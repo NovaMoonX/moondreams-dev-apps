@@ -1,5 +1,5 @@
 import { execSync, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 
 const targets: string[] = [];
 
@@ -36,6 +36,57 @@ const INVOKER_FAILURES = [
   'Failed to set invoker function',
 ];
 
+// The CLI hides the error of its release update and then tries to create the release, so only this follow-up shows; the update is repeated here to read its answer.
+const RELEASE_EXISTS = /Release projects\/\S+\/releases\/\S+ already exists/;
+const RELEASE_RETRY_WAIT_MS = 20_000;
+const RULES_API = 'https://firebaserules.googleapis.com/v1';
+
+const probeRulesRelease = async () => {
+  try {
+    const project = (
+      JSON.parse(readFileSync('.firebaserc', 'utf8')) as {
+        projects: { default: string };
+      }
+    ).projects.default;
+    const token = execSync('gcloud auth print-access-token').toString().trim();
+    const call = async (method: string, path: string, body?: unknown) => {
+      const response = await fetch(`${RULES_API}/projects/${project}/${path}`, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const text = await response.text();
+      console.error(
+        `${method} ${path.split('?')[0]} -> ${response.status} ${text.slice(0, 600)}`,
+      );
+      if (text.includes('Total size of compiled executables')) {
+        console.error(
+          'The Firestore rules are too big once compiled. Run `npm run check:rules-size`, then shrink firestore.rules (README Troubleshooting).',
+        );
+      }
+      return response.ok ? (JSON.parse(text) as Record<string, unknown>) : null;
+    };
+    const rulesets = await call('GET', 'rulesets?pageSize=5');
+    const newest = (
+      (rulesets?.rulesets ?? []) as { name: string; createTime: string }[]
+    ).sort((x, y) => y.createTime.localeCompare(x.createTime))[0];
+    await call('GET', 'releases/cloud.firestore');
+    if (newest) {
+      await call('PATCH', 'releases/cloud.firestore', {
+        release: {
+          name: `projects/${project}/releases/cloud.firestore`,
+          rulesetName: newest.name,
+        },
+      });
+    }
+  } catch (error) {
+    console.error('The rules release could not be probed.', error);
+  }
+};
+
 const deploy = () =>
   new Promise<{ code: number; output: string }>((resolve) => {
     const chunks: string[] = [];
@@ -71,10 +122,20 @@ const openCallables = () => {
 
 const run = async () => {
   const first = await deploy();
-  if (
-    first.code === 0 ||
-    !INVOKER_FAILURES.some((message) => first.output.includes(message))
-  ) {
+  if (first.code === 0) return 0;
+  if (RELEASE_EXISTS.test(first.output)) {
+    console.error(
+      '\nThe rules release failed. Repeating its update to read the answer:\n',
+    );
+    await probeRulesRelease();
+    console.log(
+      `\nDeploying once more in ${RELEASE_RETRY_WAIT_MS / 1000} seconds.\n`,
+    );
+    await new Promise((resolve) => setTimeout(resolve, RELEASE_RETRY_WAIT_MS));
+    const retry = await deploy();
+    return retry.code;
+  }
+  if (!INVOKER_FAILURES.some((message) => first.output.includes(message))) {
     return first.code;
   }
   console.log(
