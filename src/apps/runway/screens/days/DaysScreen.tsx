@@ -25,6 +25,7 @@ import {
   selectStanceCushion,
 } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
+  selectHasIncome,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
@@ -37,6 +38,7 @@ function DaysScreen() {
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isLoaded = isPlanLoaded && isDaysLoaded;
+  const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
   const { open: allDays, confirmed } = useAppSelector((state) =>
     selectListedDays(state, today),
   );
@@ -165,14 +167,16 @@ function DaysScreen() {
             />
           )}
         </div>
-        <Button
-          variant='secondary'
-          size='sm'
-          className="relative ml-auto shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-          onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-        >
-          + Expected
-        </Button>
+        {hasIncome && (
+          <Button
+            variant='secondary'
+            size='sm'
+            className="relative ml-auto shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+          >
+            + Expected
+          </Button>
+        )}
       </div>
       {getBody()}
       {formKey !== null && (

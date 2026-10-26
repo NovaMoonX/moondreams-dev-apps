@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Home } from 'lucide-react';
+import { ChevronRight, Home, ListChecks } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -24,7 +24,10 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
+  selectBills,
+  selectHasIncome,
   selectEnvelopes,
+  selectGoals,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
@@ -43,13 +46,13 @@ function HomeScreen() {
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const isLoaded = isItemsLoaded && isDaysLoaded;
-  const hasIncome = useAppSelector((state) =>
-    state.runway.items.some(
-      (item) =>
-        item.kind === 'payLine' &&
-        item.archivedAt === null &&
-        (item.endedAt === null || item.endedAt >= today),
-    ),
+  const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
+  const isSetupOpen = useAppSelector(
+    (state) =>
+      selectBills(state, today).length === 0 &&
+      selectEnvelopes(state, today).length === 0 &&
+      selectGoals(state, today).length === 0 &&
+      state.runway.plan?.startDate == null,
   );
   const balances = useAppSelector(selectBalances);
   const lookahead = useDeferredLookahead(today, isLedgerReady);
@@ -114,7 +117,7 @@ function HomeScreen() {
       <div className='space-y-2'>
         <Button
           variant='tertiary'
-          className='border-border bg-accent text-foreground! h-auto w-full items-center justify-between gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
+          className='border-border bg-accent text-foreground! h-auto w-full items-center sm:max-w-md justify-between gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
           aria-label={`${free.label}, ${free.value}. See it in detail`}
           onClick={() => openView('freeToSpend')}
         >
@@ -141,6 +144,18 @@ function HomeScreen() {
           <div className='min-h-5' aria-hidden='true' />
         )}
       </div>
+      {isSetupOpen && (
+        <EmptyCard
+          icon={<ListChecks className='h-5 w-5' />}
+          action={
+            <Button size='sm' onClick={() => openView('start')}>
+              {HOME_WORDS.resumeAction}
+            </Button>
+          }
+        >
+          {HOME_WORDS.resume}
+        </EmptyCard>
+      )}
       {nextDay && (
         <div className='space-y-2'>
           <SectionHeader title={HOME_WORDS.nextIncome} />

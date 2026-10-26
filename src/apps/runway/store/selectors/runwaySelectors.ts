@@ -827,6 +827,15 @@ export const selectChangeableKey = (state: RootState): ReadonlySet<string> => {
   return result;
 };
 
+/** Whether the plan has an income source that is still paying: the one thing every other screen waits for. */
+export const selectHasIncome = (state: RootState, today: number) =>
+  state.runway.items.some(
+    (item) =>
+      item.kind === 'payLine' &&
+      item.archivedAt === null &&
+      (item.endedAt === null || item.endedAt >= today),
+  );
+
 /** The pay lines whose ending has been reached and whose header is not yet marked ended, as JSON of `[itemId, lastDay, name]` rows ('' when none), so a consumer re-runs only when the set changes. */
 export const selectReachedEndingsKey = (state: RootState, today: number) => {
   const { items, versions, days } = state.runway;

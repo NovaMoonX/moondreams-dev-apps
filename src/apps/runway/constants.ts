@@ -640,6 +640,9 @@ export const HOME_WORDS = {
   noIncome:
     'Add an income source to see what your next income day does with the money.',
   getStarted: 'Get started',
+  resume:
+    'Your income source is in. Add what you pay and what you spend on, and this page can say what is free.',
+  resumeAction: 'Continue setting up',
 } as const;
 
 export const HISTORY_WORDS = {
@@ -747,6 +750,10 @@ export const START_WORDS = {
   standHelp:
     'Say what you have on hand and what is already set aside, so the first numbers start true.',
   doneAsk: 'Your next income day is ready',
+  billsEmpty: 'No bills yet. The ones you add are listed here.',
+  envelopesEmpty: 'No envelopes or goals yet. The ones you add are listed here.',
+  standEmpty:
+    'Not entered yet. Until you do, Free to spend reads Not set yet.',
 } as const;
 
 export const DELETE_PLAN_PHRASE = 'delete my plan';

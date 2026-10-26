@@ -1,3 +1,5 @@
+import { useNow } from '@/hooks/useNow';
+import { useAppSelector } from '@/store';
 import { PillGroup } from '@/components/PillGroup';
 import { PLAN_SECTION_LABELS, PLAN_SECTIONS } from '@apps/runway/constants';
 import BillsScreen from '@apps/runway/screens/plan/BillsScreen';
@@ -5,6 +7,8 @@ import EnvelopesScreen from '@apps/runway/screens/plan/EnvelopesScreen';
 import GoalsScreen from '@apps/runway/screens/plan/GoalsScreen';
 import MoreScreen from '@apps/runway/screens/plan/MoreScreen';
 import IncomeScreen from '@apps/runway/screens/plan/IncomeScreen';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectHasIncome } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 const sectionOptions = PLAN_SECTIONS.map((value) => ({
@@ -13,17 +17,23 @@ const sectionOptions = PLAN_SECTIONS.map((value) => ({
 }));
 
 function PlanScreen() {
-  const { planSection, showPlanSection } = useRunwayUrlState();
+  const { planSection: requestedSection, showPlanSection } =
+    useRunwayUrlState();
+  const today = todayAsUtcDate(useNow(60_000));
+  const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
+  const planSection = hasIncome ? requestedSection : 'income';
 
   return (
     <div className='space-y-4'>
-      <PillGroup
-        label='Plan sections'
-        options={sectionOptions}
-        value={planSection}
-        isThin
-        onChange={showPlanSection}
-      />
+      {hasIncome && (
+        <PillGroup
+          label='Plan sections'
+          options={sectionOptions}
+          value={planSection}
+          isThin
+          onChange={showPlanSection}
+        />
+      )}
       {planSection === 'envelopes' && <EnvelopesScreen />}
       {planSection === 'more' && <MoreScreen />}
       {planSection === 'goals' && <GoalsScreen />}

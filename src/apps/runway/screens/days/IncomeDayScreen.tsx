@@ -232,7 +232,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           )}
         </div>
         {heldLines.length > 0 && (
-          <p className='bg-accent border-border rounded-2xl border p-3 text-sm'>
+          <p className='bg-muted/50 border-border rounded-2xl border p-3 text-sm'>
             {DRAFT_WORDS.holdsBlock}
           </p>
         )}
