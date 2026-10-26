@@ -21,10 +21,14 @@ import { CHECK_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   selectEnvelopes,
+  selectPairedBy,
   selectIsPlanItemsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { EnvelopeSealed } from '@apps/runway/types';
-import { describeFunding } from '@apps/runway/utils/fundingText';
+import {
+  describeFunding,
+  describePairedBy,
+} from '@apps/runway/utils/fundingText';
 
 const SEARCH_THRESHOLD = 8;
 
@@ -32,6 +36,7 @@ function EnvelopesScreen() {
   const today = todayAsUtcDate(useNow(60_000));
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [purchaseFor, setPurchaseFor] = useState<string | null>(null);
@@ -89,6 +94,14 @@ function EnvelopesScreen() {
                   <p className='text-muted-foreground text-sm first-letter:uppercase'>
                     {describeFunding(version.payload.funding)}
                   </p>
+                  {describePairedBy(pairedBy[item.id] ?? []) && (
+                    <p className='text-muted-foreground text-sm'>
+                      {describePairedBy(pairedBy[item.id] ?? [])}
+                    </p>
+                  )}
+                  <div className='pt-1'>
+                    <PriorityBadge priority={version.payload.priority} />
+                  </div>
                   <div className='pt-2'>
                     <ItemChangeControls
                       kind='envelope'
@@ -141,9 +154,6 @@ function EnvelopesScreen() {
                       }
                     />
                   </div>
-                </div>
-                <div className='flex h-10 items-center'>
-                  <PriorityBadge priority={version.payload.priority} />
                 </div>
               </li>
             ))}

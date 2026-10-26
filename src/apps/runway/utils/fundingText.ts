@@ -38,3 +38,17 @@ export function describeFunding(funding: FundingRule) {
   const result = `${describeAmount(funding.amount)} ${describeCadence(funding.cadence)}`;
   return result;
 }
+
+/** Why an item's own rule is not what an income day sets aside: a pairing names an amount for it. Null when none does. */
+export function describePairedBy(
+  pairedBy: readonly { sourceName: string; amount: FundingAmount }[],
+) {
+  if (pairedBy.length === 0) return null;
+  if (pairedBy.length === 1) {
+    const { sourceName, amount } = pairedBy[0];
+    return `${sourceName}'s pairing sets this at ${describeAmount(amount, sourceName)} on its income days.`;
+  }
+  const names = [...new Set(pairedBy.map((entry) => entry.sourceName))];
+  const result = `Pairings from ${names.join(' and ')} replace this rule on their income days.`;
+  return result;
+}

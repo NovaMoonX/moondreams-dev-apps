@@ -43,6 +43,8 @@ import {
   describePurchaseRemoval,
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
+import { describeHoldsChange } from '../../src/apps/runway/utils/lookaheadText.ts';
+import type { Lookahead } from '../../src/apps/runway/engine/lookahead.ts';
 import {
   getLineEffect,
   getPurchaseEffect,
@@ -3927,6 +3929,38 @@ const version = (
     ),
     'Vacation fund returns to $300.00 this time',
   );
+  {
+    const vacLine = lineOf(draftFor(planItems, base, dayKeys[1]), 'vac')!;
+    const fromMain = {
+      ...vacLine,
+      paidBy: vacLine.paidBy.map((part) => ({ ...part, sourceId: 'main' })),
+    };
+    assert.ok(
+      describeLineReason(fromMain, { main: 'Main job' }).includes(
+        'funded from Main job',
+      ),
+      'a line names the source that pays it',
+    );
+    const said = describeLineReason(
+      fromMain,
+      { main: 'Main job' },
+      'Vacation fund',
+      'main',
+    );
+    assert.ok(
+      !said.includes('Main job') && !said.endsWith(','),
+      "a line paid by the day's own source leaves it to the screen header",
+    );
+    assert.ok(
+      describeLineReason(
+        fromMain,
+        { main: 'Main job' },
+        'Vacation fund',
+        'side',
+      ).includes('funded from Main job'),
+      'a line paid by another source still names it',
+    );
+  }
   assert.equal(
     lineOf(draftFor(planItems, base, dayKeys[3]), 'vac')?.reason.code,
     'funded',
@@ -5655,6 +5689,33 @@ const version = (
       'what the sources give and what is left over add up to the overage',
     );
   }
+  const withFree = checkAmount('dining', 4_200, envelopes, 700);
+  assert.deepEqual(
+    withFree,
+    {
+      kind: 'over',
+      overCents: 1_200,
+      sources: [
+        { envelopeId: null, takeCents: 700, leftAfterCents: 0 },
+        { envelopeId: 'fun', takeCents: 500, leftAfterCents: 500 },
+      ],
+      uncoveredCents: 0,
+    },
+    'Free to spend, when it holds money, is the first source and the envelopes cover the rest',
+  );
+  const coveredByFree = checkAmount('dining', 4_200, envelopes, 5_000);
+  assert.ok(
+    coveredByFree.kind === 'over' &&
+      coveredByFree.sources.length === 1 &&
+      coveredByFree.sources[0].envelopeId === null &&
+      coveredByFree.sources[0].leftAfterCents === 3_800,
+    'Free to spend alone covers an overage it can hold',
+  );
+  assert.deepEqual(
+    checkAmount('dining', 4_200, envelopes, -300),
+    checkAmount('dining', 4_200, envelopes),
+    'Free to spend that is over-assigned is never a source',
+  );
   const alreadyOver = checkAmount('over', 100, envelopes);
   assert.equal(alreadyOver.kind === 'over' && alreadyOver.overCents, 500);
   const words = describeAmountCheck(
@@ -6594,6 +6655,46 @@ const version = (
         `${new Date(day).toISOString().slice(0, 10)}: the figures as of a day just after the closing leave out what arrived and was paid on or after it`,
       );
     },
+  );
+}
+
+{
+  const look = (
+    holdsThrough: number | null,
+    problems: Lookahead['problems'] = [],
+  ): Lookahead => ({
+    hasBills: true,
+    holdsThrough,
+    problems,
+    shortByDay: {},
+    incomeEndsOn: null,
+  });
+  const short = (on: number, name: string, shortBy: number) =>
+    ({
+      kind: 'short',
+      on,
+      dayKey: `k${on}`,
+      itemId: name,
+      name,
+      shortBy,
+      isBill: true,
+    }) as const;
+  const day = utc(2026, 10, 29);
+  const text = describeHoldsChange(
+    look(day, [short(utc(2026, 10, 30), 'Rent', 22000)]),
+    look(day, [short(utc(2026, 10, 30), 'Car', 5000)]),
+  );
+  assert.ok(
+    text?.startsWith('Your plan still holds through') &&
+      text.includes('With this change') &&
+      !text.includes('instead of'),
+    'a change that leaves the same last day but a new first problem never says the plan holds through a day instead of that day',
+  );
+  assert.ok(
+    describeHoldsChange(look(day), look(utc(2026, 11, 12)))?.includes(
+      'would hold through',
+    ),
+    'a later last day reads as a move',
   );
 }
 

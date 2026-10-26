@@ -120,7 +120,9 @@ export function useChangeFlow({
   const summaryText =
     candidate === null ? '' : describeChange(current, candidate);
 
-  const changeJson = getChangeJson(itemId, kind, candidate, span);
+  const changeJson = isUnchanged
+    ? null
+    : getChangeJson(itemId, kind, candidate, span);
 
   const getSummary = (name: string) => {
     const words = summaryText || 'Updated';

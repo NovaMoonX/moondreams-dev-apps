@@ -32,6 +32,8 @@ interface EffectPreviewProps {
   changeJson: string | null;
   /** Words for the empty case when a change moves no income day. */
   emptyText?: string;
+  /** Words for a form that is finished but has no change in it yet. */
+  waitingText?: string;
 }
 
 const getLineText = (day: PreviewDay) => {
@@ -45,7 +47,11 @@ const getLineText = (day: PreviewDay) => {
 };
 
 /** Each upcoming income day a change would move, before and after, worked out by the same engine that drafts the days. */
-function EffectPreview({ changeJson, emptyText }: EffectPreviewProps) {
+function EffectPreview({
+  changeJson,
+  emptyText,
+  waitingText,
+}: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
   const versions = useAppSelector((state) => state.runway.versions);
@@ -110,7 +116,7 @@ function EffectPreview({ changeJson, emptyText }: EffectPreviewProps) {
     if (virtual === null || days === null) {
       return (
         <p className='text-muted-foreground text-sm'>
-          {CHANGE_WORDS.previewWaiting}
+          {waitingText ?? CHANGE_WORDS.previewWaiting}
         </p>
       );
     }
