@@ -5,12 +5,13 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import AmountHero, { AmountHeroLink } from '@/components/AmountHero';
+import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
@@ -23,6 +24,7 @@ import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import SplitEditor from '@apps/runway/components/SplitEditor';
+import { isTooLong } from '@apps/runway/utils/rangeInput';
 import {
   FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
@@ -535,6 +537,12 @@ function PurchaseForm({
       summaryLabel: isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount,
       summaryValue: amount === null ? '' : formatCents(amount),
       isAnswered: amount !== null,
+      blocker:
+        formData.amount.trim() === ''
+          ? null
+          : (parsed !== null && parsed > 0) || isTooLong(formData.amount)
+            ? FORM_FLOW_WORDS.overLimit
+            : FORM_FLOW_WORDS.badAmount,
       render: () => (
         <AmountHero
           label={isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount}
@@ -543,14 +551,17 @@ function PurchaseForm({
             setFormData((current) => ({ ...current, amount: next }))
           }
           disabled={isSaving}
-          links={
-            editing ? null : (
-              <AmountHeroLink onClick={toggleRefund}>
-                {isRefund
-                  ? FORM_FLOW_WORDS.notRefundLink
-                  : FORM_FLOW_WORDS.refundLink}
-              </AmountHeroLink>
-            )
+          ways={
+            editing
+              ? []
+              : [
+                  {
+                    label: isRefund
+                      ? FORM_FLOW_WORDS.notRefundLink
+                      : FORM_FLOW_WORDS.refundLink,
+                    onClick: toggleRefund,
+                  },
+                ]
           }
         />
       ),
@@ -563,6 +574,7 @@ function PurchaseForm({
       summaryLabel: isRefund ? SPEND_WORDS.returnsTo : SPEND_WORDS.envelope,
       summaryValue: getEnvelopeSummary(),
       isAnswered: lines !== null,
+      blocker: isSplit && !isRefund ? SPEND_WORDS.needsShares : null,
       isPreAnswered:
         !isRefund &&
         presetEnvelopeId !== null &&
@@ -696,14 +708,30 @@ function PurchaseForm({
     steps,
     startFolded: editing !== undefined,
   });
+  const isAsking = !questions.hasReviewed;
+  const snapshot = JSON.stringify({
+    formData,
+    envelopeId,
+    isRefund,
+    splitIds,
+    shares,
+    originalId,
+    returnTo,
+  });
+  const [startSnapshot] = useState(snapshot);
+  const requestClose = useDiscardGuard({
+    isDirty: snapshot !== startSnapshot,
+    onClose,
+    isBusy: isSaving,
+    title: editing
+      ? FORM_FLOW_WORDS.discardChange
+      : FORM_FLOW_WORDS.discardNew('purchase'),
+  });
 
   const formBody = (
     <div className='space-y-5'>
-      <QuestionFlow
-        flow={questions}
-        nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
-      />
-      {questions.isReview && (
+      <QuestionFlow flow={questions} />
+      {questions.hasReviewed && (
         <div className='space-y-3'>
           {effectNote}
           {extras.merchant !== null && (
@@ -754,8 +782,8 @@ function PurchaseForm({
               }
             >
               {extras.merchant === null
-                ? SPEND_WORDS.addWhere
-                : SPEND_WORDS.removeWhere}
+                ? FORM_FLOW_WORDS.addPlace
+                : FORM_FLOW_WORDS.removePlace}
             </RevealChip>
             <RevealChip
               icon={
@@ -777,26 +805,36 @@ function PurchaseForm({
         </div>
       )}
       <ModalFooterActions
-        note={error ?? (questions.isReview ? blocker : null)}
+        note={error ?? (isAsking ? questions.blocker : blocker)}
         cancelAction={
           <Button
             type='button'
             variant='secondary'
-            onClick={onClose}
+            onClick={requestClose}
             disabled={isSaving}
           >
             Cancel
           </Button>
         }
         rightActions={
-          <Button
-            type='button'
-            loading={isSaving}
-            disabled={isSaving || blocker !== null}
-            onClick={() => void handleSave()}
-          >
-            {editing ? SPEND_WORDS.save : SPEND_WORDS.add}
-          </Button>
+          isAsking ? (
+            <Button
+              type='button'
+              disabled={!questions.open?.isAnswered}
+              onClick={questions.advance}
+            >
+              {FORM_FLOW_WORDS.next}
+            </Button>
+          ) : (
+            <Button
+              type='button'
+              loading={isSaving}
+              disabled={isSaving || blocker !== null}
+              onClick={() => void handleSave()}
+            >
+              {editing ? SPEND_WORDS.save : SPEND_WORDS.add}
+            </Button>
+          )
         }
       />
     </div>
@@ -815,7 +853,11 @@ function PurchaseForm({
   const splitBlocker = getSplitBlocker();
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title={SPEND_WORDS.sheetTitle}>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={SPEND_WORDS.sheetTitle}
+    >
       {view === 'split' && amount !== null && (
         <div className='space-y-3'>
           <SplitEditor

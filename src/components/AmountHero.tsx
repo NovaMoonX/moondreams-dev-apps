@@ -3,13 +3,21 @@ import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import RevealChip from '@/components/RevealChip';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { toTwoDecimalAmount } from '@/utils/moneyUtils';
 
 const PHONE_FOCUS_DELAY_MS = 350;
+const MAX_WAYS_SHOWN = 2;
+
+/** Another way to give the amount (a range, a share of something), offered as a chip under the figure. */
+export interface AmountHeroWay {
+  label: string;
+  onClick: () => void;
+}
 
 interface AmountHeroProps {
-  /** The small caption over the figure, also its accessible name ("Amount", "Take-home pay"). */
+  /** The small caption over the figure, also its accessible name ("Amount"). */
   label: string;
   /** Dollars as typed; the low end when it is a range. */
   value: string;
@@ -24,9 +32,9 @@ interface AmountHeroProps {
   /** What the range switch says in each state. */
   rangeToggleLabels?: { toRange: string; toExact: string };
   rangeLabels?: { low: string; high: string };
-  /** More quiet links beside the range switch, built with `AmountHeroLink`. */
-  links?: ReactNode;
-  /** One quiet line right under the figure ("every income day ›"). */
+  /** Other ways to give the amount, as chips after the range switch; past two, all but the first wait behind "More ways". */
+  ways?: AmountHeroWay[];
+  /** One quiet line right under the figure (how often, what it is for). */
   suffix?: ReactNode;
   /** One short line under the links. */
   hint?: ReactNode;
@@ -83,7 +91,8 @@ function Figure({
   return (
     <label
       className={join(
-        'inline-flex max-w-full cursor-text items-start font-semibold tracking-tight tabular-nums',
+        'inline-flex max-w-full cursor-text items-start rounded-xl px-1 font-semibold tracking-tight tabular-nums',
+        'has-[input:focus-visible]:ring-primary/40 has-[input:focus-visible]:ring-2',
         sizeClass,
       )}
     >
@@ -122,15 +131,15 @@ function Figure({
               onChange(event.target.value);
               return;
             }
+            const field = event.target;
+            const text = field.value;
+            const caret = field.selectionStart ?? text.length;
+            const shift = text.slice(0, caret).split(',').length - 1;
             setIsTyping(true);
-            onChange(event.target.value.replace(/,/g, ''));
-          }}
-          onFocus={(event) => {
-            const field = event.currentTarget;
-            setIsTyping(true);
+            onChange(text.replace(/,/g, ''));
             window.requestAnimationFrame(() => {
-              const end = field.value.length;
-              field.setSelectionRange(end, end);
+              if (document.activeElement !== field) return;
+              field.setSelectionRange(caret - shift, caret - shift);
             });
           }}
           onBlur={() => {
@@ -149,7 +158,7 @@ function Figure({
   );
 }
 
-/** A quiet text action under the figure (a range, a percentage, whatever is left); never a pill row over the amount. */
+/** A quiet text line under the figure that opens something else (how often it repeats). */
 export function AmountHeroLink({
   children,
   onClick,
@@ -187,13 +196,14 @@ function AmountHero({
   onRangeToggle,
   rangeToggleLabels = { toRange: 'It varies', toExact: 'One amount' },
   rangeLabels = { low: 'lowest', high: 'highest' },
-  links,
+  ways = [],
   suffix,
   hint,
   errorMessage,
   disabled,
 }: AmountHeroProps) {
   const isPhone = useMediaQuery().isBelow('sm');
+  const [isShowingAllWays, setIsShowingAllWays] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const shouldFocus = autoFocus && isPhone;
 
@@ -209,7 +219,21 @@ function AmountHero({
   const digitsOf = (text: string) => text.replace(/,/g, '').length;
   const longest = Math.max(digitsOf(value), isRange ? digitsOf(highValue) : 0);
   const sizeClass = getSizeClass(longest, isRange);
-  const hasLinks = Boolean(onRangeToggle) || Boolean(links);
+  const allWays: AmountHeroWay[] = [
+    ...(onRangeToggle
+      ? [
+          {
+            label: isRange
+              ? rangeToggleLabels.toExact
+              : rangeToggleLabels.toRange,
+            onClick: onRangeToggle,
+          },
+        ]
+      : []),
+    ...ways,
+  ];
+  const isFolded = allWays.length > MAX_WAYS_SHOWN && !isShowingAllWays;
+  const shownWays = isFolded ? allWays.slice(0, 1) : allWays;
 
   return (
     <div className='flex flex-col items-center gap-1 text-center'>
@@ -225,7 +249,7 @@ function AmountHero({
           disabled={disabled}
         />
         {isRange && (
-          <>
+          <span className='inline-flex max-w-full items-center gap-x-3 whitespace-nowrap'>
             <span className='text-muted-foreground text-lg'>to</span>
             <Figure
               ariaLabel={`${label}, ${rangeLabels.high}`}
@@ -235,7 +259,7 @@ function AmountHero({
               isInvalid={Boolean(errorMessage)}
               disabled={disabled}
             />
-          </>
+          </span>
         )}
       </div>
       {suffix && <div className='text-sm'>{suffix}</div>}
@@ -244,14 +268,18 @@ function AmountHero({
           {errorMessage}
         </p>
       )}
-      {hasLinks && (
-        <div className='flex flex-wrap items-center justify-center gap-x-2'>
-          {onRangeToggle && (
-            <AmountHeroLink onClick={onRangeToggle}>
-              {isRange ? rangeToggleLabels.toExact : rangeToggleLabels.toRange}
-            </AmountHeroLink>
+      {allWays.length > 0 && (
+        <div className='flex flex-wrap items-center justify-center gap-2 pt-1'>
+          {shownWays.map((way) => (
+            <RevealChip key={way.label} onClick={way.onClick}>
+              {way.label}
+            </RevealChip>
+          ))}
+          {isFolded && (
+            <RevealChip onClick={() => setIsShowingAllWays(true)}>
+              More ways
+            </RevealChip>
           )}
-          {links}
         </div>
       )}
       {hint && (

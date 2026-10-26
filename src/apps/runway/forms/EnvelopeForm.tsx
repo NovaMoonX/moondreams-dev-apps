@@ -8,6 +8,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -34,6 +35,7 @@ import ChangeReason from '@apps/runway/components/ChangeReason';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
+import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import { toFundingInput } from '@apps/runway/utils/fundingInput';
 import { describeAmount } from '@apps/runway/utils/fundingText';
 import {
@@ -176,6 +178,7 @@ function EnvelopeForm({
   const [formData, setFormData] = useState<EnvelopeFormData>(() =>
     editing ? getEditingData(editing.payload) : INITIAL_DATA,
   );
+  const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<EnvelopeFormData>) =>
@@ -184,6 +187,7 @@ function EnvelopeForm({
   const [amountMode, setAmountMode] = useState<AmountMode>(
     editing ? toFundingInput(editing.payload.funding).mode : 'exact',
   );
+  const [startMode] = useState(amountMode);
   const amount = getFundingAmount(amountMode, formData.amount);
   const blocker = getBlocker(
     formData,
@@ -229,6 +233,12 @@ function EnvelopeForm({
       summaryLabel: FORM_FLOW_WORDS.eachTime,
       summaryValue: amount === null ? '' : describeAmount(amount),
       isAnswered: amount !== null,
+      blocker:
+        formData.amount.trim() === ''
+          ? null
+          : amountMode === 'percent'
+            ? FORM_FLOW_WORDS.badPercent
+            : FORM_FLOW_WORDS.badAmount,
       render: () => (
         <AmountField
           isHero
@@ -257,6 +267,9 @@ function EnvelopeForm({
       summaryLabel: FORM_FLOW_WORDS.cadence,
       summaryValue: cadenceText,
       isAnswered: isCadenceAnswered,
+      blocker: !hasDays
+        ? 'Add an income source first, so there are days to count.'
+        : FORM_FLOW_WORDS.pickDays,
       isPreAnswered: true,
       render: () => (
         <div className='space-y-3'>
@@ -397,6 +410,20 @@ function EnvelopeForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) ||
+    amountMode !== startMode ||
+    flow.note.trim() !== '' ||
+    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const requestClose = useDiscardGuard({
+    isDirty,
+    onClose,
+    isBusy: isSaving || flow.isSaving,
+    title: editing
+      ? FORM_FLOW_WORDS.discardChange
+      : FORM_FLOW_WORDS.discardNew('envelope'),
+  });
+  const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -432,45 +459,52 @@ function EnvelopeForm({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
+    <FormSheet isOpen={isOpen} onClose={requestClose} title={title}>
       <ChangeSteps
         isReason={flow.step === 'reason'}
-        reason={<ChangeReason flow={flow} onClose={onClose} />}
+        reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow
-              flow={questions}
-              nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
-            />
-            {editing && questions.isReview && <ChangeSection />}
+            <QuestionFlow flow={questions} />
+            {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
-              note={error ?? (questions.isReview ? shownBlocker : null)}
+              note={error ?? (isAsking ? questions.blocker : shownBlocker)}
               cancelAction={
                 <Button
                   type='button'
                   variant='secondary'
-                  onClick={onClose}
+                  onClick={requestClose}
                   disabled={isSaving}
                 >
                   Cancel
                 </Button>
               }
               rightActions={
-                <Button
-                  type='button'
-                  loading={isSaving}
-                  disabled={isSaving || shownBlocker !== null}
-                  onClick={() => {
-                    if (editing) {
-                      flow.setStep('reason');
-                      return;
-                    }
-                    void handleSubmit();
-                  }}
-                >
-                  {editing ? CHANGE_WORDS.review : 'Add'}
-                </Button>
+                isAsking ? (
+                  <Button
+                    type='button'
+                    disabled={!questions.open?.isAnswered}
+                    onClick={questions.advance}
+                  >
+                    {FORM_FLOW_WORDS.next}
+                  </Button>
+                ) : (
+                  <Button
+                    type='button'
+                    loading={isSaving}
+                    disabled={isSaving || shownBlocker !== null}
+                    onClick={() => {
+                      if (editing) {
+                        flow.setStep('reason');
+                        return;
+                      }
+                      void handleSubmit();
+                    }}
+                  >
+                    {editing ? CHANGE_WORDS.review : 'Add'}
+                  </Button>
+                )
               }
             />
           </div>

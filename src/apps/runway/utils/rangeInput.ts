@@ -3,7 +3,7 @@ import {
   formatCents,
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
-import { STANCE_FOLLOW_PLAN } from '@apps/runway/constants';
+import { FORM_FLOW_WORDS, STANCE_FOLLOW_PLAN } from '@apps/runway/constants';
 import type { MoneyRange, Stance } from '@apps/runway/types';
 
 /** What a form holds for an amount: one figure, or a low and a high end, and the stance this item plans at. */
@@ -61,4 +61,19 @@ export function describeAmountDraft(draft: AmountDraft): string {
       ? formatCents(range.lowCents)
       : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
   return result;
+}
+
+/** Eight or more whole-dollar digits, which no amount here can hold. */
+export const isTooLong = (text: string) =>
+  /^\d{8,}/.test(text.trim().replace(/[$,]/g, ''));
+
+/** Why a draft the person has started typing is not an amount yet; null while it is empty or fine. */
+export function getAmountDraftProblem(draft: AmountDraft): string | null {
+  if (draft.low.trim() === '' || parseAmountDraft(draft) !== null) return null;
+  const low = parseMoneyToCents(draft.low);
+  if (low === null && isTooLong(draft.low)) return FORM_FLOW_WORDS.overLimit;
+  if (low === null || low <= 0) return FORM_FLOW_WORDS.badAmount;
+  if (draft.mode === 'range' && draft.high.trim() !== '')
+    return FORM_FLOW_WORDS.badRange;
+  return null;
 }

@@ -8,8 +8,12 @@ export interface QuestionStep {
   summaryLabel: string;
   /** What its folded row says; empty reads "Not answered yet". */
   summaryValue: ReactNode;
+  /** The folded row's value as words, for its accessible name when `summaryValue` is not plain text. */
+  summaryText?: string;
   isAnswered: boolean;
-  /** Nearly always right as it starts (a priority, today, every time): shown folded and never asked. */
+  /** Why it is not answered yet, when the question alone doesn't say (a day that has passed, an amount over a limit). */
+  blocker?: string | null;
+  /** Nearly always right as it starts: shown folded and never asked. */
   isPreAnswered?: boolean;
   /** Its control, drawn only while it is the open question. */
   render: () => ReactNode;
@@ -25,7 +29,7 @@ interface UseQuestionFlowOptions {
   onAdvance?: (fromId: string) => void;
 }
 
-/** Which question is open in a one-question-at-a-time form, and the moves between them. */
+/** Which question is open in a one-question-at-a-time form, the moves between them, and whether every answer has been seen once. */
 export function useQuestionFlow({
   steps,
   startFolded = false,
@@ -36,24 +40,31 @@ export function useQuestionFlow({
     () => new Set(startFolded ? steps.map((step) => step.id) : []),
   );
   const [openId, setOpenId] = useState<string | null>(initialOpenId);
+  const [hasReviewed, setHasReviewed] = useState(startFolded);
 
-  const isFolded = (step: QuestionStep) =>
-    step.isAnswered && (step.isPreAnswered === true || passed.has(step.id));
+  const isFoldedIn = (step: QuestionStep, done: ReadonlySet<string>) =>
+    step.isAnswered && (step.isPreAnswered === true || done.has(step.id));
   const chosen =
     openId === null ? null : (steps.find((step) => step.id === openId) ?? null);
-  const open = chosen ?? steps.find((step) => !isFolded(step)) ?? null;
+  const open =
+    chosen ?? steps.find((step) => !isFoldedIn(step, passed)) ?? null;
 
   const advance = () => {
     if (open === null || !open.isAnswered) return;
     onAdvance?.(open.id);
-    setPassed((current) => new Set([...current, open.id]));
+    const done = new Set([...passed, open.id]);
+    setPassed(done);
     setOpenId(null);
+    if (steps.every((step) => isFoldedIn(step, done))) setHasReviewed(true);
   };
 
   const result = {
     steps,
     open,
     isReview: open === null,
+    /** Every answer has been seen once: from here the form's own primary (Add, Save) is offered and reopened answers keep the rest folded around them. */
+    hasReviewed,
+    blocker: open !== null && !open.isAnswered ? (open.blocker ?? null) : null,
     reopen: (id: string) => setOpenId(id),
     advance,
   };

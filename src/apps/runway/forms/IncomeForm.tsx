@@ -7,6 +7,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -35,10 +36,12 @@ import ChangeReason from '@apps/runway/components/ChangeReason';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
+import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import {
   describeAmountDraft,
   EMPTY_AMOUNT_DRAFT,
+  getAmountDraftProblem,
   getStanceOverride,
   parseAmountDraft,
   toAmountDraft,
@@ -265,6 +268,7 @@ function IncomeForm({
           endCount: '',
         },
   );
+  const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<IncomeFormData>) =>
@@ -363,6 +367,7 @@ function IncomeForm({
       summaryLabel: FORM_FLOW_WORDS.takeHome,
       summaryValue: describeAmountDraft(formData.amount),
       isAnswered: parseAmountDraft(formData.amount) !== null,
+      blocker: getAmountDraftProblem(formData.amount),
       render: () => (
         <RangeAmountField
           isHero
@@ -381,6 +386,10 @@ function IncomeForm({
       summaryLabel: FORM_FLOW_WORDS.schedule,
       summaryValue: scheduleText,
       isAnswered: isScheduleAnswered,
+      blocker:
+        formData.frequency === 'twiceMonthly' && formData.secondDay !== ''
+          ? FORM_FLOW_WORDS.otherPayday
+          : null,
       render: () => (
         <div className='space-y-4'>
           <PillGroup
@@ -433,6 +442,7 @@ function IncomeForm({
             summaryLabel: FORM_FLOW_WORDS.ends,
             summaryValue: endingText,
             isAnswered: buildEnding(formData) !== null,
+            blocker: FORM_FLOW_WORDS.finishEnding,
             isPreAnswered: true,
             render: () => (
               <div className='space-y-3'>
@@ -525,6 +535,19 @@ function IncomeForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) ||
+    flow.note.trim() !== '' ||
+    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const requestClose = useDiscardGuard({
+    isDirty,
+    onClose,
+    isBusy: isSaving || flow.isSaving,
+    title: editing
+      ? FORM_FLOW_WORDS.discardChange
+      : FORM_FLOW_WORDS.discardNew('income'),
+  });
+  const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -581,45 +604,52 @@ function IncomeForm({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
+    <FormSheet isOpen={isOpen} onClose={requestClose} title={title}>
       <ChangeSteps
         isReason={flow.step === 'reason'}
-        reason={<ChangeReason flow={flow} onClose={onClose} />}
+        reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow
-              flow={questions}
-              nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
-            />
-            {editing && questions.isReview && <ChangeSection />}
+            <QuestionFlow flow={questions} />
+            {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
-              note={error ?? (questions.isReview ? shownBlocker : null)}
+              note={error ?? (isAsking ? questions.blocker : shownBlocker)}
               cancelAction={
                 <Button
                   type='button'
                   variant='secondary'
-                  onClick={onClose}
+                  onClick={requestClose}
                   disabled={isSaving}
                 >
                   Cancel
                 </Button>
               }
               rightActions={
-                <Button
-                  type='button'
-                  loading={isSaving}
-                  disabled={isSaving || shownBlocker !== null}
-                  onClick={() => {
-                    if (editing) {
-                      flow.setStep('reason');
-                      return;
-                    }
-                    void handleSubmit();
-                  }}
-                >
-                  {editing ? CHANGE_WORDS.review : 'Add'}
-                </Button>
+                isAsking ? (
+                  <Button
+                    type='button'
+                    disabled={!questions.open?.isAnswered}
+                    onClick={questions.advance}
+                  >
+                    {FORM_FLOW_WORDS.next}
+                  </Button>
+                ) : (
+                  <Button
+                    type='button'
+                    loading={isSaving}
+                    disabled={isSaving || shownBlocker !== null}
+                    onClick={() => {
+                      if (editing) {
+                        flow.setStep('reason');
+                        return;
+                      }
+                      void handleSubmit();
+                    }}
+                  >
+                    {editing ? CHANGE_WORDS.review : 'Add'}
+                  </Button>
+                )
               }
             />
           </div>

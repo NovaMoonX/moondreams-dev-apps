@@ -34,7 +34,7 @@ const STRETCH_OPTIONS = [
 
 const hasDayOnly = (kind: ItemKind) => kind === 'envelope' || kind === 'goal';
 
-/** When a change starts and how long it lasts, folded to one row until tapped since "From now on" is nearly always right. Earlier days keep what they had; only choices that mean something here are drawn. */
+/** When a change starts and how long it lasts: opened on an income day's own screen with that day's choices first, and elsewhere folded to one row until tapped since "From now on" is nearly always right. Earlier days keep what they had; only choices that mean something here are drawn. */
 function FromWhenPicker({
   value,
   onChange,
@@ -45,20 +45,26 @@ function FromWhenPicker({
   isDisabled = false,
 }: FromWhenPickerProps) {
   const preset = days.find((day) => day.dayKey === presetDayKey) ?? null;
-  const options: { value: FromWhenChoice; label: string }[] = [
-    { value: 'now', label: CHANGE_WORDS.fromNow },
-    ...(preset && preset.on > today
-      ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
-      : []),
-    { value: 'date', label: CHANGE_WORDS.fromDate },
+  const dayFirst: { value: FromWhenChoice; label: string }[] = [
     ...(hasDayOnly(kind) && (preset || days.length > 0)
       ? [{ value: 'dayOnly' as const, label: CHANGE_WORDS.dayOnly }]
       : []),
+    ...(preset && preset.on > today
+      ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
+      : []),
+  ];
+  const rest: { value: FromWhenChoice; label: string }[] = [
+    { value: 'now', label: CHANGE_WORDS.fromNow },
+    { value: 'date', label: CHANGE_WORDS.fromDate },
     ...(kind !== 'source'
       ? [{ value: 'stretch' as const, label: CHANGE_WORDS.stretch }]
       : []),
   ];
-  const [isOpen, setIsOpen] = useState(false);
+  const options =
+    preset !== null
+      ? [...dayFirst, ...rest]
+      : [rest[0], ...dayFirst, ...rest.slice(1)];
+  const [isOpen, setIsOpen] = useState(preset !== null);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
     label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,

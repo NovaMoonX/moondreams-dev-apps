@@ -144,7 +144,7 @@ function EffectPreview({
       const count =
         days.length === 1
           ? FORM_FLOW_WORDS.compactOne
-          : FORM_FLOW_WORDS.compactMany.replace('{n}', String(days.length));
+          : FORM_FLOW_WORDS.compactMany(days.length);
       return (
         <div className='space-y-1'>
           <p className='text-sm'>
