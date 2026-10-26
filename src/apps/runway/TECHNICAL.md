@@ -1196,13 +1196,18 @@ Everything outside `src/apps/runway/` that must change, so nothing is found miss
 
 ### Proposed changes to the repo's instructions
 
-Per the project instruction to keep `copilot-instructions.md` current, these follow from this design and are for approval, not yet made:
+Per the project instruction to keep `copilot-instructions.md` current, these follow from this design. Made in the polish PR (the owner's list, applied as written unless noted):
 
-1. **New-app checklist, Release line:** replace "bump `SITE_VERSION`" with the label rule it already states elsewhere.
-2. **Data and app patterns:** add that a Firestore document may carry one `sealed` payload of sensitive fields beside readable ones, with the key held by a callable and never persisted; reference Runway's `security.ts`.
-3. **Data and app patterns:** add the append-only collection and deterministic-id patterns (rules deny `update`/`delete`; a duplicate create fails by id).
-4. **Shared security lib:** note `encryptBytes`/`decryptBytes` once they exist.
-5. **`.github/instructions/runway.instructions.md`:** the restrained tone exception, the level-gating rule (hidden, not disabled), and the sealed-document rule.
+1. **New-app checklist, Release line:** replaced "bump `SITE_VERSION`" with the label rule (never edit `SITE_VERSION`; one `patch` or `minor` label). Made.
+2. **One PWA:** the checklist says the site installs as one PWA and an app has no manifest of its own. Made.
+3. **Sealed payloads:** a document may carry one `sealed` payload beside readable fields, the key held by a callable and never persisted, a sealed payload gaining a field only in the change that reads it. Made in "Data and app patterns".
+4. **Append-only and deterministic ids:** rules deny `update`/`delete`, a duplicate create fails by id, corrections are new records. Made.
+5. **Shared security lib:** note `encryptBytes`/`decryptBytes` once they exist. **Not made:** they arrive with Issue 47 (receipts, a Next Steps issue).
+6. **Functions and secrets:** a secret an issue binds must exist in production before merge, and `functions/README.md` mirrors `index.ts`. Already stated in "Documentation quality" and "Cloud Functions"; nothing added.
+7. **Shared primitives:** a component with no app entities goes in `src/components` from its first use. Already stated; `AmountField` and `BeforeAfterRow` are now named as examples.
+8. **Terminology:** "mini-app" is "app" in prose in `CLAUDE.md` and `copilot-instructions.md`, "New mini-app checklist" is "New app checklist", paths under `src/apps/<name>/` are unchanged, and "beta" is defined once, as an access-gated app. Made. The `build-mini-app-mvp` skill keeps its name.
+9. **`.github/instructions/runway.instructions.md` and `.claude/rules/runway.md`:** the restrained tone exception, the level-gating rule (hidden, not disabled) and the sealed-document rule were written in Issue 2 and extended since. The tone exception is still the owner's decision to confirm.
+10. **The `plan-mini-app` skill** (UX phase as a canvas plus a short `UX.md` with no Mermaid; the hidden-not-disabled checklist item; the roadmap preamble's two closing checks using the label rule; a sealed payload gaining a field only in the issue that uses it; its name and description "Plan an app for the Moondreams Dev Apps repo"): **not made.** The skill is not in this repository, so it cannot be changed from here. It is listed in the PR overview for the owner to apply or to save as a skill proposal.
 
 ---
 
