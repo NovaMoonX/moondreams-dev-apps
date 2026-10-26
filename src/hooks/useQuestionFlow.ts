@@ -1,5 +1,9 @@
 import { useState, type ReactNode } from 'react';
 
+export interface QuestionControls {
+  moveOn: () => void;
+}
+
 export interface QuestionStep {
   id: string;
   /** The question while it is open, in large type. */
@@ -15,8 +19,8 @@ export interface QuestionStep {
   blocker?: string | null;
   /** Nearly always right as it starts: shown folded and never asked. */
   isPreAnswered?: boolean;
-  /** Its control, drawn only while it is the open question. */
-  render: () => ReactNode;
+  /** Its control, drawn only while it is the open question. `moveOn` closes it without a Next: call it from a pick that answers the whole question (one pill, nothing else left to fill). */
+  render: (controls: QuestionControls) => ReactNode;
 }
 
 interface UseQuestionFlowOptions {
@@ -49,13 +53,18 @@ export function useQuestionFlow({
   const open =
     chosen ?? steps.find((step) => !isFoldedIn(step, passed)) ?? null;
 
-  const advance = () => {
-    if (open === null || !open.isAnswered) return;
-    onAdvance?.(open.id);
-    const done = new Set([...passed, open.id]);
+  const moveOnFrom = (id: string) => {
+    onAdvance?.(id);
+    const done = new Set([...passed, id]);
     setPassed(done);
     setOpenId(null);
-    if (steps.every((step) => isFoldedIn(step, done))) setHasReviewed(true);
+    if (steps.every((step) => step.id === id || isFoldedIn(step, done)))
+      setHasReviewed(true);
+  };
+
+  const advance = () => {
+    if (open === null || !open.isAnswered) return;
+    moveOnFrom(open.id);
   };
 
   const result = {
@@ -67,6 +76,8 @@ export function useQuestionFlow({
     blocker: open !== null && !open.isAnswered ? (open.blocker ?? null) : null,
     reopen: (id: string) => setOpenId(id),
     advance,
+    /** Moves on from a question its pick has just answered, before that answer has reached the steps. */
+    moveOnFrom,
   };
   return result;
 }

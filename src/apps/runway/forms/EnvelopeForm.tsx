@@ -64,6 +64,8 @@ interface EnvelopeFormData {
 interface EnvelopeFormProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Where Cancel and Discard go, when that is not where a save goes (back to the sheet the form came from). */
+  onCancel?: () => void;
   title: string;
   /** The envelope to change; its saved values start the form and a save adds a version from a date. */
   editing?: { itemId: string; payload: EnvelopeSealed };
@@ -166,6 +168,7 @@ const getBlocker = (
 function EnvelopeForm({
   isOpen,
   onClose,
+  onCancel,
   title,
   editing,
   presetDayKey,
@@ -254,9 +257,11 @@ function EnvelopeForm({
           value={formData.amount}
           onChange={(value) => set({ amount: value })}
           suffix={
-            <AmountHeroLink onClick={() => questions.reopen('cadence')}>
-              {cadenceText} ›
-            </AmountHeroLink>
+            questions.hasReviewed ? undefined : (
+              <AmountHeroLink onClick={() => questions.reopen('cadence')}>
+                {cadenceText} ›
+              </AmountHeroLink>
+            )
           }
         />
       ),
@@ -271,13 +276,20 @@ function EnvelopeForm({
         ? 'Add an income source first, so there are days to count.'
         : FORM_FLOW_WORDS.pickDays,
       isPreAnswered: true,
-      render: () => (
+      render: ({ moveOn }) => (
         <div className='space-y-3'>
           <PillGroup
             label={FORM_FLOW_WORDS.cadence}
             options={cadenceOptions}
             value={formData.cadence}
-            onChange={(cadence) => set({ cadence })}
+            onChange={(cadence) => {
+              set({ cadence });
+              if (
+                (cadence === 'everyIncomeDay' || hasDays) &&
+                (cadence !== 'chosen' || formData.dayKeys.length > 0)
+              )
+                moveOn();
+            }}
           />
           {formData.cadence === 'chosen' && dayOptions.length > 0 && (
             <div className='space-y-2'>
@@ -303,12 +315,15 @@ function EnvelopeForm({
         formData.priority === null ? '' : PRIORITY_LABELS[formData.priority],
       isAnswered: formData.priority !== null,
       isPreAnswered: true,
-      render: () => (
+      render: ({ moveOn }) => (
         <PillGroup
           label={FORM_FLOW_WORDS.priority}
           options={priorityOptions}
           value={formData.priority}
-          onChange={(priority) => set({ priority })}
+          onChange={(priority) => {
+            set({ priority });
+            moveOn();
+          }}
         />
       ),
     },
@@ -417,7 +432,7 @@ function EnvelopeForm({
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
   const requestClose = useDiscardGuard({
     isDirty,
-    onClose,
+    onClose: onCancel ?? onClose,
     isBusy: isSaving || flow.isSaving,
     title: editing
       ? FORM_FLOW_WORDS.discardChange

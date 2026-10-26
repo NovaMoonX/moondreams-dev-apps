@@ -39,7 +39,7 @@ const getRowName = (step: QuestionStep) => {
 
 /** A form asked one question at a time: the open one is large with only its control, the answered ones fold into rows that reopen it. Until every answer has been seen nothing follows the open question; after, a reopened answer keeps the rest folded around it. The way forward is the form's pinned footer (`flow.advance` while asking). */
 function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
-  const { steps, open, reopen, advance, hasReviewed } = flow;
+  const { steps, open, reopen, advance, moveOnFrom, hasReviewed } = flow;
   const rootRef = useRef<HTMLDivElement>(null);
   const openRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -131,7 +131,7 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
           >
             {open.title}
           </h3>
-          {open.render()}
+          {open.render({ moveOn: () => moveOnFrom(open.id) })}
         </div>
       )}
       {rows(after)}

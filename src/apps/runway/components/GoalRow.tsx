@@ -25,19 +25,23 @@ interface GoalRowProps {
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
-const describePaceShort = (goal: GoalSealed, pace: Pace) => {
+const describePaceShort = (
+  goal: GoalSealed,
+  pace: Pace,
+  savedCents: number,
+) => {
   if (pace.isComplete) return PACE_WORDS.completed;
   if (goal.state === 'paused') return LIFECYCLE_WORDS.paused;
   if (goal.funding.amount.kind === 'rest') return 'Takes what is left';
   const reaches = pace.reachedOn
     ? `reaches it ${formatDateShortUTC(pace.reachedOn.on)}`
     : 'the days ahead do not reach it';
-  if (goal.targetDate === null || pace.state === null) {
-    return reaches.charAt(0).toUpperCase() + reaches.slice(1);
-  }
-  if (pace.state === 'behind') {
+  if (goal.targetDate !== null && pace.state === 'behind') {
     const short = pace.remainingCents - pace.plannedByDateCents;
     return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateShortUTC(goal.targetDate)}`;
+  }
+  if (goal.targetDate === null || pace.state === null || savedCents === 0) {
+    return reaches.charAt(0).toUpperCase() + reaches.slice(1);
   }
   return `${PACE_STATE_LABELS[pace.state]}, ${reaches}`;
 };
@@ -47,7 +51,7 @@ function GoalRow({ goalId, goal, pace, heldCents, today }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const savedCents = Math.min(heldCents, goal.targetCents);
   const progress = `${formatCentsShort(savedCents)} of ${formatCentsShort(goal.targetCents)}`;
-  const paceLine = describePaceShort(goal, pace);
+  const paceLine = describePaceShort(goal, pace, savedCents);
   const funding = describeFundingShort(goal.funding);
 
   return (

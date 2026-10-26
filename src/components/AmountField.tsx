@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
@@ -71,6 +71,8 @@ function AmountField({
   extraWays = [],
 }: AmountFieldProps) {
   const shownHint = mode === 'rest' ? (restHint ?? hint) : hint;
+  const [hasSwitched, setHasSwitched] = useState(false);
+  const percentRef = useRef<HTMLInputElement>(null);
 
   if (isHero) {
     const options = modes ?? [];
@@ -87,7 +89,12 @@ function AmountField({
       ...(onModeChange
         ? others.map((option) => ({
             label: option.linkLabel ?? option.label,
-            onClick: () => onModeChange(option.value),
+            onClick: () => {
+              setHasSwitched(true);
+              onModeChange(option.value);
+              if (option.value === 'percent')
+                window.requestAnimationFrame(() => percentRef.current?.focus());
+            },
           }))
         : []),
       ...extraWays,
@@ -100,6 +107,7 @@ function AmountField({
           value={value}
           onChange={onChange}
           autoFocus={autoFocus}
+          focusOnOpen={hasSwitched}
           isRange={mode === 'range'}
           highValue={highValue}
           onHighChange={onHighChange}
@@ -128,6 +136,7 @@ function AmountField({
           <div className='flex items-center justify-center gap-2'>
             <div className='w-28 shrink-0'>
               <Input
+                ref={percentRef}
                 variant='outline'
                 type='text'
                 inputMode='decimal'

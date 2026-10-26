@@ -11,6 +11,7 @@ import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -127,6 +128,14 @@ function StartingAmountsSheet({
   );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const snapshot = JSON.stringify({ date, money, amounts });
+  const [startSnapshot] = useState(snapshot);
+  const requestClose = useDiscardGuard({
+    isDirty: snapshot !== startSnapshot,
+    onClose,
+    isBusy: isSaving,
+    title: FORM_FLOW_WORDS.discardChange,
+  });
 
   const startDate = fromDateInputValue(date) ?? null;
   const getHoldings = (): StartHoldingInput[] => {
@@ -184,7 +193,11 @@ function StartingAmountsSheet({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title='Where things stand'>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title='Where things stand'
+    >
       <div className='grid gap-4'>
         <AmountHero
           label={FORM_FLOW_WORDS.moneyOnHand}
@@ -232,7 +245,7 @@ function StartingAmountsSheet({
             <Button
               type='button'
               variant='secondary'
-              onClick={onClose}
+              onClick={requestClose}
               disabled={isSaving}
             >
               Cancel

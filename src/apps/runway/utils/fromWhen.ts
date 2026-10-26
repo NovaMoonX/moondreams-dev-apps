@@ -76,7 +76,7 @@ const getStretch = (
   const end = getStretchEnd(days, today, count);
   if (end === null) {
     const planned = days.filter((day) => day.on >= today).length;
-    return none(CHANGE_WORDS.stretchTooFar.replace('{n}', String(planned)));
+    return none(CHANGE_WORDS.stretchTooFar(planned));
   }
   return {
     span: { kind: 'version', effectiveFrom: today, effectiveUntil: end },

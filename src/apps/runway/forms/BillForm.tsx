@@ -7,7 +7,11 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import {
+  useQuestionFlow,
+  type QuestionControls,
+  type QuestionStep,
+} from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -84,6 +88,8 @@ interface BillFormData {
 interface BillFormProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Where Cancel and Discard go, when that is not where a save goes (back to the sheet the form came from). */
+  onCancel?: () => void;
   title: string;
   /** The bill to change; its saved values start the form and a save adds a version from a date. */
   editing?: { itemId: string; payload: BillSealed };
@@ -221,6 +227,7 @@ const getEditingData = (payload: BillSealed): BillFormData => {
 function BillForm({
   isOpen,
   onClose,
+  onCancel,
   title,
   editing,
   presetDayKey,
@@ -341,7 +348,7 @@ function BillForm({
           : dueDate !== undefined && formData.frequency === null
             ? FORM_FLOW_WORDS.pickRepeat
             : null,
-      render: () => (
+      render: ({ moveOn }) => (
         <div className='space-y-4'>
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs'>
@@ -369,7 +376,10 @@ function BillForm({
               label='Repeats'
               options={frequencyOptions}
               value={formData.frequency}
-              onChange={(frequency) => set({ frequency })}
+              onChange={(frequency) => {
+                set({ frequency });
+                if (isDueValid) moveOn();
+              }}
             />
           </div>
         </div>
@@ -386,13 +396,17 @@ function BillForm({
             isAnswered: buildEnding(formData) !== null,
             blocker: FORM_FLOW_WORDS.finishEnding,
             isPreAnswered: true,
-            render: () => (
+            render: ({ moveOn }: QuestionControls) => (
               <div className='space-y-3'>
                 <PillGroup
                   label='Ends'
                   options={endingOptions}
                   value={formData.endKind}
-                  onChange={(endKind) => set({ endKind })}
+                  onChange={(endKind) => {
+                    set({ endKind });
+                    if (buildEnding({ ...formData, endKind }) !== null)
+                      moveOn();
+                  }}
                 />
                 {formData.endKind === 'date' && (
                   <Input
@@ -433,13 +447,16 @@ function BillForm({
             isAnswered: !isChosen || pickedCount > 0,
             blocker: FORM_FLOW_WORDS.pickDays,
             isPreAnswered: true,
-            render: () => (
+            render: ({ moveOn }: QuestionControls) => (
               <div className='space-y-3'>
                 <PillGroup
                   label='Funded from'
                   options={fundingOptions}
                   value={formData.funding}
-                  onChange={(funding) => set({ funding })}
+                  onChange={(funding) => {
+                    set({ funding });
+                    if (funding !== 'chosen' || pickedCount > 0) moveOn();
+                  }}
                 />
                 {isChosen && (
                   <div className='space-y-2'>
@@ -468,12 +485,15 @@ function BillForm({
       summaryValue: PRIORITY_LABELS[formData.priority],
       isAnswered: true,
       isPreAnswered: true,
-      render: () => (
+      render: ({ moveOn }) => (
         <PillGroup
           label={FORM_FLOW_WORDS.priority}
           options={priorityOptions}
           value={formData.priority}
-          onChange={(priority) => set({ priority })}
+          onChange={(priority) => {
+            set({ priority });
+            moveOn();
+          }}
         />
       ),
     },
@@ -575,7 +595,7 @@ function BillForm({
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
   const requestClose = useDiscardGuard({
     isDirty,
-    onClose,
+    onClose: onCancel ?? onClose,
     isBusy: isSaving || flow.isSaving,
     title: editing
       ? FORM_FLOW_WORDS.discardChange

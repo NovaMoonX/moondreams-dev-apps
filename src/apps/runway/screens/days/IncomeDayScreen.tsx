@@ -17,8 +17,8 @@ import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
 import {
   CONFIRM_WORDS,
+  CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
-  ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
 } from '@apps/runway/constants';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
@@ -89,6 +89,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     (line) => line.pairing?.state === 'held',
   );
   const firstHeld = heldLines[0] ?? null;
+  const firstHeldName =
+    firstHeld !== null && Object.hasOwn(items, firstHeld.itemId)
+      ? items[firstHeld.itemId].name
+      : DRAFT_WORDS.billFallback;
   const effectivePairings = override?.pairings ?? inheritedPairings;
   const hasChanges =
     override !== null &&
@@ -281,16 +285,15 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                   onClick={() => setOpenLineId(firstHeld.lineId)}
                 >
                   <span className='min-w-0'>
-                    {ITEM_SHEET_R2_WORDS.heldNote(
-                      Object.hasOwn(items, firstHeld.itemId)
-                        ? items[firstHeld.itemId].name
-                        : DRAFT_WORDS.billFallback,
-                      formatCentsShort(
-                        (firstHeld.pairing?.heldCents ?? 0) > 0
-                          ? (firstHeld.pairing?.heldCents ?? 0)
-                          : firstHeld.shortBy,
-                      ),
-                    )}
+                    {(firstHeld.pairing?.heldCents ?? 0) > 0
+                      ? CHECKLIST_R3_WORDS.heldNote(
+                          firstHeldName,
+                          formatCentsShort(firstHeld.pairing?.heldCents ?? 0),
+                        )
+                      : CHECKLIST_R3_WORDS.shortNote(
+                          firstHeldName,
+                          formatCentsShort(firstHeld.shortBy),
+                        )}
                   </span>
                   <ChevronRight
                     className='text-muted-foreground h-4 w-4 shrink-0'

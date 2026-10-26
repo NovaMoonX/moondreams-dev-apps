@@ -332,6 +332,8 @@ function ItemSheet({
     }
   };
 
+  const backToSheet = () => setPhase('sheet');
+
   const leaveTo = (open: () => void) => () => {
     onClose();
     leaveAfterSubviewCloses(open);
@@ -347,6 +349,7 @@ function ItemSheet({
           presetDayKey={presetDayKey}
           openStep={openStep as BillStepId | null}
           onClose={onClose}
+          onCancel={backToSheet}
         />
       );
     }
@@ -359,6 +362,7 @@ function ItemSheet({
           presetDayKey={presetDayKey}
           openStep={openStep as EnvelopeStepId | null}
           onClose={onClose}
+          onCancel={backToSheet}
         />
       );
     }
@@ -371,6 +375,7 @@ function ItemSheet({
           presetDayKey={presetDayKey}
           openStep={openStep as GoalStepId | null}
           onClose={onClose}
+          onCancel={backToSheet}
         />
       );
     }
@@ -386,12 +391,20 @@ function ItemSheet({
             : { itemId, kind: 'payLine', payload: version.payload }
         }
         onClose={onClose}
+        onCancel={backToSheet}
       />
     );
   }
 
   if (phase === 'purchase') {
-    return <PurchaseForm isOpen presetEnvelopeId={itemId} onClose={onClose} />;
+    return (
+      <PurchaseForm
+        isOpen
+        presetEnvelopeId={itemId}
+        onClose={onClose}
+        onCancel={backToSheet}
+      />
+    );
   }
 
   if (

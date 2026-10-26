@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { CHECKLIST_WORDS } from '@apps/runway/constants';
+import { CHECKLIST_R3_WORDS, CHECKLIST_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { countMarks } from '@apps/runway/engine/progress';
@@ -88,6 +88,14 @@ export function useBillPaid({
 
   const run = async (task: (uid: string) => Promise<void>, failure: string) => {
     if (!user || isBusyRef.current) return false;
+    if (!navigator.onLine) {
+      addToast({
+        title: failure,
+        description: CHECKLIST_R3_WORDS.needsConnection,
+        type: 'error',
+      });
+      return false;
+    }
     isBusyRef.current = true;
     setIsBusy(true);
     try {
@@ -96,7 +104,13 @@ export function useBillPaid({
     } catch (error) {
       addToast({
         title: failure,
-        description: getErrorMessage(error, 'Nothing was changed.'),
+        description:
+          !navigator.onLine ||
+          /offline|unavailable/i.test(
+            error instanceof Error ? error.message : '',
+          )
+            ? CHECKLIST_R3_WORDS.needsConnection
+            : getErrorMessage(error, 'Nothing was changed.'),
         type: 'error',
       });
       return false;

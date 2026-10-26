@@ -319,7 +319,7 @@ export const CONFIRM_WORDS = {
   shortFrom: 'The shortfall comes out of what is left from this day.',
   needsAmount: 'Enter the amount that arrived.',
   needsDate: 'Pick the date it arrived.',
-  holds: 'Choose for each held line first.',
+  holds: 'Choose for each line that is short first.',
   linesTakeTooMuch:
     'The lines take more than arrived. Lower a line or raise the amount.',
   needsLineAmount: 'Enter an amount for each line you changed.',
@@ -413,7 +413,8 @@ export const CHANGE_WORDS = {
   stretchCountLabel: 'How many income days',
   stretchDateLabel: 'Last day of the change',
   stretchCountBlocker: 'Enter how many income days, at least 1.',
-  stretchTooFar: 'Only {n} income days are planned ahead. Pick fewer.',
+  stretchTooFar: (planned: number) =>
+    `Only ${planned} income days are planned ahead. Pick fewer.`,
   stretchDateBlocker: 'Pick the last day, from today to ten years ahead.',
   dayBlocker: 'Pick an income day.',
   dayOnlyFields:
@@ -500,7 +501,6 @@ export const DRAFT_CADENCE_WORDS: Record<
 
 export const DRAFT_WORDS = {
   fundedFrom: 'funded from',
-  shortBy: 'Short by',
   outOfMoney: "This day's money ran out before it got to this line",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',
@@ -528,7 +528,7 @@ export const DRAFT_WORDS = {
   leftShort: 'Left short',
   toppedUp: 'Topped up as far as the money allowed',
   holdsBlock:
-    'This day cannot be confirmed until you choose for each held line.',
+    'This day cannot be confirmed until you choose for each line that is short.',
   useThePlan: 'Undo my choices for this day',
   undoChoice: 'Undo my choice',
   fundsNone: 'Not tied to anything. Goes where the draft puts it.',
@@ -667,7 +667,6 @@ export const SPEND_WORDS = {
   wherePlaceholder: 'Safeway',
   note: 'Note',
   notePlaceholder: 'Birthday dinner',
-  addWhere: 'Add where',
   addNote: 'Add a note',
   removeWhere: 'Remove where',
   removeNote: 'Remove note',
@@ -915,12 +914,32 @@ export const ITEM_SHEET_R2_WORDS = {
   changeName: 'Change name',
   heldDetail: (amount: string) => `${amount} held · choose`,
   toppedUp: 'Topped up',
-  heldNote: (name: string, amount: string) =>
-    `${name}: ${amount} held · choose before confirming`,
   setAsideHeading: 'Set aside from this pay',
   holdsThrough: 'Your plan holds through',
   everythingPaid: 'Mark all paid',
   markedPaid: (name: string) => `Marked ${name} paid`,
   unmarkedPaid: (name: string) => `${name} is not marked paid`,
   undo: 'Undo',
+} as const;
+
+// Round 3: paying a whole payday at once, a tick that needs a connection, and one word for a shortfall.
+export const CHECKLIST_R3_WORDS = {
+  allPaid: 'All paid',
+  markedAllPaid: (count: number) =>
+    count === 1 ? 'Marked 1 bill paid' : `Marked ${count} bills paid`,
+  nothingToMark: 'Those were already paid',
+  undoneAll: (count: number) =>
+    count === 1
+      ? '1 bill is not marked paid'
+      : `${count} bills are not marked paid`,
+  markAllFailed: 'Those bills were not marked paid',
+  needsConnection: 'Marking paid needs a connection. Nothing was changed.',
+  tickNeedsConnection: 'Ticking needs a connection. Nothing was changed.',
+  short: (amount: string) => `${amount} short`,
+  shortChoose: (amount: string) => `${amount} short · choose`,
+  shortNote: (name: string, amount: string) =>
+    `${name} is ${amount} short: choose before confirming`,
+  heldNote: (name: string, amount: string) =>
+    `${name}: ${amount} held · choose before confirming`,
+  notStarted: 'Not started',
 } as const;

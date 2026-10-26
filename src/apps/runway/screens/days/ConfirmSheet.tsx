@@ -309,6 +309,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
             <Input
               variant='outline'
               aria-label='Note on the difference'
+              autoFocus={isNoting}
               maxLength={MAX_NOTE_LENGTH}
               placeholder={CONFIRM_WORDS.notePlaceholder}
               value={formData.note}

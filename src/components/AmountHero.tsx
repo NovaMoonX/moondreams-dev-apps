@@ -24,6 +24,8 @@ interface AmountHeroProps {
   onChange: (value: string) => void;
   /** Takes focus once its sheet has settled, on a phone only, where the keyboard is the next thing anyway. */
   autoFocus?: boolean;
+  /** Takes focus as it appears, at any size: it was just revealed by a tap. */
+  focusOnOpen?: boolean;
   isRange?: boolean;
   highValue?: string;
   onHighChange?: (value: string) => void;
@@ -190,6 +192,7 @@ function AmountHero({
   value,
   onChange,
   autoFocus = false,
+  focusOnOpen = false,
   isRange = false,
   highValue = '',
   onHighChange,
@@ -205,7 +208,21 @@ function AmountHero({
   const isPhone = useMediaQuery().isBelow('sm');
   const [isShowingAllWays, setIsShowingAllWays] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const highRef = useRef<HTMLInputElement>(null);
   const shouldFocus = autoFocus && isPhone;
+  const [isFocusingOnOpen] = useState(focusOnOpen);
+
+  useEffect(() => {
+    if (isFocusingOnOpen) inputRef.current?.focus();
+  }, [isFocusingOnOpen]);
+
+  const [focusRequest, setFocusRequest] = useState<{
+    end: 'low' | 'high';
+  } | null>(null);
+  useEffect(() => {
+    if (focusRequest === null) return;
+    (focusRequest.end === 'high' ? highRef : inputRef).current?.focus();
+  }, [focusRequest]);
 
   useEffect(() => {
     if (!shouldFocus) return;
@@ -226,7 +243,10 @@ function AmountHero({
             label: isRange
               ? rangeToggleLabels.toExact
               : rangeToggleLabels.toRange,
-            onClick: onRangeToggle,
+            onClick: () => {
+              onRangeToggle();
+              setFocusRequest({ end: isRange ? 'low' : 'high' });
+            },
           },
         ]
       : []),
@@ -256,6 +276,7 @@ function AmountHero({
               value={highValue}
               onChange={(next) => onHighChange?.(next)}
               sizeClass={sizeClass}
+              inputRef={highRef}
               isInvalid={Boolean(errorMessage)}
               disabled={disabled}
             />

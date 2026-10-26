@@ -14,7 +14,7 @@ export function describeProblem(problem: LookaheadProblem) {
   if (problem.kind === 'noIncome') {
     return `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
   }
-  const result = `On ${formatDateUTC(problem.on)}, the plan leaves ${name} short by ${formatCents(problem.shortBy)}.`;
+  const result = `On ${formatDateUTC(problem.on)}, the plan leaves ${name} ${formatCents(problem.shortBy)} short.`;
   return result;
 }
 

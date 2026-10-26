@@ -4,6 +4,7 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import {
   CONFIRM_WORDS,
+  CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
@@ -23,7 +24,7 @@ function RecordLineRow({ line, plannedCents, note }: RecordLineRowProps) {
   const isChanged = plannedCents !== undefined && plannedCents !== line.cents;
   const shortText =
     line.shortBy > 0
-      ? `${DRAFT_WORDS.shortBy} ${formatCents(line.shortBy)}`
+      ? CHECKLIST_R3_WORDS.short(formatCents(line.shortBy))
       : null;
 
   if (isChanged) {

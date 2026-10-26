@@ -349,6 +349,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               <Input
                 variant='outline'
                 aria-label='Note on the correction'
+                autoFocus={isNoting}
                 maxLength={MAX_NOTE_LENGTH}
                 placeholder={CORRECT_WORDS.notePlaceholder}
                 value={note}

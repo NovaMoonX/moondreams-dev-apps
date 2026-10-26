@@ -9,6 +9,7 @@ import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
+  CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
@@ -93,7 +94,7 @@ function DraftLine({
   };
   const pairingNote = getPairingNote();
   const shortText = isShort
-    ? `${DRAFT_WORDS.shortBy} ${formatCentsShort(line.shortBy)}`
+    ? CHECKLIST_R3_WORDS.short(formatCentsShort(line.shortBy))
     : null;
   const heldCents = line.pairing?.heldCents ?? 0;
   const getPairingShort = () => {
@@ -120,7 +121,7 @@ function DraftLine({
         text:
           heldCents > 0
             ? ITEM_SHEET_R2_WORDS.heldDetail(formatCentsShort(heldCents))
-            : `${formatCentsShort(line.shortBy)} short · choose`,
+            : CHECKLIST_R3_WORDS.shortChoose(formatCentsShort(line.shortBy)),
         isStrong: true,
       };
     if (shortText) return { text: shortText, isStrong: true };
@@ -235,6 +236,11 @@ function DraftLine({
             ) : undefined
           }
           presetDayKey={dayKey}
+          quickChange={
+            kind === 'bill' || kind === 'envelope' || kind === 'goal'
+              ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+              : undefined
+          }
           canChange={canChange}
           extra={extra}
           onClose={() => setIsOpen(false)}

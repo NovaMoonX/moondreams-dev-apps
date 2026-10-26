@@ -59,7 +59,14 @@ export function describeLineReason(
     ? ''
     : `, ${DRAFT_WORDS.fundedFrom} ${joinNames(names)}`;
   if (line.ask.kind === 'percent') {
-    return `${ask}, ${cadence.toLowerCase()}`;
+    const share =
+      isFromDaySource || line.sourceId === daySourceId
+        ? describeAmount(
+            { kind: 'percent', bps: line.ask.bps, of: line.ask.of },
+            'pay',
+          )
+        : ask;
+    return `${share} · ${cadence.toLowerCase()}`;
   }
   const result = `${ask ? `${ask}, ${cadence.toLowerCase()}` : cadence}${funded}`;
   return result;

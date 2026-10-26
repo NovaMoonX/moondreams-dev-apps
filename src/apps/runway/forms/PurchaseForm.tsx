@@ -75,6 +75,8 @@ interface PurchaseFormData {
 interface PurchaseFormProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Where Cancel and Discard go, when that is not where a save goes (back to the sheet the form came from). */
+  onCancel?: () => void;
   /** The envelope the form opened from; it starts chosen. */
   presetEnvelopeId?: string | null;
   /** The purchase being changed; the form then saves over it instead of adding. */
@@ -89,6 +91,7 @@ const isOfflineFailure = (error: unknown) =>
 function PurchaseForm({
   isOpen,
   onClose,
+  onCancel,
   presetEnvelopeId = null,
   editing,
 }: PurchaseFormProps) {
@@ -156,6 +159,7 @@ function PurchaseForm({
       : FREE_VALUE,
   );
   const [originQuery, setOriginQuery] = useState('');
+  const [revealed, setRevealed] = useState<'merchant' | 'note' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -579,7 +583,7 @@ function PurchaseForm({
         !isRefund &&
         presetEnvelopeId !== null &&
         envelopeId === presetEnvelopeId,
-      render: () => (
+      render: ({ moveOn }) => (
         <div className='space-y-4'>
           {isRefund && (
             <SummaryRow
@@ -608,7 +612,10 @@ function PurchaseForm({
                   ...allPills,
                 ]}
                 value={returnTo}
-                onChange={setReturnTo}
+                onChange={(id) => {
+                  setReturnTo(id);
+                  if (amount !== null) moveOn();
+                }}
               />
             </div>
           )}
@@ -618,7 +625,10 @@ function PurchaseForm({
                 label={SPEND_WORDS.envelope}
                 options={envelopePills}
                 value={envelopeId}
-                onChange={setEnvelopeId}
+                onChange={(id) => {
+                  setEnvelopeId(id);
+                  if (amount !== null) moveOn();
+                }}
               />
               {(hasMore || (amount !== null && options.length >= 2)) && (
                 <div className='flex flex-wrap gap-2'>
@@ -721,7 +731,7 @@ function PurchaseForm({
   const [startSnapshot] = useState(snapshot);
   const requestClose = useDiscardGuard({
     isDirty: snapshot !== startSnapshot,
-    onClose,
+    onClose: onCancel ?? onClose,
     isBusy: isSaving,
     title: editing
       ? FORM_FLOW_WORDS.discardChange
@@ -742,6 +752,7 @@ function PurchaseForm({
               <Input
                 variant='outline'
                 aria-label={SPEND_WORDS.where}
+                autoFocus={revealed === 'merchant'}
                 maxLength={MAX_NAME_LENGTH}
                 placeholder={SPEND_WORDS.wherePlaceholder}
                 value={extras.merchant}
@@ -760,6 +771,7 @@ function PurchaseForm({
               <Input
                 variant='outline'
                 aria-label={SPEND_WORDS.note}
+                autoFocus={revealed === 'note'}
                 maxLength={MAX_NOTE_LENGTH}
                 placeholder={SPEND_WORDS.notePlaceholder}
                 value={extras.note}
@@ -777,9 +789,10 @@ function PurchaseForm({
                   <X className='h-4 w-4' />
                 )
               }
-              onClick={() =>
-                setExtras({ merchant: extras.merchant === null ? '' : null })
-              }
+              onClick={() => {
+                setRevealed(extras.merchant === null ? 'merchant' : null);
+                setExtras({ merchant: extras.merchant === null ? '' : null });
+              }}
             >
               {extras.merchant === null
                 ? FORM_FLOW_WORDS.addPlace
@@ -793,9 +806,10 @@ function PurchaseForm({
                   <X className='h-4 w-4' />
                 )
               }
-              onClick={() =>
-                setExtras({ note: extras.note === null ? '' : null })
-              }
+              onClick={() => {
+                setRevealed(extras.note === null ? 'note' : null);
+                setExtras({ note: extras.note === null ? '' : null });
+              }}
             >
               {extras.note === null
                 ? SPEND_WORDS.addNote
@@ -977,6 +991,8 @@ function PurchaseForm({
                   onClick={() => {
                     setEnvelopeId(option.id);
                     setView('form');
+                    if (amount !== null && questions.open?.id === 'envelope')
+                      questions.moveOnFrom('envelope');
                   }}
                 >
                   <span className='flex w-full min-w-0 items-center gap-3'>

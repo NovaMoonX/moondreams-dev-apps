@@ -4,6 +4,7 @@ import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import SectionDivider from '@/components/SectionDivider';
+import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -14,12 +15,19 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   BILL_WORDS,
+  CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
   ITEM_SHEET_R2_WORDS,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { setLinesDone } from '@apps/runway/store/actions/moveActions';
+import { countMarks } from '@apps/runway/engine/progress';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import {
+  markBillsPaid,
+  setLinesDone,
+  undoBillsPaid,
+} from '@apps/runway/store/actions/moveActions';
 import {
   selectBillPayments,
   selectOpenDay,
@@ -27,11 +35,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { RecordLine } from '@apps/runway/types';
-import {
-  markPaymentPaid,
-  undoPaymentPaid,
-  useBillPaid,
-} from '@apps/runway/hooks/useBillPaid';
+import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
 
 interface ChecklistBillRowProps {
   line: RecordLine;
@@ -63,11 +67,13 @@ function ChecklistBillRow({
   useEffect(() => {
     latest.current = paid;
   });
+  const [pending, setPending] = useState<boolean | null>(null);
   const progress = payment
     ? (getChecklistProgress(payment) ?? BILL_WORDS.readyToPay)
     : null;
   const amount = formatCents(line.cents);
-  const isChecked = payment ? paid.isPaid : isDone;
+  const settled = payment ? paid.isPaid : isDone;
+  const isChecked = pending ?? settled;
 
   const toggle = async (next: boolean) => {
     if (!payment) {
@@ -75,7 +81,9 @@ function ChecklistBillRow({
       return;
     }
     if (!paid.isReady || paid.isBusy || next === paid.isPaid) return;
+    setPending(next);
     const isWritten = next ? await paid.mark() : await paid.undo();
+    setPending(null);
     if (!isWritten) return;
     addToast({
       title: next
@@ -121,6 +129,10 @@ function ChecklistBillRow({
   );
 }
 
+const isOffline = (error: unknown) =>
+  !navigator.onLine ||
+  /offline|unavailable/i.test(error instanceof Error ? error.message : '');
+
 /** Where a payment stands, short enough for one line. */
 const getChecklistProgress = (payment: BillPayment) => {
   const { paid, fundedCents, totalCents } = payment;
@@ -148,6 +160,8 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const doneIds = openDay?.doneLineIds ?? [];
   const moves = useAppSelector((state) => state.runway.moves);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const isMarkingRef = useRef(false);
+  const [markTries, setMarkTries] = useState(0);
   const done = new Set(doneIds);
 
   const billIds = new Set(
@@ -167,35 +181,104 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
     });
   const ready = rows.filter((row) => !row.isWaiting);
   const waiting = rows.filter((row) => row.isWaiting);
-  const readyIds = ready.map((row) => row.line.lineId);
   const isSettled = (row: (typeof ready)[number]) =>
     row.payment ? row.payment.paid !== null : done.has(row.line.lineId);
   const doneCount = ready.filter(isSettled).length;
+  const isAllSettled = doneCount === ready.length;
 
   if (rows.length === 0) return null;
 
-  const markAll = async (isPaid: boolean) => {
-    if (!user || isMarkingAll) return;
-    const changing = ready.filter(
-      (row) => row.payment !== null && (row.payment.paid !== null) !== isPaid,
+  const markAll = async () => {
+    if (!user || isMarkingRef.current) return;
+    if (!navigator.onLine) {
+      setMarkTries((count) => count + 1);
+      addToast({
+        title: CHECKLIST_R3_WORDS.markAllFailed,
+        description: CHECKLIST_R3_WORDS.needsConnection,
+        type: 'error',
+      });
+      return;
+    }
+    const unpaid = ready.flatMap((row) =>
+      row.payment !== null && row.payment.paid === null
+        ? [{ billId: row.line.itemId, payment: row.payment }]
+        : [],
     );
+    const lineIds = ready
+      .filter((row) => !done.has(row.line.lineId))
+      .map((row) => row.line.lineId);
+    const dayLines = { dayId: day.dayKey, lineIds };
+    isMarkingRef.current = true;
     setIsMarkingAll(true);
     try {
-      await changing.reduce(async (previous, row) => {
-        await previous;
-        if (!row.payment) return;
-        if (isPaid) {
-          await markPaymentPaid(user.uid, row.line.itemId, row.payment, moves);
-          return;
-        }
-        if (row.payment.paid)
-          await undoPaymentPaid(user.uid, row.line.itemId, row.payment.paid);
-      }, Promise.resolve());
-      await setLinesDone(user.uid, day.dayKey, readyIds, isPaid, doneIds);
-    } catch {
-      addToast({ title: CHECKLIST_WORDS.tickFailed, type: 'error' });
+      const encryption = await getRunwayEncryption(user.uid);
+      const written = await markBillsPaid(
+        user.uid,
+        encryption,
+        unpaid.map(({ billId, payment }) => ({
+          billId,
+          dueOn: payment.dueOn,
+          amountCents: payment.totalCents,
+          fundedCents: payment.fundedCents,
+          paidOn: todayAsUtcDate(),
+          marks: countMarks(moves, billId, payment.dueOn),
+        })),
+        dayLines,
+      );
+      addToast({
+        title:
+          written.length === 0 && unpaid.length > 0
+            ? CHECKLIST_R3_WORDS.nothingToMark
+            : CHECKLIST_R3_WORDS.markedAllPaid(written.length),
+        type: 'success',
+        action:
+          written.length === 0 && lineIds.length === 0
+            ? undefined
+            : {
+                label: ITEM_SHEET_R2_WORDS.undo,
+                onClick: () => void undoAll(written, dayLines),
+              },
+      });
+    } catch (markError) {
+      addToast({
+        title: CHECKLIST_R3_WORDS.markAllFailed,
+        description: isOffline(markError)
+          ? CHECKLIST_R3_WORDS.needsConnection
+          : 'Nothing was changed.',
+        type: 'error',
+      });
     } finally {
+      isMarkingRef.current = false;
       setIsMarkingAll(false);
+      setMarkTries((count) => count + 1);
+    }
+  };
+
+  const undoAll = async (
+    written: Awaited<ReturnType<typeof markBillsPaid>>,
+    dayLines: { dayId: string; lineIds: readonly string[] },
+  ) => {
+    if (!user) return;
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const count = await undoBillsPaid(
+        user.uid,
+        encryption,
+        written,
+        dayLines,
+      );
+      addToast({
+        title: CHECKLIST_R3_WORDS.undoneAll(count),
+        type: 'success',
+      });
+    } catch (undoError) {
+      addToast({
+        title: 'Those bills are still marked paid',
+        description: isOffline(undoError)
+          ? CHECKLIST_R3_WORDS.needsConnection
+          : 'Nothing was changed.',
+        type: 'error',
+      });
     }
   };
 
@@ -212,16 +295,27 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
     <section aria-label={CHECKLIST_WORDS.title} className='space-y-3'>
       {ready.length > 0 && (
         <div className='border-border bg-card flex min-h-12 items-center gap-3 rounded-2xl border px-3'>
-          <Checkbox
-            className={TICK_HIT_CLASS}
-            checked={doneCount === ready.length}
-            indeterminate={doneCount > 0 && doneCount < ready.length}
-            disabled={isMarkingAll}
-            onCheckedChange={(next) => void markAll(Boolean(next))}
-            aria-label={ITEM_SHEET_R2_WORDS.everythingPaid}
-          />
+          {isAllSettled ? (
+            <span className='flex w-5 shrink-0 justify-center text-lg'>
+              <TickMark />
+            </span>
+          ) : (
+            <Checkbox
+              key={markTries}
+              className={TICK_HIT_CLASS}
+              checked={isMarkingAll}
+              indeterminate={!isMarkingAll && doneCount > 0}
+              disabled={isMarkingAll}
+              onCheckedChange={(next) => {
+                if (next) void markAll();
+              }}
+              aria-label={ITEM_SHEET_R2_WORDS.everythingPaid}
+            />
+          )}
           <span className='min-w-0 flex-1 font-medium'>
-            {ITEM_SHEET_R2_WORDS.everythingPaid}
+            {isAllSettled
+              ? CHECKLIST_R3_WORDS.allPaid
+              : ITEM_SHEET_R2_WORDS.everythingPaid}
           </span>
           <span className='text-muted-foreground text-sm whitespace-nowrap tabular-nums'>
             {doneCount} of {ready.length}

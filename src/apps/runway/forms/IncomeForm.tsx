@@ -8,7 +8,11 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import {
+  useQuestionFlow,
+  type QuestionControls,
+  type QuestionStep,
+} from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -76,6 +80,8 @@ interface IncomeFormData {
 interface IncomeFormProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Where Cancel and Discard go, when that is not where a save goes (back to the sheet the form came from). */
+  onCancel?: () => void;
   title: string;
   /** What the sheet starts on; the income form leaves it open and an expected income starts on once. */
   defaultFrequency: Frequency | null;
@@ -244,6 +250,7 @@ const getEditingData = (editing: EditingIncome): IncomeFormData => {
 function IncomeForm({
   isOpen,
   onClose,
+  onCancel,
   title,
   defaultFrequency,
   editing,
@@ -342,7 +349,7 @@ function IncomeForm({
             summaryLabel: FORM_FLOW_WORDS.source,
             summaryValue: sourceName,
             isAnswered: sourceName !== '',
-            render: () => (
+            render: ({ moveOn }: QuestionControls) => (
               <PickOrCreate
                 label='Where it comes from'
                 options={sourceOptions}
@@ -351,9 +358,10 @@ function IncomeForm({
                 newPillLabel='New source'
                 newPlaceholder='Employer or source'
                 maxLength={MAX_NAME_LENGTH}
-                onChange={(choice, newText) =>
-                  set({ source: { choice, newText } })
-                }
+                onChange={(choice, newText) => {
+                  set({ source: { choice, newText } });
+                  if (choice !== '' && choice !== NEW_CHOICE) moveOn();
+                }}
               />
             ),
           },
@@ -390,13 +398,20 @@ function IncomeForm({
         formData.frequency === 'twiceMonthly' && formData.secondDay !== ''
           ? FORM_FLOW_WORDS.otherPayday
           : null,
-      render: () => (
+      render: ({ moveOn }) => (
         <div className='space-y-4'>
           <PillGroup
             label='How often'
             options={frequencyOptions}
             value={formData.frequency}
-            onChange={(frequency) => set({ frequency })}
+            onChange={(frequency) => {
+              set({ frequency });
+              if (
+                frequency !== 'twiceMonthly' &&
+                buildSchedule({ ...formData, frequency }) !== null
+              )
+                moveOn();
+            }}
           />
           {formData.frequency !== null && (
             <div className='space-y-1.5'>
@@ -444,13 +459,17 @@ function IncomeForm({
             isAnswered: buildEnding(formData) !== null,
             blocker: FORM_FLOW_WORDS.finishEnding,
             isPreAnswered: true,
-            render: () => (
+            render: ({ moveOn }: QuestionControls) => (
               <div className='space-y-3'>
                 <PillGroup
                   label='Ends'
                   options={endingOptions}
                   value={formData.endKind}
-                  onChange={(endKind) => set({ endKind })}
+                  onChange={(endKind) => {
+                    set({ endKind });
+                    if (buildEnding({ ...formData, endKind }) !== null)
+                      moveOn();
+                  }}
                 />
                 {formData.endKind === 'date' && (
                   <Input
@@ -541,7 +560,7 @@ function IncomeForm({
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
   const requestClose = useDiscardGuard({
     isDirty,
-    onClose,
+    onClose: onCancel ?? onClose,
     isBusy: isSaving || flow.isSaving,
     title: editing
       ? FORM_FLOW_WORDS.discardChange

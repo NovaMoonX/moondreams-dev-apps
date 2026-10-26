@@ -50,7 +50,15 @@ function FormSheet({
         id={dialogId}
         isOpen={isOpen}
         onClose={onDialogClose}
-        title={title}
+        title={
+          isShort ? (
+            <h2 id={`${dialogId}-title`} className='text-xl font-semibold'>
+              {title}
+            </h2>
+          ) : (
+            title
+          )
+        }
         showCloseButton
         disableCloseOnOverlayClick
         className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
