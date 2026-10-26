@@ -49,6 +49,15 @@ export interface ClosingState {
   billFunded: Record<string, FundedDay[]>;
   /** Each bill's payments not undone; the ones before the starting day are kept and left out of the sums. */
   billPaid: Record<string, PaidPayment[]>;
+  /** The splits summed in `arrivedCents` and `given` whose money arrived after this month ended, so a figure as of a day just after it can leave them out. */
+  late: LateSplit[];
+}
+
+/** One confirmed day's money that arrived after the month it was expected in had closed. */
+export interface LateSplit {
+  on: DateOnly;
+  arrivedCents: Cents;
+  given: Record<string, Cents>;
 }
 
 /** The ledger entries whose date falls in one month, with the day documents the records belong to. */
@@ -180,6 +189,7 @@ export const emptyClosing = (
   spentByItem: {},
   billFunded: {},
   billPaid: {},
+  late: [],
 });
 
 /**
@@ -231,9 +241,32 @@ export function closing(
       }
       return sums;
     }, {});
+  const boundary = getMonthStart(getNextMonth(month));
+  const late = [
+    ...base.late.filter((split) => split.on >= boundary),
+    ...getEffectiveSplits(counted).flatMap((split): LateSplit[] => {
+      const on = arrivedOn.get(split.dayId) ?? 0;
+      return on >= boundary
+        ? [
+            {
+              on,
+              arrivedCents: split.arrivedCents,
+              given: split.lines.reduce<Record<string, Cents>>(
+                (sums, line) => ({
+                  ...sums,
+                  [line.itemId]: (sums[line.itemId] ?? 0) + line.cents,
+                }),
+                {},
+              ),
+            },
+          ]
+        : [];
+    }),
+  ];
   const result: ClosingState = {
     month,
     startDate,
+    late,
     arrivedCents: base.arrivedCents + arrivedCents,
     given: addCents(base.given, sumConfirmedByItem(counted)),
     spentCents:
@@ -252,6 +285,38 @@ export const withoutSpending = (state: ClosingState): ClosingState => ({
   spentCents: 0,
   spentByItem: {},
 });
+
+/**
+ * The closing as it stood at the start of `day`, a day inside the window that follows it: money that
+ * arrived, and payments made, on or after `day` are taken out, which is what `deriveBalancesBefore` does
+ * to the ledger read since.
+ */
+export function closingBefore(
+  state: ClosingState,
+  day: DateOnly,
+): ClosingState {
+  const dropped = state.late.filter((split) => split.on >= day);
+  const result: ClosingState = {
+    ...state,
+    arrivedCents:
+      state.arrivedCents -
+      dropped.reduce((sum, split) => sum + split.arrivedCents, 0),
+    given: dropped
+      .flatMap((split) => Object.entries(split.given))
+      .reduce<Record<string, Cents>>(
+        (sums, [id, cents]) => ({ ...sums, [id]: (sums[id] ?? 0) - cents }),
+        { ...state.given },
+      ),
+    late: state.late.filter((split) => split.on < day),
+    billPaid: Object.fromEntries(
+      Object.entries(state.billPaid).map(([id, list]) => [
+        id,
+        list.filter((payment) => payment.paidOn < day),
+      ]),
+    ),
+  };
+  return result;
+}
 
 /** The payments of every bill from a closing and from the ledger read since, none of them counted twice. */
 export const joinPaid = (
@@ -359,6 +424,11 @@ export function encodeClosing(state: ClosingState): ClosingSealed {
         list.map((entry): [number, Cents] => [toDays(entry.on), entry.cents]),
       ]),
     ),
+    late: state.late.map((split): [number, Cents, Record<string, Cents>] => [
+      toDays(split.on),
+      split.arrivedCents,
+      split.given,
+    ]),
     paid: Object.fromEntries(
       Object.entries(state.billPaid).map(([id, list]) => [
         id,
@@ -388,6 +458,11 @@ export function decodeClosing(
     startDate: sealed.startDay * DAY_MS,
     arrivedCents: sealed.arrivedCents,
     given: sealed.given,
+    late: sealed.late.map(([day, arrivedCents, given]) => ({
+      on: day * DAY_MS,
+      arrivedCents,
+      given,
+    })),
     spentCents: sealed.spentCents,
     spentByItem: sealed.spentByItem,
     billFunded: Object.fromEntries(
@@ -501,9 +576,23 @@ export function getRebuildRange(
   return result;
 }
 
+const joinEntries = (
+  left: ClosingEntries,
+  right: ClosingEntries,
+): ClosingEntries => ({
+  ...right,
+  days: [...left.days, ...right.days],
+  records: [...left.records, ...right.records],
+  moves: [...left.moves, ...right.moves],
+  purchases: [...left.purchases, ...right.purchases],
+});
+
 /**
  * Builds the closings of the months `from` through `to`, each on the one before it, reading up to
  * `limit` months ahead while the earlier ones are summed. Stops at the first month that cannot be read.
+ * The first closing of a chain (no `previous`) also reads the month before it: a day expected, or a
+ * payment due, in the month before the starting day still counts when it arrives or is paid after it, and
+ * nothing else would hold it once the recent window starts after the closing.
  */
 export async function buildClosings(
   months: readonly string[],
@@ -511,15 +600,25 @@ export async function buildClosings(
   read: (month: string) => Promise<ClosingEntries>,
   limit = 3,
 ): Promise<ClosingState[]> {
+  const readFirst = async (month: string) => {
+    if (previous !== null) return read(month);
+    const [before, here] = await Promise.all([
+      read(getPreviousMonth(month)),
+      read(month),
+    ]);
+    return joinEntries(before, here);
+  };
   const reads = months.reduce<Promise<ClosingEntries>[]>(
     (started, month, index) => [
       ...started,
-      index < limit
-        ? read(month)
-        : started[index - limit].then(
-            () => read(month),
-            () => read(month),
-          ),
+      index === 0
+        ? readFirst(month)
+        : index < limit
+          ? read(month)
+          : started[index - limit].then(
+              () => read(month),
+              () => read(month),
+            ),
     ],
     [],
   );

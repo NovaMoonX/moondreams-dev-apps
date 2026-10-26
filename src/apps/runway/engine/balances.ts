@@ -6,7 +6,12 @@ import type {
   OpenRecord,
 } from '@apps/runway/types';
 
-import { joinCents, joinPaid, type ClosingState } from './closings';
+import {
+  closingBefore,
+  joinCents,
+  joinPaid,
+  type ClosingState,
+} from './closings';
 import { getEffectiveSplits } from './correct';
 import { collectPaid, collectStarted } from './progress';
 
@@ -196,6 +201,7 @@ export function deriveBalancesBefore(
   );
   const result = deriveBalances({
     ...input,
+    closing: input.closing ? closingBefore(input.closing, day) : null,
     moves: input.moves.filter(
       (move) =>
         !dropped.has(move.id) &&

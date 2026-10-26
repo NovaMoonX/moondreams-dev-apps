@@ -89,7 +89,10 @@ function RunwayPage() {
   useRunwayTheme();
   useTrackAppUsage('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
-  const { retry: retryHistory } = useClosings(user?.uid ?? null);
+  const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
+  const { retry: retryHistory } = useClosings(
+    isDeletingPlan ? null : (user?.uid ?? null),
+  );
   const historyStatus = useAppSelector((state) => selectHistory(state).status);
 
   const tryAgain = () => {
@@ -105,11 +108,7 @@ function RunwayPage() {
     return <AuthRequiredState message='Please sign in to use Runway.' />;
   }
 
-  if (
-    moreEntry === 'settings' &&
-    settingsView === 'delete' &&
-    keyStatus === 'ready'
-  ) {
+  if (isDeletingPlan && keyStatus === 'ready') {
     return (
       <div className='page'>
         <DeletePlanScreen

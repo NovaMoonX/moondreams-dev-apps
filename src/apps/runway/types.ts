@@ -483,6 +483,8 @@ export interface ClosingSealed {
   startDay: number;
   arrivedCents: Cents;
   given: Record<string, Cents>;
+  /** `[day, arrivedCents, given]` for each split that arrived after its month ended and is still after the next month's start. */
+  late: [number, Cents, Record<string, Cents>][];
   spentCents: Cents;
   spentByItem: Record<string, Cents>;
   funded: Record<string, [number, Cents][]>;

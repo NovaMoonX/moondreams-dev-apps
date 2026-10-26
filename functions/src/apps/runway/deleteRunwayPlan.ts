@@ -127,6 +127,10 @@ export const deleteRunwayPlan = onCall(
       );
       const planDoc = await plan.get();
       if (planDoc.exists) await plan.delete();
+      const strays = await plan.listCollections();
+      const strayCounts = await Promise.all(
+        strays.map((collection) => deleteCollection(firestore, collection)),
+      );
       const serverCount = await deleteDocumentTree(
         firestore,
         firestore.doc(serverPath(uid)),
@@ -135,6 +139,7 @@ export const deleteRunwayPlan = onCall(
 
       const documents =
         childCounts.reduce((sum, value) => sum + value, 0) +
+        strayCounts.reduce((sum, value) => sum + value, 0) +
         (planDoc.exists ? 1 : 0) +
         serverCount;
       logger.info('runway.plan.deleted', { documents, receipts });
@@ -143,7 +148,10 @@ export const deleteRunwayPlan = onCall(
     } catch (error) {
       const code = (error as { code?: unknown } | null)?.code;
       logger.error('runway.plan.deleteFailed', {
-        code: typeof code === 'string' || typeof code === 'number' ? code : 'unknown',
+        code:
+          typeof code === 'string' || typeof code === 'number'
+            ? code
+            : 'unknown',
       });
       throw new HttpsError(
         'internal',
