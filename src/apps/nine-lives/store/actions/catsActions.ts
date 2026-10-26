@@ -185,7 +185,7 @@ export const deleteCat = createAsyncThunk<
 
     try {
       await deleteDoc(getCatDocRef(householdId, catId));
-      await cancelEntityReminders(current.reminderIds);
+      await cancelEntityReminders(current.reminderIds ?? []);
       return { id: catId };
     } catch (error) {
       dispatch(revertCat({ id: catId }));

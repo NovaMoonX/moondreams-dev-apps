@@ -32,59 +32,17 @@ const getVisitsCollectionRef = (householdId: string) =>
 const getVisitDocRef = (householdId: string, visitId: string) =>
   doc(getVisitsCollectionRef(householdId), visitId);
 
-const getCatConditionDocRef = (
-  householdId: string,
-  catId: string,
-  conditionId: string,
-) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'conditions',
-    conditionId,
-  );
+const getCatConditionDocRef = (householdId: string, conditionId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'conditions', conditionId);
 
-const getSymptomDocRef = (
-  householdId: string,
-  catId: string,
-  symptomId: string,
-) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'symptoms',
-    symptomId,
-  );
+const getSymptomDocRef = (householdId: string, symptomId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'symptoms', symptomId);
 
 const getVaccinationDocRef = (householdId: string, vaccinationId: string) =>
   doc(db, 'apps', 'nine-lives', 'households', householdId, 'vaccinations', vaccinationId);
 
-const getWeightEntryDocRef = (
-  householdId: string,
-  catId: string,
-  weightEntryId: string,
-) =>
-  doc(
-    db,
-    'apps',
-    'nine-lives',
-    'households',
-    householdId,
-    'cats',
-    catId,
-    'weightEntries',
-    weightEntryId,
-  );
+const getWeightEntryDocRef = (householdId: string, weightEntryId: string) =>
+  doc(db, 'apps', 'nine-lives', 'households', householdId, 'weightEntries', weightEntryId);
 
 async function scheduleVisitReminders(
   state: RootState,
@@ -411,18 +369,7 @@ export const completeVisit = createAsyncThunk<
     for (const input of outcome.weightEntries ?? []) {
       const id =
         input.id ??
-        doc(
-          collection(
-            db,
-            'apps',
-            'nine-lives',
-            'households',
-            householdId,
-            'cats',
-            input.catId,
-            'weightEntries',
-          ),
-        ).id;
+        doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'weightEntries')).id;
       const weightEntry: WeightEntry = {
         id,
         catId: input.catId,
@@ -434,7 +381,7 @@ export const completeVisit = createAsyncThunk<
         createdAt: input.createdAt ?? now,
       };
       batch.set(
-        getWeightEntryDocRef(householdId, input.catId, id),
+        getWeightEntryDocRef(householdId, id),
         weightEntry,
       );
       linkedWeightEntryIds.push(id);
@@ -450,18 +397,7 @@ export const completeVisit = createAsyncThunk<
         : undefined;
       const id =
         input.id ??
-        doc(
-          collection(
-            db,
-            'apps',
-            'nine-lives',
-            'households',
-            householdId,
-            'cats',
-            input.catId,
-            'conditions',
-          ),
-        ).id;
+        doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'conditions')).id;
       const linkedVisitIds = [
         ...new Set([
           ...(existing?.linkedVisitIds ?? input.linkedVisitIds ?? []),
@@ -485,7 +421,7 @@ export const completeVisit = createAsyncThunk<
         createdAt: input.createdAt ?? existing?.createdAt ?? now,
         lastEditedAt: now,
       };
-      batch.set(getCatConditionDocRef(householdId, input.catId, id), condition);
+      batch.set(getCatConditionDocRef(householdId, id), condition);
       linkedConditionIds.push(id);
       changedConditions.push(condition);
     }
@@ -499,18 +435,7 @@ export const completeVisit = createAsyncThunk<
         : undefined;
       const id =
         input.id ??
-        doc(
-          collection(
-            db,
-            'apps',
-            'nine-lives',
-            'households',
-            householdId,
-            'cats',
-            input.catId,
-            'symptoms',
-          ),
-        ).id;
+        doc(collection(db, 'apps', 'nine-lives', 'households', householdId, 'symptoms')).id;
       const linkedVisitIds = [
         ...new Set([
           ...(existing?.linkedVisitIds ?? input.linkedVisitIds ?? []),
@@ -532,7 +457,7 @@ export const completeVisit = createAsyncThunk<
         createdAt: input.createdAt ?? existing?.createdAt ?? now,
         lastEditedAt: now,
       };
-      batch.set(getSymptomDocRef(householdId, input.catId, id), symptom);
+      batch.set(getSymptomDocRef(householdId, id), symptom);
       linkedSymptomIds.push(id);
       changedSymptoms.push(symptom);
     }

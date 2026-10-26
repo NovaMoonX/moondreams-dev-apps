@@ -210,14 +210,14 @@ function PackingSuggestionsEntry({ trip, currentUserId }: PackingSuggestionsEntr
               </p>
             </div>
           </div>
-          <div className='flex flex-wrap items-center gap-2'>
-            <Button type='button' size='lg' className='flex-1' onClick={() => setIsOpen(true)}>
+          <div className='flex items-center gap-2'>
+            <Button type='button' className='flex-1 whitespace-nowrap' onClick={() => setIsOpen(true)}>
               Choose items
             </Button>
             <Button
               type='button'
               variant='tertiary'
-              size='lg'
+              className='whitespace-nowrap'
               onClick={() => updateChoices((current) => ({ ...current, isDismissed: true }))}
             >
               Not for me

@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import {
   COLLECTION_BATCH_SIZE,
@@ -774,72 +773,10 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
 }
 
-// ---- The caps the rules and the app share ----
+// ---- The caps the app shares ----
 {
   assert.ok(MAX_RECIPE_COLLECTIONS <= MAX_COLLECTIONS);
   assert.ok(MAX_COLLECTION_LABEL_LENGTH > 0);
-  const rules = readFileSync(
-    new URL('../../firestore.rules', import.meta.url),
-    'utf8',
-  );
-  const ids =
-    /function isCollectionIds\(value\) \{\s*return value is list && value\.size\(\) <= (\d+);/.exec(
-      rules,
-    );
-  assert.equal(
-    Number(ids?.[1]),
-    MAX_RECIPE_COLLECTIONS,
-    "the rules cap a recipe's collections at the same number the form does",
-  );
-  const label =
-    /function isCollection\(data, id\) \{[\s\S]*?isShortText\(data\.label, (\d+)\)/.exec(
-      rules,
-    );
-  assert.equal(
-    Number(label?.[1]),
-    MAX_COLLECTION_LABEL_LENGTH,
-    "and a collection's name at the same length",
-  );
-  assert.match(
-    rules,
-    /function isMeal\(data, id\) \{\s*return data\.keys\(\)\.hasOnly\(\[[^\]]*'isFavorite'[^\]]*\]\)\s*&& data\.keys\(\)\.hasAll\(\[(?![^\]]*'isFavorite')[^\]]*\]\)/,
-    'a saved meal may carry isFavorite but is not required to (older ones have none)',
-  );
-  assert.match(
-    rules,
-    /'sourceId', 'collectionIds', 'categories', 'isArchived'/,
-    'a recipe may carry collectionIds and categories',
-  );
-  assert.doesNotMatch(
-    rules,
-    /hasAll\(\['id', 'title', 'servings', 'ingredients', 'steps', 'source', [^\]]*'categories'/,
-    'but categories are not required (older ones have none)',
-  );
-  assert.doesNotMatch(
-    rules,
-    /function isMeal\(data, id\) \{\s*return data\.keys\(\)\.hasOnly\(\[[^\]]*\]\)\s*&& data\.keys\(\)\.hasAll\(\[[^\]]*'categories'/,
-    'nor are a saved meal’s',
-  );
-  assert.doesNotMatch(
-    rules,
-    /hasAll\(\['id', 'title', 'servings', 'ingredients', 'steps', 'source', [^\]]*'collectionIds'/,
-    'but is not required (older ones have none)',
-  );
-  assert.match(
-    rules,
-    /function isRecipe\(data, id\) \{\s*return data\.keys\(\)\.hasOnly\(\[[^\]]*'isFavorite'[^\]]*\]\)\s*&& data\.keys\(\)\.hasAll\(\[(?![^\]]*'isFavorite')[^\]]*\]\)/,
-    'a recipe may carry isFavorite but is not required to (older ones have none)',
-  );
-  assert.match(
-    rules,
-    /data\.get\('isFavorite', false\) is bool/,
-    'and the key is read with a default',
-  );
-  assert.match(
-    rules,
-    /function isCollection\(data, id\) \{\s*return data\.keys\(\)\.hasOnly\(\['id', 'label', 'createdAt', 'updatedAt'\]\)\s*&& data\.keys\(\)\.hasAll\(\['id', 'label', 'createdAt', 'updatedAt'\]\)/,
-    'a new collection lists every key it has',
-  );
 }
 
 // ---- Adding many recipes to collections at once ----

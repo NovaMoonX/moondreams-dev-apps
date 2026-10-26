@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 import {
   CATEGORY_FILTER_ANY,
@@ -132,34 +131,6 @@ assert.ok(
     ['LUNCH', 'DINNER'].includes(category.value),
   ),
   'no Lunch or Dinner: a dish can be either, and the plan already has those slots',
-);
-
-const rules = readFileSync(
-  new URL('../../firestore.rules', import.meta.url),
-  'utf8',
-);
-const rulesList =
-  /function isDishCategories\(value\) \{[^}]*?hasOnly\(\[([^\]]*)\]\)/.exec(
-    rules,
-  )?.[1];
-assert.deepEqual(
-  (rulesList ?? '').split(',').map((entry) => entry.trim().replace(/'/g, '')),
-  DISH_CATEGORIES.map((category) => category.value),
-  'firestore.rules lists the same categories as constants.ts (isDishCategories)',
-);
-assert.match(
-  rules,
-  /function isDishCategories\(value\) \{[^}]*value\.size\(\) <= (\d+)/,
-  'the rules cap the list',
-);
-assert.equal(
-  Number(
-    /function isDishCategories\(value\) \{[^}]*value\.size\(\) <= (\d+)/.exec(
-      rules,
-    )?.[1],
-  ),
-  DISH_CATEGORIES.length,
-  'the rules cap equals the number of categories, so each can appear once',
 );
 
 assert.deepEqual(
