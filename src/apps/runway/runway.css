@@ -99,3 +99,9 @@ html.runway-theme button[class*='underline-offset'] {
 html.runway-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
   box-shadow: inset 0 0 0 1px var(--color-border);
 }
+
+/* A modal's card is capped to the screen and scrolls inside itself, so a long form never runs past the viewport with its title cut off above it. */
+html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}

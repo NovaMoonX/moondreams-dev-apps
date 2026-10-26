@@ -348,75 +348,79 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     <FormSheet isOpen onClose={onClose} title={CONFIRM_WORDS.sheetTitle}>
       {isChoosing && (
         <div className='space-y-3'>
-          <BackLink onBack={() => setIsChoosing(false)} />
-          <div className='space-y-1'>
-            <p className='text-muted-foreground text-sm'>
-              {CONFIRM_WORDS.adjustIntro}
-            </p>
-            <p className='text-sm font-medium'>
-              {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
-              <span className='text-muted-foreground font-normal'>
-                {' '}
-                of {arrivedCents === null ? '' : formatCents(arrivedCents)}
-              </span>
-            </p>
-          </div>
-          <div className='flex flex-wrap gap-2'>
-            {remainder < 0 && (
-              <RevealChip onClick={applyLowestFirst}>
-                {CONFIRM_WORDS.lowestFirst}
-              </RevealChip>
+          <div className='space-y-3'>
+            <BackLink onBack={() => setIsChoosing(false)} />
+            <div className='space-y-1'>
+              <p className='text-muted-foreground text-sm'>
+                {CONFIRM_WORDS.adjustIntro}
+              </p>
+              <p className='text-sm font-medium'>
+                {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
+                <span className='text-muted-foreground font-normal'>
+                  {' '}
+                  of {arrivedCents === null ? '' : formatCents(arrivedCents)}
+                </span>
+              </p>
+            </div>
+            <div className='flex flex-wrap gap-2'>
+              {remainder < 0 && (
+                <RevealChip onClick={applyLowestFirst}>
+                  {CONFIRM_WORDS.lowestFirst}
+                </RevealChip>
+              )}
+              {Object.keys(lineInputs).length > 0 && (
+                <RevealChip
+                  onClick={() => {
+                    setLineInputs({});
+                    setLineNotes({});
+                  }}
+                >
+                  {CONFIRM_WORDS.resetLines}
+                </RevealChip>
+              )}
+            </div>
+            {adjusted.length >= LINE_SEARCH_THRESHOLD && (
+              <SearchInput
+                value={lineSearch}
+                onChange={setLineSearch}
+                placeholder='Find a line'
+              />
             )}
-            {Object.keys(lineInputs).length > 0 && (
-              <RevealChip
-                onClick={() => {
-                  setLineInputs({});
-                  setLineNotes({});
-                }}
-              >
-                {CONFIRM_WORDS.resetLines}
-              </RevealChip>
+            {visibleLines.length === 0 && (
+              <p className='text-muted-foreground text-sm'>
+                No line matches that.
+              </p>
             )}
           </div>
-          {adjusted.length >= LINE_SEARCH_THRESHOLD && (
-            <SearchInput
-              value={lineSearch}
-              onChange={setLineSearch}
-              placeholder='Find a line'
-            />
-          )}
-          {visibleLines.length === 0 && (
-            <p className='text-muted-foreground text-sm'>
-              No line matches that.
-            </p>
-          )}
-          <ul className='border-border divide-border divide-y rounded-2xl border'>
+          <ul className='border-border divide-border max-h-[max(9rem,calc(92dvh-29rem))] divide-y overflow-y-auto rounded-2xl border [@media(max-height:499px)]:max-h-none'>
             {visibleLines.map(({ line, index }) => {
               const original = lines[index];
               const isChanged = line.cents !== original.cents;
               const name = original.name === '' ? 'Bill' : original.name;
               return (
                 <li key={line.lineId} className='space-y-2 p-3'>
-                  <div className='flex items-start gap-3'>
+                  <div className='flex flex-wrap items-start gap-x-3 gap-y-2'>
                     <ItemBadge name={name} emoji={original.emoji} />
-                    <div className='min-w-0 flex-1 space-y-1'>
+                    <div className='min-w-24 flex-1 space-y-1'>
                       <p className='line-clamp-2 font-medium break-words'>
                         {name}
                       </p>
                       <PriorityBadge priority={original.tier} />
                     </div>
+                    <div className='w-28 max-[339px]:w-full'>
+                      <MoneyInput
+                        variant='outline'
+                        ariaLabel={`${name} amount`}
+                        value={
+                          Object.hasOwn(lineInputs, line.lineId)
+                            ? lineInputs[line.lineId]
+                            : centsToInputValue(original.cents)
+                        }
+                        onChange={(text) => setLineInput(line.lineId, text)}
+                        disabled={isSaving}
+                      />
+                    </div>
                   </div>
-                  <MoneyInput
-                    variant='outline'
-                    ariaLabel={`${name} amount`}
-                    value={
-                      Object.hasOwn(lineInputs, line.lineId)
-                        ? lineInputs[line.lineId]
-                        : centsToInputValue(original.cents)
-                    }
-                    onChange={(text) => setLineInput(line.lineId, text)}
-                    disabled={isSaving}
-                  />
                   {isChanged && (
                     <div className='space-y-1.5'>
                       <p className='text-muted-foreground text-xs'>
