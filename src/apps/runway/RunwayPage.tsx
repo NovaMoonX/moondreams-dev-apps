@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { History, Loader, LockKeyhole } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -39,6 +39,77 @@ import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
+import type { RunwayTab } from '@apps/runway/types';
+
+const tabScrolls = new Map<RunwayTab, number>();
+const RESTORE_FRAMES = 40;
+
+const getScreen = (tab: RunwayTab) => {
+  if (tab === 'days') return <DaysScreen />;
+  if (tab === 'spend') return <SpendScreen />;
+  if (tab === 'plan') return <PlanScreen />;
+  return <HomeScreen />;
+};
+
+interface RunwayTabsProps {
+  activeTab: RunwayTab;
+  onChange: (tab: RunwayTab) => void;
+}
+
+/** A tab opens where it was left (the top on a first visit), and tapping the open tab again goes to its top. */
+function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
+  useLayoutEffect(() => {
+    const target = tabScrolls.get(activeTab) ?? 0;
+    const state = { isRestoring: true, frame: 0, id: 0 };
+    const stopRestoring = () => {
+      state.isRestoring = false;
+    };
+    const restore = () => {
+      if (!state.isRestoring) return;
+      if (Math.abs(window.scrollY - target) >= 2) window.scrollTo(0, target);
+      state.frame += 1;
+      if (state.frame >= RESTORE_FRAMES) {
+        state.isRestoring = false;
+        return;
+      }
+      state.id = requestAnimationFrame(restore);
+    };
+    const save = () => {
+      if (!state.isRestoring) tabScrolls.set(activeTab, window.scrollY);
+    };
+    restore();
+    window.addEventListener('scroll', save, { passive: true });
+    window.addEventListener('wheel', stopRestoring, { passive: true });
+    window.addEventListener('touchstart', stopRestoring, { passive: true });
+    return () => {
+      cancelAnimationFrame(state.id);
+      window.removeEventListener('scroll', save);
+      window.removeEventListener('wheel', stopRestoring);
+      window.removeEventListener('touchstart', stopRestoring);
+    };
+  }, [activeTab]);
+
+  const handleChange = (tab: RunwayTab) => {
+    if (tab !== activeTab) {
+      onChange(tab);
+      return;
+    }
+    tabScrolls.set(tab, 0);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  return (
+    <div className='page pb-28'>
+      <div className='mx-auto max-w-4xl space-y-4 py-6'>
+        <h1 className='text-2xl font-semibold'>
+          {RUNWAY_TAB_LABELS[activeTab]}
+        </h1>
+        {getScreen(activeTab)}
+      </div>
+      <RunwayBottomNav value={activeTab} onChange={handleChange} />
+    </div>
+  );
+}
 
 function RunwayPage() {
   const { user, loading } = useAuth();
@@ -75,6 +146,7 @@ function RunwayPage() {
   const [attempt, setAttempt] = useState(0);
 
   useRunwayTheme();
+  useEffect(() => () => tabScrolls.clear(), []);
   useTrackAppUsage('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
@@ -98,7 +170,7 @@ function RunwayPage() {
 
   if (isDeletingPlan && keyStatus === 'ready') {
     return (
-      <div className='page'>
+      <div>
         <DeletePlanScreen
           onClose={closeSettingsView}
           onDeleted={() => {
@@ -179,7 +251,7 @@ function RunwayPage() {
 
   if (openDayKey !== null && (hasOpenDay || !isItemsLoaded)) {
     return (
-      <div className='page'>
+      <div>
         <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
       </div>
     );
@@ -187,7 +259,7 @@ function RunwayPage() {
 
   if (purchaseId !== null && level === 'track') {
     return (
-      <div className='page'>
+      <div>
         <PurchaseScreen purchaseId={purchaseId} onClose={closePurchase} />
       </div>
     );
@@ -195,7 +267,7 @@ function RunwayPage() {
 
   if (view === 'checkAmount' && level === 'track') {
     return (
-      <div className='page'>
+      <div>
         <CheckAmountScreen
           presetEnvelopeId={checkEnvelope}
           onClose={closeView}
@@ -206,7 +278,7 @@ function RunwayPage() {
 
   if (view === 'start') {
     return (
-      <div className='page'>
+      <div>
         <StartingOutScreen />
       </div>
     );
@@ -214,7 +286,7 @@ function RunwayPage() {
 
   if (view === 'freeToSpend') {
     return (
-      <div className='page'>
+      <div>
         <FreeToSpendScreen onClose={closeView} />
       </div>
     );
@@ -222,7 +294,7 @@ function RunwayPage() {
 
   if (moreEntry === 'changeLog') {
     return (
-      <div className='page'>
+      <div>
         <ChangeLogScreen onClose={closeMoreEntry} />
       </div>
     );
@@ -230,7 +302,7 @@ function RunwayPage() {
 
   if (moreEntry === 'settings' && settingsView === 'tracking') {
     return (
-      <div className='page'>
+      <div>
         <TrackingScreen onClose={closeSettingsView} />
       </div>
     );
@@ -238,30 +310,13 @@ function RunwayPage() {
 
   if (moreEntry === 'settings') {
     return (
-      <div className='page'>
+      <div>
         <SettingsScreen onClose={closeMoreEntry} />
       </div>
     );
   }
 
-  const getScreen = () => {
-    if (activeTab === 'days') return <DaysScreen />;
-    if (activeTab === 'spend') return <SpendScreen />;
-    if (activeTab === 'plan') return <PlanScreen />;
-    return <HomeScreen />;
-  };
-
-  return (
-    <div className='page pb-28'>
-      <div className='mx-auto max-w-4xl space-y-4 py-6'>
-        <h1 className='text-2xl font-semibold'>
-          {RUNWAY_TAB_LABELS[activeTab]}
-        </h1>
-        {getScreen()}
-      </div>
-      <RunwayBottomNav value={activeTab} onChange={showTab} />
-    </div>
-  );
+  return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
 }
 
 export default RunwayPage;
