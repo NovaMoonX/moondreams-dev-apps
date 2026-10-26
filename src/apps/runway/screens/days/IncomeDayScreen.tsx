@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarX, Link2, Mail, Undo2 } from 'lucide-react';
+import { CalendarX, ChevronRight, Link2, Mail, Undo2 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -12,12 +12,13 @@ import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
 import {
   CONFIRM_WORDS,
   DRAFT_WORDS,
+  ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
 } from '@apps/runway/constants';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
@@ -60,6 +61,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const [isConfirming, setIsConfirming] = useState(false);
   const [isEditingFunds, setIsEditingFunds] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [openLineId, setOpenLineId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
@@ -86,6 +88,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const heldLines = draft.lines.filter(
     (line) => line.pairing?.state === 'held',
   );
+  const firstHeld = heldLines[0] ?? null;
   const effectivePairings = override?.pairings ?? inheritedPairings;
   const hasChanges =
     override !== null &&
@@ -169,6 +172,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       <DraftLine
         key={line.lineId}
         line={line}
+        isOpen={openLineId === line.lineId}
+        onOpenChange={(isOpen) => setOpenLineId(isOpen ? line.lineId : null)}
         name={envelope.name}
         emoji={envelope.emoji}
         kind={isKnown ? (line.bill ? 'bill' : 'envelope') : null}
@@ -268,7 +273,31 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           <ModalFooterActions
             note={
               error ??
-              (heldLines.length > 0 ? DRAFT_WORDS.holdsBlock : undefined)
+              (firstHeld ? (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  className='text-foreground! h-auto min-h-10 w-full justify-between gap-2 px-0! text-left text-sm font-normal whitespace-normal'
+                  onClick={() => setOpenLineId(firstHeld.lineId)}
+                >
+                  <span className='min-w-0'>
+                    {ITEM_SHEET_R2_WORDS.heldNote(
+                      Object.hasOwn(items, firstHeld.itemId)
+                        ? items[firstHeld.itemId].name
+                        : DRAFT_WORDS.billFallback,
+                      formatCentsShort(
+                        (firstHeld.pairing?.heldCents ?? 0) > 0
+                          ? (firstHeld.pairing?.heldCents ?? 0)
+                          : firstHeld.shortBy,
+                      ),
+                    )}
+                  </span>
+                  <ChevronRight
+                    className='text-muted-foreground h-4 w-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                </Button>
+              ) : undefined)
             }
             rightActions={
               <Button

@@ -114,7 +114,7 @@ function DaysScreen() {
                   day={day}
                   note={
                     lookahead?.shortByDay[day.dayKey]
-                      ? `Runs short on ${lookahead.shortByDay[day.dayKey].name}`
+                      ? `The plan leaves ${lookahead.shortByDay[day.dayKey].name} short`
                       : undefined
                   }
                   onOpen={() => openDay(day.dayKey)}

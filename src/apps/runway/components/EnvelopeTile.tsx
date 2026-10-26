@@ -7,10 +7,14 @@ import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import { PRIORITY_LABELS } from '@apps/runway/constants';
+import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { EnvelopeSealed } from '@apps/runway/types';
-import { describeFunding } from '@apps/runway/utils/fundingText';
+import {
+  describeCadenceLine,
+  describeFundingShort,
+} from '@apps/runway/utils/fundingText';
+import { formatCents } from '@/utils/moneyUtils';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 
 interface EnvelopeTileProps {
@@ -38,11 +42,18 @@ function EnvelopeTile({
   look = 'row',
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { value, word } = describeEnvelopeFigure(
-    useAppSelector(selectLevel),
-    cents,
-  );
-  const funding = capitalize(describeFunding(envelope.funding));
+  const level = useAppSelector(selectLevel);
+  const { value, word } = describeEnvelopeFigure(level, cents);
+  const funding = describeFundingShort(envelope.funding);
+  const { amount } = envelope.funding;
+  const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
+  const isPlan = level === 'plan';
+  const rowFigure = isPlan ? eachTime : value;
+  const rowDetail = isPlan
+    ? eachTime
+      ? describeCadenceLine(envelope.funding.cadence)
+      : funding
+    : `${capitalize(word)} · ${funding}`;
   const isOver = word === 'over';
   const open = () => setIsOpen(true);
 
@@ -84,10 +95,9 @@ function EnvelopeTile({
         <ItemRow
           name={envelope.name}
           emoji={envelope.emoji}
-          detail={funding}
-          figure={value}
-          figureWord={word}
-          ariaLabel={`${envelope.name}, ${value} ${word}. ${funding}. Open`}
+          detail={rowDetail}
+          figure={rowFigure}
+          ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
           onOpen={open}
         />
       )}
@@ -96,12 +106,22 @@ function EnvelopeTile({
           itemId={itemId}
           kind='envelope'
           today={today}
-          figureLabel={capitalize(word)}
-          figure={value}
-          facts={[
-            `${PRIORITY_LABELS[envelope.priority]}. ${funding}`,
-            pairedNote,
-          ]}
+          figureLabel={isPlan ? ITEM_SHEET_R2_WORDS.eachTime : capitalize(word)}
+          figure={isPlan ? (eachTime ?? undefined) : value}
+          fact={[
+            PRIORITY_LABELS[envelope.priority],
+            isPlan && eachTime
+              ? describeCadenceLine(envelope.funding.cadence)
+              : funding,
+            isPlan && cents !== 0 ? `${value} ${word}` : null,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+          help={pairedNote}
+          quickChange={{
+            label: ITEM_SHEET_R2_WORDS.changeAmount,
+            step: 'amount',
+          }}
           onClose={() => setIsOpen(false)}
         />
       )}

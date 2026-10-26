@@ -20,6 +20,7 @@ import {
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   selectItemLooks,
@@ -57,8 +58,13 @@ function SpendScreen() {
     (state) => state.runway.plan?.startDate ?? null,
   );
   const looks = useAppSelector(selectItemLooks);
-  const { spendEnvelope, showSpendEnvelope, openPurchase } =
-    useRunwayUrlState();
+  const {
+    spendEnvelope,
+    showSpendEnvelope,
+    openPurchase,
+    purchaseId,
+    closePurchase,
+  } = useRunwayUrlState();
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -215,6 +221,13 @@ function SpendScreen() {
         }
       />
       {getBody()}
+      {purchaseId !== null && (
+        <PurchaseScreen
+          key={purchaseId}
+          purchaseId={purchaseId}
+          onClose={closePurchase}
+        />
+      )}
       {formKey !== null && (
         <PurchaseForm
           key={formKey}

@@ -1,4 +1,4 @@
-import { formatBps, formatCents } from '@/utils/moneyUtils';
+import { formatBps, formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import type { FundingAmount, FundingRule } from '@apps/runway/types';
 
 const describeCadence = (cadence: FundingRule['cadence']) => {
@@ -51,4 +51,21 @@ export function describePairedBy(
   const names = [...new Set(pairedBy.map((entry) => entry.sourceName))];
   const result = `Pairings from ${names.join(' and ')} replace this rule on their income days.`;
   return result;
+}
+
+/** How often an envelope or goal is funded, as a row's line: "Every income day", "On 3 chosen days". */
+export function describeCadenceLine(cadence: FundingRule['cadence']) {
+  const words = describeCadence(cadence);
+  const result = words.charAt(0).toUpperCase() + words.slice(1);
+  return result;
+}
+
+/** A funding rule in a short line: "$200 every income day", "10% of the day's money every other income day". */
+export function describeFundingShort(funding: FundingRule) {
+  const amount =
+    funding.amount.kind === 'exact'
+      ? formatCentsShort(funding.amount.cents)
+      : describeAmount(funding.amount);
+  const result = `${amount} ${describeCadence(funding.cadence)}`;
+  return result.charAt(0).toUpperCase() + result.slice(1);
 }

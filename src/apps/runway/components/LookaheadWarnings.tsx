@@ -6,6 +6,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import DetailSheet from '@/components/DetailSheet';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { PROBLEM_WORDS } from '@apps/runway/constants';
+import { describeProblemShort } from '@apps/runway/utils/lookaheadText';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import ProblemRow from '@apps/runway/components/ProblemRow';
 
@@ -17,17 +18,22 @@ interface LookaheadWarningsProps {
 function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { problems, incomeEndsOn } = lookahead;
-  const count = problems.length + (incomeEndsOn === null ? 0 : 1);
+  const first = problems[0] ?? null;
+  const endsText =
+    incomeEndsOn === null
+      ? null
+      : `Your last income day is ${formatDateUTC(incomeEndsOn)}. Nothing is planned after it.`;
 
-  if (count === 0) return null;
-  const label = count === 1 ? PROBLEM_WORDS.one : PROBLEM_WORDS.many(count);
+  if (!first && !endsText) return null;
+  const label = first ? describeProblemShort(first) : endsText;
+  const more = problems.length - 1;
 
   return (
     <>
       <Button
         type='button'
         variant='tertiary'
-        className='border-border bg-card text-foreground! h-auto min-h-12 w-full items-center justify-start gap-3 rounded-2xl border px-3! py-2 text-left font-normal whitespace-normal'
+        className='border-border bg-card text-foreground! h-auto min-h-11 w-full items-center justify-start gap-3 rounded-2xl border px-3! py-1.5 text-left font-normal whitespace-normal'
         onClick={() => setIsOpen(true)}
       >
         <span
@@ -36,7 +42,15 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         >
           <TriangleAlert className='text-muted-foreground h-4 w-4' />
         </span>
-        <span className='min-w-0 flex-1 font-medium'>{label}</span>
+        <span className='min-w-0 flex-1 text-sm font-medium'>
+          {label}
+          {more > 0 && (
+            <span className='text-muted-foreground font-normal whitespace-nowrap'>
+              {' '}
+              · {more} more
+            </span>
+          )}
+        </span>
         <ChevronRight
           className='text-muted-foreground h-4 w-4 shrink-0'
           aria-hidden='true'

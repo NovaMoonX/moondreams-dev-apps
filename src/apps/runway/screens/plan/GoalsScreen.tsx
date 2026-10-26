@@ -103,11 +103,6 @@ function GoalsScreen() {
                 pace={pace}
                 heldCents={heldByItem[item.id] ?? 0}
                 today={today}
-                basisNote={
-                  hasRangedIncome && (
-                    <RangeBasisNote stance={stance} side='income' />
-                  )
-                }
               />
             ))}
           </ul>

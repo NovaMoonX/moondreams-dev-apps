@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Archive,
+  CalendarClock,
   CalendarOff,
   Calculator,
   Check,
@@ -11,6 +12,7 @@ import {
   Play,
   Plus,
   ReceiptText,
+  SlidersHorizontal,
   Undo2,
 } from 'lucide-react';
 
@@ -29,15 +31,17 @@ import { useAppSelector } from '@/store';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
   CHANGE_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
   ENVELOPE_SPEND_WORDS,
+  ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
   LIFECYCLE_WORDS,
   LOOKAHEAD_MONTHS,
@@ -53,10 +57,12 @@ import {
   resolveVersion,
 } from '@apps/runway/engine/resolve';
 import { occurrences } from '@apps/runway/engine/schedule';
-import BillForm from '@apps/runway/forms/BillForm';
-import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
-import GoalForm from '@apps/runway/forms/GoalForm';
-import IncomeForm from '@apps/runway/forms/IncomeForm';
+import BillForm, { type BillStepId } from '@apps/runway/forms/BillForm';
+import EnvelopeForm, {
+  type EnvelopeStepId,
+} from '@apps/runway/forms/EnvelopeForm';
+import GoalForm, { type GoalStepId } from '@apps/runway/forms/GoalForm';
+import IncomeForm, { type IncomeStepId } from '@apps/runway/forms/IncomeForm';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
@@ -68,7 +74,6 @@ import {
 } from '@apps/runway/store/actions/itemActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
-import { selectItemNames } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   BillSealed,
   GoalSealed,
@@ -77,7 +82,6 @@ import type {
   PayLineSealed,
 } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { describeBillProgress } from '@apps/runway/utils/billText';
 import {
   describeChange,
   type ItemPayload,
@@ -86,9 +90,6 @@ import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 
 type View = 'menu' | 'pause' | 'resume' | 'end' | 'archive';
 type Phase = 'sheet' | 'change' | 'purchase' | 'funds';
-
-const MAX_FUNDS_NAMES = 3;
-const MAX_FACTS = 3;
 
 interface ItemSheetProps {
   itemId: string;
@@ -100,10 +101,14 @@ interface ItemSheetProps {
   figureLabel: string;
   /** Left out for an item with no amount of its own (an income source). */
   figure?: string;
-  /** Up to three short facts under the figure: priority, schedule, progress. */
-  facts?: readonly (string | null | false | undefined)[];
-  /** A note under the facts that qualifies the figure (which end of a range it is planned at). */
-  note?: ReactNode;
+  /** Small words after the figure ("of $600"). */
+  figureSuffix?: string;
+  /** The one short fact under the figure. */
+  fact?: string | null;
+  /** A caveat about the figure (the end of a range, a pairing), behind a help icon by it. */
+  help?: ReactNode;
+  /** The sheet's first action: the change people make most, opened at that question. */
+  quickChange?: { label: string; step: string };
   /** A bill's next payment, which the sheet can mark paid. */
   payment?: BillPayment | null;
   onMarked?: () => void;
@@ -142,8 +147,10 @@ function ItemSheet({
   onClose,
   figureLabel,
   figure,
-  facts = [],
-  note,
+  figureSuffix,
+  fact,
+  help,
+  quickChange,
   payment = null,
   onMarked,
   onUndone,
@@ -170,8 +177,8 @@ function ItemSheet({
   const header = useAppSelector(
     (state) => state.runway.items.find((item) => item.id === itemId) ?? null,
   );
-  const itemNames = useAppSelector(selectItemNames);
   const [phase, setPhase] = useState<Phase>('sheet');
+  const [openStep, setOpenStep] = useState<string | null>(null);
   const [view, setView] = useState<View>('menu');
   const [reason, setReason] = useState('');
   const [endPick, setEndPick] = useState<string>(String(today));
@@ -227,31 +234,20 @@ function ItemSheet({
     next &&
     difference !== '' &&
     (endedAt === null || next.effectiveFrom <= endedAt)
-      ? `${CHANGE_WORDS.scheduled} ${formatDateUTC(next.effectiveFrom)}: ${difference}`
+      ? `${CHANGE_WORDS.scheduled} ${formatDateShortUTC(next.effectiveFrom)} · ${difference.replace(/ to /g, ' → ')}`
       : null,
     stretchEnd !== null
-      ? `${LIFECYCLE_WORDS.until} ${formatDateUTC(stretchEnd - DAY_MS)}, ${LIFECYCLE_WORDS.backAfter}.`
+      ? `${LIFECYCLE_WORDS.until} ${formatDateShortUTC(stretchEnd - DAY_MS)}, ${LIFECYCLE_WORDS.backAfter}`
       : null,
     endedAt !== null
-      ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateUTC(endedAt)}.`
+      ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateShortUTC(endedAt)}`
       : null,
   ].filter((line): line is string => line !== null);
-  const shownFacts = facts
-    .filter((fact): fact is string => typeof fact === 'string' && fact !== '')
-    .slice(0, MAX_FACTS);
 
   const pairings =
     version.kind === 'source' || version.kind === 'payLine'
       ? (version.payload.pairings ?? [])
       : [];
-  const fundsNames = pairings.flatMap((pairing) => {
-    const found = itemNames.find((entry) => entry.id === pairing.targetItemId);
-    return found ? [found.name] : [];
-  });
-  const fundsSummary =
-    fundsNames.length > MAX_FUNDS_NAMES
-      ? `${fundsNames.slice(0, MAX_FUNDS_NAMES).join(', ')} and ${fundsNames.length - MAX_FUNDS_NAMES} more`
-      : fundsNames.join(', ');
 
   const goTo = (nextView: View) => {
     setError(null);
@@ -349,6 +345,7 @@ function ItemSheet({
           title='Bill'
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          openStep={openStep as BillStepId | null}
           onClose={onClose}
         />
       );
@@ -360,6 +357,7 @@ function ItemSheet({
           title='Envelope'
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          openStep={openStep as EnvelopeStepId | null}
           onClose={onClose}
         />
       );
@@ -371,6 +369,7 @@ function ItemSheet({
           title='Goal'
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          openStep={openStep as GoalStepId | null}
           onClose={onClose}
         />
       );
@@ -380,6 +379,7 @@ function ItemSheet({
         isOpen
         title='Income'
         defaultFrequency={null}
+        openStep={openStep as IncomeStepId | null}
         editing={
           version.kind === 'source'
             ? { itemId, kind: 'source', payload: version.payload }
@@ -432,168 +432,164 @@ function ItemSheet({
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
   const hasBillRow = itemKind === 'bill' && paid.isReady && payment !== null;
 
+  const openChange = (step: string | null) => {
+    setOpenStep(step);
+    setPhase('change');
+  };
+  const openHistory = leaveTo(() => {
+    setLogItem(itemId);
+    openMoreEntry('changeLog');
+  });
+
   const menu = (
     <div className='space-y-4'>
-      <div className='border-border bg-accent rounded-2xl border p-4'>
-        <p className='text-muted-foreground text-sm font-medium'>
-          {figureLabel}
-        </p>
-        {figure && (
-          <p className='text-4xl font-semibold tracking-tight break-words tabular-nums'>
-            {figure}
-          </p>
-        )}
-        {[...shownFacts, ...planned].map((fact, index) => (
-          <p
-            key={`${index}:${fact}`}
-            className='text-muted-foreground text-sm break-words'
-          >
-            {fact}
-          </p>
-        ))}
-        {note}
-      </div>
+      <SheetHead
+        label={figureLabel}
+        figure={figure}
+        suffix={figureSuffix}
+        fact={fact}
+        help={help}
+      />
       {extra}
-      {(canChange || hasBillRow || isFunded) && (
-        <ActionGroup isRoomy>
-          {canChange && (
-            <ActionRow
-              isGrouped
-              isRoomy
-              hasChevron
-              icon={<Pencil />}
-              label={ITEM_SHEET_WORDS.change}
-              subtitle={
-                presetDayKey
-                  ? ITEM_SHEET_WORDS.changeDaySub
-                  : ITEM_SHEET_WORDS.changeSub[itemKind]
-              }
-              onClick={() => setPhase('change')}
-            />
-          )}
-          {hasBillRow && payment && (
-            <ActionRow
-              isGrouped
-              isRoomy
-              icon={paid.isPaid ? <Undo2 /> : <Check />}
-              label={
-                paid.isPaid
-                  ? ITEM_SHEET_WORDS.notPaid
-                  : CHECKLIST_WORDS.markPaid
-              }
-              subtitle={
-                paid.isPaid
-                  ? (describeBillProgress(payment) ?? undefined)
-                  : payment.fundedCents >= payment.totalCents
-                    ? ITEM_SHEET_WORDS.paidFromSetAside
-                    : `${formatCents(payment.totalCents - payment.fundedCents)} ${ITEM_SHEET_WORDS.paidFromFree}`
-              }
-              isDisabled={paid.isBusy}
-              onClick={() => void (paid.isPaid ? paid.undo() : paid.mark())}
-            />
-          )}
-          {isFunded && (
-            <ActionRow
-              isGrouped
-              isRoomy
-              hasChevron
-              icon={<Link2 />}
-              label={ITEM_SHEET_WORDS.funds}
-              subtitle={fundsSummary === '' ? undefined : fundsSummary}
-              onClick={() => setPhase('funds')}
-            />
-          )}
-        </ActionGroup>
-      )}
-      {isTrackEnvelope && (
-        <ActionGroup isRoomy caption={ENVELOPE_SPEND_WORDS.heading}>
+      <ActionGroup>
+        {canChange && quickChange && (
           <ActionRow
             isGrouped
-            isRoomy
+            hasChevron
+            icon={<Pencil />}
+            label={quickChange.label}
+            onClick={() => openChange(quickChange.step)}
+          />
+        )}
+        {canChange && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={quickChange ? <SlidersHorizontal /> : <Pencil />}
+            label={
+              quickChange
+                ? ITEM_SHEET_R2_WORDS.changeElse
+                : ITEM_SHEET_WORDS.change
+            }
+            subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
+            onClick={() => openChange(null)}
+          />
+        )}
+        {hasBillRow && payment && (
+          <ActionRow
+            isGrouped
+            icon={paid.isPaid ? <Undo2 /> : <Check />}
+            label={
+              paid.isPaid ? ITEM_SHEET_WORDS.notPaid : CHECKLIST_WORDS.markPaid
+            }
+            subtitle={
+              paid.isPaid
+                ? undefined
+                : payment.fundedCents >= payment.totalCents
+                  ? ITEM_SHEET_WORDS.paidFromSetAside
+                  : ITEM_SHEET_R2_WORDS.paidFromFreeText(
+                      formatCentsShort(
+                        payment.totalCents - payment.fundedCents,
+                      ),
+                    )
+            }
+            isDisabled={paid.isBusy}
+            onClick={() => void (paid.isPaid ? paid.undo() : paid.mark())}
+          />
+        )}
+        {isFunded && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Link2 />}
+            label={ITEM_SHEET_WORDS.funds}
+            onClick={() => setPhase('funds')}
+          />
+        )}
+        <ActionRow
+          isGrouped
+          hasChevron
+          icon={<History />}
+          label={ITEM_SHEET_WORDS.history}
+          onClick={openHistory}
+        />
+        {planned.map((line) => (
+          <ActionRow
+            key={line}
+            isGrouped
+            hasChevron
+            icon={<CalendarClock />}
+            label={line}
+            onClick={openHistory}
+          />
+        ))}
+      </ActionGroup>
+      {isTrackEnvelope && (
+        <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
+          <ActionRow
+            isGrouped
             hasChevron
             icon={<Plus />}
             label={SPEND_WORDS.envelopeAdd}
-            subtitle={ENVELOPE_SPEND_WORDS.addSub}
             onClick={() => setPhase('purchase')}
           />
           <ActionRow
             isGrouped
-            isRoomy
             hasChevron
             icon={<ReceiptText />}
             label={SPEND_WORDS.title}
-            subtitle={ENVELOPE_SPEND_WORDS.listSub}
             onClick={leaveTo(() => showSpend(itemId))}
           />
           <ActionRow
             isGrouped
-            isRoomy
             hasChevron
             icon={<Calculator />}
             label={CHECK_WORDS.open}
-            subtitle={ENVELOPE_SPEND_WORDS.checkSub}
+            subtitle={ITEM_SHEET_R2_WORDS.checkSub}
             onClick={leaveTo(() => openCheckAmount(itemId))}
           />
         </ActionGroup>
       )}
       {isStoppable && (
-        <ActionGroup isRoomy caption={ITEM_SHEET_WORDS.stopHeading}>
+        <ActionGroup caption={goal ? ITEM_SHEET_WORDS.stopHeading : undefined}>
           {goal && !isPaused && (
             <ActionRow
               isGrouped
-              isRoomy
               hasChevron
               icon={<Pause />}
               label={LIFECYCLE_WORDS.pause}
-              subtitle={LIFECYCLE_WORDS.pauseSub}
+              subtitle={ITEM_SHEET_R2_WORDS.pauseSub}
               onClick={() => goTo('pause')}
             />
           )}
           {goal && isPaused && (
             <ActionRow
               isGrouped
-              isRoomy
               hasChevron
               icon={<Play />}
               label={LIFECYCLE_WORDS.resume}
-              subtitle={LIFECYCLE_WORDS.resumeSub}
+              subtitle={ITEM_SHEET_R2_WORDS.resumeSub}
               onClick={() => goTo('resume')}
             />
           )}
           <ActionRow
             isGrouped
-            isRoomy
             hasChevron
             icon={<CalendarOff />}
             label={LIFECYCLE_WORDS.end}
-            subtitle={LIFECYCLE_WORDS.endSub}
+            subtitle={ITEM_SHEET_R2_WORDS.endSub}
             onClick={() => goTo('end')}
           />
           <ActionRow
             isGrouped
-            isRoomy
             hasChevron
             icon={<Archive />}
             label={LIFECYCLE_WORDS.archive}
-            subtitle={LIFECYCLE_WORDS.archiveSub}
+            subtitle={ITEM_SHEET_R2_WORDS.archiveSub}
             onClick={() => goTo('archive')}
           />
         </ActionGroup>
       )}
-      <ActionGroup isRoomy>
-        <ActionRow
-          isGrouped
-          isRoomy
-          hasChevron
-          icon={<History />}
-          label={ITEM_SHEET_WORDS.history}
-          subtitle={ITEM_SHEET_WORDS.historySub}
-          onClick={leaveTo(() => {
-            setLogItem(itemId);
-            openMoreEntry('changeLog');
-          })}
-        />
-      </ActionGroup>
     </div>
   );
 
@@ -674,7 +670,7 @@ function ItemSheet({
   );
 
   return (
-    <FormSheet isOpen onClose={onClose} title={payload.name}>
+    <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={payload.name}>
       <ChangeSteps isReason={view !== 'menu'} reason={action}>
         {menu}
       </ChangeSteps>

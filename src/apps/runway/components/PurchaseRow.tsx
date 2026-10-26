@@ -1,4 +1,4 @@
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -18,13 +18,22 @@ function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
   const refund = isRefund(purchase);
   const named = purchase.merchant?.trim() || purchase.note?.trim() || null;
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
+  const firstName = purchase.lines[0]
+    ? purchase.lines[0].envelopeId === null
+      ? 'Free to spend'
+      : nameOf(purchase.lines[0].envelopeId)
+    : '';
+  const shortEnvelopes =
+    purchase.lines.length > 1
+      ? `${firstName} and ${purchase.lines.length - 1} more`
+      : envelopes;
   const first = purchase.lines[0]?.envelopeId ?? null;
   const lead = first === null ? null : (looks.get(first) ?? null);
-  const date = formatDateUTC(purchase.date);
+  const date = formatDateShortUTC(purchase.date);
   const title =
     named ?? (refund ? `Refund to ${envelopes}` : envelopes || 'Purchase');
   const detail = named
-    ? `${date}, ${refund ? 'refund to ' : ''}${envelopes}`
+    ? `${date} · ${refund ? 'refund to ' : ''}${shortEnvelopes}`
     : date;
   const amount = refund
     ? `+${formatCents(-purchase.amountCents)}`

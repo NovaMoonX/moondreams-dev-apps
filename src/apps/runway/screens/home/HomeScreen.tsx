@@ -113,14 +113,16 @@ function HomeScreen() {
   const isTiles = level === 'track';
 
   return (
-    <div className='space-y-4'>
-      {lookahead ? (
+    <div className='space-y-2'>
+      {lookahead && lookahead.problems.length > 0 ? (
+        <LookaheadWarnings lookahead={lookahead} />
+      ) : lookahead ? (
         <HoldsThroughLine lookahead={lookahead} />
       ) : (
         <div className='min-h-10' aria-hidden='true' />
       )}
-      <div className='border-border bg-accent relative rounded-2xl border p-4 sm:max-w-md'>
-        <div className='flex h-6 items-center gap-1'>
+      <div className='border-border bg-accent relative rounded-2xl border px-4 py-2.5'>
+        <div className='flex h-5 items-center gap-1'>
           <span className='text-muted-foreground text-sm font-medium'>
             {free.label}
           </span>
@@ -139,7 +141,7 @@ function HomeScreen() {
           aria-label={`${free.label}, ${free.value}. See it in detail`}
           onClick={() => openView('freeToSpend')}
         >
-          <span className='min-w-0 text-4xl font-semibold tracking-tight break-words tabular-nums'>
+          <span className='min-w-0 text-4xl leading-none font-semibold tracking-tight break-words tabular-nums'>
             {free.value}
           </span>
           <ChevronRight
@@ -148,7 +150,6 @@ function HomeScreen() {
           />
         </Button>
       </div>
-      {lookahead && <LookaheadWarnings lookahead={lookahead} />}
       {isSetupOpen && (
         <EmptyCard
           icon={<ListChecks className='h-5 w-5' />}
@@ -160,15 +161,6 @@ function HomeScreen() {
         >
           {HOME_WORDS.resume}
         </EmptyCard>
-      )}
-      {nextDay && (
-        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          <IncomeDayCard
-            day={nextDay}
-            lead={HOME_WORDS.nextIncome}
-            onOpen={() => openDay(nextDay.dayKey)}
-          />
-        </ul>
       )}
       {envelopes.length > 0 && (
         <div className='space-y-2'>
@@ -219,6 +211,15 @@ function HomeScreen() {
             </Button>
           )}
         </div>
+      )}
+      {nextDay && (
+        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+          <IncomeDayCard
+            day={nextDay}
+            lead={HOME_WORDS.nextIncome}
+            onOpen={() => openDay(nextDay.dayKey)}
+          />
+        </ul>
       )}
       {isAddingPurchase && (
         <PurchaseForm isOpen onClose={() => setIsAddingPurchase(false)} />

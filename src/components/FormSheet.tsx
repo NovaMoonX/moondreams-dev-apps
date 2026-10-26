@@ -4,7 +4,10 @@ import { Drawer, Modal, Panel } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+
+const SHORT_SCREEN_MAX_HEIGHT = 599;
 
 interface FormSheetProps {
   isOpen: boolean;
@@ -14,6 +17,8 @@ interface FormSheetProps {
   children: ReactNode;
   /** What a wide screen gets: a centered modal, or a panel sliding in from the right. */
   wide?: 'modal' | 'panel';
+  /** A short landscape screen (under 600px tall, below 1024px wide) gets the drawer too, for a sheet of rows rather than fields. */
+  isDrawerWhenShort?: boolean;
 }
 
 const STICKY_FOOTER =
@@ -31,8 +36,12 @@ function FormSheet({
   title,
   children,
   wide = 'modal',
+  isDrawerWhenShort = false,
 }: FormSheetProps) {
-  const isPhone = useMediaQuery().isBelow('sm');
+  const { isBelow } = useMediaQuery();
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
+  const isPhone =
+    isBelow('sm') || (isDrawerWhenShort && isShort && isBelow('lg'));
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
 
   if (isPhone) {

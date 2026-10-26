@@ -16,6 +16,7 @@ import {
   CONFIRM_WORDS,
   CORRECT_WORDS,
   DRAFT_WORDS,
+  ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
 } from '@apps/runway/constants';
 import { formatDayTitle } from '@apps/runway/utils/dayTitle';
@@ -74,12 +75,15 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           </EmptyCard>
         ) : (
           <div className='space-y-4'>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {funded.map((line) => (
-                <RecordLineRow key={line.lineId} line={line} />
-              ))}
-              {dayLeft}
-            </ul>
+            <div className='space-y-2'>
+              <SectionDivider label={ITEM_SHEET_R2_WORDS.setAsideHeading} />
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                {funded.map((line) => (
+                  <RecordLineRow key={line.lineId} line={line} />
+                ))}
+                {dayLeft}
+              </ul>
+            </div>
             {unfunded.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider label={DRAFT_WORDS.notFunded} />
