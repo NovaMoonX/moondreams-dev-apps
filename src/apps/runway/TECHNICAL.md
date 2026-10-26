@@ -1205,7 +1205,7 @@ Per the project instruction to keep `copilot-instructions.md` current, these fol
 2. **One PWA:** the checklist says the site installs as one PWA and an app has no manifest of its own. Made.
 3. **Sealed payloads:** a document may carry one `sealed` payload beside readable fields, the key held by a callable and never persisted, a sealed payload gaining a field only in the change that reads it. Made in "Data and app patterns".
 4. **Append-only and deterministic ids:** rules deny `update`/`delete`, a duplicate create fails by id, corrections are new records. Made.
-5. **Shared security lib:** note `encryptBytes`/`decryptBytes` once they exist. **Not made:** they arrive with Issue 47 (receipts, a Next Steps issue).
+5. **Shared security lib:** note `encryptBytes`/`decryptBytes` once they exist. **Held for Issue 47** (receipts, a Next Steps issue), which adds them: writing the note is one of that issue's success criteria.
 6. **Functions and secrets:** a secret an issue binds must exist in production before merge, and `functions/README.md` mirrors `index.ts`. Already stated in "Documentation quality" and "Cloud Functions"; nothing added.
 7. **Shared primitives:** a component with no app entities goes in `src/components` from its first use. Already stated; `AmountField` and `BeforeAfterRow` are now named as examples.
 8. **Terminology:** "mini-app" is "app" in prose in `CLAUDE.md` and `copilot-instructions.md`, "New mini-app checklist" is "New app checklist", paths under `src/apps/<name>/` are unchanged, and "beta" is defined once, as an access-gated app. Made. The `build-mini-app-mvp` skill keeps its name.

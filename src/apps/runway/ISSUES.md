@@ -1654,7 +1654,7 @@ A purchase can carry a note and a link, and belong to a named expense group ("Ch
 Receipt photos are sealed on the device and stored as opaque bytes. A photo expires after a year unless kept; in the last 30 days the purchase offers to keep or download it. A kept photo stays until the person removes it.
 
 ### Possible Approach
-1. Add `encryptBytes`/`decryptBytes` to the shared security lib, exported from `@lib/security` (propose the instructions note in the PR).
+1. Add `encryptBytes`/`decryptBytes` to the shared security lib, exported from `@lib/security`, and note them in `.github/copilot-instructions.md` beside the sealed-payload rule in the same PR.
 2. `expireRunwayReceipts` (daily) uses the collection-group query on `expiresAt`, deletes the object then the document, and never deletes `expiresAt == null`.
 
 ### CRUD & Entry-Point Requirements
@@ -1666,6 +1666,7 @@ Receipt photos are sealed on the device and stored as opaque bytes. A photo expi
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
 - [ ] `encryptBytes` and `decryptBytes` have a round-trip check.
+- [ ] `.github/copilot-instructions.md` names `encryptBytes`/`decryptBytes` in `@lib/security` as the way to seal bytes (the owner's item 5, held until these exist).
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
