@@ -141,7 +141,7 @@ const getEditingData = (payload: GoalSealed): GoalFormData => {
 
 const INITIAL_DATA: GoalFormData = {
   name: '',
-  priority: null,
+  priority: 'should',
   target: '',
   date: null,
   amount: '',

@@ -17,9 +17,11 @@ function ChangeRow({ change, confirmedDayKey, onOpenRecord }: ChangeRowProps) {
   return (
     <li className='space-y-1.5 p-3'>
       <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
-        <span className='border-border bg-muted/50 text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-xs font-medium whitespace-nowrap'>
-          {CHANGE_KIND_LABELS[change.kind] ?? 'Change'}
-        </span>
+        {change.kind !== 'planChange' && (
+          <span className='border-border bg-muted/50 text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-xs font-medium whitespace-nowrap'>
+            {CHANGE_KIND_LABELS[change.kind] ?? 'Change'}
+          </span>
+        )}
         <span className='text-muted-foreground text-xs'>
           {formatDateTime(change.createdAt)}
         </span>

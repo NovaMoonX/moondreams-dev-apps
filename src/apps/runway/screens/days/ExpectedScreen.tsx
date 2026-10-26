@@ -34,7 +34,9 @@ function ExpectedScreen({ onClose }: ExpectedScreenProps) {
     );
   }
   if (kind === 'expense') {
-    return <BillForm isOpen title='Expected' onClose={onClose} />;
+    return (
+      <BillForm isOpen title='Expected' noun='expense' onClose={onClose} />
+    );
   }
 
   return (

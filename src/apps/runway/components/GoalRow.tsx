@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 
-import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
@@ -12,15 +11,15 @@ import { describePace } from '@apps/runway/utils/paceText';
 interface GoalRowProps {
   goal: GoalSealed;
   pace: Pace;
+  /** What the goal holds now. */
+  heldCents: number;
   /** The row's change door. */
   footer?: ReactNode;
 }
 
 /** A goal in the plan: its name and target, how it is funded, and the pace line. */
-function GoalRow({ goal, pace, footer }: GoalRowProps) {
+function GoalRow({ goal, pace, heldCents, footer }: GoalRowProps) {
   const words = describePace(goal, pace);
-  const dateText =
-    goal.targetDate === null ? '' : ` · by ${formatDateUTC(goal.targetDate)}`;
 
   return (
     <li className='flex items-start gap-3 p-3'>
@@ -36,17 +35,21 @@ function GoalRow({ goal, pace, footer }: GoalRowProps) {
         </div>
         <p className='text-muted-foreground text-sm first-letter:uppercase'>
           {describeFunding(goal.funding)}
-          {dateText}
         </p>
-        {words.need && <p className='text-sm'>{words.need}</p>}
-        <p className='text-muted-foreground text-sm'>
-          {words.stateLabel && (
-            <span className='text-foreground font-medium'>
-              {words.stateLabel}.{' '}
-            </span>
-          )}
-          {words.standing}
+        <p className='text-sm font-medium'>
+          {formatCents(Math.min(heldCents, goal.targetCents))} of{' '}
+          {formatCents(goal.targetCents)} saved
         </p>
+        {(words.stateLabel || words.line) && (
+          <p className='text-muted-foreground text-sm'>
+            {words.stateLabel && (
+              <span className='text-foreground font-medium'>
+                {words.stateLabel}.{' '}
+              </span>
+            )}
+            {words.line}
+          </p>
+        )}
         <div className='pt-1'>
           <PriorityBadge priority={goal.priority} />
         </div>

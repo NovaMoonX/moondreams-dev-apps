@@ -28,7 +28,11 @@ import {
 } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
-import { CONFIRM_WORDS, MAX_NOTE_LENGTH } from '@apps/runway/constants';
+import {
+  CONFIRM_WORDS,
+  DRAFT_WORDS,
+  MAX_NOTE_LENGTH,
+} from '@apps/runway/constants';
 import {
   countUnresolvedHolds,
   toRecordLines,
@@ -147,14 +151,14 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     if (arrivedOn === null || arrivedOn > today) return CONFIRM_WORDS.needsDate;
     if (hasBadLine) return CONFIRM_WORDS.needsLineAmount;
     if (remainder < 0)
-      return `Choose where ${formatCents(-remainder)} comes from, or lower the lines.`;
+      return `The lines take ${formatCents(-remainder)} more than arrived. Lower a line or raise the amount.`;
     return null;
   };
   const blocker = getBlocker();
 
   const getEffect = () => {
     if (arrivedCents === null || arrivedCents <= 0) return null;
-    const free = `Free to spend holds ${formatCents(Math.max(0, remainder))}.`;
+    const free = `${DRAFT_WORDS.dayLeft}: ${formatCents(Math.max(0, remainder))}.`;
     if (difference === 0)
       return changedCount > 0
         ? `${CONFIRM_WORDS.sameAsExpected} ${free}`
@@ -168,7 +172,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     const lead = `${formatCents(-difference)} less than expected.`;
     if (changedCount > 0) return `${lead} ${free}`;
     return remainder < 0
-      ? `${lead} That is more than Free to spend holds.`
+      ? `${lead} That is more than the ${formatCents(draft.freeToSpend.cents)} left from this day, so a line has to get less.`
       : `${lead} ${CONFIRM_WORDS.shortFrom} ${free}`;
   };
   const effect = getEffect();
@@ -350,7 +354,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
               {CONFIRM_WORDS.adjustIntro}
             </p>
             <p className='text-sm font-medium'>
-              Free to spend {formatCents(remainder)}
+              {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
               <span className='text-muted-foreground font-normal'>
                 {' '}
                 of {arrivedCents === null ? '' : formatCents(arrivedCents)}

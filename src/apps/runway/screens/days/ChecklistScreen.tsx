@@ -3,6 +3,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
@@ -28,6 +29,10 @@ interface ChecklistScreenProps {
 /** What to do with the money of a confirmed day: the bills it set money aside for, ready to pay or still waiting for the rest. */
 function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const { user } = useAuth();
+  const { isBelow } = useMediaQuery();
+  const everythingLabel = isBelow('sm')
+    ? CHECKLIST_WORDS.everythingShort
+    : CHECKLIST_WORDS.everything;
   const { addToast } = useToast();
   const today = todayAsUtcDate(useNow(60_000));
   const items = useAppSelector((state) => state.runway.items);
@@ -77,9 +82,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
             onCheckedChange={(next) => setDone(readyIds, Boolean(next))}
             aria-label={CHECKLIST_WORDS.everything}
           />
-          <span className='min-w-0 flex-1 font-medium'>
-            {CHECKLIST_WORDS.everything}
-          </span>
+          <span className='min-w-0 flex-1 font-medium'>{everythingLabel}</span>
           <span className='text-muted-foreground text-sm whitespace-nowrap tabular-nums'>
             {doneCount} of {ready.length}
           </span>

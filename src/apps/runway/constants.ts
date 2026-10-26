@@ -317,8 +317,8 @@ export const CONFIRM_WORDS = {
   date: 'Arrived on',
   note: 'Add a note',
   notePlaceholder: 'Overtime, a bonus from the quarter',
-  extraTo: 'The extra goes to Free to spend.',
-  shortFrom: 'The shortfall comes out of Free to spend.',
+  extraTo: 'The extra is left from this day.',
+  shortFrom: 'The shortfall comes out of what is left from this day.',
   sameAsExpected: 'The same as the draft expected.',
   needsAmount: 'Enter the amount that arrived.',
   needsDate: 'Pick the date it arrived.',
@@ -327,9 +327,10 @@ export const CONFIRM_WORDS = {
     'The lines take more than arrived. Lower a line or raise the amount.',
   needsLineAmount: 'Enter an amount for each line you changed.',
   adjustLines: 'Adjust the lines',
-  adjustIntro: 'Change what a line gets. Free to spend is what is left.',
+  adjustIntro:
+    'Change what a line gets. What is left from this day is what the lines leave.',
   lowestFirst: 'Take from the lowest priority first',
-  resetLines: 'Back to the draft',
+  resetLines: 'Reset lines to the draft',
   lineNotePlaceholder: 'Why this line changed',
   adjustedDone: 'Done',
   confirm: 'Confirm',
@@ -343,7 +344,7 @@ export const CONFIRM_WORDS = {
   arrived: 'Arrived',
   recordTitle: 'Planned and confirmed',
   recordDoor: 'Planned and confirmed',
-  unchanged: 'Everything else matched the draft.',
+  unchanged: 'Everything matched the draft.',
   missingRecords: 'The record of this day could not be read.',
 } as const;
 
@@ -352,7 +353,7 @@ export const CORRECT_WORDS = {
   doorHint: 'Fix an amount you confirmed. The original stays on record.',
   sheetTitle: 'Correct this day',
   intro:
-    'Change what arrived or what a line got. Free to spend is what is left.',
+    'Change what arrived or what a line got. What is left from this day is what the lines leave.',
   review: 'See what changes',
   reviewTitle: 'What this changes',
   confirmed: 'Confirmed',
@@ -391,7 +392,8 @@ export const CHANGE_WORDS = {
   previewNone:
     'No income day in the next year moves. Earlier days stay as they are.',
   previewWaiting: 'Finish the form to see what it changes.',
-  freeNow: 'Free to spend now',
+  previewUntouched: 'Change a field and its effect shows here.',
+  freeNow: 'Left from this day now',
   freeAfter: 'After',
   added: 'This income day is added.',
   removed: 'This income day goes away.',
@@ -504,7 +506,7 @@ export const DRAFT_CADENCE_WORDS: Record<
 export const DRAFT_WORDS = {
   fundedFrom: 'funded from',
   shortBy: 'Short by',
-  outOfMoney: "This day's money ran out first",
+  outOfMoney: "This day's money ran out before it got to this line",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',
   dayOnly: 'Changed for this income day only.',
@@ -514,8 +516,8 @@ export const DRAFT_WORDS = {
   nothingFunded: 'Nothing funded',
   fundedOf: 'Funded',
   of: 'of',
-  notFunded: 'Not funded',
-  freeToSpend: 'Free to spend',
+  notFunded: 'Not fully funded',
+  dayLeft: 'Left from this day',
   nothingLeft: 'Nothing left after the envelopes',
   tieCreatedAt:
     'Same priority and order as another envelope, so the one added first goes first',
@@ -532,9 +534,10 @@ export const DRAFT_WORDS = {
   toppedUp: 'Topped up as far as the money allowed',
   holdsBlock:
     'This day cannot be confirmed until you choose for each held line.',
-  useThePlan: 'Use the plan again',
+  useThePlan: 'Undo my choices for this day',
+  undoChoice: 'Undo my choice',
   fundsHeading: 'Funds',
-  fundsNone: 'Nothing set aside yet',
+  fundsNone: 'Not tied to anything. Goes where the draft puts it.',
 } as const;
 
 export const PACE_WORDS = {
@@ -557,6 +560,7 @@ export const PACE_STATE_LABELS: Record<(typeof PACE_STATES)[number], string> = {
 export const CHECKLIST_WORDS = {
   title: 'Checklist',
   everything: 'Mark everything done',
+  everythingShort: 'Mark all done',
   billsGroup: 'Bills to pay',
   waitingGroup: 'Waiting for more money',
   markPaid: 'Mark paid',
@@ -575,8 +579,8 @@ export const BILL_WORDS = {
 export const LEVELS = ['plan', 'track'] as const;
 
 export const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
-  plan: 'Plan',
-  track: 'Track',
+  plan: 'Plan only',
+  track: 'Plan and track spending',
 };
 
 /** What an envelope's figure is called at each level. */
@@ -597,11 +601,11 @@ export const TRACKING_WORDS = {
   planHelp:
     'You plan where each income day goes. Envelopes show what they are assigned.',
   trackHelp:
-    'Envelopes show what is left. Until you add what you spend, left is the same as assigned.',
+    'Envelopes show what is left after what you spend. Add each purchase and left follows.',
   history: 'Tracking history',
   lineUpTitle: 'Where is your money now?',
   lineUpHelp:
-    'Say what you have and what each envelope, goal and bill holds at the start of the day tracking begins. Money that arrives or is paid from that day on is added to it. The amounts start from the plan; correct what is off.',
+    'Say what you have and what each envelope, goal and bill holds at the start of the day tracking begins. Money that arrives or is paid from that day on is added to it. Amounts from days you already confirmed are filled in; add the rest.',
   startsOn: 'Tracking starts',
   moneyOnHand: 'Money on hand',
   moneyHint: 'One total for all of it. Named accounts come later.',
@@ -657,7 +661,6 @@ export const SPEND_WORDS = {
   noMatch: 'No purchase matches that.',
   windowNote: 'Earlier purchases are counted in your figures but not listed.',
   windowFrom: 'Showing purchases from',
-  windowAll: 'Showing every purchase since you started.',
   all: 'All',
   amount: 'Amount',
   refundAmount: 'Amount refunded',
@@ -689,6 +692,7 @@ export const SPEND_WORDS = {
   needsEnvelope: 'Pick the envelope.',
   needsDay: 'Pick a day you were tracking, not one ahead.',
   needsShares: 'Say how much each envelope takes.',
+  needsTwo: 'Pick at least two envelopes.',
   offline: 'This needs a connection. Nothing was saved.',
   detailTitle: 'Purchase',
   edit: 'Change this purchase',

@@ -3,13 +3,13 @@ import { Plus, X } from 'lucide-react';
 
 import {
   Button,
+  Checkbox,
   Form,
   FormFactories,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField, { type AmountMode } from '@/components/AmountField';
-import AppToggle from '@/components/AppToggle';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
@@ -319,18 +319,21 @@ function PairingsEditor({
                     onChange={(of) => update(row.key, { of })}
                   />
                 )}
-                <div className='flex items-start justify-between gap-3'>
+                <div className='flex items-start gap-3'>
+                  <Checkbox
+                    className='mt-0.5'
+                    aria-label='Top up from the rest if short'
+                    checked={row.topUp}
+                    onCheckedChange={(topUp) =>
+                      update(row.key, { topUp: Boolean(topUp) })
+                    }
+                  />
                   <div className='min-w-0'>
                     <p className='text-sm'>Top up from the rest if short</p>
                     <p className='text-muted-foreground text-xs'>
                       Off: a Must or Should is held until you choose.
                     </p>
                   </div>
-                  <AppToggle
-                    aria-label='Top up from the rest if short'
-                    checked={row.topUp}
-                    onCheckedChange={(topUp) => update(row.key, { topUp })}
-                  />
                 </div>
               </div>
             ))}

@@ -200,7 +200,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               onChange={setAmount}
             />
             <p className='text-sm font-medium'>
-              Free to spend {formatCents(remainder)}
+              {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
               <span className='text-muted-foreground font-normal'>
                 {' '}
                 of {arrivedCents === null ? '' : formatCents(arrivedCents)}
@@ -287,7 +287,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                 />
               )}
               <BeforeAfterRow
-                title={DRAFT_WORDS.freeToSpend}
+                title={DRAFT_WORDS.dayLeft}
                 before={formatCents(base.freeToSpendCents)}
                 after={formatCents(corrected.freeToSpendCents)}
                 beforeLabel={CORRECT_WORDS.confirmed}

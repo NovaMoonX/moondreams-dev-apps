@@ -86,7 +86,7 @@ function SpendScreen() {
   const visible = matches.slice(0, shown);
   const isWholeLedger = recentFrom === null || recentFrom <= (startDate ?? 0);
   const windowNote = isWholeLedger
-    ? SPEND_WORDS.windowAll
+    ? null
     : `${SPEND_WORDS.windowFrom} ${formatDateUTC(recentFrom)}. ${SPEND_WORDS.windowNote}`;
   const groups = groupByMonth(visible);
 
@@ -164,7 +164,9 @@ function SpendScreen() {
             more
           </ShowMoreButton>
         )}
-        <p className='text-muted-foreground text-xs'>{windowNote}</p>
+        {windowNote && (
+          <p className='text-muted-foreground text-xs'>{windowNote}</p>
+        )}
       </div>
     );
   };

@@ -106,6 +106,7 @@ function GoalsScreen() {
                 key={item.id}
                 goal={payload}
                 pace={pace}
+                heldCents={heldByItem[item.id] ?? 0}
                 footer={
                   <ItemChangeControls
                     kind='goal'

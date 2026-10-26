@@ -88,6 +88,8 @@ interface BillFormProps {
   editing?: { itemId: string; payload: BillSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** What the form calls the thing it adds; an expense that is coming is not a bill. */
+  noun?: 'bill' | 'expense';
 }
 
 const { custom } = FormFactories;
@@ -155,12 +157,13 @@ const getBlocker = (
   isChosen: boolean,
   pickedCount: number,
   isEditing: boolean,
+  noun: string,
 ) => {
-  if (data.name.trim() === '') return 'Name the bill.';
+  if (data.name.trim() === '') return `Name the ${noun}.`;
   if (!hasAmount) {
     return data.amount.mode === 'range'
       ? 'Enter a low amount and a higher top amount.'
-      : 'Enter how much the bill is.';
+      : `Enter how much the ${noun} is.`;
   }
   const start = fromDateInputValue(data.startDate);
   if (start === undefined) return 'Pick when it is due.';
@@ -206,6 +209,7 @@ function BillForm({
   title,
   editing,
   presetDayKey,
+  noun = 'bill',
 }: BillFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -250,6 +254,7 @@ function BillForm({
     isChosen,
     pickedCount,
     editing !== undefined,
+    noun,
   );
 
   const startMin = editing ? undefined : toDateInputValue(today);
@@ -271,7 +276,7 @@ function BillForm({
             <Input
               variant='outline'
               aria-label='Name'
-              placeholder='Rent'
+              placeholder={noun === 'bill' ? 'Rent' : 'Vet visit'}
               maxLength={MAX_NAME_LENGTH}
               value={props.value as string}
               onChange={(event) => props.onValueChange(event.target.value)}
@@ -498,6 +503,7 @@ function BillForm({
     dueDate,
     startMin,
     planStance,
+    noun,
   ]);
 
   const getChosenKeys = (picked: string[]) =>
