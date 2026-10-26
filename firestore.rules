@@ -15,7 +15,7 @@ service cloud.firestore {
     function isAdmin() {
       return request.auth != null && (
         (('admin' in request.auth.token) && request.auth.token.admin == true) ||
-        request.auth.token.email == 'nova@moondreams.dev'
+        (request.auth.token.email == 'nova@moondreams.dev' && request.auth.token.get('email_verified', false) == true)
       );
     }
 
@@ -46,10 +46,22 @@ service cloud.firestore {
     function isCreatedByMe() { return request.resource.data.createdBy == request.auth.uid; }
     function isTripIdKept() { return request.resource.data.tripId == resource.data.tripId; }
 
-    // A link other members open from the trip is a web address, never a javascript: or data: one.
+    // A link other members open is a web address, never a javascript: or data: one. The scheme is
+    // matched case-insensitively because the client saves what `new URL` accepted, as typed.
+    function isWebAddress(value) {
+      return value is string && value.lower().matches('(?s)https?:.*');
+    }
+
     function hasSafeLinkUrl() {
-      return request.resource.data.get('linkUrl', null) == null
-        || (request.resource.data.linkUrl is string && request.resource.data.linkUrl.matches('^https?://.*'));
+      return request.resource.data.get('linkUrl', null) == null || isWebAddress(request.resource.data.linkUrl);
+    }
+
+    // For fields saved as typed (`vet.com`), where only a script scheme is refused. Browsers drop
+    // tabs and newlines inside a scheme, so they are removed before matching.
+    function hasNoScriptUrl(field) {
+      let value = request.resource.data.get(field, null);
+      return !(value is string)
+        || !value.lower().replace('[\\t\\n\\r]', '').matches('(?s)[\\x00-\\x20]*(javascript|data|vbscript):.*');
     }
 
     function isHouseholdMember(householdId) {
@@ -181,7 +193,7 @@ service cloud.firestore {
         && isCreatedByKept()
         && request.resource.data.members.hasAll(resource.data.members)
         && (request.resource.data.members == resource.data.members || isApprovedMemberAddition())
-        && (request.resource.data.inviteCode == resource.data.inviteCode || resource.data.inviteCode == null);
+        && request.resource.data.get('inviteCode', null) == resource.data.get('inviteCode', null);
     }
 
     match /apps/nine-lives/pendingRequests/{requestId} {
@@ -213,18 +225,14 @@ service cloud.firestore {
       allow read: if request.auth != null;
     }
 
-    // Cats, records, visits, expenses, litter and the rest: any member of the household.
-    match /apps/nine-lives/households/{householdId}/cats/{catId} {
-      allow read, create, update: if isHouseholdMember(householdId);
-      allow delete: if isHouseholdMember(householdId) && resource.data.createdBy == request.auth.uid;
-    }
-
-    match /apps/nine-lives/households/{householdId}/cats/{catId}/{collection}/{docId=**} {
-      allow read, write: if isHouseholdMember(householdId);
-    }
-
+    // Cats, records, visits, expenses, litter and the rest: any member of the household, as the app offers.
     match /apps/nine-lives/households/{householdId}/{collection}/{docId=**} {
-      allow read, write: if collection != 'cats' && isHouseholdMember(householdId);
+      allow read, delete: if isHouseholdMember(householdId);
+      allow create, update: if isHouseholdMember(householdId)
+        && hasNoScriptUrl('website')
+        && hasNoScriptUrl('fileURL')
+        && hasNoScriptUrl('microchipServiceURL')
+        && hasNoScriptUrl('adoptionProfileURL');
     }
 
     // --- App: pinch ---
@@ -246,15 +254,21 @@ service cloud.firestore {
     // --- App: waypoint ---
 
     match /apps/waypoint/inviteCodes/{inviteCode} {
-      allow read: if request.auth != null;
+      allow get: if request.auth != null;
+      // Listing by trip is for someone waiting on that trip: a pending request or an invitation.
+      allow list: if request.auth != null
+        && exists(/databases/$(database)/documents/apps/waypoint/pendingRequests/$(request.auth.uid + '_' + resource.data.tripId));
+      allow list: if request.auth != null
+        && exists(/databases/$(database)/documents/apps/waypoint/emailInvites/$(resource.data.tripId + '_' + request.auth.token.get('email', '').lower()));
       allow create: if request.auth != null
         && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId))
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.createdBy == request.auth.uid
         && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(request.resource.data.tripId)).data.inviteCode == inviteCode;
       allow update: if request.auth != null
-        && isTripIdKept()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['title'])
         && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId))
-        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR'];
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.members[request.auth.uid].role in ['ADMIN', 'EDITOR']
+        && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(resource.data.tripId)).data.title == request.resource.data.title;
     }
 
     match /apps/waypoint/trips/{tripId} {
@@ -287,7 +301,7 @@ service cloud.firestore {
       function isAlbumUpdate() {
         let url = request.resource.data.get('sharedAlbumUrl', null);
         return changedKeys().hasOnly(['sharedAlbumUrl', 'sharedAlbumSetByUid', 'sharedAlbumSetAt', 'lastEditedAt'])
-          && (url == null || (url is string && url.matches('^https?://[^\\s]+$')))
+          && (url == null || isWebAddress(url))
           && request.resource.data.get('sharedAlbumSetByUid', null) in [null, request.auth.uid]
           && (resource.data.get('sharedAlbumUrl', null) == null || isTripEditorOrAdmin());
       }
@@ -299,7 +313,7 @@ service cloud.firestore {
       function isMembershipApprovalValid() {
         let addedUids = request.resource.data.members.keys().removeAll(resource.data.members.keys());
         return isTripAdmin()
-          && isCreatedByKept()
+          && changedKeys().hasOnly(['members', 'lastEditedAt'])
           && request.resource.data.members.keys().hasAll(resource.data.members.keys())
           && addedUids.size() == 1
           && request.resource.data.members.size() == resource.data.members.size() + 1
@@ -312,14 +326,15 @@ service cloud.firestore {
       // An Admin can change roles or remove one member, never themselves or the creator.
       function isMembershipManagementValid() {
         return isTripAdmin()
-          && isCreatedByKept()
+          && changedKeys().hasOnly(['members', 'lastEditedAt', 'id'])
           && request.resource.data.members.keys().hasAll([request.auth.uid, resource.data.createdBy])
           && request.resource.data.members[request.auth.uid] == resource.data.members[request.auth.uid]
           && request.resource.data.members[resource.data.createdBy] == resource.data.members[resource.data.createdBy]
           && (
             (request.resource.data.members.keys().hasAll(resource.data.members.keys())
               && resource.data.members.keys().hasAll(request.resource.data.members.keys()))
-            || request.resource.data.members.size() == resource.data.members.size() - 1
+            || (resource.data.members.keys().hasAll(request.resource.data.members.keys())
+              && request.resource.data.members.size() == resource.data.members.size() - 1)
           );
       }
 
@@ -406,6 +421,7 @@ service cloud.firestore {
           && resource.data.createdBy == request.auth.uid
           && isCreatedByKept()
           && isTripIdKept()
+          && request.resource.data.get('eventId', null) == resource.data.get('eventId', null)
           && request.resource.data.upvotedBy == resource.data.upvotedBy);
       allow delete: if isTripAdminOf(tripId);
     }
@@ -480,6 +496,12 @@ service cloud.firestore {
           || (targetType == 'JUST_ME' && request.auth.uid == resource.data.payerUid);
       }
 
+      // Nobody claims to have sent more than the whole expense (its top estimate, times the headcount when per person).
+      function isEarlyPaymentAmountBounded(entry) {
+        let top = resource.data.amount != null ? resource.data.amount : resource.data.amountMax;
+        return entry.amount <= top * (resource.data.get('isPerPerson', false) ? getTrip(tripId).members.size() : 1);
+      }
+
       // A member writes only their own early-payment entry, to another member of the trip, on an expense
       // they are part of; once the expense is paid, only the entry's returned flag can change.
       function isOwnEarlyPaymentChangeValid() {
@@ -491,7 +513,7 @@ service cloud.firestore {
               && after[request.auth.uid].toUid in getTrip(tripId).members
               && after[request.auth.uid].amount > 0
               && isEarlyPaymentPartOfSplit()
-              && (resource.data.status == 'EXPECTED'
+              && ((resource.data.status == 'EXPECTED' && isEarlyPaymentAmountBounded(after[request.auth.uid]))
                 || (request.auth.uid in before
                   && after[request.auth.uid].diff(before[request.auth.uid]).affectedKeys().hasOnly(['isReturned', 'returnedAt'])))));
       }
@@ -549,7 +571,7 @@ service cloud.firestore {
         && !isMemberOfTrip(request.resource.data.tripId);
       allow delete: if request.auth != null && (
         request.auth.uid == requestUid()
-        || (resource != null && isMemberOfTrip(resource.data.tripId))
+        || (resource != null && isTripAdminOf(resource.data.tripId))
       );
     }
 
@@ -653,13 +675,11 @@ service cloud.firestore {
           && isCreatedByKept()
           && request.resource.data.members == resource.data.members
           && request.resource.data.inviteCode == resource.data.inviteCode
-          && request.resource.data.activeAction == resource.data.activeAction)
-        || (isMember(resource.data)
-          && isCreatedByKept()
-          && request.resource.data.members == resource.data.members
-          && request.resource.data.inviteCode == resource.data.inviteCode
-          && request.resource.data.activeAction.initiatedBy == request.auth.uid);
-      allow delete: if isCreator(resource.data);
+          // The key is fixed for the space's life and the reveal lock is the function's alone.
+          && request.resource.data.get('activeAction', null) == resource.data.get('activeAction', null)
+          && request.resource.data.get('encryption', null) == resource.data.get('encryption', null));
+      // Deleting the space would take the partner's boxes and items with it.
+      allow delete: if false;
 
       match /memberUpdates/{userId} {
         allow read, create, update: if request.auth != null
@@ -677,8 +697,19 @@ service cloud.firestore {
           return resource.data.createdBy == request.auth.uid;
         }
 
-        allow read, create: if isSpaceMember();
-        allow update: if isSpaceMember() && (
+        // A reveal request is a partner's consent: each member adds or takes back only their own.
+        function isOwnRevealQueueChange() {
+          let before = resource.data.get('revealRequestedBy', []);
+          let after = request.resource.data.get('revealRequestedBy', []);
+          let added = after.removeAll(before);
+          let removed = before.removeAll(after);
+          return (added.size() == 0 || (added.size() == 1 && added[0].userId == request.auth.uid))
+            && (removed.size() == 0 || (removed.size() == 1 && removed[0].userId == request.auth.uid));
+        }
+
+        allow read: if isSpaceMember();
+        allow create: if isSpaceMember() && request.resource.data.get('revealRequestedBy', []).size() == 0;
+        allow update: if isSpaceMember() && isOwnRevealQueueChange() && (
           (isBoxCreator() && !resource.data.isDefault)
             || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['revealRequestedBy', 'revealHistory'])
         );
@@ -714,14 +745,40 @@ service cloud.firestore {
     // Central, cross-app: every mini-app schedules and reads its own reminders. Only the scheduled
     // Function (admin SDK) marks one `sent` or rolls a recurring one forward.
     match /reminders/{reminderId} {
+      function relatedGroupOf(data) {
+        let path = data.get('relatedEntityPath', null);
+        return !(path is string) ? ''
+          : path.matches('apps/waypoint/trips/[^/]+/.+') ? 'trip'
+          : path.matches('apps/nine-lives/households/[^/]+/.+') ? 'household'
+          : '';
+      }
+
+      // Someone on the trip or in the household the reminder is about (they may schedule or cancel it for the others).
+      function isRelatedGroupMember(data) {
+        let id = data.get('relatedEntityPath', '').split('/')[3];
+        return (relatedGroupOf(data) == 'trip' && isTripMemberOf(id))
+          || (relatedGroupOf(data) == 'household' && isHouseholdMember(id));
+      }
+
+      // A reminder goes to its creator alone, or to people who share that trip or household with them.
+      function isReminderAudienceKnown() {
+        let data = request.resource.data;
+        let id = data.get('relatedEntityPath', '').split('/')[3];
+        return (data.targetUids.hasOnly([request.auth.uid]) && request.auth.uid in data.targetUids)
+          || (relatedGroupOf(data) == 'trip' && isTripMemberOf(id)
+            && data.targetUids.hasOnly(getTrip(id).members.keys()))
+          || (relatedGroupOf(data) == 'household' && isHouseholdMember(id)
+            && data.targetUids.hasOnly(get(/databases/$(database)/documents/apps/nine-lives/households/$(id)).data.members));
+      }
+
       allow read: if request.auth != null && request.auth.uid in resource.data.targetUids;
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy
-        && request.auth.uid in request.resource.data.targetUids
+        && isReminderAudienceKnown()
         // A path inside the app, never another site: a notification opens it on tap.
         && (request.resource.data.get('link', null) == null || request.resource.data.link.matches('/[a-z0-9].*'));
       allow update: if request.auth != null
-        && request.auth.uid in resource.data.targetUids
+        && (request.auth.uid in resource.data.targetUids || isRelatedGroupMember(resource.data))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
         && request.resource.data.status == 'cancelled';
     }
