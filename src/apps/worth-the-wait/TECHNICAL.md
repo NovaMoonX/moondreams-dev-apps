@@ -245,6 +245,8 @@ Execution is strictly handled via the Cloud Function callable endpoint (triggerB
 
 ## **Security & Privacy Requirements**
 
+> **Beta-tier rules.** Every app here is a beta app, so `firestore.rules` enforces access (sign-in, ownership, membership, roles, phases, invite flows, immutable ownership fields) and no longer validates field types, lengths, enums, key lists, list caps or timestamp bounds. Where this document says a rule checks one of those, the client's types and caps are what hold it now; the strict rules are in git history at `c784e89` and come back when the app graduates (`GRADUATING.md`).
+
 * **App Namespacing:** All database transactions and security rules are restricted to paths prefixed with apps/worth-the-wait/.
 * **Space Membership Guard:** Reads of `spaces/{spaceId}` and all space subresources are restricted strictly to authenticated users listed in `members`.
 * **Invite Lookup Privacy:** `inviteCodes/{code}` can be read by authenticated users because it only exposes a `spaceId` mapping and no private space payload.

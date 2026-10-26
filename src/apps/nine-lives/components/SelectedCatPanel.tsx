@@ -12,6 +12,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 
 import { getInitials } from '@/utils/accountUtils';
+import { toWebLink } from '@/utils/urlUtils';
 
 import type { Cat } from '../types';
 import CatConditionsSection from './CatConditionsSection';
@@ -83,11 +84,14 @@ function SelectedCatPanel({ householdId, cats, selectedCat, onEditDetails }: Sel
                   Microchip service
                 </a>
               )}
-              {selectedCat.otherLinks?.map((link) => (
-                <a key={link.id} href={link.url} target='_blank' rel='noopener noreferrer' className='text-primary text-xs hover:underline'>
-                  {link.label}
-                </a>
-              ))}
+              {selectedCat.otherLinks?.map((link) => {
+                const href = toWebLink(link.url);
+                return href ? (
+                  <a key={link.id} href={href} target='_blank' rel='noopener noreferrer' className='text-primary text-xs hover:underline'>
+                    {link.label}
+                  </a>
+                ) : null;
+              })}
             </div>
             {(selectedCat.coatColors?.length || selectedCat.personalityTraits?.length) && (
               <p className='text-muted-foreground mt-1 text-sm'>
