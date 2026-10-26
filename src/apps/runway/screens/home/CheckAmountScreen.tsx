@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import HelpTip from '@/components/HelpTip';
 import Subview from '@/components/Subview';
 import MoneyInput from '@/components/MoneyInput';
 import { PillGroup } from '@/components/PillGroup';
@@ -79,11 +80,13 @@ function CheckAmountScreen({
         </p>
       ) : (
         <div className='space-y-4'>
-          <p className='text-muted-foreground text-sm'>{CHECK_WORDS.prompt}</p>
           <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>
-              {CHECK_WORDS.amount}
-            </p>
+            <div className='flex h-6 items-center gap-1'>
+              <p className='text-muted-foreground text-xs'>
+                {CHECK_WORDS.amount}
+              </p>
+              <HelpTip title={CHECK_WORDS.title}>{CHECK_WORDS.prompt}</HelpTip>
+            </div>
             <MoneyInput
               variant='outline'
               ariaLabel={CHECK_WORDS.amount}

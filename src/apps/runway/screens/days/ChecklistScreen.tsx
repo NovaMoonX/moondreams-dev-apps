@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -6,10 +8,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import BillPaidChip from '@apps/runway/components/BillPaidChip';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
-import ItemBadge from '@apps/runway/components/ItemBadge';
+import ItemRow from '@apps/runway/components/ItemRow';
+import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   BILL_WORDS,
   CHECKLIST_WORDS,
@@ -22,8 +25,60 @@ import {
   selectOpenDay,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { BillPayment } from '@apps/runway/engine/demands';
 import type { RecordLine } from '@apps/runway/types';
 import { describeBillProgress } from '@apps/runway/utils/billText';
+
+interface ChecklistBillRowProps {
+  line: RecordLine;
+  payment: BillPayment | null;
+  today: number;
+  isDone: boolean;
+  onDone: (isDone: boolean) => void;
+}
+
+/** A bill the day set money aside for: tapping it ticks it, and its chevron opens the bill, where it can be marked paid. */
+function ChecklistBillRow({
+  line,
+  payment,
+  today,
+  isDone,
+  onDone,
+}: ChecklistBillRowProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const progress = payment
+    ? (describeBillProgress(payment) ?? BILL_WORDS.readyToPay)
+    : null;
+  const amount = formatCents(line.cents);
+
+  return (
+    <>
+      <ItemRow
+        name={line.name}
+        detail={progress}
+        figure={amount}
+        ariaLabel={`${line.name}, ${amount}`}
+        tick={{ checked: isDone, onChange: onDone }}
+        onOpen={payment ? () => setIsOpen(true) : undefined}
+      />
+      {isOpen && payment && (
+        <ItemSheet
+          itemId={line.itemId}
+          kind='bill'
+          today={today}
+          figureLabel='From this day'
+          figure={amount}
+          facts={[`Due ${formatDateUTC(payment.dueOn)}`, progress]}
+          payment={payment}
+          canChange={false}
+          onMarked={() => onDone(true)}
+          onUndone={() => onDone(false)}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+    </>
+  );
+}
 
 interface ChecklistScreenProps {
   day: ListedDay;
@@ -100,44 +155,14 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           total={ready.length}
         >
           {ready.map(({ line, payment }) => (
-            <li key={line.lineId} className='flex items-start gap-3 p-3'>
-              <div className='flex h-10 shrink-0 items-center'>
-                <Checkbox
-                  className={TICK_HIT_CLASS}
-                  checked={done.has(line.lineId)}
-                  onCheckedChange={(next) =>
-                    setDone([line.lineId], Boolean(next))
-                  }
-                  aria-label={`${line.name} done`}
-                />
-              </div>
-              <div className='min-w-0 flex-1'>
-                <div className='flex min-h-10 items-start justify-between gap-2'>
-                  <p className='line-clamp-2 min-w-0 pt-2 font-medium break-words'>
-                    {line.name}
-                  </p>
-                  <p className='flex h-10 shrink-0 items-center font-semibold whitespace-nowrap tabular-nums'>
-                    {formatCents(line.cents)}
-                  </p>
-                </div>
-                {payment && (
-                  <p className='text-muted-foreground text-sm'>
-                    {describeBillProgress(payment) ?? BILL_WORDS.readyToPay}
-                  </p>
-                )}
-                {payment && (
-                  <div className='pt-1'>
-                    <BillPaidChip
-                      billId={line.itemId}
-                      billName={line.name}
-                      payment={payment}
-                      onMarked={() => setDone([line.lineId], true)}
-                      onUndone={() => setDone([line.lineId], false)}
-                    />
-                  </div>
-                )}
-              </div>
-            </li>
+            <ChecklistBillRow
+              key={line.lineId}
+              line={line}
+              payment={payment}
+              today={today}
+              isDone={done.has(line.lineId)}
+              onDone={(isDone) => setDone([line.lineId], isDone)}
+            />
           ))}
         </ChecklistGroup>
       )}
@@ -146,20 +171,16 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           <SectionDivider label={CHECKLIST_WORDS.waitingGroup} />
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {waiting.map(({ line, payment }) => (
-              <li key={line.lineId} className='flex items-start gap-3 p-3'>
-                <ItemBadge name={line.name} emoji={line.emoji} />
-                <div className='min-w-0 flex-1'>
-                  <p className='line-clamp-2 pt-2 font-medium break-words'>
-                    {line.name}
-                  </p>
-                  <p className='text-muted-foreground text-sm'>
-                    {payment ? describeBillProgress(payment) : null}
-                  </p>
-                  <p className='text-muted-foreground text-sm'>
-                    {BILL_WORDS.waiting}
-                  </p>
-                </div>
-              </li>
+              <ItemRow
+                key={line.lineId}
+                name={line.name}
+                emoji={line.emoji}
+                detail={
+                  (payment ? describeBillProgress(payment) : null) ??
+                  BILL_WORDS.waiting
+                }
+                figure={formatCents(line.cents)}
+              />
             ))}
           </ul>
         </div>

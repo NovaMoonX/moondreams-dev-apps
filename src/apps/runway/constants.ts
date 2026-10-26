@@ -774,3 +774,42 @@ export const DELETE_PLAN_WORDS = {
     "You're offline. Connect to the internet to delete your plan; nothing has been removed.",
   partial: 'Your plan was not fully deleted. Run the delete again to finish.',
 } as const;
+
+// Lists and screens: an item's sheet, the one row anatomy and the counted problems row.
+export const ITEM_SHEET_WORDS = {
+  change: 'Change it',
+  changeSub: {
+    bill: 'The amount, the due date or how often',
+    envelope: 'The amount, how often or how much it matters',
+    goal: 'The target, the date or what goes in',
+    payLine: 'The amount or when it arrives',
+    source: 'Its name',
+  },
+  changeDaySub: 'From this income day, or for this day alone',
+  funds: 'What it funds',
+  history: 'History',
+  historySub: 'Every change to it, with your reasons',
+  notPaid: 'Mark not paid',
+  paidFromSetAside: 'It comes out of what is set aside',
+  paidFromFree: 'not set aside yet comes out of Free to spend',
+  stopHeading: 'Stop or pause',
+  lineHeading: 'This income day',
+  topUpSub: 'Takes what it is short from what this day has left',
+  leaveShortSub: 'It waits for a later income day',
+  undoChoiceSub: 'Back to holding it until you choose',
+  heldFlag: 'Held until you choose',
+  fromThisDay: 'From this day',
+  draftStatus: 'Expected. A draft until the money arrives.',
+  dayMore: 'More about this day',
+  notArrivedSub: 'Takes this draft off your plan until you put it back',
+} as const;
+
+export const PROBLEM_WORDS = {
+  title: 'Things to fix',
+  one: '1 thing to fix',
+  many: (count: number) => `${count} things to fix`,
+  stanceTitle: 'Planning at the safe end',
+} as const;
+
+/** Envelope tiles Home shows at Track, two to a row. */
+export const HOME_TILE_COUNT = 4;

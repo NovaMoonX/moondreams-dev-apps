@@ -232,7 +232,7 @@ function StartingOutScreen() {
         ? 'Open it to see what it sets aside, or go to Home.'
         : 'Go to Home to see where things stand.',
       content: nextDay ? (
-        <ul>
+        <ul className='border-border bg-card rounded-2xl border'>
           <IncomeDayCard
             day={nextDay}
             onOpen={() => {

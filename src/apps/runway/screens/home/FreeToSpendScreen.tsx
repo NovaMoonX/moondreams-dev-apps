@@ -1,12 +1,21 @@
 import { useState } from 'react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Calculator, Wallet } from 'lucide-react';
+
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 
 import Subview from '@/components/Subview';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
-import { HOME_WORDS } from '@apps/runway/constants';
+import {
+  CHECK_WORDS,
+  ENVELOPE_SPEND_WORDS,
+  HOME_WORDS,
+} from '@apps/runway/constants';
+import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -25,7 +34,9 @@ interface FreeToSpendScreenProps {
 /** Free to spend in detail: the money on hand and what has a job, so the figure can be followed to its parts. */
 function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const balances = useAppSelector(selectBalances);
-  const words = getLevelWords(useAppSelector(selectLevel));
+  const level = useAppSelector(selectLevel);
+  const words = getLevelWords(level);
+  const { openCheckAmount } = useRunwayUrlState();
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -52,7 +63,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             <p className='text-muted-foreground text-sm font-medium'>
               {free.label}
             </p>
-            <p className='text-3xl font-semibold tracking-tight tabular-nums'>
+            <p className='text-4xl font-semibold tracking-tight tabular-nums'>
               {free.value}
             </p>
             {startDate !== null && (
@@ -80,14 +91,34 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
               ))}
             </dl>
           )}
-          <Button
-            variant='secondary'
-            onClick={() => setSheetKey((current) => (current ?? 0) + 1)}
-          >
-            {startDate === null
-              ? 'Say where things stand'
-              : 'Change what you started with'}
-          </Button>
+          <ActionGroup isRoomy>
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<Wallet />}
+              label={
+                startDate === null
+                  ? 'Say where things stand'
+                  : 'Change what you started with'
+              }
+              onClick={() => setSheetKey((current) => (current ?? 0) + 1)}
+            />
+            {level === 'track' && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Calculator />}
+                label={CHECK_WORDS.open}
+                subtitle={ENVELOPE_SPEND_WORDS.checkSub}
+                onClick={() => {
+                  onClose();
+                  leaveAfterSubviewCloses(() => openCheckAmount(null));
+                }}
+              />
+            )}
+          </ActionGroup>
           {sheetKey !== null && (
             <StartingAmountsSheet
               key={sheetKey}

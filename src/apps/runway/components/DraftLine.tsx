@@ -1,15 +1,18 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useState, type ReactNode } from 'react';
+import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import { formatCents } from '@/utils/moneyUtils';
+import ItemRow from '@apps/runway/components/ItemRow';
+import ItemSheet from '@apps/runway/components/ItemSheet';
 import RangeNote from '@apps/runway/components/RangeNote';
-import ItemBadge from '@apps/runway/components/ItemBadge';
-import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import {
-  CHANGE_WORDS,
   DRAFT_WORDS,
+  ITEM_SHEET_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
-import type { HoldChoice } from '@apps/runway/types';
+import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import {
   describeBillShare,
@@ -21,33 +24,41 @@ interface DraftLineProps {
   line: DraftLineData;
   name: string;
   emoji: string | null;
+  /** The item's kind; a line whose item is gone has none and opens nothing. */
+  kind: ItemKind | null;
   sourceNames: Record<string, string>;
   /** The source that pays the whole day, so a line need not repeat it. */
   daySourceId?: string | null;
+  today: number;
+  dayKey: string;
   /** Answers a short pairing; absent where the line cannot be answered. */
   onChoose?: (line: DraftLineData, choice: HoldChoice) => void;
   isChoosing?: boolean;
   /** Takes back the choice made for a held line; absent where the line cannot be answered. */
   onUndoChoice?: (line: DraftLineData) => void;
-  /** Opens the item to change it from this income day or for this day alone; absent where the item cannot be changed. */
-  onChange?: () => void;
+  /** The item can be changed from this income day or for this day alone. */
+  canChange?: boolean;
   /** This income day takes its own version of the line. */
   isDayOnly?: boolean;
 }
 
-/** One envelope's line in a draft: what it got, the priority it was funded at and why. */
+/** One line of a draft as a row: what it got and the one fact that matters most. It opens the line's sheet, with its reason, its choices and the item's changes. */
 function DraftLine({
   line,
   name,
   emoji,
+  kind,
   sourceNames,
   daySourceId,
+  today,
+  dayKey,
   onChoose,
   onUndoChoice,
   isChoosing = false,
-  onChange,
+  canChange = false,
   isDayOnly = false,
 }: DraftLineProps) {
+  const [isOpen, setIsOpen] = useState(false);
   const reason = describeLineReason(line, sourceNames, name, daySourceId);
   const tieNote = describeTieBreak(line);
   const billShare = describeBillShare(line);
@@ -70,115 +81,125 @@ function DraftLine({
       return `${DRAFT_WORDS.leftShort}. ${shortSentence}`;
     if (state === 'toppedUp' && isShort)
       return `${DRAFT_WORDS.toppedUp}. ${name} is still ${formatCents(line.shortBy)} short.`;
+    if (state === 'toppedUp') return DRAFT_WORDS.toppedUp;
     return null;
   };
   const pairingNote = getPairingNote();
-  const choices: { choice: HoldChoice; label: string }[] =
-    state === 'held'
-      ? [
-          { choice: 'topUp', label: DRAFT_WORDS.topUp },
-          { choice: 'leaveShort', label: DRAFT_WORDS.leaveShort },
-        ]
-      : state === 'offered' || state === 'leftShort'
-        ? [{ choice: 'topUp', label: DRAFT_WORDS.topUp }]
-        : [];
   const shortText = isShort
     ? `${DRAFT_WORDS.shortBy} ${formatCents(line.shortBy)}`
     : null;
-
-  return (
-    <li
-      className='flex items-start gap-3 p-3'
-      aria-label={`${name}: ${PRIORITY_LABELS[line.tier]}, ${formatCents(line.cents)}. ${billShare ? `${billShare}. ` : ''}${reason}${shortText ? `. ${shortText}` : ''}`}
-    >
-      <ItemBadge name={name} emoji={emoji} />
-      <div className='min-h-10 min-w-0 flex-1'>
-        <div className='flex min-h-10 items-start justify-between gap-2'>
-          <p className='line-clamp-2 min-w-0 pt-2 font-medium break-words'>
-            {name}
-          </p>
-          <div className='flex h-10 shrink-0 items-center gap-2'>
-            <span className='max-sm:hidden'>
-              <PriorityBadge priority={line.tier} />
-            </span>
-            <p className='font-semibold whitespace-nowrap tabular-nums'>
-              {formatCents(line.cents)}
-            </p>
-          </div>
-        </div>
-        <div className='pb-1 sm:hidden'>
-          <PriorityBadge priority={line.tier} />
-        </div>
-        {billShare && (
-          <p className='text-muted-foreground text-sm'>{billShare}</p>
-        )}
-        {line.bill?.ranged && (
-          <RangeNote
-            range={line.bill.ranged.range}
-            stance={line.bill.ranged.stance}
-            side='expense'
-            isOwnStance={line.bill.ranged.isOwnStance}
+  const getDetail = () => {
+    if (state === 'held')
+      return { text: ITEM_SHEET_WORDS.heldFlag, isStrong: true };
+    if (shortText) return { text: shortText, isStrong: true };
+    return { text: billShare ?? reason, isStrong: false };
+  };
+  const detail = getDetail();
+  const amount = formatCents(line.cents);
+  const canChoose = Boolean(onChoose);
+  const choices: {
+    choice: HoldChoice;
+    label: string;
+    subtitle: string;
+    icon: ReactNode;
+  }[] = !canChoose
+    ? []
+    : state === 'held'
+      ? [
+          {
+            choice: 'topUp',
+            label: DRAFT_WORDS.topUp,
+            subtitle: ITEM_SHEET_WORDS.topUpSub,
+            icon: <ArrowUpToLine />,
+          },
+          {
+            choice: 'leaveShort',
+            label: DRAFT_WORDS.leaveShort,
+            subtitle: ITEM_SHEET_WORDS.leaveShortSub,
+            icon: <Hourglass />,
+          },
+        ]
+      : state === 'offered' || state === 'leftShort'
+        ? [
+            {
+              choice: 'topUp',
+              label: DRAFT_WORDS.topUp,
+              subtitle: ITEM_SHEET_WORDS.topUpSub,
+              icon: <ArrowUpToLine />,
+            },
+          ]
+        : [];
+  const canUndo =
+    Boolean(onUndoChoice) && (state === 'toppedUp' || state === 'leftShort');
+  const extra =
+    choices.length > 0 || canUndo ? (
+      <ActionGroup isRoomy caption={ITEM_SHEET_WORDS.lineHeading}>
+        {choices.map(({ choice, label, subtitle, icon }) => (
+          <ActionRow
+            key={choice}
+            isGrouped
+            isRoomy
+            icon={icon}
+            label={label}
+            subtitle={subtitle}
+            isDisabled={isChoosing}
+            onClick={() => onChoose?.(line, choice)}
+          />
+        ))}
+        {canUndo && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            icon={<Undo2 />}
+            label={DRAFT_WORDS.undoChoice}
+            subtitle={ITEM_SHEET_WORDS.undoChoiceSub}
+            isDisabled={isChoosing}
+            onClick={() => onUndoChoice?.(line)}
           />
         )}
-        {pairingNote === null ? (
-          <p className='text-muted-foreground text-sm'>{reason}</p>
-        ) : (
-          <p className='text-foreground text-sm'>{pairingNote}</p>
-        )}
-        {shortText && pairingNote === null && (
-          <p className='text-foreground text-sm font-medium'>{shortText}</p>
-        )}
-        {onChoose && choices.length > 0 && (
-          <div className='flex flex-wrap gap-2 pt-2'>
-            {choices.map(({ choice, label }) => (
-              <Button
-                key={choice}
-                type='button'
-                variant='secondary'
-                disabled={isChoosing}
-                onClick={() => onChoose(line, choice)}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
-        )}
-        {onUndoChoice && (state === 'toppedUp' || state === 'leftShort') && (
-          <div className='pt-2'>
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              rounded='full'
-              className="text-foreground! relative h-7! min-h-0! w-fit px-3! py-0! before:absolute before:-inset-1.5 before:content-['']"
-              disabled={isChoosing}
-              onClick={() => onUndoChoice(line)}
-            >
-              {DRAFT_WORDS.undoChoice}
-            </Button>
-          </div>
-        )}
-        {isDayOnly && (
-          <p className='text-muted-foreground text-sm'>{DRAFT_WORDS.dayOnly}</p>
-        )}
-        {tieNote && <p className='text-muted-foreground text-xs'>{tieNote}</p>}
-        {onChange && (
-          <div className='pt-2'>
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              rounded='full'
-              className="text-foreground! relative h-7! min-h-0! w-fit px-3! py-0! before:absolute before:-inset-1.5 before:content-['']"
-              aria-label={`${CHANGE_WORDS.change} ${name}`}
-              onClick={onChange}
-            >
-              {CHANGE_WORDS.change}
-            </Button>
-          </div>
-        )}
-      </div>
-    </li>
+      </ActionGroup>
+    ) : null;
+
+  return (
+    <>
+      <ItemRow
+        name={name}
+        emoji={emoji}
+        detail={detail.text}
+        isDetailStrong={detail.isStrong}
+        figure={amount}
+        ariaLabel={`${name}: ${PRIORITY_LABELS[line.tier]}, ${amount}. ${detail.text}`}
+        onOpen={kind === null ? undefined : () => setIsOpen(true)}
+      />
+      {isOpen && kind !== null && (
+        <ItemSheet
+          itemId={line.itemId}
+          kind={kind}
+          today={today}
+          figureLabel={ITEM_SHEET_WORDS.fromThisDay}
+          figure={amount}
+          facts={[
+            `${PRIORITY_LABELS[line.tier]}. ${reason}`,
+            pairingNote ?? shortText ?? billShare,
+            isDayOnly ? DRAFT_WORDS.dayOnly : tieNote,
+          ]}
+          note={
+            line.bill?.ranged ? (
+              <RangeNote
+                range={line.bill.ranged.range}
+                stance={line.bill.ranged.stance}
+                side='expense'
+                isOwnStance={line.bill.ranged.isOwnStance}
+              />
+            ) : undefined
+          }
+          presetDayKey={dayKey}
+          canChange={canChange}
+          extra={extra}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+    </>
   );
 }
 

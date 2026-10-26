@@ -4,11 +4,11 @@ import { Target } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
@@ -24,7 +24,6 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { GoalSealed } from '@apps/runway/types';
 
 const SEARCH_THRESHOLD = 8;
 
@@ -42,10 +41,6 @@ function GoalsScreen() {
   const heldByItem = useAppSelector(selectHeldByItem);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<{
-    itemId: string;
-    payload: GoalSealed;
-  } | null>(null);
 
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
@@ -96,7 +91,6 @@ function GoalsScreen() {
             placeholder='Search goals'
           />
         )}
-        {hasRangedIncome && <RangeBasisNote stance={stance} side='income' />}
         {visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No goal matches that.</p>
         ) : (
@@ -104,18 +98,15 @@ function GoalsScreen() {
             {visible.map(({ item, payload, pace }) => (
               <GoalRow
                 key={item.id}
+                goalId={item.id}
                 goal={payload}
                 pace={pace}
                 heldCents={heldByItem[item.id] ?? 0}
-                footer={
-                  <ItemChangeControls
-                    kind='goal'
-                    itemId={item.id}
-                    current={payload}
-                    today={today}
-                    name={payload.name}
-                    onChange={() => setEditing({ itemId: item.id, payload })}
-                  />
+                today={today}
+                basisNote={
+                  hasRangedIncome && (
+                    <RangeBasisNote stance={stance} side='income' />
+                  )
                 }
               />
             ))}
@@ -129,6 +120,15 @@ function GoalsScreen() {
     <div className='space-y-4'>
       <SectionHeader
         title='Goals'
+        help={
+          isLoaded &&
+          goals.length > 0 &&
+          hasRangedIncome && (
+            <HelpTip title='Ranges of pay'>
+              <RangeBasisNote stance={stance} side='income' />
+            </HelpTip>
+          )
+        }
         action={
           <Button
             variant='secondary'
@@ -146,15 +146,6 @@ function GoalsScreen() {
           isOpen
           title='Goal'
           onClose={() => setFormKey(null)}
-        />
-      )}
-      {editing !== null && (
-        <GoalForm
-          key={editing.itemId}
-          isOpen
-          title='Goal'
-          editing={editing}
-          onClose={() => setEditing(null)}
         />
       )}
     </div>

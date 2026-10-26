@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { ChevronRight, FileText, Pencil } from 'lucide-react';
+import { FileText, Pencil } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 
 import EmptyCard from '@/components/EmptyCard';
 import SectionDivider from '@/components/SectionDivider';
@@ -15,7 +16,9 @@ import {
   CONFIRM_WORDS,
   CORRECT_WORDS,
   DRAFT_WORDS,
+  ITEM_SHEET_WORDS,
 } from '@apps/runway/constants';
+import { formatDayTitle } from '@apps/runway/utils/dayTitle';
 import CorrectSheet from '@apps/runway/screens/days/CorrectSheet';
 import ChecklistScreen from '@apps/runway/screens/days/ChecklistScreen';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
@@ -55,58 +58,28 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
         </EmptyCard>
       );
     }
-    const { arrivedCents, freeToSpendCents, lines } = record;
+    const { freeToSpendCents, lines } = record;
     const otherLines = lines.filter(
       (line) => !(billIds.has(line.itemId) && line.cents > 0),
     );
     const funded = otherLines.filter((line) => line.shortBy === 0);
     const unfunded = otherLines.filter((line) => line.shortBy > 0);
+    const dayLeft = <CoverageHeadline freeCents={freeToSpendCents} />;
     return (
       <div className='space-y-4'>
-        <CoverageHeadline
-          freeCents={freeToSpendCents}
-          moneyCents={arrivedCents}
-        />
         <ChecklistScreen day={day} lines={lines} />
-        <Button
-          type='button'
-          variant='tertiary'
-          className='border-border h-auto min-h-11 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left font-normal whitespace-normal'
-          onClick={() => setIsRecordOpen(true)}
-        >
-          <span className='min-w-0 flex-1 break-words'>
-            {CONFIRM_WORDS.recordDoor}
-          </span>
-          <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
-        </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='border-border h-auto min-h-11 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-left font-normal whitespace-normal'
-          onClick={() => setIsCorrecting(true)}
-        >
-          <Pencil className='text-muted-foreground h-4 w-4 shrink-0' />
-          <span className='min-w-0 flex-1'>
-            <span className='block break-words'>{CORRECT_WORDS.door}</span>
-            <span className='text-muted-foreground block text-sm break-words'>
-              {CORRECT_WORDS.doorHint}
-            </span>
-          </span>
-          <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
-        </Button>
         {lines.length === 0 ? (
           <EmptyCard icon={<FileText className='h-5 w-5' />}>
             Nothing was set to be funded from this day.
           </EmptyCard>
-        ) : otherLines.length === 0 ? null : (
+        ) : (
           <div className='space-y-4'>
-            {funded.length > 0 && (
-              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                {funded.map((line) => (
-                  <RecordLineRow key={line.lineId} line={line} />
-                ))}
-              </ul>
-            )}
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {funded.map((line) => (
+                <RecordLineRow key={line.lineId} line={line} />
+              ))}
+              {dayLeft}
+            </ul>
             {unfunded.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider label={DRAFT_WORDS.notFunded} />
@@ -119,34 +92,54 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
             )}
           </div>
         )}
+        <ActionGroup isRoomy caption={ITEM_SHEET_WORDS.dayMore}>
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<FileText />}
+            label={CONFIRM_WORDS.recordDoor}
+            onClick={() => setIsRecordOpen(true)}
+          />
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Pencil />}
+            label={CORRECT_WORDS.door}
+            subtitle={CORRECT_WORDS.doorHint}
+            onClick={() => setIsCorrecting(true)}
+          />
+        </ActionGroup>
       </div>
     );
   };
 
   return (
-    <Subview title='Income day' onClose={onClose}>
+    <Subview title={formatDayTitle(day.on)} onClose={onClose}>
       <div className='space-y-4'>
-        <div>
-          <p className='line-clamp-2 text-lg font-medium break-words'>
-            {title}
-          </p>
-          <p className='text-muted-foreground text-sm'>
-            {CONFIRM_WORDS.confirmed}
-            {day.arrivedOn !== null && (
-              <>
-                <span className='max-sm:hidden'> · </span>
-                <span className='max-sm:block'>
-                  Arrived {formatDateUTC(day.arrivedOn)}
-                </span>
-              </>
-            )}
+        <div className='border-border bg-accent rounded-2xl border p-4'>
+          <p className='text-muted-foreground text-sm font-medium break-words'>
+            {day.sourceName ? `${title}, ${day.payLineName}` : title}
           </p>
           {record && (
-            <p className='text-muted-foreground text-sm'>
-              {formatCents(record.arrivedCents)} arrived
-              {record.kind === 'correction' && ` · ${CORRECT_WORDS.corrected}`}
+            <p className='text-4xl font-semibold tracking-tight tabular-nums'>
+              {formatCents(record.arrivedCents)}
             </p>
           )}
+          <p className='text-muted-foreground text-sm'>
+            {[
+              CONFIRM_WORDS.confirmed,
+              day.arrivedOn !== null
+                ? `arrived ${formatDateUTC(day.arrivedOn)}`
+                : null,
+              record?.kind === 'correction'
+                ? CORRECT_WORDS.corrected.toLowerCase()
+                : null,
+            ]
+              .filter(Boolean)
+              .join(', ')}
+          </p>
         </div>
         {getBody()}
       </div>

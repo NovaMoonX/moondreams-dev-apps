@@ -9,14 +9,13 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import ItemRow from '@apps/runway/components/ItemRow';
+import ItemSheet from '@apps/runway/components/ItemSheet';
 import RangeNote from '@apps/runway/components/RangeNote';
-import { effectiveStance, pick } from '@apps/runway/engine/stance';
-import FundsRow from '@apps/runway/components/FundsRow';
-import PairingsEditor from '@apps/runway/forms/PairingsEditor';
-import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
-import { SCHEDULE_LABELS } from '@apps/runway/constants';
+import { DRAFT_WORDS, SCHEDULE_LABELS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import IncomeForm, { type EditingIncome } from '@apps/runway/forms/IncomeForm';
+import { effectiveStance, pick } from '@apps/runway/engine/stance';
+import IncomeForm from '@apps/runway/forms/IncomeForm';
 import {
   selectBills,
   selectEnvelopes,
@@ -30,6 +29,7 @@ import type {
   PayLineSealed,
   Schedule,
   SourceSealed,
+  Stance,
 } from '@apps/runway/types';
 
 const ordinalRules = new Intl.PluralRules('en-US', { type: 'ordinal' });
@@ -41,6 +41,7 @@ const ORDINAL_SUFFIXES: Record<string, string> = {
 };
 const toOrdinal = (day: number) =>
   `${day}${ORDINAL_SUFFIXES[ordinalRules.select(day)]}`;
+const MAX_SHOWN_NAMES = 3;
 
 const describePattern = (schedule: Schedule) => {
   if (schedule.kind === 'monthly') {
@@ -52,23 +53,117 @@ const describePattern = (schedule: Schedule) => {
   return SCHEDULE_LABELS[schedule.kind];
 };
 
-const describeTiming = ({ schedule, ending }: PayLineSealed) => {
-  if (schedule.kind === 'once' && schedule.anchor !== null) {
-    return `Arrives ${formatDateUTC(schedule.anchor)}`;
-  }
-  const pattern = describePattern(schedule);
+const describeTiming = ({ schedule }: PayLineSealed) =>
+  schedule.kind === 'once' && schedule.anchor !== null
+    ? `Arrives ${formatDateUTC(schedule.anchor)}`
+    : describePattern(schedule);
+
+const describeEnding = ({ ending }: PayLineSealed) => {
   if (ending.afterCount !== null)
-    return `${pattern} · Ends after ${ending.afterCount} payments`;
-  if (ending.onDate !== null)
-    return `${pattern} · Ends ${formatDateUTC(ending.onDate)}`;
-  return pattern;
+    return `Ends after ${ending.afterCount} payments`;
+  if (ending.onDate !== null) return `Ends ${formatDateUTC(ending.onDate)}`;
+  return null;
 };
 
-interface EditingFunds {
+const describeFunds = (names: string[]) => {
+  if (names.length === 0) return DRAFT_WORDS.fundsNone;
+  const shown = names.slice(0, MAX_SHOWN_NAMES).join(', ');
+  const more = names.length - MAX_SHOWN_NAMES;
+  return `Funds ${more > 0 ? `${shown} and ${more} more` : shown}`;
+};
+
+interface SourceRowProps {
   itemId: string;
-  kind: 'source' | 'payLine';
-  name: string;
-  current: SourceSealed | PayLineSealed;
+  source: SourceSealed;
+  funds: string[];
+  payCount: number;
+  today: number;
+}
+
+/** An income source as the head of its pays: its name and what it funds; it opens the source's sheet. */
+function SourceRow({ itemId, source, funds, payCount, today }: SourceRowProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const fundsLine = describeFunds(funds);
+  const pays = payCount === 1 ? '1 pay' : `${payCount} pays`;
+  const detail = funds.length > 0 ? fundsLine : pays;
+
+  return (
+    <>
+      <ItemRow
+        name={source.name}
+        detail={detail}
+        ariaLabel={`${source.name}. ${detail}. Open`}
+        onOpen={() => setIsOpen(true)}
+      />
+      {isOpen && (
+        <ItemSheet
+          itemId={itemId}
+          kind='source'
+          today={today}
+          figureLabel='Income source'
+          facts={[pays, fundsLine]}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+    </>
+  );
+}
+
+interface PayLineRowProps {
+  itemId: string;
+  payLine: PayLineSealed;
+  planStance: Stance;
+  funds: string[];
+  today: number;
+}
+
+/** One pay: its name, when it arrives and its amount; it opens the pay's sheet. */
+function PayLineRow({
+  itemId,
+  payLine,
+  planStance,
+  funds,
+  today,
+}: PayLineRowProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const stance = effectiveStance(planStance, payLine.stanceOverride);
+  const amount = formatCents(pick(stance, payLine.amount, 'income'));
+  const timing = describeTiming(payLine);
+
+  return (
+    <>
+      <ItemRow
+        name={payLine.name}
+        detail={timing}
+        figure={amount}
+        ariaLabel={`${payLine.name}, ${amount}. ${timing}. Open`}
+        onOpen={() => setIsOpen(true)}
+      />
+      {isOpen && (
+        <ItemSheet
+          itemId={itemId}
+          kind='payLine'
+          today={today}
+          figureLabel='Each pay'
+          figure={amount}
+          facts={[
+            timing,
+            describeEnding(payLine),
+            funds.length > 0 ? describeFunds(funds) : null,
+          ]}
+          note={
+            <RangeNote
+              range={payLine.amount}
+              stance={stance}
+              side='income'
+              isOwnStance={Boolean(payLine.stanceOverride)}
+            />
+          }
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+    </>
+  );
 }
 
 function IncomeScreen() {
@@ -77,18 +172,16 @@ function IncomeScreen() {
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
-  const [editing, setEditing] = useState<EditingFunds | null>(null);
-  const namesOf = (pairings: Pairing[]) =>
-    pairings.flatMap((pairing) => {
+  const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const sources = useAppSelector((state) => selectResolvedPlan(state, today));
+  const [formKey, setFormKey] = useState<number | null>(null);
+  const namesOf = (pairings: readonly Pairing[] | undefined) =>
+    (pairings ?? []).flatMap((pairing) => {
       const target = [...envelopes, ...bills, ...goals].find(
         ({ item }) => item.id === pairing.targetItemId,
       );
       return target ? [target.version.payload.name] : [];
     });
-  const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
-  const sources = useAppSelector((state) => selectResolvedPlan(state, today));
-  const [formKey, setFormKey] = useState<number | null>(null);
-  const [changing, setChanging] = useState<EditingIncome | null>(null);
 
   const getBody = () => {
     if (!isLoaded) {
@@ -105,118 +198,38 @@ function IncomeScreen() {
       );
     }
     return (
-      <ul className='space-y-3'>
+      <div className='space-y-3'>
         {sources.map((source) => (
-          <li
+          <ul
             key={source.item.id}
-            className='border-border bg-card rounded-2xl border p-4'
+            className='border-border divide-border bg-card divide-y rounded-2xl border'
           >
-            <h3 className='line-clamp-2 font-medium break-words'>
-              {source.version.payload.name}
-            </h3>
-            <div className='py-1'>
-              <ItemChangeControls
-                kind='source'
-                itemId={source.item.id}
-                current={source.version.payload}
-                today={today}
-                name={source.version.payload.name}
-                onChange={() =>
-                  setChanging({
-                    itemId: source.item.id,
-                    kind: 'source',
-                    payload: source.version.payload,
-                  })
-                }
-              />
-            </div>
-            <FundsRow
-              names={namesOf(source.version.payload.pairings)}
-              ariaLabel={`What ${source.version.payload.name} funds`}
-              onOpen={() =>
-                setEditing({
-                  itemId: source.item.id,
-                  kind: 'source',
-                  name: source.version.payload.name,
-                  current: source.version.payload,
-                })
-              }
+            <SourceRow
+              itemId={source.item.id}
+              source={source.version.payload}
+              funds={namesOf(source.version.payload.pairings)}
+              payCount={source.payLines.length}
+              today={today}
             />
             {source.payLines.length === 0 ? (
-              <p className='text-muted-foreground mt-1 text-sm'>
+              <li className='text-muted-foreground p-3 text-sm'>
                 No pay added yet.
-              </p>
+              </li>
             ) : (
-              <ul className='divide-border mt-2 divide-y'>
-                {source.payLines.map(({ item, version }) => {
-                  return (
-                    <li
-                      key={item.id}
-                      className='space-y-0.5 py-2 first:pt-0 last:pb-0'
-                    >
-                      <div className='flex items-start justify-between gap-3'>
-                        <p className='min-w-0 break-words'>
-                          {version.payload.name}
-                        </p>
-                        <p className='shrink-0 font-semibold whitespace-nowrap tabular-nums'>
-                          {formatCents(
-                            pick(
-                              effectiveStance(
-                                stance,
-                                version.payload.stanceOverride,
-                              ),
-                              version.payload.amount,
-                              'income',
-                            ),
-                          )}
-                        </p>
-                      </div>
-                      <RangeNote
-                        range={version.payload.amount}
-                        stance={effectiveStance(
-                          stance,
-                          version.payload.stanceOverride,
-                        )}
-                        side='income'
-                        isOwnStance={Boolean(version.payload.stanceOverride)}
-                      />
-                      <p className='text-muted-foreground text-sm'>
-                        {describeTiming(version.payload)}
-                      </p>
-                      <ItemChangeControls
-                        kind='payLine'
-                        itemId={item.id}
-                        current={version.payload}
-                        today={today}
-                        name={version.payload.name}
-                        onChange={() =>
-                          setChanging({
-                            itemId: item.id,
-                            kind: 'payLine',
-                            payload: version.payload,
-                          })
-                        }
-                      />
-                      <FundsRow
-                        names={namesOf(version.payload.pairings)}
-                        ariaLabel={`What ${version.payload.name} funds`}
-                        onOpen={() =>
-                          setEditing({
-                            itemId: item.id,
-                            kind: 'payLine',
-                            name: version.payload.name,
-                            current: version.payload,
-                          })
-                        }
-                      />
-                    </li>
-                  );
-                })}
-              </ul>
+              source.payLines.map(({ item, version }) => (
+                <PayLineRow
+                  key={item.id}
+                  itemId={item.id}
+                  payLine={version.payload}
+                  planStance={stance}
+                  funds={namesOf(version.payload.pairings)}
+                  today={today}
+                />
+              ))
             )}
-          </li>
+          </ul>
         ))}
-      </ul>
+      </div>
     );
   };
 
@@ -235,32 +248,6 @@ function IncomeScreen() {
         }
       />
       {getBody()}
-      {editing !== null && (
-        <PairingsEditor
-          key={editing.itemId}
-          isOpen
-          title='Funds'
-          fromLabel={editing.name}
-          locked={[]}
-          initial={editing.current.pairings ?? []}
-          change={{
-            itemId: editing.itemId,
-            kind: editing.kind,
-            current: editing.current,
-          }}
-          onClose={() => setEditing(null)}
-        />
-      )}
-      {changing !== null && (
-        <IncomeForm
-          key={changing.itemId}
-          isOpen
-          title='Income'
-          defaultFrequency={null}
-          editing={changing}
-          onClose={() => setChanging(null)}
-        />
-      )}
       {formKey !== null && (
         <IncomeForm
           key={formKey}

@@ -94,11 +94,18 @@ function SpendScreen() {
   const groups = groupByMonth(visible);
 
   const filterOptions = [
-    { value: '', label: SPEND_WORDS.all },
+    {
+      value: '',
+      label: SPEND_WORDS.all,
+      detail: String(purchases.length),
+      ariaLabel: `${SPEND_WORDS.all}, ${purchases.length}`,
+    },
     ...[...counts.entries()]
       .map(([id, count]) => ({
         value: id,
-        label: `${nameOf(id)} · ${count}`,
+        label: nameOf(id),
+        detail: String(count),
+        ariaLabel: `${nameOf(id)}, ${count}`,
       }))
       .sort((a, b) => a.label.localeCompare(b.label)),
   ];
@@ -136,7 +143,7 @@ function SpendScreen() {
             <Select
               searchable
               options={filterOptions.map((option) => ({
-                text: option.label,
+                text: `${option.label} · ${option.detail}`,
                 value: option.value === '' ? ALL_ENVELOPES : option.value,
               }))}
               value={filterId ?? ALL_ENVELOPES}

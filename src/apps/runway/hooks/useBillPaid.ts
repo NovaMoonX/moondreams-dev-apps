@@ -1,15 +1,9 @@
-import { useState } from 'react';
-import { Check, Undo2 } from 'lucide-react';
+import { useRef, useState } from 'react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import ActionChips from '@/components/ActionChips';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
-import {
-  selectIsMovesLoaded,
-  selectIsRecordsReady,
-} from '@apps/runway/store/selectors/runwaySelectors';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { CHECKLIST_WORDS } from '@apps/runway/constants';
@@ -21,38 +15,42 @@ import {
   markBillPaid,
   undoBillPaid,
 } from '@apps/runway/store/actions/moveActions';
+import {
+  selectIsMovesLoaded,
+  selectIsRecordsReady,
+} from '@apps/runway/store/selectors/runwaySelectors';
 
-interface BillPaidChipProps {
+interface UseBillPaidOptions {
   billId: string;
   billName: string;
-  payment: BillPayment;
+  payment: BillPayment | null;
   /** Runs after a mark, so a checklist can tick the line it came from. */
   onMarked?: () => void;
   /** Runs after an undo, so a checklist can untick the line it marked. */
   onUndone?: () => void;
 }
 
-/** Marks a payment paid, ahead of its due date or not, or takes the mark back. */
-function BillPaidChip({
+/** Marks a bill's payment paid, ahead of its due date or not, or takes the mark back; `isReady` is false until the ledger has loaded. */
+export function useBillPaid({
   billId,
   billName,
   payment,
   onMarked,
   onUndone,
-}: BillPaidChipProps) {
+}: UseBillPaidOptions) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const moves = useAppSelector((state) => state.runway.moves);
-  const isReady = useAppSelector(
+  const isLedgerReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [isBusy, setIsBusy] = useState(false);
-  const { paid } = payment;
-  const unfundedCents = Math.max(0, payment.totalCents - payment.fundedCents);
+  const isBusyRef = useRef(false);
 
   const run = async (task: (uid: string) => Promise<void>, failure: string) => {
-    if (!user || isBusy) return;
+    if (!user || isBusyRef.current) return;
+    isBusyRef.current = true;
     setIsBusy(true);
     try {
       await task(user.uid);
@@ -63,11 +61,14 @@ function BillPaidChip({
         type: 'error',
       });
     } finally {
+      isBusyRef.current = false;
       setIsBusy(false);
     }
   };
 
-  const handleMark = async () => {
+  const mark = async () => {
+    if (!payment || payment.paid) return;
+    const unfundedCents = Math.max(0, payment.totalCents - payment.fundedCents);
     if (unfundedCents > 0) {
       const isConfirmed = await confirm({
         title: `Mark ${billName} paid`,
@@ -90,8 +91,9 @@ function BillPaidChip({
     }, `${billName} was not marked paid`);
   };
 
-  const handleUndo = () =>
+  const undo = () =>
     run(async (uid) => {
+      const paid = payment?.paid ?? null;
       if (!paid) return;
       const encryption = await getRunwayEncryption(uid);
       await undoBillPaid(uid, encryption, {
@@ -105,32 +107,12 @@ function BillPaidChip({
       onUndone?.();
     }, `${billName} was not changed`);
 
-  if (!isReady) return null;
-
-  return (
-    <ActionChips
-      label={`${billName} payment`}
-      actions={[
-        paid
-          ? {
-              key: 'undo',
-              icon: <Undo2 className='h-4 w-4' />,
-              label: CHECKLIST_WORDS.undoPaid,
-              description: `Undo: ${billName} paid`,
-              isLoading: isBusy,
-              onClick: handleUndo,
-            }
-          : {
-              key: 'pay',
-              icon: <Check className='h-4 w-4' />,
-              label: CHECKLIST_WORDS.markPaid,
-              description: `Mark ${billName} paid`,
-              isLoading: isBusy,
-              onClick: handleMark,
-            },
-      ]}
-    />
-  );
+  const result = {
+    isReady: isLedgerReady && payment !== null,
+    isPaid: payment?.paid != null,
+    isBusy,
+    mark,
+    undo,
+  };
+  return result;
 }
-
-export default BillPaidChip;

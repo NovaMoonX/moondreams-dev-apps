@@ -8,41 +8,34 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
-import ItemBadge from '@apps/runway/components/ItemBadge';
-import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
-import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   selectEnvelopes,
   selectPairedBy,
   selectIsPlanItemsLoaded,
+  selectIsMovesLoaded,
+  selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { EnvelopeSealed } from '@apps/runway/types';
-import {
-  describeFunding,
-  describePairedBy,
-} from '@apps/runway/utils/fundingText';
+import { describePairedBy } from '@apps/runway/utils/fundingText';
+import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 
 const SEARCH_THRESHOLD = 8;
 
 function EnvelopesScreen() {
   const today = todayAsUtcDate(useNow(60_000));
-  const level = useAppSelector(selectLevel);
-  const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const balances = useAppSelector(selectBalances);
+  const isLoaded = useAppSelector(
+    (state) =>
+      selectIsPlanItemsLoaded(state) &&
+      selectIsMovesLoaded(state) &&
+      selectIsRecordsReady(state),
+  );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
-  const [purchaseFor, setPurchaseFor] = useState<string | null>(null);
-  const { showSpend, openCheckAmount } = useRunwayUrlState();
-  const [editing, setEditing] = useState<{
-    itemId: string;
-    payload: EnvelopeSealed;
-  } | null>(null);
 
   const hasSearch = envelopes.length >= SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -80,52 +73,14 @@ function EnvelopesScreen() {
         ) : (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {visible.map(({ item, version }) => (
-              <li key={item.id} className='flex items-start gap-3 p-3'>
-                <ItemBadge
-                  name={version.payload.name}
-                  emoji={version.payload.emoji}
-                />
-                <div className='min-h-10 min-w-0 flex-1'>
-                  <p className='line-clamp-2 font-medium break-words'>
-                    {version.payload.name}
-                  </p>
-                  <p className='text-muted-foreground text-sm first-letter:uppercase'>
-                    {describeFunding(version.payload.funding)}
-                  </p>
-                  {describePairedBy(pairedBy[item.id] ?? []) && (
-                    <p className='text-muted-foreground text-sm'>
-                      {describePairedBy(pairedBy[item.id] ?? [])}
-                    </p>
-                  )}
-                  <div className='pt-1'>
-                    <PriorityBadge priority={version.payload.priority} />
-                  </div>
-                  <div className='pt-2'>
-                    <ItemChangeControls
-                      kind='envelope'
-                      itemId={item.id}
-                      current={version.payload}
-                      today={today}
-                      name={version.payload.name}
-                      onChange={() =>
-                        setEditing({
-                          itemId: item.id,
-                          payload: version.payload,
-                        })
-                      }
-                      spend={
-                        level === 'track'
-                          ? {
-                              onAddPurchase: () => setPurchaseFor(item.id),
-                              onPurchases: () => showSpend(item.id),
-                              onCheckAmount: () => openCheckAmount(item.id),
-                            }
-                          : undefined
-                      }
-                    />
-                  </div>
-                </div>
-              </li>
+              <EnvelopeTile
+                key={item.id}
+                itemId={item.id}
+                envelope={version.payload}
+                cents={balances.assignedByItem[item.id] ?? 0}
+                pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
+                today={today}
+              />
             ))}
           </ul>
         )}
@@ -154,23 +109,6 @@ function EnvelopesScreen() {
           isOpen
           title='Envelope'
           onClose={() => setFormKey(null)}
-        />
-      )}
-      {purchaseFor !== null && (
-        <PurchaseForm
-          key={purchaseFor}
-          isOpen
-          presetEnvelopeId={purchaseFor}
-          onClose={() => setPurchaseFor(null)}
-        />
-      )}
-      {editing !== null && (
-        <EnvelopeForm
-          key={editing.itemId}
-          isOpen
-          title='Envelope'
-          editing={editing}
-          onClose={() => setEditing(null)}
         />
       )}
     </div>

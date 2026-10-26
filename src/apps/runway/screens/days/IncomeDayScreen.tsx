@@ -1,25 +1,25 @@
 import { useState } from 'react';
-import { CalendarX, Mail } from 'lucide-react';
+import { CalendarX, Link2, Mail, Undo2 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import ActionChips from '@/components/ActionChips';
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import EmptyCard from '@/components/EmptyCard';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import RangeNote from '@apps/runway/components/RangeNote';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
-import FundsRow from '@apps/runway/components/FundsRow';
-import { CONFIRM_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
-import BillForm from '@apps/runway/forms/BillForm';
-import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
-import GoalForm from '@apps/runway/forms/GoalForm';
+import {
+  CONFIRM_WORDS,
+  DRAFT_WORDS,
+  ITEM_SHEET_WORDS,
+} from '@apps/runway/constants';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -35,7 +35,6 @@ import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import { effectiveStance } from '@apps/runway/engine/stance';
 import type { HoldChoice } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import {
   selectChangeableKey,
   selectDraft,
@@ -46,6 +45,9 @@ import {
   selectListedDays,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { describeRange } from '@apps/runway/utils/rangeText';
+
+import { formatDayTitle } from '@apps/runway/utils/dayTitle';
 
 interface IncomeDayScreenProps {
   dayKey: string;
@@ -59,7 +61,6 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const [isEditingFunds, setIsEditingFunds] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [changingItemId, setChangingItemId] = useState<string | null>(null);
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
@@ -69,11 +70,6 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const isLoaded = isPlanLoaded && isDaysLoaded && isRecordsReady;
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
-  const changing = useAppSelector((state) =>
-    changingItemId === null
-      ? null
-      : resolveCurrentOrNext(state.runway.versions, changingItemId, today),
-  );
   const changeableIds = useAppSelector(selectChangeableKey);
 
   if (!view || !isDaysLoaded || !isRecordsReady) {
@@ -162,7 +158,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const title = day.sourceName ?? day.payLineName;
 
   const renderLine = (line: (typeof draft.lines)[number]) => {
-    const envelope = Object.hasOwn(items, line.itemId)
+    const isKnown = Object.hasOwn(items, line.itemId);
+    const envelope = isKnown
       ? items[line.itemId]
       : {
           name: line.bill ? DRAFT_WORDS.billFallback : 'Envelope',
@@ -174,85 +171,42 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         line={line}
         name={envelope.name}
         emoji={envelope.emoji}
+        kind={isKnown ? (line.bill ? 'bill' : 'envelope') : null}
         sourceNames={sourceNames}
         daySourceId={day.sourceId}
+        today={today}
+        dayKey={dayKey}
         onChoose={choose}
         onUndoChoice={undoChoice}
         isChoosing={isSaving}
         isDayOnly={Object.hasOwn(override?.payloads ?? {}, line.itemId)}
-        onChange={
-          day.on >= today && changeableIds.has(line.itemId)
-            ? () => setChangingItemId(line.itemId)
-            : undefined
-        }
+        canChange={day.on >= today && changeableIds.has(line.itemId)}
       />
     );
   };
+  const stance = effectiveStance(planStance, day.stanceOverride);
+  const statusLine =
+    describeRange(day.amount, stance, 'income', Boolean(day.stanceOverride)) ??
+    ITEM_SHEET_WORDS.draftStatus;
+  const dayLeft = <CoverageHeadline freeCents={draft.freeToSpend.cents} />;
+  const fundsNames = effectivePairings.flatMap((pairing) =>
+    Object.hasOwn(items, pairing.targetItemId)
+      ? [items[pairing.targetItemId].name]
+      : [],
+  );
 
   return (
-    <Subview title='Income day' onClose={onClose}>
+    <Subview title={formatDayTitle(day.on)} onClose={onClose}>
       <div className='space-y-4'>
-        <div>
-          <p className='line-clamp-2 text-lg font-medium break-words'>
-            {title}
+        <div className='border-border bg-accent rounded-2xl border p-4'>
+          <p className='text-muted-foreground text-sm font-medium break-words'>
+            {day.sourceName ? `${title}, ${day.payLineName}` : title}
           </p>
-          <p className='text-muted-foreground text-sm'>
-            {formatDateUTC(day.on)}
-            <span className='max-sm:hidden'> · </span>
-            <span className='max-sm:block'>
-              {formatCents(draft.moneyCents)}
-            </span>
+          <p className='text-4xl font-semibold tracking-tight tabular-nums'>
+            {formatCents(draft.moneyCents)}
           </p>
-          <RangeNote
-            range={day.amount}
-            stance={effectiveStance(planStance, day.stanceOverride)}
-            side='income'
-            isOwnStance={Boolean(day.stanceOverride)}
-          />
+          <p className='text-muted-foreground text-sm'>{statusLine}</p>
         </div>
-        <div>
-          <FundsRow
-            names={effectivePairings.flatMap((pairing) =>
-              Object.hasOwn(items, pairing.targetItemId)
-                ? [items[pairing.targetItemId].name]
-                : [],
-            )}
-            ariaLabel='What this day funds'
-            onOpen={() => setIsEditingFunds(true)}
-          />
-          {hasChanges && (
-            <Button
-              type='button'
-              variant='secondary'
-              disabled={isSaving}
-              onClick={() => void save(() => EMPTY_OVERRIDE)}
-            >
-              {DRAFT_WORDS.useThePlan}
-            </Button>
-          )}
-        </div>
-        {heldLines.length > 0 && (
-          <p className='bg-muted/50 border-border rounded-2xl border p-3 text-sm'>
-            {DRAFT_WORDS.holdsBlock}
-          </p>
-        )}
-        <Button
-          type='button'
-          className='w-full'
-          disabled={heldLines.length > 0 || isSaving}
-          onClick={() => setIsConfirming(true)}
-        >
-          {CONFIRM_WORDS.action}
-        </Button>
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        <CoverageHeadline
-          freeCents={draft.freeToSpend.cents}
-          moneyCents={draft.moneyCents}
-        />
         {draft.lines.length === 0 ? (
           <EmptyCard icon={<Mail className='h-5 w-5' />}>
             Nothing is set to be funded from this day. Add an envelope or a bill
@@ -260,11 +214,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           </EmptyCard>
         ) : (
           <div className='space-y-4'>
-            {funded.length > 0 && (
-              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                {funded.map(renderLine)}
-              </ul>
-            )}
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {funded.map(renderLine)}
+              {dayLeft}
+            </ul>
             {unfunded.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider label={DRAFT_WORDS.notFunded} />
@@ -275,59 +228,67 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             )}
           </div>
         )}
-        <ActionChips
-          label='More about this day'
-          actions={[
-            {
-              key: 'notArrived',
-              icon: <CalendarX className='h-4 w-4' />,
-              label: CONFIRM_WORDS.markNotArrived,
-              isDisabled: isSaving,
-              onClick: () => void notArrived(),
-            },
-          ]}
-        />
+        <ActionGroup isRoomy caption={ITEM_SHEET_WORDS.dayMore}>
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Link2 />}
+            label={ITEM_SHEET_WORDS.funds}
+            subtitle={
+              fundsNames.length === 0
+                ? DRAFT_WORDS.fundsNone
+                : fundsNames.length > 3
+                  ? `${fundsNames.slice(0, 3).join(', ')} and ${fundsNames.length - 3} more`
+                  : fundsNames.join(', ')
+            }
+            onClick={() => setIsEditingFunds(true)}
+          />
+          {hasChanges && (
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<Undo2 />}
+              label={DRAFT_WORDS.useThePlan}
+              isDisabled={isSaving}
+              onClick={() => void save(() => EMPTY_OVERRIDE)}
+            />
+          )}
+          <ActionRow
+            isGrouped
+            isRoomy
+            icon={<CalendarX />}
+            label={CONFIRM_WORDS.markNotArrived}
+            subtitle={ITEM_SHEET_WORDS.notArrivedSub}
+            isDisabled={isSaving}
+            onClick={() => void notArrived()}
+          />
+        </ActionGroup>
+        <div className='bg-background border-border sticky bottom-0 z-10 -mx-(--subview-pad) -mb-(--subview-pad) border-t px-(--subview-pad) pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]'>
+          <ModalFooterActions
+            note={
+              error ??
+              (heldLines.length > 0 ? DRAFT_WORDS.holdsBlock : undefined)
+            }
+            rightActions={
+              <Button
+                type='button'
+                className='w-full'
+                disabled={heldLines.length > 0 || isSaving}
+                onClick={() => setIsConfirming(true)}
+              >
+                {CONFIRM_WORDS.action}
+              </Button>
+            }
+          />
+        </div>
       </div>
       {isConfirming && (
         <ConfirmSheet
           view={view}
-          stance={effectiveStance(planStance, day.stanceOverride)}
+          stance={stance}
           onClose={() => setIsConfirming(false)}
         />
-      )}
-      {changing && changingItemId !== null && (
-        <>
-          {changing.kind === 'envelope' && (
-            <EnvelopeForm
-              key={changingItemId}
-              isOpen
-              title='Envelope'
-              editing={{ itemId: changingItemId, payload: changing.payload }}
-              presetDayKey={dayKey}
-              onClose={() => setChangingItemId(null)}
-            />
-          )}
-          {changing.kind === 'goal' && (
-            <GoalForm
-              key={changingItemId}
-              isOpen
-              title='Goal'
-              editing={{ itemId: changingItemId, payload: changing.payload }}
-              presetDayKey={dayKey}
-              onClose={() => setChangingItemId(null)}
-            />
-          )}
-          {changing.kind === 'bill' && (
-            <BillForm
-              key={changingItemId}
-              isOpen
-              title='Bill'
-              editing={{ itemId: changingItemId, payload: changing.payload }}
-              presetDayKey={dayKey}
-              onClose={() => setChangingItemId(null)}
-            />
-          )}
-        </>
       )}
       {isEditingFunds && (
         <PairingsEditor

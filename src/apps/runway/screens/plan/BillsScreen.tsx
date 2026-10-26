@@ -9,7 +9,6 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
 import BillRow from '@apps/runway/components/BillRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
@@ -21,11 +20,10 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { BillSealed } from '@apps/runway/types';
 
 const SEARCH_THRESHOLD = 8;
 const ROWS_PER_CHUNK = 12;
-const ESTIMATED_ROW_HEIGHT = 190;
+const ESTIMATED_ROW_HEIGHT = 69;
 
 function BillsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -40,10 +38,6 @@ function BillsScreen() {
   const stance = useAppSelector(selectStance);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<{
-    itemId: string;
-    payload: BillSealed;
-  } | null>(null);
 
   const hasSearch = bills.length >= SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -113,18 +107,7 @@ function BillsScreen() {
                         bill={payload}
                         payment={payment}
                         planStance={stance}
-                        footer={
-                          <ItemChangeControls
-                            kind='bill'
-                            itemId={item.id}
-                            current={payload}
-                            today={today}
-                            name={payload.name}
-                            onChange={() =>
-                              setEditing({ itemId: item.id, payload })
-                            }
-                          />
-                        }
+                        today={today}
                       />
                     ))}
                   </ul>
@@ -158,15 +141,6 @@ function BillsScreen() {
           isOpen
           title='Bill'
           onClose={() => setFormKey(null)}
-        />
-      )}
-      {editing !== null && (
-        <BillForm
-          key={editing.itemId}
-          isOpen
-          title='Bill'
-          editing={editing}
-          onClose={() => setEditing(null)}
         />
       )}
     </div>

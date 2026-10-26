@@ -5,23 +5,34 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import type { LookaheadProblem } from '@apps/runway/engine/lookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { describeProblem } from '@apps/runway/utils/lookaheadText';
+import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 
 interface ProblemRowProps {
   problem: LookaheadProblem;
+  /** Closes the sheet the row sits in; the row then opens its door once the sheet's history step is done. */
+  onLeave?: () => void;
 }
 
 /** One thing that stops the plan, as a row that opens the income day it runs short on, or the bills for a bill with no income or one past due. */
-function ProblemRow({ problem }: ProblemRowProps) {
+function ProblemRow({ problem, onLeave }: ProblemRowProps) {
   const { openDay, showPlanSection, showTab } = useRunwayUrlState();
   const text = describeProblem(problem);
 
-  const open = () => {
+  const go = () => {
     if (problem.kind === 'short') {
       openDay(problem.dayKey);
       return;
     }
     showPlanSection('bills');
     showTab('plan');
+  };
+  const open = () => {
+    if (!onLeave) {
+      go();
+      return;
+    }
+    onLeave();
+    leaveAfterSubviewCloses(go);
   };
 
   return (

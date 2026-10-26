@@ -4,13 +4,16 @@ import { CalendarDays } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import HelpTip from '@/components/HelpTip';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { formatCents } from '@/utils/moneyUtils';
 import {
   COMING_DAYS_CAP,
   COMING_DAYS_PREVIEW,
+  PROBLEM_WORDS,
   SETTLED_DAYS_PREVIEW,
 } from '@apps/runway/constants';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
@@ -31,7 +34,12 @@ import {
   selectIsPlanItemsLoaded,
   selectIsRecordsReady,
   selectListedDays,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { describeRangeBasis } from '@apps/runway/utils/rangeText';
+
+const plural = (count: number, word: string) =>
+  `${count} ${word}${count === 1 ? '' : 's'}`;
 
 function DaysScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -51,7 +59,14 @@ function DaysScreen() {
   );
   const cushion = useAppSelector((state) => selectStanceCushion(state, today));
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
+  const stance = useAppSelector(selectStance);
   const days = allDays.slice(0, COMING_DAYS_CAP);
+  const cushionParts = cushion
+    ? [
+        cushion.sourceCount > 0 && plural(cushion.sourceCount, 'source'),
+        cushion.billCount > 0 && plural(cushion.billCount, 'bill'),
+      ].filter(Boolean)
+    : [];
   const { openDay } = useRunwayUrlState();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSettledExpanded, setIsSettledExpanded] = useState(false);
@@ -91,10 +106,8 @@ function DaysScreen() {
           </p>
         ) : (
           <div className='space-y-2'>
-            {lookahead && (
-              <LookaheadWarnings lookahead={lookahead} cushion={cushion} />
-            )}
-            <ul className='space-y-2'>
+            {lookahead && <LookaheadWarnings lookahead={lookahead} />}
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
               {visibleDays.map((day) => (
                 <IncomeDayCard
                   key={day.dayKey}
@@ -129,7 +142,7 @@ function DaysScreen() {
         {confirmed.length > 0 && (
           <div className='space-y-2'>
             <SectionDivider label='Confirmed' />
-            <ul className='space-y-2'>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
               {visibleSettled.map((day) => (
                 <IncomeDayCard
                   key={day.dayKey}
@@ -157,13 +170,29 @@ function DaysScreen() {
 
   return (
     <div className='space-y-4'>
-      <div className='flex items-start justify-between gap-3'>
+      <div className='flex items-center justify-between gap-3'>
         <div className='min-w-0 flex-1'>
           {lookahead && days.length > 0 && (
             <HoldsThroughLine
               lookahead={lookahead}
-              rangeSides={rangeSides}
-              hasRangeNote={false}
+              help={
+                (cushion || rangeSides.income || rangeSides.expense) && (
+                  <HelpTip title={PROBLEM_WORDS.stanceTitle}>
+                    {cushion && (
+                      <p>
+                        Conservative planning is holding back{' '}
+                        {formatCents(cushion.cents)}
+                        {cushionParts.length > 0 &&
+                          ` across ${cushionParts.join(' and ')}`}
+                        .
+                      </p>
+                    )}
+                    {(rangeSides.income || rangeSides.expense) && (
+                      <p>{describeRangeBasis(stance, rangeSides)}</p>
+                    )}
+                  </HelpTip>
+                )
+              }
             />
           )}
         </div>
