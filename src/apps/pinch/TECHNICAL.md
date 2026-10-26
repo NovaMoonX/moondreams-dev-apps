@@ -1060,6 +1060,8 @@ The fridge and freezer list exists (§5g, decision 23) and so do pantry packages
 
 ## Security Rules Design Criteria
 
+> **Beta-tier rules.** Every app here is a beta app, so `firestore.rules` enforces access (sign-in, ownership, membership, roles, phases, invite flows, immutable ownership fields) and no longer validates field types, lengths, enums, key lists, list caps or timestamp bounds. Where this document says a rule checks one of those, the client's types and caps are what hold it now; the strict rules are in git history at `c784e89` and come back when the app graduates (`GRADUATING.md`).
+
 1. **Everything in a kitchen is owner-only.** Every path under `apps/pinch/kitchens/{uid}` (the kitchen document and all fourteen subcollections) allows read and write only when `request.auth.uid == uid`. There is no member-of, admin or role branch. The two share collections (criterion 20) are the only other documents under `apps/pinch` that a person's account touches, and they hold a copy the Functions made, never the kitchen itself; no rule makes any kitchen path readable by a link.
 2. **`isAdmin()` and `isDevUser()` get no access to kitchen data.** They gate only the app *catalog* document `apps/pinch`, as for every other app. A dev fixture signs in as its own `uid` like anyone else.
 3. **The app document** `apps/pinch` follows the existing four-read-predicate shape (admin/dev, unrestricted-public, uid-allowed, email-allowed) with admin-only writes, in alphabetical position among the app blocks.
