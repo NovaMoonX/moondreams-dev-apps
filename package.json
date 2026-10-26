@@ -53,6 +53,7 @@
     "check:a-list": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/aListProjection.ts",
     "check:option-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/optionMatch.ts",
     "check:indexes": "tsx scripts/checkFirestoreIndexes.ts",
+    "check:rules-size": "tsx scripts/checkRulesSize.ts",
     "fb:indexes": "firebase deploy --only firestore:indexes",
     "fb:functions": "cd functions && npm run build && firebase deploy --only functions",
     "fb:deploy:smart": "tsx scripts/fbDeploySmart.ts",
