@@ -90,7 +90,7 @@ export default function ChecklistSection({
   const mayModify = (item: ChecklistItem) => isPrivateItem(item) || canEditExisting;
 
   const mayToggle = (item: ChecklistItem) =>
-    isPrivateItem(item) || canEdit || item.assignedToUids.includes(currentUserId);
+    isPrivateItem(item) || canEditExisting || item.assignedToUids.includes(currentUserId);
 
   const showSearch = items.length >= LIST_SEARCH_THRESHOLD;
   const needle = showSearch ? query.trim().toLowerCase() : '';
