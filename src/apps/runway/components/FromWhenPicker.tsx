@@ -1,6 +1,9 @@
+import { useState } from 'react';
+
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import { PillGroup } from '@/components/PillGroup';
+import SummaryRow from '@/components/SummaryRow';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
@@ -31,7 +34,7 @@ const STRETCH_OPTIONS = [
 
 const hasDayOnly = (kind: ItemKind) => kind === 'envelope' || kind === 'goal';
 
-/** When a change starts and how long it lasts. Earlier days keep what they had; only choices that mean something here are drawn. */
+/** When a change starts and how long it lasts, folded to one row until tapped since "From now on" is nearly always right. Earlier days keep what they had; only choices that mean something here are drawn. */
 function FromWhenPicker({
   value,
   onChange,
@@ -55,10 +58,26 @@ function FromWhenPicker({
       ? [{ value: 'stretch' as const, label: CHANGE_WORDS.stretch }]
       : []),
   ];
+  const [isOpen, setIsOpen] = useState(false);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
     label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
+
+  if (!isOpen) {
+    const chosen =
+      options.find((option) => option.value === value.choice)?.label ??
+      CHANGE_WORDS.fromNow;
+    return (
+      <SummaryRow
+        label={CHANGE_WORDS.fromHeading}
+        ariaLabel={`${CHANGE_WORDS.fromHeading}: ${chosen}. Change`}
+        onClick={isDisabled ? undefined : () => setIsOpen(true)}
+      >
+        {chosen}
+      </SummaryRow>
+    );
+  }
 
   return (
     <div className='space-y-2'>

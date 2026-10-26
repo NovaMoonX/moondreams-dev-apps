@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import AmountHero from '@/components/AmountHero';
+import FoldedDateField from '@/components/FoldedDateField';
 import FormSheet from '@/components/FormSheet';
 import MoneyInput from '@/components/MoneyInput';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -15,6 +17,7 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
+  FORM_FLOW_WORDS,
   START_AMOUNTS_WORDS,
   START_ROWS_PREVIEW,
 } from '@apps/runway/constants';
@@ -183,27 +186,19 @@ function StartingAmountsSheet({
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title='Where things stand'>
       <div className='grid gap-4'>
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>As of</p>
-          <Input
-            type='date'
-            variant='outline'
-            aria-label='As of'
-            max={toDateInputValue(today)}
-            value={date}
-            onChange={(event) => setDate(event.target.value)}
-          />
-        </div>
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>Money on hand</p>
-          <MoneyInput
-            variant='outline'
-            ariaLabel='Money on hand'
-            value={money}
-            onChange={setMoney}
-            placeholder='What you have to plan with'
-          />
-        </div>
+        <AmountHero
+          label={FORM_FLOW_WORDS.moneyOnHand}
+          value={money}
+          onChange={setMoney}
+          hint='What you have to plan with.'
+        />
+        <FoldedDateField
+          label={FORM_FLOW_WORDS.asOf}
+          value={date}
+          onChange={setDate}
+          todayValue={toDateInputValue(today)}
+          max={toDateInputValue(today)}
+        />
         <AmountList
           label='What each goal holds'
           rows={goals.map(({ item, version }) => ({

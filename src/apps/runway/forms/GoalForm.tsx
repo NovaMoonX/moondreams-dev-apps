@@ -1,18 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useState } from 'react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField, { type AmountMode } from '@/components/AmountField';
+import { AmountHeroLink } from '@/components/AmountHero';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
-import RevealChip from '@/components/RevealChip';
+import QuestionFlow from '@/components/QuestionFlow';
+import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -20,12 +16,14 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import {
   centsToInputValue,
+  formatCents,
   parseMoneyToCents,
   parsePercentToBps,
 } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
+  FORM_FLOW_WORDS,
   FUNDING_CADENCE_LABELS,
   FUNDING_CADENCES,
   LOOKAHEAD_MONTHS,
@@ -40,10 +38,11 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createGoal } from '@apps/runway/store/actions/itemActions';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
-import { changeField } from '@apps/runway/forms/changeField';
+import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { toFundingInput } from '@apps/runway/utils/fundingInput';
+import { describeAmount } from '@apps/runway/utils/fundingText';
 import {
   selectComingDays,
   selectGoals,
@@ -78,14 +77,25 @@ interface GoalFormProps {
   editing?: { itemId: string; payload: GoalSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** A question to open first when changing a goal ("target", "amount"); every answer starts folded otherwise. */
+  openStep?: GoalStepId | null;
 }
 
-const { custom } = FormFactories;
+export type GoalStepId =
+  'name' | 'target' | 'byWhen' | 'amount' | 'cadence' | 'priority' | 'emoji';
 
 const AMOUNT_MODES = [
-  { value: 'exact', label: 'Exact amount' },
-  { value: 'percent', label: "% of the day's money" },
-  { value: 'rest', label: 'The rest' },
+  {
+    value: 'exact',
+    label: 'Exact amount',
+    linkLabel: FORM_FLOW_WORDS.exactLink,
+  },
+  {
+    value: 'percent',
+    label: "% of the day's money",
+    linkLabel: FORM_FLOW_WORDS.percentLink,
+  },
+  { value: 'rest', label: 'The rest', linkLabel: FORM_FLOW_WORDS.restLink },
 ] as const;
 
 const getFundingAmount = (
@@ -187,17 +197,19 @@ function GoalForm({
   title,
   editing,
   presetDayKey,
+  openStep = null,
 }: GoalFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
-  const [initialData] = useState<GoalFormData>(() =>
+  const [formData, setFormData] = useState<GoalFormData>(() =>
     editing ? getEditingData(editing.payload) : INITIAL_DATA,
   );
-  const [formData, setFormData] = useState<GoalFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const set = (patch: Partial<GoalFormData>) =>
+    setFormData((current) => ({ ...current, ...patch }));
 
   const [amountMode, setAmountMode] = useState<AmountMode>(
     editing ? toFundingInput(editing.payload.funding).mode : 'exact',
@@ -217,205 +229,217 @@ function GoalForm({
     value: day.dayKey,
     label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
+  const hasDays = comingDays.length > 0;
+  const isCadenceAnswered =
+    (formData.cadence === 'everyIncomeDay' || hasDays) &&
+    (formData.cadence !== 'chosen' || formData.dayKeys.length > 0);
+  const cadenceText =
+    formData.cadence === 'chosen'
+      ? `${FUNDING_CADENCE_LABELS.chosen} · ${formData.dayKeys.length}`
+      : FUNDING_CADENCE_LABELS[formData.cadence];
+  const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
+  const date =
+    formData.date === null ? null : (fromDateInputValue(formData.date) ?? null);
+  const isDateAnswered =
+    formData.date === null ||
+    (date !== null && date >= today && date <= lastDate);
+  const daysToDate =
+    date === null
+      ? []
+      : comingDays.filter((day) => day.on >= today && day.on <= date);
+  const suggestionCents =
+    targetCents !== null && targetCents > 0 && daysToDate.length > 0
+      ? Math.ceil(targetCents / daysToDate.length)
+      : null;
+  const suggestionText =
+    suggestionCents === null || date === null
+      ? null
+      : FORM_FLOW_WORDS.suggestion
+          .replace('{amount}', formatCents(suggestionCents))
+          .replace('{date}', formatDateUTC(date));
 
-  const fields = useMemo(() => {
-    const result = [
-      custom({
-        name: 'name',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>Name</p>
-            <Input
-              variant='outline'
-              aria-label='Name'
-              placeholder='Vacation fund'
-              maxLength={MAX_NAME_LENGTH}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'priority',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>How much it matters</p>
-            <PillGroup
-              label='How much it matters'
-              options={priorityOptions}
-              value={props.value as Priority | null}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'target',
-        label: '',
-        renderComponent: (props) => (
-          <AmountField
-            label='Target'
-            hint='How much you want to have saved.'
-            value={props.value as string}
-            onChange={(value) => props.onValueChange(value)}
+  const steps: QuestionStep[] = [
+    {
+      id: 'name',
+      title: FORM_FLOW_WORDS.nameTitle,
+      summaryLabel: FORM_FLOW_WORDS.name,
+      summaryValue: formData.name.trim(),
+      isAnswered: formData.name.trim() !== '',
+      render: () => (
+        <Input
+          variant='outline'
+          aria-label={FORM_FLOW_WORDS.name}
+          placeholder='Vacation fund'
+          maxLength={MAX_NAME_LENGTH}
+          value={formData.name}
+          onChange={(event) => set({ name: event.target.value })}
+        />
+      ),
+    },
+    {
+      id: 'target',
+      title: FORM_FLOW_WORDS.targetTitle,
+      summaryLabel: FORM_FLOW_WORDS.target,
+      summaryValue:
+        targetCents !== null && targetCents > 0 ? formatCents(targetCents) : '',
+      isAnswered: targetCents !== null && targetCents > 0,
+      render: () => (
+        <AmountField
+          isHero
+          label={FORM_FLOW_WORDS.target}
+          value={formData.target}
+          onChange={(target) => set({ target })}
+        />
+      ),
+    },
+    {
+      id: 'byWhen',
+      title: FORM_FLOW_WORDS.byWhenTitle,
+      summaryLabel: FORM_FLOW_WORDS.byWhen,
+      summaryValue:
+        formData.date === null
+          ? FORM_FLOW_WORDS.noDate
+          : date === null
+            ? ''
+            : formatDateUTC(date),
+      isAnswered: isDateAnswered,
+      render: () => (
+        <div className='space-y-3'>
+          <Input
+            type='date'
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.byWhen}
+            min={toDateInputValue(today)}
+            max={toDateInputValue(lastDate)}
+            value={formData.date ?? ''}
+            onChange={(event) => set({ date: event.target.value })}
           />
-        ),
-      }),
-      custom({
-        name: 'date',
-        label: '',
-        renderComponent: (props) => {
-          const date = props.value as string | null;
-          if (date === null) {
-            return (
-              <div>
-                <RevealChip
-                  icon={<Plus className='h-4 w-4' />}
-                  onClick={() => props.onValueChange('')}
-                >
-                  Add a date
-                </RevealChip>
-              </div>
-            );
-          }
-          return (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>Reach it by</p>
-              <div className='flex flex-wrap items-center gap-2'>
-                <div className='min-w-40 flex-1'>
-                  <Input
-                    type='date'
-                    variant='outline'
-                    aria-label='Reach it by'
-                    min={toDateInputValue(today)}
-                    max={toDateInputValue(
-                      addUtcMonths(today, LOOKAHEAD_MONTHS),
-                    )}
-                    value={date}
-                    onChange={(event) =>
-                      props.onValueChange(event.target.value)
-                    }
-                  />
-                </div>
-                <RevealChip
-                  icon={<X className='h-4 w-4' />}
-                  onClick={() => props.onValueChange(null)}
-                >
-                  Remove date
-                </RevealChip>
-              </div>
+          {formData.date === null ? (
+            <p className='text-muted-foreground text-sm'>
+              {FORM_FLOW_WORDS.noDateHint}
+            </p>
+          ) : (
+            <div>
+              <AmountHeroLink onClick={() => set({ date: null })}>
+                {FORM_FLOW_WORDS.noDate}
+              </AmountHeroLink>
             </div>
-          );
-        },
-      }),
-      custom({
-        name: 'amount',
-        label: '',
-        renderComponent: (props) => (
-          <AmountField
-            label='Each time'
-            hint='What it gets on each income day it is funded.'
-            mode={amountMode}
-            modes={AMOUNT_MODES}
-            onModeChange={(mode) => {
-              setAmountMode(mode);
-              props.onValueChange('');
-            }}
-            percentOfLabel="of the day's money"
-            restHint='Whatever is left of the day after the lines above it.'
-            value={props.value as string}
-            onChange={(value) => props.onValueChange(value)}
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'amount',
+      title: FORM_FLOW_WORDS.goalEachTitle,
+      summaryLabel: FORM_FLOW_WORDS.eachTime,
+      summaryValue: amount === null ? '' : describeAmount(amount),
+      isAnswered: amount !== null,
+      render: () => (
+        <AmountField
+          isHero
+          label={FORM_FLOW_WORDS.eachTime}
+          mode={amountMode}
+          modes={AMOUNT_MODES}
+          onModeChange={(mode) => {
+            setAmountMode(mode);
+            set({ amount: '' });
+          }}
+          percentOfLabel="of the day's money"
+          restHint='Whatever is left of the day after the lines above it.'
+          value={formData.amount}
+          onChange={(value) => set({ amount: value })}
+          hint={amountMode === 'exact' ? suggestionText : null}
+          suffix={
+            <AmountHeroLink onClick={() => questions.reopen('cadence')}>
+              {cadenceText} ›
+            </AmountHeroLink>
+          }
+        />
+      ),
+    },
+    {
+      id: 'cadence',
+      title: FORM_FLOW_WORDS.cadenceTitle,
+      summaryLabel: FORM_FLOW_WORDS.cadence,
+      summaryValue: cadenceText,
+      isAnswered: isCadenceAnswered,
+      isPreAnswered: true,
+      render: () => (
+        <div className='space-y-3'>
+          <PillGroup
+            label={FORM_FLOW_WORDS.cadence}
+            options={cadenceOptions}
+            value={formData.cadence}
+            onChange={(cadence) => set({ cadence })}
           />
-        ),
-      }),
-      custom({
-        name: 'cadence',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>Funded</p>
-            <PillGroup
-              label='Funded'
-              options={cadenceOptions}
-              value={props.value as Cadence}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      ...(formData.cadence === 'chosen' && dayOptions.length > 0
-        ? [
-            custom({
-              name: 'dayKeys',
-              label: '',
-              renderComponent: (props) => (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>
-                    Which income days
-                  </p>
-                  <MultiPillGroup
-                    label='Which income days'
-                    options={dayOptions}
-                    values={props.value as string[]}
-                    onChange={(values) =>
-                      props.onValueChange(values.slice(0, MAX_CHOSEN_DAYS))
-                    }
-                  />
-                </div>
-              ),
-            }),
-          ]
-        : []),
-      custom({
-        name: 'emoji',
-        label: '',
-        renderComponent: (props) => {
-          const emoji = props.value as string | null;
-          if (emoji === null) {
-            return (
-              <div>
-                <RevealChip
-                  icon={<Plus className='h-4 w-4' />}
-                  onClick={() => props.onValueChange('')}
-                >
-                  Add emoji
-                </RevealChip>
-              </div>
-            );
-          }
-          return (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>Emoji</p>
-              <div className='flex items-center gap-2'>
-                <div className='w-24 shrink-0'>
-                  <Input
-                    variant='outline'
-                    aria-label='Emoji'
-                    placeholder='🏖️'
-                    maxLength={MAX_EMOJI_LENGTH}
-                    value={emoji}
-                    onChange={(event) =>
-                      props.onValueChange(event.target.value)
-                    }
-                  />
-                </div>
-                <RevealChip
-                  icon={<X className='h-4 w-4' />}
-                  onClick={() => props.onValueChange(null)}
-                >
-                  Remove emoji
-                </RevealChip>
-              </div>
+          {formData.cadence === 'chosen' && dayOptions.length > 0 && (
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-xs'>Which income days</p>
+              <MultiPillGroup
+                label='Which income days'
+                options={dayOptions}
+                values={formData.dayKeys}
+                onChange={(values) =>
+                  set({ dayKeys: values.slice(0, MAX_CHOSEN_DAYS) })
+                }
+              />
             </div>
-          );
-        },
-      }),
-    ];
-    return result;
-  }, [amountMode, formData.cadence, dayOptions, today]);
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'priority',
+      title: FORM_FLOW_WORDS.priorityTitle,
+      summaryLabel: FORM_FLOW_WORDS.priority,
+      summaryValue:
+        formData.priority === null ? '' : PRIORITY_LABELS[formData.priority],
+      isAnswered: formData.priority !== null,
+      isPreAnswered: true,
+      render: () => (
+        <PillGroup
+          label={FORM_FLOW_WORDS.priority}
+          options={priorityOptions}
+          value={formData.priority}
+          onChange={(priority) => set({ priority })}
+        />
+      ),
+    },
+    {
+      id: 'emoji',
+      title: FORM_FLOW_WORDS.emojiTitle,
+      summaryLabel: FORM_FLOW_WORDS.emoji,
+      summaryValue: formData.emoji?.trim() || FORM_FLOW_WORDS.noEmoji,
+      isAnswered: true,
+      isPreAnswered: true,
+      render: () => (
+        <div className='w-24'>
+          <Input
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.emoji}
+            placeholder='🏖️'
+            maxLength={MAX_EMOJI_LENGTH}
+            value={formData.emoji ?? ''}
+            onChange={(event) => set({ emoji: event.target.value })}
+          />
+        </div>
+      ),
+    },
+  ];
+  const questions = useQuestionFlow({
+    steps,
+    startFolded: editing !== undefined,
+    initialOpenId: editing ? openStep : null,
+    onAdvance: (fromId) => {
+      if (
+        fromId === 'byWhen' &&
+        formData.amount === '' &&
+        amountMode === 'exact' &&
+        suggestionCents !== null
+      )
+        set({ amount: centsToInputValue(suggestionCents) });
+    },
+  });
 
   const buildFunding = (data: GoalFormData, amount: FundingAmount) => {
     const saved = editing?.payload.funding.cadence;
@@ -494,9 +518,10 @@ function GoalForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const shownBlocker = editing ? editBlocker : blocker;
 
-  const handleSubmit = async (data: GoalFormData) => {
-    const goal = buildGoal(data);
+  const handleSubmit = async () => {
+    const goal = buildGoal(formData);
     if (!user || !goal) return;
 
     setError(null);
@@ -523,7 +548,6 @@ function GoalForm({
     kind: 'goal' as const,
     candidate,
   };
-  const formFields = editing ? [...fields, changeField] : fields;
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
@@ -532,46 +556,42 @@ function GoalForm({
         reason={<ChangeReason flow={flow} onClose={onClose} />}
       >
         <ChangeFlowContext value={flowValue}>
-          <Form
-            id='runway-goal'
-            form={formFields}
-            initialData={initialData}
-            columns={1}
-            onDataChange={(data) => setFormData(data as GoalFormData)}
-            onSubmit={(data) => {
-              if (editing) {
-                flow.setStep('reason');
-                return;
+          <div className='space-y-5'>
+            <QuestionFlow
+              flow={questions}
+              nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
+            />
+            {editing && questions.isReview && <ChangeSection />}
+            <ModalFooterActions
+              note={error ?? (questions.isReview ? shownBlocker : null)}
+              cancelAction={
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={onClose}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </Button>
               }
-              void handleSubmit(data as GoalFormData);
-            }}
-            submitButton={
-              <ModalFooterActions
-                note={error ?? (editing ? editBlocker : blocker)}
-                cancelAction={
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={onClose}
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </Button>
-                }
-                rightActions={
-                  <Button
-                    type='submit'
-                    loading={isSaving}
-                    disabled={
-                      isSaving || (editing ? editBlocker : blocker) !== null
+              rightActions={
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={isSaving || shownBlocker !== null}
+                  onClick={() => {
+                    if (editing) {
+                      flow.setStep('reason');
+                      return;
                     }
-                  >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
-                  </Button>
-                }
-              />
-            }
-          />
+                    void handleSubmit();
+                  }}
+                >
+                  {editing ? CHANGE_WORDS.review : 'Add'}
+                </Button>
+              }
+            />
+          </div>
         </ChangeFlowContext>
       </ChangeSteps>
     </FormSheet>

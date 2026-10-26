@@ -1,4 +1,7 @@
+import { useState } from 'react';
+
 import AmountField from '@/components/AmountField';
+import { AmountHeroLink } from '@/components/AmountHero';
 import { PillGroup } from '@/components/PillGroup';
 import RangeNote from '@apps/runway/components/RangeNote';
 import {
@@ -20,8 +23,8 @@ import {
 } from '@apps/runway/utils/rangeInput';
 
 const modeOptions = [
-  { value: 'exact' as const, label: 'Exact' },
-  { value: 'range' as const, label: 'A range' },
+  { value: 'exact' as const, label: 'Exact', linkLabel: 'One amount' },
+  { value: 'range' as const, label: 'A range', linkLabel: 'It varies' },
 ];
 
 interface RangeAmountFieldProps {
@@ -31,6 +34,9 @@ interface RangeAmountFieldProps {
   planStance: Stance;
   value: AmountDraft;
   onChange: (value: AmountDraft) => void;
+  /** The amount as the form's large centred figure, "It varies" under it and the end it plans at one tap away. */
+  isHero?: boolean;
+  autoFocus?: boolean;
 }
 
 /** An exact amount or a range, and for a range which end this item plans at: the plan's stance unless it sets its own. */
@@ -41,7 +47,10 @@ function RangeAmountField({
   planStance,
   value,
   onChange,
+  isHero = false,
+  autoFocus,
 }: RangeAmountFieldProps) {
+  const [isChoosingEnd, setIsChoosingEnd] = useState(false);
   const range = parseAmountDraft(value);
   const stance = effectiveStance(planStance, getStanceOverride(value));
   const stanceOptions = [
@@ -69,6 +78,49 @@ function RangeAmountField({
     return `The plan uses ${RANGE_END_WORDS[getRangeEnd(stance, side)]} of a range.`;
   };
 
+  const stancePills = (
+    <div className='space-y-1.5'>
+      <p className='text-muted-foreground text-xs'>Plan it at</p>
+      <PillGroup
+        label='Plan it at'
+        isThin
+        options={stanceOptions}
+        value={value.stance}
+        onChange={(next) => onChange({ ...value, stance: next })}
+      />
+    </div>
+  );
+
+  if (isHero) {
+    return (
+      <div className='space-y-3'>
+        <AmountField
+          isHero
+          autoFocus={autoFocus}
+          label={label}
+          modes={modeOptions}
+          mode={value.mode}
+          onModeChange={(mode) =>
+            onChange({ ...value, mode: mode === 'range' ? 'range' : 'exact' })
+          }
+          value={value.low}
+          onChange={(low) => onChange({ ...value, low })}
+          highValue={value.high}
+          onHighChange={(high) => onChange({ ...value, high })}
+          hint={value.mode === 'exact' ? hint : getHint()}
+        />
+        {value.mode === 'range' && !isChoosingEnd && (
+          <div className='flex justify-center'>
+            <AmountHeroLink onClick={() => setIsChoosingEnd(true)}>
+              Choose which end it plans at
+            </AmountHeroLink>
+          </div>
+        )}
+        {value.mode === 'range' && isChoosingEnd && stancePills}
+      </div>
+    );
+  }
+
   return (
     <div className='space-y-3'>
       <AmountField
@@ -84,18 +136,7 @@ function RangeAmountField({
         onHighChange={(high) => onChange({ ...value, high })}
         hint={getHint()}
       />
-      {value.mode === 'range' && (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>Plan it at</p>
-          <PillGroup
-            label='Plan it at'
-            isThin
-            options={stanceOptions}
-            value={value.stance}
-            onChange={(next) => onChange({ ...value, stance: next })}
-          />
-        </div>
-      )}
+      {value.mode === 'range' && stancePills}
     </div>
   );
 }
