@@ -41,7 +41,7 @@ A person who only plans never sees a purchase, a bank screen or an import button
 
 Tracking is one switch for the whole plan: off is Plan, on is Track. Linking is per account, on top of Track, so a plan can link a checking account and keep tracking cash by hand. A move in either direction is a setting, and each one is recorded in history.
 
-- **Up to Track.** Pick a start date (today by default) and what each envelope holds on it. The amounts start from the plan and you correct them to what each really holds. Purchases from before the start date are not part of it.
+- **Up to Track.** Pick a start date (today by default) and what each envelope holds on it. Amounts from days you already confirmed are filled in, and you add or correct the rest to what each really holds. Purchases from before the start date are not part of it.
 - **Up to Link.** Link an account and pick a start date. Runway shows the account's real balance and asks how it divides across your envelopes and goals. Purchases you added by hand for that account after the start date are offered as matches when the real ones arrive, so nothing is counted twice.
 - **Down from Link.** Unlink an account. What came in stays. New purchases stop arriving for it, its envelope figures go back from "safe to spend" to "left", merchant rules wait unused, and goals held in it return to the amounts you type. Anything still in Needs a home stays there until you assign or skip it.
 - **Down from Track.** Stop tracking. Purchase screens and "left" figures are hidden, envelopes show what they are assigned, and the purchases, notes, receipts and the amounts as they stood that day stay in history.

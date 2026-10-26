@@ -836,6 +836,10 @@ export const selectHasIncome = (state: RootState, today: number) =>
       (item.endedAt === null || item.endedAt >= today),
   );
 
+/** Whether the plan has ever had an income source, ended or archived included: a first run has none, and every screen but Home waits for one. */
+export const selectHasEverHadIncome = (state: RootState) =>
+  state.runway.items.some((item) => item.kind === 'payLine');
+
 /** The pay lines whose ending has been reached and whose header is not yet marked ended, as JSON of `[itemId, lastDay, name]` rows ('' when none), so a consumer re-runs only when the set changes. */
 export const selectReachedEndingsKey = (state: RootState, today: number) => {
   const { items, versions, days } = state.runway;

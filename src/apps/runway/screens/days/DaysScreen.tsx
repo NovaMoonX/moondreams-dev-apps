@@ -25,7 +25,7 @@ import {
   selectStanceCushion,
 } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
-  selectHasIncome,
+  selectHasEverHadIncome,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
@@ -38,7 +38,7 @@ function DaysScreen() {
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isLoaded = isPlanLoaded && isDaysLoaded;
-  const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
+  const hasIncome = useAppSelector(selectHasEverHadIncome);
   const { open: allDays, confirmed } = useAppSelector((state) =>
     selectListedDays(state, today),
   );
