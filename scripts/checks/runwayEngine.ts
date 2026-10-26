@@ -6423,4 +6423,178 @@ const version = (
   );
 }
 
+{
+  // Closings: money that arrives, and a payment that is made, after the month it belongs to still count once.
+  const startDate = utc(2024, 7, 3);
+  const lineFor = (dayId: string, itemId: string, cents: number) => ({
+    lineId: `${dayId}:${itemId}`,
+    itemId,
+    name: itemId,
+    emoji: null,
+    tier: 'should' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const dayRows = [
+    {
+      id: 'before',
+      expectedOn: utc(2024, 6, 30),
+      arrivedOn: utc(2024, 7, 4),
+      cents: 5_000,
+      itemId: 'billA',
+    },
+    {
+      id: 'middle',
+      expectedOn: utc(2024, 7, 15),
+      arrivedOn: utc(2024, 7, 15),
+      cents: 6_000,
+      itemId: 'envA',
+    },
+    {
+      id: 'late',
+      expectedOn: utc(2024, 7, 31),
+      arrivedOn: utc(2024, 8, 2),
+      cents: 7_000,
+      itemId: 'envA',
+    },
+    {
+      id: 'early',
+      expectedOn: utc(2024, 6, 20),
+      arrivedOn: utc(2024, 6, 20),
+      cents: 9_000,
+      itemId: 'envA',
+    },
+  ];
+  const records = dayRows.map(
+    (day) =>
+      ({
+        id: `${day.id}_confirmed`,
+        dayId: day.id,
+        createdAt: 1,
+        kind: 'confirmed',
+        payload: {
+          fingerprint: 'x',
+          stance: 'conservative',
+          arrivedCents: day.cents + 100,
+          expectedCents: day.cents + 100,
+          freeToSpendCents: 100,
+          differences: [],
+          lines: [lineFor(day.id, day.itemId, day.cents)],
+          before: { arrivedCents: day.cents + 100, freeToSpendCents: 100 },
+          changes: [],
+          note: null,
+        },
+      }) as unknown as OpenRecord,
+  );
+  const mk = (
+    id: string,
+    kind: 'start' | 'billPaid',
+    date: number,
+    refId: string | null,
+    payload: object,
+  ) =>
+    ({
+      id,
+      kind,
+      date,
+      refId,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload,
+    }) as unknown as OpenMove;
+  const moves = [
+    mk('start_money', 'start', startDate, null, {
+      amountCents: 100_000,
+      holding: 'money',
+    }),
+    mk(
+      getPaidMoveId('billA', utc(2024, 6, 28), 0),
+      'billPaid',
+      utc(2024, 6, 28),
+      'billA',
+      { amountCents: 3_000, paidOn: utc(2024, 7, 5), fromFreeCents: 0 },
+    ),
+    mk(
+      getPaidMoveId('billA', utc(2024, 7, 28), 0),
+      'billPaid',
+      utc(2024, 7, 28),
+      'billA',
+      { amountCents: 4_000, paidOn: utc(2024, 8, 3), fromFreeCents: 500 },
+    ),
+  ];
+  const kinds = { billA: 'bill', envA: 'envelope' } as const;
+  const monthOf = toMonthKey;
+  const entriesIn = (isIn: (month: string) => boolean): ClosingEntries => {
+    const monthDays = dayRows.filter((day) => isIn(monthOf(day.expectedOn)));
+    return {
+      startDate,
+      days: monthDays,
+      records: records.filter((record) =>
+        monthDays.some((day) => day.id === record.dayId),
+      ),
+      moves: moves.filter(
+        (move) => move.kind === 'billPaid' && isIn(monthOf(move.date)),
+      ),
+      purchases: [],
+      billIds: new Set(['billA']),
+    };
+  };
+  const [july] = await buildClosings(['2024-07'], null, async (month) =>
+    entriesIn((candidate) => candidate === month),
+  );
+  const arrivedOn = new Map(dayRows.map((day) => [day.id, day.arrivedOn]));
+  const wholeInput = {
+    startDate,
+    moves,
+    records,
+    arrivedOn,
+    kinds: { ...kinds },
+    purchases: [],
+  };
+  assert.deepEqual(
+    deriveBalances({
+      ...wholeInput,
+      moves: moves.filter((m) => m.kind === 'start'),
+      records: [],
+      closing: july,
+    }),
+    deriveBalances(wholeInput),
+    'a day expected before the starting month, a late day and both late payments are in the first closing',
+  );
+  assert.equal(
+    july.late.length,
+    1,
+    'only the day that arrived after July is late',
+  );
+  const sameKeys = (balances: ReturnType<typeof deriveBalances>) => ({
+    ...balances,
+    assignedByItem: Object.fromEntries(
+      Object.entries(balances.assignedByItem).filter(
+        ([, cents]) => cents !== 0,
+      ),
+    ),
+  });
+  [utc(2024, 8, 1), utc(2024, 8, 2), utc(2024, 8, 3), utc(2024, 8, 4)].forEach(
+    (day) => {
+      assert.deepEqual(
+        sameKeys(
+          deriveBalancesBefore(
+            {
+              ...wholeInput,
+              moves: moves.filter((m) => m.kind === 'start'),
+              records: [],
+              closing: july,
+            },
+            day,
+          ),
+        ),
+        sameKeys(deriveBalancesBefore(wholeInput, day)),
+        `${new Date(day).toISOString().slice(0, 10)}: the figures as of a day just after the closing leave out what arrived and was paid on or after it`,
+      );
+    },
+  );
+}
+
 console.log('runway engine: ok');

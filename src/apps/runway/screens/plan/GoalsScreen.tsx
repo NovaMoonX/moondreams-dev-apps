@@ -19,7 +19,9 @@ import {
   selectComingDays,
   selectHeldByItem,
   selectGoals,
+  selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
+  selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GoalSealed } from '@apps/runway/types';
@@ -28,7 +30,12 @@ const SEARCH_THRESHOLD = 8;
 
 function GoalsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
-  const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const isLoaded = useAppSelector(
+    (state) =>
+      selectIsPlanItemsLoaded(state) &&
+      selectIsMovesLoaded(state) &&
+      selectIsRecordsReady(state),
+  );
   const goals = useAppSelector((state) => selectGoals(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const stance = useAppSelector(selectStance);

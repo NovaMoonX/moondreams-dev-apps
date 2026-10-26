@@ -296,7 +296,7 @@ export const CLOSING_WRITE_CHUNK = 6;
 /** Times one rebuild is tried again after another device changed the plan under it. */
 export const CLOSING_REBUILD_ATTEMPTS = 3;
 /** A closing is stored as this version of its sealed payload; a reader of a different one rebuilds it. */
-export const CLOSING_VERSION = 1;
+export const CLOSING_VERSION = 2;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
@@ -638,6 +638,11 @@ export const HISTORY_WORDS = {
   failed:
     'Your history could not be updated right now. Nothing has been changed or lost.',
   tryAgain: 'Try again',
+} as const;
+
+export const START_AMOUNTS_WORDS = {
+  offline:
+    'Saving where things stand needs a connection. Nothing was saved. Try again when you are back online.',
 } as const;
 
 export const SPEND_WORDS = {
