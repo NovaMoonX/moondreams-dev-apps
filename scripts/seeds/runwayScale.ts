@@ -34,6 +34,7 @@ import {
   change,
   header,
   readEmulatorKeyring,
+  seedClosings,
   seedLine,
   version,
 } from './runway.ts';
@@ -199,7 +200,7 @@ interface PlanItem {
   priority?: Priority;
 }
 
-/** Five years of one plan, sealed as the app seals it, for judging performance. Emulators only, and only when asked for (`npm run seed:runway-scale`); `seed:reset` brings the baseline back. */
+/** Five years of one plan, sealed as the app seals it, for judging performance. Emulators only, and only when asked for (`npm run seed:runway-scale`); `seed:reset` brings the baseline back. The plan is shaped like one written before closings existed (no `dirtyFrom`, no closings), so the first open builds them: sixty months, once. `RUNWAY_SCALE_CLOSINGS=1` writes them as well, for judging every open after that. */
 export async function seedRunwayScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -891,5 +892,11 @@ export async function seedRunwayScale(
   });
 
   await writer.close();
-  return { ...EMPTY_SEED_RESULT, firestoreDocuments: written.count };
+  const closingDocuments = process.env.RUNWAY_SCALE_CLOSINGS
+    ? await seedClosings(context, owner.uid, encryption, startDate)
+    : 0;
+  return {
+    ...EMPTY_SEED_RESULT,
+    firestoreDocuments: written.count + closingDocuments,
+  };
 }

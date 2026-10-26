@@ -1,7 +1,9 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
+  DateOnly,
   OpenChange,
   OpenDay,
   OpenMove,
@@ -23,13 +25,21 @@ export interface RunwayState {
   isItemsLoaded: boolean;
   isVersionsLoaded: boolean;
   days: OpenDay[];
-  isDaysLoaded: boolean;
   records: OpenRecord[];
   moves: OpenMove[];
-  isMovesLoaded: boolean;
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
-  isPurchasesLoaded: boolean;
+  /** Where the recent window began when the days, moves and purchases were read; they are the ledger since the closing only while it matches `selectHistory`. */
+  daysFrom: DateOnly | null;
+  movesFrom: DateOnly | null;
+  purchasesFrom: DateOnly | null;
+  /** The newest closing that applied when it was read, and the `dirtyFrom` the read was for ('none' when the plan had none). */
+  closing: ClosingState | null;
+  closingFor: string | null;
+  /** The day this visit began, which decides how far back the history reads. */
+  loadDay: DateOnly | null;
+  /** The `need` key of a rebuild that did not finish, so the plan opens on what it has instead of waiting for it. */
+  failedRebuild: string | null;
   /** The confirmed day ids the records were read for, as the selector joins them. */
   recordsFor: string | null;
   /** The change log's open window: what it holds, the window key it was read for, and whether the read failed. */
@@ -47,12 +57,16 @@ const initialState: RunwayState = {
   isItemsLoaded: false,
   isVersionsLoaded: false,
   days: [],
-  isDaysLoaded: false,
   records: [],
   moves: [],
-  isMovesLoaded: false,
   purchases: [],
-  isPurchasesLoaded: false,
+  daysFrom: null,
+  movesFrom: null,
+  purchasesFrom: null,
+  closing: null,
+  closingFor: null,
+  loadDay: null,
+  failedRebuild: null,
   recordsFor: null,
   changes: [],
   changesFor: null,
@@ -79,9 +93,12 @@ export const runwaySlice = createSlice({
       state.versions = action.payload;
       state.isVersionsLoaded = true;
     },
-    setDays: (state, action: PayloadAction<OpenDay[]>) => {
-      state.days = action.payload;
-      state.isDaysLoaded = true;
+    setDays: (
+      state,
+      action: PayloadAction<{ from: DateOnly; days: OpenDay[] }>,
+    ) => {
+      state.days = action.payload.days;
+      state.daysFrom = action.payload.from;
     },
     setChanges: (
       state,
@@ -101,13 +118,32 @@ export const runwaySlice = createSlice({
       state.records = action.payload.records;
       state.recordsFor = action.payload.dayIds;
     },
-    setMoves: (state, action: PayloadAction<OpenMove[]>) => {
-      state.moves = action.payload;
-      state.isMovesLoaded = true;
+    setMoves: (
+      state,
+      action: PayloadAction<{ from: DateOnly; moves: OpenMove[] }>,
+    ) => {
+      state.moves = action.payload.moves;
+      state.movesFrom = action.payload.from;
     },
-    setPurchases: (state, action: PayloadAction<OpenPurchase[]>) => {
-      state.purchases = action.payload;
-      state.isPurchasesLoaded = true;
+    setPurchases: (
+      state,
+      action: PayloadAction<{ from: DateOnly; purchases: OpenPurchase[] }>,
+    ) => {
+      state.purchases = action.payload.purchases;
+      state.purchasesFrom = action.payload.from;
+    },
+    setClosing: (
+      state,
+      action: PayloadAction<{ closing: ClosingState | null; key: string }>,
+    ) => {
+      state.closing = action.payload.closing;
+      state.closingFor = action.payload.key;
+    },
+    setLoadDay: (state, action: PayloadAction<DateOnly>) => {
+      state.loadDay = action.payload;
+    },
+    setFailedRebuild: (state, action: PayloadAction<string | null>) => {
+      state.failedRebuild = action.payload;
     },
   },
   extraReducers: (builder) => {
@@ -125,6 +161,9 @@ export const {
   setRecords,
   setMoves,
   setPurchases,
+  setClosing,
+  setLoadDay,
+  setFailedRebuild,
   setChanges,
   setChangesFailed,
 } = runwaySlice.actions;

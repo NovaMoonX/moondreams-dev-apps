@@ -7,8 +7,7 @@ import {
 } from '@apps/runway/utils/changeWindow';
 import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { RECENT_DAYS_WINDOW } from '@apps/runway/constants';
-import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { ensurePlan } from '@apps/runway/store/actions/planActions';
 import {
@@ -21,19 +20,28 @@ import {
 } from '@apps/runway/store/listeners/dayListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { startPurchasesListener } from '@apps/runway/store/listeners/purchaseListeners';
+import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
 import { endItem } from '@apps/runway/store/actions/itemActions';
 import {
+  selectRecentFrom,
+  toClosingKey,
+} from '@apps/runway/store/selectors/historySelectors';
+import {
   selectConfirmedDayIds,
+  selectIsDaysLoaded,
+  selectIsPlanItemsLoaded,
   selectReachedEndingsKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
   setChanges,
   setChangesFailed,
+  setClosing,
   setDays,
   setItems,
   setKeyStatus,
+  setLoadDay,
   setMoves,
   setPlan,
   setPurchases,
@@ -49,11 +57,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const confirmedDayIds = useAppSelector(selectConfirmedDayIds);
-  const isPlanLoaded = useAppSelector(
-    (state) =>
-      state.runway.isItemsLoaded &&
-      state.runway.isVersionsLoaded &&
-      state.runway.isDaysLoaded,
+  const isItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
+  const isPlanLoaded = isItemsLoaded && isDaysLoaded;
+  const recentFrom = useAppSelector(selectRecentFrom);
+  const closingKey = useAppSelector((state) =>
+    toClosingKey(state.runway.plan?.dirtyFrom ?? null),
   );
   const reachedEndings = useAppSelector((state) =>
     selectReachedEndingsKey(state, todayAsUtcDate()),
@@ -66,7 +75,9 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     getRunwayEncryption(uid)
       .then(async (encryption) => {
         await ensurePlan(uid, encryption);
-        if (run.isCurrent) dispatch(setKeyStatus('ready'));
+        if (!run.isCurrent) return;
+        dispatch(setLoadDay(todayAsUtcDate()));
+        dispatch(setKeyStatus('ready'));
       })
       .catch(() => {
         if (run.isCurrent) dispatch(setKeyStatus('failed'));
@@ -100,27 +111,6 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           (versions) => dispatch(setVersions(versions)),
           fail,
         ),
-        startDaysListener(
-          uid,
-          encryption,
-          todayAsUtcDate() - RECENT_DAYS_WINDOW * DAY_MS,
-          (days) => dispatch(setDays(days)),
-          fail,
-        ),
-        startMovesListener(
-          uid,
-          encryption,
-          todayAsUtcDate() - RECENT_DAYS_WINDOW * DAY_MS,
-          (moves) => dispatch(setMoves(moves)),
-          fail,
-        ),
-        startPurchasesListener(
-          uid,
-          encryption,
-          todayAsUtcDate() - RECENT_DAYS_WINDOW * DAY_MS,
-          (purchases) => dispatch(setPurchases(purchases)),
-          fail,
-        ),
       ];
     });
 
@@ -129,6 +119,79 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       stops.current.forEach((stop) => stop());
     };
   }, [uid, keyStatus, dispatch]);
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready') return;
+
+    const stop: { current: (() => void) | null } = { current: null };
+    const run = { isCurrent: true };
+    const dirtyFrom = closingKey === 'none' ? null : closingKey;
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        stop.current = startClosingListener(
+          uid,
+          encryption,
+          dirtyFrom,
+          (closing) => dispatch(setClosing({ closing, key: closingKey })),
+          () => dispatch(setKeyStatus('failed')),
+        );
+      })
+      .catch(() => {
+        if (run.isCurrent) dispatch(setKeyStatus('failed'));
+      });
+
+    return () => {
+      run.isCurrent = false;
+      stop.current?.();
+    };
+  }, [uid, keyStatus, closingKey, dispatch]);
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || recentFrom === null) return;
+
+    const stops: { current: (() => void)[] } = { current: [] };
+    const run = { isCurrent: true };
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        const fail = () => dispatch(setKeyStatus('failed'));
+        stops.current = [
+          startDaysListener(
+            uid,
+            encryption,
+            recentFrom,
+            (days) => dispatch(setDays({ from: recentFrom, days })),
+            fail,
+          ),
+          startMovesListener(
+            uid,
+            encryption,
+            recentFrom,
+            (moves) => dispatch(setMoves({ from: recentFrom, moves })),
+            fail,
+          ),
+          startPurchasesListener(
+            uid,
+            encryption,
+            recentFrom,
+            (purchases) =>
+              dispatch(setPurchases({ from: recentFrom, purchases })),
+            fail,
+          ),
+        ];
+      })
+      .catch(() => {
+        if (run.isCurrent) dispatch(setKeyStatus('failed'));
+      });
+
+    return () => {
+      run.isCurrent = false;
+      stops.current.forEach((stop) => stop());
+    };
+  }, [uid, keyStatus, recentFrom, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || confirmedDayIds === null) return;

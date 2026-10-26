@@ -6,7 +6,15 @@ import {
   describeDay,
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
-import { sumConfirmedByItem } from '@apps/runway/engine/confirm';
+import {
+  deriveBillProgress,
+  deriveHeldByItem,
+} from '@apps/runway/engine/closings';
+import {
+  selectClosingBase,
+  selectIsWindowLoaded,
+  selectRecentFrom,
+} from '@apps/runway/store/selectors/historySelectors';
 import {
   getRecordChain,
   toSplit,
@@ -14,9 +22,6 @@ import {
 } from '@apps/runway/engine/correct';
 import { buildDraft, type Draft } from '@apps/runway/engine/draft';
 import {
-  collectFunded,
-  collectPaid,
-  collectStarted,
   NO_PROGRESS,
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
@@ -37,7 +42,6 @@ import {
   LOOKAHEAD_MONTHS,
   OVERDUE_DAYS,
   PRIORITIES,
-  START_DAY_KEY,
 } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
 import type {
@@ -84,8 +88,10 @@ export const selectItemNames = createSelector([selectVersions], (versions) => {
 export const selectIsPlanItemsLoaded = (state: RootState) =>
   state.runway.isItemsLoaded && state.runway.isVersionsLoaded;
 
-export const selectIsDaysLoaded = (state: RootState) =>
-  state.runway.isDaysLoaded;
+export const selectIsDaysLoaded = (state: RootState) => {
+  const from = selectRecentFrom(state);
+  return from !== null && state.runway.daysFrom === from;
+};
 
 export interface ResolvedPayLine {
   item: PlanItemDoc;
@@ -235,7 +241,7 @@ export const selectListedDays = createSelector(
 
 /** The confirmed days' ids as one string, or null until the days are read; the records listener restarts when it changes. */
 export const selectConfirmedDayIds = (state: RootState): string | null =>
-  state.runway.isDaysLoaded
+  selectIsDaysLoaded(state)
     ? state.runway.days
         .filter((day) => day.status === 'confirmed')
         .map((day) => day.id)
@@ -273,62 +279,36 @@ const selectRecordsSinceStart = createSelector(
 
 /** What each plan item holds from the ledger: its starting amount plus what confirmed days gave it; a goal's held money. */
 export const selectHeldByItem = createSelector(
-  [selectRecordsSinceStart, selectMoves, selectStartDate],
-  (records, moves, startDate) => {
-    const confirmed = sumConfirmedByItem(records);
-    const { byItem } = collectStarted(moves, startDate);
-    const ids = new Set([...Object.keys(confirmed), ...Object.keys(byItem)]);
-    return Object.fromEntries(
-      [...ids].map((id) => [id, (confirmed[id] ?? 0) + (byItem[id] ?? 0)]),
-    );
-  },
+  [selectRecordsSinceStart, selectMoves, selectStartDate, selectClosingBase],
+  deriveHeldByItem,
 );
 /** What confirmed days set aside for each item and which payments were marked paid, from the records and moves read. */
 export const selectBillProgress = createSelector(
-  [selectRecordsSinceStart, selectOpenDays, selectMoves, selectStartDate],
-  (records, days, moves, startDate): Record<string, BillProgressInput> => {
-    const confirmedFunded = collectFunded(
+  [
+    selectRecordsSinceStart,
+    selectOpenDays,
+    selectMoves,
+    selectStartDate,
+    selectClosingBase,
+  ],
+  (
+    records,
+    days,
+    moves,
+    startDate,
+    closing,
+  ): Record<string, BillProgressInput> =>
+    deriveBillProgress(
       records,
       new Map(days.map((day) => [day.id, day.expectedOn])),
-    );
-    const started = collectStarted(moves, startDate);
-    const funded = Object.fromEntries(
-      [
-        ...new Set([
-          ...Object.keys(confirmedFunded),
-          ...Object.keys(started.byItem),
-        ]),
-      ].map((id) => [
-        id,
-        [
-          ...(startDate !== null && (started.byItem[id] ?? 0) > 0
-            ? [
-                {
-                  dayKey: START_DAY_KEY,
-                  on: startDate,
-                  cents: started.byItem[id],
-                },
-              ]
-            : []),
-          ...(confirmedFunded[id] ?? []),
-        ],
-      ]),
-    );
-    const paid = collectPaid(moves);
-    const ids = new Set([...Object.keys(funded), ...Object.keys(paid)]);
-    const result = Object.fromEntries(
-      [...ids].map((id) => [
-        id,
-        { funded: funded[id] ?? [], paid: paid[id] ?? [] },
-      ]),
-    );
-    return result;
-  },
+      moves,
+      startDate,
+      closing,
+    ),
 );
 
-/** The ledger the balances are summed from is read: the moves and the purchases of the recent window. */
-export const selectIsMovesLoaded = (state: RootState) =>
-  state.runway.isMovesLoaded && state.runway.isPurchasesLoaded;
+/** The ledger the balances are summed from is read: the moves and the purchases of the window that follows the closing. */
+export const selectIsMovesLoaded = selectIsWindowLoaded;
 
 export const selectProposedRecord = (state: RootState, dayId: string) => {
   const result = state.runway.records.find(

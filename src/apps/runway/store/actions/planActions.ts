@@ -11,6 +11,7 @@ import {
   stopTrackingPeriod,
 } from '@apps/runway/engine/level';
 import { sealJson } from '@apps/runway/security';
+import { getLedgerMark } from '@apps/runway/store/actions/closingActions';
 import {
   getStartMoveId,
   type StartHoldingInput,
@@ -47,6 +48,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       stance: 'conservative',
       startDate: null,
       trackingPeriods: [],
+      dirtyFrom: null,
       keyId: encryption.keyId,
       sealed,
     };
@@ -123,14 +125,21 @@ export async function moveToTrack(
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
-    const periods = (snapshot.data() as PlanDoc).trackingPeriods ?? [];
+    const plan = snapshot.data() as PlanDoc;
+    const periods = plan.trackingPeriods ?? [];
     const next = startTrackingPeriod(periods, startDate);
     if ('error' in next) throw new Error(next.error);
 
+    const before = plan.startDate ?? null;
+    const mark = getLedgerMark(
+      plan,
+      before === startDate ? [] : [before, startDate],
+    );
     transaction.update(ref, {
       trackingPeriods: next.periods,
       startDate,
       updatedAt: now,
+      ...mark,
     });
     const moveId = getTrackingMoveId(startDate, now);
     transaction.set(subPath(uid, 'moves', moveId), {

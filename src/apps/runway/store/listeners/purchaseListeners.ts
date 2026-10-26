@@ -8,37 +8,16 @@ import {
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader, type SealedReader } from '@apps/runway/security';
+import { createSealedReader } from '@apps/runway/security';
+import { openPurchase } from '@apps/runway/store/listeners/openLedger';
 import type {
   OpenPurchase,
   PurchaseDoc,
-  PurchaseSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
-
-async function openPurchase(
-  entry: PurchaseDoc,
-  read: SealedReader,
-): Promise<OpenPurchase> {
-  const payload = await read<PurchaseSealed>(entry.sealed);
-  const result: OpenPurchase = {
-    id: entry.id,
-    date: entry.date,
-    source: entry.source,
-    needsHome: entry.needsHome,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
-    amountCents: payload.amountCents,
-    merchant: payload.merchant ?? null,
-    note: payload.note ?? null,
-    lines: payload.lines ?? [],
-    refundOfId: payload.refundOfId ?? null,
-  };
-  return result;
-}
 
 /** The purchases dated from `from` on; older ones arrive with the history view. A slow open never overwrites a newer snapshot. */
 export function startPurchasesListener(

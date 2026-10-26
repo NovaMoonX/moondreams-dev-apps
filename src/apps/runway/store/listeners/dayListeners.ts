@@ -8,20 +8,14 @@ import {
 
 import { db } from '@lib/firebase/config';
 
-import {
-  createSealedReader,
-  openJson,
-  type SealedReader,
-} from '@apps/runway/security';
+import { createSealedReader, type SealedReader } from '@apps/runway/security';
+import { openRecord } from '@apps/runway/store/listeners/openLedger';
 import type {
-  ConfirmedSealed,
-  CorrectionSealed,
   DayOverrideSealed,
   DayRecordDoc,
   IncomeDayDoc,
   OpenDay,
   OpenRecord,
-  ProposedSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -90,28 +84,6 @@ export function startDaysListener(
     sequence.latest += 1;
     stop();
   };
-}
-
-async function openRecord(
-  entry: DayRecordDoc,
-  encryption: RunwayEncryption,
-): Promise<OpenRecord> {
-  const base = { id: entry.id, dayId: entry.dayId, createdAt: entry.createdAt };
-  if (entry.kind === 'proposed') {
-    const payload = await openJson<ProposedSealed>(entry.sealed, encryption);
-    return { ...base, kind: 'proposed', payload };
-  }
-  if (entry.kind === 'correction') {
-    const payload = await openJson<CorrectionSealed>(entry.sealed, encryption);
-    return {
-      ...base,
-      kind: 'correction',
-      supersedesId: entry.supersedesId ?? '',
-      payload,
-    };
-  }
-  const payload = await openJson<ConfirmedSealed>(entry.sealed, encryption);
-  return { ...base, kind: 'confirmed', payload };
 }
 
 /**

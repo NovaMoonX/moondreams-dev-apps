@@ -23,11 +23,22 @@ import {
   buildCorrection,
   getCorrectionId,
 } from '../../src/apps/runway/engine/correct.ts';
+import {
+  buildClosings,
+  encodeClosing,
+  getLastClosableMonth,
+  getMonthStart,
+  getNextMonth,
+  listMonths,
+  toMonthKey,
+} from '../../src/apps/runway/engine/closings.ts';
 import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
+import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   ChangeDoc,
   ChangeSealed,
+  ClosingDoc,
   BillPaidSealed,
   BillSealed,
   ConfirmedSealed,
@@ -148,6 +159,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     stance: 'conservative',
     startDate: startOfUtcDay(context.now) - 45 * DAY_MS,
     trackingPeriods: [],
+    dirtyFrom: null,
     keyId: data.keyId,
     sealed,
   });
@@ -183,12 +195,19 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     ),
   );
   await batch.commit();
+  const closingDocuments = await seedClosings(
+    context,
+    owner.uid,
+    encryption,
+    startOfUtcDay(context.now) - 45 * DAY_MS,
+  );
   const trackingDocuments = await seedTrackingPlan(context, keyring);
 
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
       trackingDocuments +
+      closingDocuments +
       2 +
       incomeDocuments +
       envelopeDocuments +
@@ -1554,6 +1573,7 @@ async function seedTrackingPlan(
     stance: 'conservative',
     startDate,
     trackingPeriods: [{ from: startDate, to: null }],
+    dirtyFrom: null,
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });
@@ -1624,7 +1644,14 @@ async function seedTrackingPlan(
     owner.uid,
     encryption,
   );
+  const closingDocuments = await seedClosings(
+    context,
+    owner.uid,
+    encryption,
+    startDate,
+  );
   return (
+    closingDocuments +
     2 +
     1 +
     envelopeStarts.length +
@@ -1783,4 +1810,75 @@ async function writeSeedPurchases(
   );
   await batch.commit();
   return purchases.length + changes.length;
+}
+
+/**
+ * Writes the closings the app would build for a seeded plan: every month from the starting day's through
+ * the last one that may be closed, read back from the emulator and summed by the same code the app runs.
+ * Emulators only. Returns how many it wrote.
+ */
+export async function seedClosings(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+  startDate: number,
+): Promise<number> {
+  const plan = `apps/runway/plans/${uid}`;
+  const target = getLastClosableMonth(startOfUtcDay(context.now));
+  if (toMonthKey(startDate) > target) return 0;
+  const items = await context.firestore.collection(`${plan}/items`).get();
+  const billIds = new Set(
+    items.docs
+      .filter((entry) => entry.data().kind === 'bill')
+      .map((entry) => entry.id),
+  );
+  const months = listMonths(toMonthKey(startDate), target);
+  const states = await buildClosings(months, null, async (month) => {
+    const from = getMonthStart(month);
+    const to = getMonthStart(getNextMonth(month));
+    const inMonth = (name: string, field: string) =>
+      context.firestore
+        .collection(`${plan}/${name}`)
+        .where(field, '>=', from)
+        .where(field, '<', to)
+        .get();
+    const [days, moves, purchases] = await Promise.all([
+      inMonth('days', 'expectedOn'),
+      inMonth('moves', 'date'),
+      inMonth('purchases', 'date'),
+    ]);
+    return openMonthEntries(
+      {
+        days: days.docs,
+        moves: moves.docs,
+        purchases: purchases.docs,
+        getRecords: async (dayId) =>
+          (
+            await context.firestore
+              .collection(`${plan}/days/${dayId}/records`)
+              .get()
+          ).docs,
+      },
+      encryption,
+      startDate,
+      billIds,
+    );
+  });
+  const writer = context.firestore.bulkWriter();
+  await Promise.all(
+    states.map(async (state) => {
+      const sealed = await sealJson(encodeClosing(state), encryption);
+      void writer.set(
+        context.firestore.doc(`${plan}/closings/${state.month}`),
+        {
+          id: state.month,
+          month: state.month,
+          createdAt: context.now,
+          sealed,
+        } satisfies ClosingDoc,
+      );
+    }),
+  );
+  await writer.close();
+  return states.length;
 }

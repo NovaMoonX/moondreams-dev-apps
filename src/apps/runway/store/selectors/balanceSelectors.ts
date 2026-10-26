@@ -2,6 +2,8 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { selectClosingBase } from '@apps/runway/store/selectors/historySelectors';
+import { withoutSpending } from '@apps/runway/engine/closings';
 import {
   deriveBalances,
   type BalancesInput,
@@ -17,6 +19,7 @@ export const selectBalanceInputs = createSelector(
     (state: RootState) => state.runway.items,
     (state: RootState) => state.runway.purchases,
     selectLevel,
+    selectClosingBase,
   ],
   (
     startDate,
@@ -26,6 +29,7 @@ export const selectBalanceInputs = createSelector(
     items,
     purchases,
     level,
+    closing,
   ): BalancesInput => ({
     startDate,
     moves,
@@ -34,6 +38,10 @@ export const selectBalanceInputs = createSelector(
       days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
     ),
     purchases: level === 'track' ? purchases : [],
+    closing:
+      closing !== null && level !== 'track'
+        ? withoutSpending(closing)
+        : closing,
     kinds: Object.fromEntries(
       items.flatMap((item) =>
         item.kind === 'goal' || item.kind === 'bill' || item.kind === 'envelope'

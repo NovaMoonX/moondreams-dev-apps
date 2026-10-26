@@ -11,6 +11,7 @@ import {
   sumLines,
 } from '@apps/runway/engine/purchases';
 import { sealJson } from '@apps/runway/security';
+import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import type {
   Cents,
   DateOnly,
@@ -65,7 +66,7 @@ export async function addPurchase(
   );
 
   await runTransaction(db, async (transaction) => {
-    await checkDayAndEnvelopes(
+    const plan = await checkDayAndEnvelopes(
       transaction,
       uid,
       input.date,
@@ -75,6 +76,7 @@ export async function addPurchase(
     );
 
     const now = Date.now();
+    markLedgerWrite(transaction, uid, plan, [input.date]);
     transaction.set(purchaseRef(uid, id), {
       id,
       date: input.date,
@@ -96,7 +98,7 @@ async function checkDayAndEnvelopes(
   lines: readonly PurchaseLine[],
   known: ReadonlySet<string>,
   keptDate: DateOnly | null,
-) {
+): Promise<Partial<PlanDoc> | undefined> {
   const envelopeIds = [
     ...new Set(
       lines.flatMap((line) =>
@@ -114,7 +116,8 @@ async function checkDayAndEnvelopes(
       ),
     ),
   ]);
-  const periods = (plan.data() as PlanDoc | undefined)?.trackingPeriods ?? [];
+  const planData = plan.data() as Partial<PlanDoc> | undefined;
+  const periods = planData?.trackingPeriods ?? [];
   if (!isInTrackingPeriods(periods, date)) {
     throw new Error(
       `Tracking was not on for ${formatDateUTC(date)}. Pick a day you were tracking.`,
@@ -138,6 +141,7 @@ async function checkDayAndEnvelopes(
       'An envelope you picked was archived or removed on another device. Pick again.',
     );
   }
+  return planData;
 }
 
 /** The purchase as stored must still be the one the person was looking at, or another device got there first. */
@@ -203,7 +207,7 @@ export async function editPurchase(
 
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
-    await checkDayAndEnvelopes(
+    const plan = await checkDayAndEnvelopes(
       transaction,
       uid,
       input.date,
@@ -212,6 +216,7 @@ export async function editPurchase(
       previous.date,
     );
     const now = Math.max(Date.now(), previous.updatedAt + 1);
+    markLedgerWrite(transaction, uid, plan, [previous.date, input.date]);
     transaction.update(purchaseRef(uid, previous.id), {
       date: input.date,
       updatedAt: now,
@@ -245,6 +250,8 @@ export async function deletePurchase(
   const changeId = generateUuid();
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
+    const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
+    markLedgerWrite(transaction, uid, plan.data(), [previous.date]);
     transaction.delete(purchaseRef(uid, previous.id));
     transaction.set(
       doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),

@@ -1,8 +1,8 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import { LOOKAHEAD_MONTHS, RECENT_DAYS_WINDOW } from '@apps/runway/constants';
-import { addUtcMonths, DAY_MS, startOfUtcDay } from '@apps/runway/engine/dates';
+import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import { addUtcMonths, startOfUtcDay } from '@apps/runway/engine/dates';
 import {
   getStanceCushion,
   lookahead,
@@ -13,6 +13,7 @@ import {
   NO_PROGRESS,
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
+import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   computeDraftView,
   selectBillPayments,
@@ -74,6 +75,8 @@ export function computeLookahead(
     settledKey: string;
     billProgress: Record<string, BillProgressInput>;
     startDate: number | null;
+    /** Where the ledger read since the closing starts; a payment due before it that was not marked paid is not reported late. */
+    recentFrom: number | null;
     comingDays: ReturnType<typeof selectComingDays>;
     bills: ReturnType<typeof selectBills>;
     payments: ReturnType<typeof selectBillPayments>;
@@ -91,7 +94,7 @@ export function computeLookahead(
       since: Math.max(
         startOfUtcDay(item.createdAt),
         inputs.startDate ?? 0,
-        today - RECENT_DAYS_WINDOW * DAY_MS,
+        inputs.recentFrom ?? 0,
       ),
     })),
     payments: inputs.payments,
@@ -126,6 +129,7 @@ export const selectLookahead = createSelector(
     selectSettledKey,
     selectBillProgress,
     selectStartDate,
+    selectRecentFrom,
     selectComingDays,
     selectBills,
     selectBillPayments,
@@ -140,6 +144,7 @@ export const selectLookahead = createSelector(
     settledKey,
     billProgress,
     startDate,
+    recentFrom,
     comingDays,
     bills,
     payments,
@@ -153,6 +158,7 @@ export const selectLookahead = createSelector(
         settledKey,
         billProgress,
         startDate,
+        recentFrom,
         comingDays,
         bills,
         payments,

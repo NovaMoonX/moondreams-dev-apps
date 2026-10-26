@@ -6,6 +6,7 @@ import type {
   OpenRecord,
 } from '@apps/runway/types';
 
+import { joinCents, joinPaid, type ClosingState } from './closings';
 import { getEffectiveSplits } from './correct';
 import { collectPaid, collectStarted } from './progress';
 
@@ -19,6 +20,8 @@ export interface BalancesInput {
   kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope'>>;
   /** What was spent, only while tracking is on; a purchase dated before the starting point is not counted. */
   purchases?: readonly OpenPurchase[];
+  /** What the ledger before the records, moves and purchases above summed to, counted from the same starting day; its spending is left out by the caller when spending is not counted. */
+  closing?: ClosingState | null;
 }
 
 export interface Balances {
@@ -56,31 +59,34 @@ export function deriveBalances(input: BalancesInput): Balances {
       startDate !== null &&
       (input.arrivedOn.get(split.dayId) ?? 0) >= startDate,
   );
-  const arrivedCents = splits.reduce(
-    (sum, split) => sum + split.arrivedCents,
-    0,
+  const base = input.closing ?? null;
+  const arrivedCents =
+    (base?.arrivedCents ?? 0) +
+    splits.reduce((sum, split) => sum + split.arrivedCents, 0);
+
+  const given = joinCents(
+    base?.given,
+    splits
+      .flatMap((split) => split.lines)
+      .reduce<Record<string, Cents>>((sums, line) => {
+        sums[line.itemId] = (sums[line.itemId] ?? 0) + line.cents;
+        return sums;
+      }, {}),
   );
 
-  const given = splits
-    .flatMap((split) => split.lines)
-    .reduce<Record<string, Cents>>((sums, line) => {
-      sums[line.itemId] = (sums[line.itemId] ?? 0) + line.cents;
-      return sums;
-    }, {});
-
-  const paidByBill = Object.entries(collectPaid(input.moves)).map(
-    ([billId, payments]) => {
-      const counted =
-        startDate === null
-          ? []
-          : payments.filter((payment) => payment.paidOn >= startDate);
-      return {
-        billId,
-        amountCents: counted.reduce((sum, p) => sum + p.amountCents, 0),
-        fromFreeCents: counted.reduce((sum, p) => sum + p.fromFreeCents, 0),
-      };
-    },
-  );
+  const paidByBill = Object.entries(
+    joinPaid(base, collectPaid(input.moves)),
+  ).map(([billId, payments]) => {
+    const counted =
+      startDate === null
+        ? []
+        : payments.filter((payment) => payment.paidOn >= startDate);
+    return {
+      billId,
+      amountCents: counted.reduce((sum, p) => sum + p.amountCents, 0),
+      fromFreeCents: counted.reduce((sum, p) => sum + p.fromFreeCents, 0),
+    };
+  });
   const paidCents = paidByBill.reduce((sum, bill) => sum + bill.amountCents, 0);
   const consumed = Object.fromEntries(
     paidByBill.map((bill) => [
@@ -95,18 +101,20 @@ export function deriveBalances(input: BalancesInput): Balances {
       : (input.purchases ?? []).filter(
           (purchase) => purchase.date >= startDate,
         );
-  const spentCents = counted.reduce(
-    (sum, purchase) => sum + purchase.amountCents,
-    0,
+  const spentCents =
+    (base?.spentCents ?? 0) +
+    counted.reduce((sum, purchase) => sum + purchase.amountCents, 0);
+  const spentByItem = joinCents(
+    base?.spentByItem,
+    counted
+      .flatMap((purchase) => purchase.lines)
+      .reduce<Record<string, Cents>>((sums, line) => {
+        if (line.envelopeId !== null) {
+          sums[line.envelopeId] = (sums[line.envelopeId] ?? 0) + line.cents;
+        }
+        return sums;
+      }, {}),
   );
-  const spentByItem = counted
-    .flatMap((purchase) => purchase.lines)
-    .reduce<Record<string, Cents>>((sums, line) => {
-      if (line.envelopeId !== null) {
-        sums[line.envelopeId] = (sums[line.envelopeId] ?? 0) + line.cents;
-      }
-      return sums;
-    }, {});
 
   const itemIds = new Set([
     ...Object.keys(given),

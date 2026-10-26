@@ -3974,6 +3974,12 @@ service cloud.firestore {
           && (periods.size() == 0 || isPeriodValid(periods[periods.size() - 1]));
       }
 
+      // The first month whose closing is stale, or none; a plan written before closings existed has no key.
+      function isDirtyFromValid(value) {
+        return value == null
+          || (value is string && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])$'));
+      }
+
       function isPlanValid(data) {
         return data.uid == uid
           && data.createdAt is number
@@ -3983,21 +3989,23 @@ service cloud.firestore {
           && data.stance in ['conservative', 'middle', 'optimistic']
           && (data.get('startDate', null) == null || isDateOnly(data.startDate))
           && isTrackingPeriodsValid(data.get('trackingPeriods', []))
+          && isDirtyFromValid(data.get('dirtyFrom', null))
           && (data.keyId == null || data.keyId is string)
           && (data.get('sealed', null) == null || isSealed(data.sealed));
       }
 
       allow read: if isPlanOwner();
       allow create: if isPlanOwner()
-        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'keyId', 'sealed'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'dirtyFrom', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'dirtyFrom', 'keyId', 'sealed'])
         && request.resource.data.startDate == null
+        && request.resource.data.dirtyFrom == null
         && request.resource.data.get('trackingPeriods', []).size() == 0
         && isPlanValid(request.resource.data);
-      // A plan written before `sealed`, `startDate` or `trackingPeriods` existed may lack the key; it is added with the next write.
+      // A plan written before `sealed`, `startDate`, `trackingPeriods` or `dirtyFrom` existed may lack the key; it is added with the next write.
       allow update: if isPlanOwner()
         && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'keyId', 'sealed'])
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'dirtyFrom', 'keyId', 'sealed'])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.createdAt == resource.data.createdAt
         && isPlanValid(request.resource.data);
@@ -4259,6 +4267,25 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['date', 'updatedAt', 'sealed'])
           && request.resource.data.updatedAt > resource.data.updatedAt
           && isPurchaseValid(request.resource.data);
+        allow delete: if isPlanOwner();
+      }
+
+      // A closing is a cache of what the ledger summed to at the end of a month, rebuilt whenever a write
+      // lands in a closed month, so the owner may write and delete it freely. Its id is its month.
+      match /closings/{month} {
+        function isClosingValid(data) {
+          return month.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
+            && data.id == month
+            && data.month == month
+            && isPastOrNear(data.createdAt)
+            && isSealed(data.sealed);
+        }
+
+        allow read: if isPlanOwner();
+        allow create, update: if isPlanOwner()
+          && request.resource.data.keys().hasAll(['id', 'month', 'createdAt', 'sealed'])
+          && request.resource.data.keys().hasOnly(['id', 'month', 'createdAt', 'sealed'])
+          && isClosingValid(request.resource.data);
         allow delete: if isPlanOwner();
       }
 

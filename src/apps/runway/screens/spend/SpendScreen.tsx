@@ -10,6 +10,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import PurchaseRow from '@apps/runway/components/PurchaseRow';
 import {
@@ -18,6 +19,7 @@ import {
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   selectItemLooks,
   selectIsMovesLoaded,
@@ -43,10 +45,14 @@ const groupByMonth = (purchases: readonly OpenPurchase[]) =>
       : [...groups, { label, rows: [row] }];
   }, []);
 
-/** What was spent in the recent window, newest first. Older purchases arrive with the history view; search covers the window in view. */
+/** What was spent since the newest closing, newest first; earlier purchases are counted in the figures and arrive with the history view. Search covers the window in view. */
 function SpendScreen() {
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const purchases = useAppSelector(selectSpendPurchases);
+  const recentFrom = useAppSelector(selectRecentFrom);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? null,
+  );
   const looks = useAppSelector(selectItemLooks);
   const { spendEnvelope, showSpendEnvelope, openPurchase } =
     useRunwayUrlState();
@@ -78,6 +84,10 @@ function SpendScreen() {
           .includes(needle)),
   );
   const visible = matches.slice(0, shown);
+  const isWholeLedger = recentFrom === null || recentFrom <= (startDate ?? 0);
+  const windowNote = isWholeLedger
+    ? SPEND_WORDS.windowAll
+    : `${SPEND_WORDS.windowFrom} ${formatDateUTC(recentFrom)}. ${SPEND_WORDS.windowNote}`;
   const groups = groupByMonth(visible);
 
   const filterOptions = [
@@ -154,9 +164,7 @@ function SpendScreen() {
             more
           </ShowMoreButton>
         )}
-        <p className='text-muted-foreground text-xs'>
-          {SPEND_WORDS.windowNote}
-        </p>
+        <p className='text-muted-foreground text-xs'>{windowNote}</p>
       </div>
     );
   };

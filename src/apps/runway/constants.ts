@@ -285,8 +285,18 @@ export const START_ROWS_PREVIEW = 6;
 
 /** The most checklist ticks a day keeps; the rules cap the list at the same size. */
 export const MAX_DONE_LINE_IDS = 200;
-/** How far back the Days list and the confirmed-day records are read. */
+/** How far back the recent listeners read while no closing applies (a plan too new to have one, or one that could not be rebuilt). */
 export const RECENT_DAYS_WINDOW = 180;
+/** A month is closed once it ended this many days ago, so the recent window always reaches back past the overdue days and a device a day ahead never closes a month another is still writing into. */
+export const CLOSING_SETTLE_DAYS = 15;
+/** Whole months a closing may lag behind the last closable month before the next load rebuilds them. */
+export const CLOSING_LAG_MONTHS = 2;
+/** Closings written in one transaction, so a request stays far under the size limit. */
+export const CLOSING_WRITE_CHUNK = 6;
+/** Times one rebuild is tried again after another device changed the plan under it. */
+export const CLOSING_REBUILD_ATTEMPTS = 3;
+/** A closing is stored as this version of its sealed payload; a reader of a different one rebuilds it. */
+export const CLOSING_VERSION = 1;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
@@ -621,6 +631,15 @@ export const HOME_WORDS = {
   getStarted: 'Get started',
 } as const;
 
+export const HISTORY_WORDS = {
+  updating: 'Updating your history',
+  updatingBody:
+    'Runway is adding up your earlier months so your figures open quickly. Nothing is changed or lost.',
+  failed:
+    'Your history could not be updated right now. Nothing has been changed or lost.',
+  tryAgain: 'Try again',
+} as const;
+
 export const SPEND_WORDS = {
   title: 'Purchases',
   newPurchase: 'New purchase',
@@ -631,7 +650,9 @@ export const SPEND_WORDS = {
   loading: 'Getting your purchases.',
   search: 'Search purchases',
   noMatch: 'No purchase matches that.',
-  windowNote: 'Showing the last six months.',
+  windowNote: 'Earlier purchases are counted in your figures but not listed.',
+  windowFrom: 'Showing purchases from',
+  windowAll: 'Showing every purchase since you started.',
   all: 'All',
   amount: 'Amount',
   refundAmount: 'Amount refunded',

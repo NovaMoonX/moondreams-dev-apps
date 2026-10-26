@@ -53,6 +53,8 @@ export interface PlanDoc {
   startDate: DateOnly | null;
   /** Oldest first, never overlapping; a plan written before tracking existed has none and reads as Plan. */
   trackingPeriods: TrackingPeriod[];
+  /** 'yyyy-mm' of the earliest month a ledger write has touched since its closing was built: closings from that month on are stale. Null when none is; a plan written before closings existed has none. */
+  dirtyFrom: string | null;
   keyId: string | null;
   sealed: Sealed | null;
 }
@@ -64,6 +66,7 @@ export interface OpenPlan extends PlanSealedFields {
   stance: Stance;
   startDate: DateOnly | null;
   trackingPeriods: TrackingPeriod[];
+  dirtyFrom: string | null;
   keyId: string | null;
 }
 
@@ -472,4 +475,24 @@ export interface OpenPurchase extends PurchaseSealed {
   needsHome: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+/** What the ledger summed to at the end of a month, as stored: dates are whole days since 1970, a bill's funded days are `[day, cents]` and its paid payments `[dueDay, cents, paidDay, fromFreeCents, mark]`, where `mark` is the number of the mark in the move's id or the id itself when it is not the usual one. */
+export interface ClosingSealed {
+  version: number;
+  startDay: number;
+  arrivedCents: Cents;
+  given: Record<string, Cents>;
+  spentCents: Cents;
+  spentByItem: Record<string, Cents>;
+  funded: Record<string, [number, Cents][]>;
+  paid: Record<string, [number, Cents, number, Cents, number | string][]>;
+}
+
+/** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */
+export interface ClosingDoc {
+  id: string;
+  month: string;
+  createdAt: number;
+  sealed: Sealed;
 }

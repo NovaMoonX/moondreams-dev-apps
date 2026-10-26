@@ -25,6 +25,10 @@ import { AmountList } from '@apps/runway/forms/StartingAmountsSheet';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import type { StartHoldingInput } from '@apps/runway/store/actions/moveActions';
 import { moveToTrack } from '@apps/runway/store/actions/planActions';
+import {
+  selectClosingBase,
+  selectRecentFrom,
+} from '@apps/runway/store/selectors/historySelectors';
 import { selectBalanceInputs } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBills,
@@ -124,7 +128,10 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
     }),
   ];
   const planStart = plan?.startDate ?? null;
-  const floor = Math.max(earliest ?? 0, planStart ?? 0);
+  const summarizedBefore = useAppSelector((state) =>
+    selectClosingBase(state) === null ? null : selectRecentFrom(state),
+  );
+  const floor = Math.max(earliest ?? 0, planStart ?? 0, summarizedBefore ?? 0);
   const note =
     startDate === null || startDate > today
       ? 'Pick today or an earlier day.'
@@ -132,9 +139,11 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
         ? `Tracking stopped on ${formatDateUTC(earliest - DAY_MS)}. You can start again from ${formatDateUTC(earliest)}.`
         : planStart !== null && startDate < planStart
           ? `Your plan's figures begin on ${formatDateUTC(planStart)}. Pick that day or a later one.`
-          : moneyCents === null
-            ? 'Say how much money you have on hand.'
-            : null;
+          : summarizedBefore !== null && startDate < summarizedBefore
+            ? `Your earlier months are added up, not listed. Pick ${formatDateUTC(summarizedBefore)} or a later day.`
+            : moneyCents === null
+              ? 'Say how much money you have on hand.'
+              : null;
 
   const close = async () => {
     if (isSaving) return;
