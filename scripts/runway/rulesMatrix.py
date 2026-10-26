@@ -21,7 +21,8 @@ DAY = 86400000
 TODAY = NOW // DAY * DAY
 SEAL = {'value': 'x', 'nonce': 'n', 'keyId': 'k', 'keyVersion': 1, 'algorithm': 'AES-256-GCM'}
 
-# What the app does to each collection under a plan. Anything not listed is refused to the owner too.
+# What the app does to each collection under a plan. The owner may create and read under any other name too (the
+# plan's wildcard), but never update or delete there.
 COLLECTIONS = {
     'items': {'update'},
     'versions': set(),
@@ -130,6 +131,15 @@ def main():
             check(f'{c} delete [{a}]', commit(tok, [rm(path)]), a == 'o' and 'delete' in ops)
             admin([put(path, doc)])
             check(f'{c} write twice by id [{a}]', commit(tok, [put(path, doc)]), a == 'o' and 'update' in ops)
+
+    other = f'{base}/unlisted/doc-1'
+    for a, tok in actors.items():
+        admin([rm(other)])
+        check(f'unlisted create [{a}]', commit(tok, [put_new(other, {'x': 1})]), a == 'o')
+        admin([put(other, {'x': 1})])
+        check(f'unlisted read [{a}]', get(other, tok), a == 'o')
+        check(f'unlisted update [{a}]', commit(tok, [put(other, {'x': 2})]), False)
+        check(f'unlisted delete [{a}]', commit(tok, [rm(other)]), False)
 
     rec = f'{base}/days/day-1/records/day-1_confirmed'
     rdoc = dict(id='day-1_confirmed', dayId='day-1', kind='confirmed', createdAt=NOW, sealed=SEAL)
