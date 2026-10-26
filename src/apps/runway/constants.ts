@@ -706,6 +706,13 @@ export const SPEND_WORDS = {
   belowRefunds: 'Refunds already returned more than that.',
 } as const;
 
+export const ENVELOPE_SPEND_WORDS = {
+  heading: 'Spending',
+  addSub: 'Something you bought with this envelope.',
+  listSub: 'Everything spent from it.',
+  checkSub: 'See what it would leave. Nothing is spent.',
+} as const;
+
 export const CHECK_WORDS = {
   title: 'Check an amount',
   open: 'Check an amount',

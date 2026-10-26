@@ -8,16 +8,13 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import ItemChangeControls, {
-  ITEM_CHIP_CLASS,
-} from '@apps/runway/components/ItemChangeControls';
-import LevelGate from '@apps/runway/components/LevelGate';
+import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import { CHECK_WORDS, SPEND_WORDS } from '@apps/runway/constants';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   selectEnvelopes,
@@ -34,6 +31,7 @@ const SEARCH_THRESHOLD = 8;
 
 function EnvelopesScreen() {
   const today = todayAsUtcDate(useNow(60_000));
+  const level = useAppSelector(selectLevel);
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
@@ -115,42 +113,14 @@ function EnvelopesScreen() {
                           payload: version.payload,
                         })
                       }
-                      extra={
-                        <LevelGate level='track'>
-                          <Button
-                            type='button'
-                            variant='secondary'
-                            size='sm'
-                            rounded='full'
-                            className={ITEM_CHIP_CLASS}
-                            aria-label={`${SPEND_WORDS.envelopeAdd} to ${version.payload.name}`}
-                            onClick={() => setPurchaseFor(item.id)}
-                          >
-                            {SPEND_WORDS.envelopeAdd}
-                          </Button>
-                          <Button
-                            type='button'
-                            variant='secondary'
-                            size='sm'
-                            rounded='full'
-                            className={ITEM_CHIP_CLASS}
-                            aria-label={`${version.payload.name} purchases`}
-                            onClick={() => showSpend(item.id)}
-                          >
-                            Purchases
-                          </Button>
-                          <Button
-                            type='button'
-                            variant='secondary'
-                            size='sm'
-                            rounded='full'
-                            className={ITEM_CHIP_CLASS}
-                            aria-label={`${CHECK_WORDS.open} against ${version.payload.name}`}
-                            onClick={() => openCheckAmount(item.id)}
-                          >
-                            {CHECK_WORDS.open}
-                          </Button>
-                        </LevelGate>
+                      spend={
+                        level === 'track'
+                          ? {
+                              onAddPurchase: () => setPurchaseFor(item.id),
+                              onPurchases: () => showSpend(item.id),
+                              onCheckAmount: () => openCheckAmount(item.id),
+                            }
+                          : undefined
                       }
                     />
                   </div>

@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react';
-import { Archive, CalendarOff, Pause, Play } from 'lucide-react';
+import {
+  Archive,
+  CalendarOff,
+  Calculator,
+  Pause,
+  Play,
+  Plus,
+  ReceiptText,
+} from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
@@ -20,13 +28,17 @@ import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
   CHANGE_WORDS,
+  CHECK_WORDS,
+  ENVELOPE_SPEND_WORDS,
   LIFECYCLE_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_CHANGE_DAYS_AHEAD,
   MAX_NOTE_LENGTH,
+  SPEND_WORDS,
 } from '@apps/runway/constants';
 import { addUtcDays, addUtcMonths } from '@apps/runway/engine/dates';
 import { occurrences } from '@apps/runway/engine/schedule';
+import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveItem,
@@ -50,6 +62,12 @@ interface ItemActionsSheetProps {
   payload: ItemPayload;
   today: number;
   onClose: () => void;
+  /** What an envelope does with spending at Track: the sheet closes first, then the screen opens it. */
+  spend?: {
+    onAddPurchase: () => void;
+    onPurchases: () => void;
+    onCheckAmount: () => void;
+  };
 }
 
 const isScheduled = (
@@ -77,6 +95,7 @@ function ItemActionsSheet({
   payload,
   today,
   onClose,
+  spend,
 }: ItemActionsSheetProps) {
   const { user } = useAuth();
   const [view, setView] = useState<View>('menu');
@@ -217,8 +236,44 @@ function ItemActionsSheet({
   const blocker =
     view === 'end' && !isEndValid ? LIFECYCLE_WORDS.endBlocker : null;
 
+  const leaveTo = (open: () => void) => () => {
+    onClose();
+    leaveAfterSubviewCloses(open);
+  };
+
   const menu = (
     <div className='space-y-3'>
+      {spend && (
+        <ActionGroup isRoomy caption={ENVELOPE_SPEND_WORDS.heading}>
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Plus />}
+            label={SPEND_WORDS.envelopeAdd}
+            subtitle={ENVELOPE_SPEND_WORDS.addSub}
+            onClick={leaveTo(spend.onAddPurchase)}
+          />
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<ReceiptText />}
+            label={SPEND_WORDS.title}
+            subtitle={ENVELOPE_SPEND_WORDS.listSub}
+            onClick={leaveTo(spend.onPurchases)}
+          />
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Calculator />}
+            label={CHECK_WORDS.open}
+            subtitle={ENVELOPE_SPEND_WORDS.checkSub}
+            onClick={leaveTo(spend.onCheckAmount)}
+          />
+        </ActionGroup>
+      )}
       <ActionGroup isRoomy caption={LIFECYCLE_WORDS.sheetHeading}>
         {goal && !isPaused && (
           <ActionRow

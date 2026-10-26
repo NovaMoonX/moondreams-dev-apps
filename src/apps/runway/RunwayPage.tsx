@@ -25,6 +25,7 @@ import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import { HISTORY_WORDS, RUNWAY_TAB_LABELS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import SpendScreen from '@apps/runway/screens/spend/SpendScreen';
@@ -38,19 +39,6 @@ import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
-
-/** A subview that unmounts steps its own history entry back, which would undo a URL change made first; this waits for that step. */
-function leaveAfterSubviewCloses(go: () => void) {
-  const state = { isDone: false };
-  const run = () => {
-    if (state.isDone) return;
-    state.isDone = true;
-    window.removeEventListener('popstate', run);
-    go();
-  };
-  window.addEventListener('popstate', run);
-  setTimeout(run, 400);
-}
 
 function RunwayPage() {
   const { user, loading } = useAuth();

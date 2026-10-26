@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ChevronRight, Home } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -14,9 +15,12 @@ import {
   CHECK_WORDS,
   HOME_ENVELOPE_TILES,
   HOME_WORDS,
+  SPEND_WORDS,
 } from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
@@ -52,8 +56,16 @@ function HomeScreen() {
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
-  const { openView, openDay, showTab, showPlanSection, openCheckAmount } =
-    useRunwayUrlState();
+  const [isAddingPurchase, setIsAddingPurchase] = useState(false);
+  const level = useAppSelector(selectLevel);
+  const {
+    openView,
+    openDay,
+    showTab,
+    showPlanSection,
+    showSpend,
+    openCheckAmount,
+  } = useRunwayUrlState();
 
   if (!isLoaded) {
     return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
@@ -80,14 +92,29 @@ function HomeScreen() {
 
   const free = describeFreeToSpend(getFreeToSpendFigure(balances));
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
-  const shown = envelopes.slice(0, HOME_ENVELOPE_TILES);
+  const withMoney = envelopes.filter(
+    ({ item }) =>
+      level !== 'plan' || (balances.assignedByItem[item.id] ?? 0) !== 0,
+  );
+  const shown = (withMoney.length > 0 ? withMoney : envelopes).slice(
+    0,
+    withMoney.length > 0 ? HOME_ENVELOPE_TILES : 3,
+  );
+  const openEnvelope = (itemId: string) => {
+    if (level === 'plan') {
+      showPlanSection('envelopes');
+      showTab('plan');
+      return;
+    }
+    showSpend(itemId);
+  };
 
   return (
     <div className='space-y-5'>
       <div className='space-y-2'>
         <Button
           variant='tertiary'
-          className='border-border bg-accent h-auto w-full items-start justify-between gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
+          className='border-border bg-accent text-foreground! h-auto w-full items-center justify-between gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
           aria-label={`${free.label}, ${free.value}. See it in detail`}
           onClick={() => openView('freeToSpend')}
         >
@@ -100,7 +127,7 @@ function HomeScreen() {
             </span>
           </span>
           <ChevronRight
-            className='text-muted-foreground mt-1 h-5 w-5 shrink-0'
+            className='text-muted-foreground h-5 w-5 shrink-0'
             aria-hidden='true'
           />
         </Button>
@@ -127,7 +154,20 @@ function HomeScreen() {
       )}
       {envelopes.length > 0 && (
         <div className='space-y-2'>
-          <SectionHeader title={HOME_WORDS.envelopes} />
+          <SectionHeader
+            title={HOME_WORDS.envelopes}
+            action={
+              <LevelGate level='track'>
+                <Button
+                  variant='secondary'
+                  size='sm'
+                  onClick={() => setIsAddingPurchase(true)}
+                >
+                  + {SPEND_WORDS.envelopeAdd}
+                </Button>
+              </LevelGate>
+            }
+          />
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {shown.map(({ item, version }) => (
               <EnvelopeTile
@@ -135,32 +175,39 @@ function HomeScreen() {
                 name={version.payload.name}
                 emoji={version.payload.emoji}
                 cents={balances.assignedByItem[item.id] ?? 0}
+                onOpen={() => openEnvelope(item.id)}
               />
             ))}
           </ul>
-          <LevelGate level='track'>
-            <Button
-              variant='secondary'
-              size='sm'
-              className='h-10'
-              onClick={() => openCheckAmount(null)}
-            >
-              {CHECK_WORDS.open}
-            </Button>
-          </LevelGate>
-          {envelopes.length > shown.length && (
-            <Button
-              variant='tertiary'
-              className='h-10 justify-start px-0!'
-              onClick={() => {
-                showPlanSection('envelopes');
-                showTab('plan');
-              }}
-            >
-              See all {envelopes.length} envelopes
-            </Button>
-          )}
+          <div className='flex flex-wrap items-center gap-x-4 gap-y-1'>
+            <LevelGate level='track'>
+              <Button
+                variant='secondary'
+                size='sm'
+                className='h-10'
+                onClick={() => openCheckAmount(null)}
+              >
+                {CHECK_WORDS.open}
+              </Button>
+            </LevelGate>
+            {envelopes.length > shown.length && (
+              <Button
+                variant='tertiary'
+                className='h-10 gap-1 px-0!'
+                onClick={() => {
+                  showPlanSection('envelopes');
+                  showTab('plan');
+                }}
+              >
+                See all {envelopes.length} envelopes
+                <ChevronRight className='h-4 w-4' aria-hidden='true' />
+              </Button>
+            )}
+          </div>
         </div>
+      )}
+      {isAddingPurchase && (
+        <PurchaseForm isOpen onClose={() => setIsAddingPurchase(false)} />
       )}
     </div>
   );

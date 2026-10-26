@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ComponentProps } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -22,8 +22,8 @@ interface ItemChangeControlsProps {
   today: number;
   name: string;
   onChange: () => void;
-  /** More chips after Change and More, for what only some levels offer. */
-  extra?: ReactNode;
+  /** Spending doors for an envelope at Track; they live in More so a row keeps two chips. */
+  spend?: ComponentProps<typeof ItemActionsSheet>['spend'];
 }
 
 export const ITEM_CHIP_CLASS =
@@ -37,7 +37,7 @@ function ItemChangeControls({
   today,
   name,
   onChange,
-  extra,
+  spend,
 }: ItemChangeControlsProps) {
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const next = useAppSelector((state) =>
@@ -102,7 +102,6 @@ function ItemChangeControls({
             {LIFECYCLE_WORDS.more}
           </Button>
         )}
-        {extra}
       </div>
       {isMoreOpen && (
         <ItemActionsSheet
@@ -110,6 +109,7 @@ function ItemChangeControls({
           kind={kind}
           payload={current}
           today={today}
+          spend={spend}
           onClose={() => setIsMoreOpen(false)}
         />
       )}
