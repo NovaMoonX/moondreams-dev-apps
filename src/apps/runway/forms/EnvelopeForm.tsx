@@ -1,18 +1,14 @@
-import { useMemo, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useState } from 'react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField, { type AmountMode } from '@/components/AmountField';
+import { AmountHeroLink } from '@/components/AmountHero';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
-import RevealChip from '@/components/RevealChip';
+import QuestionFlow from '@/components/QuestionFlow';
+import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -21,6 +17,7 @@ import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
+  FORM_FLOW_WORDS,
   FUNDING_CADENCE_LABELS,
   FUNDING_CADENCES,
   MAX_CHOSEN_DAYS,
@@ -34,10 +31,11 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createEnvelope } from '@apps/runway/store/actions/itemActions';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
-import { changeField } from '@apps/runway/forms/changeField';
+import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { toFundingInput } from '@apps/runway/utils/fundingInput';
+import { describeAmount } from '@apps/runway/utils/fundingText';
 import {
   selectComingDays,
   selectEnvelopes,
@@ -69,14 +67,25 @@ interface EnvelopeFormProps {
   editing?: { itemId: string; payload: EnvelopeSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** A question to open first when changing an envelope ("amount"); every answer starts folded otherwise. */
+  openStep?: EnvelopeStepId | null;
 }
 
-const { custom } = FormFactories;
+export type EnvelopeStepId =
+  'name' | 'amount' | 'cadence' | 'priority' | 'emoji';
 
 const AMOUNT_MODES = [
-  { value: 'exact', label: 'Exact amount' },
-  { value: 'percent', label: "% of the day's money" },
-  { value: 'rest', label: 'The rest' },
+  {
+    value: 'exact',
+    label: 'Exact amount',
+    linkLabel: FORM_FLOW_WORDS.exactLink,
+  },
+  {
+    value: 'percent',
+    label: "% of the day's money",
+    linkLabel: FORM_FLOW_WORDS.percentLink,
+  },
+  { value: 'rest', label: 'The rest', linkLabel: FORM_FLOW_WORDS.restLink },
 ] as const;
 
 const getFundingAmount = (
@@ -158,17 +167,19 @@ function EnvelopeForm({
   title,
   editing,
   presetDayKey,
+  openStep = null,
 }: EnvelopeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
-  const [initialData] = useState<EnvelopeFormData>(() =>
+  const [formData, setFormData] = useState<EnvelopeFormData>(() =>
     editing ? getEditingData(editing.payload) : INITIAL_DATA,
   );
-  const [formData, setFormData] = useState<EnvelopeFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const set = (patch: Partial<EnvelopeFormData>) =>
+    setFormData((current) => ({ ...current, ...patch }));
 
   const [amountMode, setAmountMode] = useState<AmountMode>(
     editing ? toFundingInput(editing.payload.funding).mode : 'exact',
@@ -185,146 +196,135 @@ function EnvelopeForm({
     value: day.dayKey,
     label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
+  const hasDays = comingDays.length > 0;
+  const isCadenceAnswered =
+    (formData.cadence === 'everyIncomeDay' || hasDays) &&
+    (formData.cadence !== 'chosen' || formData.dayKeys.length > 0);
+  const cadenceText =
+    formData.cadence === 'chosen'
+      ? `${FUNDING_CADENCE_LABELS.chosen} · ${formData.dayKeys.length}`
+      : FUNDING_CADENCE_LABELS[formData.cadence];
 
-  const fields = useMemo(() => {
-    const result = [
-      custom({
-        name: 'name',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>Name</p>
-            <Input
-              variant='outline'
-              aria-label='Name'
-              placeholder='Groceries'
-              maxLength={MAX_NAME_LENGTH}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'priority',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>How much it matters</p>
-            <PillGroup
-              label='How much it matters'
-              options={priorityOptions}
-              value={props.value as Priority | null}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'amount',
-        label: '',
-        renderComponent: (props) => (
-          <AmountField
-            label='Each time'
-            hint='What it gets on each income day it is funded.'
-            mode={amountMode}
-            modes={AMOUNT_MODES}
-            onModeChange={(mode) => {
-              setAmountMode(mode);
-              props.onValueChange('');
-            }}
-            percentOfLabel="of the day's money"
-            restHint='Whatever is left of the day after the lines above it.'
-            value={props.value as string}
-            onChange={(value) => props.onValueChange(value)}
-          />
-        ),
-      }),
-      custom({
-        name: 'cadence',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>Funded</p>
-            <PillGroup
-              label='Funded'
-              options={cadenceOptions}
-              value={props.value as Cadence}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      ...(formData.cadence === 'chosen' && dayOptions.length > 0
-        ? [
-            custom({
-              name: 'dayKeys',
-              label: '',
-              renderComponent: (props) => (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>
-                    Which income days
-                  </p>
-                  <MultiPillGroup
-                    label='Which income days'
-                    options={dayOptions}
-                    values={props.value as string[]}
-                    onChange={(values) =>
-                      props.onValueChange(values.slice(0, MAX_CHOSEN_DAYS))
-                    }
-                  />
-                </div>
-              ),
-            }),
-          ]
-        : []),
-      custom({
-        name: 'emoji',
-        label: '',
-        renderComponent: (props) => {
-          const emoji = props.value as string | null;
-          if (emoji === null) {
-            return (
-              <div>
-                <RevealChip
-                  icon={<Plus className='h-4 w-4' />}
-                  onClick={() => props.onValueChange('')}
-                >
-                  Add emoji
-                </RevealChip>
-              </div>
-            );
+  const steps: QuestionStep[] = [
+    {
+      id: 'name',
+      title: FORM_FLOW_WORDS.nameTitle,
+      summaryLabel: FORM_FLOW_WORDS.name,
+      summaryValue: formData.name.trim(),
+      isAnswered: formData.name.trim() !== '',
+      render: () => (
+        <Input
+          variant='outline'
+          aria-label={FORM_FLOW_WORDS.name}
+          placeholder='Groceries'
+          maxLength={MAX_NAME_LENGTH}
+          value={formData.name}
+          onChange={(event) => set({ name: event.target.value })}
+        />
+      ),
+    },
+    {
+      id: 'amount',
+      title: FORM_FLOW_WORDS.envelopeAmountTitle,
+      summaryLabel: FORM_FLOW_WORDS.eachTime,
+      summaryValue: amount === null ? '' : describeAmount(amount),
+      isAnswered: amount !== null,
+      render: () => (
+        <AmountField
+          isHero
+          label={FORM_FLOW_WORDS.eachTime}
+          mode={amountMode}
+          modes={AMOUNT_MODES}
+          onModeChange={(mode) => {
+            setAmountMode(mode);
+            set({ amount: '' });
+          }}
+          percentOfLabel="of the day's money"
+          restHint='Whatever is left of the day after the lines above it.'
+          value={formData.amount}
+          onChange={(value) => set({ amount: value })}
+          suffix={
+            <AmountHeroLink onClick={() => questions.reopen('cadence')}>
+              {cadenceText} ›
+            </AmountHeroLink>
           }
-          return (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>Emoji</p>
-              <div className='flex items-center gap-2'>
-                <div className='w-24 shrink-0'>
-                  <Input
-                    variant='outline'
-                    aria-label='Emoji'
-                    placeholder='🛒'
-                    maxLength={MAX_EMOJI_LENGTH}
-                    value={emoji}
-                    onChange={(event) =>
-                      props.onValueChange(event.target.value)
-                    }
-                  />
-                </div>
-                <RevealChip
-                  icon={<X className='h-4 w-4' />}
-                  onClick={() => props.onValueChange(null)}
-                >
-                  Remove emoji
-                </RevealChip>
-              </div>
+        />
+      ),
+    },
+    {
+      id: 'cadence',
+      title: FORM_FLOW_WORDS.cadenceTitle,
+      summaryLabel: FORM_FLOW_WORDS.cadence,
+      summaryValue: cadenceText,
+      isAnswered: isCadenceAnswered,
+      isPreAnswered: true,
+      render: () => (
+        <div className='space-y-3'>
+          <PillGroup
+            label={FORM_FLOW_WORDS.cadence}
+            options={cadenceOptions}
+            value={formData.cadence}
+            onChange={(cadence) => set({ cadence })}
+          />
+          {formData.cadence === 'chosen' && dayOptions.length > 0 && (
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-xs'>Which income days</p>
+              <MultiPillGroup
+                label='Which income days'
+                options={dayOptions}
+                values={formData.dayKeys}
+                onChange={(values) =>
+                  set({ dayKeys: values.slice(0, MAX_CHOSEN_DAYS) })
+                }
+              />
             </div>
-          );
-        },
-      }),
-    ];
-    return result;
-  }, [amountMode, formData.cadence, dayOptions]);
+          )}
+        </div>
+      ),
+    },
+    {
+      id: 'priority',
+      title: FORM_FLOW_WORDS.priorityTitle,
+      summaryLabel: FORM_FLOW_WORDS.priority,
+      summaryValue:
+        formData.priority === null ? '' : PRIORITY_LABELS[formData.priority],
+      isAnswered: formData.priority !== null,
+      isPreAnswered: true,
+      render: () => (
+        <PillGroup
+          label={FORM_FLOW_WORDS.priority}
+          options={priorityOptions}
+          value={formData.priority}
+          onChange={(priority) => set({ priority })}
+        />
+      ),
+    },
+    {
+      id: 'emoji',
+      title: FORM_FLOW_WORDS.emojiTitle,
+      summaryLabel: FORM_FLOW_WORDS.emoji,
+      summaryValue: formData.emoji?.trim() || FORM_FLOW_WORDS.noEmoji,
+      isAnswered: true,
+      isPreAnswered: true,
+      render: () => (
+        <div className='w-24'>
+          <Input
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.emoji}
+            placeholder='🛒'
+            maxLength={MAX_EMOJI_LENGTH}
+            value={formData.emoji ?? ''}
+            onChange={(event) => set({ emoji: event.target.value })}
+          />
+        </div>
+      ),
+    },
+  ];
+  const questions = useQuestionFlow({
+    steps,
+    startFolded: editing !== undefined,
+    initialOpenId: editing ? openStep : null,
+  });
 
   const buildFunding = (data: EnvelopeFormData, amount: FundingAmount) => {
     const saved = editing?.payload.funding.cadence;
@@ -397,9 +397,10 @@ function EnvelopeForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const shownBlocker = editing ? editBlocker : blocker;
 
-  const handleSubmit = async (data: EnvelopeFormData) => {
-    const envelope = buildEnvelope(data);
+  const handleSubmit = async () => {
+    const envelope = buildEnvelope(formData);
     if (!user || !envelope) return;
 
     setError(null);
@@ -429,7 +430,6 @@ function EnvelopeForm({
     kind: 'envelope' as const,
     candidate,
   };
-  const formFields = editing ? [...fields, changeField] : fields;
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
@@ -438,46 +438,42 @@ function EnvelopeForm({
         reason={<ChangeReason flow={flow} onClose={onClose} />}
       >
         <ChangeFlowContext value={flowValue}>
-          <Form
-            id='runway-envelope'
-            form={formFields}
-            initialData={initialData}
-            columns={1}
-            onDataChange={(data) => setFormData(data as EnvelopeFormData)}
-            onSubmit={(data) => {
-              if (editing) {
-                flow.setStep('reason');
-                return;
+          <div className='space-y-5'>
+            <QuestionFlow
+              flow={questions}
+              nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
+            />
+            {editing && questions.isReview && <ChangeSection />}
+            <ModalFooterActions
+              note={error ?? (questions.isReview ? shownBlocker : null)}
+              cancelAction={
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={onClose}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </Button>
               }
-              void handleSubmit(data as EnvelopeFormData);
-            }}
-            submitButton={
-              <ModalFooterActions
-                note={error ?? (editing ? editBlocker : blocker)}
-                cancelAction={
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={onClose}
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </Button>
-                }
-                rightActions={
-                  <Button
-                    type='submit'
-                    loading={isSaving}
-                    disabled={
-                      isSaving || (editing ? editBlocker : blocker) !== null
+              rightActions={
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={isSaving || shownBlocker !== null}
+                  onClick={() => {
+                    if (editing) {
+                      flow.setStep('reason');
+                      return;
                     }
-                  >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
-                  </Button>
-                }
-              />
-            }
-          />
+                    void handleSubmit();
+                  }}
+                >
+                  {editing ? CHANGE_WORDS.review : 'Add'}
+                </Button>
+              }
+            />
+          </div>
         </ChangeFlowContext>
       </ChangeSteps>
     </FormSheet>

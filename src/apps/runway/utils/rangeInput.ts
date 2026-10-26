@@ -1,4 +1,8 @@
-import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
+import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
 import { STANCE_FOLLOW_PLAN } from '@apps/runway/constants';
 import type { MoneyRange, Stance } from '@apps/runway/types';
 
@@ -45,5 +49,16 @@ export function toAmountDraft(
     high: isExact ? '' : centsToInputValue(range.highCents),
     stance: stanceOverride ?? STANCE_FOLLOW_PLAN,
   };
+  return result;
+}
+
+/** "$150.00", or "$100.00 to $140.00" for a range; empty while it is not a whole amount. */
+export function describeAmountDraft(draft: AmountDraft): string {
+  const range = parseAmountDraft(draft);
+  if (range === null) return '';
+  const result =
+    range.lowCents === range.highCents
+      ? formatCents(range.lowCents)
+      : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
   return result;
 }

@@ -29,6 +29,7 @@ function ChangeSection() {
         presetDayKey={flow.presetDayKey}
       />
       <EffectPreview
+        isCompact
         changeJson={flow.changeJson}
         emptyText={
           pairedText

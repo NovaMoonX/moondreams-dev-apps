@@ -1,23 +1,22 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
+import QuestionFlow from '@/components/QuestionFlow';
+import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
 import {
   CHANGE_WORDS,
   DEFAULT_PAY_LINE_NAME,
+  FORM_FLOW_WORDS,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
   INCOME_FREQUENCIES,
@@ -33,11 +32,12 @@ import {
 } from '@apps/runway/store/actions/itemActions';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
-import { changeField } from '@apps/runway/forms/changeField';
+import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import {
+  describeAmountDraft,
   EMPTY_AMOUNT_DRAFT,
   getStanceOverride,
   parseAmountDraft,
@@ -78,13 +78,16 @@ interface IncomeFormProps {
   defaultFrequency: Frequency | null;
   /** A pay line or source to change; its saved values start the form and a save adds a version from a date. */
   editing?: EditingIncome;
+  /** A question to open first when changing a pay line ("amount"); every answer starts folded otherwise. */
+  openStep?: IncomeStepId | null;
 }
+
+export type IncomeStepId =
+  'source' | 'amount' | 'schedule' | 'ends' | 'payName' | 'sourceName';
 
 export type EditingIncome =
   | { itemId: string; kind: 'payLine'; payload: PayLineSealed }
   | { itemId: string; kind: 'source'; payload: SourceSealed };
-
-const { custom } = FormFactories;
 
 const frequencyOptions = INCOME_FREQUENCIES.map((value) => ({
   value,
@@ -241,12 +244,13 @@ function IncomeForm({
   title,
   defaultFrequency,
   editing,
+  openStep = null,
 }: IncomeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const resolved = useAppSelector((state) => selectResolvedPlan(state, today));
   const planStance = useAppSelector(selectStance);
-  const [initialData] = useState<IncomeFormData>(() =>
+  const [formData, setFormData] = useState<IncomeFormData>(() =>
     editing
       ? getEditingData(editing)
       : {
@@ -261,9 +265,10 @@ function IncomeForm({
           endCount: '',
         },
   );
-  const [formData, setFormData] = useState<IncomeFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const set = (patch: Partial<IncomeFormData>) =>
+    setFormData((current) => ({ ...current, ...patch }));
 
   const sourceNames = Object.fromEntries(
     resolved.map((source) => [source.item.id, source.version.payload.name]),
@@ -286,211 +291,208 @@ function IncomeForm({
         isEditing,
       );
   const isOnce = formData.frequency === 'once';
+  const startDate = fromDateInputValue(formData.startDate);
+  const isScheduleAnswered =
+    formData.frequency !== null && buildSchedule(formData) !== null;
+  const scheduleText =
+    formData.frequency === null || startDate === undefined
+      ? ''
+      : isOnce
+        ? formatDateUTC(startDate)
+        : `${SCHEDULE_LABELS[formData.frequency]} · next ${formatDateUTC(startDate)}`;
+  const endingText =
+    formData.endKind === 'never'
+      ? INCOME_ENDING_LABELS.never
+      : formData.endKind === 'date'
+        ? formData.endDate === ''
+          ? ''
+          : `After ${formatDateUTC(fromDateInputValue(formData.endDate) ?? 0)}`
+        : formData.endCount === ''
+          ? ''
+          : `After ${formData.endCount} payments`;
 
-  const fields = useMemo(() => {
-    const dateField = custom({
-      name: 'startDate',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>
-            {isOnce ? 'Arrives' : 'First payday'}
-          </p>
-          <Input
-            type='date'
-            variant='outline'
-            aria-label={isOnce ? 'Arrives' : 'First payday'}
-            value={props.value as string}
-            onChange={(event) => props.onValueChange(event.target.value)}
-          />
-        </div>
-      ),
-    });
-    const secondDayField = custom({
-      name: 'secondDay',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>
-            Other payday of the month
-          </p>
-          <Input
-            type='number'
-            inputMode='numeric'
-            min={1}
-            max={31}
-            variant='outline'
-            aria-label='Other payday of the month'
-            placeholder='15'
-            value={props.value as string}
-            onChange={(event) => props.onValueChange(event.target.value)}
-          />
-        </div>
-      ),
-    });
-    const endingField = custom({
-      name: 'endKind',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>Ends</p>
-          <PillGroup
-            label='Ends'
-            options={endingOptions}
-            value={props.value as EndKind}
-            onChange={(value) => props.onValueChange(value)}
-          />
-        </div>
-      ),
-    });
-    const endDateField = custom({
-      name: 'endDate',
-      label: '',
-      renderComponent: (props) => (
-        <Input
-          type='date'
-          variant='outline'
-          aria-label='Last payday'
-          min={formData.startDate || undefined}
-          value={props.value as string}
-          onChange={(event) => props.onValueChange(event.target.value)}
-        />
-      ),
-    });
-    const endCountField = custom({
-      name: 'endCount',
-      label: '',
-      renderComponent: (props) => (
-        <Input
-          type='number'
-          inputMode='numeric'
-          min={1}
-          max={MAX_ENDING_COUNT}
-          variant='outline'
-          aria-label='How many payments'
-          placeholder='How many payments, like 6'
-          value={props.value as string}
-          onChange={(event) => props.onValueChange(event.target.value)}
-        />
-      ),
-    });
-
-    const all = [
-      custom({
-        name: 'source',
-        label: '',
-        renderComponent: (props) => {
-          const value = props.value as IncomeFormData['source'];
-          return (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>
-                Where it comes from
-              </p>
+  const sourceNameStep: QuestionStep = {
+    id: 'sourceName',
+    title: FORM_FLOW_WORDS.sourceNameTitle,
+    summaryLabel: FORM_FLOW_WORDS.name,
+    summaryValue: formData.payName.trim(),
+    isAnswered: formData.payName.trim() !== '',
+    render: () => (
+      <Input
+        variant='outline'
+        aria-label='Source name'
+        placeholder='Employer or source'
+        maxLength={MAX_NAME_LENGTH}
+        value={formData.payName}
+        onChange={(event) => set({ payName: event.target.value })}
+      />
+    ),
+  };
+  const payLineSteps: QuestionStep[] = [
+    ...(isEditing
+      ? []
+      : [
+          {
+            id: 'source',
+            title: FORM_FLOW_WORDS.sourceTitle,
+            summaryLabel: FORM_FLOW_WORDS.source,
+            summaryValue: sourceName,
+            isAnswered: sourceName !== '',
+            render: () => (
               <PickOrCreate
                 label='Where it comes from'
                 options={sourceOptions}
-                choice={value.choice}
-                newText={value.newText}
+                choice={formData.source.choice}
+                newText={formData.source.newText}
                 newPillLabel='New source'
                 newPlaceholder='Employer or source'
                 maxLength={MAX_NAME_LENGTH}
                 onChange={(choice, newText) =>
-                  props.onValueChange({ choice, newText })
+                  set({ source: { choice, newText } })
                 }
               />
+            ),
+          },
+        ]),
+    {
+      id: 'amount',
+      title:
+        defaultFrequency === 'once' && !isEditing
+          ? FORM_FLOW_WORDS.expectedIncomeTitle
+          : FORM_FLOW_WORDS.takeHomeTitle,
+      summaryLabel: FORM_FLOW_WORDS.takeHome,
+      summaryValue: describeAmountDraft(formData.amount),
+      isAnswered: parseAmountDraft(formData.amount) !== null,
+      render: () => (
+        <RangeAmountField
+          isHero
+          label={FORM_FLOW_WORDS.takeHome}
+          hint=''
+          side='income'
+          planStance={planStance}
+          value={formData.amount}
+          onChange={(amount) => set({ amount })}
+        />
+      ),
+    },
+    {
+      id: 'schedule',
+      title: FORM_FLOW_WORDS.scheduleTitle,
+      summaryLabel: FORM_FLOW_WORDS.schedule,
+      summaryValue: scheduleText,
+      isAnswered: isScheduleAnswered,
+      render: () => (
+        <div className='space-y-4'>
+          <PillGroup
+            label='How often'
+            options={frequencyOptions}
+            value={formData.frequency}
+            onChange={(frequency) => set({ frequency })}
+          />
+          {formData.frequency !== null && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                {isOnce ? 'Arrives' : 'Next payday'}
+              </p>
+              <Input
+                type='date'
+                variant='outline'
+                aria-label={isOnce ? 'Arrives' : 'First payday'}
+                value={formData.startDate}
+                onChange={(event) => set({ startDate: event.target.value })}
+              />
             </div>
-          );
-        },
-      }),
-      custom({
-        name: 'payName',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>
-              What this pay is called
-            </p>
-            <Input
-              variant='outline'
-              aria-label='What this pay is called'
-              placeholder={DEFAULT_PAY_LINE_NAME}
-              maxLength={MAX_NAME_LENGTH}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'amount',
-        label: '',
-        renderComponent: (props) => (
-          <RangeAmountField
-            label='Take-home pay'
-            hint='What lands in your account each time.'
-            side='income'
-            planStance={planStance}
-            value={props.value as AmountDraft}
-            onChange={(value) => props.onValueChange(value)}
-          />
-        ),
-      }),
-      custom({
-        name: 'frequency',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>How often</p>
-            <PillGroup
-              label='How often'
-              options={frequencyOptions}
-              value={props.value as Frequency | null}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      ...(formData.frequency === null ? [] : [dateField]),
-      ...(formData.frequency === 'twiceMonthly' ? [secondDayField] : []),
-      ...(formData.frequency === null || isOnce ? [] : [endingField]),
-      ...(!isOnce && formData.frequency !== null && formData.endKind === 'date'
-        ? [endDateField]
-        : []),
-      ...(!isOnce && formData.frequency !== null && formData.endKind === 'count'
-        ? [endCountField]
-        : []),
-    ];
-    const sourceNameField = custom({
-      name: 'payName',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>Name</p>
-          <Input
-            variant='outline'
-            aria-label='Source name'
-            placeholder='Employer or source'
-            maxLength={MAX_NAME_LENGTH}
-            value={props.value as string}
-            onChange={(event) => props.onValueChange(event.target.value)}
-          />
+          )}
+          {formData.frequency === 'twiceMonthly' && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                Other payday of the month
+              </p>
+              <Input
+                type='number'
+                inputMode='numeric'
+                min={1}
+                max={31}
+                variant='outline'
+                aria-label='Other payday of the month'
+                placeholder='15'
+                value={formData.secondDay}
+                onChange={(event) => set({ secondDay: event.target.value })}
+              />
+            </div>
+          )}
         </div>
       ),
-    });
-    const result = isEditingSource
-      ? [sourceNameField]
-      : all.filter((field) => !(isEditing && field.name === 'source'));
-    return result;
-  }, [
-    isEditing,
-    isEditingSource,
-    sourceOptions,
-    formData.frequency,
-    formData.endKind,
-    formData.startDate,
-    isOnce,
-    planStance,
-  ]);
+    },
+    ...(formData.frequency === null || isOnce
+      ? []
+      : [
+          {
+            id: 'ends',
+            title: FORM_FLOW_WORDS.endsTitle,
+            summaryLabel: FORM_FLOW_WORDS.ends,
+            summaryValue: endingText,
+            isAnswered: buildEnding(formData) !== null,
+            isPreAnswered: true,
+            render: () => (
+              <div className='space-y-3'>
+                <PillGroup
+                  label='Ends'
+                  options={endingOptions}
+                  value={formData.endKind}
+                  onChange={(endKind) => set({ endKind })}
+                />
+                {formData.endKind === 'date' && (
+                  <Input
+                    type='date'
+                    variant='outline'
+                    aria-label='Last payday'
+                    min={formData.startDate || undefined}
+                    value={formData.endDate}
+                    onChange={(event) => set({ endDate: event.target.value })}
+                  />
+                )}
+                {formData.endKind === 'count' && (
+                  <Input
+                    type='number'
+                    inputMode='numeric'
+                    min={1}
+                    max={MAX_ENDING_COUNT}
+                    variant='outline'
+                    aria-label='How many payments'
+                    placeholder='How many payments, like 6'
+                    value={formData.endCount}
+                    onChange={(event) => set({ endCount: event.target.value })}
+                  />
+                )}
+              </div>
+            ),
+          },
+        ]),
+    {
+      id: 'payName',
+      title: FORM_FLOW_WORDS.payNameTitle,
+      summaryLabel: FORM_FLOW_WORDS.payName,
+      summaryValue: formData.payName.trim() || DEFAULT_PAY_LINE_NAME,
+      isAnswered: true,
+      isPreAnswered: true,
+      render: () => (
+        <Input
+          variant='outline'
+          aria-label='What this pay is called'
+          placeholder={DEFAULT_PAY_LINE_NAME}
+          maxLength={MAX_NAME_LENGTH}
+          value={formData.payName}
+          onChange={(event) => set({ payName: event.target.value })}
+        />
+      ),
+    },
+  ];
+  const questions = useQuestionFlow({
+    steps: isEditingSource ? [sourceNameStep] : payLineSteps,
+    startFolded: isEditing,
+    initialOpenId: isEditing ? openStep : null,
+  });
 
   const buildPayLine = (data: IncomeFormData): PayLineSealed | null => {
     const schedule = buildSchedule(data);
@@ -523,8 +525,10 @@ function IncomeForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const shownBlocker = editing ? editBlocker : blocker;
 
-  const handleSubmit = async (data: IncomeFormData) => {
+  const handleSubmit = async () => {
+    const data = formData;
     const schedule = buildSchedule(data);
     const ending = buildEnding(data);
     const amount = parseAmountDraft(data.amount);
@@ -575,7 +579,6 @@ function IncomeForm({
     kind: editing?.kind ?? 'payLine',
     candidate,
   };
-  const formFields = editing ? [...fields, changeField] : fields;
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
@@ -584,46 +587,42 @@ function IncomeForm({
         reason={<ChangeReason flow={flow} onClose={onClose} />}
       >
         <ChangeFlowContext value={flowValue}>
-          <Form
-            id='runway-income'
-            form={formFields}
-            initialData={initialData}
-            columns={1}
-            onDataChange={(data) => setFormData(data as IncomeFormData)}
-            onSubmit={(data) => {
-              if (editing) {
-                flow.setStep('reason');
-                return;
+          <div className='space-y-5'>
+            <QuestionFlow
+              flow={questions}
+              nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
+            />
+            {editing && questions.isReview && <ChangeSection />}
+            <ModalFooterActions
+              note={error ?? (questions.isReview ? shownBlocker : null)}
+              cancelAction={
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={onClose}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </Button>
               }
-              void handleSubmit(data as IncomeFormData);
-            }}
-            submitButton={
-              <ModalFooterActions
-                note={error ?? (editing ? editBlocker : blocker)}
-                cancelAction={
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={onClose}
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </Button>
-                }
-                rightActions={
-                  <Button
-                    type='submit'
-                    loading={isSaving}
-                    disabled={
-                      isSaving || (editing ? editBlocker : blocker) !== null
+              rightActions={
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={isSaving || shownBlocker !== null}
+                  onClick={() => {
+                    if (editing) {
+                      flow.setStep('reason');
+                      return;
                     }
-                  >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
-                  </Button>
-                }
-              />
-            }
-          />
+                    void handleSubmit();
+                  }}
+                >
+                  {editing ? CHANGE_WORDS.review : 'Add'}
+                </Button>
+              }
+            />
+          </div>
         </ChangeFlowContext>
       </ChangeSteps>
     </FormSheet>

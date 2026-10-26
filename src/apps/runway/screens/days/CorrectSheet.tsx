@@ -4,6 +4,7 @@ import { Plus } from 'lucide-react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import BeforeAfterRow from '@/components/BeforeAfterRow';
 import FormSheet from '@/components/FormSheet';
@@ -189,24 +190,20 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
       {step === 'edit' ? (
         <div className='space-y-4'>
           <p className='text-muted-foreground text-sm'>{CORRECT_WORDS.intro}</p>
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>
-              {CONFIRM_WORDS.amount}
-            </p>
-            <MoneyInput
-              variant='outline'
-              ariaLabel={CONFIRM_WORDS.amount}
-              value={amount}
-              onChange={setAmount}
-            />
-            <p className='text-sm font-medium'>
-              {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
-              <span className='text-muted-foreground font-normal'>
-                {' '}
-                of {arrivedCents === null ? '' : formatCents(arrivedCents)}
-              </span>
-            </p>
-          </div>
+          <AmountHero
+            label={CONFIRM_WORDS.amount}
+            value={amount}
+            onChange={setAmount}
+            suffix={
+              <p className='font-medium'>
+                {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
+                <span className='text-muted-foreground font-normal'>
+                  {' '}
+                  of {arrivedCents === null ? '' : formatCents(arrivedCents)}
+                </span>
+              </p>
+            }
+          />
           {base.lines.length >= LINE_SEARCH_THRESHOLD && (
             <SearchInput
               value={search}

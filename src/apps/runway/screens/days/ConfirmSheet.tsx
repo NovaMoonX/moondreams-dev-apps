@@ -1,17 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
+import FoldedDateField from '@/components/FoldedDateField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import MoneyInput from '@/components/MoneyInput';
@@ -31,6 +28,7 @@ import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import {
   CONFIRM_WORDS,
   DRAFT_WORDS,
+  FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
 import {
@@ -51,8 +49,6 @@ import {
 } from '@apps/runway/store/actions/dayActions';
 import type { DraftView } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, Stance } from '@apps/runway/types';
-
-const { custom } = FormFactories;
 
 const LINE_SEARCH_THRESHOLD = 8;
 
@@ -157,23 +153,28 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const blocker = getBlocker();
 
   const getEffect = () => {
-    if (arrivedCents === null || arrivedCents <= 0) return null;
-    const free = `${DRAFT_WORDS.dayLeft}: ${formatCents(Math.max(0, remainder))}.`;
-    if (difference === 0)
-      return changedCount > 0
-        ? `${CONFIRM_WORDS.sameAsExpected} ${free}`
-        : CONFIRM_WORDS.sameAsExpected;
-    if (difference > 0) {
-      const lead = `${formatCents(difference)} more than expected.`;
-      return changedCount > 0
-        ? `${lead} ${free}`
-        : `${lead} ${CONFIRM_WORDS.extraTo} ${free}`;
+    if (arrivedCents === null || arrivedCents <= 0 || difference === 0)
+      return null;
+    const amount = formatCents(Math.abs(difference));
+    if (changedCount > 0) {
+      const result = FORM_FLOW_WORDS.differenceWithLines
+        .replace(
+          '{lead}',
+          (difference > 0
+            ? FORM_FLOW_WORDS.moreShort
+            : FORM_FLOW_WORDS.lessShort
+          ).replace('{amount}', amount),
+        )
+        .replace('{left}', formatCents(Math.max(0, remainder)));
+      return result;
     }
-    const lead = `${formatCents(-difference)} less than expected.`;
-    if (changedCount > 0) return `${lead} ${free}`;
-    return remainder < 0
-      ? `${lead} That is more than the ${formatCents(draft.freeToSpend.cents)} left from this day, so a line has to get less.`
-      : `${lead} ${CONFIRM_WORDS.shortFrom} ${free}`;
+    if (difference > 0)
+      return FORM_FLOW_WORDS.moreThanPlanned.replace('{amount}', amount);
+    const words =
+      remainder < 0
+        ? FORM_FLOW_WORDS.lessThanLeft
+        : FORM_FLOW_WORDS.lessThanPlanned;
+    return words.replace('{amount}', amount);
   };
   const effect = getEffect();
 
@@ -258,75 +259,56 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     }
   };
 
-  const fields = [
-    custom({
-      name: 'amount',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>
-            {CONFIRM_WORDS.amount}
-          </p>
-          <MoneyInput
-            variant='outline'
-            ariaLabel={CONFIRM_WORDS.amount}
-            value={props.value as string}
-            onChange={props.onValueChange}
-            disabled={isSaving}
-          />
-          {effect && <p className='text-muted-foreground text-xs'>{effect}</p>}
-          {arrivedCents !== null && arrivedCents > 0 && (
-            <SummaryRow
-              label='Lines'
-              onClick={openLines}
-              detail={
-                changedCount > 0
-                  ? `${changedCount} ${changedCount === 1 ? 'line' : 'lines'} changed`
-                  : undefined
-              }
-            >
-              {getDoorLabel()}
-            </SummaryRow>
-          )}
-        </div>
-      ),
-    }),
-    custom({
-      name: 'arrivedOn',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>{CONFIRM_WORDS.date}</p>
-          <Input
-            type='date'
-            variant='outline'
-            aria-label={CONFIRM_WORDS.date}
-            max={toDateInputValue(today)}
-            value={props.value as string}
-            disabled={isSaving}
-            onChange={(event) => props.onValueChange(event.target.value)}
-          />
-        </div>
-      ),
-    }),
-    custom({
-      name: 'note',
-      label: '',
-      renderComponent: (props) => {
-        if (difference === 0) return null;
-        if (!isNoting && (props.value as string) === '') {
-          return (
-            <div>
-              <RevealChip
-                icon={<Plus className='h-4 w-4' />}
-                onClick={() => setIsNoting(true)}
-              >
-                {CONFIRM_WORDS.note}
-              </RevealChip>
-            </div>
-          );
+  const setField = (patch: Partial<ConfirmFormData>) =>
+    setFormData((current) => ({ ...current, ...patch }));
+
+  const formBody = (
+    <div className='space-y-5'>
+      <AmountHero
+        label={CONFIRM_WORDS.amount}
+        value={formData.amount}
+        onChange={(amount) => setField({ amount })}
+        disabled={isSaving}
+        suffix={
+          effect ? (
+            <p className='text-muted-foreground' role='status'>
+              {effect}
+            </p>
+          ) : undefined
         }
-        return (
+      />
+      {arrivedCents !== null && arrivedCents > 0 && (
+        <SummaryRow
+          label='Lines'
+          onClick={openLines}
+          detail={
+            changedCount > 0
+              ? `${changedCount} ${changedCount === 1 ? 'line' : 'lines'} changed`
+              : undefined
+          }
+        >
+          {getDoorLabel()}
+        </SummaryRow>
+      )}
+      <FoldedDateField
+        label={FORM_FLOW_WORDS.arrivedOn}
+        value={formData.arrivedOn}
+        onChange={(arrivedOn) => setField({ arrivedOn })}
+        todayValue={toDateInputValue(today)}
+        max={toDateInputValue(today)}
+        disabled={isSaving}
+      />
+      {difference !== 0 &&
+        (!isNoting && formData.note === '' ? (
+          <div>
+            <RevealChip
+              icon={<Plus className='h-4 w-4' />}
+              onClick={() => setIsNoting(true)}
+            >
+              {CONFIRM_WORDS.note}
+            </RevealChip>
+          </div>
+        ) : (
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs'>Note</p>
             <Input
@@ -334,15 +316,37 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
               aria-label='Note on the difference'
               maxLength={MAX_NOTE_LENGTH}
               placeholder={CONFIRM_WORDS.notePlaceholder}
-              value={props.value as string}
+              value={formData.note}
               disabled={isSaving}
-              onChange={(event) => props.onValueChange(event.target.value)}
+              onChange={(event) => setField({ note: event.target.value })}
             />
           </div>
-        );
-      },
-    }),
-  ];
+        ))}
+      <ModalFooterActions
+        note={error ?? blocker}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={onClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || blocker !== null}
+            onClick={() => void handleConfirm()}
+          >
+            {CONFIRM_WORDS.confirm}
+          </Button>
+        }
+      />
+    </div>
+  );
 
   return (
     <FormSheet isOpen onClose={onClose} title={CONFIRM_WORDS.sheetTitle}>
@@ -456,42 +460,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           />
         </div>
       )}
-      <div className={join(isChoosing && 'hidden')}>
-        <Form
-          id='runway-confirm-day'
-          form={fields}
-          initialData={initialData}
-          columns={1}
-          onDataChange={(data) => setFormData(data as ConfirmFormData)}
-          onSubmit={() => {
-            void handleConfirm();
-          }}
-          submitButton={
-            <ModalFooterActions
-              note={error ?? blocker}
-              cancelAction={
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={onClose}
-                  disabled={isSaving}
-                >
-                  Cancel
-                </Button>
-              }
-              rightActions={
-                <Button
-                  type='submit'
-                  loading={isSaving}
-                  disabled={isSaving || blocker !== null}
-                >
-                  {CONFIRM_WORDS.confirm}
-                </Button>
-              }
-            />
-          }
-        />
-      </div>
+      <div className={join(isChoosing && 'hidden')}>{formBody}</div>
     </FormSheet>
   );
 }

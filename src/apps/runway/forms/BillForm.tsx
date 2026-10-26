@@ -1,17 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useState } from 'react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
-import RevealChip from '@/components/RevealChip';
+import QuestionFlow from '@/components/QuestionFlow';
+import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -24,6 +19,7 @@ import {
   BILL_FUNDINGS,
   CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
+  FORM_FLOW_WORDS,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
   MAX_CHOSEN_DAYS,
@@ -39,10 +35,11 @@ import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
-import { changeField } from '@apps/runway/forms/changeField';
+import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import {
+  describeAmountDraft,
   EMPTY_AMOUNT_DRAFT,
   getStanceOverride,
   parseAmountDraft,
@@ -90,9 +87,12 @@ interface BillFormProps {
   presetDayKey?: string;
   /** What the form calls the thing it adds; an expense that is coming is not a bill. */
   noun?: 'bill' | 'expense';
+  /** A question to open first when changing a bill ("amount"); every answer starts folded otherwise. */
+  openStep?: BillStepId | null;
 }
 
-const { custom } = FormFactories;
+export type BillStepId =
+  'name' | 'amount' | 'due' | 'ends' | 'funding' | 'priority' | 'emoji';
 
 const EMPTY_BILL: BillSealed = {
   name: '',
@@ -125,6 +125,16 @@ const fundingOptions = BILL_FUNDINGS.map((value) => ({
   value,
   label: BILL_FUNDING_LABELS[value],
 }));
+
+const describeEnding = (data: BillFormData) => {
+  if (data.endKind === 'never') return INCOME_ENDING_LABELS.never;
+  if (data.endKind === 'date') {
+    const onDate = fromDateInputValue(data.endDate);
+    return onDate === undefined ? '' : `After ${formatDateUTC(onDate)}`;
+  }
+  const count = parseCount(data.endCount);
+  return count === null ? '' : `After ${count} payments`;
+};
 
 const parseCount = (value: string) => {
   const count = Number(value);
@@ -210,12 +220,13 @@ function BillForm({
   editing,
   presetDayKey,
   noun = 'bill',
+  openStep = null,
 }: BillFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
-  const [initialData] = useState<BillFormData>(() =>
+  const [formData, setFormData] = useState<BillFormData>(() =>
     editing
       ? getEditingData(editing.payload)
       : {
@@ -232,9 +243,10 @@ function BillForm({
           emoji: null,
         },
   );
-  const [formData, setFormData] = useState<BillFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const set = (patch: Partial<BillFormData>) =>
+    setFormData((current) => ({ ...current, ...patch }));
 
   const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
@@ -258,65 +270,63 @@ function BillForm({
   );
 
   const startMin = editing ? undefined : toDateInputValue(today);
+  const dayOptions = dueDays.map((day) => ({
+    value: day.dayKey,
+    label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
+  }));
+  const isDueValid =
+    dueDate !== undefined && (editing !== undefined || dueDate >= today);
 
-  const fields = useMemo(() => {
-    const dayOptions = comingDays
-      .filter((day) => dueDate !== undefined && day.on <= dueDate)
-      .map((day) => ({
-        value: day.dayKey,
-        label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
-      }));
-    const result = [
-      custom({
-        name: 'name',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>Name</p>
-            <Input
-              variant='outline'
-              aria-label='Name'
-              placeholder={noun === 'bill' ? 'Rent' : 'Vet visit'}
-              maxLength={MAX_NAME_LENGTH}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'amount',
-        label: '',
-        renderComponent: (props) => (
-          <RangeAmountField
-            label='Amount'
-            hint='What you pay each time it is due.'
-            side='expense'
-            planStance={planStance}
-            value={props.value as AmountDraft}
-            onChange={(value) => props.onValueChange(value)}
-          />
-        ),
-      }),
-      custom({
-        name: 'priority',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>How much it matters</p>
-            <PillGroup
-              label='How much it matters'
-              options={priorityOptions}
-              value={props.value as Priority}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'startDate',
-        label: '',
-        renderComponent: (props) => (
+  const steps: QuestionStep[] = [
+    {
+      id: 'name',
+      title: FORM_FLOW_WORDS.nameTitle,
+      summaryLabel: FORM_FLOW_WORDS.name,
+      summaryValue: formData.name.trim(),
+      isAnswered: formData.name.trim() !== '',
+      render: () => (
+        <Input
+          variant='outline'
+          aria-label={FORM_FLOW_WORDS.name}
+          placeholder={noun === 'bill' ? 'Rent' : 'Vet visit'}
+          maxLength={MAX_NAME_LENGTH}
+          value={formData.name}
+          onChange={(event) => set({ name: event.target.value })}
+        />
+      ),
+    },
+    {
+      id: 'amount',
+      title:
+        noun === 'bill'
+          ? FORM_FLOW_WORDS.billAmountTitle
+          : FORM_FLOW_WORDS.expenseAmountTitle,
+      summaryLabel: FORM_FLOW_WORDS.amount,
+      summaryValue: describeAmountDraft(formData.amount),
+      isAnswered: parseAmountDraft(formData.amount) !== null,
+      render: () => (
+        <RangeAmountField
+          isHero
+          label={FORM_FLOW_WORDS.amount}
+          hint=''
+          side='expense'
+          planStance={planStance}
+          value={formData.amount}
+          onChange={(amount) => set({ amount })}
+        />
+      ),
+    },
+    {
+      id: 'due',
+      title: FORM_FLOW_WORDS.dueTitle,
+      summaryLabel: FORM_FLOW_WORDS.due,
+      summaryValue:
+        dueDate === undefined
+          ? ''
+          : `${formatDateUTC(dueDate)} · ${BILL_FREQUENCY_LABELS[formData.frequency]}`,
+      isAnswered: isDueValid,
+      render: () => (
+        <div className='space-y-4'>
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs'>
               {isOnce ? 'Due' : 'Starts'}
@@ -326,185 +336,148 @@ function BillForm({
               variant='outline'
               aria-label={isOnce ? 'Due' : 'Starts'}
               min={startMin}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
+              value={formData.startDate}
+              onChange={(event) => set({ startDate: event.target.value })}
             />
           </div>
-        ),
-      }),
-      custom({
-        name: 'frequency',
-        label: '',
-        renderComponent: (props) => (
           <div className='space-y-2'>
             <p className='text-muted-foreground text-xs'>Repeats</p>
             <PillGroup
               label='Repeats'
               options={frequencyOptions}
-              value={props.value as Frequency}
-              onChange={(value) => props.onValueChange(value)}
+              value={formData.frequency}
+              onChange={(frequency) => set({ frequency })}
             />
           </div>
-        ),
-      }),
-      ...(isOnce
-        ? []
-        : [
-            custom({
-              name: 'endKind',
-              label: '',
-              renderComponent: (props) => (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>Ends</p>
-                  <PillGroup
-                    label='Ends'
-                    options={endingOptions}
-                    value={props.value as EndKind}
-                    onChange={(value) => props.onValueChange(value)}
-                  />
-                </div>
-              ),
-            }),
-          ]),
-      ...(!isOnce && formData.endKind === 'date'
-        ? [
-            custom({
-              name: 'endDate',
-              label: '',
-              renderComponent: (props) => (
-                <Input
-                  type='date'
-                  variant='outline'
-                  aria-label='Last payment'
-                  min={formData.startDate || undefined}
-                  value={props.value as string}
-                  onChange={(event) => props.onValueChange(event.target.value)}
+        </div>
+      ),
+    },
+    ...(isOnce
+      ? []
+      : [
+          {
+            id: 'ends',
+            title: FORM_FLOW_WORDS.endsTitle,
+            summaryLabel: FORM_FLOW_WORDS.ends,
+            summaryValue: describeEnding(formData),
+            isAnswered: buildEnding(formData) !== null,
+            isPreAnswered: true,
+            render: () => (
+              <div className='space-y-3'>
+                <PillGroup
+                  label='Ends'
+                  options={endingOptions}
+                  value={formData.endKind}
+                  onChange={(endKind) => set({ endKind })}
                 />
-              ),
-            }),
-          ]
-        : []),
-      ...(!isOnce && formData.endKind === 'count'
-        ? [
-            custom({
-              name: 'endCount',
-              label: '',
-              renderComponent: (props) => (
-                <Input
-                  type='number'
-                  inputMode='numeric'
-                  min={1}
-                  max={MAX_ENDING_COUNT}
-                  variant='outline'
-                  aria-label='How many payments'
-                  placeholder='How many payments, like 6'
-                  value={props.value as string}
-                  onChange={(event) => props.onValueChange(event.target.value)}
-                />
-              ),
-            }),
-          ]
-        : []),
-      ...(canChoose
-        ? [
-            custom({
-              name: 'funding',
-              label: '',
-              renderComponent: (props) => (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>Funded from</p>
-                  <PillGroup
-                    label='Funded from'
-                    options={fundingOptions}
-                    value={props.value as Funding}
-                    onChange={(value) => props.onValueChange(value)}
-                  />
-                </div>
-              ),
-            }),
-          ]
-        : []),
-      ...(isChosen
-        ? [
-            custom({
-              name: 'dayKeys',
-              label: '',
-              renderComponent: (props) => (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>
-                    Which income days
-                  </p>
-                  <MultiPillGroup
-                    label='Which income days'
-                    options={dayOptions}
-                    values={props.value as string[]}
-                    onChange={(values) =>
-                      props.onValueChange(values.slice(0, MAX_CHOSEN_DAYS))
-                    }
-                  />
-                </div>
-              ),
-            }),
-          ]
-        : []),
-      custom({
-        name: 'emoji',
-        label: '',
-        renderComponent: (props) => {
-          const emoji = props.value as string | null;
-          if (emoji === null) {
-            return (
-              <div>
-                <RevealChip
-                  icon={<Plus className='h-4 w-4' />}
-                  onClick={() => props.onValueChange('')}
-                >
-                  Add emoji
-                </RevealChip>
-              </div>
-            );
-          }
-          return (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>Emoji</p>
-              <div className='flex items-center gap-2'>
-                <div className='w-24 shrink-0'>
+                {formData.endKind === 'date' && (
                   <Input
+                    type='date'
                     variant='outline'
-                    aria-label='Emoji'
-                    placeholder='🏠'
-                    maxLength={MAX_EMOJI_LENGTH}
-                    value={emoji}
-                    onChange={(event) =>
-                      props.onValueChange(event.target.value)
-                    }
+                    aria-label='Last payment'
+                    min={formData.startDate || undefined}
+                    value={formData.endDate}
+                    onChange={(event) => set({ endDate: event.target.value })}
                   />
-                </div>
-                <RevealChip
-                  icon={<X className='h-4 w-4' />}
-                  onClick={() => props.onValueChange(null)}
-                >
-                  Remove emoji
-                </RevealChip>
+                )}
+                {formData.endKind === 'count' && (
+                  <Input
+                    type='number'
+                    inputMode='numeric'
+                    min={1}
+                    max={MAX_ENDING_COUNT}
+                    variant='outline'
+                    aria-label='How many payments'
+                    placeholder='How many payments, like 6'
+                    value={formData.endCount}
+                    onChange={(event) => set({ endCount: event.target.value })}
+                  />
+                )}
               </div>
-            </div>
-          );
-        },
-      }),
-    ];
-    return result;
-  }, [
-    isOnce,
-    isChosen,
-    canChoose,
-    formData.endKind,
-    formData.startDate,
-    comingDays,
-    dueDate,
-    startMin,
-    planStance,
-    noun,
-  ]);
+            ),
+          },
+        ]),
+    ...(canChoose
+      ? [
+          {
+            id: 'funding',
+            title: FORM_FLOW_WORDS.fundingTitle,
+            summaryLabel: FORM_FLOW_WORDS.funding,
+            summaryValue: isChosen
+              ? `${BILL_FUNDING_LABELS.chosen} · ${pickedCount}`
+              : BILL_FUNDING_LABELS.suggested,
+            isAnswered: !isChosen || pickedCount > 0,
+            isPreAnswered: true,
+            render: () => (
+              <div className='space-y-3'>
+                <PillGroup
+                  label='Funded from'
+                  options={fundingOptions}
+                  value={formData.funding}
+                  onChange={(funding) => set({ funding })}
+                />
+                {isChosen && (
+                  <div className='space-y-2'>
+                    <p className='text-muted-foreground text-xs'>
+                      Which income days
+                    </p>
+                    <MultiPillGroup
+                      label='Which income days'
+                      options={dayOptions}
+                      values={formData.dayKeys}
+                      onChange={(values) =>
+                        set({ dayKeys: values.slice(0, MAX_CHOSEN_DAYS) })
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+            ),
+          },
+        ]
+      : []),
+    {
+      id: 'priority',
+      title: FORM_FLOW_WORDS.priorityTitle,
+      summaryLabel: FORM_FLOW_WORDS.priority,
+      summaryValue: PRIORITY_LABELS[formData.priority],
+      isAnswered: true,
+      isPreAnswered: true,
+      render: () => (
+        <PillGroup
+          label={FORM_FLOW_WORDS.priority}
+          options={priorityOptions}
+          value={formData.priority}
+          onChange={(priority) => set({ priority })}
+        />
+      ),
+    },
+    {
+      id: 'emoji',
+      title: FORM_FLOW_WORDS.emojiTitle,
+      summaryLabel: FORM_FLOW_WORDS.emoji,
+      summaryValue: formData.emoji?.trim() || FORM_FLOW_WORDS.noEmoji,
+      isAnswered: true,
+      isPreAnswered: true,
+      render: () => (
+        <div className='w-24'>
+          <Input
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.emoji}
+            placeholder='🏠'
+            maxLength={MAX_EMOJI_LENGTH}
+            value={formData.emoji ?? ''}
+            onChange={(event) => set({ emoji: event.target.value })}
+          />
+        </div>
+      ),
+    },
+  ];
+  const questions = useQuestionFlow({
+    steps,
+    startFolded: editing !== undefined,
+    initialOpenId: editing ? openStep : null,
+  });
 
   const getChosenKeys = (picked: string[]) =>
     comingDays
@@ -565,9 +538,10 @@ function BillForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const shownBlocker = editing ? editBlocker : blocker;
 
-  const handleSubmit = async (data: BillFormData) => {
-    const bill = buildBill(data);
+  const handleSubmit = async () => {
+    const bill = buildBill(formData);
     if (!user || !bill) return;
 
     setError(null);
@@ -594,7 +568,6 @@ function BillForm({
     kind: 'bill' as const,
     candidate,
   };
-  const formFields = editing ? [...fields, changeField] : fields;
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
@@ -603,46 +576,42 @@ function BillForm({
         reason={<ChangeReason flow={flow} onClose={onClose} />}
       >
         <ChangeFlowContext value={flowValue}>
-          <Form
-            id='runway-bill'
-            form={formFields}
-            initialData={initialData}
-            columns={1}
-            onDataChange={(data) => setFormData(data as BillFormData)}
-            onSubmit={(data) => {
-              if (editing) {
-                flow.setStep('reason');
-                return;
+          <div className='space-y-5'>
+            <QuestionFlow
+              flow={questions}
+              nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
+            />
+            {editing && questions.isReview && <ChangeSection />}
+            <ModalFooterActions
+              note={error ?? (questions.isReview ? shownBlocker : null)}
+              cancelAction={
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={onClose}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </Button>
               }
-              void handleSubmit(data as BillFormData);
-            }}
-            submitButton={
-              <ModalFooterActions
-                note={error ?? (editing ? editBlocker : blocker)}
-                cancelAction={
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={onClose}
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </Button>
-                }
-                rightActions={
-                  <Button
-                    type='submit'
-                    loading={isSaving}
-                    disabled={
-                      isSaving || (editing ? editBlocker : blocker) !== null
+              rightActions={
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={isSaving || shownBlocker !== null}
+                  onClick={() => {
+                    if (editing) {
+                      flow.setStep('reason');
+                      return;
                     }
-                  >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
-                  </Button>
-                }
-              />
-            }
-          />
+                    void handleSubmit();
+                  }}
+                >
+                  {editing ? CHANGE_WORDS.review : 'Add'}
+                </Button>
+              }
+            />
+          </div>
         </ChangeFlowContext>
       </ChangeSteps>
     </FormSheet>

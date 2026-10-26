@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
+import AmountHero, { AmountHeroLink } from '@/components/AmountHero';
 import MoneyInput from '@/components/MoneyInput';
 import { PillGroup } from '@/components/PillGroup';
 
@@ -10,6 +11,8 @@ export type AmountMode = 'exact' | 'range' | 'percent' | 'rest';
 export interface AmountModeOption {
   value: AmountMode;
   label: string;
+  /** Its words as a quiet link under a hero figure ("It varies", "a % of pay"); the label when missing. */
+  linkLabel?: string;
 }
 
 interface AmountFieldProps {
@@ -35,6 +38,12 @@ interface AmountFieldProps {
   hint?: ReactNode;
   errorMessage?: string;
   placeholder?: string;
+  /** Draws the amount as the screen's large centred figure, the other modes as quiet links under it. */
+  isHero?: boolean;
+  /** A hero figure takes focus once its sheet settles, on a phone. */
+  autoFocus?: boolean;
+  /** One quiet line under a hero figure. */
+  suffix?: ReactNode;
 }
 
 /** A labelled amount: exact money, a low and a high end, a whole or half percentage of something the caller names, or the rest. */
@@ -53,8 +62,106 @@ function AmountField({
   hint,
   errorMessage,
   placeholder = '0.00',
+  isHero = false,
+  autoFocus,
+  suffix,
 }: AmountFieldProps) {
   const shownHint = mode === 'rest' ? (restHint ?? hint) : hint;
+
+  if (isHero) {
+    const options = modes ?? [];
+    const linkOf = (value: AmountMode) =>
+      options.find((option) => option.value === value);
+    const hasRange = linkOf('range') !== undefined;
+    const isMoney = mode === 'exact' || mode === 'range';
+    const others = options.filter(
+      (option) =>
+        option.value !== mode &&
+        !(isMoney && (option.value === 'exact' || option.value === 'range')),
+    );
+    const links = onModeChange
+      ? others.map((option) => (
+          <AmountHeroLink
+            key={option.value}
+            onClick={() => onModeChange(option.value)}
+          >
+            {option.linkLabel ?? option.label}
+          </AmountHeroLink>
+        ))
+      : null;
+
+    if (isMoney) {
+      return (
+        <AmountHero
+          label={label}
+          value={value}
+          onChange={onChange}
+          autoFocus={autoFocus}
+          isRange={mode === 'range'}
+          highValue={highValue}
+          onHighChange={onHighChange}
+          onRangeToggle={
+            hasRange && onModeChange
+              ? () => onModeChange(mode === 'range' ? 'exact' : 'range')
+              : undefined
+          }
+          rangeToggleLabels={{
+            toRange: linkOf('range')?.linkLabel ?? 'It varies',
+            toExact: linkOf('exact')?.linkLabel ?? 'One amount',
+          }}
+          rangeLabels={rangeLabels}
+          links={links}
+          suffix={suffix}
+          hint={shownHint}
+          errorMessage={errorMessage}
+        />
+      );
+    }
+
+    return (
+      <div className='flex flex-col items-center gap-2 text-center'>
+        <p className='text-muted-foreground text-sm'>{label}</p>
+        {mode === 'percent' && (
+          <div className='flex items-center justify-center gap-2'>
+            <div className='w-28 shrink-0'>
+              <Input
+                variant='outline'
+                type='text'
+                inputMode='decimal'
+                autoComplete='off'
+                aria-label={label}
+                aria-invalid={errorMessage ? true : undefined}
+                placeholder='10'
+                maxLength={6}
+                className='text-center text-2xl font-semibold tabular-nums'
+                value={value}
+                onChange={(event) => onChange(event.target.value)}
+              />
+            </div>
+            <p className='text-muted-foreground min-w-0 text-left text-sm break-words'>
+              % {percentOfLabel}
+            </p>
+          </div>
+        )}
+        {suffix && <div className='text-sm'>{suffix}</div>}
+        {errorMessage && (
+          <p className='text-destructive text-sm' role='alert'>
+            {errorMessage}
+          </p>
+        )}
+        {shownHint && (
+          <div className='text-muted-foreground max-w-xs text-sm'>
+            {shownHint}
+          </div>
+        )}
+        {links && (
+          <div className='flex flex-wrap items-center justify-center gap-x-2'>
+            {links}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className='space-y-1.5'>

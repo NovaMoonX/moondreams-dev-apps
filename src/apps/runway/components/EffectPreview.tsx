@@ -7,7 +7,11 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector, type RootState } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { CHANGE_WORDS, PREVIEW_SHOWN } from '@apps/runway/constants';
+import {
+  CHANGE_WORDS,
+  FORM_FLOW_WORDS,
+  PREVIEW_SHOWN,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { describeHoldsChange } from '@apps/runway/utils/lookaheadText';
 import {
@@ -34,6 +38,8 @@ interface EffectPreviewProps {
   emptyText?: string;
   /** Words for a form that is finished but has no change in it yet. */
   waitingText?: string;
+  /** One summary line with a door to each day, for a form whose subject is the change itself. */
+  isCompact?: boolean;
 }
 
 const getLineText = (day: PreviewDay) => {
@@ -51,6 +57,7 @@ function EffectPreview({
   changeJson,
   emptyText,
   waitingText,
+  isCompact = false,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -107,7 +114,11 @@ function EffectPreview({
       today,
       settledVirtual,
     );
-    return describeHoldsChange(before, after);
+    const isSame =
+      before.holdsThrough === after.holdsThrough &&
+      JSON.stringify(before.problems[0] ?? null) ===
+        JSON.stringify(after.problems[0] ?? null);
+    return { text: describeHoldsChange(before, after), isSame };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledVirtual, isLedgerReady, today, items, versions, openDays]);
@@ -128,6 +139,28 @@ function EffectPreview({
       );
     }
     const shown = isOpen ? days : days.slice(0, PREVIEW_SHOWN);
+    if (isCompact && !isOpen) {
+      const [first] = days;
+      const count =
+        days.length === 1
+          ? FORM_FLOW_WORDS.compactOne
+          : FORM_FLOW_WORDS.compactMany.replace('{n}', String(days.length));
+      return (
+        <div className='space-y-1'>
+          <p className='text-sm'>
+            {count} {formatDateUTC(first.on)}:{' '}
+            <span className='whitespace-nowrap tabular-nums'>
+              {formatCents(first.effect.freeBeforeCents)} to{' '}
+              {formatCents(first.effect.freeAfterCents)}
+            </span>{' '}
+            {FORM_FLOW_WORDS.compactLeft}
+          </p>
+          <ShowMoreButton isOpen={false} onClick={() => setIsOpen(true)}>
+            {FORM_FLOW_WORDS.compactDoor}
+          </ShowMoreButton>
+        </div>
+      );
+    }
     return (
       <div className='space-y-1'>
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -163,7 +196,7 @@ function EffectPreview({
             );
           })}
         </ul>
-        {days.length > PREVIEW_SHOWN && (
+        {(days.length > PREVIEW_SHOWN || isCompact) && (
           <ShowMoreButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)}>
             {isOpen ? 'Show fewer' : `Show all ${days.length}`}
           </ShowMoreButton>
@@ -176,7 +209,9 @@ function EffectPreview({
     <section aria-label={CHANGE_WORDS.previewHeading} className='space-y-2'>
       <SectionDivider label={CHANGE_WORDS.previewHeading} />
       {getBody()}
-      {holdsText && <p className='text-sm'>{holdsText}</p>}
+      {holdsText?.text && !(isCompact && holdsText.isSame) && (
+        <p className='text-sm'>{holdsText.text}</p>
+      )}
     </section>
   );
 }
