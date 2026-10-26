@@ -22,8 +22,8 @@ interface BillRowProps {
 
 const getDueLine = (payment: BillPayment | null) => {
   if (!payment) return 'No payment left';
-  const due = `Due ${formatDateShortUTC(payment.dueOn)}`;
-  return payment.paid ? `Paid · ${due.toLowerCase()}` : due;
+  const date = formatDateShortUTC(payment.dueOn);
+  return payment.paid ? `Paid · due ${date}` : `Due ${date}`;
 };
 
 /** Where the next payment stands, short: "$1,075 of $1,250 set aside". */

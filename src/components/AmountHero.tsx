@@ -91,8 +91,8 @@ function Figure({
   return (
     <label
       className={join(
-        'inline-flex max-w-full cursor-text items-start rounded-xl px-1 font-semibold tracking-tight tabular-nums',
-        'has-[input:focus-visible]:ring-primary/40 has-[input:focus-visible]:ring-2',
+        'inline-flex max-w-full cursor-text items-start border-b-2 border-transparent px-1 font-semibold tracking-tight tabular-nums',
+        'has-[input:focus]:border-primary/50',
         sizeClass,
       )}
     >
