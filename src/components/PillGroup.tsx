@@ -15,6 +15,8 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 const SEARCH_THRESHOLD = 12;
 /** Two rows of pills: keep in step with `max-h-22` below. */
 const COLLAPSED_ROWS_REM = 5.5;
+/** Two rows of thin pills (24px each with a 16px gap): keep in step with `max-h-16` below, or a sliver of the third row shows. */
+const COLLAPSED_THIN_ROWS_REM = 4;
 /** Up to this many pills may sit below the two rows without a "Show all": a toggle that hides one to three options costs more than it saves. */
 const MAX_QUIET_HIDDEN = 3;
 
@@ -183,7 +185,7 @@ export function PillOptions<T extends string>({
       return;
     }
     const limit =
-      COLLAPSED_ROWS_REM *
+      (isThin ? COLLAPSED_THIN_ROWS_REM : COLLAPSED_ROWS_REM) *
       parseFloat(getComputedStyle(document.documentElement).fontSize);
     const top = content.getBoundingClientRect().top;
     const pills = [...(content.firstElementChild?.children ?? [])];
@@ -255,7 +257,10 @@ export function PillOptions<T extends string>({
         </div>
       )}
       <div
-        className={join(isClamped && 'max-h-22 overflow-hidden')}
+        className={join(
+          isClamped && (isThin ? 'max-h-16' : 'max-h-22'),
+          isClamped && 'overflow-hidden',
+        )}
         onFocusCapture={(event) =>
           isClamped &&
           event.target.matches(':focus-visible') &&

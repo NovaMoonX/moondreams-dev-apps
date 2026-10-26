@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Wallet } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import { PillGroup } from '@/components/PillGroup';
@@ -15,6 +15,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import PurchaseRow from '@apps/runway/components/PurchaseRow';
 import {
   SPEND_PAGE_SIZE,
+  SPEND_PILL_LIMIT,
   SPEND_SEARCH_THRESHOLD,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -28,6 +29,8 @@ import {
 import type { OpenPurchase } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
+
+const ALL_ENVELOPES = 'all';
 
 const monthLabel = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -125,7 +128,26 @@ function SpendScreen() {
             placeholder={SPEND_WORDS.search}
           />
         )}
-        {counts.size >= 2 && (
+        {filterOptions.length > SPEND_PILL_LIMIT && (
+          <div className='space-y-1.5'>
+            <p className='text-muted-foreground text-xs'>
+              {SPEND_WORDS.envelope}
+            </p>
+            <Select
+              searchable
+              options={filterOptions.map((option) => ({
+                text: option.label,
+                value: option.value === '' ? ALL_ENVELOPES : option.value,
+              }))}
+              value={filterId ?? ALL_ENVELOPES}
+              onChange={(value) => {
+                showSpendEnvelope(value === ALL_ENVELOPES ? null : value);
+                setShown(SPEND_PAGE_SIZE);
+              }}
+            />
+          </div>
+        )}
+        {counts.size >= 2 && filterOptions.length <= SPEND_PILL_LIMIT && (
           <PillGroup
             isThin
             label='Envelope'

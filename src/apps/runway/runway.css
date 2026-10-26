@@ -105,3 +105,10 @@ html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.sh
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
 }
+
+/* Five section pills are 28px wider than a 320px screen, so below 380px they sit a little closer in and stay on one line. */
+@media (max-width: 379px) {
+  html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill] {
+    padding-inline: 0.375rem;
+  }
+}

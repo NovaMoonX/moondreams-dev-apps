@@ -271,6 +271,8 @@ export const MAX_PURCHASE_LINES = 12;
 export const MAX_PURCHASE_CENTS = 99_999_999;
 /** Purchases the Spend tab draws before "Show more". */
 export const SPEND_PAGE_SIZE = 30;
+/** More envelope filters than this become a searchable list instead of pills. */
+export const SPEND_PILL_LIMIT = 12;
 /** Rows before the Spend tab offers a search. */
 export const SPEND_SEARCH_THRESHOLD = 8;
 
