@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode, type Ref } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -46,6 +46,14 @@ const getSizeClass = (length: number, isRange: boolean) => {
   return 'text-3xl';
 };
 
+/** "12345.67" as money reads, "12,345.67"; anything that isn't plain digits is left as typed. */
+const groupDigits = (value: string) => {
+  const match = /^(\d+)(\.\d*)?$/.exec(value);
+  if (!match) return value;
+  const result = `${match[1].replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${match[2] ?? ''}`;
+  return result;
+};
+
 interface FigureProps {
   ariaLabel: string;
   value: string;
@@ -65,6 +73,8 @@ function Figure({
   isInvalid,
   disabled,
 }: FigureProps) {
+  const [isTyping, setIsTyping] = useState(false);
+  const shown = isTyping ? value : groupDigits(value);
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
     if (settled !== value) onChange(settled);
@@ -88,7 +98,7 @@ function Figure({
           className='invisible block px-0.5 whitespace-pre'
           aria-hidden='true'
         >
-          {value === '' ? '0' : value}
+          {shown === '' ? '0' : shown}
         </span>
         <Input
           ref={inputRef}
@@ -100,17 +110,38 @@ function Figure({
           aria-label={ariaLabel}
           aria-invalid={isInvalid ? true : undefined}
           placeholder='0'
-          value={value}
+          value={shown}
           disabled={disabled}
           className={join(
             'absolute inset-0 h-full! w-full min-w-0 rounded-lg border-0! bg-transparent! px-0.5! py-0! text-center font-semibold tracking-tight tabular-nums',
             sizeClass,
             'placeholder:text-muted-foreground/50',
           )}
-          onChange={(event) => onChange(event.target.value)}
-          onBlur={settle}
+          onChange={(event) => {
+            if (isTyping) {
+              onChange(event.target.value);
+              return;
+            }
+            setIsTyping(true);
+            onChange(event.target.value.replace(/,/g, ''));
+          }}
+          onFocus={(event) => {
+            const field = event.currentTarget;
+            setIsTyping(true);
+            window.requestAnimationFrame(() => {
+              const end = field.value.length;
+              field.setSelectionRange(end, end);
+            });
+          }}
+          onBlur={() => {
+            setIsTyping(false);
+            settle();
+          }}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') settle();
+            if (event.key === 'Enter') {
+              setIsTyping(false);
+              settle();
+            }
           }}
         />
       </span>
@@ -175,7 +206,8 @@ function AmountHero({
     return () => window.clearTimeout(timer);
   }, [shouldFocus]);
 
-  const longest = Math.max(value.length, isRange ? highValue.length : 0);
+  const digitsOf = (text: string) => text.replace(/,/g, '').length;
+  const longest = Math.max(digitsOf(value), isRange ? digitsOf(highValue) : 0);
   const sizeClass = getSizeClass(longest, isRange);
   const hasLinks = Boolean(onRangeToggle) || Boolean(links);
 

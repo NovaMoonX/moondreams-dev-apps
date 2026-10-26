@@ -7,14 +7,15 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AmountHero, { AmountHeroLink } from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
-import FoldedDateField from '@/components/FoldedDateField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
+import QuestionFlow from '@/components/QuestionFlow';
 import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -321,12 +322,16 @@ function PurchaseForm({
     lines === null || !isCounted ? null : getPurchaseEffect(lines, leftById);
   const getEffectLine = () => {
     if (effect === null || lines === null) return null;
+    const freeChange =
+      effect.freeDropCents < 0
+        ? `Free to spend goes up by ${formatCents(-effect.freeDropCents)}.`
+        : `Free to spend drops by ${formatCents(effect.freeDropCents)}.`;
     if (effect.over.length === 1) {
       const [only] = effect.over;
-      return `${nameOf(only.envelopeId)} would be ${formatCents(only.overCents)} over. Free to spend drops by ${formatCents(effect.freeDropCents)}.`;
+      return `${nameOf(only.envelopeId)} would be ${formatCents(only.overCents)} over. ${freeChange}`;
     }
     if (effect.over.length > 1) {
-      return `${effect.over.length} envelopes would be over. Free to spend drops by ${formatCents(effect.freeDropCents)}.`;
+      return `${effect.over.length} envelopes would be over. ${freeChange}`;
     }
     if (effect.freeDropCents < 0) {
       return `Free to spend goes up by ${formatCents(-effect.freeDropCents)}.`;
@@ -509,190 +514,270 @@ function PurchaseForm({
     }));
   const { extras } = formData;
 
-  const formBody = (
-    <div className='space-y-5'>
-      <AmountHero
-        label={isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount}
-        value={formData.amount}
-        onChange={(amount) =>
-          setFormData((current) => ({ ...current, amount }))
-        }
-        autoFocus={!editing}
-        disabled={isSaving}
-        links={
-          editing ? null : (
-            <AmountHeroLink onClick={toggleRefund}>
-              {isRefund
-                ? FORM_FLOW_WORDS.notRefundLink
-                : FORM_FLOW_WORDS.refundLink}
-            </AmountHeroLink>
-          )
-        }
-      />
-      {isRefund && (
-        <SummaryRow
-          label={SPEND_WORDS.refundOf}
-          onClick={() => setView('original')}
-          detail={
-            original !== null && returnsToOriginal && lines
-              ? `Returns to ${describeEnvelopes(lines, nameOf)}.`
-              : undefined
+  const effectNote = effectLine && (
+    <p className='text-muted-foreground text-sm' role='status'>
+      {effectLine}
+    </p>
+  );
+  const getEnvelopeSummary = () => {
+    if (lines === null) return '';
+    if (isRefund) return `Back to ${describeEnvelopes(lines, nameOf)}`;
+    return describeEnvelopes(lines, nameOf);
+  };
+  const todayValue = toDateInputValue(today);
+
+  const steps: QuestionStep[] = [
+    {
+      id: 'amount',
+      title: isRefund
+        ? FORM_FLOW_WORDS.refundAmountTitle
+        : FORM_FLOW_WORDS.purchaseAmountTitle,
+      summaryLabel: isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount,
+      summaryValue: amount === null ? '' : formatCents(amount),
+      isAnswered: amount !== null,
+      render: () => (
+        <AmountHero
+          label={isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount}
+          value={formData.amount}
+          onChange={(next) =>
+            setFormData((current) => ({ ...current, amount: next }))
           }
-        >
-          {original === null
-            ? SPEND_WORDS.noOriginal
-            : getPurchaseTitle(original, nameOf)}
-        </SummaryRow>
-      )}
-      {isRefund && !returnsToOriginal && (
-        <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>
-            {SPEND_WORDS.returnsTo}
-          </p>
-          <PillGroup
-            label={SPEND_WORDS.returnsTo}
-            options={[
-              { value: FREE_VALUE, label: SPEND_WORDS.freeToSpend },
-              ...allPills,
-            ]}
-            value={returnTo}
-            onChange={setReturnTo}
-          />
-        </div>
-      )}
-      {!isRefund && !isSplit && (
-        <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>
-            {SPEND_WORDS.envelope}
-          </p>
-          <PillGroup
-            label={SPEND_WORDS.envelope}
-            options={envelopePills}
-            value={envelopeId}
-            onChange={setEnvelopeId}
-          />
-          {(hasMore || (amount !== null && options.length >= 2)) && (
-            <div className='flex flex-wrap gap-2'>
-              {hasMore && (
-                <RevealChip
-                  icon={<Search className='h-4 w-4' />}
-                  onClick={() => {
-                    setEnvelopeSearch('');
-                    setView('envelopes');
-                  }}
-                >
-                  {FORM_FLOW_WORDS.more}
-                </RevealChip>
-              )}
-              {amount !== null && options.length >= 2 && (
-                <RevealChip
-                  icon={<Plus className='h-4 w-4' />}
-                  onClick={startSplit}
-                >
-                  {SPEND_WORDS.split}
-                </RevealChip>
+          disabled={isSaving}
+          links={
+            editing ? null : (
+              <AmountHeroLink onClick={toggleRefund}>
+                {isRefund
+                  ? FORM_FLOW_WORDS.notRefundLink
+                  : FORM_FLOW_WORDS.refundLink}
+              </AmountHeroLink>
+            )
+          }
+        />
+      ),
+    },
+    {
+      id: 'envelope',
+      title: isRefund
+        ? FORM_FLOW_WORDS.refundForTitle
+        : FORM_FLOW_WORDS.purchaseForTitle,
+      summaryLabel: isRefund ? SPEND_WORDS.returnsTo : SPEND_WORDS.envelope,
+      summaryValue: getEnvelopeSummary(),
+      isAnswered: lines !== null,
+      isPreAnswered:
+        !isRefund &&
+        presetEnvelopeId !== null &&
+        envelopeId === presetEnvelopeId,
+      render: () => (
+        <div className='space-y-4'>
+          {isRefund && (
+            <SummaryRow
+              label={SPEND_WORDS.refundOf}
+              onClick={() => setView('original')}
+              detail={
+                original !== null && returnsToOriginal && lines
+                  ? `Returns to ${describeEnvelopes(lines, nameOf)}.`
+                  : undefined
+              }
+            >
+              {original === null
+                ? SPEND_WORDS.noOriginal
+                : getPurchaseTitle(original, nameOf)}
+            </SummaryRow>
+          )}
+          {isRefund && !returnsToOriginal && (
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-xs'>
+                {SPEND_WORDS.returnsTo}
+              </p>
+              <PillGroup
+                label={SPEND_WORDS.returnsTo}
+                options={[
+                  { value: FREE_VALUE, label: SPEND_WORDS.freeToSpend },
+                  ...allPills,
+                ]}
+                value={returnTo}
+                onChange={setReturnTo}
+              />
+            </div>
+          )}
+          {!isRefund && !isSplit && (
+            <div className='space-y-2'>
+              <PillGroup
+                label={SPEND_WORDS.envelope}
+                options={envelopePills}
+                value={envelopeId}
+                onChange={setEnvelopeId}
+              />
+              {(hasMore || (amount !== null && options.length >= 2)) && (
+                <div className='flex flex-wrap gap-2'>
+                  {hasMore && (
+                    <RevealChip
+                      icon={<Search className='h-4 w-4' />}
+                      onClick={() => {
+                        setEnvelopeSearch('');
+                        setView('envelopes');
+                      }}
+                    >
+                      {FORM_FLOW_WORDS.more}
+                    </RevealChip>
+                  )}
+                  {amount !== null && options.length >= 2 && (
+                    <RevealChip
+                      icon={<Plus className='h-4 w-4' />}
+                      onClick={startSplit}
+                    >
+                      {SPEND_WORDS.split}
+                    </RevealChip>
+                  )}
+                </div>
               )}
             </div>
           )}
+          {!isRefund && isSplit && (
+            <div className='space-y-2'>
+              <SummaryRow
+                label={SPEND_WORDS.splitLabel}
+                onClick={() => setView('split')}
+              >
+                {splitIds.length === 0
+                  ? 'Pick the envelopes'
+                  : splitIds
+                      .map(
+                        (id) =>
+                          `${nameOf(id)} ${formatCents(parseMoneyToCents(shares[id] ?? '') ?? 0)}`,
+                      )
+                      .join(', ')}
+              </SummaryRow>
+              <div>
+                <RevealChip
+                  icon={<X className='h-4 w-4' />}
+                  onClick={stopSplit}
+                >
+                  {SPEND_WORDS.unsplit}
+                </RevealChip>
+              </div>
+            </div>
+          )}
+          {effectNote}
         </div>
-      )}
-      {!isRefund && isSplit && (
-        <div className='space-y-2'>
-          <SummaryRow
-            label={SPEND_WORDS.splitLabel}
-            onClick={() => setView('split')}
-          >
-            {splitIds.length === 0
-              ? 'Pick the envelopes'
-              : splitIds
-                  .map(
-                    (id) =>
-                      `${nameOf(id)} ${formatCents(parseMoneyToCents(shares[id] ?? '') ?? 0)}`,
-                  )
-                  .join(', ')}
-          </SummaryRow>
-          <div>
-            <RevealChip icon={<X className='h-4 w-4' />} onClick={stopSplit}>
-              {SPEND_WORDS.unsplit}
+      ),
+    },
+    {
+      id: 'day',
+      title: FORM_FLOW_WORDS.dayTitle,
+      summaryLabel: SPEND_WORDS.day,
+      summaryValue:
+        formData.date === todayValue
+          ? 'Today'
+          : date === null
+            ? ''
+            : formatDateUTC(date),
+      isAnswered: date !== null && date <= today,
+      isPreAnswered: true,
+      render: () => (
+        <Input
+          type='date'
+          variant='outline'
+          aria-label={SPEND_WORDS.day}
+          max={todayValue}
+          value={formData.date}
+          disabled={isSaving}
+          onChange={(event) =>
+            setFormData((current) => ({
+              ...current,
+              date: event.target.value,
+            }))
+          }
+        />
+      ),
+    },
+  ];
+  const questions = useQuestionFlow({
+    steps,
+    startFolded: editing !== undefined,
+  });
+
+  const formBody = (
+    <div className='space-y-5'>
+      <QuestionFlow
+        flow={questions}
+        nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
+      />
+      {questions.isReview && (
+        <div className='space-y-3'>
+          {effectNote}
+          {extras.merchant !== null && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                {SPEND_WORDS.where}
+              </p>
+              <Input
+                variant='outline'
+                aria-label={SPEND_WORDS.where}
+                maxLength={MAX_NAME_LENGTH}
+                placeholder={SPEND_WORDS.wherePlaceholder}
+                value={extras.merchant}
+                disabled={isSaving}
+                onChange={(event) =>
+                  setExtras({ merchant: event.target.value })
+                }
+              />
+            </div>
+          )}
+          {extras.note !== null && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                {SPEND_WORDS.note}
+              </p>
+              <Input
+                variant='outline'
+                aria-label={SPEND_WORDS.note}
+                maxLength={MAX_NOTE_LENGTH}
+                placeholder={SPEND_WORDS.notePlaceholder}
+                value={extras.note}
+                disabled={isSaving}
+                onChange={(event) => setExtras({ note: event.target.value })}
+              />
+            </div>
+          )}
+          <div className='flex flex-wrap gap-2'>
+            <RevealChip
+              icon={
+                extras.merchant === null ? (
+                  <Plus className='h-4 w-4' />
+                ) : (
+                  <X className='h-4 w-4' />
+                )
+              }
+              onClick={() =>
+                setExtras({ merchant: extras.merchant === null ? '' : null })
+              }
+            >
+              {extras.merchant === null
+                ? SPEND_WORDS.addWhere
+                : SPEND_WORDS.removeWhere}
+            </RevealChip>
+            <RevealChip
+              icon={
+                extras.note === null ? (
+                  <Plus className='h-4 w-4' />
+                ) : (
+                  <X className='h-4 w-4' />
+                )
+              }
+              onClick={() =>
+                setExtras({ note: extras.note === null ? '' : null })
+              }
+            >
+              {extras.note === null
+                ? SPEND_WORDS.addNote
+                : SPEND_WORDS.removeNote}
             </RevealChip>
           </div>
         </div>
       )}
-      {effectLine && (
-        <p className='text-muted-foreground text-sm' role='status'>
-          {effectLine}
-        </p>
-      )}
-      <FoldedDateField
-        label={SPEND_WORDS.day}
-        value={formData.date}
-        onChange={(next) =>
-          setFormData((current) => ({ ...current, date: next }))
-        }
-        todayValue={toDateInputValue(today)}
-        max={toDateInputValue(today)}
-        disabled={isSaving}
-      />
-      {extras.merchant !== null && (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>{SPEND_WORDS.where}</p>
-          <Input
-            variant='outline'
-            aria-label={SPEND_WORDS.where}
-            maxLength={MAX_NAME_LENGTH}
-            placeholder={SPEND_WORDS.wherePlaceholder}
-            value={extras.merchant}
-            disabled={isSaving}
-            onChange={(event) => setExtras({ merchant: event.target.value })}
-          />
-        </div>
-      )}
-      {extras.note !== null && (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>{SPEND_WORDS.note}</p>
-          <Input
-            variant='outline'
-            aria-label={SPEND_WORDS.note}
-            maxLength={MAX_NOTE_LENGTH}
-            placeholder={SPEND_WORDS.notePlaceholder}
-            value={extras.note}
-            disabled={isSaving}
-            onChange={(event) => setExtras({ note: event.target.value })}
-          />
-        </div>
-      )}
-      <div className='flex flex-wrap gap-2'>
-        <RevealChip
-          icon={
-            extras.merchant === null ? (
-              <Plus className='h-4 w-4' />
-            ) : (
-              <X className='h-4 w-4' />
-            )
-          }
-          onClick={() =>
-            setExtras({ merchant: extras.merchant === null ? '' : null })
-          }
-        >
-          {extras.merchant === null
-            ? SPEND_WORDS.addWhere
-            : SPEND_WORDS.removeWhere}
-        </RevealChip>
-        <RevealChip
-          icon={
-            extras.note === null ? (
-              <Plus className='h-4 w-4' />
-            ) : (
-              <X className='h-4 w-4' />
-            )
-          }
-          onClick={() => setExtras({ note: extras.note === null ? '' : null })}
-        >
-          {extras.note === null ? SPEND_WORDS.addNote : SPEND_WORDS.removeNote}
-        </RevealChip>
-      </div>
       <ModalFooterActions
-        note={error ?? blocker}
+        note={error ?? (questions.isReview ? blocker : null)}
         cancelAction={
           <Button
             type='button'
