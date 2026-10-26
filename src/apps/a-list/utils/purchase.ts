@@ -12,6 +12,7 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
     format: option.format,
     priceCents: option.priceCents,
     standardPriceCents: option.standardPriceCents,
+    taxCents: option.taxCents,
     purchaseUrl: option.purchaseUrl,
     startedAt: null,
   };
@@ -20,10 +21,16 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
 /** The ticket form's start for a picked showing: its format and AMC's prices; the fee and tax are still the member's to enter. */
 export function applyPurchaseToDraft(
   draft: TicketDraft,
-  plan: Pick<PurchasePlan, 'format' | 'priceCents' | 'standardPriceCents'>,
+  plan: Pick<PurchasePlan, 'format' | 'priceCents' | 'standardPriceCents'> &
+    Partial<Pick<PurchasePlan, 'taxCents'>>,
 ): TicketDraft {
+  const taxCents = plan.taxCents ?? null;
   return {
     ...draft,
+    // AMC's own tax for the showing is exact, so it replaces the rate learned from past tickets.
+    ...(taxCents === null
+      ? {}
+      : { tax: centsToInputValue(taxCents), isTaxEdited: true }),
     format: plan.format,
     price: centsToInputValue(plan.priceCents),
     standardPrice:

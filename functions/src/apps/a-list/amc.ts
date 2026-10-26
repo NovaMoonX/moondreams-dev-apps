@@ -295,7 +295,7 @@ interface AmcShowtime {
   purchaseUrl?: string;
   mobilePurchaseUrl?: string;
   attributes?: Array<{ code?: string; name?: string }>;
-  ticketPrices?: Array<{ type?: string; agePolicy?: string; name?: string; price?: number }>;
+  ticketPrices?: Array<{ type?: string; agePolicy?: string; name?: string; price?: number; tax?: number }>;
 }
 
 interface AmcShowtimesResponse {
@@ -348,15 +348,17 @@ function toTicketKind(entry: { type?: string; agePolicy?: string; name?: string 
 }
 
 // An exact "Adult" entry wins over a variant of it; the first entry of each kind otherwise.
-function toTicketPrices(showtime: AmcShowtime): TicketPrices {
+function toTicketAmounts(showtime: AmcShowtime): { prices: TicketPrices; taxes: TicketPrices } {
   const entries = (showtime.ticketPrices ?? []).filter((entry) => typeof entry.price === 'number' && entry.price >= 0);
-  const priceOf = (kind: TicketPriceKind) => {
+  const entryOf = (kind: TicketPriceKind) => {
     const ofKind = entries.filter((entry) => toTicketKind(entry) === kind);
-    const exact = ofKind.find((entry) => entry.type?.trim().toLowerCase() === kind.toLowerCase());
-    const entry = exact ?? ofKind[0];
-    return entry ? Math.round((entry.price as number) * 100) : null;
+    return ofKind.find((entry) => entry.type?.trim().toLowerCase() === kind.toLowerCase()) ?? ofKind[0];
   };
-  return { ADULT: priceOf('ADULT'), SENIOR: priceOf('SENIOR'), CHILD: priceOf('CHILD') };
+  const toCents = (value: number | undefined) => (typeof value === 'number' && value >= 0 ? Math.round(value * 100) : null);
+  const kinds: TicketPriceKind[] = ['ADULT', 'SENIOR', 'CHILD'];
+  const prices = Object.fromEntries(kinds.map((kind) => [kind, toCents(entryOf(kind)?.price)])) as TicketPrices;
+  const taxes = Object.fromEntries(kinds.map((kind) => [kind, toCents(entryOf(kind)?.tax)])) as TicketPrices;
+  return { prices, taxes };
 }
 
 function toHttpsUrl(value: string | undefined) {
@@ -389,6 +391,7 @@ function fixtureDay(date: string): DayShowtime[] {
     standardPriceCents: null,
     prices: { ADULT: priceCents as number, SENIOR: (priceCents as number) - 300, CHILD: (priceCents as number) - 400 },
     standardPrices: NO_PRICES,
+    taxes: { ADULT: Math.round((priceCents as number) * 0.08), SENIOR: Math.round((priceCents as number) * 0.08), CHILD: Math.round((priceCents as number) * 0.08) },
     purchaseUrl: `https://www.amctheatres.com/order/fixture/${date}/${index + 1}`,
     isSoldOut: index === 9,
     // Matches every title, so any movie the emulator is asked about has showings.
@@ -419,7 +422,7 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
     .flatMap((showtime) => {
       const startsAt = Date.parse(showtime.showDateTimeUtc ?? '');
       const purchaseUrl = toHttpsUrl(showtime.purchaseUrl) ?? toHttpsUrl(showtime.mobilePurchaseUrl);
-      const prices = toTicketPrices(showtime);
+      const { prices, taxes } = toTicketAmounts(showtime);
       return Number.isFinite(startsAt) && purchaseUrl && showtime.id !== undefined && showtime.movieName
         ? [
             {
@@ -430,6 +433,7 @@ export async function fetchShowtimeDay(apiKey: string, theatreId: string, date: 
               standardPriceCents: null,
               prices,
               standardPrices: NO_PRICES,
+              taxes,
               purchaseUrl,
               isSoldOut: Boolean(showtime.isSoldOut),
               movieTitle: showtime.movieName,
@@ -464,6 +468,7 @@ export function pickMovieShowtimes(day: DayShowtime[], title: string): ShowtimeO
       standardPriceCents: standardPrices.ADULT,
       prices: showtime.prices,
       standardPrices,
+      taxes: showtime.taxes,
       purchaseUrl: showtime.purchaseUrl,
       isSoldOut: showtime.isSoldOut,
     };

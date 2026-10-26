@@ -741,3 +741,4 @@ flowchart LR
 
 - **Ticket price:** showtimes show Adult prices unless the member picks Senior or Child under Membership settings → Ticket prices.
 - **Archive:** a watchlist movie can be archived with a reason (suggestions such as "No longer in theaters", or their own words) from its drawer; archived movies live under the Archived pill and can be put back.
+- **Tax from AMC:** when AMC lists the tax on a showing, the ticket form starts with that exact figure; otherwise the tax is filled from the member's usual rate as before.

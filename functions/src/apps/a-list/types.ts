@@ -62,6 +62,8 @@ export interface ShowtimeOption {
   prices: TicketPrices;
   /** The nearest Standard showing's price of every kind, for a premium showing; all null otherwise. */
   standardPrices: TicketPrices;
+  /** The sales tax AMC lists on one ticket of each kind; null when AMC lists none. */
+  taxes: TicketPrices;
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;

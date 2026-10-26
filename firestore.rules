@@ -214,7 +214,9 @@ service cloud.firestore {
 
       function isPurchaseValid(purchase) {
         let keys = ['showtimeId', 'format', 'priceCents', 'standardPriceCents', 'purchaseUrl', 'startedAt'];
-        return purchase is map && purchase.keys().hasOnly(keys) && purchase.keys().hasAll(keys)
+        // `taxCents` arrived later: older plans lack it, so it is allowed but not required.
+        return purchase is map && purchase.keys().hasOnly(keys.concat(['taxCents'])) && purchase.keys().hasAll(keys)
+          && (purchase.get('taxCents', null) == null || isCents(purchase.taxCents))
           && purchase.showtimeId is string && purchase.showtimeId.size() > 0 && purchase.showtimeId.size() <= 40
           && isFormat(purchase.format)
           && (purchase.priceCents == null || isCents(purchase.priceCents))

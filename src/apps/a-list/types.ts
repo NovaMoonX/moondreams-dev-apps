@@ -243,6 +243,10 @@ export interface ShowtimeOption {
   prices: TicketPrices;
   /** The nearest Standard showing's price of every kind, for a premium showing. */
   standardPrices: TicketPrices;
+  /** The sales tax AMC lists on one ticket of each kind. */
+  taxes: TicketPrices;
+  /** The tax on one ticket of the member's chosen kind; null when AMC lists none. */
+  taxCents: number | null;
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;
@@ -254,6 +258,8 @@ export interface PurchasePlan {
   format: AmcFormat;
   priceCents: number | null;
   standardPriceCents: number | null;
+  /** AMC's sales tax on one ticket at that price; null when AMC listed none. Plans saved before it existed lack the key. */
+  taxCents: number | null;
   purchaseUrl: string;
   /** Instant: when the member last left for AMC to buy; null until they do. */
   startedAt: number | null;
