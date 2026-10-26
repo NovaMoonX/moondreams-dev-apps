@@ -4,10 +4,8 @@ import { useAppSelector } from '@/store';
 import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
-import {
-  describeHoldsThrough,
-  describeProblem,
-} from '@apps/runway/utils/lookaheadText';
+import ProblemRow from '@apps/runway/components/ProblemRow';
+import { describeHoldsThrough } from '@apps/runway/utils/lookaheadText';
 
 interface CoverageHeadlineProps {
   freeCents: number;
@@ -18,13 +16,13 @@ interface CoverageHeadlineProps {
 function CoverageHeadline({ freeCents, moneyCents }: CoverageHeadlineProps) {
   const detail =
     freeCents > 0
-      ? `Left from ${formatCents(moneyCents)} after the envelopes`
+      ? `Of ${formatCents(moneyCents)} after the envelopes`
       : DRAFT_WORDS.nothingLeft;
 
   return (
     <div className='border-border bg-accent rounded-2xl border p-4'>
       <p className='text-muted-foreground text-sm font-medium'>
-        {DRAFT_WORDS.freeToSpend}
+        {DRAFT_WORDS.dayLeft}
       </p>
       <p className='text-3xl font-semibold tracking-tight tabular-nums'>
         {formatCents(freeCents)}
@@ -60,9 +58,9 @@ export function HoldsThroughLine({
     <div className='space-y-0.5'>
       {headline && <p className='text-sm font-medium'>{headline}</p>}
       {isFirstProblemShown && first && (
-        <p className='text-muted-foreground text-sm'>
-          {describeProblem(first)}
-        </p>
+        <div className='border-border bg-card rounded-2xl border'>
+          <ProblemRow problem={first} />
+        </div>
       )}
       {rangeSides.income && (
         <RangeBasisNote stance={stance} side='income' className='text-xs' />

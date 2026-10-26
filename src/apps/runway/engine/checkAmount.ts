@@ -9,7 +9,8 @@ export interface CheckEnvelope {
 }
 
 export interface CheckSource {
-  envelopeId: string;
+  /** Null is Free to spend. */
+  envelopeId: string | null;
   takeCents: Cents;
   leftAfterCents: Cents;
 }
@@ -19,17 +20,18 @@ export type AmountCheck =
   | {
       kind: 'over';
       overCents: Cents;
-      /** Other envelopes with room, lowest priority first, with what each would give. */
+      /** Free to spend when it holds money, then other envelopes with room, lowest priority first, with what each would give. */
       sources: CheckSource[];
-      /** What no envelope could cover; it comes out of Free to spend. */
+      /** What neither Free to spend nor another envelope could cover. */
       uncoveredCents: Cents;
     };
 
-/** Whether `cents` fits in an envelope; if not, by how much, and which other envelopes could cover it (lowest priority first, the list order within a priority). Nothing moves. */
+/** Whether `cents` fits in an envelope; if not, by how much, and what could cover it: Free to spend when it holds money, then other envelopes (lowest priority first, the list order within a priority). Nothing moves. */
 export function checkAmount(
   envelopeId: string,
   cents: Cents,
   envelopes: readonly CheckEnvelope[],
+  freeCents: Cents = 0,
 ): AmountCheck {
   const target = envelopes.find((envelope) => envelope.id === envelopeId);
   const leftAfterCents = (target?.leftCents ?? 0) - cents;
@@ -44,6 +46,17 @@ export function checkAmount(
         PRIORITIES.indexOf(b.envelope.priority) -
           PRIORITIES.indexOf(a.envelope.priority) || a.index - b.index,
     );
+  const fromFree = Math.min(Math.max(0, freeCents), overCents);
+  const first: CheckSource[] =
+    fromFree > 0
+      ? [
+          {
+            envelopeId: null,
+            takeCents: fromFree,
+            leftAfterCents: freeCents - fromFree,
+          },
+        ]
+      : [];
   const filled = candidates.reduce<{ sources: CheckSource[]; needed: Cents }>(
     (acc, { envelope }) => {
       if (acc.needed === 0) return acc;
@@ -60,7 +73,7 @@ export function checkAmount(
         needed: acc.needed - takeCents,
       };
     },
-    { sources: [], needed: overCents },
+    { sources: first, needed: overCents - fromFree },
   );
   return {
     kind: 'over',

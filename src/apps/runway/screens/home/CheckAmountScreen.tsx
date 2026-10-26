@@ -58,7 +58,12 @@ function CheckAmountScreen({
   const answer =
     envelopeId !== null && cents !== null
       ? describeAmountCheck(
-          checkAmount(envelopeId, cents, entries),
+          checkAmount(
+            envelopeId,
+            cents,
+            entries,
+            balances.hasMoney ? balances.freeToSpendCents : 0,
+          ),
           nameOf(envelopeId),
           nameOf,
         )

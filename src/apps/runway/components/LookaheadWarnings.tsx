@@ -6,6 +6,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { LOOKAHEAD_WARNINGS_PREVIEW } from '@apps/runway/constants';
 import type { Lookahead, StanceCushion } from '@apps/runway/engine/lookahead';
+import ProblemRow from '@apps/runway/components/ProblemRow';
 import { describeProblem } from '@apps/runway/utils/lookaheadText';
 
 interface LookaheadWarningsProps {
@@ -23,6 +24,7 @@ function LookaheadWarnings({ lookahead, cushion }: LookaheadWarningsProps) {
   const rows = [
     ...problems.map((problem) => ({
       key: `${problem.kind}:${problem.on}:${'billId' in problem ? problem.billId : problem.itemId}`,
+      problem,
       text: describeProblem(problem),
     })),
     ...(incomeEndsOn === null
@@ -30,6 +32,7 @@ function LookaheadWarnings({ lookahead, cushion }: LookaheadWarningsProps) {
       : [
           {
             key: 'incomeEnds',
+            problem: null,
             text: `Your last income day is ${formatDateUTC(incomeEndsOn)}. Nothing is planned after it.`,
           },
         ]),
@@ -51,12 +54,18 @@ function LookaheadWarnings({ lookahead, cushion }: LookaheadWarningsProps) {
       {rows.length > 0 && (
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
           {shown.map((row) => (
-            <li key={row.key} className='flex items-start gap-3 p-3 text-sm'>
-              <TriangleAlert
-                className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
-                aria-hidden='true'
-              />
-              <span className='min-w-0 break-words'>{row.text}</span>
+            <li key={row.key}>
+              {row.problem ? (
+                <ProblemRow problem={row.problem} />
+              ) : (
+                <p className='flex items-start gap-3 p-3 text-sm'>
+                  <TriangleAlert
+                    className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                  <span className='min-w-0 break-words'>{row.text}</span>
+                </p>
+              )}
             </li>
           ))}
         </ul>
