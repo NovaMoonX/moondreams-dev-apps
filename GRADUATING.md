@@ -76,7 +76,7 @@ Each phase ends in something that can ship and be rolled back.
 
 - Name, domain and brand (logo, icons, banner, colors); whether the Moondreams name stays.
 - Option A or B, above.
-- What "full rules" means for this app: the strictness it had before the beta tier (`git show c784e89:firestore.rules`, the app's blocks), or new.
+- Who writes the app's full rules. Strict rules are required at graduation (Phase 2 lists what they must check); only checks beyond that list are a choice.
 - Who is told, and how existing links (invite codes, share links, calendar shares) keep working.
 
 ### Phase 1: make it stand alone inside this repo
@@ -88,7 +88,13 @@ Each phase ends in something that can ship and be rolled back.
 
 ### Phase 2: tighten and verify the data
 
-- Restore the app's full rules in a branch. Write a script that reads every document of the app and runs it through the strict shape (the client types are the contract); the output is the list of documents the strict rules would refuse.
+- Write the app's full rules in a branch. A graduated app owns its data alone, so its rules check everything the beta tier skips on purpose:
+  - every field's type, and the length, range or allowed values the form enforces (titles, notes, amounts, enums, dates);
+  - the `hasOnly` key list on every write and the `hasAll` list on create, with keys added after launch read with `.get(field, default)` so older documents still pass;
+  - caps on every list and map a person can grow, measured against the 1,000-expression budget (a per-element check is about 15 to 30 expressions; state a cap kept only in the client);
+  - timestamps bounded by `request.time` (plus a small skew) and immutable fields (`id`, `createdAt`, owner and parent ids) kept on update.
+  The beta-tier rules that protect people from each other stay as they are. The strict file in git history (`git show c784e89:firestore.rules`, the app's blocks) is a starting point, not the answer: the data model has moved since, so each check is written against the app's current types.
+- Write a script that reads every document of the app and runs it through the strict shape (the client types are the contract); the output is the list of documents the strict rules would refuse.
 - Fix or backfill those documents with the app's own actions, not by hand in the console.
 - Run the same writes against beta-tier and full rules in the emulator and diff the results (the method in README Troubleshooting, "The merge deploy fails with `Release … already exists`"), so the tightening is reviewed, not assumed.
 - Check indexes (`npm run check:indexes`) and that every callable checks `request.auth` or says why not.
