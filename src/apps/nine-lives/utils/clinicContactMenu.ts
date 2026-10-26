@@ -1,6 +1,7 @@
 import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
 
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { toWebLink } from '@/utils/urlUtils';
 
 import type { VetClinic } from '../types';
 
@@ -24,7 +25,7 @@ export function getClinicContactMenuItems(clinic: VetClinic) {
     ...(clinic.address
       ? [option({ label: 'Copy address', value: 'copy-address', description: 'Copy the clinic address.' })]
       : []),
-    ...(clinic.website
+    ...(clinic.website && toWebLink(clinic.website)
       ? [option({ label: 'Visit website', value: 'visit-website', description: clinic.website })]
       : []),
   ];
@@ -70,8 +71,9 @@ export async function handleClinicContactAction(
     return true;
   }
 
-  if (value === 'visit-website' && clinic.website) {
-    window.open(clinic.website, '_blank', 'noopener,noreferrer');
+  const websiteLink = clinic.website ? toWebLink(clinic.website) : null;
+  if (value === 'visit-website' && websiteLink) {
+    window.open(websiteLink, '_blank', 'noopener,noreferrer');
     return true;
   }
 
