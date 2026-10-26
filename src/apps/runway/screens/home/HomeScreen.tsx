@@ -117,11 +117,11 @@ function HomeScreen() {
       <div className='space-y-2'>
         <Button
           variant='tertiary'
-          className='border-border bg-accent text-foreground! h-auto w-full items-center sm:max-w-md justify-between gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
+          className='border-border bg-accent text-foreground! h-auto w-full items-center sm:max-w-md justify-start gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
           aria-label={`${free.label}, ${free.value}. See it in detail`}
           onClick={() => openView('freeToSpend')}
         >
-          <span className='min-w-0'>
+          <span className='min-w-0 flex-1'>
             <span className='text-muted-foreground block text-sm font-medium'>
               {free.label}
             </span>

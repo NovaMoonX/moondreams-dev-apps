@@ -15,8 +15,8 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 const SEARCH_THRESHOLD = 12;
 /** Two rows of pills: keep in step with `max-h-22` below. */
 const COLLAPSED_ROWS_REM = 5.5;
-/** Two rows of thin pills (24px each with a 16px gap): keep in step with `max-h-16` below, or a sliver of the third row shows. */
-const COLLAPSED_THIN_ROWS_REM = 4;
+/** The gap between rows of thin pills (`gap-y-4`); two rows of them end at twice a pill's height plus this, whatever height a theme gives the pill. */
+const THIN_ROW_GAP_PX = 16;
 /** Up to this many pills may sit below the two rows without a "Show all": a toggle that hides one to three options costs more than it saves. */
 const MAX_QUIET_HIDDEN = 3;
 
@@ -40,6 +40,8 @@ interface Fit {
   /** How many options sit inside the two rows when the list is in its own order. */
   visible: number;
   overflows: boolean;
+  /** Where the second row ends, in pixels, for a thin row; 0 otherwise. */
+  limit: number;
 }
 
 interface Trim {
@@ -184,11 +186,13 @@ export function PillOptions<T extends string>({
     if (!content) {
       return;
     }
-    const limit =
-      (isThin ? COLLAPSED_THIN_ROWS_REM : COLLAPSED_ROWS_REM) *
-      parseFloat(getComputedStyle(document.documentElement).fontSize);
     const top = content.getBoundingClientRect().top;
     const pills = [...(content.firstElementChild?.children ?? [])];
+    const pillHeight = pills[0]?.getBoundingClientRect().height ?? 0;
+    const limit = isThin
+      ? 2 * pillHeight + THIN_ROW_GAP_PX
+      : COLLAPSED_ROWS_REM *
+        parseFloat(getComputedStyle(document.documentElement).fontSize);
     const isClipped = (pill: Element) =>
       pill.getBoundingClientRect().bottom - top > limit + 1;
     const width = Math.round(content.offsetWidth);
@@ -215,13 +219,15 @@ export function PillOptions<T extends string>({
       width,
       visible: pills.length - leadingCount - hiddenCount,
       overflows: hiddenCount > MAX_QUIET_HIDDEN,
+      limit: isThin ? Math.round(limit) : 0,
     };
     setFit((current) =>
       current &&
       current.key === next.key &&
       current.width === next.width &&
       current.visible === next.visible &&
-      current.overflows === next.overflows
+      current.overflows === next.overflows &&
+      current.limit === next.limit
         ? current
         : next,
     );
@@ -258,9 +264,10 @@ export function PillOptions<T extends string>({
       )}
       <div
         className={join(
-          isClamped && (isThin ? 'max-h-16' : 'max-h-22'),
+          isClamped && !isThin && 'max-h-22',
           isClamped && 'overflow-hidden',
         )}
+        style={isClamped && isThin ? { maxHeight: fit.limit } : undefined}
         onFocusCapture={(event) =>
           isClamped &&
           event.target.matches(':focus-visible') &&
