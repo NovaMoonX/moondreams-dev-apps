@@ -142,7 +142,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
 | `npm run emulators:seed`                         | Start emulators, seed all fixtures, and exit.                                                    |
 | `npm run emulators:seed:reset`                   | Start emulators, clear all fixtures, reseed, and exit.                                           |
-| `npm run check:runway-rules`                     | Run about 2,250 allowed and refused Runway writes and reads against `firestore.rules` in a throwaway emulator. |
+| `npm run check:runway-rules`                     | Read and write every Runway collection as the owner, a second user and a signed-out visitor against `firestore.rules` in a throwaway emulator (beta tier: who may do what, not shape). |
 
 Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, `pinch-scale`, `runway`, `runway-scale`, or `all` to select a scope (`pinch-scale` and `runway-scale` are opt-in; `all` and `seed:reset` leave them out).
 Normal runs are idempotent upserts and retain records created manually during local

@@ -7,7 +7,7 @@ Every issue's Success Criteria end with the same two checks, written once here a
 Conventions that apply to every issue:
 
 - **A sealed payload gains a field in the issue that uses it.** Nothing is added early. Readers default a missing field, and `v` rises only for a breaking change.
-- **Rules.** Any issue that adds or changes a field, permission, path or collection updates `firestore.rules` (and `storage.rules`) in the same PR, verified on the emulator as the owner and a second user, with a legacy-shaped document, and says whether `firestore.indexes.json` changed.
+- **Rules.** Any issue that adds or changes a field, permission, path or collection updates `firestore.rules` (and `storage.rules`) in the same PR, verified on the emulator as the owner and a second user, with a legacy-shaped document, and says whether `firestore.indexes.json` changed. Runway is a beta app, so the rules check access, not shape (TECHNICAL.md "Security Rules Design Criteria"): a new collection under the plan needs a rule change only when the app updates or deletes in it, or when it must stay read-only to the client. The MVP issues below were built with strict per-field rules; the beta tier keeps their access and leaves their shape clauses to the app.
 - **Seeds and engine checks.** Each issue extends `scripts/seeds/runway.ts` with documents sealed the way the app seals them, and `npm run check:runway-engine` with the cases it adds.
 - **Secrets before merge.** CI deploys every function on merge, so a secret an issue binds must exist in production before the PR merges. The Link issues therefore come after the provider spike, and each function the TDD lists is documented in `functions/README.md`, which mirrors `index.ts`, in the same PR.
 - **One PWA.** Runway has no manifest of its own.
@@ -112,7 +112,7 @@ Open Runway to three tabs, Home, Days and Plan, in a restrained, matter-of-fact 
 - `src/apps/runway/types.ts`, `constants.ts` (`Sealed`, `SEALED_SCHEMA_VERSION`, `STANCES`, `PlanDoc`)
 - `src/apps/runway/store/runwaySlice.ts`, `listeners/planListener.ts`, `actions/planActions.ts` (`ensurePlan`), `useRunwaySync.ts`
 - `src/apps/runway/RunwayPage.tsx` (the sync hook, the loading, ready and failed states)
-- `firestore.rules` (the plan document, `isOwner(uid)`, `isSealed`, and deny-all for `server/**` and `keyChecks/**`)
+- `firestore.rules` (the plan document, owner only, with no match for `server/**` and `keyChecks/**`)
 - `scripts/seeds/runway.ts`, `scripts/seeds/types.ts`, `scripts/seed.ts`, `package.json` (`seed:runway`), `SEEDING.md`, `src/lib/dev/fixtureAccounts.ts`
 
 **Context:** Read the TDD's Decisions 1 to 3, 12, 20, Invariants 1 and 12, "The key", "Master secret management" (shape and fails-closed items), "Encryption in the app", "Key" under Client State Management and Security Rules Design Criteria 1, 2, 4, 5 and 12; Worth the Wait's `security.ts` and `queries/spaceEncryptionQueries.ts`; `src/lib/security/encryption.ts`.
@@ -124,7 +124,7 @@ A person who opens Runway for the first time gets a private plan and a data key 
 1. Functions: `planKey.ts` reads `RUNWAY_MASTER_KEYS`, rejects a malformed keyring, a `current` that is not in `keys` or any key that is not 32 bytes (a cold-start check), and wraps or unwraps a 256-bit data key under a named master key id. `getRunwayKey` requires `request.auth`, creates the wrapped key document only when it does not exist, never when unwrapping fails (it reports an error and logs `runway.keys.unwrapFailed` with the id and no bytes), and re-wraps lazily when the stored `masterKeyId` is not current.
 2. App: `security.ts` wraps `@lib/security` so nothing else calls `encryptValue` or `decryptValue`. `runwayKeyQueries.ts` is `staleTime: Infinity` with no `persist` meta. The key lives in the query cache and in `security.ts` only, never in Redux.
 3. `ensurePlan(uid)` creates `apps/runway/plans/{uid}` in a transaction when absent, with the fields this issue uses (`uid`, `createdAt`, `updatedAt`, `stance: 'conservative'`, `keyId`). `useRunwaySync(uid)` starts the plan listener once `keyStatus` is `ready`, and `RunwayPage` renders loading, ready and failed states.
-4. Rules: `isOwner(uid)` is the single predicate; `isSealed(v)` checks the shape of a sealed value; `apps/runway/server/**` and `apps/runway/keyChecks/**` are `allow read, write: if false`. The plan document's `uid` and `createdAt` are immutable and `stance` is one of three strings.
+4. Rules: `isUser(uid)` is the single predicate, and `apps/runway/server/**` and `apps/runway/keyChecks/**` have no match, so a client can't reach them. The beta tier leaves the plan document's shape to the app.
 5. Seed: the seed derives the plan key the way the functions do, from the emulator keyring in `functions/.secret.local`, and writes a wrapped key document plus a sealed plan, so a seeded account opens like a real one. Document the keyring file in `SEEDING.md`. Add `'runway'` to a fixture's `apps` list.
 6. Propose to the owner, as a block in the PR, the TDD's "Proposed changes to the repo's instructions" item 2: a document may carry one `sealed` payload beside readable fields, with the key held by a callable and never persisted.
 
