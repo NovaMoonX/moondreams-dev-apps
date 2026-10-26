@@ -999,6 +999,8 @@ export const selectIsHouseholdEmergencyReady = (state: RootState, householdId: s
 
 ## Security Rules Design Criteria
 
+> **Beta-tier rules.** Every app here is a beta app, so `firestore.rules` enforces access (sign-in, ownership, membership, roles, phases, invite flows, immutable ownership fields) and no longer validates field types, lengths, enums, key lists, list caps or timestamp bounds. Where this document says a rule checks one of those, the client's types and caps are what hold it now; the strict rules are in git history at `c784e89` and come back when the app graduates (`GRADUATING.md`).
+
 Rules need to be secure and comprehensive without becoming so field-specific that they break every time a feature evolves slightly. These criteria apply to every collection in this document, and every issue in the roadmap that touches `firestore.rules` should be checked against them:
 
 1. **Default to relationship-based checks, not field-diffing.** For most collections, "is this UID a member of the owning household" (or "is this UID the author") is sufficient. Reach for exhaustive `request.resource.data.diff(resource.data).affectedKeys().hasOnly([...])` validation only when a collection has a genuine security-critical invariant to protect — not as the default posture for every write path.
