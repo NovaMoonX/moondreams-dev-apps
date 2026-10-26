@@ -3931,432 +3931,73 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Runway: one private tree per person under apps/runway/plans/{uid}.
-    // Server-only paths (the wrapped data key, key canaries) are written by
-    // Functions through the Admin SDK, which bypasses these rules.
-    match /apps/runway/server/{path=**} {
-      allow read, write: if false;
-    }
-
-    match /apps/runway/keyChecks/{path=**} {
-      allow read, write: if false;
-    }
-
-    match /apps/runway/plans/{uid} {
-      function isPlanOwner() {
-        return request.auth != null && request.auth.uid == uid;
+    // Runway: one private tree per person under apps/runway/plans/{uid}. The server-only paths
+    // (apps/runway/server, apps/runway/keyChecks) have no match, so clients can neither read nor write
+    // them; Functions use the Admin SDK. A collection with no create or update arm below is read-only.
+    //
+    // Written to be short: firestore.rules is close to the compiled-size limit (npm run check:rules-size), and
+    // comments cost nothing while code does. So helpers have one-letter names, every `a is b` type check that
+    // a later `+`, `<=` or `%` would already fail on is left out (an error denies), a key count replaces a key list
+    // wherever every key is also read, and one `/{c}/{i}` match dispatches on the collection name. Each arm
+    // below is the original per-collection clause. npm run check:runway-rules runs about 2,250 writes and reads against it.
+    match /apps/runway/plans/{u}{
+      // o: the owner. d: the incoming document. t: now in milliseconds. n: a time that is not in the future (an hour of skew).
+      // dt: a date-only value (UTC midnight). da: a date-only value at most ten years ahead.
+      // ym: a `yyyy-mm` month. ds: `yyyymmdd` of a date-only value. f: a document path under this plan, given from its first slash.
+      // sl: the shape of a sealed value, never its contents (five keys, plus an optional `ciphertext`). ls: a list of at most k.
+      // ns: null or a string. la: the last element. rc: the path of a day's record.
+      // cm: the owner writes a document of at most k keys (all of them also read by the arm that calls it) with its own id, a createdAt and a sealed value.
+      function o(){return request.auth.uid==u;}
+      function d(){return request.resource.data;}
+      function t(){return request.time.toMillis();}
+      function n(v){return v<=t()+3600000;}
+      function dt(v){return v%86400000==0;}
+      function da(v){return dt(v)&&v<=t()+315360000000;}
+      function ym(s){return s.matches('[0-9]{4}-(0[1-9]|1[0-2])');}
+      function ds(v){let s=timestamp.value(v);return string(s.year()*10000+s.month()*100+s.day());}
+      function f(p){return path('/databases/'+database+'/documents/apps/runway/plans/'+u+p);}
+      function sl(v){return(v.size()==5||v.size()==6&&'ciphertext' in v)&&v.value+v.nonce+v.keyId is string&&v.keyVersion is number&&v.algorithm=='AES-256-GCM';}
+      function ls(l,k){return l is list&&l.size()<=k;}
+      function ns(v){return v==null||v is string;}
+      function la(l){return l[l.size()-1];}
+      function rc(y,z){return f('/days/'+y+'/records/'+z);}
+      function cm(x,k,i){return o()&&x.size()<=k&&x.id==i&&n(x.createdAt)&&sl(x.sealed);}
+      // pe: a tracking period, `from` a day and `to` null or a day on or after it. pp: at most 50 periods; only the last is shape-checked, since a per-element check would not fit the expression budget.
+      function pe(p){return p.size()==2&&dt(p.from)&&(p.to==null||dt(p.to)&&p.to>=p.from);}
+      function pp(l){return ls(l,50)&&(l.size()==0||pe(la(l)));}
+      // A plan written before `sealed`, `startDate`, `trackingPeriods` or `dirtyFrom` existed may lack the key. A create carries the first three empty; an update keeps `uid` and `createdAt`.
+      function pv(x){let p=x.get('trackingPeriods',[]);return o()&&x.keys().hasOnly(['uid','createdAt','updatedAt','stance','startDate','trackingPeriods','dirtyFrom','keyId','sealed'])&&x.uid==u&&n(x.createdAt)&&n(x.updatedAt)&&x.stance in['conservative','middle','optimistic']&&(x.get('startDate',null)==null||dt(x.startDate))&&pp(p)&&(x.get('dirtyFrom',null)==null||ym(x.dirtyFrom))&&ns(x.keyId)&&(x.get('sealed',null)==null||sl(x.sealed))&&(resource==null?'sealed' in x&&x.startDate==null&&x.dirtyFrom==null&&p==[]:x.uid==resource.data.uid&&x.createdAt==resource.data.createdAt);}
+      allow read:if o();
+      allow create,update:if pv(d());
+      // Everything below a plan is one document per id: items, versions, changes, days, purchases, closings, moves.
+      // Items are created and read; ending and archiving are one-way writes to their own field (`endedAt` only in a write
+      // that creates the `ended_<itemId>` entry). A version is a whole payload and a change is a log entry; neither is edited.
+      // A day moves from draft to confirmed once with its two records, and a confirmed day changes only its ticks (uv).
+      // A purchase's day must fall inside the span the plan has tracked (tk: first period's start to the last period's
+      // end), an edit changes only its day, stamp and payload, and the owner may delete it. A closing is a cache of what
+      // the ledger summed to at the end of a month, so the owner may write and delete it freely.
+      // h: a field of the stored document, null when absent. mu: the mark an undo names, of the same bill and day and not itself an undo.
+      // ed: the day is the first day of the newest period or the day it ended. bo: both of a day's records are written with it.
+      match /{c}/{i}{
+        function h(k){return resource.data.get(k,null);}
+        function mu(x){let m=get(f('/moves/'+x.reversesMoveId)).data;return m.refId==x.refId&&m.date==x.date&&m.reversesMoveId==null;}
+        function tk(z){let p=get(f('')).data.trackingPeriods;return z>=p[0].from&&(la(p).to==null||z<=la(p).to);}
+        function ed(p,z){return la(p).from==z||la(p).to==z;}
+        function bo(){return existsAfter(rc(i,i+'_proposed'))&&existsAfter(rc(i,i+'_confirmed'));}
+        function uv(x,s){let c=x.diff(resource.data).affectedKeys();return s=='draft'&&(c.hasOnly(['sealed'])&&sl(x.sealed)||c.hasOnly(['status','arrivedOn','confirmedAt'])&&x.status=='confirmed'&&dt(x.arrivedOn)&&n(x.confirmedAt)&&bo()||c.hasOnly(['status'])&&x.status=='notArrived')||s=='notArrived'&&c.hasOnly(['status'])&&x.status=='draft'||s=='confirmed'&&c.hasOnly(['doneLineIds'])&&ls(x.doneLineIds,200);}
+        function v(x){return o()&&(c=='items'&&x.keys().toSet()==['id','kind','parentId','createdAt','endedAt','archivedAt'].toSet()&&(resource==null?x.id==i&&x.kind in['source','payLine','bill','envelope','goal','group']&&ns(x.parentId)&&n(x.createdAt)&&x.endedAt==null&&x.archivedAt==null:x.diff(resource.data).affectedKeys().hasOnly(['endedAt','archivedAt'])&&(x.endedAt==h('endedAt')||h('endedAt')==null&&da(x.endedAt)&&getAfter(f('/changes/ended_'+i)).data.kind=='ended')&&(x.archivedAt==h('archivedAt')||h('archivedAt')==null&&n(x.archivedAt)))||c=='days'&&(resource==null?cm(x,10,i)&&i==x.payLineId+'_'+ds(x.expectedOn)&&ns(x.sourceId)&&ls(x.doneLineIds,200)&&(x.status=='confirmed'?dt(x.arrivedOn)&&n(x.confirmedAt)&&bo():x.status in['draft','notArrived']&&x.arrivedOn==null&&x.confirmedAt==null):uv(x,resource.data.status))||c=='purchases'&&cm(x,7,i)&&dt(x.date)&&x.date<=t()+86400000&&x.source in['manual','csv','link']&&x.needsHome is bool&&n(x.updatedAt)&&tk(x.date)&&(resource==null||x.diff(resource.data).affectedKeys().hasOnly(['date','updatedAt','sealed'])&&x.updatedAt>resource.data.updatedAt)||c=='closings'&&cm(x,4,i)&&ym(i)&&x.month==i||resource==null&&(c=='versions'&&cm(x,8,i)&&getAfter(f('/items/'+x.itemId)).data.kind==x.kind&&existsAfter(f('/changes/'+x.changeId))&&da(x.effectiveFrom)&&(x.effectiveUntil==null||da(x.effectiveUntil)&&x.effectiveUntil>x.effectiveFrom)||c=='changes'&&cm(x,6,i)&&x.kind in['planChange','start','levelMove','whatIfApplied','ended','correction','purchaseChange']&&(x.effectiveFrom==null||da(x.effectiveFrom))&&ls(x.itemIds,20)||c=='moves'&&cm(x,7,i)&&dt(x.date)&&(x.kind=='start'?getAfter(f('')).data.startDate==x.date&&x.reversesMoveId==null&&i=='start_'+(x.refId==null?'money':x.refId)+'_'+string(x.createdAt)&&(x.refId==null||x.refId.size()<=200):x.kind=='trackingChange'?x.refId==null&&x.reversesMoveId==null&&i=='tracking_'+ds(x.date)+'_'+string(x.createdAt)&&ed(getAfter(f('')).data.trackingPeriods,x.date):x.kind=='billPaid'&&get(f('/items/'+x.refId)).data.kind=='bill'&&(x.reversesMoveId==null?i.matches('paid_'+x.refId+'_'+ds(x.date)+'(_[0-9]+)?'):i=='unpaid_'+x.reversesMoveId&&mu(x)))));}
+        allow read:if o()&&c in['items','versions','changes','days','purchases','closings','moves'];
+        allow delete:if o()&&c in['purchases','closings'];
+        allow create,update:if v(d());
       }
-
-      // The shape of a sealed value, never its contents.
-      function isSealed(value) {
-        return value is map
-          && value.keys().hasAll(['value', 'nonce', 'keyId', 'keyVersion', 'algorithm'])
-          && value.keys().hasOnly(['value', 'ciphertext', 'nonce', 'keyId', 'keyVersion', 'algorithm'])
-          && value.value is string
-          && value.nonce is string
-          && value.keyId is string
-          && value.keyVersion is number
-          && value.algorithm == 'AES-256-GCM';
-      }
-
-      // At most 50 periods; only the last one is shape-checked, since a per-element check would not fit the expression budget. A period closes once, and a new one opens only after it.
-      function isPeriodValid(period) {
-        return period is map
-          && period.keys().hasOnly(['from', 'to'])
-          && isDateOnly(period['from'])
-          && (period['to'] == null || (isDateOnly(period['to']) && period['to'] >= period['from']));
-      }
-
-      function isTrackingPeriodsValid(periods) {
-        return periods is list
-          && periods.size() <= 50
-          && (periods.size() == 0 || isPeriodValid(periods[periods.size() - 1]));
-      }
-
-      // The first month whose closing is stale, or none; a plan written before closings existed has no key.
-      function isDirtyFromValid(value) {
-        return value == null
-          || (value is string && value.matches('^[0-9]{4}-(0[1-9]|1[0-2])$'));
-      }
-
-      function isPlanValid(data) {
-        return data.uid == uid
-          && data.createdAt is number
-          && data.createdAt <= request.time.toMillis() + 3600000
-          && data.updatedAt is number
-          && data.updatedAt <= request.time.toMillis() + 3600000
-          && data.stance in ['conservative', 'middle', 'optimistic']
-          && (data.get('startDate', null) == null || isDateOnly(data.startDate))
-          && isTrackingPeriodsValid(data.get('trackingPeriods', []))
-          && isDirtyFromValid(data.get('dirtyFrom', null))
-          && (data.keyId == null || data.keyId is string)
-          && (data.get('sealed', null) == null || isSealed(data.sealed));
-      }
-
-      allow read: if isPlanOwner();
-      allow create: if isPlanOwner()
-        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'dirtyFrom', 'keyId', 'sealed'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'dirtyFrom', 'keyId', 'sealed'])
-        && request.resource.data.startDate == null
-        && request.resource.data.dirtyFrom == null
-        && request.resource.data.get('trackingPeriods', []).size() == 0
-        && isPlanValid(request.resource.data);
-      // A plan written before `sealed`, `startDate`, `trackingPeriods` or `dirtyFrom` existed may lack the key; it is added with the next write.
-      allow update: if isPlanOwner()
-        && request.resource.data.keys().hasAll(['uid', 'createdAt', 'updatedAt', 'stance', 'keyId'])
-        && request.resource.data.keys().hasOnly(['uid', 'createdAt', 'updatedAt', 'stance', 'startDate', 'trackingPeriods', 'dirtyFrom', 'keyId', 'sealed'])
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.createdAt == resource.data.createdAt
-        && isPlanValid(request.resource.data);
-      allow delete: if false;
-
-      function planDoc(collectionName, id) {
-        return /databases/$(database)/documents/apps/runway/plans/$(uid)/$(collectionName)/$(id);
-      }
-
-      function isPastOrNear(value) {
-        return value is number && value <= request.time.toMillis() + 3600000;
-      }
-
-      // `yyyymmdd` of a date-only value, the part of a day's or a payment's id that names its date.
-      function dayStamp(date) {
-        return string(timestamp.value(date).year() * 10000
-          + timestamp.value(date).month() * 100
-          + timestamp.value(date).day());
-      }
-
-      function isDateOnly(value) {
-        return value is number && value % 86400000 == 0;
-      }
-
-      // A change may start on any day, a future one included, but not years out.
-      function isDateAhead(value) {
-        return isDateOnly(value) && value <= request.time.toMillis() + 315360000000;
-      }
-
-      // Plan items are created and read; ending and archiving are one-way writes to their own field, and deleting arrives with the issue that uses it.
-      match /items/{itemId} {
-        function isItemValid(data) {
-          return data.id == itemId
-            && data.kind in ['source', 'payLine', 'bill', 'envelope', 'goal', 'group']
-            && (data.parentId == null || data.parentId is string)
-            && isPastOrNear(data.createdAt)
-            && data.endedAt == null
-            && data.archivedAt == null;
-        }
-
-        // `endedAt` goes from null to a date once, with the entry whose id names the item; `archivedAt` from null to a time once.
-        function isEndOnly(before, after) {
-          return before.get('endedAt', null) == null
-            && isDateAhead(after.endedAt)
-            && existsAfter(planDoc('changes', 'ended_' + itemId))
-            && getAfter(planDoc('changes', 'ended_' + itemId)).data.kind == 'ended';
-        }
-
-        function isArchiveOnly(before, after) {
-          return before.get('archivedAt', null) == null
-            && isPastOrNear(after.archivedAt);
-        }
-
-        function isEndingValid(before, after) {
-          return after.endedAt == before.get('endedAt', null)
-            || isEndOnly(before, after);
-        }
-
-        function isArchivingValid(before, after) {
-          return after.archivedAt == before.get('archivedAt', null)
-            || isArchiveOnly(before, after);
-        }
-
-        allow read: if isPlanOwner();
-        allow create: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
-          && request.resource.data.keys().hasOnly(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
-          && isItemValid(request.resource.data);
-        allow update: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
-          && request.resource.data.keys().hasOnly(['id', 'kind', 'parentId', 'createdAt', 'endedAt', 'archivedAt'])
-          && request.resource.data.id == resource.data.id
-          && request.resource.data.kind == resource.data.kind
-          && request.resource.data.parentId == resource.data.parentId
-          && request.resource.data.createdAt == resource.data.createdAt
-          && isEndingValid(resource.data, request.resource.data)
-          && isArchivingValid(resource.data, request.resource.data);
-      }
-
-      // A version is a whole payload and is never edited: a mistake is superseded by a later one.
-      match /versions/{versionId} {
-        function isVersionValid(data) {
-          return data.id == versionId
-            && data.itemId is string
-            && data.kind in ['source', 'payLine', 'bill', 'envelope', 'goal', 'group']
-            && existsAfter(planDoc('items', data.itemId))
-            && getAfter(planDoc('items', data.itemId)).data.kind == data.kind
-            && existsAfter(planDoc('changes', data.changeId))
-            && isPastOrNear(data.createdAt)
-            && isDateAhead(data.effectiveFrom)
-            && (data.effectiveUntil == null
-              || (isDateAhead(data.effectiveUntil) && data.effectiveUntil > data.effectiveFrom))
-            && data.changeId is string
-            && isSealed(data.sealed);
-        }
-
-        allow read: if isPlanOwner();
-        allow create: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'itemId', 'kind', 'createdAt', 'effectiveFrom', 'effectiveUntil', 'changeId', 'sealed'])
-          && request.resource.data.keys().hasOnly(['id', 'itemId', 'kind', 'createdAt', 'effectiveFrom', 'effectiveUntil', 'changeId', 'sealed'])
-          && isVersionValid(request.resource.data);
-        allow update, delete: if false;
-      }
-
-      // The change log is append-only.
-      match /changes/{changeId} {
-        function isChangeValid(data) {
-          return data.id == changeId
-            && data.kind in ['planChange', 'start', 'levelMove', 'whatIfApplied', 'ended', 'correction', 'purchaseChange']
-            && isPastOrNear(data.createdAt)
-            && (data.effectiveFrom == null || isDateAhead(data.effectiveFrom))
-            && data.itemIds is list
-            && data.itemIds.size() <= 20
-            && isSealed(data.sealed);
-        }
-
-        allow read: if isPlanOwner();
-        allow create: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'kind', 'createdAt', 'effectiveFrom', 'itemIds', 'sealed'])
-          && request.resource.data.keys().hasOnly(['id', 'kind', 'createdAt', 'effectiveFrom', 'itemIds', 'sealed'])
-          && isChangeValid(request.resource.data);
-        allow update, delete: if false;
-      }
-
-      // An income day gets a document the first time the person overrides, confirms or marks it. Its id is
-      // the pay line and the day (`<payLineId>_yyyymmdd`), so a duplicate or a spoofed id fails. A draft
-      // can change its override; it moves to confirmed once, together with its two records, or to not
-      // arrived and back. After that only the checklist ticks can change.
-      match /days/{dayId} {
-        function dayRecord(kind) {
-          return /databases/$(database)/documents/apps/runway/plans/$(uid)/days/$(dayId)/records/$(dayId + '_' + kind);
-        }
-
-        function hasBothRecordsAfter() {
-          return existsAfter(dayRecord('proposed')) && existsAfter(dayRecord('confirmed'));
-        }
-
-        function isDayValid(data) {
-          return data.payLineId is string
-            && (data.sourceId == null || data.sourceId is string)
-            && data.expectedOn is number
-            && data.id == dayId
-            && dayId == data.payLineId + '_' + dayStamp(data.expectedOn)
-            && data.status in ['draft', 'confirmed', 'notArrived']
-            && (data.status == 'confirmed'
-              ? isDateOnly(data.arrivedOn) && isPastOrNear(data.confirmedAt) && hasBothRecordsAfter()
-              : data.arrivedOn == null && data.confirmedAt == null)
-            && isPastOrNear(data.createdAt)
-            && data.doneLineIds is list
-            && data.doneLineIds.size() <= 200
-            && isSealed(data.sealed);
-        }
-
-        function onlyChanges(keys) {
-          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
-        }
-
-        allow read: if isPlanOwner();
-        allow create: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'payLineId', 'sourceId', 'expectedOn', 'arrivedOn', 'status', 'createdAt', 'confirmedAt', 'doneLineIds', 'sealed'])
-          && request.resource.data.keys().hasOnly(['id', 'payLineId', 'sourceId', 'expectedOn', 'arrivedOn', 'status', 'createdAt', 'confirmedAt', 'doneLineIds', 'sealed'])
-          && isDayValid(request.resource.data);
-        allow update: if isPlanOwner() && (
-          (resource.data.status == 'draft'
-            && onlyChanges(['sealed'])
-            && isSealed(request.resource.data.sealed))
-          || (resource.data.status == 'draft'
-            && onlyChanges(['status', 'arrivedOn', 'confirmedAt'])
-            && request.resource.data.status == 'confirmed'
-            && isDateOnly(request.resource.data.arrivedOn)
-            && isPastOrNear(request.resource.data.confirmedAt)
-            && hasBothRecordsAfter())
-          || (resource.data.status == 'draft'
-            && onlyChanges(['status'])
-            && request.resource.data.status == 'notArrived')
-          || (resource.data.status == 'notArrived'
-            && onlyChanges(['status'])
-            && request.resource.data.status == 'draft')
-          || (resource.data.status == 'confirmed'
-            && onlyChanges(['doneLineIds'])
-            && request.resource.data.doneLineIds is list
-            && request.resource.data.doneLineIds.size() <= 200));
-        allow delete: if false;
-
-        // The draft as proposed and the split confirmed, written once with the day's move to confirmed. A
-        // correction is a new record that replaces the one it names; its id is that record's id plus
-        // `_corrected`, so a record can be corrected once and a second device holding the older split is refused.
-        match /records/{recordId} {
-          function isFirstRecordValid(data) {
-            return data.kind in ['proposed', 'confirmed']
-              && recordId == dayId + '_' + data.kind
-              && data.get('supersedesId', null) == null
-              && getAfter(planDoc('days', dayId)).data.status == 'confirmed'
-              && (!exists(planDoc('days', dayId)) || get(planDoc('days', dayId)).data.status == 'draft');
-          }
-
-          function recordById(id) {
-            return /databases/$(database)/documents/apps/runway/plans/$(uid)/days/$(dayId)/records/$(id);
-          }
-
-          function isCorrectionValid(data) {
-            return data.kind == 'correction'
-              && data.supersedesId is string
-              && recordId == data.supersedesId + '_corrected'
-              && exists(planDoc('days', dayId))
-              && get(planDoc('days', dayId)).data.status == 'confirmed'
-              && exists(recordById(data.supersedesId))
-              && get(recordById(data.supersedesId)).data.kind in ['confirmed', 'correction'];
-          }
-
-          function isRecordValid(data) {
-            return data.id == recordId
-              && data.dayId == dayId
-              && isPastOrNear(data.createdAt)
-              && isSealed(data.sealed)
-              && (data.kind == 'correction' ? isCorrectionValid(data) : isFirstRecordValid(data));
-          }
-
-          allow read: if isPlanOwner();
-          allow create: if isPlanOwner()
-            && request.resource.data.keys().hasAll(['id', 'dayId', 'kind', 'createdAt', 'sealed'])
-            && request.resource.data.keys().hasOnly(['id', 'dayId', 'kind', 'createdAt', 'sealed', 'supersedesId'])
-            && (request.resource.data.kind != 'correction' || request.resource.data.keys().hasAll(['supersedesId']))
-            && isRecordValid(request.resource.data);
-          allow update, delete: if false;
-        }
-      }
-
-      // A purchase is created by the owner with a readable day, source and flag and one sealed payload.
-      // An edit changes only the day, the stamp and the payload; removing it is the owner's. The day must fall inside the span the
-      // plan has tracked (first period's start to the last period's end), and the device checks each period.
-      match /purchases/{purchaseId} {
-        function isTrackedDay(date) {
-          let periods = get(/databases/$(database)/documents/apps/runway/plans/$(uid)).data.get('trackingPeriods', []);
-          return periods.size() > 0
-            && date >= periods[0]['from']
-            && (periods[periods.size() - 1]['to'] == null || date <= periods[periods.size() - 1]['to']);
-        }
-
-        function isPurchaseValid(data) {
-          return data.id == purchaseId
-            && isDateOnly(data.date)
-            && data.date <= request.time.toMillis() + 86400000
-            && data.source in ['manual', 'csv', 'link']
-            && data.needsHome is bool
-            && isPastOrNear(data.createdAt)
-            && isPastOrNear(data.updatedAt)
-            && isSealed(data.sealed)
-            && isTrackedDay(data.date);
-        }
-
-        allow read: if isPlanOwner();
-        allow create: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'date', 'source', 'needsHome', 'createdAt', 'updatedAt', 'sealed'])
-          && request.resource.data.keys().hasOnly(['id', 'date', 'source', 'needsHome', 'createdAt', 'updatedAt', 'sealed'])
-          && isPurchaseValid(request.resource.data);
-        allow update: if isPlanOwner()
-          && request.resource.data.keys().hasOnly(['id', 'date', 'source', 'needsHome', 'createdAt', 'updatedAt', 'sealed'])
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['date', 'updatedAt', 'sealed'])
-          && request.resource.data.updatedAt > resource.data.updatedAt
-          && isPurchaseValid(request.resource.data);
-        allow delete: if isPlanOwner();
-      }
-
-      // A closing is a cache of what the ledger summed to at the end of a month, rebuilt whenever a write
-      // lands in a closed month, so the owner may write and delete it freely. Its id is its month.
-      match /closings/{month} {
-        function isClosingValid(data) {
-          return month.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
-            && data.id == month
-            && data.month == month
-            && isPastOrNear(data.createdAt)
-            && isSealed(data.sealed);
-        }
-
-        allow read: if isPlanOwner();
-        allow create, update: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'month', 'createdAt', 'sealed'])
-          && request.resource.data.keys().hasOnly(['id', 'month', 'createdAt', 'sealed'])
-          && isClosingValid(request.resource.data);
-        allow delete: if isPlanOwner();
-      }
-
-      // The ledger is append-only. A bill marked paid is `paid_<bill>_<yyyymmdd of its due date>`, with `_<n>`
-      // when it is marked again after an undo; an undo is `unpaid_<id of the mark>` and names that mark.
-      match /moves/{moveId} {
-        function isPaidMoveValid(data) {
-          return data.kind == 'billPaid'
-            && isDateOnly(data.date)
-            && data.refId is string
-            && exists(planDoc('items', data.refId))
-            && get(planDoc('items', data.refId)).data.kind == 'bill'
-            && isPastOrNear(data.createdAt)
-            && isSealed(data.sealed)
-            && (data.reversesMoveId == null
-              ? moveId.matches('paid_' + data.refId + '_' + dayStamp(data.date) + '(_[0-9]+)?')
-              : data.reversesMoveId is string
-                && moveId == 'unpaid_' + data.reversesMoveId
-                && exists(planDoc('moves', data.reversesMoveId))
-                && get(planDoc('moves', data.reversesMoveId)).data.refId == data.refId
-                && get(planDoc('moves', data.reversesMoveId)).data.date == data.date
-                && get(planDoc('moves', data.reversesMoveId)).data.reversesMoveId == null);
-        }
-
-        // A starting holding is dated the plan's starting day, set in the same batch, and its id names the
-        // holding and when it was written, so a run appends and never replaces. The item is not looked up:
-        // one write may make only 20 lookups, and a plan can start with more holdings than that.
-        function isStartMoveValid(data) {
-          return data.kind == 'start'
-            && isDateOnly(data.date)
-            && existsAfter(/databases/$(database)/documents/apps/runway/plans/$(uid))
-            && getAfter(/databases/$(database)/documents/apps/runway/plans/$(uid)).data.get('startDate', null) == data.date
-            && data.reversesMoveId == null
-            && isPastOrNear(data.createdAt)
-            && isSealed(data.sealed)
-            && moveId == 'start_' + (data.refId == null ? 'money' : data.refId) + '_' + string(data.createdAt)
-            && (data.refId == null
-              || (data.refId is string && data.refId.size() <= 200));
-        }
-
-        function isPeriodEdge(periods, date) {
-          return periods.size() > 0
-            && (periods[periods.size() - 1]['from'] == date || periods[periods.size() - 1]['to'] == date);
-        }
-
-        // Tracking turned on or off: dated the first day of the newest period or the day it ended, in the same
-        // write that changed the plan's periods, with an id that names the day and when it was written.
-        function isTrackingMoveValid(data) {
-          return data.kind == 'trackingChange'
-            && isDateOnly(data.date)
-            && data.refId == null
-            && data.reversesMoveId == null
-            && isPastOrNear(data.createdAt)
-            && isSealed(data.sealed)
-            && moveId == 'tracking_' + dayStamp(data.date) + '_' + string(data.createdAt)
-            && existsAfter(/databases/$(database)/documents/apps/runway/plans/$(uid))
-            && isPeriodEdge(getAfter(/databases/$(database)/documents/apps/runway/plans/$(uid)).data.get('trackingPeriods', []), data.date);
-        }
-
-        function isMoveValid(data) {
-          return data.id == moveId
-            && (data.kind == 'start'
-              ? isStartMoveValid(data)
-              : data.kind == 'trackingChange' ? isTrackingMoveValid(data) : isPaidMoveValid(data));
-        }
-
-        allow read: if isPlanOwner();
-        allow create: if isPlanOwner()
-          && request.resource.data.keys().hasAll(['id', 'kind', 'date', 'refId', 'reversesMoveId', 'createdAt', 'sealed'])
-          && request.resource.data.keys().hasOnly(['id', 'kind', 'date', 'refId', 'reversesMoveId', 'createdAt', 'sealed'])
-          && isMoveValid(request.resource.data);
-        allow update, delete: if false;
+      // A day's records: the draft as proposed and the split confirmed, written once with the day's move to confirmed. A
+      // correction replaces the record it names; its id is that record's id plus `_corrected`, so a record
+      // is corrected once and a second device holding the older split is refused.
+      match /days/{y}/records/{r}{
+        function dy(){return f('/days/'+y);}
+        function v(x){return cm(x,6,r)&&(x.size()==5||'supersedesId' in x)&&x.dayId==y&&(x.kind=='correction'?r==x.supersedesId+'_corrected'&&get(dy()).data.status=='confirmed'&&get(rc(y,x.supersedesId)).data.kind in['confirmed','correction']:x.kind in['proposed','confirmed']&&r==y+'_'+x.kind&&x.get('supersedesId',null)==null&&getAfter(dy()).data.status=='confirmed'&&(!exists(dy())||get(dy()).data.status=='draft'));}
+        allow read:if o();
+        allow create:if v(d());
       }
     }
 
