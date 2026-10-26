@@ -1090,8 +1090,8 @@ Measured in Issue 27 on the scale seed: `npm run seed:runway-scale`, signed in a
 | The lookahead (62 income days, 60 bills, 25 envelopes) | 1,530 ms on the first paint | 480 ms, after the first paint | n/a |
 | Balances summed, bill progress, what goals hold | 28.7, 22.6, 18.7 ms | 3.2, 1.0, 1.0 ms | n/a |
 | Preview of a change (26 days, then its lookahead) | 1,738 ms, 1,452 ms | 504 ms, 495 ms | n/a |
-| Tab switches (Home, Days, Spend, Plan) | 67 to 271 ms | 67 to 237 ms | 1 s |
-| Plan: Bills (60 rows), Envelopes (25), Goals (12) | 805 / 359 / 172 ms | 485 / 354 / 143 ms | 1 s |
+| Tab switches (Home, Days, Spend, Plan) | 67 to 271 ms | 67 to 287 ms | 1 s |
+| Plan: Bills (60 rows), Envelopes (25), Goals (12) | 805 / 359 / 172 ms | 485 to 504 / 354 / 143 to 189 ms | 1 s |
 | Spend: search over the window (2,465 rows) | 168 ms | 143 ms | n/a |
 | Change log: window change, 3 months / a year | 138 / 264 to 315 ms | 127 to 149 / 253 to 306 ms | 300 ms |
 | Add a purchase until the figures show it | 3.9 s | 3.8 s | n/a |

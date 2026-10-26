@@ -234,7 +234,7 @@ gcloud iam policies create runway-protect-keyring --kind=denypolicies \
   --policy-file=/tmp/runway-deny.json
 ```
 
-The JSON follows Google's deny-policy format from its documentation and has not been run here. If `resource.name` is refused as a condition, drop `denialCondition` in the scratch project to test the principle (the policy then covers every secret in that project), and record that the real policy cannot be scoped to one secret. Allow several minutes for a new policy to take effect.
+The JSON follows Google's deny-policy format from its documentation and has not been run here. If `resource.name` is refused as a condition, drop `denialCondition` in the scratch project to test the principle (the policy then covers every secret in that project), and record that the real policy cannot be scoped to one secret. A policy without the condition would also block destroying versions of, and deleting, every other secret in the real project for everyone except the break-glass account (for example the Firebase CLI's clean-up of old versions when another function secret is rotated), so decide that trade before applying it there. Allow several minutes for a new policy to take effect.
 
 - [ ] In the scratch project, create `RUNWAY_MASTER_KEYS` (step 5 below) and a throwaway version. With the policy in place, as the Owner (not the break-glass account): `gcloud secrets versions destroy 1 --secret=RUNWAY_MASTER_KEYS --project=$SCRATCH` and `gcloud secrets delete RUNWAY_MASTER_KEYS --project=$SCRATCH` must both answer `PERMISSION_DENIED` mentioning the deny policy. That settles whether Owner bypasses it.
 - [ ] As the Owner, try to remove the policy: `gcloud iam policies delete runway-protect-keyring --kind=denypolicies --attachment-point=cloudresourcemanager.googleapis.com/projects/$SCRATCH`. Record whether it works without the Deny Admin role. A policy an Owner can remove with no extra step is a speed bump, not a lock; say so in the record.
@@ -279,7 +279,7 @@ JSON
 gcloud alpha monitoring policies create --project=$P --policy-from-file=/tmp/runway-alert-failed.json
 ```
 
-- [ ] Test: write a fake entry (it is not key material): `gcloud logging write runway-alert-test '{"event":"runway.keys.failed","checked":0,"failures":[],"drill":true}' --payload-type=json --severity=ERROR --project=$P`. The email must arrive within a few minutes. Also test the real thing once in the scratch project if you deploy `verifyRunwayKeys` there: disable the latest secret version (`gcloud secrets versions disable <n> --secret=RUNWAY_MASTER_KEYS`), force-run the job from Cloud Scheduler, expect `secret-unreadable`, then re-enable it.
+- [ ] Test: write a fake entry (it is not key material): `gcloud logging write runway-alert-test '{"event":"runway.keys.failed","checked":0,"failures":[],"drill":true}' --payload-type=json --severity=ERROR --project=$P`. The email must arrive within a few minutes. Also test the real thing once in the scratch project if you deploy `verifyRunwayKeys` there: write a canary document for an id the keyring does not hold (a document `apps/runway/keyChecks/zz-drill` with any field, through the console), force-run the job from Cloud Scheduler, expect a `runway.keys.failed` entry with `missing-id` and the email, then delete the document. Do not use a disabled latest version for this: the function binds the secret at instance start, so a disabled latest version can stop the instance starting and no entry is written at all (that case is what alert B catches).
 
 **Alert B: missing heartbeat.** A log-based metric counts `runway.keys.ok`, and a policy fires when the metric is absent. The check runs at 06:17 UTC daily, so the design says 26 hours.
 
@@ -301,7 +301,7 @@ cat > /tmp/runway-alert-heartbeat.json <<JSON
     "conditionAbsent": {
       "filter": "metric.type=\"logging.googleapis.com/user/runway_keys_ok\"",
       "duration": "93600s",
-      "aggregations": [{ "alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_SUM" }]
+      "aggregations": [{ "alignmentPeriod": "3600s", "perSeriesAligner": "ALIGN_SUM", "crossSeriesReducer": "REDUCE_SUM" }]
     }
   }],
   "notificationChannels": ["$CHANNEL"]
@@ -310,7 +310,9 @@ JSON
 gcloud alpha monitoring policies create --project=$P --policy-from-file=/tmp/runway-alert-heartbeat.json
 ```
 
-**Open point to settle while creating it.** Google's documentation of metric-absence conditions, as remembered when this was written and not confirmed, caps the absence duration at 23.5 hours, which is shorter than the 24-hour cadence and would fire every day. If the API refuses `93600s`, or accepts only a shorter duration, do not shorten it to 23.5 hours. Choose one and record which: (a) a threshold condition on the same metric that fires when the sum over a one-day alignment period is below 1 (`conditionThreshold`, `COMPARISON_LT`, `thresholdValue` 1, `duration` `3600s`), accepting up to an hour of extra lag; (b) a PromQL condition with a 26-hour range; or (c) a code change that runs `verifyRunwayKeys` every six hours so that a 23-hour absence means four missed runs (a change to the function, to be made in its own PR). The option chosen is recorded in the table.
+The `crossSeriesReducer` merges the metric's series into one. A log-based metric has one series per monitored resource, and a function's resource includes its revision, so without the reducer every redeploy of `verifyRunwayKeys` leaves the old revision's series absent and the alert fires for a check that is running fine. Whether the series are split that way in this project is unconfirmed; the reducer is harmless if they are not.
+
+**Open point to settle while creating it.** Google's documentation of metric-absence conditions, as remembered when this was written and not confirmed, caps the absence duration at 23.5 hours, which is shorter than the 24-hour cadence and would fire every day. If the API refuses `93600s`, or accepts only a shorter duration, do not shorten it to 23.5 hours. Choose one and record which: (a) a threshold condition on the same metric that fires when the sum over a one-day alignment period is below 1 (`conditionThreshold`, `COMPARISON_LT`, `thresholdValue` 1, `duration` `3600s`, the same `aggregations` with a one-day `alignmentPeriod` if the API accepts it, and `evaluationMissingData` set to `EVALUATION_MISSING_DATA_ACTIVE`; without that, a threshold condition on a metric with no data points at all never fires, which is exactly the failure being watched for, and whether this field is accepted here is unconfirmed), accepting up to an hour of extra lag; (b) a PromQL condition with a 26-hour range; or (c) a code change that runs `verifyRunwayKeys` every six hours so that a 23-hour absence means four missed runs (a change to the function, to be made in its own PR). The option chosen is recorded in the table.
 
 - [ ] Test in the scratch project: pause the job that runs the check (or, with the metric only, stop writing entries) and wait past the window; the email must arrive; resume and confirm the incident closes. In the real project: `gcloud scheduler jobs list --location=us-central1 --project=$PROJECT` shows the job (its name starts `firebase-schedule-verifyRunwayKeys`); `gcloud scheduler jobs pause <name> --location=us-central1 --project=$PROJECT`, wait past the window, check the email, then `gcloud scheduler jobs resume ...` and force-run it once. The pause lasts more than a day, so do it before the first real user.
 
@@ -352,7 +354,7 @@ Finish by deleting the temp files (`rm /tmp/runway-*.json`) and confirming each 
 
 The keyring is saved after it is first created and after every rotation (a key added). Two copies, one holder, none in this repository or in any CI secret. The keyring is the only thing that opens every plan; the ids in it are not secret, the key values are.
 
-- [ ] Encrypt and save (the passphrase is generated by the password manager and stored in its own entry, separate from the encrypted file):
+- [ ] Encrypt and save. Run it from a private temporary directory outside the repo (`cd "$(mktemp -d)"`), so the file cannot be committed by a stray `git add`. The passphrase is generated by the password manager and stored in its own entry, separate from the encrypted file:
 
   ```bash
   gcloud secrets versions access latest --secret=RUNWAY_MASTER_KEYS --project=$PROJECT \
@@ -400,7 +402,7 @@ What this does and does not prove. It proves that an escrow file restores the ke
 
 #### 6. The incident order, when an alert arrives
 
-1. **Master key failure (A):** read the `failures` in the entry. `secret-unreadable` with a disabled version: re-enable it (`gcloud secrets versions enable <n> --secret=RUNWAY_MASTER_KEYS --project=$PROJECT`) within the 90 days. Anything else: stop, do not rotate, restore from escrow as in section 5 and compare.
+1. **Master key failure (A):** read the `failures` in the entry. `secret-unreadable` with a disabled version: re-enable it (`gcloud secrets versions enable <n> --secret=RUNWAY_MASTER_KEYS --project=$PROJECT`) within the 90 days. Anything else: stop and do not rotate. Compare the fingerprint of the latest version (section 4) with the escrow entry's. If it differs or the secret is gone, restore from the escrow file as in section 5: add the file as a new version when the secret still exists (`gpg -d <file> | gcloud secrets versions add RUNWAY_MASTER_KEYS --data-file=- --project=$PROJECT`), or create the secret first when it is gone. The restored version holds the whole keyring, so it is self-sufficient; do not use `publishKeyring.ts` for this, it refuses a keyring it did not build on.
 2. **Heartbeat (B):** check Cloud Scheduler for a paused job, then the function's last deploy; a disabled latest version can also keep the instance from starting.
 3. **Audit (C):** if it was not you, treat the keyring as exposed: re-enable the version, check IAM, and follow "Retiring a master key" in `TECHNICAL.md`.
 

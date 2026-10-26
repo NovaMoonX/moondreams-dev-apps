@@ -90,6 +90,11 @@ async function main() {
       'Refused: the drill runs in a scratch project, never in the real one.',
     );
   }
+  if (project === REAL_PROJECT && has('from-secret')) {
+    throw new Refusal(
+      "Refused: the drill never reads the real project's keyring.",
+    );
+  }
   if (command !== 'seed' && command !== 'open') {
     throw new Refusal('Refused: the command is seed or open.');
   }
