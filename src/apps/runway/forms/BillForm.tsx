@@ -6,6 +6,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -38,9 +39,11 @@ import ChangeReason from '@apps/runway/components/ChangeReason';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
+import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   describeAmountDraft,
   EMPTY_AMOUNT_DRAFT,
+  getAmountDraftProblem,
   getStanceOverride,
   parseAmountDraft,
   toAmountDraft,
@@ -67,7 +70,8 @@ interface BillFormData {
   amount: AmountDraft;
   priority: Priority;
   startDate: string;
-  frequency: Frequency;
+  /** Null until a due date is picked on a new bill. */
+  frequency: Frequency | null;
   endKind: EndKind;
   endDate: string;
   endCount: string;
@@ -177,6 +181,7 @@ const getBlocker = (
   }
   const start = fromDateInputValue(data.startDate);
   if (start === undefined) return 'Pick when it is due.';
+  if (data.frequency === null) return 'Pick how often it repeats.';
   if (!isEditing && start < today) return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
   if (isChosen && pickedCount === 0) return 'Pick at least one income day.';
@@ -233,8 +238,8 @@ function BillForm({
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,
           priority: 'should',
-          startDate: toDateInputValue(today),
-          frequency: 'once',
+          startDate: '',
+          frequency: null,
           endKind: 'never',
           endDate: '',
           endCount: '',
@@ -243,6 +248,7 @@ function BillForm({
           emoji: null,
         },
   );
+  const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<BillFormData>) =>
@@ -250,6 +256,7 @@ function BillForm({
 
   const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
+  const isDueWord = isOnce || formData.frequency === null;
   const dueDate = fromDateInputValue(formData.startDate);
   const dueDays = comingDays.filter(
     (day) => dueDate !== undefined && day.on <= dueDate,
@@ -304,6 +311,7 @@ function BillForm({
       summaryLabel: FORM_FLOW_WORDS.amount,
       summaryValue: describeAmountDraft(formData.amount),
       isAnswered: parseAmountDraft(formData.amount) !== null,
+      blocker: getAmountDraftProblem(formData.amount),
       render: () => (
         <RangeAmountField
           isHero
@@ -323,21 +331,36 @@ function BillForm({
       summaryValue:
         dueDate === undefined
           ? ''
-          : `${formatDateUTC(dueDate)} · ${BILL_FREQUENCY_LABELS[formData.frequency]}`,
-      isAnswered: isDueValid,
+          : formData.frequency === null
+            ? formatDateUTC(dueDate)
+            : `${formatDateUTC(dueDate)} · ${BILL_FREQUENCY_LABELS[formData.frequency]}`,
+      isAnswered: isDueValid && formData.frequency !== null,
+      blocker:
+        dueDate !== undefined && !isDueValid
+          ? FORM_FLOW_WORDS.pastDay
+          : dueDate !== undefined && formData.frequency === null
+            ? FORM_FLOW_WORDS.pickRepeat
+            : null,
       render: () => (
         <div className='space-y-4'>
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs'>
-              {isOnce ? 'Due' : 'Starts'}
+              {isDueWord ? 'Due' : 'Starts'}
             </p>
             <Input
               type='date'
               variant='outline'
-              aria-label={isOnce ? 'Due' : 'Starts'}
+              aria-label={isDueWord ? 'Due' : 'Starts'}
               min={startMin}
               value={formData.startDate}
-              onChange={(event) => set({ startDate: event.target.value })}
+              onChange={(event) =>
+                set({
+                  startDate: event.target.value,
+                  frequency:
+                    formData.frequency ??
+                    (noun === 'bill' ? 'monthly' : 'once'),
+                })
+              }
             />
           </div>
           <div className='space-y-2'>
@@ -352,7 +375,7 @@ function BillForm({
         </div>
       ),
     },
-    ...(isOnce
+    ...(isOnce || formData.frequency === null
       ? []
       : [
           {
@@ -361,6 +384,7 @@ function BillForm({
             summaryLabel: FORM_FLOW_WORDS.ends,
             summaryValue: describeEnding(formData),
             isAnswered: buildEnding(formData) !== null,
+            blocker: FORM_FLOW_WORDS.finishEnding,
             isPreAnswered: true,
             render: () => (
               <div className='space-y-3'>
@@ -407,6 +431,7 @@ function BillForm({
               ? `${BILL_FUNDING_LABELS.chosen} · ${pickedCount}`
               : BILL_FUNDING_LABELS.suggested,
             isAnswered: !isChosen || pickedCount > 0,
+            blocker: FORM_FLOW_WORDS.pickDays,
             isPreAnswered: true,
             render: () => (
               <div className='space-y-3'>
@@ -493,7 +518,13 @@ function BillForm({
     const amount = parseAmountDraft(data.amount);
     const anchor = fromDateInputValue(data.startDate);
     const ending = buildEnding(data);
-    if (amount === null || anchor === undefined || !ending) return null;
+    if (
+      amount === null ||
+      anchor === undefined ||
+      !ending ||
+      data.frequency === null
+    )
+      return null;
 
     const tier = bills.filter(
       (bill) => bill.version.payload.priority === data.priority,
@@ -538,6 +569,19 @@ function BillForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) ||
+    flow.note.trim() !== '' ||
+    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const requestClose = useDiscardGuard({
+    isDirty,
+    onClose,
+    isBusy: isSaving || flow.isSaving,
+    title: editing
+      ? FORM_FLOW_WORDS.discardChange
+      : FORM_FLOW_WORDS.discardNew(noun),
+  });
+  const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -570,45 +614,52 @@ function BillForm({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
+    <FormSheet isOpen={isOpen} onClose={requestClose} title={title}>
       <ChangeSteps
         isReason={flow.step === 'reason'}
-        reason={<ChangeReason flow={flow} onClose={onClose} />}
+        reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow
-              flow={questions}
-              nextLabel={editing ? FORM_FLOW_WORDS.done : FORM_FLOW_WORDS.next}
-            />
-            {editing && questions.isReview && <ChangeSection />}
+            <QuestionFlow flow={questions} />
+            {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
-              note={error ?? (questions.isReview ? shownBlocker : null)}
+              note={error ?? (isAsking ? questions.blocker : shownBlocker)}
               cancelAction={
                 <Button
                   type='button'
                   variant='secondary'
-                  onClick={onClose}
+                  onClick={requestClose}
                   disabled={isSaving}
                 >
                   Cancel
                 </Button>
               }
               rightActions={
-                <Button
-                  type='button'
-                  loading={isSaving}
-                  disabled={isSaving || shownBlocker !== null}
-                  onClick={() => {
-                    if (editing) {
-                      flow.setStep('reason');
-                      return;
-                    }
-                    void handleSubmit();
-                  }}
-                >
-                  {editing ? CHANGE_WORDS.review : 'Add'}
-                </Button>
+                isAsking ? (
+                  <Button
+                    type='button'
+                    disabled={!questions.open?.isAnswered}
+                    onClick={questions.advance}
+                  >
+                    {FORM_FLOW_WORDS.next}
+                  </Button>
+                ) : (
+                  <Button
+                    type='button'
+                    loading={isSaving}
+                    disabled={isSaving || shownBlocker !== null}
+                    onClick={() => {
+                      if (editing) {
+                        flow.setStep('reason');
+                        return;
+                      }
+                      void handleSubmit();
+                    }}
+                  >
+                    {editing ? CHANGE_WORDS.review : 'Add'}
+                  </Button>
+                )
               }
             />
           </div>

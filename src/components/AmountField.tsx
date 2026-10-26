@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
-import AmountHero, { AmountHeroLink } from '@/components/AmountHero';
+import AmountHero, { type AmountHeroWay } from '@/components/AmountHero';
 import MoneyInput from '@/components/MoneyInput';
+import RevealChip from '@/components/RevealChip';
 import { PillGroup } from '@/components/PillGroup';
 
 export type AmountMode = 'exact' | 'range' | 'percent' | 'rest';
@@ -11,12 +12,12 @@ export type AmountMode = 'exact' | 'range' | 'percent' | 'rest';
 export interface AmountModeOption {
   value: AmountMode;
   label: string;
-  /** Its words as a quiet link under a hero figure ("It varies", "a % of pay"); the label when missing. */
+  /** Its words as a chip under a hero figure ("It varies"); the label when missing. */
   linkLabel?: string;
 }
 
 interface AmountFieldProps {
-  /** What the amount is called here ("Take-home pay"). */
+  /** What the amount is called here ("Amount"). */
   label: string;
   /** Dollars in exact mode (the low end in range mode), whole or half percents ("12.5") in percent mode, unused in rest mode. */
   value: string;
@@ -38,12 +39,14 @@ interface AmountFieldProps {
   hint?: ReactNode;
   errorMessage?: string;
   placeholder?: string;
-  /** Draws the amount as the screen's large centred figure, the other modes as quiet links under it. */
+  /** Draws the amount as the screen's large centred figure, the other modes as chips under it. */
   isHero?: boolean;
   /** A hero figure takes focus once its sheet settles, on a phone. */
   autoFocus?: boolean;
   /** One quiet line under a hero figure. */
   suffix?: ReactNode;
+  /** More chips under a hero figure, after the other modes. */
+  extraWays?: AmountHeroWay[];
 }
 
 /** A labelled amount: exact money, a low and a high end, a whole or half percentage of something the caller names, or the rest. */
@@ -65,6 +68,7 @@ function AmountField({
   isHero = false,
   autoFocus,
   suffix,
+  extraWays = [],
 }: AmountFieldProps) {
   const shownHint = mode === 'rest' ? (restHint ?? hint) : hint;
 
@@ -79,16 +83,15 @@ function AmountField({
         option.value !== mode &&
         !(isMoney && (option.value === 'exact' || option.value === 'range')),
     );
-    const links = onModeChange
-      ? others.map((option) => (
-          <AmountHeroLink
-            key={option.value}
-            onClick={() => onModeChange(option.value)}
-          >
-            {option.linkLabel ?? option.label}
-          </AmountHeroLink>
-        ))
-      : null;
+    const ways: AmountHeroWay[] = [
+      ...(onModeChange
+        ? others.map((option) => ({
+            label: option.linkLabel ?? option.label,
+            onClick: () => onModeChange(option.value),
+          }))
+        : []),
+      ...extraWays,
+    ];
 
     if (isMoney) {
       return (
@@ -110,7 +113,7 @@ function AmountField({
             toExact: linkOf('exact')?.linkLabel ?? 'One amount',
           }}
           rangeLabels={rangeLabels}
-          links={links}
+          ways={ways}
           suffix={suffix}
           hint={shownHint}
           errorMessage={errorMessage}
@@ -154,9 +157,13 @@ function AmountField({
             {shownHint}
           </div>
         )}
-        {links && (
-          <div className='flex flex-wrap items-center justify-center gap-x-2'>
-            {links}
+        {ways.length > 0 && (
+          <div className='flex flex-wrap items-center justify-center gap-2'>
+            {ways.map((way) => (
+              <RevealChip key={way.label} onClick={way.onClick}>
+                {way.label}
+              </RevealChip>
+            ))}
           </div>
         )}
       </div>

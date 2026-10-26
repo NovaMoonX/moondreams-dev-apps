@@ -175,10 +175,6 @@ export const MAX_CHANGE_ITEM_IDS = 20;
 export const COMING_DAYS_PREVIEW = 3;
 /** Most coming income days the Days list can draw, however far the lookahead reaches. */
 export const COMING_DAYS_CAP = 50;
-/** Warnings shown before "Show all". */
-export const LOOKAHEAD_WARNINGS_PREVIEW = 1;
-/** A fold that would hide this many rows or fewer shows them all instead. */
-export const MAX_QUIET_HIDDEN = 3;
 /** Days of income and bills the stance cushion adds up. */
 export const CUSHION_DAYS = 30;
 /** A gap this long between income days, or after the last one, reads as income that has ended. */
@@ -216,11 +212,6 @@ export const ENVELOPE_ORDER_STEP = 1;
 
 /** What "+ Expected" can add. */
 export const EXPECTED_KINDS = ['income', 'expense'] as const;
-
-export const EXPECTED_KIND_LABELS: Record<
-  (typeof EXPECTED_KINDS)[number],
-  string
-> = { income: 'Income', expense: 'Expense' };
 
 /** The ways a bill can repeat that the bill form offers. */
 export const BILL_FREQUENCIES = [
@@ -326,7 +317,6 @@ export const CONFIRM_WORDS = {
   notePlaceholder: 'Overtime, a bonus from the quarter',
   extraTo: 'The extra is left from this day.',
   shortFrom: 'The shortfall comes out of what is left from this day.',
-  sameAsExpected: 'The same as the draft expected.',
   needsAmount: 'Enter the amount that arrived.',
   needsDate: 'Pick the date it arrived.',
   holds: 'Choose for each held line first.',
@@ -433,8 +423,6 @@ export const CHANGE_WORDS = {
 
 export const LIFECYCLE_WORDS = {
   more: 'More',
-  moreAria: 'More about',
-  sheetHeading: 'What would you like to do?',
   pause: 'Pause saving',
   pauseSub: 'Nothing new goes in. The balance and history stay.',
   resume: 'Start saving again',
@@ -543,7 +531,6 @@ export const DRAFT_WORDS = {
     'This day cannot be confirmed until you choose for each held line.',
   useThePlan: 'Undo my choices for this day',
   undoChoice: 'Undo my choice',
-  fundsHeading: 'Funds',
   fundsNone: 'Not tied to anything. Goes where the draft puts it.',
 } as const;
 
@@ -819,7 +806,7 @@ export const FORM_FLOW_WORDS = {
   next: 'Next',
   done: 'Done',
   compactOne: 'One income day changes,',
-  compactMany: '{n} income days change, starting',
+  compactMany: (count: number) => `${count} income days change, starting`,
   compactLeft: 'left from this day.',
   compactDoor: 'See each income day',
   nameTitle: 'What is it called?',
@@ -840,9 +827,12 @@ export const FORM_FLOW_WORDS = {
   funding: 'Paid from',
   envelopeAmountTitle: 'How much does it get each time?',
   eachTime: 'Each time',
-  percentLink: 'a % of pay',
-  restLink: 'whatever is left',
-  exactLink: 'an amount',
+  percentLink: 'A % of pay',
+  restLink: 'Whatever is left',
+  exactLink: 'An amount',
+  itVaries: 'It varies',
+  oneAmount: 'One amount',
+  chooseEnd: 'Plan it at one end',
   cadenceTitle: 'Which income days does it get money?',
   cadence: 'Funded',
   targetTitle: 'How much do you want to save?',
@@ -852,7 +842,8 @@ export const FORM_FLOW_WORDS = {
   noDate: 'No date',
   noDateHint: 'Leave it empty if there is no date.',
   goalEachTitle: 'How much goes in each time?',
-  suggestion: '{amount} each income day reaches it by {date}.',
+  suggestion: (amount: string, date: string) =>
+    `${amount} each income day reaches it by ${date}.`,
   sourceTitle: 'Where does it come from?',
   source: 'From',
   takeHomeTitle: 'How much lands in your account?',
@@ -880,12 +871,31 @@ export const FORM_FLOW_WORDS = {
   refundLink: 'This is a refund',
   notRefundLink: 'Not a refund',
   arrivedOn: 'Arrived',
-  moreThanPlanned: '{amount} more than planned, left from this day.',
-  lessThanPlanned: '{amount} less than planned, taken from what is left.',
-  lessThanLeft: '{amount} less than planned. A line has to get less.',
-  moreShort: '{amount} more than planned.',
-  lessShort: '{amount} less than planned.',
-  differenceWithLines: '{lead} Left from this day: {left}.',
+  moreThanPlanned: (amount: string) =>
+    `${amount} more than planned, left from this day.`,
+  lessThanPlanned: (amount: string) =>
+    `${amount} less than planned, taken from what is left.`,
+  lessThanLeft: (amount: string) =>
+    `${amount} less than planned. A line has to get less.`,
+  moreShort: (amount: string) => `${amount} more than planned.`,
+  lessShort: (amount: string) => `${amount} less than planned.`,
+  differenceWithLines: (lead: string, left: string) =>
+    `${lead} Left from this day: ${left}.`,
+  linesAsPlanned: 'As planned',
+  linesChanged: (count: number) => `${count} changed`,
+  addPlace: 'Add a place',
+  removePlace: 'Remove place',
+  pastDay: 'Pick today or a day to come.',
+  pickRepeat: 'Pick how often it repeats.',
+  badAmount: 'Enter an amount above $0, like 45.00.',
+  overLimit: 'That is more than an amount can be here.',
+  badRange: 'Make the top of the range higher than the low end.',
+  badPercent: 'Enter a whole or half percent, up to 100.',
+  finishEnding: 'Finish when it ends.',
+  pickDays: 'Pick at least one income day.',
+  otherPayday: 'Enter a second payday that is a different day of the month.',
+  discardNew: (noun: string) => `Discard this ${noun}?`,
+  discardChange: 'Discard this change?',
   asOf: 'As of',
   moneyOnHand: 'Money on hand',
 } as const;

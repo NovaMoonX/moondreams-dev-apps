@@ -1,10 +1,10 @@
 import { useState } from 'react';
 
 import AmountField from '@/components/AmountField';
-import { AmountHeroLink } from '@/components/AmountHero';
 import { PillGroup } from '@/components/PillGroup';
 import RangeNote from '@apps/runway/components/RangeNote';
 import {
+  FORM_FLOW_WORDS,
   RANGE_END_WORDS,
   STANCE_FOLLOW_PLAN,
   STANCE_LABELS,
@@ -23,8 +23,16 @@ import {
 } from '@apps/runway/utils/rangeInput';
 
 const modeOptions = [
-  { value: 'exact' as const, label: 'Exact', linkLabel: 'One amount' },
-  { value: 'range' as const, label: 'A range', linkLabel: 'It varies' },
+  {
+    value: 'exact' as const,
+    label: 'Exact',
+    linkLabel: FORM_FLOW_WORDS.oneAmount,
+  },
+  {
+    value: 'range' as const,
+    label: 'A range',
+    linkLabel: FORM_FLOW_WORDS.itVaries,
+  },
 ];
 
 interface RangeAmountFieldProps {
@@ -108,14 +116,17 @@ function RangeAmountField({
           highValue={value.high}
           onHighChange={(high) => onChange({ ...value, high })}
           hint={value.mode === 'exact' ? hint : getHint()}
+          extraWays={
+            value.mode === 'range' && !isChoosingEnd
+              ? [
+                  {
+                    label: FORM_FLOW_WORDS.chooseEnd,
+                    onClick: () => setIsChoosingEnd(true),
+                  },
+                ]
+              : []
+          }
         />
-        {value.mode === 'range' && !isChoosingEnd && (
-          <div className='flex justify-center'>
-            <AmountHeroLink onClick={() => setIsChoosingEnd(true)}>
-              Choose which end it plans at
-            </AmountHeroLink>
-          </div>
-        )}
         {value.mode === 'range' && isChoosingEnd && stancePills}
       </div>
     );

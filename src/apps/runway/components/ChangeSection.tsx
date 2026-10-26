@@ -31,11 +31,7 @@ function ChangeSection() {
       <EffectPreview
         isCompact
         changeJson={flow.changeJson}
-        emptyText={
-          pairedText
-            ? `${pairedText} Change the pairing under Plan, Income to move an income day.`
-            : undefined
-        }
+        emptyText={pairedText ?? undefined}
         waitingText={
           flow.isUnchanged ? CHANGE_WORDS.previewUntouched : undefined
         }

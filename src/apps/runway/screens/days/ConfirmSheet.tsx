@@ -16,6 +16,7 @@ import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -157,34 +158,21 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       return null;
     const amount = formatCents(Math.abs(difference));
     if (changedCount > 0) {
-      const result = FORM_FLOW_WORDS.differenceWithLines
-        .replace(
-          '{lead}',
-          (difference > 0
-            ? FORM_FLOW_WORDS.moreShort
-            : FORM_FLOW_WORDS.lessShort
-          ).replace('{amount}', amount),
-        )
-        .replace('{left}', formatCents(Math.max(0, remainder)));
-      return result;
+      const lead =
+        difference > 0
+          ? FORM_FLOW_WORDS.moreShort(amount)
+          : FORM_FLOW_WORDS.lessShort(amount);
+      return FORM_FLOW_WORDS.differenceWithLines(
+        lead,
+        formatCents(Math.max(0, remainder)),
+      );
     }
-    if (difference > 0)
-      return FORM_FLOW_WORDS.moreThanPlanned.replace('{amount}', amount);
-    const words =
-      remainder < 0
-        ? FORM_FLOW_WORDS.lessThanLeft
-        : FORM_FLOW_WORDS.lessThanPlanned;
-    return words.replace('{amount}', amount);
+    if (difference > 0) return FORM_FLOW_WORDS.moreThanPlanned(amount);
+    return remainder < 0
+      ? FORM_FLOW_WORDS.lessThanLeft(amount)
+      : FORM_FLOW_WORDS.lessThanPlanned(amount);
   };
   const effect = getEffect();
-
-  const getDoorLabel = () => {
-    if (difference > 0)
-      return `Choose where the ${formatCents(difference)} goes`;
-    if (difference < 0)
-      return `Choose where the ${formatCents(-difference)} comes from`;
-    return CONFIRM_WORDS.adjustLines;
-  };
 
   const openLines = () => {
     if (arrivedCents !== null && Object.keys(lineInputs).length === 0) {
@@ -259,6 +247,15 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     }
   };
 
+  const requestClose = useDiscardGuard({
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(initialData) ||
+      Object.keys(lineInputs).length > 0 ||
+      Object.keys(lineNotes).length > 0,
+    onClose,
+    isBusy: isSaving,
+  });
+
   const setField = (patch: Partial<ConfirmFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
@@ -280,14 +277,12 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       {arrivedCents !== null && arrivedCents > 0 && (
         <SummaryRow
           label='Lines'
+          ariaLabel={`Lines, ${changedCount > 0 ? FORM_FLOW_WORDS.linesChanged(changedCount) : FORM_FLOW_WORDS.linesAsPlanned}, change`}
           onClick={openLines}
-          detail={
-            changedCount > 0
-              ? `${changedCount} ${changedCount === 1 ? 'line' : 'lines'} changed`
-              : undefined
-          }
         >
-          {getDoorLabel()}
+          {changedCount > 0
+            ? FORM_FLOW_WORDS.linesChanged(changedCount)
+            : FORM_FLOW_WORDS.linesAsPlanned}
         </SummaryRow>
       )}
       <FoldedDateField
@@ -328,7 +323,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           <Button
             type='button'
             variant='secondary'
-            onClick={onClose}
+            onClick={requestClose}
             disabled={isSaving}
           >
             Cancel
@@ -349,7 +344,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   );
 
   return (
-    <FormSheet isOpen onClose={onClose} title={CONFIRM_WORDS.sheetTitle}>
+    <FormSheet isOpen onClose={requestClose} title={CONFIRM_WORDS.sheetTitle}>
       {isChoosing && (
         <div className='space-y-3'>
           <div className='space-y-3'>

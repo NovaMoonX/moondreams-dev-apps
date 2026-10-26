@@ -13,6 +13,7 @@ import MoneyInput from '@/components/MoneyInput';
 import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -147,6 +148,15 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
     return null;
   };
 
+  const requestClose = useDiscardGuard({
+    isDirty:
+      amount !== centsToInputValue(base.arrivedCents) ||
+      Object.keys(lineInputs).length > 0 ||
+      note.trim() !== '',
+    onClose,
+    isBusy: isSaving,
+  });
+
   const ticked = new Set(openDay?.doneLineIds ?? []);
   const hasUntick = changes.some((change) => ticked.has(change.lineId));
 
@@ -186,7 +196,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   };
 
   return (
-    <FormSheet isOpen onClose={onClose} title={CORRECT_WORDS.sheetTitle}>
+    <FormSheet isOpen onClose={requestClose} title={CORRECT_WORDS.sheetTitle}>
       {step === 'edit' ? (
         <div className='space-y-4'>
           <p className='text-muted-foreground text-sm'>{CORRECT_WORDS.intro}</p>
@@ -253,7 +263,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
           <ModalFooterActions
             note={blocker}
             cancelAction={
-              <Button type='button' variant='secondary' onClick={onClose}>
+              <Button type='button' variant='secondary' onClick={requestClose}>
                 Cancel
               </Button>
             }
@@ -353,7 +363,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               <Button
                 type='button'
                 variant='secondary'
-                onClick={onClose}
+                onClick={requestClose}
                 disabled={isSaving}
               >
                 Cancel
