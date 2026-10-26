@@ -798,6 +798,11 @@ function ExpenseFormModal({
         />
     </>
   );
+  const getReceiptCategory = () => {
+    const key = resolveChoice(formData.category);
+    const parsed = key === null ? null : parseExpenseCategoryKey(formData.category.choice === NEW_CHOICE ? toCustomCategoryKey(key) : key);
+    return { category: parsed?.category ?? null, customCategoryLabel: parsed?.customCategoryLabel ?? null };
+  };
   const canSplitReceipt = !isEditing && !isPrivate && canShare && Boolean(onSplitReceipt);
   const receiptDoor = canSplitReceipt && (
     <Button
@@ -809,6 +814,7 @@ function ExpenseFormModal({
           title: formData.title.trim() || pickedSubject?.title || '',
           dayIndex: linkedDay ?? (formData.dayIndex === '' ? null : Number(formData.dayIndex)),
           link,
+          ...getReceiptCategory(),
         })
       }
     >

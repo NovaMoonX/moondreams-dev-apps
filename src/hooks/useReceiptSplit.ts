@@ -47,7 +47,7 @@ function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
     tipChoice: reading?.tipCents ? 'RECEIPT' : 'NONE',
     customTip: '',
     tipSplit: 'PROPORTIONAL',
-    openLineId: null,
+    openLineId: lines[0]?.id ?? null,
   };
 }
 
@@ -115,8 +115,16 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
   const itemsCents = sumLinesCents(state.lines);
   const printedTotalCents = reading?.totalCents ?? null;
   const hasUnnamedLine = state.lines.some((line) => line.name.trim() === '');
+  const hasUnpricedLine = state.lines.some((line) => line.priceCents <= 0);
+  const hasNegativeShare = Object.values(result.totals).some((total) => total.totalCents < 0);
+  const isDirty = Object.values(state.claims).some((uids) => uids.length > 0);
   const isComplete =
-    state.lines.length > 0 && result.unclaimedLineIds.length === 0 && !hasUnnamedLine && result.totalCents > 0;
+    state.lines.length > 0 &&
+    result.unclaimedLineIds.length === 0 &&
+    !hasUnnamedLine &&
+    !hasUnpricedLine &&
+    !hasNegativeShare &&
+    result.totalCents > 0;
 
   return {
     state,
@@ -129,6 +137,10 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
     tipCents,
     receiptTipCents,
     printedTotalCents,
+    hasUnnamedLine,
+    hasUnpricedLine,
+    hasNegativeShare,
+    isDirty,
     isComplete,
     patch,
     setLineClaims,

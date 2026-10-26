@@ -76,8 +76,8 @@ export const createExpense = createAsyncThunk<
   if (input.splitAmounts) {
     const shares = input.splitAmounts;
     const covers = sharedWith.every((uid) => uid in shares);
-    const shareCents = Object.values(shares).reduce((sum, share) => sum + Math.round(share * 100), 0);
-    if (!covers || input.amount === null || Math.abs(shareCents - Math.round(input.amount * 100)) > 1) {
+    const shareCents = sharedWith.reduce((sum, uid) => sum + Math.round((shares[uid] ?? 0) * 100), 0);
+    if (!covers || input.amount === null || shareCents !== Math.round(input.amount * 100)) {
       return rejectWithValue('The shares need to add up to the total.');
     }
   }
@@ -107,7 +107,9 @@ export const createExpense = createAsyncThunk<
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
     targetType: input.split.targetType,
     targetMemberIds: input.split.targetType === 'EVERYONE_CURRENT' ? input.memberIds : sharedWith,
-    splitAmounts: input.splitAmounts ?? null,
+    splitAmounts: input.splitAmounts
+      ? Object.fromEntries(sharedWith.map((uid) => [uid, input.splitAmounts?.[uid] ?? 0]))
+      : null,
     paidMemberStatus,
     earlyPayments: {},
     note: input.note?.trim() || null,

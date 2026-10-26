@@ -2,10 +2,9 @@ import { useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronDown, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { ArrowRight, ChevronDown, Pencil, Plus, Trash2, Users } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
-import HelpTip from '@/components/HelpTip';
 import MoneyInput from '@/components/MoneyInput';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
@@ -32,10 +31,11 @@ const formatNames = (names: string[]) => {
 function LineRow({ line, holders, split }: LineRowProps) {
   const { state, people, patch, setLineClaims, updateLine, removeLine } = split;
   const isOpen = state.openLineId === line.id;
-  const [isEditing, setIsEditing] = useState(line.name === '');
+  const [isEditing, setIsEditing] = useState(line.name === '' || line.priceCents === 0);
   const [priceText, setPriceText] = useState(line.priceCents ? centsToInputValue(line.priceCents) : '');
   const names = people.filter((person) => holders.includes(person.id)).map((person) => person.name);
   const isEveryone = people.length > 0 && holders.length === people.length;
+  const nextUnclaimedId = state.lines.find((other) => other.id !== line.id && (state.claims[other.id] ?? []).length === 0)?.id;
 
   return (
     <li>
@@ -48,8 +48,8 @@ function LineRow({ line, holders, split }: LineRowProps) {
       >
         <span className='min-w-0 flex-1'>
           <span className='line-clamp-2 text-sm font-medium'>{line.name || 'New item'}</span>
-          <span className={join('mt-0.5 text-xs', names.length === 0 ? 'text-warning' : 'text-muted-foreground')}>
-            {names.length === 0 ? 'Nobody yet' : isEveryone ? 'Everyone' : formatNames(names)}
+          <span className={join('mt-0.5 text-xs', names.length === 0 || line.priceCents <= 0 ? 'text-warning' : 'text-muted-foreground')}>
+            {line.priceCents <= 0 ? 'Add a price' : names.length === 0 ? 'Nobody yet' : isEveryone ? 'Everyone' : formatNames(names)}
           </span>
         </span>
         <span className='flex shrink-0 items-center gap-1.5'>
@@ -75,6 +75,16 @@ function LineRow({ line, holders, split }: LineRowProps) {
                 description: isEveryone ? 'Clear who had this' : 'Everyone shares this',
                 onClick: () => setLineClaims(line.id, isEveryone ? [] : people.map((person) => person.id)),
               },
+              ...(holders.length > 0 && nextUnclaimedId
+                ? [
+                    {
+                      key: 'next',
+                      icon: <ArrowRight className='h-4 w-4' />,
+                      label: 'Next item',
+                      onClick: () => patch({ openLineId: nextUnclaimedId }),
+                    },
+                  ]
+                : []),
               ...(isEditing
                 ? []
                 : [{ key: 'edit', icon: <Pencil className='h-4 w-4' />, label: 'Edit item', onClick: () => setIsEditing(true) }]),
@@ -142,6 +152,10 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
   ];
 
   const billWithoutOwnTip = itemsCents + taxCents + split.feesCents - split.discountCents + receiptTipCents;
+  const hasShares = result.participants.length > 0 && itemsCents > 0;
+  const leftOut = hasShares
+    ? people.filter((person) => (result.totals[person.id]?.totalCents ?? 0) === 0).map((person) => person.name)
+    : [];
   const mismatch = printedTotalCents !== null && Math.abs(printedTotalCents - billWithoutOwnTip) > 1;
 
   return (
@@ -290,17 +304,18 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
           </ul>
         )}
         <div className='flex items-center justify-between gap-3 px-1 text-sm'>
-          <span className='text-muted-foreground flex items-center gap-1.5'>
-            Bill total
-            {mismatch && (
-              <HelpTip variant='warning' title='This is different from the receipt'>
-                The receipt says {formatCents(printedTotalCents ?? 0)}, and the items, tax and fees here add up to{' '}
-                {formatCents(billWithoutOwnTip)}. Check for a missing or mistyped item.
-              </HelpTip>
-            )}
-          </span>
+          <span className='text-muted-foreground'>Bill total</span>
           <span className='font-semibold whitespace-nowrap'>{formatCents(result.totalCents)}</span>
         </div>
+        {mismatch && (
+          <p className='text-warning px-1 text-xs' role='status'>
+            The receipt says {formatCents(printedTotalCents ?? 0)}, and the items, tax and fees here add up to{' '}
+            {formatCents(billWithoutOwnTip)}. Check for a missing or mistyped item.
+          </p>
+        )}
+        {leftOut.length > 0 && (
+          <p className='text-muted-foreground px-1 text-xs'>Not in this split: {formatNames(leftOut)}.</p>
+        )}
       </section>
     </div>
   );

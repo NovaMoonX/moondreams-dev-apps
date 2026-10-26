@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -18,13 +18,15 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { createExpense } from '@apps/waypoint/store/actions/expenseActions';
-import type { ExpenseLink, TripSpace } from '@apps/waypoint/types';
+import type { ExpenseCategory, ExpenseLink, TripSpace } from '@apps/waypoint/types';
 
 /** What the expense form already knew when the person chose to split a receipt instead. */
 export interface ReceiptSplitPrefill {
   title: string;
   dayIndex: number | null;
   link: ExpenseLink | null;
+  category: ExpenseCategory | null;
+  customCategoryLabel: string | null;
 }
 
 interface ReceiptSplitScreenProps {
@@ -36,6 +38,7 @@ interface ReceiptSplitScreenProps {
 
 interface SplitStepProps extends ReceiptSplitScreenProps {
   reading: ReceiptReading | null;
+  isDirtyRef: { current: boolean };
 }
 
 /** A receipt's date as a trip day, when it falls on the trip or just around it. */
@@ -53,7 +56,7 @@ function getReceiptDay(trip: TripSpace, date: string | null) {
   return isNearTrip ? offset : null;
 }
 
-function SplitStep({ trip, currentUserId, prefill, reading, onClose }: SplitStepProps) {
+function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose }: SplitStepProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
@@ -70,57 +73,69 @@ function SplitStep({ trip, currentUserId, prefill, reading, onClose }: SplitStep
   const [title, setTitle] = useState(prefill?.title || reading?.merchant || '');
   const [payerUid, setPayerUid] = useState(currentUserId);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const isSavingRef = useRef(false);
   const { result, isComplete } = split;
+
+  useEffect(() => {
+    isDirtyRef.current = split.isDirty;
+  }, [isDirtyRef, split.isDirty]);
   const canSave = isComplete && title.trim() !== '' && !isSubmitting;
   const unclaimedCount = result.unclaimedLineIds.length;
 
   const getNote = () => {
     if (split.state.lines.length === 0) return 'Add an item to start splitting.';
     if (split.state.lines.some((line) => line.name.trim() === '')) return 'Give each item a name.';
+    if (split.hasUnpricedLine) return 'Give each item a price.';
+    if (split.hasNegativeShare) return 'A discount is bigger than what someone ordered.';
     if (unclaimedCount > 0) return `${unclaimedCount} ${unclaimedCount === 1 ? 'item has' : 'items have'} nobody yet.`;
     if (title.trim() === '') return 'Add a title to save it.';
     return null;
   };
 
-  const handleSave = async () => {
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const shared = result.participants;
-      await dispatch(
-        createExpense({
-          uid: currentUserId,
-          tripId: trip.id,
-          memberIds,
-          title,
-          amount: result.totalCents / 100,
-          amountMin: null,
-          amountMax: null,
-          currency: 'USD',
-          payerUid,
-          status: 'PAID',
-          dayIndex: prefill?.dayIndex ?? getReceiptDay(trip, reading?.date ?? null),
-          category: 'FOOD',
-          customCategoryLabel: null,
-          note: null,
-          groupLabel: null,
-          isPerPerson: false,
-          linkedTo: prefill?.link ?? null,
-          split: { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: shared },
-          splitAmounts: Object.fromEntries(shared.map((uid) => [uid, (result.totals[uid]?.totalCents ?? 0) / 100])),
-        }),
-      ).unwrap();
-      addToast({
-        title: `Added ${title.trim()}`,
-        description: `${formatCents(result.totalCents)} split between ${shared.length} ${shared.length === 1 ? 'person' : 'people'}.`,
-        type: 'success',
-      });
-      onClose();
-    } catch (saveError) {
-      setError(getErrorMessage(saveError, 'Unable to add this expense.'));
-      setIsSubmitting(false);
+  const handleSave = () => {
+    if (isSavingRef.current) {
+      return;
     }
+    isSavingRef.current = true;
+    setIsSubmitting(true);
+    const shared = result.participants;
+    const savedTitle = title.trim();
+    const write = dispatch(
+      createExpense({
+        uid: currentUserId,
+        tripId: trip.id,
+        memberIds,
+        title,
+        amount: result.totalCents / 100,
+        amountMin: null,
+        amountMax: null,
+        currency: 'USD',
+        payerUid,
+        status: 'PAID',
+        dayIndex: prefill?.dayIndex ?? getReceiptDay(trip, reading?.date ?? null),
+        category: prefill?.category ?? 'FOOD',
+        customCategoryLabel: prefill?.customCategoryLabel ?? null,
+        note: null,
+        groupLabel: null,
+        isPerPerson: false,
+        linkedTo: prefill?.link ?? null,
+        split: { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: shared },
+        splitAmounts: Object.fromEntries(shared.map((uid) => [uid, (result.totals[uid]?.totalCents ?? 0) / 100])),
+      }),
+    ).unwrap();
+    write.catch((saveError) =>
+      addToast({
+        title: `Couldn't add ${savedTitle}`,
+        description: getErrorMessage(saveError, 'Please split the receipt again.'),
+        type: 'error',
+      }),
+    );
+    addToast({
+      title: `Adding ${savedTitle}`,
+      description: `${formatCents(result.totalCents)} split between ${shared.length} ${shared.length === 1 ? 'person' : 'people'}.`,
+      type: 'success',
+    });
+    onClose();
   };
 
   return (
@@ -147,11 +162,6 @@ function SplitStep({ trip, currentUserId, prefill, reading, onClose }: SplitStep
           It&apos;s added as paid by them, and everyone else owes their share.
         </p>
       </section>
-      {error && (
-        <p role='alert' className='text-destructive text-sm'>
-          {error}
-        </p>
-      )}
       <ModalFooterActions
         note={getNote()}
         cancelAction={
@@ -160,8 +170,8 @@ function SplitStep({ trip, currentUserId, prefill, reading, onClose }: SplitStep
           </Button>
         }
         rightActions={
-          <Button type='button' loading={isSubmitting} disabled={!canSave} onClick={() => void handleSave()}>
-            {isSubmitting ? 'Adding…' : 'Add'}
+          <Button type='button' loading={isSubmitting} disabled={!canSave} onClick={handleSave}>
+            Add
           </Button>
         }
       />
@@ -176,8 +186,10 @@ function ReceiptSplitScreen({ trip, currentUserId, prefill, onClose }: ReceiptSp
     step: 'photo',
   });
 
+  const isDirtyRef = useRef(false);
+
   const requestClose = async () => {
-    if (stage.step === 'photo') {
+    if (stage.step === 'photo' || !isDirtyRef.current) {
       onClose();
       return;
     }
@@ -207,6 +219,7 @@ function ReceiptSplitScreen({ trip, currentUserId, prefill, onClose }: ReceiptSp
           currentUserId={currentUserId}
           prefill={prefill}
           reading={stage.reading}
+          isDirtyRef={isDirtyRef}
           onClose={onClose}
         />
       )}
