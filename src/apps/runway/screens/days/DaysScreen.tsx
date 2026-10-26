@@ -5,7 +5,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import SectionDivider from '@/components/SectionDivider';
-import SectionHeader from '@/components/SectionHeader';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -91,13 +90,7 @@ function DaysScreen() {
         ) : (
           <div className='space-y-2'>
             {lookahead && (
-              <div className='space-y-2'>
-                <HoldsThroughLine
-                  lookahead={lookahead}
-                  rangeSides={rangeSides}
-                />
-                <LookaheadWarnings lookahead={lookahead} cushion={cushion} />
-              </div>
+              <LookaheadWarnings lookahead={lookahead} cushion={cushion} />
             )}
             <ul className='space-y-2'>
               {visibleDays.map((day) => (
@@ -126,7 +119,7 @@ function DaysScreen() {
             {allDays.length > COMING_DAYS_CAP && (
               <p className='text-muted-foreground text-sm'>
                 Showing the next {COMING_DAYS_CAP} of {allDays.length} income
-                days.
+                days. Later ones appear as these pass.
               </p>
             )}
           </div>
@@ -139,6 +132,7 @@ function DaysScreen() {
                 <IncomeDayCard
                   key={day.dayKey}
                   day={day}
+                  isConfirmedShown={false}
                   onOpen={() => openDay(day.dayKey)}
                 />
               ))}
@@ -161,18 +155,25 @@ function DaysScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Coming income'
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            + Expected
-          </Button>
-        }
-      />
+      <div className='flex items-start justify-between gap-3'>
+        <div className='min-w-0 flex-1'>
+          {lookahead && days.length > 0 && (
+            <HoldsThroughLine
+              lookahead={lookahead}
+              rangeSides={rangeSides}
+              hasRangeNote={false}
+            />
+          )}
+        </div>
+        <Button
+          variant='secondary'
+          size='sm'
+          className="relative ml-auto shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+          onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+        >
+          + Expected
+        </Button>
+      </div>
       {getBody()}
       {formKey !== null && (
         <ExpectedScreen key={formKey} onClose={() => setFormKey(null)} />

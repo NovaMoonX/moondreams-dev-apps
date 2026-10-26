@@ -4,7 +4,10 @@ import { TriangleAlert } from 'lucide-react';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { LOOKAHEAD_WARNINGS_PREVIEW } from '@apps/runway/constants';
+import {
+  LOOKAHEAD_WARNINGS_PREVIEW,
+  MAX_QUIET_HIDDEN,
+} from '@apps/runway/constants';
 import type { Lookahead, StanceCushion } from '@apps/runway/engine/lookahead';
 import ProblemRow from '@apps/runway/components/ProblemRow';
 import { describeProblem } from '@apps/runway/utils/lookaheadText';
@@ -37,7 +40,7 @@ function LookaheadWarnings({ lookahead, cushion }: LookaheadWarningsProps) {
           },
         ]),
   ];
-  const hasFold = rows.length > LOOKAHEAD_WARNINGS_PREVIEW + 1;
+  const hasFold = rows.length > LOOKAHEAD_WARNINGS_PREVIEW + MAX_QUIET_HIDDEN;
   const shown =
     hasFold && !isOpen ? rows.slice(0, LOOKAHEAD_WARNINGS_PREVIEW) : rows;
   const cushionParts = cushion
@@ -72,7 +75,9 @@ function LookaheadWarnings({ lookahead, cushion }: LookaheadWarningsProps) {
       )}
       {hasFold && (
         <ShowMoreButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? 'Show fewer' : `Show all ${rows.length}`}
+          {isOpen
+            ? 'Show fewer'
+            : `Show ${rows.length - LOOKAHEAD_WARNINGS_PREVIEW} more`}
         </ShowMoreButton>
       )}
       {cushion && (

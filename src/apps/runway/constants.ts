@@ -176,7 +176,9 @@ export const COMING_DAYS_PREVIEW = 3;
 /** Most coming income days the Days list can draw, however far the lookahead reaches. */
 export const COMING_DAYS_CAP = 50;
 /** Warnings shown before "Show all". */
-export const LOOKAHEAD_WARNINGS_PREVIEW = 3;
+export const LOOKAHEAD_WARNINGS_PREVIEW = 1;
+/** A fold that would hide this many rows or fewer shows them all instead. */
+export const MAX_QUIET_HIDDEN = 3;
 /** Days of income and bills the stance cushion adds up. */
 export const CUSHION_DAYS = 30;
 /** A gap this long between income days, or after the last one, reads as income that has ended. */

@@ -1,11 +1,11 @@
 import { formatCents } from '@/utils/moneyUtils';
 import { DRAFT_WORDS, HOME_WORDS } from '@apps/runway/constants';
 import { useAppSelector } from '@/store';
-import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
 import ProblemRow from '@apps/runway/components/ProblemRow';
 import { describeHoldsThrough } from '@apps/runway/utils/lookaheadText';
+import { describeRangeBasis } from '@apps/runway/utils/rangeText';
 
 interface CoverageHeadlineProps {
   freeCents: number;
@@ -38,6 +38,8 @@ interface HoldsThroughLineProps {
   rangeSides: { income: boolean; expense: boolean };
   /** True on Home, which names only the first problem; Days lists them all. */
   isFirstProblemShown?: boolean;
+  /** False where each row already says which end it is planned at (Days). */
+  hasRangeNote?: boolean;
 }
 
 /** How far the plan holds. A gap is said as a gap in the plan, never as missing money. */
@@ -45,6 +47,7 @@ export function HoldsThroughLine({
   lookahead,
   rangeSides,
   isFirstProblemShown = false,
+  hasRangeNote = true,
 }: HoldsThroughLineProps) {
   const stance = useAppSelector(selectStance);
   if (!lookahead.hasBills) {
@@ -62,11 +65,10 @@ export function HoldsThroughLine({
           <ProblemRow problem={first} />
         </div>
       )}
-      {rangeSides.income && (
-        <RangeBasisNote stance={stance} side='income' className='text-xs' />
-      )}
-      {rangeSides.expense && (
-        <RangeBasisNote stance={stance} side='expense' className='text-xs' />
+      {hasRangeNote && (rangeSides.income || rangeSides.expense) && (
+        <span className='text-muted-foreground block text-xs'>
+          {describeRangeBasis(stance, rangeSides)}
+        </span>
       )}
     </div>
   );

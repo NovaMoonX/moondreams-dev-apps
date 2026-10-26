@@ -34,11 +34,18 @@ interface IncomeDayCardProps {
   day: ListedDay;
   /** A line the lookahead has for this day, such as the item that runs short. */
   note?: string;
+  /** False under a "Confirmed" heading, which already says it. */
+  isConfirmedShown?: boolean;
   onOpen: () => void;
 }
 
 /** One coming income day: the date, where it comes from and the take-home amount; it opens that day's draft. */
-function IncomeDayCard({ day, note, onOpen }: IncomeDayCardProps) {
+function IncomeDayCard({
+  day,
+  note,
+  isConfirmedShown = true,
+  onOpen,
+}: IncomeDayCardProps) {
   const stance = effectiveStance(
     useAppSelector(selectStance),
     day.stanceOverride,
@@ -47,7 +54,10 @@ function IncomeDayCard({ day, note, onOpen }: IncomeDayCardProps) {
     day.status === 'confirmed' ? selectEffectiveSplit(state, day.dayKey) : null,
   );
   const cents = record?.arrivedCents ?? pick(stance, day.amount, 'income');
-  const statusLabel = getStatusLabel(day);
+  const statusLabel =
+    day.status === 'confirmed' && !isConfirmedShown
+      ? null
+      : getStatusLabel(day);
   const title = day.sourceName ?? day.payLineName;
   const detail = day.sourceName ? day.payLineName : null;
 
