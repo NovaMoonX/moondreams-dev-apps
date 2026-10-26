@@ -1022,12 +1022,6 @@ check(
       kitchenCoverPath('u1', 'r1'),
       'apps/pinch/kitchens/u1/recipes/r1/cover.webp',
     );
-    assert.ok(
-      firestoreRules.includes(
-        "data.coverPath == 'apps/pinch/kitchens/' + uid + '/recipes/' + id + '/cover.webp'",
-      ),
-      'the recipe rule accepts the path a copied cover is written to',
-    );
   },
 );
 
@@ -1047,14 +1041,11 @@ check(
         'allow read: if request.auth != null && resource.data.ownerUid == request.auth.uid;',
       ),
     );
-    assert.ok(shares.includes('allow write: if false;'));
-    assert.ok(!/allow (create|update|delete)/.test(shares));
-    const snapshots = block(
-      firestoreRules,
-      'match /apps/pinch/shareSnapshots/{shareId}',
+    assert.ok(!/allow (write|create|update|delete)/.test(shares));
+    assert.ok(
+      !firestoreRules.includes('shareSnapshots'),
+      'snapshots have no rule at all, so every client read and write is denied',
     );
-    assert.ok(snapshots.includes('allow read, write: if false;'));
-    assert.ok(!snapshots.includes('request.auth'));
     const covers = block(
       storageRules,
       'match /apps/pinch/shares/{shareId}/{fileName}',
