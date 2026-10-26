@@ -34,6 +34,7 @@ import SectionHeader from '@/components/SectionHeader';
 import EarlyPaymentModal from '@apps/waypoint/components/EarlyPaymentModal';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
+import ReceiptSplitScreen, { type ReceiptSplitPrefill } from '@apps/waypoint/components/ReceiptSplitScreen';
 import PersonalExpenseFormModal, {
   type PersonalExpenseSubmitValues,
 } from '@apps/waypoint/components/PersonalExpenseFormModal';
@@ -263,6 +264,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [splitOnly, setSplitOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [receiptPrefill, setReceiptPrefill] = useState<ReceiptSplitPrefill | null>(null);
+  const [isSplittingReceipt, setIsSplittingReceipt] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [paying, setPaying] = useState<{ id: string } | null>(null);
@@ -1270,6 +1273,14 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         </div>
       )}
       {error && <p className='text-destructive text-sm'>{error}</p>}
+      {isSplittingReceipt && (
+        <ReceiptSplitScreen
+          trip={trip}
+          currentUserId={currentUserId}
+          prefill={receiptPrefill}
+          onClose={() => setIsSplittingReceipt(false)}
+        />
+      )}
       <ExpenseFormModal
         key={`${editingExpense?.id ?? 'new'}-${newExpenseAudience}-${isModalOpen ? 'open' : 'closed'}`}
         isOpen={isModalOpen}
@@ -1279,6 +1290,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         initialAudience={newExpenseAudience}
         canShare={canAddExpenses}
         onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
+        onSplitReceipt={(prefill) => {
+          setReceiptPrefill(prefill);
+          setIsModalOpen(false);
+          setIsSplittingReceipt(true);
+        }}
         categoryKeys={categoryKeys}
         personalCategoryKeys={personalCategoryKeys}
         existingGroupLabels={existingGroupLabels}

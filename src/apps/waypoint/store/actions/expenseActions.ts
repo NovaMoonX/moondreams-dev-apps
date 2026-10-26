@@ -35,6 +35,8 @@ interface CreateExpenseInput {
   isPerPerson: boolean;
   linkedTo: ExpenseLink | null;
   split: { targetType: 'EVERYONE_CURRENT' | 'SPECIFIC_MEMBERS'; targetMemberIds: string[] };
+  /** Each person's exact share, when it isn't an even split (a receipt split item by item). */
+  splitAmounts?: Record<string, number> | null;
 }
 
 export const createExpense = createAsyncThunk<
@@ -71,6 +73,15 @@ export const createExpense = createAsyncThunk<
     return rejectWithValue('Enter a valid amount.');
   }
 
+  if (input.splitAmounts) {
+    const shares = input.splitAmounts;
+    const covers = sharedWith.every((uid) => uid in shares);
+    const shareCents = Object.values(shares).reduce((sum, share) => sum + Math.round(share * 100), 0);
+    if (!covers || input.amount === null || Math.abs(shareCents - Math.round(input.amount * 100)) > 1) {
+      return rejectWithValue('The shares need to add up to the total.');
+    }
+  }
+
   const expenseRef = doc(
     collection(db, 'apps', 'waypoint', 'trips', input.tripId, 'expenses'),
   );
@@ -96,7 +107,7 @@ export const createExpense = createAsyncThunk<
       input.category === 'OTHER' ? input.customCategoryLabel?.trim() || null : null,
     targetType: input.split.targetType,
     targetMemberIds: input.split.targetType === 'EVERYONE_CURRENT' ? input.memberIds : sharedWith,
-    splitAmounts: null,
+    splitAmounts: input.splitAmounts ?? null,
     paidMemberStatus,
     earlyPayments: {},
     note: input.note?.trim() || null,

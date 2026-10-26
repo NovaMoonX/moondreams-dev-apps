@@ -11,7 +11,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ArrowLeftRight, CalendarDays, ChevronUp, Link2, Pencil, Route, StickyNote } from 'lucide-react';
+import { ArrowLeftRight, CalendarDays, ChevronUp, Link2, Pencil, Receipt, Route, StickyNote } from 'lucide-react';
 
 import { getErrorMessage } from '@/utils/errorUtils';
 import { useAppSelector } from '@/store';
@@ -24,6 +24,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import Pill from '@/components/Pill';
 import { MultiPillGroup, PillGroup, PillRow } from '@/components/PillGroup';
+import type { ReceiptSplitPrefill } from '@apps/waypoint/components/ReceiptSplitScreen';
 import type { PersonalExpenseSubmitValues } from '@apps/waypoint/components/PersonalExpenseFormModal';
 import { getActiveSplitAmounts, getEarlyPayments, getSplitMemberIds } from '@apps/waypoint/utils/splitCalculators';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -178,6 +179,8 @@ interface ExpenseFormModalProps {
   onSubmit: (values: ExpenseSubmitValues) => Promise<void> | void;
   /** Saves it as private to the person adding it; without it, "Just me" isn't offered. */
   onSubmitPersonal?: (values: PersonalExpenseSubmitValues) => Promise<void> | void;
+  /** Hands what the form already knows to the receipt splitter; without it, the door isn't offered. */
+  onSplitReceipt?: (prefill: ReceiptSplitPrefill) => void;
   onDelete?: () => Promise<void> | void;
   onClose: () => void;
 }
@@ -246,6 +249,7 @@ function ExpenseFormModal({
   isSubmitting = false,
   onSubmit,
   onSubmitPersonal,
+  onSplitReceipt,
   onDelete,
   onClose,
 }: ExpenseFormModalProps) {
@@ -794,6 +798,29 @@ function ExpenseFormModal({
         />
     </>
   );
+  const canSplitReceipt = !isEditing && !isPrivate && canShare && Boolean(onSplitReceipt);
+  const receiptDoor = canSplitReceipt && (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='border-border h-auto min-h-14 w-full justify-start gap-3 rounded-2xl border border-dashed px-3! py-2.5 text-left font-normal whitespace-normal'
+      onClick={() =>
+        onSplitReceipt?.({
+          title: formData.title.trim() || pickedSubject?.title || '',
+          dayIndex: linkedDay ?? (formData.dayIndex === '' ? null : Number(formData.dayIndex)),
+          link,
+        })
+      }
+    >
+      <span className='bg-accent grid size-10 shrink-0 place-items-center rounded-xl' aria-hidden='true'>
+        <Receipt className='h-5 w-5' />
+      </span>
+      <span className='min-w-0'>
+        <span className='block text-sm font-medium'>Split a receipt</span>
+        <span className='text-muted-foreground block text-xs'>Add the bill and pick who had what, tax and tip included.</span>
+      </span>
+    </Button>
+  );
   const planQuestion = (
     <div className='space-y-4'>
       <div className='min-h-60 space-y-2'>
@@ -811,6 +838,7 @@ function ExpenseFormModal({
       >
         Something else
       </Button>
+      {receiptDoor}
     </div>
   );
 
@@ -886,6 +914,7 @@ function ExpenseFormModal({
               Choose from your itinerary
             </Button>
           )}
+          {receiptDoor && <div className='mb-4'>{receiptDoor}</div>}
           {!isEditing && canShare && !startsPrivate && (
             <div className='mb-4 space-y-2'>
               <Label>Who&apos;s this for?</Label>
