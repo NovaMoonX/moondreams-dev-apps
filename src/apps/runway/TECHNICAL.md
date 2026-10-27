@@ -1266,7 +1266,7 @@ Each becomes a spike or a decision in the Issue Roadmap rather than blocking it.
 ## Round 5, package G6
 
 - **Twice a month's day lists** cap the listbox and Dreamer's inner scroller (`max-h-48!` plus `[&_[data-scroll-area-viewport]]:max-h-48!`) and open upward (`bottom-full!`), so every row sits inside the list's own box and the box inside the viewport at 320x568, 390x844 and 1280x900.
-- **The add pill** (`FloatingAction`) measures, at scroll rest, whether any list row sits under its box and stays invisible until the first scroll when one does; at scroll end the page's spacer already clears it. A page that fits draws it at rest as before.
+- **The add pill** (`FloatingAction`) is always drawn while no sheet or subview is open, like a bank app's floating action: it may sit over a row mid-list, and every page ends in a spacer of its height plus a gap, so the last row and its chevron scroll clear of it. Hiding it at rest when it overlaps a row was tried and dropped: on a long page the tab's one add action vanished.
 - **`canChangeStart`** returns false for a start date with no start record in hand (the Free to spend screen waits for the ledger before asking).
 - **The goal chart** leaves a strip above the plot for the readout (`isReadoutAbove`) and names the guide line on the soft look (`referenceLabelSoft`); its height follows the viewport.
 - **"What it funds"** swaps into the Funds sheet in place of the list (the form stays mounted, hidden), led by `BackLink`; the rows write through `ValueChangeHandle`, which hands the form field's change callback to the sheet.

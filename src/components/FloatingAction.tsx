@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -12,28 +12,6 @@ const SCROLL_STEP_PX = 6;
 const isCoveredNow = () =>
   document.documentElement.hasAttribute('data-subview-open') ||
   hasDialogOnTop();
-
-const REST_PX = 8;
-
-/** Whether any list row sits under the pill's box, so a figure or chevron is never covered at rest. */
-const isOverRow = (pill: HTMLElement | null) => {
-  if (!pill) return false;
-  const box = pill.getBoundingClientRect();
-  return [...document.querySelectorAll<HTMLElement>('li, [data-row]')].some(
-    (row) => {
-      if (row.closest('[data-bottom-bar], [role="dialog"]')) return false;
-      const rect = row.getBoundingClientRect();
-      return (
-        rect.width > 0 &&
-        rect.height > 0 &&
-        rect.bottom > box.top &&
-        rect.top < box.bottom &&
-        rect.right > box.left &&
-        rect.left < box.right
-      );
-    },
-  );
-};
 
 const getBarHeight = () =>
   document.querySelector<HTMLElement>('[data-bottom-bar]')?.offsetHeight ?? 0;
@@ -57,15 +35,11 @@ function FloatingAction({
   const [isCovered, setIsCovered] = useState(isCoveredNow);
   const [isCompact, setIsCompact] = useState(false);
   const [barHeight, setBarHeight] = useState(getBarHeight);
-  const [isAtRest, setIsAtRest] = useState(() => window.scrollY <= REST_PX);
-  const [isOverRowNow, setIsOverRowNow] = useState(false);
-  const pillRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
     const update = () => {
       setIsCovered(isCoveredNow());
       setBarHeight(getBarHeight());
-      setIsOverRowNow(isOverRow(pillRef.current));
     };
     // A busy page mutates often; the check reads layout, so it runs at most once a frame.
     const queued = { frame: 0 };
@@ -100,8 +74,6 @@ function FloatingAction({
     const state = { last: window.scrollY };
     const handleScroll = () => {
       const current = window.scrollY;
-      setIsAtRest(current <= REST_PX);
-      if (current <= REST_PX) setIsOverRowNow(isOverRow(pillRef.current));
       const delta = current - state.last;
       if (Math.abs(delta) < SCROLL_STEP_PX) return;
       state.last = current;
@@ -124,31 +96,26 @@ function FloatingAction({
                 : 'calc(1rem + env(safe-area-inset-bottom))',
           }}
         >
-          <div className={join('mx-auto flex justify-end', columnClassName)}>
-            <span
-              ref={pillRef}
-              className={join('flex', isAtRest && isOverRowNow && 'invisible')}
+          <div
+            className={join('mx-auto flex justify-end', columnClassName)}
+          >
+            <Button
+              type='button'
+              rounded='full'
+              aria-label={label}
+              onClick={onClick}
+              className='pointer-events-auto h-12 min-w-12 gap-0 px-4 shadow-lg'
             >
-              <Button
-                type='button'
-                rounded='full'
-                aria-label={label}
-                onClick={onClick}
-                className='pointer-events-auto h-12 min-w-12 gap-0 px-4 shadow-lg'
+              {icon}
+              <span
+                className={join(
+                  'overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 motion-reduce:transition-none',
+                  isCompact ? 'max-w-0 opacity-0' : 'ml-2 max-w-64 opacity-100',
+                )}
               >
-                {icon}
-                <span
-                  className={join(
-                    'overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 motion-reduce:transition-none',
-                    isCompact
-                      ? 'max-w-0 opacity-0'
-                      : 'ml-2 max-w-64 opacity-100',
-                  )}
-                >
-                  {label}
-                </span>
-              </Button>
-            </span>
+                {label}
+              </span>
+            </Button>
           </div>
         </div>
       )}
