@@ -28,6 +28,7 @@ import {
   selectResolvedPlan,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { toOrdinal } from '@apps/runway/utils/monthDays';
 import type {
   Pairing,
   PayLineSealed,
@@ -36,15 +37,6 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
-const ordinalRules = new Intl.PluralRules('en-US', { type: 'ordinal' });
-const ORDINAL_SUFFIXES: Record<string, string> = {
-  one: 'st',
-  two: 'nd',
-  few: 'rd',
-  other: 'th',
-};
-const toOrdinal = (day: number) =>
-  `${day}${ORDINAL_SUFFIXES[ordinalRules.select(day)]}`;
 const MAX_SHOWN_NAMES = 3;
 
 const describePattern = (schedule: Schedule) => {

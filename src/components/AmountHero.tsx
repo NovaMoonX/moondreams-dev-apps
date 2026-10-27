@@ -12,7 +12,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import RevealChip from '@/components/RevealChip';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { toTwoDecimalAmount } from '@/utils/moneyUtils';
+import { groupDigits, toTwoDecimalAmount } from '@/utils/moneyUtils';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const MAX_WAYS_SHOWN = 2;
@@ -63,18 +63,10 @@ const getSizeClass = (length: number, isRange: boolean) => {
   return 'text-3xl';
 };
 
-/** "12345.67" as money reads, "12,345.67"; anything that isn't plain digits is left as typed. */
 // Focus given from code selects the figure, so typing replaces it as a tap or Tab would.
 const focusWhole = (field: HTMLInputElement | null) => {
   field?.focus();
   field?.select();
-};
-
-const groupDigits = (value: string) => {
-  const match = /^(\d+)(\.\d*)?$/.exec(value);
-  if (!match) return value;
-  const result = `${match[1].replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${match[2] ?? ''}`;
-  return result;
 };
 
 interface FigureProps {
