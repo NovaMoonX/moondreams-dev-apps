@@ -139,8 +139,8 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
           )}
         </SummaryEditor>
         <InlineNotice tone='info'>
-          A pay line or bill with a range can plan at its own end instead. You
-          choose that where you add it.
+          A pay or bill with a range can plan at its own end instead. You choose
+          that where you add it.
         </InlineNotice>
         <SettingsRow
           icon={<Activity />}

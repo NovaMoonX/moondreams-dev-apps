@@ -16,6 +16,7 @@ import {
   type EffectiveSplit,
 } from '@apps/runway/engine/correct';
 import { toDayKey } from '@apps/runway/engine/dates';
+import { isWithinCover } from '@apps/runway/engine/differences';
 import type { Draft } from '@apps/runway/engine/draft';
 import { hashOverride } from '@apps/runway/engine/fingerprint';
 import { hasOwnChoices } from '@apps/runway/engine/moved';
@@ -153,6 +154,8 @@ export interface ConfirmDayInput {
   edits: Record<string, Cents>;
   /** The notes on changed lines, by line id. */
   lineNotes: Record<string, string | null>;
+  /** What the person chose to cover from Free to spend: the day may leave this much less than nothing. */
+  coverCents: Cents;
 }
 
 /**
@@ -181,7 +184,7 @@ export async function confirmDay(
     lineNotes: input.lineNotes,
   });
   if (
-    confirmed.freeToSpendCents < 0 ||
+    !isWithinCover(confirmed.freeToSpendCents, input.coverCents) ||
     confirmed.lines.some((line) => line.cents < 0)
   ) {
     throw new Error(CONFIRM_WORDS.linesTakeTooMuch);
@@ -373,7 +376,10 @@ export async function correctDay(
     note: input.note,
   });
   if (
-    sealedPayload.freeToSpendCents < 0 ||
+    !isWithinCover(
+      sealedPayload.freeToSpendCents,
+      -Math.min(0, base.freeToSpendCents),
+    ) ||
     sealedPayload.lines.some((line) => line.cents < 0)
   ) {
     throw new Error(CONFIRM_WORDS.linesTakeTooMuch);

@@ -342,7 +342,7 @@ export async function setLinesDone(
   current: readonly string[],
 ): Promise<void> {
   if (isDone && new Set([...current, ...lineIds]).size > MAX_DONE_LINE_IDS) {
-    throw new Error('This checklist is full. Untick a line first.');
+    throw new Error('This checklist is full. Untick an item first.');
   }
   await updateDoc(doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId), {
     doneLineIds: isDone ? arrayUnion(...lineIds) : arrayRemove(...lineIds),

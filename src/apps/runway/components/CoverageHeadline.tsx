@@ -2,9 +2,11 @@ import type { ReactNode } from 'react';
 import { CircleCheck } from 'lucide-react';
 
 import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
+  CONFIRM_FLOW_WORDS,
   DRAFT_WORDS,
   HOME_WORDS,
   ITEM_SHEET_R2_WORDS,
@@ -15,11 +17,19 @@ interface CoverageHeadlineProps {
   freeCents: number;
 }
 
-/** What the day's money leaves once every line has had its turn: its own framed block under the day's lines, in the card's neutral colour so the figure above it stays the one emphasized surface. */
+/** What the day's money leaves once every item has had its turn (less than nothing when the person covered the difference from Free to spend): its own framed block under the day's lines, in the card's neutral colour so the figure above it stays the one emphasized surface. */
 function CoverageHeadline({ freeCents }: CoverageHeadlineProps) {
+  const { isHidden } = useValuesHidden();
   return (
     <div className='border-border bg-card flex min-h-12 items-center justify-between gap-3 rounded-2xl border px-3 py-2'>
-      <span className='font-medium'>{DRAFT_WORDS.dayLeft}</span>
+      <span className='min-w-0'>
+        <span className='block font-medium'>{DRAFT_WORDS.dayLeft}</span>
+        {freeCents < 0 && !isHidden && (
+          <span className='text-muted-foreground block text-sm'>
+            {CONFIRM_FLOW_WORDS.coveredDay}
+          </span>
+        )}
+      </span>
       <span className='text-lg font-semibold whitespace-nowrap tabular-nums'>
         <SensitiveValue>{formatCents(freeCents)}</SensitiveValue>
       </span>

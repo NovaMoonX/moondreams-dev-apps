@@ -27,6 +27,7 @@ import {
   LineAmountView,
 } from '@apps/runway/components/LineAmounts';
 import {
+  CONFIRM_FLOW_WORDS,
   CONFIRM_WORDS,
   CORRECT_WORDS,
   DRAFT_WORDS,
@@ -118,8 +119,10 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
     if (arrivedCents === null || arrivedCents <= 0)
       return CONFIRM_WORDS.needsAmount;
     if (hasBadLine) return CONFIRM_WORDS.needsLineAmount;
-    if (remainder < 0)
-      return `Choose where ${formatCents(-remainder)} comes from, or lower the lines.`;
+    if (remainder < Math.min(0, base.freeToSpendCents))
+      return CONFIRM_FLOW_WORDS.correctTooMuch(
+        formatCents(Math.min(0, base.freeToSpendCents) - remainder),
+      );
     if (!isChanged) return CORRECT_WORDS.nothingChanged;
     return null;
   };
@@ -245,12 +248,12 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder='Find a line'
+              placeholder={CONFIRM_FLOW_WORDS.findItem}
             />
           )}
           {visibleLines.length === 0 && (
             <p className='text-muted-foreground text-sm'>
-              No line matches that.
+              {CONFIRM_FLOW_WORDS.noItemMatch}
             </p>
           )}
           <LineAmountList
