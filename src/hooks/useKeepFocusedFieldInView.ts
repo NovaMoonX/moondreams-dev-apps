@@ -4,7 +4,7 @@ const EDGE_GAP_PX = 12;
 const KEYBOARD_MIN_PX = 80;
 const SETTLE_MS = 120;
 const FIELD_SELECTOR = 'input, textarea, select, [contenteditable="true"]';
-const DRAWER_ANCHOR_SELECTOR = '[role="dialog"][data-drawer-open] > .fixed';
+const DRAWER_ANCHOR_SELECTOR = '[role="dialog"][data-drawer-open] > .fixed.bottom-0';
 
 const prefersReducedMotion = () =>
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -31,7 +31,9 @@ export function runWhenDrawerSettled(
   callback: () => void,
   maxMs = 450,
 ) {
-  const panel = node?.closest<HTMLElement>('[role="dialog"][data-drawer-open] .transform');
+  const panel = node?.closest<HTMLElement>(
+    '[role="dialog"][data-drawer-open] .transform',
+  );
   const state = { isDone: false, frame: 0, timer: 0 };
   const finish = () => {
     if (state.isDone) return;
@@ -114,8 +116,11 @@ export function useKeepFocusedFieldInView(isActive: boolean) {
       const footerTop = footer ? footer.getBoundingClientRect().top : Infinity;
       const top = Math.max(bounds.top, viewport.offsetTop) + EDGE_GAP_PX;
       const bottom =
-        Math.min(bounds.bottom, viewport.offsetTop + viewport.height, footerTop) -
-        EDGE_GAP_PX;
+        Math.min(
+          bounds.bottom,
+          viewport.offsetTop + viewport.height,
+          footerTop,
+        ) - EDGE_GAP_PX;
       const rect = field.getBoundingClientRect();
       if (rect.top >= top && rect.bottom <= bottom) return;
 
@@ -127,7 +132,9 @@ export function useKeepFocusedFieldInView(isActive: boolean) {
     };
 
     const update = () => {
-      const anchor = document.querySelector<HTMLElement>(DRAWER_ANCHOR_SELECTOR);
+      const anchor = document.querySelector<HTMLElement>(
+        DRAWER_ANCHOR_SELECTOR,
+      );
       if (!anchor) return;
       if (getKeyboardHeight() < KEYBOARD_MIN_PX) {
         release();
