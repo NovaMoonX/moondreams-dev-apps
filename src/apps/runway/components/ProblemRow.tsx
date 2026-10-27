@@ -49,7 +49,10 @@ function ProblemRow({ group }: ProblemRowProps) {
       </span>
       <span className='min-w-0 flex-1'>
         <span className='block font-medium break-words'>{title}</span>
-        <span className='text-muted-foreground block text-sm break-words'>
+        <span
+          className='text-muted-foreground block text-sm break-words'
+          data-sensitive={isDay ? '' : undefined}
+        >
           {detail}
         </span>
       </span>
