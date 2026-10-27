@@ -290,7 +290,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 ## The Build Plan
 
-**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "+ Expected" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Spend and Days list the months since the newest monthly closing, so older purchases and income days count in every figure but cannot be opened until a history window is built.
+**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Spend and Days list the months since the newest monthly closing, so older purchases and income days count in every figure but cannot be opened until a history window is built.
 
 ### Core MVP
 

@@ -2,26 +2,28 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import type { LookaheadProblem } from '@apps/runway/engine/lookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { describeProblemRow } from '@apps/runway/utils/lookaheadText';
+import {
+  describeGroupRow,
+  type ProblemGroup,
+} from '@apps/runway/utils/lookaheadText';
 import { FIX_WORDS } from '@apps/runway/constants';
 import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
 
 interface ProblemRowProps {
-  problem: LookaheadProblem;
+  group: ProblemGroup;
 }
 
-/** One thing that stops the plan: what is short or missing, by how much and on which day, as a row that opens the income day it runs short on, or the bills. */
-function ProblemRow({ problem }: ProblemRowProps) {
+/** One day that runs short, or one problem not tied to a day: what is short or missing and when, as a row that opens the income day it runs short on, or the bills. */
+function ProblemRow({ group }: ProblemRowProps) {
   const { openDay, showPlanSection, showTab, closeFixes } = useRunwayUrlState();
-  const { title, detail } = describeProblemRow(problem);
-  const isDay = problem.kind === 'short';
+  const { title, detail } = describeGroupRow(group);
+  const isDay = group.kind === 'day';
 
   const open = () => {
-    if (problem.kind === 'short') {
+    if (group.kind === 'day') {
       keepEntryFor('fixes');
-      openDay(problem.dayKey);
+      openDay(group.dayKey);
       return;
     }
     closeFixes();

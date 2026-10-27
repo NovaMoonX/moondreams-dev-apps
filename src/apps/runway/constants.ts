@@ -210,7 +210,7 @@ export const FUNDING_CADENCE_LABELS: Record<
 
 export const ENVELOPE_ORDER_STEP = 1;
 
-/** What "+ Expected" can add. */
+/** What "Add expected money" can add. */
 export const EXPECTED_KINDS = ['income', 'expense'] as const;
 
 /** The ways a bill can repeat that the bill form offers. */
@@ -273,8 +273,6 @@ export const SPEND_SEARCH_THRESHOLD = 8;
 export const START_HOLDINGS = ['money', 'goal', 'bill', 'envelope'] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
-/** Envelope tiles Home draws before it points at the full list. */
-export const HOME_ENVELOPE_TILES = 6;
 /** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
 export const TICK_HIT_CLASS =
   "relative before:absolute before:-inset-[11px] before:content-['']";
@@ -519,6 +517,10 @@ export const DRAFT_WORDS = {
   fundedOf: 'Funded',
   of: 'of',
   notFunded: 'Not fully funded',
+  lesserLeft: (count: number, total: number) =>
+    count === total
+      ? 'These are left for later.'
+      : `${count === 1 ? 'The other one is' : `The other ${count} are`} left for later.`,
   dayLeft: 'Left from this day',
   nothingLeft: 'Nothing left after the envelopes',
   tieCreatedAt:
@@ -805,7 +807,7 @@ export const START_WORDS = {
     'Some of what you entered did not save. It is still on this device.',
   landingTitle: 'Plan before you sign in',
   landingBody:
-    'You can go through Starting out now. Your answers stay on this device until you sign in.',
+    'Runway plans each paycheck: what goes to bills, envelopes and goals, and what is left to spend. You can go through Starting out now. Your answers stay on this device until you sign in.',
   landingButton: 'Start planning',
 } as const;
 
@@ -981,7 +983,7 @@ export const ITEM_SHEET_R2_WORDS = {
   resumeSub: 'Money goes in again from the next income day',
   endSub: 'It stops after the day you pick',
   archiveSub: 'Off your lists. Its history stays',
-  checkSub: 'Nothing is spent',
+  checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to spend`,
   changeAmount: 'Change amount',
   eachTime: 'Each time',
@@ -1107,7 +1109,7 @@ export const FIX_WORDS = {
 
 export const DAYS_WORDS = {
   addExpected: 'Add expected money',
-  addExpectedShort: 'Add expected',
+  addExpectedShort: 'Add money',
 } as const;
 
 export const PLAN_VIEW_EMOJI = {
@@ -1122,19 +1124,19 @@ export const PLAN_MORE_LABEL = 'Settings and tools';
 /** Quick periods on Spend, as the URL keeps them; any other value is a month as `yyyy-mm`. */
 export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
-export const SPEND_OTHER_MONTH = 'other' as const;
 
 export const SPEND_PERIOD_LABELS = {
   month: 'This month',
   lastMonth: 'Last month',
   '30': 'Past 30 days',
   '90': 'Past 90 days',
-  other: 'Older',
 } as const;
 
 export const SPEND_PERIOD_WORDS = {
   total: 'Spent',
-  pickMonth: 'Month',
+  period: 'Period',
+  months: 'Older months',
+  failed: 'These purchases did not load. Nothing was changed.',
   emptyPeriod: 'Nothing was spent in this period.',
   loading: 'Getting these purchases.',
 } as const;
@@ -1166,6 +1168,7 @@ export const ITEM_VIEW_WORDS = {
   historyTitle: 'History',
   historyEmpty: 'Nothing has changed since you added it.',
   historyLoading: 'Getting the changes.',
+  historyOlder: 'Older changes are in the change log.',
   historyFailed: 'The history did not load. Nothing was changed.',
   purchasesTitle: 'Purchases this month',
   purchasesEmpty: 'Nothing spent from it this month.',
@@ -1200,3 +1203,9 @@ export const EFFECT_FOLD_WORDS = {
       ? 'One income day: nothing else changes'
       : `${count} income days: nothing else changes`,
 } as const;
+
+/** Rows of "Things to fix" drawn before "Show N more". */
+export const FIX_ROWS_SHOWN = 12;
+
+/** Rows a Plan view (envelopes, bills, goals) holds before it offers a search. */
+export const PLAN_SEARCH_THRESHOLD = 5;

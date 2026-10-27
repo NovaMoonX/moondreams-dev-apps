@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { ChevronRight, Home, ListChecks, ReceiptText } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import EmptyCard from '@/components/EmptyCard';
 import HelpTip from '@/components/HelpTip';
@@ -18,7 +17,6 @@ import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import LookaheadWarnings from '@apps/runway/components/LookaheadWarnings';
 import {
-  HOME_ENVELOPE_TILES,
   HOME_TILE_COUNT,
   HOME_WORDS,
   SPEND_WORDS,
@@ -107,56 +105,53 @@ function HomeScreen() {
   );
   const shown = (withMoney.length > 0 ? withMoney : envelopes).slice(
     0,
-    withMoney.length > 0
-      ? level === 'track'
-        ? HOME_TILE_COUNT
-        : HOME_ENVELOPE_TILES
-      : 3,
+    HOME_TILE_COUNT,
   );
   const hasRanges = rangeSides.income || rangeSides.expense;
-  const isTiles = level === 'track';
 
   return (
-    <div className='space-y-2'>
-      {lookahead && lookahead.problems.length > 0 ? (
-        <LookaheadWarnings lookahead={lookahead} />
-      ) : lookahead ? (
-        <HoldsThroughLine lookahead={lookahead} />
-      ) : (
-        <div className='min-h-10' aria-hidden='true' />
-      )}
-      <div className='border-border bg-accent relative rounded-2xl border px-4 py-2.5'>
-        <div className='flex h-5 items-center gap-1'>
-          <span className='text-muted-foreground text-sm font-medium'>
-            {free.label}
-          </span>
-          {hasRanges && (
-            <span className='relative z-10'>
-              <HelpTip title={HOME_WORDS.freeToSpend}>
-                {describeRangeBasis(stance, rangeSides)}
-              </HelpTip>
+    <div className='space-y-6'>
+      <div className='space-y-2'>
+        {lookahead && lookahead.problems.length > 0 ? (
+          <LookaheadWarnings lookahead={lookahead} />
+        ) : lookahead ? (
+          <HoldsThroughLine lookahead={lookahead} />
+        ) : (
+          <div className='min-h-10' aria-hidden='true' />
+        )}
+        <div className='border-border bg-accent relative rounded-2xl border px-4 py-2.5'>
+          <div className='flex h-5 items-center gap-1'>
+            <span className='text-muted-foreground text-sm font-medium'>
+              {free.label}
             </span>
-          )}
+            {hasRanges && (
+              <span className='relative z-10'>
+                <HelpTip title={HOME_WORDS.freeToSpend}>
+                  {describeRangeBasis(stance, rangeSides)}
+                </HelpTip>
+              </span>
+            )}
+          </div>
+          <Button
+            variant='tertiary'
+            size='stripped'
+            className="text-foreground! static h-auto w-full items-center justify-between gap-3 text-left font-normal after:absolute after:inset-0 after:rounded-2xl after:content-['']"
+            aria-label={
+              isHidden
+                ? `${free.label}, amount hidden. See it in detail`
+                : `${free.label}, ${free.value}. See it in detail`
+            }
+            onClick={() => openView('freeToSpend')}
+          >
+            <span className='min-w-0 text-4xl leading-none font-semibold tracking-tight break-words tabular-nums'>
+              <SensitiveValue>{free.value}</SensitiveValue>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground h-5 w-5 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
         </div>
-        <Button
-          variant='tertiary'
-          size='stripped'
-          className="text-foreground! static h-auto w-full items-center justify-between gap-3 text-left font-normal after:absolute after:inset-0 after:rounded-2xl after:content-['']"
-          aria-label={
-            isHidden
-              ? `${free.label}, amount hidden. See it in detail`
-              : `${free.label}, ${free.value}. See it in detail`
-          }
-          onClick={() => openView('freeToSpend')}
-        >
-          <span className='min-w-0 text-4xl leading-none font-semibold tracking-tight break-words tabular-nums'>
-            <SensitiveValue>{free.value}</SensitiveValue>
-          </span>
-          <ChevronRight
-            className='text-muted-foreground h-5 w-5 shrink-0'
-            aria-hidden='true'
-          />
-        </Button>
       </div>
       {isSetupOpen && (
         <EmptyCard
@@ -206,13 +201,7 @@ function HomeScreen() {
               </span>
             }
           />
-          <ul
-            className={join(
-              isTiles
-                ? 'grid grid-cols-2 gap-2'
-                : 'border-border divide-border bg-card divide-y rounded-2xl border',
-            )}
-          >
+          <ul className='grid grid-cols-2 gap-2'>
             {shown.map(({ item, version }) => (
               <EnvelopeTile
                 key={item.id}
@@ -221,21 +210,23 @@ function HomeScreen() {
                 cents={balances.assignedByItem[item.id] ?? 0}
                 pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
                 today={today}
-                look={isTiles ? 'tile' : 'row'}
+                look='tile'
               />
             ))}
           </ul>
         </div>
       )}
       {nextDay && (
-        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          <IncomeDayCard
-            day={nextDay}
-            lead={HOME_WORDS.nextIncome}
-            isPrivate
-            onOpen={() => openDay(nextDay.dayKey)}
-          />
-        </ul>
+        <div className='space-y-2'>
+          <SectionHeader title={HOME_WORDS.nextIncome} />
+          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+            <IncomeDayCard
+              day={nextDay}
+              isPrivate
+              onOpen={() => openDay(nextDay.dayKey)}
+            />
+          </ul>
+        </div>
       )}
       {isAddingPurchase && (
         <PurchaseForm isOpen onClose={() => setIsAddingPurchase(false)} />

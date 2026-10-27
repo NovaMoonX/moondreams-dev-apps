@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import SearchInput from '@/components/SearchInput';
+import { PLAN_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -21,8 +22,6 @@ import { describePairedBy } from '@apps/runway/utils/fundingText';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 
-const SEARCH_THRESHOLD = 8;
-
 function EnvelopesScreen() {
   const today = todayAsUtcDate(useNow(60_000));
   const balances = useAppSelector(selectBalances);
@@ -37,7 +36,7 @@ function EnvelopesScreen() {
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
-  const hasSearch = envelopes.length >= SEARCH_THRESHOLD;
+  const hasSearch = envelopes.length >= PLAN_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = envelopes.filter(({ version }) =>
     version.payload.name.toLowerCase().includes(needle),

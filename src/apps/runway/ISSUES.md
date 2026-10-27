@@ -201,11 +201,11 @@ A person adds an income source and a pay line (take-home, an exact amount, weekl
 2. `createIncome` is one `writeBatch` of the item header, its first version (`effectiveFrom` = the start date, `changeId`) and a `ChangeDoc` whose sealed summary says what was added. Items and versions are created and never updated; changes are append-only.
 3. Sealed payloads carry only the fields this issue reads. A field a later issue needs (`pairings`, `steps`, `stanceOverride`, `hourly`) is added by that issue; readers default a missing one.
 4. `AmountField` is built in `src/components` with an exact mode and a prop for the money label; later issues add the other modes.
-5. Plan > Income lists sources with their pay lines and "+ Add income"; the form asks for the name, the amount, how often and when it ends as visible pill questions, with the first date. Days lists the coming income days, three first and the rest behind "Show N more", each as an `IncomeDayCard` with no chevron yet.
+5. Plan > Income lists sources with their pay lines and "Add income"; the form asks for the name, the amount, how often and when it ends as visible pill questions, with the first date. Days lists the coming income days, three first and the rest behind "Show N more", each as an `IncomeDayCard` with no chevron yet.
 6. Rules for `items`, `versions` and `changes`: required keys with explicit nulls, immutable `kind`, `itemId`, `effectiveFrom` and `changeId`, `endedAt` writable once, and `update`/`delete` denied on `versions` and `changes`. Seed a source with two pay lines, one ending after a count and one once.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ Add income" on Plan > Income and "+ Expected" on Days with Income chosen.
+- [ ] **Create:** "Add income" on Plan > Income and "Add expected money" on Days with Income chosen.
 - [ ] **Read:** the Income list, and the coming days on Days.
 - [ ] **Update / Delete:** deferred to Issues 18 and 19 (changing, ending and archiving apply to every kind of item, so they are built once).
 
@@ -239,13 +239,13 @@ A person adds an envelope with a name, an optional emoji, a priority (Must, Shou
 
 ### Possible Approach
 1. `createEnvelope` follows `createIncome`: header, first version and change in one batch. `orderIndex` is a fractional rank inside the priority tier, so reordering later writes one version.
-2. `EnvelopeForm` is a `FormSheet`: name, priority pills (a detail the path depends on, so visible), the amount (`AmountField` exact) and "funded" pills (every income day, every other, every third, chosen days). Emoji is a chip under "+ Add X".
+2. `EnvelopeForm` is a `FormSheet`: name, priority pills (a detail the path depends on, so visible), the amount (`AmountField` exact) and "funded" pills (every income day, every other, every third, chosen days). Emoji is a chip under "Add X".
 3. The cadence selector in `schedule.ts` answers, for an envelope and an income-day list, which days it funds: `everyNth` counts from `anchorDayKey` in the plan-wide chronological income-day list; `chosen` is a list of day keys picked from the coming days.
 4. List at 5 and 50: a `SearchInput` from 8 rows, rows with the badge, name, priority and funding line ("$50 every income day").
 5. Seed five envelopes covering all three cadences and priorities.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ New" in the Envelopes pill of Plan.
+- [ ] **Create:** "New" in the Envelopes pill of Plan.
 - [ ] **Read:** the Envelopes pill; the funding line on each row.
 - [ ] **Update / Delete:** deferred to Issues 18 and 19.
 
@@ -305,7 +305,7 @@ Open a coming income day and see exactly what its money does: every envelope fun
 - `src/apps/runway/store/actions/itemActions.ts` (`createBill`)
 - `src/apps/runway/engine/demands.ts` (bill demands: chosen days and suggested), `draft.ts`
 - `src/apps/runway/screens/plan/BillsScreen.tsx`, `forms/BillForm.tsx`, `components/BillRow.tsx`
-- `src/apps/runway/screens/days/ExpectedScreen.tsx` (Expense choice, reached from "+ Expected")
+- `src/apps/runway/screens/days/ExpectedScreen.tsx` (Expense choice, reached from "Add expected money")
 - `scripts/seeds/runway.ts`
 - `scripts/checks/runwayEngine.ts`
 
@@ -321,7 +321,7 @@ A person adds a bill (exact amount) due once or repeating, ending never, on a da
 4. Seed a monthly bill, a one-time bill, a bill chosen across 3 days and a bill ending after 6 payments.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ Add" on Plan > Bills and "+ Expected" on Days with Expense chosen.
+- [ ] **Create:** "Add a bill" on Plan > Bills and "Add expected money" on Days with Expense chosen.
 - [ ] **Read:** the Bills pill, and the bill's funding lines on each draft.
 - [ ] **Update / Delete:** deferred to Issues 18 and 19. **Paid and progress:** Issue 15.
 
@@ -359,7 +359,7 @@ A person adds a savings goal with a target, an optional date and a priority, fun
 4. Seed an active goal with a date, one without, and one at its target.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ New" on the Goals pill.
+- [ ] **Create:** "New" on the Goals pill.
 - [ ] **Read:** the Goals pill and the draft lines.
 - [ ] **Update / Delete:** pause, complete and archive in Issue 19; editing in Issue 18.
 
@@ -1454,7 +1454,7 @@ Bills and expected expenses can be grouped (Subscriptions, Housing, Car). A grou
 A pay line can have no schedule. Income days are created when money arrives; lookahead uses a rough monthly range so the headline stays honest.
 
 ### Possible Approach
-1. An irregular pay line generates no occurrences; "+ Income arrived" creates a day on the date. Lookahead adds a labelled expectation per month, at the stance's end of the range.
+1. An irregular pay line generates no occurrences; "Income arrived" creates a day on the date. Lookahead adds a labelled expectation per month, at the stance's end of the range.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read:** an irregular pay line and its arrivals.

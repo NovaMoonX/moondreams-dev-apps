@@ -13,6 +13,7 @@ import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { SPEND_WORDS } from '@apps/runway/constants';
+import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
 import type { OpenPurchase } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import SheetHead from '@apps/runway/components/SheetHead';
@@ -157,6 +158,18 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
     }
   };
 
+  if (editTarget !== null) {
+    return (
+      <PurchaseForm
+        key={editTarget.key}
+        isOpen
+        editing={editTarget.purchase}
+        onClose={() => setEditTarget(null)}
+        onCancel={() => setEditTarget(null)}
+      />
+    );
+  }
+
   return (
     <>
       <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={title}>
@@ -200,12 +213,13 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
               icon={<Pencil />}
               label={SPEND_WORDS.edit}
               isDisabled={isBusy}
-              onClick={() =>
+              onClick={() => {
+                keepEntryFor('purchase');
                 setEditTarget((current) => ({
                   key: (current?.key ?? 0) + 1,
                   purchase,
-                }))
-              }
+                }));
+              }}
             />
             {original && (
               <ActionRow
@@ -246,14 +260,6 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
           />
         </div>
       </FormSheet>
-      {editTarget !== null && (
-        <PurchaseForm
-          key={editTarget.key}
-          isOpen
-          editing={editTarget.purchase}
-          onClose={() => setEditTarget(null)}
-        />
-      )}
     </>
   );
 }

@@ -6,7 +6,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 /** The header's eye: shows or hides every private figure under the same provider. 28px round with a 40px hit area, like the other header icons. */
 function ValuesEyeButton() {
   const { isHidden, toggle } = useValuesHidden();
-  const label = isHidden ? 'Show amounts' : 'Hide amounts';
+  const label = 'Show amounts';
   const Icon = isHidden ? Eye : EyeOff;
 
   return (

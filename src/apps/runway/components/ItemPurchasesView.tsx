@@ -58,6 +58,7 @@ function ItemPurchasesView({ envelopeId, onOpen }: ItemPurchasesViewProps) {
         <PurchaseRow
           key={purchase.id}
           purchase={purchase}
+          isPrivate={false}
           looks={looks}
           onOpen={() => onOpen(purchase.id)}
         />

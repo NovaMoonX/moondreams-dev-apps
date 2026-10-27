@@ -1,56 +1,21 @@
-import { useEffect, useState } from 'react';
-
-import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import ChangeRow from '@apps/runway/components/ChangeRow';
-import { ITEM_VIEW_WORDS } from '@apps/runway/constants';
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
-import type { OpenChange } from '@apps/runway/types';
-import { getChangeWindow } from '@apps/runway/utils/changeWindow';
+import { ITEM_VIEW_WORDS, MAX_WINDOW_CHANGES } from '@apps/runway/constants';
+import { useItemChanges } from '@apps/runway/hooks/useItemChanges';
 
 interface ItemHistoryViewProps {
   itemId: string;
 }
 
-const YEAR_DAYS = 365;
-
-/** Every change to one item over the past year, newest first, read by this view alone so the sheet it sits in stays where it was. */
+/** Every change to one item over the past year, newest first. */
 function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
-  const { user } = useAuth();
-  const uid = user?.uid ?? null;
-  const [state, setState] = useState<{
-    changes: OpenChange[] | null;
-    isFailed: boolean;
-  }>({ changes: null, isFailed: false });
-
-  useEffect(() => {
-    if (!uid) return;
-    const run = { isCurrent: true };
-    const stop: { current: (() => void) | null } = { current: null };
-    const window = getChangeWindow(todayAsUtcDate(), YEAR_DAYS, 0);
-    getRunwayEncryption(uid)
-      .then((encryption) => {
-        if (!run.isCurrent) return;
-        stop.current = startChangesListener(
-          uid,
-          encryption,
-          { from: window.from, to: window.to, itemId },
-          (changes) => setState({ changes, isFailed: false }),
-          (error) => {
-            console.error('The history did not open', error);
-            setState({ changes: null, isFailed: true });
-          },
-        );
-      })
-      .catch(() => {
-        if (run.isCurrent) setState({ changes: null, isFailed: true });
-      });
-    return () => {
-      run.isCurrent = false;
-      stop.current?.();
-    };
-  }, [uid, itemId]);
+  const state = useItemChanges(itemId);
+  const startDate = useAppSelector(
+    (current) => current.runway.plan?.startDate ?? null,
+  );
+  const isCut =
+    (state.changes?.length ?? 0) >= MAX_WINDOW_CHANGES ||
+    (startDate !== null && startDate < state.from);
 
   if (state.isFailed) {
     return (
@@ -83,6 +48,11 @@ function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
           onOpenRecord={() => undefined}
         />
       ))}
+      {isCut && (
+        <li className='text-muted-foreground p-3 text-sm'>
+          {ITEM_VIEW_WORDS.historyOlder}
+        </li>
+      )}
     </ul>
   );
 }

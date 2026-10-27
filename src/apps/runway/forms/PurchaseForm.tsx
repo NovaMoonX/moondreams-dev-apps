@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -657,10 +657,7 @@ function PurchaseForm({
                     </RevealChip>
                   )}
                   {amount !== null && options.length >= 2 && (
-                    <RevealChip
-                      icon={<Plus className='h-4 w-4' />}
-                      onClick={startSplit}
-                    >
+                    <RevealChip onClick={startSplit}>
                       {SPEND_WORDS.split}
                     </RevealChip>
                   )}
@@ -786,11 +783,7 @@ function PurchaseForm({
           <div className='flex flex-wrap gap-2'>
             <RevealChip
               icon={
-                extras.merchant === null ? (
-                  <Plus className='h-4 w-4' />
-                ) : (
-                  <X className='h-4 w-4' />
-                )
+                extras.merchant === null ? undefined : <X className='h-4 w-4' />
               }
               onClick={() => {
                 setRevealed(extras.merchant === null ? 'merchant' : null);
@@ -803,11 +796,7 @@ function PurchaseForm({
             </RevealChip>
             <RevealChip
               icon={
-                extras.note === null ? (
-                  <Plus className='h-4 w-4' />
-                ) : (
-                  <X className='h-4 w-4' />
-                )
+                extras.note === null ? undefined : <X className='h-4 w-4' />
               }
               onClick={() => {
                 setRevealed(extras.note === null ? 'note' : null);

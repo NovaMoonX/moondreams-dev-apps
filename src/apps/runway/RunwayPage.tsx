@@ -36,6 +36,7 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectIsDaysLoaded,
   selectListedDays,
+  selectSpendPurchases,
   selectIsPlanItemsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
@@ -61,6 +62,12 @@ interface RunwayTabsProps {
 
 /** A tab opens where it was left (the top on a first visit), and tapping the open tab again goes to its top. */
 function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
+  const hasItems = useAppSelector((state) => state.runway.items.length > 0);
+  const hasPurchases = useAppSelector(
+    (state) => selectSpendPurchases(state).length > 0,
+  );
+  const hasFigures = activeTab === 'spend' ? hasPurchases : hasItems;
+
   useLayoutEffect(() => {
     const target = tabScrolls.get(activeTab) ?? 0;
     const state = { isRestoring: true, frame: 0, id: 0 };
@@ -108,7 +115,7 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
           <h1 className='text-2xl font-semibold'>
             {RUNWAY_TAB_LABELS[activeTab]}
           </h1>
-          <ValuesEyeButton />
+          {hasFigures && <ValuesEyeButton />}
         </div>
         {getScreen(activeTab)}
       </div>

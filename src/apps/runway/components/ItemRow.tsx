@@ -9,6 +9,20 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { TICK_HIT_CLASS } from '@apps/runway/constants';
 
+const FIGURE_PATTERN = /([−+-]?\$[\d,]+(?:\.\d+)?)/;
+
+/** A line with each amount in it blurred and the words left readable. */
+const blurFigures = (text: string) =>
+  text
+    .split(FIGURE_PATTERN)
+    .map((part, index) =>
+      index % 2 === 1 ? (
+        <SensitiveValue key={index}>{part}</SensitiveValue>
+      ) : (
+        part
+      ),
+    );
+
 interface ItemRowProps {
   name: string;
   emoji?: string | null;
@@ -98,7 +112,9 @@ function ItemRow({
             />
           )}
           <span className='line-clamp-2'>
-            {hide(detail, isPrivate && isDetailPrivate)}
+            {isPrivate && isDetailPrivate && detail
+              ? blurFigures(detail)
+              : detail}
           </span>
         </span>
       )}

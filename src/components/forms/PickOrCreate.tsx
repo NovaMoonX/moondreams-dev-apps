@@ -27,6 +27,8 @@ interface PickOrCreateProps {
   isFocusedOnOpen?: boolean;
   /** A visible way to unset the choice ("Remove source"), shown while something is chosen; without it the only way is tapping the chosen pill again. */
   clearLabel?: string;
+  /** Draw a "+" on the "New" pill; an app whose calls to action carry no glyph turns it off. */
+  hasPlus?: boolean;
 }
 
 /** Pick an existing name or make a new one: nothing starts selected, and the dashed "New" pill comes first. With no names yet it is just the text field. */
@@ -42,6 +44,7 @@ function PickOrCreate({
   maxLength,
   isFocusedOnOpen = true,
   clearLabel,
+  hasPlus = true,
 }: PickOrCreateProps) {
   const [isCreating, setIsCreating] = useState(choice === NEW_CHOICE);
   const [hasTappedNew, setHasTappedNew] = useState(false);
@@ -82,7 +85,7 @@ function PickOrCreate({
               onChange(NEW_CHOICE, newText);
             }}
           >
-            <Plus className='h-3.5 w-3.5' aria-hidden='true' />
+            {hasPlus && <Plus className='h-3.5 w-3.5' aria-hidden='true' />}
             {newPillLabel}
           </Pill>
         }

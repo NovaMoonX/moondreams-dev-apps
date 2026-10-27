@@ -1,5 +1,7 @@
 import { useEffect } from 'react';
 
+import { useNow } from '@/hooks/useNow';
+
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   getChangeWindow,
@@ -44,6 +46,8 @@ import {
   setKeyStatus,
   setLoadDay,
   setMoves,
+  clearPeriodPurchases,
+  setPeriodFailed,
   setPeriodPurchases,
   setPlan,
   setPurchases,
@@ -57,6 +61,7 @@ import {
  */
 export function useRunwaySync(uid: string | null, attempt: number) {
   const dispatch = useAppDispatch();
+  const today = todayAsUtcDate(useNow(60_000));
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const confirmedDayIds = useAppSelector(selectConfirmedDayIds);
   const isItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
@@ -67,7 +72,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     toClosingKey(state.runway.plan?.dirtyFrom ?? null),
   );
   const reachedEndings = useAppSelector((state) =>
-    selectReachedEndingsKey(state, todayAsUtcDate()),
+    selectReachedEndingsKey(state, today),
   );
 
   useEffect(() => {
@@ -231,7 +236,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     from: periodFrom,
     to: periodTo,
     key: periodKey,
-  } = getSpendRange(spendPeriod, todayAsUtcDate());
+  } = getSpendRange(spendPeriod, today);
   const isChangeLogOpen = moreEntry === 'changeLog';
 
   useEffect(() => {
@@ -251,18 +256,19 @@ export function useRunwaySync(uid: string | null, attempt: number) {
             dispatch(setPeriodPurchases({ key: periodKey, purchases })),
           (error) => {
             console.error('The purchases did not open', error);
-            dispatch(setKeyStatus('failed'));
+            dispatch(setPeriodFailed(periodKey));
           },
           periodTo,
         );
       })
       .catch(() => {
-        if (run.isCurrent) dispatch(setKeyStatus('failed'));
+        if (run.isCurrent) dispatch(setPeriodFailed(periodKey));
       });
 
     return () => {
       run.isCurrent = false;
       stop.current?.();
+      dispatch(clearPeriodPurchases());
     };
   }, [uid, keyStatus, isSpendOpen, periodFrom, periodTo, periodKey, dispatch]);
 
@@ -271,7 +277,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
 
     const stop: { current: (() => void) | null } = { current: null };
     const run = { isCurrent: true };
-    const window = getChangeWindow(todayAsUtcDate(), Number(logSpan), logPage);
+    const window = getChangeWindow(today, Number(logSpan), logPage);
     const key = toChangeWindowKey(window, logItem);
 
     getRunwayEncryption(uid)
@@ -296,7 +302,16 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       run.isCurrent = false;
       stop.current?.();
     };
-  }, [uid, keyStatus, isChangeLogOpen, logSpan, logPage, logItem, dispatch]);
+  }, [
+    uid,
+    keyStatus,
+    isChangeLogOpen,
+    logSpan,
+    logPage,
+    logItem,
+    today,
+    dispatch,
+  ]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || !isPlanLoaded || reachedEndings === '')

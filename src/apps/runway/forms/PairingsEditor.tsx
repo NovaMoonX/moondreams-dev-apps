@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 import {
   Button,
@@ -348,10 +348,7 @@ function PairingsEditor({
             {rows.length + locked.length < MAX_PAIRINGS &&
               choices.length > rows.length && (
                 <div>
-                  <RevealChip
-                    icon={<Plus className='h-4 w-4' />}
-                    onClick={() => addRow(rows, props.onValueChange)}
-                  >
+                  <RevealChip onClick={() => addRow(rows, props.onValueChange)}>
                     Add something to fund
                   </RevealChip>
                 </div>

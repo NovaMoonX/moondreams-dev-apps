@@ -9,10 +9,17 @@ interface PurchaseRowProps {
   purchase: OpenPurchase;
   looks: ReadonlyMap<string, { name: string; emoji: string | null }>;
   onOpen: () => void;
+  /** Blurred until shown, as on a tab's front; off in a sheet the person opened on purpose. */
+  isPrivate?: boolean;
 }
 
 /** One purchase in a list: where it was, the day and the envelopes it came out of, and the amount. A refund reads as money coming back. */
-function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
+function PurchaseRow({
+  purchase,
+  looks,
+  onOpen,
+  isPrivate = true,
+}: PurchaseRowProps) {
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
   const refund = isRefund(purchase);
@@ -47,7 +54,7 @@ function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
       }
       detail={detail}
       figure={amount}
-      isPrivate
+      isPrivate={isPrivate}
       ariaLabel={`${title}, ${amount}, ${detail}. Open`}
       onOpen={onOpen}
     />

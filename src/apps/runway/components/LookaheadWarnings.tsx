@@ -1,15 +1,22 @@
+import { useState } from 'react';
 import { ChevronRight, TriangleAlert } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Callout } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { FIX_WORDS, PROBLEM_WORDS } from '@apps/runway/constants';
 import {
-  describeProblemShort,
-  sortProblems,
+  FIX_ROWS_SHOWN,
+  FIX_WORDS,
+  PROBLEM_WORDS,
+} from '@apps/runway/constants';
+import {
+  describeGroupShort,
+  groupProblems,
 } from '@apps/runway/utils/lookaheadText';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import ProblemRow from '@apps/runway/components/ProblemRow';
@@ -24,17 +31,25 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
   const { isFixesOpen, openFixes, closeFixes } = useRunwayUrlState();
   const { isHidden } = useValuesHidden();
   const { incomeEndsOn } = lookahead;
-  const problems = sortProblems(lookahead.problems);
-  const first = problems[0] ?? null;
+  const [isAllShown, setIsAllShown] = useState(false);
+  const groups = groupProblems(lookahead.problems);
+  const first = groups[0] ?? null;
   const endsText =
     incomeEndsOn === null
       ? null
       : FIX_WORDS.incomeEnds(formatDateUTC(incomeEndsOn));
 
   if (!first && !endsText) return null;
-  const label = first ? describeProblemShort(first) : endsText;
-  const more = problems.length - 1;
-  const isLabelPrivate = first?.kind === 'short';
+  const label = first
+    ? describeGroupShort(first)
+    : { before: endsText ?? '', figure: null, after: '' };
+  const more = groups.length - 1;
+  const moreText = groups.every((group) => group.kind === 'day')
+    ? `${more} more ${more === 1 ? 'day' : 'days'}`
+    : `${more} more`;
+  const isCounted = more > 0;
+  const isLabelPrivate = label.figure !== null;
+  const shown = isAllShown ? groups : groups.slice(0, FIX_ROWS_SHOWN);
 
   return (
     <>
@@ -56,13 +71,24 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
           <TriangleAlert className='h-4 w-4' />
         </span>
         <span className='min-w-0 flex-1 text-sm font-medium'>
-          {isLabelPrivate ? <SensitiveValue>{label}</SensitiveValue> : label}
-          {more > 0 && (
-            <span className='text-muted-foreground font-normal whitespace-nowrap'>
-              {' '}
-              · {more} more
+          {isCounted && (
+            <span className='sm:hidden'>
+              {PROBLEM_WORDS.many(groups.length)}
             </span>
           )}
+          <span className={join(isCounted && 'max-sm:hidden')}>
+            {label.before}
+            {label.figure !== null && (
+              <SensitiveValue>{label.figure}</SensitiveValue>
+            )}
+            {label.after}
+            {more > 0 && (
+              <span className='text-muted-foreground font-normal whitespace-nowrap'>
+                {' '}
+                · {moreText}
+              </span>
+            )}
+          </span>
         </span>
         <ChevronRight
           className='text-muted-foreground h-4 w-4 shrink-0'
@@ -74,20 +100,32 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         onClose={closeFixes}
         title={PROBLEM_WORDS.title}
       >
-        {isFixesOpen && (
+        {isFixesOpen && groups.length > 0 && (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {problems.map((problem, index) => (
+            {shown.map((group) => (
               <li
-                key={`${index}:${problem.kind}:${problem.on}`}
+                key={`${group.kind}:${group.on}:${group.kind === 'day' ? group.dayKey : group.problem.kind}`}
                 className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'
               >
-                <ProblemRow problem={problem} />
+                <ProblemRow group={group} />
               </li>
             ))}
-            {endsText !== null && (
-              <li className='text-muted-foreground p-3 text-sm'>{endsText}</li>
+            {groups.length > FIX_ROWS_SHOWN && (
+              <li className='px-3 py-1'>
+                <ShowMoreButton
+                  isOpen={isAllShown}
+                  onClick={() => setIsAllShown((current) => !current)}
+                >
+                  {isAllShown
+                    ? 'Show fewer'
+                    : `Show ${groups.length - FIX_ROWS_SHOWN} more`}
+                </ShowMoreButton>
+              </li>
             )}
           </ul>
+        )}
+        {isFixesOpen && endsText !== null && (
+          <Callout variant='info' description={endsText} className='mt-3' />
         )}
       </DetailSheet>
     </>
