@@ -4,12 +4,14 @@ Spawn all three in parallel with the Agent tool: `model: "sonnet"`, `run_in_back
 
 ## Keeping these sections useful
 
-When the owner says a review agent should have caught something (any wording: "the design agent should've caught this", "this should have been flagged"), the fix is to **that agent's section**, in the same turn as the code fix, and it is an audit of the whole section, not an append:
+Revise these sections **on your own, without being asked**, whenever you are confident a change makes a review catch more, and in the same turn as the work that showed it. Any moment of feedback is a signal to re-evaluate them: the owner reporting a problem on a screen a review passed (whether or not they say "the agent should have caught this"), the owner correcting a design or product choice, a finding the owner rejects (a check that is wrong or noisy), a bug you or an implementer find after a review passed, and an audit or test that turns up a class of problem. For each, ask which agent's section should have caught it or should stop flagging it, and change **that agent's section** as an audit of the whole section, never an append:
 1. Name the **class** of failure (not the instance) and why the section missed it: no check, a check too vague to act on, a check buried among many, or one that measured the wrong thing.
 2. Put it in the group that owns the class and **sharpen that check** (add the measurement that would have caught it); add a group only when none fits.
 3. While in the section: merge checks that overlap, replace checks the new one subsumes, delete checks that only restate a `CLAUDE.md` rule (point to the rule instead) or never caught anything, and fix stale wording. `polish-agents.md` and `SKILL.md` point here; they never keep their own copy of a check.
 4. Keep each role to about ten groups an agent can run in full, each a test with its measurement and the owner round that taught it. A section that only grows stops being run.
-5. Tell the owner in one line what was added, merged, replaced and deleted.
+5. A finding the owner rejected, or a check that keeps flagging what the owner accepts, is deleted or narrowed the same way: a check that misleads costs as much as one that is missing.
+6. Leave a change out only when you are not confident it is right (one ambiguous instance, a preference the owner has not stated); then put it to the owner as a one-line proposal instead.
+7. Tell the owner in one line what was added, merged, replaced and deleted, and why.
 
 ## Shared preamble (top of every prompt)
 
