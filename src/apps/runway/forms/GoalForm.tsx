@@ -6,6 +6,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField from '@/components/AmountField';
 import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
@@ -533,7 +534,12 @@ function GoalForm({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={requestClose} title={title}>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={title}
+      actions={<ValuesEyeButton />}
+    >
       <ChangeSteps
         isReason={flow.step === 'reason'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}

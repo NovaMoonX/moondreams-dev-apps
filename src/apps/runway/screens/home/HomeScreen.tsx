@@ -25,7 +25,6 @@ import {
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
@@ -71,7 +70,6 @@ function HomeScreen() {
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
-  const level = useAppSelector(selectLevel);
   const { isHidden } = useValuesHidden();
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
 
@@ -100,14 +98,12 @@ function HomeScreen() {
 
   const free = describeFreeToSpend(getFreeToSpendFigure(balances));
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
-  const withMoney = envelopes.filter(
-    ({ item }) =>
-      level !== 'plan' || (balances.assignedByItem[item.id] ?? 0) !== 0,
-  );
-  const shown = (withMoney.length > 0 ? withMoney : envelopes).slice(
-    0,
-    HOME_TILE_COUNT,
-  );
+  const hasMoney = ({ item }: (typeof envelopes)[number]) =>
+    (balances.assignedByItem[item.id] ?? 0) !== 0;
+  const shown = [
+    ...envelopes.filter(hasMoney),
+    ...envelopes.filter((entry) => !hasMoney(entry)),
+  ].slice(0, HOME_TILE_COUNT);
   const hasRanges = rangeSides.income || rangeSides.expense;
 
   return (

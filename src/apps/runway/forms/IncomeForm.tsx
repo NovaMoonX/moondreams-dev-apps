@@ -4,6 +4,7 @@ import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
@@ -743,7 +744,12 @@ function IncomeForm({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={requestClose} title={title}>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={title}
+      actions={<ValuesEyeButton />}
+    >
       <ChangeSteps
         isReason={flow.step === 'reason'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}

@@ -203,7 +203,9 @@ function EffectPreview({
     }
     if (days.length === 0) {
       return emptyText ? (
-        <InlineNotice tone='info'>{emptyText}</InlineNotice>
+        <InlineNotice tone='info'>
+          <MaskedText>{emptyText}</MaskedText>
+        </InlineNotice>
       ) : (
         <p className='text-muted-foreground text-sm'>
           {CHANGE_WORDS.previewNone}
