@@ -822,9 +822,8 @@ export const DELETE_PLAN_WORDS = {
   rowLabel: 'Delete your plan',
   rowHelp: 'Remove everything and start over.',
   title: 'Delete your plan',
-  goes: "Your plan, every change, every day and every purchase. This can't be undone.",
-  keys: 'The key that opens your plan is deleted too, so nothing that was saved can be read again.',
-  kept: 'Your account stays. You can start a new plan afterwards.',
+  goes: "This deletes your plan, every change, day and purchase. It can't be undone.",
+  kept: 'Your account stays, and you can start a new plan afterwards.',
   phraseLabel: `Type "${DELETE_PLAN_PHRASE}" to confirm`,
   confirmTitle: 'Delete your plan for good?',
   confirmMessage:

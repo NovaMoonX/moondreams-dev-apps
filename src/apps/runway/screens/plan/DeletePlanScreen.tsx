@@ -76,7 +76,7 @@ function DeletePlanScreen({ onClose, onDeleted }: DeletePlanScreenProps) {
     <Subview overlay title={DELETE_PLAN_WORDS.title} onClose={onClose}>
       <div className='space-y-4'>
         <InlineNotice tone='warning' title={DELETE_PLAN_WORDS.goes}>
-          {DELETE_PLAN_WORDS.keys} {DELETE_PLAN_WORDS.kept}
+          {DELETE_PLAN_WORDS.kept}
         </InlineNotice>
         <div className='space-y-2'>
           <p className='text-muted-foreground block text-xs'>
