@@ -48,6 +48,8 @@ export const EMPTY_START_DRAFT: StartDraft = {
   goals: [],
 };
 
+const readClock = () => Date.now();
+
 const listeners = new Set<() => void>();
 
 const readRaw = (): string | null => {
@@ -170,6 +172,6 @@ const subscribe = (onChange: () => void) => {
 /** The saved draft, live across tabs; null when there is none or it has expired. */
 export function useStartDraft(): StartDraft | null {
   const raw = useSyncExternalStore(subscribe, readRaw, () => null);
-  const draft = useMemo(() => parseStartDraft(raw, Date.now()), [raw]);
+  const draft = useMemo(() => parseStartDraft(raw, readClock()), [raw]);
   return draft;
 }

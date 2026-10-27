@@ -82,7 +82,7 @@ export const router = createBrowserRouter([
           const { default: RunwayPage } = await import('@apps/runway/RunwayPage');
           return {
             Component: () => (
-              <ProtectedRoute appId='runway'>
+              <ProtectedRoute appId='runway' allowSignedOut>
                 <RunwayPage />
               </ProtectedRoute>
             ),

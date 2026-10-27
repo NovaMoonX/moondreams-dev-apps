@@ -90,3 +90,22 @@ export const toGoalRow = (id: string, goal: GoalSealed): StartRow => ({
       : `By ${formatDateUTC(goal.targetDate)}`,
   amount: formatCents(goal.targetCents),
 });
+
+const NOUNS = {
+  income: ['income source', 'income sources'],
+  bill: ['bill', 'bills'],
+  envelope: ['envelope', 'envelopes'],
+  goal: ['goal', 'goals'],
+} as const;
+
+/** "1 income source, 3 bills and 2 goals". */
+export const describeCounts = (counts: Record<keyof typeof NOUNS, number>) => {
+  const parts = (Object.keys(NOUNS) as (keyof typeof NOUNS)[])
+    .filter((kind) => counts[kind] > 0)
+    .map(
+      (kind) => `${counts[kind]} ${NOUNS[kind][counts[kind] === 1 ? 0 : 1]}`,
+    );
+  return parts.length < 2
+    ? (parts[0] ?? '')
+    : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+};

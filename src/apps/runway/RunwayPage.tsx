@@ -8,14 +8,16 @@ import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
-import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
 import CheckAmountScreen from '@apps/runway/screens/home/CheckAmountScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
+import DraftHandoff from '@apps/runway/screens/start/DraftHandoff';
+import SignedOutLanding from '@apps/runway/screens/start/SignedOutLanding';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
+import { useStartDraft } from '@apps/runway/utils/startDraft';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
@@ -120,6 +122,7 @@ function RunwayPage() {
     moreEntry,
     closeMoreEntry,
     view,
+    openView,
     closeView,
     settingsView,
     closeSettingsView,
@@ -141,6 +144,7 @@ function RunwayPage() {
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
   const [attempt, setAttempt] = useState(0);
+  const startDraft = useStartDraft();
 
   useRunwayTheme();
   useEffect(() => () => tabScrolls.clear(), []);
@@ -162,7 +166,14 @@ function RunwayPage() {
   }
 
   if (!user) {
-    return <AuthRequiredState message='Please sign in to use Runway.' />;
+    if (view === 'start') {
+      return (
+        <div>
+          <StartingOutScreen />
+        </div>
+      );
+    }
+    return <SignedOutLanding onStart={() => openView('start')} />;
   }
 
   if (isDeletingPlan && keyStatus === 'ready') {
@@ -244,6 +255,10 @@ function RunwayPage() {
         </div>
       </div>
     );
+  }
+
+  if (startDraft !== null) {
+    return <DraftHandoff draft={startDraft} />;
   }
 
   if (view === 'checkAmount' && level === 'track') {

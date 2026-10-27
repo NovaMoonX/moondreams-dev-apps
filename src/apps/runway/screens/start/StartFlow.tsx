@@ -20,7 +20,10 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
 import { START_WORDS } from '@apps/runway/constants';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
-import type { StartRow } from '@apps/runway/screens/start/startRows';
+import {
+  describeCounts,
+  type StartRow,
+} from '@apps/runway/screens/start/startRows';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { StartStep } from '@apps/runway/utils/startDraft';
 
@@ -95,17 +98,6 @@ const EMPTY_ICONS: Record<StartKind, ReactNode> = {
   bill: <ReceiptText className='h-5 w-5' />,
   envelope: <Mail className='h-5 w-5' />,
   goal: <Target className='h-5 w-5' />,
-};
-
-/** "1 income source, 3 bills and 2 goals". */
-export const describeCounts = (counts: Record<StartKind, number>) => {
-  const parts = KIND_ORDER.filter((kind) => counts[kind] > 0).map(
-    (kind) =>
-      `${counts[kind]} ${KIND_WORDS[kind].noun[counts[kind] === 1 ? 0 : 1]}`,
-  );
-  return parts.length < 2
-    ? (parts[0] ?? '')
-    : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 };
 
 interface StartFlowProps {
