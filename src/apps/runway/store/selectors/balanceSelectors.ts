@@ -37,6 +37,7 @@ export const selectBalanceInputs = createSelector(
     arrivedOn: new Map(
       days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
     ),
+    expectedOn: new Map(days.map((day) => [day.id, day.expectedOn])),
     purchases: level === 'track' ? purchases : [],
     closing:
       closing !== null && level !== 'track'

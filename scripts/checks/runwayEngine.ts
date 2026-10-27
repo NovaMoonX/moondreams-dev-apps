@@ -7173,4 +7173,170 @@ const version = (
   );
 }
 
+// B1 (round 7): a correction, a schedule move and a pairing to an item that went away.
+{
+  const start = Date.UTC(2026, 0, 1);
+  const on = (days: number) => start + days * DAY_MS;
+  const kinds = { rent: 'bill' } as const;
+  const startMoney: OpenMove = {
+    id: 'start_money',
+    kind: 'start',
+    date: start,
+    refId: null,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: 0, holding: 'money' },
+  };
+  const rentLine = (dayId: string, cents: number) => ({
+    lineId: dayId + ':rent',
+    itemId: 'rent',
+    name: 'Rent',
+    emoji: null,
+    tier: 'must' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const confirmedDay = (dayId: string, arrived: number, rent: number) =>
+    ({
+      id: dayId + '_confirmed',
+      dayId,
+      createdAt: 2,
+      kind: 'confirmed',
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative',
+        arrivedCents: arrived,
+        expectedCents: arrived,
+        freeToSpendCents: arrived - rent,
+        differences: [],
+        lines: [rentLine(dayId, rent)],
+      },
+    }) satisfies OpenRecord;
+  const corrected = (dayId: string, arrived: number, rent: number) =>
+    ({
+      id: dayId + '_confirmed_corrected',
+      dayId,
+      createdAt: 9,
+      kind: 'correction',
+      supersedesId: dayId + '_confirmed',
+      payload: {
+        ...buildCorrection({
+          base: toSplit(confirmedDay(dayId, arrived, 100_000)),
+          arrivedCents: arrived,
+          edits: { [dayId + ':rent']: rent },
+          note: null,
+        }),
+      },
+    }) satisfies OpenRecord;
+  const paidMove = (
+    id: string,
+    dueOn: number,
+    paidOn: number,
+    fromFreeCents: number,
+  ): OpenMove => ({
+    id,
+    kind: 'billPaid',
+    date: dueOn,
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: { amountCents: 100_000, paidOn, fromFreeCents },
+  });
+  const days = new Map([
+    ['d1', on(1)],
+    ['d2', on(10)],
+  ]);
+  const balancesOf = (records: OpenRecord[], moves: OpenMove[]) =>
+    deriveBalances({
+      startDate: start,
+      moves: [startMoney, ...moves],
+      records,
+      arrivedOn: days,
+      expectedOn: days,
+      kinds,
+    });
+  const paid1 = paidMove('paid_rent_1', on(5), on(2), 0);
+  const before = balancesOf([confirmedDay('d1', 150_000, 100_000)], [paid1]);
+  assert.equal(
+    before.freeToSpendCents,
+    50_000,
+    'B1: paying the rent leaves the day’s leftover',
+  );
+  const records = [
+    confirmedDay('d1', 150_000, 100_000),
+    corrected('d1', 150_000, 60_000),
+  ];
+  const after = balancesOf(records, [paid1]);
+  assert.equal(
+    after.assignedToBillsCents,
+    0,
+    'B1: lowering the rent line of a paid payment never leaves the bill holding less than nothing',
+  );
+  assert.equal(
+    after.freeToSpendCents,
+    50_000,
+    'B1: the cut paid part of the rent from Free to spend, so Free to spend is what the money left after the payment, not up by the cut',
+  );
+  assert.equal(
+    after.freeToSpendCents,
+    after.moneyOnHandCents - after.assignedToBillsCents,
+    'B1: and Free to spend is still money on hand less what is held',
+  );
+  const progress = deriveBillProgress(
+    records,
+    days,
+    [startMoney, paid1],
+    start,
+    null,
+  );
+  assert.deepEqual(
+    progress.rent.paid.map((payment) => payment.fromFreeCents),
+    [40_000],
+    'B1: the paid mark says the $400 the correction took off came from Free to spend',
+  );
+  const twoDays = [...records, confirmedDay('d2', 150_000, 50_000)];
+  assert.equal(
+    balancesOf(twoDays, [paid1]).assignedToBillsCents,
+    50_000,
+    'B1: what a later day sets aside for the next payment stays held, not used to cover the earlier cut',
+  );
+  const paid2 = paidMove('paid_rent_2', on(35), on(30), 50_000);
+  assert.equal(
+    balancesOf(twoDays, [paid1, paid2]).assignedToBillsCents,
+    0,
+    'B1: and the next payment uses it up',
+  );
+  assert.equal(
+    balancesOf(
+      [confirmedDay('d1', 150_000, 100_000), corrected('d1', 150_000, 120_000)],
+      [paid1],
+    ).assignedToBillsCents,
+    20_000,
+    'B1: raising the line of a paid payment holds the extra for the bill',
+  );
+  const closed = buildClosing('2026-01', null, {
+    startDate: start,
+    days: [{ id: 'd1', expectedOn: on(1), arrivedOn: on(1) }],
+    records,
+    moves: [paid1],
+    purchases: [],
+    billIds: new Set(['rent']),
+  });
+  const fromClosing = deriveBalances({
+    startDate: start,
+    moves: [startMoney],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closed,
+  });
+  assert.deepEqual(
+    [fromClosing.freeToSpendCents, fromClosing.assignedToBillsCents],
+    [after.freeToSpendCents, after.assignedToBillsCents],
+    'B1: a closing over the corrected day and the payment gives the same figures as the ledger',
+  );
+}
+
 console.log('runway engine: ok');

@@ -23,6 +23,7 @@ import {
   collectPaid,
   collectStarted,
   getPaidMoveId,
+  settlePaid,
   type BillProgressInput,
   type FundedDay,
   type PaidPayment,
@@ -393,9 +394,29 @@ export function deriveBillProgress(
   const result = Object.fromEntries(
     [...ids].map((id) => [
       id,
-      { funded: funded[id] ?? [], paid: paid[id] ?? [] },
+      {
+        funded: funded[id] ?? [],
+        paid: settleCounted(funded[id] ?? [], paid[id] ?? [], startDate),
+      },
     ]),
   );
+  return result;
+}
+
+/** Settles the payments counted since the starting day; one made before it keeps its mark as it was. */
+function settleCounted(
+  funded: readonly FundedDay[],
+  paid: readonly PaidPayment[],
+  startDate: DateOnly | null,
+): PaidPayment[] {
+  if (startDate === null) return [...paid];
+  const settled = new Map(
+    settlePaid(
+      funded,
+      paid.filter((payment) => payment.paidOn >= startDate),
+    ).map((payment) => [payment.moveId, payment]),
+  );
+  const result = paid.map((payment) => settled.get(payment.moveId) ?? payment);
   return result;
 }
 
