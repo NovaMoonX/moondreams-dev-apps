@@ -1185,7 +1185,7 @@ export const ITEM_KIND_NOUNS = {
   bill: 'bill',
   envelope: 'envelope',
   goal: 'goal',
-  payLine: 'pay line',
+  payLine: 'pay',
   source: 'income source',
   group: 'group',
 } as const;

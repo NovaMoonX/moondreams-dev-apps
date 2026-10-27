@@ -44,6 +44,8 @@ import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
+import BackLink from '@/components/BackLink';
+import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
@@ -539,10 +541,10 @@ function BillForm({
       ),
     },
   ];
+  const [isAll, setIsAll] = useState(false);
   const questions = useQuestionFlow({
     steps,
     startFolded: editing !== undefined || !!draft?.initial,
-    initialOpenId: editing ? openStep : null,
   });
 
   const getChosenKeys = (picked: string[]) =>
@@ -622,6 +624,8 @@ function BillForm({
       ? FORM_FLOW_WORDS.discardChange
       : FORM_FLOW_WORDS.discardNew(noun),
   });
+  const quickStep = steps.find((step) => step.id === openStep) ?? null;
+  const isQuick = !!editing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
@@ -668,7 +672,16 @@ function BillForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow flow={questions} />
+            {isQuick && quickStep ? (
+              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+            ) : (
+              <>
+                {openStep !== null && editing && (
+                  <BackLink onBack={() => setIsAll(false)} />
+                )}
+                <QuestionFlow flow={questions} />
+              </>
+            )}
             {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
               note={error ?? (isAsking ? questions.blocker : shownBlocker)}

@@ -41,6 +41,8 @@ import { recordHolding } from '@apps/runway/store/actions/moveActions';
 import { getPeriodIndex } from '@apps/runway/engine/calendar';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
+import BackLink from '@/components/BackLink';
+import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
@@ -384,10 +386,10 @@ function GoalForm({
       ),
     },
   ];
+  const [isAll, setIsAll] = useState(false);
   const questions = useQuestionFlow({
     steps,
     startFolded: editing !== undefined || !!draft?.initial,
-    initialOpenId: editing ? openStep : null,
     onAdvance: (fromId) => {
       const suggestion = getSuggestion(formData);
       if (
@@ -463,6 +465,8 @@ function GoalForm({
       ? FORM_FLOW_WORDS.discardChange
       : FORM_FLOW_WORDS.discardNew('goal'),
   });
+  const quickStep = steps.find((step) => step.id === openStep) ?? null;
+  const isQuick = !!editing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
@@ -519,7 +523,16 @@ function GoalForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow flow={questions} />
+            {isQuick && quickStep ? (
+              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+            ) : (
+              <>
+                {openStep !== null && editing && (
+                  <BackLink onBack={() => setIsAll(false)} />
+                )}
+                <QuestionFlow flow={questions} />
+              </>
+            )}
             {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
               note={error ?? (isAsking ? questions.blocker : shownBlocker)}

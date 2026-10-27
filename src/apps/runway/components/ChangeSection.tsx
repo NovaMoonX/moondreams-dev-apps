@@ -1,7 +1,6 @@
 import { use } from 'react';
 
 import { useAppSelector } from '@/store';
-import { CHANGE_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import FromWhenPicker from '@apps/runway/components/FromWhenPicker';
@@ -14,7 +13,7 @@ function ChangeSection() {
   const value = use(ChangeFlowContext);
   const today = todayAsUtcDate();
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
-  if (!value) return null;
+  if (!value || value.flow.isUnchanged) return null;
   const { flow, kind, itemId } = value;
   const pairedText = describePairedBy(pairedBy[itemId] ?? []);
 
@@ -32,9 +31,6 @@ function ChangeSection() {
         isCompact
         changeJson={flow.changeJson}
         emptyText={pairedText ?? undefined}
-        waitingText={
-          flow.isUnchanged ? CHANGE_WORDS.previewUntouched : undefined
-        }
       />
     </div>
   );

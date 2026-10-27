@@ -39,6 +39,8 @@ import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
+import BackLink from '@/components/BackLink';
+import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
@@ -600,10 +602,10 @@ function IncomeForm({
       ),
     },
   ];
+  const [isAll, setIsAll] = useState(false);
   const questions = useQuestionFlow({
     steps: isEditingSource ? [sourceNameStep] : payLineSteps,
     startFolded: isEditing || !!draft?.initial,
-    initialOpenId: isEditing ? openStep : null,
   });
 
   const buildPayLine = (data: IncomeFormData): PayLineSealed | null => {
@@ -649,6 +651,9 @@ function IncomeForm({
       ? FORM_FLOW_WORDS.discardChange
       : FORM_FLOW_WORDS.discardNew('income'),
   });
+  const quickStep =
+    questions.steps.find((step) => step.id === openStep) ?? null;
+  const isQuick = !!isEditing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
@@ -719,7 +724,16 @@ function IncomeForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow flow={questions} />
+            {isQuick && quickStep ? (
+              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+            ) : (
+              <>
+                {openStep !== null && isEditing && (
+                  <BackLink onBack={() => setIsAll(false)} />
+                )}
+                <QuestionFlow flow={questions} />
+              </>
+            )}
             {editing && !isEditingSource && questions.hasReviewed && (
               <ChangeSection />
             )}

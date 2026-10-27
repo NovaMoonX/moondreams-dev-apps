@@ -30,30 +30,81 @@ export function describeHoldsThrough(lookahead: Lookahead) {
   return result;
 }
 
-/** What a change does to how far the plan holds, in one sentence; null when there is nothing to say. */
+/** What a change does to how far the plan holds, as one sentence; null when there is nothing to say. */
 export function describeHoldsChange(before: Lookahead, after: Lookahead) {
+  const blocks = describeHoldsBlocks(before, after);
+  const result =
+    blocks.length === 0 ? null : blocks.map((block) => block.text).join(' ');
+  return result;
+}
+
+export interface HoldsBlock {
+  tone: 'success' | 'warning';
+  text: string;
+  /** The amount inside `text`, so it can be drawn in the warning colour. */
+  figure: string | null;
+}
+
+/** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
+function describeChangeProblem(problem: LookaheadProblem, more: number) {
+  const name = problem.name === '' ? 'A bill' : problem.name;
+  const on = formatDateShortUTC(problem.on);
+  const tail =
+    more > 0
+      ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.`
+      : '';
+  if (problem.kind === 'overdue') {
+    return {
+      text: `With this change, ${name} was due ${on} and is not marked paid.${tail}`,
+      figure: null,
+    };
+  }
+  if (problem.kind === 'noIncome') {
+    return {
+      text: `With this change, ${name} on ${on} has no income before it is due.${tail}`,
+      figure: null,
+    };
+  }
+  const figure = formatCentsShort(problem.shortBy);
+  return {
+    text: `With this change, the plan leaves ${name} ${figure} short on ${on}.${tail}`,
+    figure,
+  };
+}
+
+/** What a change does to how far the plan holds, as separate blocks: the plan holding is one idea, a shortfall another. */
+export function describeHoldsBlocks(
+  before: Lookahead,
+  after: Lookahead,
+): HoldsBlock[] {
+  const holds = (through: number): HoldsBlock => ({
+    tone: 'success',
+    text:
+      isSameLookahead(before, after) || before.holdsThrough === through
+        ? `Your plan still holds through ${formatDateUTC(through)}.`
+        : `Your plan would hold through ${formatDateUTC(through)}${
+            before.holdsThrough === null
+              ? ''
+              : ` instead of ${formatDateUTC(before.holdsThrough)}`
+          }.`,
+    figure: null,
+  });
   if (isSameLookahead(before, after)) {
-    return after.holdsThrough === null
-      ? null
-      : `Your plan still holds through ${formatDateUTC(after.holdsThrough)}.`;
+    return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
   const [first] = sortProblems(after.problems);
-  const more = after.problems.length - 1;
-  const describeFirst = (problem: LookaheadProblem) =>
-    `With this change, ${describeProblem(problem)}${more > 0 ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.` : ''}`;
-  if (after.holdsThrough === null) {
-    return first ? describeFirst(first) : null;
-  }
-  if (before.holdsThrough === after.holdsThrough) {
-    const still = `Your plan still holds through ${formatDateUTC(after.holdsThrough)}.`;
-    return first ? `${still} ${describeFirst(first)}` : still;
-  }
-  const was =
-    before.holdsThrough === null
-      ? ''
-      : ` instead of ${formatDateUTC(before.holdsThrough)}`;
-  const result = `Your plan would hold through ${formatDateUTC(after.holdsThrough)}${was}.`;
-  return result;
+  const problem: HoldsBlock[] = first
+    ? [
+        {
+          tone: 'warning',
+          ...describeChangeProblem(first, after.problems.length - 1),
+        },
+      ]
+    : [];
+  if (after.holdsThrough === null) return problem;
+  if (before.holdsThrough === after.holdsThrough)
+    return [holds(after.holdsThrough), ...problem];
+  return [holds(after.holdsThrough)];
 }
 
 /** One problem in a few words, in the plan's terms: "The plan leaves Rent $30 short on Nov 1". */
