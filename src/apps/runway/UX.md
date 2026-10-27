@@ -212,7 +212,7 @@ Notes on the table:
 - Amounts: on a front only the figures blur, never the sentence around them; sheets opened on purpose (the envelope sheet's Purchases) never blur. The header eye is one "Show amounts" toggle (`aria-pressed`), drawn once the tab has a figure to hide.
 - Home shows the top four envelopes as tiles at every level; the next income day is its own section under a heading, 24px below Envelopes.
 - The day sheet tints only the shortfalls that are in Things to fix and says in one inline block that the rest are left for later. Separate explanations (the lesser lines, a change's effect on how far the plan holds, what a check cannot cover, a last income day) are `Callout` blocks.
-- Plan's Envelopes, Bills and Goals search from 5 rows (`PLAN_SEARCH_THRESHOLD`); bills also match the next due date and goals their target date.
+- Plan's Envelopes, Bills and Goals search from 5 rows (`RUNWAY_SEARCH_THRESHOLD`); bills also match the next due date and goals their target date.
 - No call to action carries a "+" glyph.
 
 ## Round 4, package G4: floating adds, Free to spend, filters, warnings, goal chart
@@ -220,7 +220,7 @@ Notes on the table:
 - **Every tab's add action floats.** One pill at the bottom right above the tab bar (`FloatingAction`, an icon and a label): Home and Spend "Add a purchase" (Home at Track only), Days "Add expected money", Plan the view's own ("Add a bill", "Add a goal", "Add an envelope", "Add income"). It hides while a sheet, drawer or subview is open and drops to the icon while scrolling down; the label is always its accessible name. The header lines that held the old buttons are now free: Days' headline line takes the full width, and nothing else was put in them.
 - **Free to spend is a worked sum.** Money on hand, minus held for bills, minus held for goals, minus envelopes, equals Free to spend, one operand per row with the signs in their own column; each held row opens its Plan view. Amounts are masked while hidden.
 - **"Change what you started with" is a correction window.** Offered until the first income day from the start is confirmed and for at most 14 days after the start record was made; afterwards one quiet line says to correct the income day or bill payment.
-- **Spend's envelope filter** is one icon beside the search (a drawer on a phone, a popover from `sm`); an active filter tints it and shows one chip that clears it. The search and icon show from the eighth purchase or when two envelopes have purchases.
+- **Spend's envelope filter** is one icon beside the search (a drawer on a phone, a popover from `sm`); an active filter tints it and shows one chip that clears it. The search and icon show from the fifth purchase or when two envelopes have purchases.
 - **A day's warning** is one line: "Groceries $160 short", or "3 short · Groceries $160" (the count alone below 360px), the icon in a fixed column.
 - **A goal's balance over time** is a row in its sheet ("Balance over time", only with two or more points): the held amount by date, a dotted path to the target date at the planned contribution, a guide at the target and a marker where the plan reaches it. While amounts are hidden it says "Show amounts to see the chart".
 - **Check an amount** swaps in place inside Free to spend's card, so no frame shows the page between them; Back returns to Free to spend and one more leaves it.
