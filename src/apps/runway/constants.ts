@@ -1020,6 +1020,7 @@ export const HOW_OFTEN_WORDS = {
   current: 'In it now',
   currentHint: 'Leave it at $0 if you are starting from nothing.',
   notBeingAdded: 'Not being added to',
+} as const;
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
 export const FIX_WORDS = {
