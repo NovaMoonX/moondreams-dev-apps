@@ -90,6 +90,10 @@ const leaveDeadEntry = (isClosing = false) => {
   if (isStepping() || !isOnDeadEntry()) return;
   steppedAt = Date.now();
   adoptUrl = isClosing ? window.location.href : null;
+  // A step that never lands (no entry below) must not leave the address waiting for a later, unrelated pop.
+  window.setTimeout(() => {
+    adoptUrl = null;
+  }, STEP_TIMEOUT_MS);
   window.history.back();
 };
 

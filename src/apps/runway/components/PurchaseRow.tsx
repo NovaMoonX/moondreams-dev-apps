@@ -9,7 +9,7 @@ interface PurchaseRowProps {
   purchase: OpenPurchase;
   looks: ReadonlyMap<string, { name: string; emoji: string | null }>;
   onOpen: () => void;
-  /** Blurred until shown, as on a tab's front; off in a sheet the person opened on purpose. */
+  /** Masked until shown, as on a tab's front; off in a sheet the person opened on purpose. */
   isPrivate?: boolean;
 }
 

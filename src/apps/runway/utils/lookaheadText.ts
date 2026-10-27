@@ -103,7 +103,7 @@ export function describeGroupRow(group: ProblemGroup) {
   return result;
 }
 
-/** The first group in a few words, split around its one figure so only the figure is blurred: "The plan leaves Rent [$30] short on Nov 1". */
+/** The first group in a few words, split around its one figure so only the figure is masked: "The plan leaves Rent [$30] short on Nov 1". */
 export function describeGroupShort(group: ProblemGroup) {
   const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {

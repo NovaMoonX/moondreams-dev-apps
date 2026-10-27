@@ -8,7 +8,7 @@ import type {
   GoalSealed,
 } from '@apps/runway/types';
 
-export const START_DRAFT_KEY = 'runway:start-draft';
+export const START_DRAFT_KEY = 'runway:signed-out-draft';
 export const START_DRAFT_DAYS = 7;
 /** Bumped when the shape of a stored draft changes; a draft of another version is dropped. */
 export const START_DRAFT_VERSION = 1;

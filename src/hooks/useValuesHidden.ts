@@ -49,7 +49,7 @@ export const getValuesHiddenKey = (scopeId: string, uid: string | null) =>
 /** Hides the figures again; the provider calls it when the page has been away for a while. */
 export const hideValues = (key: string) => write(key, true);
 
-/** Whether private figures are blurred, shared by everything under one provider. Hidden until the person shows them, kept on this device only. */
+/** Whether private figures are masked, shared by everything under one provider. Hidden until the person shows them, kept on this device only. */
 export function useValuesHidden() {
   const key = useContext(ValuesHiddenKeyContext);
   const isHidden = useSyncExternalStore(

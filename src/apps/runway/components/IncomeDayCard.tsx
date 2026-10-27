@@ -34,7 +34,7 @@ interface IncomeDayCardProps {
   isConfirmedShown?: boolean;
   /** Words that lead the detail line ("Next income day"). */
   lead?: string;
-  /** The amount and any shortfall line blur until shown; off inside a flow the person opened on purpose. */
+  /** The amount and any shortfall line are masked until shown; off inside a flow the person opened on purpose. */
   isPrivate?: boolean;
   onOpen: () => void;
 }

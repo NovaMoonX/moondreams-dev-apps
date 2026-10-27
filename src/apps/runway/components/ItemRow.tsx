@@ -11,8 +11,8 @@ import { TICK_HIT_CLASS } from '@apps/runway/constants';
 
 const FIGURE_PATTERN = /([−+-]?\$[\d,]+(?:\.\d+)?)/;
 
-/** A line with each amount in it blurred and the words left readable. */
-const blurFigures = (text: string) =>
+/** A line with each amount in it masked and the words left readable. */
+const maskFigures = (text: string) =>
   text
     .split(FIGURE_PATTERN)
     .map((part, index) =>
@@ -37,9 +37,9 @@ interface ItemRowProps {
   /** The detail says the plan falls short: warning ink and icon. */
   isDetailWarning?: boolean;
   figure?: string | null;
-  /** The figure is private until shown (a tab's front): it blurs, and so does the detail when `isDetailPrivate`. */
+  /** The figure is private until shown (a tab's front): it is masked, and so is the detail when `isDetailPrivate`. */
   isPrivate?: boolean;
-  /** The detail line gives an amount away ("$30 short"), so it blurs with the figure. */
+  /** The detail line gives an amount away ("$30 short"), so it is masked with the figure. */
   isDetailPrivate?: boolean;
   /** A word under the figure that says what it counts ("left", "over"). */
   figureWord?: string | null;
@@ -124,7 +124,7 @@ function ItemRow({
           )}
           <span className='line-clamp-2'>
             {isPrivate && isDetailPrivate && detail
-              ? blurFigures(detail)
+              ? maskFigures(detail)
               : detail}
           </span>
         </span>

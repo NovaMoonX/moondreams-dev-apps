@@ -21,7 +21,10 @@ import {
 import { useAuth } from '@hooks/useAuth';
 import { APP_REGISTRY_ID_MAP } from '@lib/app';
 import { db, isUsingFirebaseEmulators } from '@lib/firebase/config';
-import { normalizeAppStatus, type AppMetadata } from '@lib/types/appCatalog';
+import {
+  normalizeAppStatus,
+  type AppMetadata,
+} from '@lib/types/appCatalog';
 import { User } from 'firebase/auth';
 
 function normalizeAppMetadata(
@@ -146,7 +149,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
             return;
           }
 
-          const nextApps = Array.from(appMap.values());
+          const nextApps = Array.from(appMap.values())
           setAllApps(nextApps);
           markQueryResolved(index);
         },
@@ -172,9 +175,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
     }
 
     if (!user) {
-      return allApps.filter(
-        (app) => app.status === 'public' && !app.isRestricted,
-      );
+      return allApps.filter((app) => app.status === 'public' && !app.isRestricted);
     }
 
     return allApps.filter((app) => {

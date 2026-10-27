@@ -41,7 +41,16 @@ function FloatingAction({
       setIsCovered(isCoveredNow());
       setBarHeight(getBarHeight());
     };
-    const observer = new MutationObserver(update);
+    // A busy page mutates often; the check reads layout, so it runs at most once a frame.
+    const queued = { frame: 0 };
+    const queueUpdate = () => {
+      if (queued.frame !== 0) return;
+      queued.frame = requestAnimationFrame(() => {
+        queued.frame = 0;
+        update();
+      });
+    };
+    const observer = new MutationObserver(queueUpdate);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['data-subview-open'],
@@ -52,12 +61,12 @@ function FloatingAction({
       attributes: true,
       attributeFilter: ['data-drawer-open', 'data-panel-open', 'inert'],
     });
-    window.addEventListener('resize', update);
-    const frame = requestAnimationFrame(update);
+    window.addEventListener('resize', queueUpdate);
+    queueUpdate();
     return () => {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(queued.frame);
       observer.disconnect();
-      window.removeEventListener('resize', update);
+      window.removeEventListener('resize', queueUpdate);
     };
   }, []);
 
