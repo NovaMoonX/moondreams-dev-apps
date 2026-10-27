@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Mail } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import SearchInput from '@/components/SearchInput';
 import { PLAN_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import SectionHeader from '@/components/SectionHeader';
@@ -91,17 +90,13 @@ function EnvelopesScreen() {
     <div className='space-y-4'>
       <SectionHeader
         title='Envelopes'
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            Add an envelope
-          </Button>
-        }
       />
       {getBody()}
+      <FloatingAction
+        label='Add an envelope'
+        icon={<Mail className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {formKey !== null && (
         <EnvelopeForm
           key={formKey}

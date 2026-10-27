@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Banknote, CalendarDays } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import HelpTip from '@/components/HelpTip';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -197,26 +196,15 @@ function DaysScreen() {
             />
           )}
         </div>
-        {hasIncome && (
-          <Button
-            variant='secondary'
-            size='sm'
-            className="relative shrink-0 gap-1.5 before:absolute before:-inset-2 before:content-['']"
-            aria-label={DAYS_WORDS.addExpected}
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            <Banknote
-              className='h-4 w-4 max-[389px]:hidden'
-              aria-hidden='true'
-            />
-            <span className='min-[390px]:hidden'>
-              {DAYS_WORDS.addExpectedShort}
-            </span>
-            <span className='max-[389px]:hidden'>{DAYS_WORDS.addExpected}</span>
-          </Button>
-        )}
       </div>
       {getBody()}
+      {hasIncome && (
+        <FloatingAction
+          label={DAYS_WORDS.addExpected}
+          icon={<Banknote className='h-5 w-5' aria-hidden='true' />}
+          onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+        />
+      )}
       {formKey !== null && (
         <ExpectedScreen key={formKey} onClose={() => setFormKey(null)} />
       )}

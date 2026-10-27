@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { CalendarRange, Wallet } from 'lucide-react';
+import { CalendarRange, ShoppingBag, Wallet } from 'lucide-react';
 
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Select } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import { PillGroup } from '@/components/PillGroup';
 import SensitiveValue from '@/components/SensitiveValue';
 import SearchInput from '@/components/SearchInput';
@@ -313,19 +314,13 @@ function SpendScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title={SPEND_WORDS.title}
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            {SPEND_WORDS.newPurchase}
-          </Button>
-        }
-      />
+      <SectionHeader title={SPEND_WORDS.title} />
       {getBody()}
+      <FloatingAction
+        label={SPEND_WORDS.newPurchase}
+        icon={<ShoppingBag className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {purchaseId !== null && (
         <PurchaseScreen
           key={purchaseId}
