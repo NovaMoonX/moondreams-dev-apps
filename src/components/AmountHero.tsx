@@ -11,6 +11,11 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import RevealChip from '@/components/RevealChip';
+import {
+  cleanAmountText,
+  isAmountText,
+  useAmountTyping,
+} from '@/hooks/useAmountTyping';
 import { runWhenDrawerSettled } from '@/hooks/useKeepFocusedFieldInView';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { toTwoDecimalAmount } from '@/utils/moneyUtils';
@@ -98,6 +103,7 @@ function Figure({
   disabled,
 }: FigureProps) {
   const pendingCaret = useRef<number | null>(null);
+  useAmountTyping(inputRef);
   const shown = groupDigits(value);
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
@@ -164,9 +170,16 @@ function Figure({
             const caret = field.selectionStart ?? field.value.length;
             const countBefore = (text: string, end: number) =>
               text.slice(0, end).replace(/,/g, '').length;
-            const typed = field.value.replace(/,/g, '');
+            const raw = field.value.replace(/,/g, '');
+            const typed = isAmountText(raw)
+              ? raw
+              : (cleanAmountText(raw) ?? value);
             const isCommaDeleted =
-              typed === value && field.value.length < shown.length;
+              (event.nativeEvent as InputEvent).inputType?.startsWith(
+                'delete',
+              ) === true &&
+              typed === value &&
+              field.value.length < shown.length;
             const significant = countBefore(field.value, caret);
             pendingCaret.current = isCommaDeleted
               ? Math.max(0, significant - 1)
