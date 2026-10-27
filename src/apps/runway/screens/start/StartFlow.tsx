@@ -24,7 +24,6 @@ import {
   describeCounts,
   type StartRow,
 } from '@apps/runway/screens/start/startRows';
-import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { StartStep } from '@apps/runway/utils/startDraft';
 
@@ -173,7 +172,11 @@ function StartFlow({
   };
   const [isLeaving, setIsLeaving] = useState(false);
   const leave = (then?: () => void) => {
-    if (then) leaveAfterSubviewCloses(then);
+    if (then) {
+      closeView();
+      then();
+      return;
+    }
     if (!window.history.state?.backLayerKey) {
       closeView();
       return;
