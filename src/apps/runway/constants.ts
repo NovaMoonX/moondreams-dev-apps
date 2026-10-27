@@ -809,7 +809,7 @@ export const START_WORDS = {
     'Some of what you entered did not save. It is still on this device.',
   landingTitle: 'Plan before you sign in',
   landingBody:
-    'You can go through Starting out now. Your answers stay on this device until you sign in.',
+    'Runway plans each paycheck: what goes to bills, envelopes and goals, and what is left to spend. You can go through Starting out now. Your answers stay on this device until you sign in.',
   landingButton: 'Start planning',
 } as const;
 
@@ -1170,6 +1170,7 @@ export const ITEM_VIEW_WORDS = {
   historyTitle: 'History',
   historyEmpty: 'Nothing has changed since you added it.',
   historyLoading: 'Getting the changes.',
+  historyOlder: 'Older changes are in the change log.',
   historyFailed: 'The history did not load. Nothing was changed.',
   purchasesTitle: 'Purchases this month',
   purchasesEmpty: 'Nothing spent from it this month.',
