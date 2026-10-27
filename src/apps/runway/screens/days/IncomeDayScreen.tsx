@@ -12,6 +12,7 @@ import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
+import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useAppSelector } from '@/store';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
@@ -74,6 +75,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     (state) => selectIsRecordsReady(state) && selectIsMovesLoaded(state),
   );
   const isLoaded = isPlanLoaded && isDaysLoaded && isRecordsReady;
+  const lookahead = useDeferredLookahead(today, isLoaded);
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
   const changeableIds = useAppSelector(selectChangeableKey);
@@ -175,6 +177,17 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     }));
   const funded = draft.lines.filter((line) => line.shortBy === 0);
   const unfunded = draft.lines.filter((line) => line.shortBy > 0);
+  const fixIds = new Set(
+    (lookahead?.problems ?? []).flatMap((problem) =>
+      problem.kind === 'short' && problem.dayKey === dayKey
+        ? [problem.itemId]
+        : [],
+    ),
+  );
+  const lesserCount =
+    lookahead === null
+      ? 0
+      : unfunded.filter((line) => !fixIds.has(line.itemId)).length;
   const title = day.sourceName ?? day.payLineName;
 
   const renderLine = (line: (typeof draft.lines)[number]) => {
@@ -189,6 +202,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       <DraftLine
         key={line.lineId}
         line={line}
+        isWarning={fixIds.has(line.itemId)}
         isOpen={openLineId === line.lineId}
         onOpenChange={(isOpen) => setOpenLineId(isOpen ? line.lineId : null)}
         name={envelope.name}
@@ -246,6 +260,11 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {unfunded.map(renderLine)}
                 </ul>
+                {lesserCount > 0 && (
+                  <p className='text-muted-foreground text-sm'>
+                    {DRAFT_WORDS.lesserLeft(lesserCount, unfunded.length)}
+                  </p>
+                )}
               </div>
             )}
           </div>

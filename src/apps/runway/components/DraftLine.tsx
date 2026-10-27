@@ -42,6 +42,8 @@ interface DraftLineProps {
   canChange?: boolean;
   /** This income day takes its own version of the line. */
   isDayOnly?: boolean;
+  /** The shortfall is one of the plan's things to fix, so it wears the warning; any other short line stays neutral. */
+  isWarning?: boolean;
   /** Set where the day opens the line's sheet itself (a door from the footer). */
   isOpen?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
@@ -62,6 +64,7 @@ function DraftLine({
   isChoosing = false,
   canChange = false,
   isDayOnly = false,
+  isWarning = false,
   isOpen: isOpenProp,
   onOpenChange,
 }: DraftLineProps) {
@@ -124,7 +127,7 @@ function DraftLine({
             : CHECKLIST_R3_WORDS.shortChoose(formatCentsShort(line.shortBy)),
         isStrong: true,
       };
-    if (shortText) return { text: shortText, isStrong: true };
+    if (shortText) return { text: shortText, isStrong: isWarning };
     return { text: billShareShort ?? reason, isStrong: false };
   };
   const detail = getDetail();
@@ -212,6 +215,7 @@ function DraftLine({
         emoji={emoji}
         detail={detail.text}
         isDetailStrong={detail.isStrong}
+        isDetailWarning={isWarning && state !== 'held'}
         figure={amount}
         ariaLabel={`${name}: ${PRIORITY_LABELS[line.tier]}, ${amount}. ${detail.text}`}
         onOpen={kind === null ? undefined : () => setIsOpen(true)}

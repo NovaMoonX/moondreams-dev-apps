@@ -519,6 +519,10 @@ export const DRAFT_WORDS = {
   fundedOf: 'Funded',
   of: 'of',
   notFunded: 'Not fully funded',
+  lesserLeft: (count: number, total: number) =>
+    count === total
+      ? 'These are left for later.'
+      : `${count === 1 ? 'The other one is' : `The other ${count} are`} left for later.`,
   dayLeft: 'Left from this day',
   nothingLeft: 'Nothing left after the envelopes',
   tieCreatedAt:
