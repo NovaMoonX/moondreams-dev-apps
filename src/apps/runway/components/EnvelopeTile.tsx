@@ -56,7 +56,9 @@ function EnvelopeTile({
     ? eachTime
       ? describeCadenceLine(envelope.funding.cadence)
       : funding
-    : `${capitalize(word)} · ${funding}`;
+    : isHidden
+      ? funding
+      : `${capitalize(word)} · ${funding}`;
   const isOver = word === 'over';
   const open = () => setIsOpen(true);
 
@@ -87,17 +89,17 @@ function EnvelopeTile({
               <span
                 className={join(
                   'block text-2xl font-semibold tracking-tight whitespace-nowrap tabular-nums',
-                  value.length >= 11 && 'max-[389px]:text-xl',
-                  value.length >= 10
+                  !isHidden && value.length >= 11 && 'max-[389px]:text-xl',
+                  !isHidden && value.length >= 10
                     ? 'max-[359px]:text-lg'
                     : 'max-[359px]:text-xl',
-                  isOver && 'text-destructive',
+                  isOver && !isHidden && 'text-destructive',
                 )}
               >
                 <SensitiveValue>{value}</SensitiveValue>
               </span>
               <span className='text-muted-foreground block text-xs'>
-                {word}
+                {isHidden ? '\u00a0' : word}
               </span>
             </span>
           </Button>
