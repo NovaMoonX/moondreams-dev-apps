@@ -36,6 +36,10 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import {
+  ActionSection,
+  ActionTitle,
+} from '@apps/runway/components/ActionSection';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
@@ -49,6 +53,7 @@ import {
   ENVELOPE_SPEND_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
+  ITEM_KIND_NOUNS,
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
   LOOKAHEAD_MONTHS,
@@ -142,11 +147,19 @@ const getSchedule = (payload: PayLineSealed | BillSealed) =>
 
 const LAST_DAY_OTHER = 'other';
 
+const getActionTitle = (view: View, kind: ItemKind) => {
+  const noun = ITEM_KIND_NOUNS[kind];
+  if (view === 'end') return `End the ${noun}`;
+  if (view === 'archive') return `Archive the ${noun}`;
+  if (view === 'resume') return `Resume the ${noun}`;
+  return `Pause the ${noun}`;
+};
+
 const VIEW_NOTES: Record<View, string> = {
   menu: '',
   pause: LIFECYCLE_WORDS.pauseSub,
   resume: LIFECYCLE_WORDS.resumeSub,
-  end: LIFECYCLE_WORDS.endSub,
+  end: '',
   archive: LIFECYCLE_WORDS.archiveNote,
   history: '',
   purchases: '',
@@ -455,14 +468,6 @@ function ItemSheet({
       : view === 'archive'
         ? LIFECYCLE_WORDS.chipsArchive
         : LIFECYCLE_WORDS.chipsPause;
-  const confirmLabel =
-    view === 'end'
-      ? LIFECYCLE_WORDS.endConfirm
-      : view === 'archive'
-        ? LIFECYCLE_WORDS.archiveConfirm
-        : view === 'resume'
-          ? LIFECYCLE_WORDS.resumeConfirm
-          : LIFECYCLE_WORDS.pauseConfirm;
   const blocker =
     view === 'end' && !isEndValid ? LIFECYCLE_WORDS.endBlocker : null;
   const isStoppable = itemKind !== 'source' && header?.archivedAt == null;
@@ -608,7 +613,11 @@ function ItemSheet({
         </ActionGroup>
       )}
       {isStoppable && (
-        <ActionGroup caption={goal ? ITEM_SHEET_WORDS.stopHeading : undefined}>
+        <ActionGroup
+          caption={
+            goal ? ITEM_SHEET_WORDS.stopHeading : ITEM_SHEET_R2_WORDS.stopOnly
+          }
+        >
           {goal && !isPaused && (
             <ActionRow
               isGrouped
@@ -675,12 +684,14 @@ function ItemSheet({
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
-      <p className='text-muted-foreground text-sm'>{VIEW_NOTES[view]}</p>
+      <div className='space-y-1'>
+        <ActionTitle>{getActionTitle(view, itemKind)}</ActionTitle>
+        {VIEW_NOTES[view] !== '' && (
+          <p className='text-muted-foreground text-sm'>{VIEW_NOTES[view]}</p>
+        )}
+      </div>
       {view === 'end' && (
-        <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>
-            {LIFECYCLE_WORDS.endHeading}
-          </p>
+        <ActionSection caption={LIFECYCLE_WORDS.endHeading}>
           <PillGroup
             label={LIFECYCLE_WORDS.endHeading}
             options={endOptions}
@@ -698,17 +709,14 @@ function ItemSheet({
               onChange={(event) => setEndDate(event.target.value)}
             />
           )}
-        </div>
+        </ActionSection>
       )}
       <EffectPreview
         changeJson={changeJson}
         emptyText={CHANGE_WORDS.previewNone}
       />
-      <p className='text-sm font-medium'>
-        {view === 'end' ? LIFECYCLE_WORDS.whyEnd : CHANGE_WORDS.whyHeading}
-      </p>
       <SuggestionChips
-        label={CHANGE_WORDS.whyHint}
+        label={CHANGE_WORDS.whyHeading}
         suggestions={chips}
         isDisabled={isSaving}
         onPick={setReason}
@@ -719,7 +727,7 @@ function ItemSheet({
         onChange={setReason}
         placeholder={CHANGE_WORDS.whyPlaceholder}
         maxLength={MAX_NOTE_LENGTH}
-        rows={3}
+        rows={1}
       />
       <ModalFooterActions
         note={error ?? blocker}
@@ -741,7 +749,7 @@ function ItemSheet({
             disabled={isSaving || blocker !== null}
             onClick={() => void run()}
           >
-            {confirmLabel}
+            {getActionTitle(view, itemKind)}
           </Button>
         }
       />

@@ -397,7 +397,7 @@ export const CHANGE_WORDS = {
   review: 'Next',
   whyHeading: 'Why the change?',
   whyHint: 'A note for your own records. You can leave it out.',
-  whyPlaceholder: 'Why it changed',
+  whyPlaceholder: 'Why it changed. You can leave this out.',
   saveWithNote: 'Save',
   saveWithoutNote: 'Save without a reason',
   unchanged: 'Change something to continue.',
@@ -926,6 +926,7 @@ export const ITEM_SHEET_R2_WORDS = {
   markedPaid: (name: string) => `Marked ${name} paid`,
   unmarkedPaid: (name: string) => `${name} is not marked paid`,
   undo: 'Undo',
+  stopOnly: 'Stop',
 } as const;
 
 // Round 3: paying a whole payday at once, a tick that needs a connection, and one word for a shortfall.
@@ -1077,4 +1078,22 @@ export const ITEM_VIEW_WORDS = {
   historyFailed: 'The history did not load. Nothing was changed.',
   purchasesTitle: 'Purchases this month',
   purchasesEmpty: 'Nothing spent from it this month.',
+} as const;
+
+export const ITEM_KIND_NOUNS = {
+  bill: 'bill',
+  envelope: 'envelope',
+  goal: 'goal',
+  payLine: 'pay line',
+  source: 'income source',
+  group: 'group',
+} as const;
+
+export const EFFECT_FOLD_WORDS = {
+  removed: (count: number) => `${count} income days go away`,
+  added: (count: number) => `${count} income days are added`,
+  same: (count: number) =>
+    count === 1
+      ? 'One income day: nothing else changes'
+      : `${count} income days: nothing else changes`,
 } as const;
