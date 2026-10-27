@@ -399,7 +399,7 @@ export const CHANGE_WORDS = {
   whyPlaceholder: 'Why it changed. You can leave this out.',
   saveWithNote: 'Save',
   saveWithoutNote: 'Save without a reason',
-  unchanged: 'Enter a new value to continue.',
+  unchanged: 'Make a change to continue.',
   change: 'Change',
   scheduled: 'From',
   fromDay: 'From this income day on',
