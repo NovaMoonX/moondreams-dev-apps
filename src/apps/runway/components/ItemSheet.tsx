@@ -6,14 +6,14 @@ import {
   Calculator,
   Check,
   CircleMinus,
-  CirclePlus,
   History,
   Link2,
   Pause,
   Pencil,
+  PiggyBank,
   Play,
-  Plus,
   ReceiptText,
+  ShoppingBag,
   SlidersHorizontal,
   Undo2,
 } from 'lucide-react';
@@ -41,6 +41,7 @@ import {
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
+import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import SheetHead from '@apps/runway/components/SheetHead';
@@ -93,18 +94,20 @@ import type {
   OpenVersion,
   PayLineSealed,
 } from '@apps/runway/types';
-import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   describeChange,
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
-import {
-  keepEntryFor,
-  leaveAfterSubviewCloses,
-} from '@apps/runway/utils/leaveAfterClose';
 
 type View =
-  'menu' | 'pause' | 'resume' | 'end' | 'archive' | 'history' | 'purchases';
+  | 'menu'
+  | 'pause'
+  | 'resume'
+  | 'end'
+  | 'archive'
+  | 'history'
+  | 'purchases'
+  | 'check';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 interface ItemSheetProps {
@@ -163,6 +166,7 @@ const VIEW_NOTES: Record<View, string> = {
   archive: LIFECYCLE_WORDS.archiveNote,
   history: '',
   purchases: '',
+  check: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -186,7 +190,6 @@ function ItemSheet({
 }: ItemSheetProps) {
   const { user } = useAuth();
   const level = useAppSelector(selectLevel);
-  const { openCheckAmount } = useRunwayUrlState();
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const version = useAppSelector(
     (state): OpenVersion | null =>
@@ -360,11 +363,6 @@ function ItemSheet({
 
   const backToSheet = () => setPhase('sheet');
 
-  const leaveTo = (open: () => void) => () => {
-    onClose();
-    leaveAfterSubviewCloses(open);
-  };
-
   if (phase === 'change') {
     if (version.kind === 'bill') {
       return (
@@ -529,7 +527,7 @@ function ItemSheet({
           <ActionRow
             isGrouped
             hasChevron
-            icon={<CirclePlus />}
+            icon={<PiggyBank />}
             label={HOW_OFTEN_WORDS.startAdding}
             onClick={() => openChange('often')}
           />
@@ -588,7 +586,7 @@ function ItemSheet({
           <ActionRow
             isGrouped
             hasChevron
-            icon={<Plus />}
+            icon={<ShoppingBag />}
             label={SPEND_WORDS.envelopeAdd}
             onClick={() => setPhase('purchase')}
           />
@@ -605,10 +603,7 @@ function ItemSheet({
             icon={<Calculator />}
             label={CHECK_WORDS.open}
             subtitle={ITEM_SHEET_R2_WORDS.checkSub}
-            onClick={leaveTo(() => {
-              keepEntryFor('day');
-              openCheckAmount(itemId);
-            })}
+            onClick={() => goTo('check')}
           />
         </ActionGroup>
       )}
@@ -665,10 +660,14 @@ function ItemSheet({
       <p className='text-2xl font-semibold'>
         {view === 'history'
           ? ITEM_VIEW_WORDS.historyTitle
-          : ITEM_VIEW_WORDS.purchasesTitle}
+          : view === 'check'
+            ? CHECK_WORDS.title
+            : ITEM_VIEW_WORDS.purchasesTitle}
       </p>
       {view === 'history' ? (
         <ItemHistoryView itemId={itemId} />
+      ) : view === 'check' ? (
+        <CheckAmountBody presetEnvelopeId={itemId} />
       ) : (
         <ItemPurchasesView
           envelopeId={itemId}
@@ -760,7 +759,11 @@ function ItemSheet({
     <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={payload.name}>
       <ChangeSteps
         isReason={view !== 'menu'}
-        reason={view === 'history' || view === 'purchases' ? browse : action}
+        reason={
+          view === 'history' || view === 'purchases' || view === 'check'
+            ? browse
+            : action
+        }
       >
         {menu}
       </ChangeSteps>

@@ -981,7 +981,7 @@ export const ITEM_SHEET_R2_WORDS = {
   resumeSub: 'Money goes in again from the next income day',
   endSub: 'It stops after the day you pick',
   archiveSub: 'Off your lists. Its history stays',
-  checkSub: 'Nothing is spent',
+  checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to spend`,
   changeAmount: 'Change amount',
   eachTime: 'Each time',
