@@ -13,7 +13,6 @@ import { formatCents } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
-  DRAFT_WORDS,
   ITEM_SHEET_R2_WORDS,
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
@@ -64,10 +63,9 @@ const describeEnding = ({ ending }: PayLineSealed) => {
 };
 
 const describeFunds = (names: string[]) => {
-  if (names.length === 0) return DRAFT_WORDS.fundsNone;
   const shown = names.slice(0, MAX_SHOWN_NAMES).join(', ');
   const more = names.length - MAX_SHOWN_NAMES;
-  return `Funds ${more > 0 ? `${shown} and ${more} more` : shown}`;
+  return `Pays first: ${more > 0 ? `${shown} and ${more} more` : shown}`;
 };
 
 interface SourceRowProps {

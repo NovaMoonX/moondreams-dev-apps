@@ -538,13 +538,11 @@ function IncomeForm({
               </div>
             )}
           {formData.frequency === 'twiceMonthly' && (
-            <div className='grid grid-cols-2 gap-3'>
+            <div className='grid grid-cols-2 items-start gap-3'>
               {(['firstDay', 'secondDay'] as const).map((key) => (
                 <div key={key} className='space-y-1.5'>
                   <p className='text-muted-foreground text-xs'>
-                    {key === 'firstDay'
-                      ? 'First payday of the month'
-                      : 'Second payday of the month'}
+                    {key === 'firstDay' ? 'First' : 'Second'}
                   </p>
                   <Select
                     options={dayOptions}

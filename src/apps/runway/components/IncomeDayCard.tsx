@@ -35,7 +35,10 @@ interface IncomeDayCardProps {
   isConfirmedShown?: boolean;
   /** Words that lead the detail line ("Next income day"). */
   lead?: string;
-  onOpen: () => void;
+  /** False where the figure is the person's own answer and nothing can show it. */
+  isPrivate?: boolean;
+  /** Left out, the row is only information. */
+  onOpen?: () => void;
 }
 
 /** One income day as a row: the date, where it comes from, one line and the take-home amount; it opens that day. */
@@ -44,6 +47,7 @@ function IncomeDayCard({
   shorts = [],
   isConfirmedShown = true,
   lead,
+  isPrivate = true,
   onOpen,
 }: IncomeDayCardProps) {
   const { isHidden } = useValuesHidden();
@@ -114,8 +118,9 @@ function IncomeDayCard({
       detail={warningLine ? undefined : detail}
       warningLine={warningLine}
       figure={amount}
-      hiddenAriaLabel={`${formatDateUTC(day.on)}, ${title}. Amount hidden. Open this day`}
-      ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}. Open this day`}
+      hiddenAriaLabel={`${formatDateUTC(day.on)}, ${title}. Amount hidden.${onOpen ? ' Open this day' : ''}`}
+      ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}.${onOpen ? ' Open this day' : ''}`}
+      isPrivate={isPrivate}
       onOpen={onOpen}
     />
   );

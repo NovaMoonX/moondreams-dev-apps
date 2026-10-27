@@ -149,11 +149,12 @@ export function useRunwayUrlState() {
   const activeTab: RunwayTab = requestedTab ?? DEFAULT_RUNWAY_TAB;
   // nuqs writes the URL without telling the router, so the entry Home leaves by carries its own marker
   // and Back from any other tab pops to it; only leaving Home adds an entry.
-  const markTabStep = () =>
-    window.history.replaceState(
-      { ...window.history.state, runwayTabStep: true },
-      '',
-    );
+  const markTabStep = () => {
+    const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
+    void backLayerKey;
+    void backLayerSeq;
+    window.history.replaceState({ ...entry, runwayTabStep: true }, '');
+  };
   const showTab = (tab: RunwayTab) => {
     if (tab === activeTab) return;
     if (requestedFixes !== null) closeFixes();
@@ -211,11 +212,24 @@ export function useRunwayUrlState() {
     setRequestedCheckFrom(null, { history: 'replace' });
   };
 
+  /** Leaves the open full-page view for a tab in one update, so the first frame after the tap is that tab; the view's own history entry takes the plain address first, so stepping back off it lands on the screen it opened from. */
+  const leaveViewForTab = (tab: RunwayTab, section?: PlanSection) => {
+    const address = new URL(window.location.href);
+    ['view', 'checkEnvelope', 'checkFrom'].forEach((key) =>
+      address.searchParams.delete(key),
+    );
+    window.history.replaceState(window.history.state, '', address);
+    closeView();
+    if (section) showPlanSection(section);
+    showTab(tab);
+  };
+
   return {
     activeTab,
     view: requestedView,
     openView,
     closeView,
+    leaveViewForTab,
     showTab,
     showSpend,
     spendEnvelope: requestedSpendEnvelope,

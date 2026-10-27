@@ -49,7 +49,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
   const moreText = groups.every((group) => group.kind === 'day')
     ? `${more} more ${more === 1 ? 'day' : 'days'}`
     : `${more} more`;
-  const isCounted = more > 0;
+  const isCounted = groups.length > 0;
   const isLabelPrivate = label.figure !== null;
   const shown = isAllShown ? groups : groups.slice(0, FIX_ROWS_SHOWN);
 
@@ -75,7 +75,9 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         <span className='min-w-0 flex-1 text-sm font-medium'>
           {isCounted && (
             <span className='sm:hidden'>
-              {PROBLEM_WORDS.many(groups.length)}
+              {groups.length === 1
+                ? PROBLEM_WORDS.one
+                : PROBLEM_WORDS.many(groups.length)}
             </span>
           )}
           <span className={join(isCounted && 'max-sm:hidden')}>

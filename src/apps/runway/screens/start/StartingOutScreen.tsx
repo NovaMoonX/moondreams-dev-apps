@@ -10,7 +10,6 @@ import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { START_WORDS } from '@apps/runway/constants';
 import { collectStarted } from '@apps/runway/engine/progress';
 import InlineNotice from '@/components/InlineNotice';
-import ValuesEyeButton from '@/components/ValuesEyeButton';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
 import { formatCentsShort } from '@/utils/moneyUtils';
@@ -42,7 +41,6 @@ import {
   selectListedDays,
   selectResolvedPlan,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   clearStartDraft,
   removeDraftEntry,
@@ -93,7 +91,6 @@ const getFirstOpenStep = (
 /** Starting out for someone with a plan: every answer is written to it as it is given. */
 function SavedStart({ uid }: { uid: string }) {
   const today = todayAsUtcDate(useNow(60_000));
-  const { openDay } = useRunwayUrlState();
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -306,12 +303,8 @@ function SavedStart({ uid }: { uid: string }) {
         </>
       )}
       doneAsk={START_WORDS.doneAsk}
-      doneHelp={
-        nextDay
-          ? 'Open it to see what it sets aside, or go to Home.'
-          : 'Go to Home to see where things stand.'
-      }
-      doneContent={(finish) => (
+      doneHelp='Go to Home to see where things stand.'
+      doneContent={() => (
         <>
           <p className='text-sm text-pretty'>
             {START_WORDS.savedSummary(describeCounts(counts))}
@@ -320,7 +313,8 @@ function SavedStart({ uid }: { uid: string }) {
             <ul className='border-border bg-card rounded-2xl border'>
               <IncomeDayCard
                 day={nextDay}
-                onOpen={() => finish(() => openDay(nextDay.dayKey))}
+                lead='Next income day'
+                isPrivate={false}
               />
             </ul>
           )}
@@ -329,7 +323,6 @@ function SavedStart({ uid }: { uid: string }) {
       remove={remove}
       startOver={startOver}
       startOverMessage={START_WORDS.startOverPlan}
-      headerAction={<ValuesEyeButton />}
     />
   );
 }

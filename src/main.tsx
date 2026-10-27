@@ -4,6 +4,7 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import { markUpdateReady, watchForAppUpdates } from './lib/app/appUpdate';
 import { reloadOnFirestoreReset } from './lib/firebase/localData';
+import { installEmptyDateInputs } from './lib/app/emptyDateInputs';
 import { installVersionPeek } from './lib/app/versionPeek';
 import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import './index.css';
@@ -19,6 +20,7 @@ window.addEventListener('vite:preloadError', () => {
   if (navigator.onLine) markUpdateReady();
 });
 installVersionPeek();
+installEmptyDateInputs();
 reloadOnFirestoreReset();
 
 createRoot(document.getElementById('root')!).render(

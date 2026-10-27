@@ -46,11 +46,13 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
 
   if (isHidden) {
     return (
-      <p className='text-muted-foreground text-sm'>{GOAL_CHART_WORDS.hidden}</p>
+      <p className='text-muted-foreground text-sm' data-sensitive=''>
+        {GOAL_CHART_WORDS.hidden}
+      </p>
     );
   }
   return (
-    <div className='space-y-2'>
+    <div className='space-y-2' data-sensitive=''>
       <div
         role='img'
         aria-label={`${goal.name}: ${GOAL_CHART_WORDS.key} Target ${formatCents(goal.targetCents)}${goal.targetDate === null ? '' : ` by ${formatDateShortUTC(goal.targetDate)}`}.`}

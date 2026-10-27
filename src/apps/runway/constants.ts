@@ -491,7 +491,7 @@ export const DRAFT_CADENCE_WORDS: Record<
   | (typeof PAIRING_DRAFT_CADENCES)[number],
   string
 > = {
-  pairing: 'Set aside from this pay',
+  pairing: 'First from this pay',
   billSuggested: 'Spread over your income days',
   billChosen: 'A day you chose',
   everyIncomeDay: 'Every income day',
@@ -541,7 +541,6 @@ export const DRAFT_WORDS = {
     'This day cannot be confirmed until you choose for each line that is short.',
   useThePlan: 'Undo my choices for this day',
   undoChoice: 'Undo my choice',
-  fundsNone: 'Not tied to anything. Goes where the draft puts it.',
 } as const;
 
 export const PACE_WORDS = {
@@ -842,7 +841,11 @@ export const DELETE_PLAN_WORDS = {
 export const ITEM_SHEET_WORDS = {
   change: 'Change it',
   changeDaySub: 'From this income day, or for this day alone',
-  funds: 'What it funds',
+  funds: 'Pay these first',
+  fundsSub: 'Out of this pay before anything else',
+  fundsTitle: (source: string) => `Paid first from ${source}`,
+  fundsNotice:
+    'Everything in your plan is paid from your income. Items here come out of this pay first.',
   history: 'History',
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',

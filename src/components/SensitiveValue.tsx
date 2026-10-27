@@ -25,13 +25,16 @@ function SensitiveValue({ children, className }: SensitiveValueProps) {
         )}
         role='img'
         aria-label='Hidden amount'
+        data-sensitive=''
       >
         {MASK}
       </span>
     );
   }
 
-  return <span className={join('select-text', className)}>{children}</span>;
+  return <span className={join('select-text', className)} data-sensitive=''>
+      {children}
+    </span>;
 }
 
 export default SensitiveValue;

@@ -291,7 +291,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             label={ITEM_SHEET_WORDS.funds}
             subtitle={
               fundsNames.length === 0
-                ? DRAFT_WORDS.fundsNone
+                ? ITEM_SHEET_WORDS.fundsSub
                 : fundsNames.length > 3
                   ? `${fundsNames.slice(0, 3).join(', ')} and ${fundsNames.length - 3} more`
                   : fundsNames.join(', ')
@@ -372,7 +372,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       {isEditingFunds && (
         <PairingsEditor
           isOpen
-          title='Funds'
+          title={ITEM_SHEET_WORDS.fundsTitle(title)}
           fromLabel={title}
           locked={[]}
           initial={effectivePairings}

@@ -135,12 +135,16 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
         </SummaryRow>
       )}
       {check && isHidden && (
-        <p className='text-muted-foreground text-sm' role='status'>
+        <p
+          className='text-muted-foreground text-sm'
+          role='status'
+          data-sensitive=''
+        >
           {CHECK_WORDS.hidden}
         </p>
       )}
       {check && !isHidden && (
-        <div className='space-y-3' role='status'>
+        <div className='space-y-3' role='status' data-sensitive=''>
           <div className='border-border bg-accent space-y-2 rounded-2xl border p-4'>
             <p className='text-muted-foreground text-sm font-medium'>
               {check.kind === 'fits'
