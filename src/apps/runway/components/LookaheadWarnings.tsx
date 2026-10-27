@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -46,6 +47,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
   const moreText = groups.every((group) => group.kind === 'day')
     ? `${more} more ${more === 1 ? 'day' : 'days'}`
     : `${more} more`;
+  const isCounted = more > 0;
   const isLabelPrivate = label.figure !== null;
   const shown = isAllShown ? groups : groups.slice(0, FIX_ROWS_SHOWN);
 
@@ -69,17 +71,24 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
           <TriangleAlert className='h-4 w-4' />
         </span>
         <span className='min-w-0 flex-1 text-sm font-medium'>
-          {label.before}
-          {label.figure !== null && (
-            <SensitiveValue>{label.figure}</SensitiveValue>
-          )}
-          {label.after}
-          {more > 0 && (
-            <span className='text-muted-foreground font-normal whitespace-nowrap'>
-              {' '}
-              · {moreText}
+          {isCounted && (
+            <span className='sm:hidden'>
+              {PROBLEM_WORDS.many(groups.length)}
             </span>
           )}
+          <span className={join(isCounted && 'max-sm:hidden')}>
+            {label.before}
+            {label.figure !== null && (
+              <SensitiveValue>{label.figure}</SensitiveValue>
+            )}
+            {label.after}
+            {more > 0 && (
+              <span className='text-muted-foreground font-normal whitespace-nowrap'>
+                {' '}
+                · {moreText}
+              </span>
+            )}
+          </span>
         </span>
         <ChevronRight
           className='text-muted-foreground h-4 w-4 shrink-0'
