@@ -720,6 +720,7 @@ export const CHECK_WORDS = {
   title: 'Check an amount',
   open: 'Check an amount',
   envelope: 'Envelope',
+  chooseTitle: 'Which envelope?',
   amount: 'Amount',
   prompt: 'Pick an envelope and type an amount. Nothing is spent or moved.',
   noEnvelopes: 'Add an envelope to check an amount against it.',

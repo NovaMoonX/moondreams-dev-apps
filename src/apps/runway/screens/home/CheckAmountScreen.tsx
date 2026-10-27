@@ -2,8 +2,10 @@ import { useState } from 'react';
 
 import InlineNotice from '@/components/InlineNotice';
 import AmountHero from '@/components/AmountHero';
+import SummaryRow from '@/components/SummaryRow';
 import Subview from '@/components/Subview';
 import { PillGroup } from '@/components/PillGroup';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
@@ -41,6 +43,8 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
   );
   const [amountText, setAmountText] = useState('');
   const [picked, setPicked] = useState<string | null>(presetEnvelopeId);
+  const [isChoosing, setIsChoosing] = useState(false);
+  useBackStep(isChoosing, () => setIsChoosing(false));
 
   const entries = envelopes.map(({ item, version }) => ({
     id: item.id,
@@ -79,10 +83,33 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
           ['This amount', `−${formatCents(cents)}`],
         ];
 
+  const pills = (
+    <PillGroup
+      label={CHECK_WORDS.envelope}
+      options={entries.map((entry) => ({
+        value: entry.id,
+        label: entry.name,
+        emoji: entry.emoji ?? undefined,
+      }))}
+      value={envelopeId}
+      onChange={(id) => {
+        setPicked(id);
+        setIsChoosing(false);
+      }}
+    />
+  );
+
   return !isLedgerReady ? (
     <p className='text-muted-foreground text-sm'>Getting your plan.</p>
   ) : entries.length === 0 ? (
     <p className='text-muted-foreground text-sm'>{CHECK_WORDS.noEnvelopes}</p>
+  ) : isChoosing ? (
+    <div className='space-y-3'>
+      <p className='text-2xl font-semibold text-balance'>
+        {CHECK_WORDS.chooseTitle}
+      </p>
+      {pills}
+    </div>
   ) : (
     <div className='space-y-4'>
       <AmountHero
@@ -92,18 +119,16 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
         autoFocus
         hint={CHECK_WORDS.prompt}
       />
-      <ActionSection caption={CHECK_WORDS.envelope}>
-        <PillGroup
+      {envelopeId === null ? (
+        <ActionSection caption={CHECK_WORDS.envelope}>{pills}</ActionSection>
+      ) : (
+        <SummaryRow
           label={CHECK_WORDS.envelope}
-          options={entries.map((entry) => ({
-            value: entry.id,
-            label: entry.name,
-            emoji: entry.emoji ?? undefined,
-          }))}
-          value={envelopeId}
-          onChange={setPicked}
-        />
-      </ActionSection>
+          onClick={() => setIsChoosing(true)}
+        >
+          {envelopeName}
+        </SummaryRow>
+      )}
       {check && (
         <div className='space-y-3' role='status'>
           <div className='border-border bg-accent space-y-2 rounded-2xl border p-4'>
