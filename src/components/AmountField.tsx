@@ -1,9 +1,20 @@
-import { useRef, useState, type ReactNode } from 'react';
+import {
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountHero, { type AmountHeroWay } from '@/components/AmountHero';
 import MoneyInput from '@/components/MoneyInput';
+import {
+  cleanAmountText,
+  isAmountText,
+  useAmountTyping,
+} from '@/hooks/useAmountTyping';
 import RevealChip from '@/components/RevealChip';
 import { PillGroup } from '@/components/PillGroup';
 
@@ -47,6 +58,38 @@ interface AmountFieldProps {
   suffix?: ReactNode;
   /** More chips under a hero figure, after the other modes. */
   extraWays?: AmountHeroWay[];
+}
+
+const MAX_PERCENT = 100;
+
+function PercentInput({
+  ref,
+  value,
+  onChange,
+  ...rest
+}: Omit<ComponentProps<typeof Input>, 'onChange' | 'value'> & {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const ownRef = useRef<HTMLInputElement>(null);
+  const inputRef =
+    (ref as RefObject<HTMLInputElement | null> | undefined) ?? ownRef;
+  useAmountTyping(inputRef, { max: MAX_PERCENT });
+  return (
+    <Input
+      {...rest}
+      ref={inputRef}
+      value={value}
+      onChange={(event) => {
+        const typed = event.target.value;
+        onChange(
+          isAmountText(typed, { max: MAX_PERCENT })
+            ? typed
+            : (cleanAmountText(typed, { max: MAX_PERCENT }) ?? value),
+        );
+      }}
+    />
+  );
 }
 
 /** A labelled amount: exact money, a low and a high end, a whole or half percentage of something the caller names, or the rest. */
@@ -135,7 +178,7 @@ function AmountField({
         {mode === 'percent' && (
           <div className='flex items-center justify-center gap-2'>
             <div className='w-28 shrink-0'>
-              <Input
+              <PercentInput
                 ref={percentRef}
                 variant='outline'
                 type='text'
@@ -147,7 +190,7 @@ function AmountField({
                 maxLength={6}
                 className='text-center text-2xl font-semibold tabular-nums'
                 value={value}
-                onChange={(event) => onChange(event.target.value)}
+                onChange={onChange}
               />
             </div>
             <p className='text-muted-foreground min-w-0 text-left text-sm break-words'>
@@ -237,7 +280,7 @@ function AmountField({
       {mode === 'percent' && (
         <div className='flex items-center gap-2'>
           <div className='w-28 shrink-0'>
-            <Input
+            <PercentInput
               variant='outline'
               type='text'
               inputMode='decimal'
@@ -247,7 +290,7 @@ function AmountField({
               placeholder='10'
               maxLength={6}
               value={value}
-              onChange={(event) => onChange(event.target.value)}
+              onChange={onChange}
             />
           </div>
           <p className='text-muted-foreground min-w-0 text-sm break-words'>

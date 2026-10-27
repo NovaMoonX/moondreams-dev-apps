@@ -11,10 +11,16 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import RevealChip from '@/components/RevealChip';
+import {
+  cleanAmountText,
+  isAmountText,
+  useAmountTyping,
+} from '@/hooks/useAmountTyping';
+import { runWhenDrawerSettled } from '@/hooks/useKeepFocusedFieldInView';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { toTwoDecimalAmount } from '@/utils/moneyUtils';
 
-const PHONE_FOCUS_DELAY_MS = 350;
+const PHONE_FOCUS_DELAY_MS = 500;
 const MAX_WAYS_SHOWN = 2;
 
 /** Another way to give the amount (a range, a share of something), offered as a chip under the figure. */
@@ -66,7 +72,7 @@ const getSizeClass = (length: number, isRange: boolean) => {
 /** "12345.67" as money reads, "12,345.67"; anything that isn't plain digits is left as typed. */
 // Focus given from code selects the figure, so typing replaces it as a tap or Tab would.
 const focusWhole = (field: HTMLInputElement | null) => {
-  field?.focus();
+  field?.focus({ preventScroll: true });
   field?.select();
 };
 
@@ -97,6 +103,7 @@ function Figure({
   disabled,
 }: FigureProps) {
   const pendingCaret = useRef<number | null>(null);
+  useAmountTyping(inputRef);
   const shown = groupDigits(value);
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
@@ -163,9 +170,16 @@ function Figure({
             const caret = field.selectionStart ?? field.value.length;
             const countBefore = (text: string, end: number) =>
               text.slice(0, end).replace(/,/g, '').length;
-            const typed = field.value.replace(/,/g, '');
+            const raw = field.value.replace(/,/g, '');
+            const typed = isAmountText(raw)
+              ? raw
+              : (cleanAmountText(raw) ?? value);
             const isCommaDeleted =
-              typed === value && field.value.length < shown.length;
+              (event.nativeEvent as InputEvent).inputType?.startsWith(
+                'delete',
+              ) === true &&
+              typed === value &&
+              field.value.length < shown.length;
             const significant = countBefore(field.value, caret);
             pendingCaret.current = isCommaDeleted
               ? Math.max(0, significant - 1)
@@ -255,11 +269,11 @@ function AmountHero({
 
   useEffect(() => {
     if (!shouldFocus) return;
-    const timer = window.setTimeout(
+    return runWhenDrawerSettled(
+      inputRef.current,
       () => focusWhole(inputRef.current),
       PHONE_FOCUS_DELAY_MS,
     );
-    return () => window.clearTimeout(timer);
   }, [shouldFocus]);
 
   const digitsOf = (text: string) => text.replace(/,/g, '').length;

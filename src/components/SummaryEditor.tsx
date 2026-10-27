@@ -16,10 +16,14 @@ import {
 } from '@/components/summaryGroup';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
-import { useKeepFocusedFieldInView } from '@/hooks/useKeepFocusedFieldInView';
+import {
+  focusFieldQuietly,
+  runWhenDrawerSettled,
+  useKeepFocusedFieldInView,
+} from '@/hooks/useKeepFocusedFieldInView';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
-const PHONE_FOCUS_DELAY_MS = 350;
+const PHONE_FOCUS_DELAY_MS = 500;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 const SHORT_SCREEN_MAX_HEIGHT = 599;
 
@@ -42,16 +46,19 @@ function EditorBody({
     if (!shouldFocus) {
       return;
     }
-    const timer = window.setTimeout(() => {
-      const field = bodyRef.current?.querySelector<
-        HTMLInputElement | HTMLTextAreaElement
-      >('input, textarea');
-      field?.focus();
-      if (field && field.selectionStart !== null) {
-        field.setSelectionRange(field.value.length, field.value.length);
-      }
-    }, focusDelay);
-    return () => window.clearTimeout(timer);
+    return runWhenDrawerSettled(
+      bodyRef.current,
+      () => {
+        const field = bodyRef.current?.querySelector<
+          HTMLInputElement | HTMLTextAreaElement
+        >('input, textarea');
+        focusFieldQuietly(field ?? null);
+        if (field && field.selectionStart !== null) {
+          field.setSelectionRange(field.value.length, field.value.length);
+        }
+      },
+      focusDelay,
+    );
   }, [focusDelay, shouldFocus]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

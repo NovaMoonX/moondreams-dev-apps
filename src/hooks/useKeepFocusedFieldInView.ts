@@ -1,8 +1,13 @@
 import { useEffect } from 'react';
 
-const EDGE_GAP_PX = 16;
+const EDGE_GAP_PX = 12;
 const KEYBOARD_MIN_PX = 80;
+const SETTLE_MS = 120;
 const FIELD_SELECTOR = 'input, textarea, select, [contenteditable="true"]';
+const DRAWER_ANCHOR_SELECTOR = '[role="dialog"][data-drawer-open] > .fixed.bottom-0';
+
+const prefersReducedMotion = () =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const findScroller = (field: HTMLElement) => {
   const dialog = field.closest('[role="dialog"]');
@@ -17,62 +22,146 @@ const findScroller = (field: HTMLElement) => {
   return scroller.pop() ?? null;
 };
 
-/** Keeps a focused field inside a sheet visible when the phone's keyboard shrinks the visual viewport. While the keyboard is up the sheet's scroller gets its height as bottom padding, so even a short sheet can scroll the field clear. */
+/**
+ * Runs `callback` once the drawer around `node` has finished sliding in, or after `maxMs` if nothing
+ * is animating. Outside a drawer it runs after `maxMs` too. Returns a cancel function.
+ */
+export function runWhenDrawerSettled(
+  node: HTMLElement | null,
+  callback: () => void,
+  maxMs = 450,
+) {
+  const panel = node?.closest<HTMLElement>(
+    '[role="dialog"][data-drawer-open] .transform',
+  );
+  const state = { isDone: false, frame: 0, timer: 0 };
+  const finish = () => {
+    if (state.isDone) return;
+    state.isDone = true;
+    window.clearTimeout(state.timer);
+    window.cancelAnimationFrame(state.frame);
+    callback();
+  };
+  state.timer = window.setTimeout(finish, maxMs);
+  if (panel) {
+    state.frame = window.requestAnimationFrame(() => {
+      state.frame = window.requestAnimationFrame(() => {
+        const running = panel
+          .getAnimations()
+          .filter((animation) => animation.playState === 'running');
+        if (running.length === 0) {
+          finish();
+          return;
+        }
+        Promise.allSettled(running.map((animation) => animation.finished)).then(
+          finish,
+        );
+      });
+    });
+  }
+  return () => {
+    state.isDone = true;
+    window.clearTimeout(state.timer);
+    window.cancelAnimationFrame(state.frame);
+  };
+}
+
+/** Focuses a field without letting the browser scroll the page or the sheet to it. */
+export const focusFieldQuietly = (field: HTMLElement | null) =>
+  field?.focus({ preventScroll: true });
+
+/**
+ * While the phone's keyboard is up, the open drawer is lifted onto it and capped to the visible area,
+ * so its pinned footer sits right on the keyboard with nothing padded; the focused field is then
+ * scrolled smoothly into the sheet's own scroller once the viewport has settled, and not at all when
+ * it is already visible.
+ */
 export function useKeepFocusedFieldInView(isActive: boolean) {
   useEffect(() => {
     const viewport = window.visualViewport;
     if (!isActive || !viewport) return;
-    const padded = new Map<HTMLElement, string>();
+    const lifted = new Set<HTMLElement>();
+    const state = { timer: 0 };
 
     const release = () => {
-      padded.forEach((value, node) => {
-        node.style.paddingBottom = value;
+      lifted.forEach((anchor) => {
+        anchor.style.removeProperty('bottom');
+        anchor.style.removeProperty('--keyboard-max-height');
       });
-      padded.clear();
+      lifted.clear();
+    };
+
+    const getKeyboardHeight = () =>
+      Math.max(0, window.innerHeight - (viewport.offsetTop + viewport.height));
+
+    const lift = (anchor: HTMLElement) => {
+      const keyboard = getKeyboardHeight();
+      lifted.add(anchor);
+      anchor.style.bottom = `${keyboard}px`;
+      anchor.style.setProperty(
+        '--keyboard-max-height',
+        `${Math.max(0, viewport.height - EDGE_GAP_PX)}px`,
+      );
     };
 
     const reveal = () => {
       const field = document.activeElement;
       if (!(field instanceof HTMLElement) || !field.matches(FIELD_SELECTOR)) {
-        release();
         return;
       }
       const scroller = findScroller(field);
       if (!scroller) return;
-
-      const visibleBottom = viewport.offsetTop + viewport.height;
-      if (window.innerHeight - visibleBottom < KEYBOARD_MIN_PX) {
-        release();
-        return;
-      }
-
-      if (!padded.has(scroller)) {
-        padded.set(scroller, scroller.style.paddingBottom);
-        const own = parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
-        const reach = scroller.getBoundingClientRect().bottom - visibleBottom;
-        scroller.style.paddingBottom = `${own + Math.max(0, reach)}px`;
-      }
-
       const bounds = scroller.getBoundingClientRect();
+      const footer = scroller.querySelector<HTMLElement>('.form-footer');
+      const footerTop = footer ? footer.getBoundingClientRect().top : Infinity;
       const top = Math.max(bounds.top, viewport.offsetTop) + EDGE_GAP_PX;
-      const bottom = Math.min(bounds.bottom, visibleBottom) - EDGE_GAP_PX;
+      const bottom =
+        Math.min(
+          bounds.bottom,
+          viewport.offsetTop + viewport.height,
+          footerTop,
+        ) - EDGE_GAP_PX;
       const rect = field.getBoundingClientRect();
       if (rect.top >= top && rect.bottom <= bottom) return;
 
-      const delta = (rect.top + rect.bottom) / 2 - (top + bottom) / 2;
-      scroller.scrollBy({ top: delta, behavior: 'smooth' });
+      const delta = rect.top < top ? rect.top - top : rect.bottom - bottom;
+      scroller.scrollBy({
+        top: delta,
+        behavior: prefersReducedMotion() ? 'auto' : 'smooth',
+      });
     };
 
-    const handleFocus = () => window.requestAnimationFrame(reveal);
-    const handleBlur = () => window.setTimeout(reveal, 100);
+    const update = () => {
+      const anchor = document.querySelector<HTMLElement>(
+        DRAWER_ANCHOR_SELECTOR,
+      );
+      if (!anchor) return;
+      if (getKeyboardHeight() < KEYBOARD_MIN_PX) {
+        release();
+        return;
+      }
+      lift(anchor);
+    };
 
-    viewport.addEventListener('resize', reveal);
+    const handleViewport = () => {
+      update();
+      window.clearTimeout(state.timer);
+      state.timer = window.setTimeout(reveal, SETTLE_MS);
+    };
+
+    const handleFocus = () => {
+      window.clearTimeout(state.timer);
+      state.timer = window.setTimeout(reveal, SETTLE_MS);
+    };
+
+    viewport.addEventListener('resize', handleViewport);
+    viewport.addEventListener('scroll', update);
     document.addEventListener('focusin', handleFocus);
-    document.addEventListener('focusout', handleBlur);
     return () => {
-      viewport.removeEventListener('resize', reveal);
+      window.clearTimeout(state.timer);
+      viewport.removeEventListener('resize', handleViewport);
+      viewport.removeEventListener('scroll', update);
       document.removeEventListener('focusin', handleFocus);
-      document.removeEventListener('focusout', handleBlur);
       release();
     };
   }, [isActive]);

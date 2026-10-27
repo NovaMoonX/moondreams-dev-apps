@@ -1,6 +1,13 @@
+import { useRef } from 'react';
+
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import {
+  cleanAmountText,
+  isAmountText,
+  useAmountTyping,
+} from '@/hooks/useAmountTyping';
 import { toTwoDecimalAmount } from '@/utils/moneyUtils';
 
 interface MoneyInputProps {
@@ -14,6 +21,8 @@ interface MoneyInputProps {
   autoFocus?: boolean;
   /** `outline` leaves the fill clear so it matches an outline `Input` beside it in a modal or drawer. */
   variant?: 'solid' | 'outline';
+  /** Off unless the amount can be below zero. */
+  allowNegative?: boolean;
 }
 
 /** A dollar amount typed as text: a number input's spinner and float parsing are wrong for money. It settles to two decimals when the field loses focus or Enter is pressed. */
@@ -27,7 +36,10 @@ function MoneyInput({
   className,
   autoFocus,
   variant = 'solid',
+  allowNegative = false,
 }: MoneyInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useAmountTyping(inputRef, { allowNegative });
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
     if (settled !== value) {
@@ -49,6 +61,7 @@ function MoneyInput({
           $
         </span>
         <Input
+          ref={inputRef}
           type='text'
           inputMode='decimal'
           variant='base'
@@ -63,7 +76,14 @@ function MoneyInput({
           autoFocus={autoFocus}
           aria-label={ariaLabel}
           aria-invalid={errorMessage ? true : undefined}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            const typed = event.target.value;
+            onChange(
+              isAmountText(typed, { allowNegative })
+                ? typed
+                : (cleanAmountText(typed, { allowNegative }) ?? value),
+            );
+          }}
           onBlur={settle}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
