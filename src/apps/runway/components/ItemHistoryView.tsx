@@ -1,6 +1,13 @@
+import { useState } from 'react';
+
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import ChangeRow from '@apps/runway/components/ChangeRow';
-import { ITEM_VIEW_WORDS, MAX_WINDOW_CHANGES } from '@apps/runway/constants';
+import {
+  ITEM_HISTORY_PREVIEW,
+  ITEM_VIEW_WORDS,
+  MAX_WINDOW_CHANGES,
+} from '@apps/runway/constants';
 import { useItemChanges } from '@apps/runway/hooks/useItemChanges';
 
 interface ItemHistoryViewProps {
@@ -10,6 +17,7 @@ interface ItemHistoryViewProps {
 /** Every change to one item over the past year, newest first. */
 function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
   const state = useItemChanges(itemId);
+  const [isAll, setIsAll] = useState(false);
   const startDate = useAppSelector(
     (current) => current.runway.plan?.startDate ?? null,
   );
@@ -38,22 +46,35 @@ function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
       </p>
     );
   }
+  const shown = isAll
+    ? state.changes
+    : state.changes.slice(0, ITEM_HISTORY_PREVIEW);
   return (
-    <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-      {state.changes.map((change) => (
-        <ChangeRow
-          key={change.id}
-          change={change}
-          confirmedDayKey={null}
-          onOpenRecord={() => undefined}
-        />
-      ))}
-      {isCut && (
-        <li className='text-muted-foreground p-3 text-sm'>
-          {ITEM_VIEW_WORDS.historyOlder}
-        </li>
+    <div className='space-y-1'>
+      <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+        {shown.map((change) => (
+          <ChangeRow
+            key={change.id}
+            change={change}
+            confirmedDayKey={null}
+            onOpenRecord={() => undefined}
+          />
+        ))}
+        {isCut && (isAll || state.changes.length <= ITEM_HISTORY_PREVIEW) && (
+          <li className='text-muted-foreground p-3 text-sm'>
+            {ITEM_VIEW_WORDS.historyOlder}
+          </li>
+        )}
+      </ul>
+      {state.changes.length > ITEM_HISTORY_PREVIEW && (
+        <ShowMoreButton
+          isOpen={isAll}
+          onClick={() => setIsAll((open) => !open)}
+        >
+          {isAll ? 'Show fewer' : `Show all ${state.changes.length}`}
+        </ShowMoreButton>
       )}
-    </ul>
+    </div>
   );
 }
 

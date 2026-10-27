@@ -1232,3 +1232,7 @@ export const GOAL_CHART_WORDS = {
   key: 'Solid is what it has held. Dotted is where the plan takes it.',
   reaches: 'Reaches target',
 } as const;
+
+// Round 4, package G5.
+/** Changes an item's History shows before "Show all". */
+export const ITEM_HISTORY_PREVIEW = 6;
