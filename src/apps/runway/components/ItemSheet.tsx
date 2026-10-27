@@ -482,7 +482,7 @@ function ItemSheet({
   const openHistory = () => goTo('history');
 
   const menu = (
-    <div className='space-y-4'>
+    <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
       <SheetHead
         label={figureLabel}
         figure={figure}
