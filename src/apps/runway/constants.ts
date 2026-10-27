@@ -1068,3 +1068,13 @@ export const SPEND_PERIOD_WORDS = {
   emptyPeriod: 'Nothing was spent in this period.',
   loading: 'Getting these purchases.',
 } as const;
+
+// Round 4, package F: views an item sheet swaps in, and one wording for the action views.
+export const ITEM_VIEW_WORDS = {
+  historyTitle: 'History',
+  historyEmpty: 'Nothing has changed since you added it.',
+  historyLoading: 'Getting the changes.',
+  historyFailed: 'The history did not load. Nothing was changed.',
+  purchasesTitle: 'Purchases this month',
+  purchasesEmpty: 'Nothing spent from it this month.',
+} as const;

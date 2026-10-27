@@ -49,14 +49,17 @@ const getRemovalEffect = (
 
 interface PurchaseScreenProps {
   purchaseId: string;
+  /** Opens a related purchase; the Spend list uses the address. */
+  onOpen?: (purchaseId: string) => void;
   onClose: () => void;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
-function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
+function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
-  const { openPurchase } = useRunwayUrlState();
+  const { openPurchase: openPurchaseInUrl } = useRunwayUrlState();
+  const openPurchase = onOpen ?? openPurchaseInUrl;
   const { addToast } = useToast();
   const purchases = useAppSelector(selectSpendPurchases);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
