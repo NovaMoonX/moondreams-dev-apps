@@ -1080,6 +1080,18 @@ export const ITEM_VIEW_WORDS = {
   purchasesEmpty: 'Nothing spent from it this month.',
 } as const;
 
+export const CHECK_RESULT_WORDS = {
+  fits: 'It fits',
+  left: 'left',
+  over: (name: string) => `${name} would be over`,
+  overBy: 'over',
+  free: 'Free to spend',
+  fromFree: 'It could come from Free to spend, then the lowest priority first',
+  fromOthers: 'It could come from, lowest priority first',
+  uncovered: (amount: string) =>
+    `${amount} is more than Free to spend and the other envelopes hold. Free to spend would go over-assigned.`,
+} as const;
+
 export const ITEM_KIND_NOUNS = {
   bill: 'bill',
   envelope: 'envelope',
