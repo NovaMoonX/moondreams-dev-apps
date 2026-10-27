@@ -69,6 +69,7 @@ function BillRow({ billId, bill, payment, planStance, today }: BillRowProps) {
         emoji={bill.emoji}
         detail={dueLine}
         figure={amount}
+        isPrivate
         ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}
         onOpen={() => setIsOpen(true)}
       />

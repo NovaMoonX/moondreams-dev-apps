@@ -33,6 +33,8 @@ interface IncomeDayCardProps {
   isConfirmedShown?: boolean;
   /** Words that lead the detail line ("Next income day"). */
   lead?: string;
+  /** The amount and any shortfall line blur until shown; off inside a flow the person opened on purpose. */
+  isPrivate?: boolean;
   onOpen: () => void;
 }
 
@@ -42,6 +44,7 @@ function IncomeDayCard({
   note,
   isConfirmedShown = true,
   lead,
+  isPrivate = false,
   onOpen,
 }: IncomeDayCardProps) {
   const stance = effectiveStance(
@@ -88,6 +91,9 @@ function IncomeDayCard({
       isDetailStrong={Boolean(note)}
       isDetailWarning={Boolean(note)}
       figure={amount}
+      isPrivate={isPrivate}
+      hiddenAriaLabel={`${formatDateUTC(day.on)}, ${title}. Amount hidden. Open this day`}
+      isDetailPrivate={Boolean(note)}
       ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}. Open this day`}
       onOpen={onOpen}
     />

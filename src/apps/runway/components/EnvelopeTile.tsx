@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -42,6 +44,7 @@ function EnvelopeTile({
   look = 'row',
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { isHidden } = useValuesHidden();
   const level = useAppSelector(selectLevel);
   const { value, word } = describeEnvelopeFigure(level, cents);
   const funding = describeFundingShort(envelope.funding);
@@ -65,7 +68,11 @@ function EnvelopeTile({
             type='button'
             variant='tertiary'
             className='border-border bg-card text-foreground! h-full min-h-28 w-full flex-col items-start justify-start gap-2 rounded-2xl border p-3! text-left font-normal whitespace-normal'
-            aria-label={`${envelope.name}, ${value} ${word}. Open`}
+            aria-label={
+              isHidden
+                ? `${envelope.name}. Amount hidden. Open`
+                : `${envelope.name}, ${value} ${word}. Open`
+            }
             onClick={open}
           >
             <span className='flex w-full min-w-0 items-center gap-2'>
@@ -83,7 +90,7 @@ function EnvelopeTile({
                   isOver && 'text-destructive',
                 )}
               >
-                {value}
+                <SensitiveValue>{value}</SensitiveValue>
               </span>
               <span className='text-muted-foreground block text-xs'>
                 {word}
@@ -97,6 +104,8 @@ function EnvelopeTile({
           emoji={envelope.emoji}
           detail={rowDetail}
           figure={rowFigure}
+          isPrivate
+          isDetailPrivate={!(isPlan && eachTime)}
           ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
           onOpen={open}
         />

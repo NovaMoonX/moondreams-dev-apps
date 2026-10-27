@@ -3,6 +3,8 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import DetailSheet from '@/components/DetailSheet';
+import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { FIX_WORDS, PROBLEM_WORDS } from '@apps/runway/constants';
 import {
@@ -20,6 +22,7 @@ interface LookaheadWarningsProps {
 /** What stops the plan, as one warning row that counts the rest; it opens "Things to fix", one row per problem, soonest first. The open list lives in the URL, so coming back from a row's day lands on it again. */
 function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
   const { isFixesOpen, openFixes, closeFixes } = useRunwayUrlState();
+  const { isHidden } = useValuesHidden();
   const { incomeEndsOn } = lookahead;
   const problems = sortProblems(lookahead.problems);
   const first = problems[0] ?? null;
@@ -31,6 +34,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
   if (!first && !endsText) return null;
   const label = first ? describeProblemShort(first) : endsText;
   const more = problems.length - 1;
+  const isLabelPrivate = first?.kind === 'short';
 
   return (
     <>
@@ -38,6 +42,11 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         type='button'
         variant='tertiary'
         className='text-foreground! h-auto min-h-11 w-full items-center justify-start gap-3 rounded-2xl border border-(--runway-warning-edge) bg-(--runway-warning-soft) px-3! py-1.5 text-left font-normal whitespace-normal'
+        aria-label={
+          isHidden && isLabelPrivate
+            ? `The plan falls short. Amount hidden${more > 0 ? `, ${more} more` : ''}. See what to fix`
+            : undefined
+        }
         onClick={openFixes}
       >
         <span
@@ -47,7 +56,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
           <TriangleAlert className='h-4 w-4' />
         </span>
         <span className='min-w-0 flex-1 text-sm font-medium'>
-          {label}
+          {isLabelPrivate ? <SensitiveValue>{label}</SensitiveValue> : label}
           {more > 0 && (
             <span className='text-muted-foreground font-normal whitespace-nowrap'>
               {' '}
