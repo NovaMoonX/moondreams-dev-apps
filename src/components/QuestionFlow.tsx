@@ -1,9 +1,10 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import SummaryRow from '@/components/SummaryRow';
+import { runWhenDrawerSettled } from '@/hooks/useKeepFocusedFieldInView';
 import type { QuestionFlowState, QuestionStep } from '@/hooks/useQuestionFlow';
 
-const FIRST_FOCUS_DELAY_MS = 350;
+const FIRST_FOCUS_DELAY_MS = 500;
 const STEP_FOCUS_DELAY_MS = 60;
 const SCROLL_MARGIN_PX = 8;
 const TYPED_FIELD =
@@ -58,30 +59,35 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
       }, STEP_FOCUS_DELAY_MS);
       return () => window.clearTimeout(timer);
     }
-    const timer = window.setTimeout(
-      () => {
-        const block = openRef.current;
-        if (block === null) return;
-        const scroller = isFirst ? null : getScroller(block);
-        if (scroller !== null) {
-          const top =
-            block.getBoundingClientRect().top -
-            scroller.getBoundingClientRect().top +
-            scroller.scrollTop -
-            SCROLL_MARGIN_PX;
-          scroller.scrollTo({ top });
-        }
-        const field =
-          block.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-            TYPED_FIELD,
-          ) ?? headingRef.current;
-        field?.focus({ preventScroll: true });
-        // A filled answer reopened to change is replaced by typing, as a tap or Tab would.
-        if (field instanceof HTMLInputElement && field.type === 'text')
-          field.select();
-      },
-      isFirst ? FIRST_FOCUS_DELAY_MS : STEP_FOCUS_DELAY_MS,
-    );
+    const focusOpenQuestion = () => {
+      const block = openRef.current;
+      if (block === null) return;
+      const scroller = isFirst ? null : getScroller(block);
+      if (scroller !== null) {
+        const top =
+          block.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top +
+          scroller.scrollTop -
+          SCROLL_MARGIN_PX;
+        scroller.scrollTo({ top });
+      }
+      const field =
+        block.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+          TYPED_FIELD,
+        ) ?? headingRef.current;
+      field?.focus({ preventScroll: true });
+      // A filled answer reopened to change is replaced by typing, as a tap or Tab would.
+      if (field instanceof HTMLInputElement && field.type === 'text')
+        field.select();
+    };
+    if (isFirst) {
+      return runWhenDrawerSettled(
+        openRef.current,
+        focusOpenQuestion,
+        FIRST_FOCUS_DELAY_MS,
+      );
+    }
+    const timer = window.setTimeout(focusOpenQuestion, STEP_FOCUS_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [openKey, shouldFocus]);
 

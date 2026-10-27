@@ -358,6 +358,30 @@ html[data-installed-app] *::-webkit-scrollbar {
   }
 }
 
+/* With the phone's keyboard up the drawer rides on it (`useKeepFocusedFieldInView` sets `bottom` and the cap), so its pinned footer
+   meets the keyboard and the two move together. */
+[role='dialog'][data-drawer-open] > .fixed.bottom-0 {
+  transition: bottom 0.2s ease-out;
+}
+[role='dialog'][data-drawer-open] > .fixed.bottom-0 > div {
+  transition-property: transform, max-height;
+}
+[role='dialog'][data-drawer-open] > .fixed.bottom-0[style*='--keyboard-max-height'],
+[role='dialog'][data-drawer-open]
+  > .fixed.bottom-0[style*='--keyboard-max-height']
+  > div,
+[role='dialog'][data-drawer-open]
+  > .fixed.bottom-0[style*='--keyboard-max-height']
+  > div
+  > div {
+  max-height: var(--keyboard-max-height);
+}
+@media (prefers-reduced-motion: reduce) {
+  [role='dialog'][data-drawer-open] > .fixed.bottom-0 {
+    transition: none;
+  }
+}
+
 /* The library's close X is a 23px icon; its 40px hit area is a pseudo-element, so the look and the layout stay as they were. */
 [data-drawer-close-button]::before,
 [data-modal-close-button]::before,
