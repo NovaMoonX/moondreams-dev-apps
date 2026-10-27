@@ -118,21 +118,20 @@ function DaysScreen() {
                       ? `The plan leaves ${lookahead.shortByDay[day.dayKey].name} ${formatCentsShort(lookahead.shortByDay[day.dayKey].shortBy)} short`
                       : undefined
                   }
+                  isPrivate
                   onOpen={() => openDay(day.dayKey)}
                 />
               ))}
             </ul>
             {hasFold && (
-              <div className='[&_button]:text-muted-foreground! [&_button]:text-sm'>
-                <ShowMoreButton
-                  isOpen={isExpanded}
-                  onClick={() => setIsExpanded((open) => !open)}
-                >
-                  {isExpanded
-                    ? 'Show fewer'
-                    : `Show ${days.length - COMING_DAYS_PREVIEW} more`}
-                </ShowMoreButton>
-              </div>
+              <ShowMoreButton
+                isOpen={isExpanded}
+                onClick={() => setIsExpanded((open) => !open)}
+              >
+                {isExpanded
+                  ? 'Show fewer'
+                  : `Show ${days.length - COMING_DAYS_PREVIEW} more`}
+              </ShowMoreButton>
             )}
             {allDays.length > COMING_DAYS_CAP && (
               <p className='text-muted-foreground text-sm'>
@@ -151,21 +150,20 @@ function DaysScreen() {
                   key={day.dayKey}
                   day={day}
                   isConfirmedShown={false}
+                  isPrivate
                   onOpen={() => openDay(day.dayKey)}
                 />
               ))}
             </ul>
             {hasSettledFold && (
-              <div className='[&_button]:text-muted-foreground! [&_button]:text-sm'>
-                <ShowMoreButton
-                  isOpen={isSettledExpanded}
-                  onClick={() => setIsSettledExpanded((open) => !open)}
-                >
-                  {isSettledExpanded
-                    ? 'Show fewer'
-                    : `Show ${confirmed.length - SETTLED_DAYS_PREVIEW} earlier`}
-                </ShowMoreButton>
-              </div>
+              <ShowMoreButton
+                isOpen={isSettledExpanded}
+                onClick={() => setIsSettledExpanded((open) => !open)}
+              >
+                {isSettledExpanded
+                  ? 'Show fewer'
+                  : `Show ${confirmed.length - SETTLED_DAYS_PREVIEW} earlier`}
+              </ShowMoreButton>
             )}
           </div>
         )}

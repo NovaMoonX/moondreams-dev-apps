@@ -47,6 +47,7 @@ function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
       }
       detail={detail}
       figure={amount}
+      isPrivate
       ariaLabel={`${title}, ${amount}, ${detail}. Open`}
       onOpen={onOpen}
     />

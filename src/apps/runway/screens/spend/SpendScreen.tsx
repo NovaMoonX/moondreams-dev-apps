@@ -5,6 +5,7 @@ import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import { PillGroup } from '@/components/PillGroup';
+import SensitiveValue from '@/components/SensitiveValue';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
@@ -208,7 +209,7 @@ function SpendScreen() {
           <p className='text-muted-foreground text-sm'>
             {SPEND_PERIOD_WORDS.total}{' '}
             <span className='text-foreground font-semibold tabular-nums'>
-              {formatCents(total)}
+              <SensitiveValue>{formatCents(total)}</SensitiveValue>
             </span>
           </p>
         </div>
@@ -277,14 +278,12 @@ function SpendScreen() {
           ))
         )}
         {matches.length > visible.length && (
-          <div className='[&_button]:text-muted-foreground! [&_button]:text-sm'>
-            <ShowMoreButton
-              onClick={() => setShown((current) => current + SPEND_PAGE_SIZE)}
-            >
-              Show {Math.min(SPEND_PAGE_SIZE, matches.length - visible.length)}{' '}
-              more
-            </ShowMoreButton>
-          </div>
+          <ShowMoreButton
+            onClick={() => setShown((current) => current + SPEND_PAGE_SIZE)}
+          >
+            Show {Math.min(SPEND_PAGE_SIZE, matches.length - visible.length)}{' '}
+            more
+          </ShowMoreButton>
         )}
       </div>
     );

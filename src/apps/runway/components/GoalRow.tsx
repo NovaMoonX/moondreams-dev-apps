@@ -65,6 +65,8 @@ function GoalRow({ goalId, goal, pace, heldCents, today }: GoalRowProps) {
         detail={paceLine}
         figure={formatCentsShort(savedCents)}
         figureWord={`of ${formatCentsShort(goal.targetCents)}`}
+        isPrivate
+        isDetailPrivate={paceLine.includes('$')}
         ariaLabel={`${goal.name}, ${progress} saved. ${paceLine}. Open`}
         onOpen={() => setIsOpen(true)}
       />

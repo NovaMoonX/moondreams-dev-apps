@@ -5,6 +5,8 @@ import {
   CalendarOff,
   Calculator,
   Check,
+  CircleMinus,
+  CirclePlus,
   History,
   Link2,
   Pause,
@@ -38,6 +40,7 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
   CHANGE_WORDS,
+  HOW_OFTEN_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
   ENVELOPE_SPEND_WORDS,
@@ -490,6 +493,25 @@ function ItemSheet({
             }
             subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
             onClick={() => openChange(null)}
+          />
+        )}
+        {canChange && goal && goal.funding.cadence.kind !== 'none' && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CircleMinus />}
+            label={HOW_OFTEN_WORDS.stopAdding}
+            subtitle={HOW_OFTEN_WORDS.stopAddingSub}
+            onClick={() => openChange('often')}
+          />
+        )}
+        {canChange && goal && goal.funding.cadence.kind === 'none' && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CirclePlus />}
+            label={HOW_OFTEN_WORDS.startAdding}
+            onClick={() => openChange('often')}
           />
         )}
         {hasBillRow && payment && (

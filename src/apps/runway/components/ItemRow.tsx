@@ -4,6 +4,8 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { TICK_HIT_CLASS } from '@apps/runway/constants';
 
@@ -19,11 +21,17 @@ interface ItemRowProps {
   /** The detail says the plan falls short: warning ink and icon. */
   isDetailWarning?: boolean;
   figure?: string | null;
+  /** The figure is private until shown (a tab's front): it blurs, and so does the detail when `isDetailPrivate`. */
+  isPrivate?: boolean;
+  /** The detail line gives an amount away ("$30 short"), so it blurs with the figure. */
+  isDetailPrivate?: boolean;
   /** A word under the figure that says what it counts ("left", "over"). */
   figureWord?: string | null;
   /** Opens the row's sheet; a row without it has nothing behind it and no chevron. */
   onOpen?: () => void;
   ariaLabel?: string;
+  /** What a screen reader hears while private amounts are hidden; defaults to the name alone. */
+  hiddenAriaLabel?: string;
   /** A row ticked from a checklist: tapping the row ticks it and the chevron opens the sheet. */
   tick?: { checked: boolean; onChange: (checked: boolean) => void };
 }
@@ -37,11 +45,21 @@ function ItemRow({
   isDetailStrong = false,
   isDetailWarning = false,
   figure,
+  isPrivate = false,
+  isDetailPrivate = false,
   figureWord,
   onOpen,
-  ariaLabel,
+  ariaLabel: givenAriaLabel,
+  hiddenAriaLabel,
   tick,
 }: ItemRowProps) {
+  const { isHidden } = useValuesHidden();
+  const ariaLabel =
+    isPrivate && isHidden && givenAriaLabel
+      ? (hiddenAriaLabel ?? `${name}. Amount hidden. Open`)
+      : givenAriaLabel;
+  const hide = (node: ReactNode, isOn: boolean) =>
+    isOn ? <SensitiveValue>{node}</SensitiveValue> : node;
   const hasDetail = Boolean(detail);
   const badge = tick
     ? null
@@ -55,11 +73,11 @@ function ItemRow({
         {figure && (
           <span className='block shrink-0 text-right'>
             <span className='block font-semibold whitespace-nowrap tabular-nums'>
-              {figure}
+              {hide(figure, isPrivate)}
             </span>
             {figureWord && (
               <span className='text-muted-foreground block text-xs'>
-                {figureWord}
+                {hide(figureWord, isPrivate)}
               </span>
             )}
           </span>
@@ -79,7 +97,9 @@ function ItemRow({
               aria-hidden='true'
             />
           )}
-          <span className='line-clamp-2'>{detail}</span>
+          <span className='line-clamp-2'>
+            {hide(detail, isPrivate && isDetailPrivate)}
+          </span>
         </span>
       )}
     </span>

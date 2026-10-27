@@ -6,7 +6,10 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import EmptyCard from '@/components/EmptyCard';
 import HelpTip from '@/components/HelpTip';
+import SensitiveValue from '@/components/SensitiveValue';
 import SectionHeader from '@/components/SectionHeader';
+import ShowMoreButton from '@/components/ShowMoreButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
@@ -70,6 +73,7 @@ function HomeScreen() {
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const level = useAppSelector(selectLevel);
+  const { isHidden } = useValuesHidden();
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
 
   if (!isLoaded) {
@@ -138,11 +142,15 @@ function HomeScreen() {
           variant='tertiary'
           size='stripped'
           className="text-foreground! static h-auto w-full items-center justify-between gap-3 text-left font-normal after:absolute after:inset-0 after:rounded-2xl after:content-['']"
-          aria-label={`${free.label}, ${free.value}. See it in detail`}
+          aria-label={
+            isHidden
+              ? `${free.label}, amount hidden. See it in detail`
+              : `${free.label}, ${free.value}. See it in detail`
+          }
           onClick={() => openView('freeToSpend')}
         >
           <span className='min-w-0 text-4xl leading-none font-semibold tracking-tight break-words tabular-nums'>
-            {free.value}
+            <SensitiveValue>{free.value}</SensitiveValue>
           </span>
           <ChevronRight
             className='text-muted-foreground h-5 w-5 shrink-0'
@@ -185,19 +193,15 @@ function HomeScreen() {
                   </Button>
                 </LevelGate>
                 {envelopes.length > shown.length && (
-                  <Button
-                    variant='tertiary'
-                    size='sm'
-                    className='text-muted-foreground! gap-0.5 px-1! text-sm font-normal'
-                    aria-label={`See all ${envelopes.length} envelopes`}
+                  <ShowMoreButton
+                    isHeaderAction
                     onClick={() => {
                       showPlanSection('envelopes');
                       showTab('plan');
                     }}
                   >
                     See all
-                    <ChevronRight className='h-4 w-4' aria-hidden='true' />
-                  </Button>
+                  </ShowMoreButton>
                 )}
               </span>
             }
@@ -228,6 +232,7 @@ function HomeScreen() {
           <IncomeDayCard
             day={nextDay}
             lead={HOME_WORDS.nextIncome}
+            isPrivate
             onOpen={() => openDay(nextDay.dayKey)}
           />
         </ul>
