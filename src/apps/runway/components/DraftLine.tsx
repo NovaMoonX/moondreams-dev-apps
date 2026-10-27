@@ -3,11 +3,13 @@ import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
@@ -69,6 +71,7 @@ function DraftLine({
   onOpenChange,
 }: DraftLineProps) {
   const [isOwnOpen, setIsOwnOpen] = useState(false);
+  const { isHidden } = useValuesHidden();
   const isOpen = isOpenProp ?? isOwnOpen;
   const setIsOpen = onOpenChange ?? setIsOwnOpen;
   const reason = describeLineReason(line, sourceNames, name, daySourceId);
@@ -214,8 +217,8 @@ function DraftLine({
         name={name}
         emoji={emoji}
         detail={detail.text}
-        isDetailStrong={detail.isStrong}
-        isDetailWarning={isWarning && state !== 'held'}
+        isDetailStrong={detail.isStrong && !isHidden}
+        isDetailWarning={isShort && state !== 'held' && !isHidden}
         figure={amount}
         ariaLabel={`${name}: ${PRIORITY_LABELS[line.tier]}, ${amount}. ${detail.text}`}
         onOpen={kind === null ? undefined : () => setIsOpen(true)}
@@ -233,7 +236,7 @@ function DraftLine({
               <span className='block space-y-2'>
                 {helpLines.map((text) => (
                   <span key={text} className='block'>
-                    {text}
+                    <MaskedText>{text}</MaskedText>
                   </span>
                 ))}
               </span>

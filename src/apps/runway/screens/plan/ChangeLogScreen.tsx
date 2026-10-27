@@ -7,6 +7,7 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import Subview from '@/components/Subview';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -158,7 +159,11 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
 
   return (
     <>
-      <Subview title='Change log' onClose={onClose}>
+      <Subview
+        title='Change log'
+        onClose={onClose}
+        headerAction={<ValuesEyeButton />}
+      >
         <div className='space-y-4'>
           <PillGroup
             label='Window'

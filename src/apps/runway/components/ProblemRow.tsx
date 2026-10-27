@@ -2,6 +2,7 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   describeGroupRow,
@@ -17,7 +18,8 @@ interface ProblemRowProps {
 /** One day that runs short, or one problem not tied to a day: what is short or missing and when, as a row that opens the income day it runs short on, or the bills. */
 function ProblemRow({ group }: ProblemRowProps) {
   const { openDay, showPlanSection, showTab, closeFixes } = useRunwayUrlState();
-  const { title, detail } = describeGroupRow(group);
+  const { isHidden } = useValuesHidden();
+  const { title, detail } = describeGroupRow(group, isHidden);
   const isDay = group.kind === 'day';
 
   const open = () => {

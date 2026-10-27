@@ -4,7 +4,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
-const MASK = '••••';
+export const MASK = '••••';
 
 interface SensitiveValueProps {
   children: ReactNode;

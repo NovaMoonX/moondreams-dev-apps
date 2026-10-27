@@ -6,7 +6,10 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { maskFigures } from '@apps/runway/utils/maskText';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
@@ -59,6 +62,8 @@ interface PurchaseScreenProps {
 function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
+  const { isHidden } = useValuesHidden();
+  const mask = (text: string) => (isHidden ? maskFigures(text) : text);
   const { openPurchase: openPurchaseInUrl } = useRunwayUrlState();
   const openPurchase = onOpen ?? openPurchaseInUrl;
   const { addToast } = useToast();
@@ -87,7 +92,7 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   }
 
   const refund = isRefund(purchase);
-  const title = getPurchaseTitle(purchase, nameOf);
+  const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
     ? (purchases.find((entry) => entry.id === purchase.refundOfId) ?? null)
@@ -100,7 +105,7 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
   const fact = [
     formatDateShortUTC(purchase.date),
-    refund ? `refund to ${envelopes}` : envelopes,
+    refund && !isHidden ? `refund to ${envelopes}` : envelopes,
   ].join(' · ');
   const extraText = [
     purchase.merchant?.trim() && purchase.merchant.trim() !== title
@@ -121,16 +126,18 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
     const where = names.join(', ').replace(/, ([^,]*)$/, ' and $1');
     const isConfirmed = await confirm({
       title: SPEND_WORDS.removeTitle,
-      message: [
-        `${title}, ${amount} on ${formatDateUTC(purchase.date)}.`,
-        getRemovalEffect(names.length, where, amount, refund),
-        refunds.length > 0
-          ? `Its ${refunds.length === 1 ? 'refund stays' : `${refunds.length} refunds stay`}, and still return${refunds.length === 1 ? 's' : ''} money.`
-          : null,
-        'It stays in the change log.',
-      ]
-        .filter(Boolean)
-        .join(' '),
+      message: mask(
+        [
+          `${title}, ${amount} on ${formatDateUTC(purchase.date)}.`,
+          getRemovalEffect(names.length, where, amount, refund),
+          refunds.length > 0
+            ? `Its ${refunds.length === 1 ? 'refund stays' : `${refunds.length} refunds stay`}, and still return${refunds.length === 1 ? 's' : ''} money.`
+            : null,
+          'It stays in the change log.',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      ),
       confirmText: SPEND_WORDS.removeConfirm,
       destructive: true,
     });
@@ -172,7 +179,13 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
 
   return (
     <>
-      <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={title}>
+      <FormSheet
+        isOpen
+        isDrawerWhenShort
+        onClose={onClose}
+        title={title}
+        actions={<ValuesEyeButton />}
+      >
         <div className='space-y-4 pb-4'>
           <SheetHead
             label={SPEND_WORDS.detailTitle}
@@ -199,7 +212,7 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                         : nameOf(line.envelopeId)}
                     </dt>
                     <dd className='font-medium whitespace-nowrap tabular-nums'>
-                      {formatCents(Math.abs(line.cents))}
+                      {mask(formatCents(Math.abs(line.cents)))}
                     </dd>
                   </div>
                 ))}
@@ -227,7 +240,7 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                 isRoomy
                 hasChevron
                 icon={<ReceiptText />}
-                label={`${SPEND_WORDS.refundOf} ${getPurchaseTitle(original, nameOf)}`}
+                label={`${isHidden ? SPEND_WORDS.relatedTo : SPEND_WORDS.refundOf} ${getPurchaseTitle(original, nameOf, isHidden)}`}
                 onClick={() => openPurchase(original.id)}
               />
             )}
@@ -237,7 +250,7 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                 isRoomy
                 hasChevron={refunds.length === 1}
                 icon={<Undo2 />}
-                label={`Refunded so far ${formatCents(refundedCents)}`}
+                label={`Refunded so far ${mask(formatCents(refundedCents))}`}
                 onClick={() => {
                   if (refunds.length === 1) openPurchase(refunds[0].id);
                 }}

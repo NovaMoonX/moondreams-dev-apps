@@ -3,9 +3,11 @@ import { useStore } from 'react-redux';
 
 import InlineNotice from '@/components/InlineNotice';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector, type RootState } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
@@ -134,6 +136,7 @@ function EffectPreview({
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [isOpen, setIsOpen] = useState(false);
+  const { isHidden } = useValuesHidden();
   const settledJson = useDeferredValue(changeJson);
   const settledVirtual = useMemo<PreviewChange | null>(
     () => (settledJson === null ? null : JSON.parse(settledJson)),
@@ -177,10 +180,18 @@ function EffectPreview({
       settledVirtual,
     );
     const isSame = isSameLookahead(before, after);
-    return { blocks: describeHoldsBlocks(before, after), isSame };
+    return { blocks: describeHoldsBlocks(before, after, isHidden), isSame };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settledVirtual, isLedgerReady, today, items, versions, openDays]);
+  }, [
+    settledVirtual,
+    isLedgerReady,
+    today,
+    items,
+    versions,
+    openDays,
+    isHidden,
+  ]);
 
   const getBody = () => {
     if (virtual === null || days === null) {
@@ -212,10 +223,11 @@ function EffectPreview({
           <p className='text-sm'>
             {count} {formatDateUTC(first.on)}:{' '}
             <span className='whitespace-nowrap tabular-nums'>
-              {formatCents(first.effect.freeBeforeCents)} to{' '}
-              {formatCents(first.effect.freeAfterCents)}
-            </span>{' '}
-            {FORM_FLOW_WORDS.compactLeft}
+              <MaskedText>
+                {`${formatCents(first.effect.freeBeforeCents)} to ${formatCents(first.effect.freeAfterCents)}`}
+              </MaskedText>
+            </span>
+            {!isHidden && ` ${FORM_FLOW_WORDS.compactLeft}`}
           </p>
           <ShowMoreButton isOpen={false} onClick={() => setIsOpen(true)}>
             {FORM_FLOW_WORDS.compactDoor}
@@ -238,7 +250,7 @@ function EffectPreview({
                 >
                   <span className='min-w-0 break-words'>{line.name}</span>
                   <span className='font-medium whitespace-nowrap tabular-nums'>
-                    {line.text}
+                    <MaskedText>{line.text}</MaskedText>
                   </span>
                 </p>
               ))}
@@ -249,7 +261,7 @@ function EffectPreview({
                 <p className='text-muted-foreground flex items-baseline justify-between gap-3'>
                   <span>{CHANGE_WORDS.freeNow}</span>
                   <span className='whitespace-nowrap tabular-nums'>
-                    {entry.free}
+                    <MaskedText>{entry.free}</MaskedText>
                   </span>
                 </p>
               )}

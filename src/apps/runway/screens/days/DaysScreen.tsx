@@ -9,6 +9,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   COMING_DAYS_CAP,
   COMING_DAYS_PREVIEW,
@@ -115,7 +116,6 @@ function DaysScreen() {
                       ? [{ name: problem.name, shortBy: problem.shortBy }]
                       : [],
                   )}
-                  isPrivate
                   onOpen={() => openDay(day.dayKey)}
                 />
               ))}
@@ -147,7 +147,6 @@ function DaysScreen() {
                   key={day.dayKey}
                   day={day}
                   isConfirmedShown={false}
-                  isPrivate
                   onOpen={() => openDay(day.dayKey)}
                 />
               ))}
@@ -181,7 +180,7 @@ function DaysScreen() {
                     {cushion && (
                       <p>
                         Conservative planning is holding back{' '}
-                        {formatCents(cushion.cents)}
+                        <MaskedText>{formatCents(cushion.cents)}</MaskedText>
                         {cushionParts.length > 0 &&
                           ` across ${cushionParts.join(' and ')}`}
                         .

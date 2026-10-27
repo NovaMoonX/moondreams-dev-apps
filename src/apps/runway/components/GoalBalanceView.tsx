@@ -57,7 +57,9 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
       >
         <TrendLineChart
           isSoft
-          className='h-56'
+          isReadoutAbove
+          referenceLabelSoft
+          className='h-[clamp(14rem,calc(100dvh-27rem),26rem)]'
           data={series.points}
           seriesLabel='Held'
           secondaryLabel='Plan'

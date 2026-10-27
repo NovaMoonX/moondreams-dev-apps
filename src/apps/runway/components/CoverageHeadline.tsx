@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { CircleCheck } from 'lucide-react';
 
+import SensitiveValue from '@/components/SensitiveValue';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
@@ -14,15 +15,15 @@ interface CoverageHeadlineProps {
   freeCents: number;
 }
 
-/** What the day's money leaves once every line has had its turn, as the last row of the day's lines. */
+/** What the day's money leaves once every line has had its turn: its own framed block under the day's lines, in the card's neutral colour so the figure above it stays the one emphasized surface. */
 function CoverageHeadline({ freeCents }: CoverageHeadlineProps) {
   return (
-    <li className='bg-accent flex min-h-12 items-center justify-between gap-3 rounded-b-2xl px-3 py-2'>
+    <div className='border-border bg-card flex min-h-12 items-center justify-between gap-3 rounded-2xl border px-3 py-2'>
       <span className='font-medium'>{DRAFT_WORDS.dayLeft}</span>
       <span className='text-lg font-semibold whitespace-nowrap tabular-nums'>
-        {formatCents(freeCents)}
+        <SensitiveValue>{formatCents(freeCents)}</SensitiveValue>
       </span>
-    </li>
+    </div>
   );
 }
 

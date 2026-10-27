@@ -9,6 +9,7 @@ import { useAppSelector } from '@/store';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { START_WORDS } from '@apps/runway/constants';
 import { collectStarted } from '@apps/runway/engine/progress';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
 import { formatCentsShort } from '@/utils/moneyUtils';
@@ -329,6 +330,7 @@ function SavedStart({ uid }: { uid: string }) {
       remove={remove}
       startOver={startOver}
       startOverMessage={START_WORDS.startOverPlan}
+      headerAction={<ValuesEyeButton />}
     />
   );
 }

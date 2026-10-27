@@ -6,22 +6,9 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { TICK_HIT_CLASS } from '@apps/runway/constants';
-
-const FIGURE_PATTERN = /([−+-]?\$[\d,]+(?:\.\d+)?)/;
-
-/** A line with each amount in it masked and the words left readable. */
-const maskFigures = (text: string) =>
-  text
-    .split(FIGURE_PATTERN)
-    .map((part, index) =>
-      index % 2 === 1 ? (
-        <SensitiveValue key={index}>{part}</SensitiveValue>
-      ) : (
-        part
-      ),
-    );
 
 interface ItemRowProps {
   name: string;
@@ -37,10 +24,8 @@ interface ItemRowProps {
   /** The detail says the plan falls short: warning ink and icon. */
   isDetailWarning?: boolean;
   figure?: string | null;
-  /** The figure is private until shown (a tab's front): it is masked, and so is the detail when `isDetailPrivate`. */
+  /** A figure is masked while amounts are hidden; a row that shows what the person is typing turns it off. */
   isPrivate?: boolean;
-  /** The detail line gives an amount away ("$30 short"), so it is masked with the figure. */
-  isDetailPrivate?: boolean;
   /** A word under the figure that says what it counts ("left", "over"). */
   figureWord?: string | null;
   /** Opens the row's sheet; a row without it has nothing behind it and no chevron. */
@@ -62,8 +47,7 @@ function ItemRow({
   isDetailWarning = false,
   warningLine,
   figure,
-  isPrivate = false,
-  isDetailPrivate = false,
+  isPrivate = true,
   figureWord,
   onOpen,
   ariaLabel: givenAriaLabel,
@@ -94,7 +78,7 @@ function ItemRow({
             </span>
             {figureWord && (
               <span className='text-muted-foreground block text-xs'>
-                {hide(figureWord, isPrivate)}
+                {isPrivate && isHidden ? '\u00a0' : figureWord}
               </span>
             )}
           </span>
@@ -123,9 +107,7 @@ function ItemRow({
             />
           )}
           <span className='line-clamp-2'>
-            {isPrivate && isDetailPrivate && detail
-              ? maskFigures(detail)
-              : detail}
+            {isPrivate && detail ? <MaskedText>{detail}</MaskedText> : detail}
           </span>
         </span>
       )}

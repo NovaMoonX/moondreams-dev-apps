@@ -305,6 +305,8 @@ export const DAY_STATUS_LABELS = {
 } as const;
 
 export const CONFIRM_WORDS = {
+  hiddenAmountDiffered: 'The amount that arrived differed from what was expected.',
+  hiddenLineDiffered: (name: string) => `${name} changed on this day.`,
   action: 'Confirm money arrived',
   sheetTitle: 'Money arrived',
   amount: 'Amount that arrived',
@@ -687,6 +689,7 @@ export const SPEND_WORDS = {
   splitEvenly: 'Split evenly',
   splitDone: 'Done',
   refundOf: 'Refund of',
+  relatedTo: 'Related to',
   noOriginal: 'Not tied to a purchase',
   pickOriginal: 'Which purchase is it for?',
   returnsTo: 'Returns to',
@@ -726,6 +729,7 @@ export const CHECK_WORDS = {
   prompt: 'Pick an envelope and type an amount. Nothing is spent or moved.',
   promptChosen: 'Type an amount. Nothing is spent or moved.',
   noEnvelopes: 'Add an envelope to check an amount against it.',
+  hidden: 'Show amounts to see how it fits.',
 } as const;
 
 export const START_WORDS = {
@@ -895,6 +899,7 @@ export const FORM_FLOW_WORDS = {
   funding: 'Paid from',
   envelopeAmountTitle: 'How much does it get each time?',
   eachTime: 'Each time',
+  balance: 'Balance',
   percentLink: 'A % of each pay',
   restLink: 'Whatever is left of each pay',
   exactLink: 'An amount',
@@ -990,6 +995,7 @@ export const ITEM_SHEET_R2_WORDS = {
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to spend`,
   changeAmount: 'Change amount',
   eachTime: 'Each time',
+  balance: 'Balance',
   changeTarget: 'Change target',
   changeName: 'Change name',
   heldDetail: (amount: string) => `${amount} held · choose`,
@@ -1020,6 +1026,7 @@ export const CHECKLIST_R3_WORDS = {
   shortChoose: (amount: string) => `${amount} short · choose`,
   shortNote: (name: string, amount: string) =>
     `${name} is ${amount} short: choose before confirming`,
+  hiddenNote: (name: string) => `${name} is waiting: choose before confirming`,
   heldNote: (name: string, amount: string) =>
     `${name}: ${amount} held · choose before confirming`,
   notStarted: 'Not started',

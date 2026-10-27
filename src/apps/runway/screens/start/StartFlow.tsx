@@ -121,6 +121,8 @@ interface StartFlowProps {
   remove: (kind: StartKind, id: string) => Promise<void>;
   startOver: () => Promise<void>;
   startOverMessage: (parts: string) => string;
+  /** On the title line, such as the eye that shows or hides private figures. */
+  headerAction?: ReactNode;
 }
 
 /** Starting out, one short question at a time. Only the income source is required; every other step has a Later. */
@@ -140,6 +142,7 @@ function StartFlow({
   remove,
   startOver,
   startOverMessage,
+  headerAction,
 }: StartFlowProps) {
   const { closeView } = useRunwayUrlState();
   const { confirm } = useActionModal();
@@ -324,6 +327,7 @@ function StartFlow({
       overlay
       title={START_WORDS.title}
       onClose={closeView}
+      headerAction={headerAction}
       onBack={() => {
         if (isLeaving) closeView();
         else if (isAsking) leave();

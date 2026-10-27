@@ -10,6 +10,8 @@ import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import RecordLineRow from '@apps/runway/components/RecordLineRow';
 import {
@@ -77,12 +79,14 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           <div className='space-y-4'>
             <div className='space-y-2'>
               <SectionDivider label={ITEM_SHEET_R2_WORDS.setAsideHeading} />
-              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                {funded.map((line) => (
-                  <RecordLineRow key={line.lineId} line={line} />
-                ))}
-                {dayLeft}
-              </ul>
+              {funded.length > 0 && (
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {funded.map((line) => (
+                    <RecordLineRow key={line.lineId} line={line} />
+                  ))}
+                </ul>
+              )}
+              {dayLeft}
             </div>
             {unfunded.length > 0 && (
               <div className='space-y-2'>
@@ -120,7 +124,11 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
   };
 
   return (
-    <Subview title={formatDayTitle(day.on)} onClose={onClose}>
+    <Subview
+      title={formatDayTitle(day.on)}
+      onClose={onClose}
+      headerAction={<ValuesEyeButton />}
+    >
       <div className='space-y-4'>
         <div className='border-border bg-accent rounded-2xl border p-4'>
           <p className='text-muted-foreground text-sm font-medium break-words'>
@@ -128,7 +136,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           </p>
           {record && (
             <p className='text-4xl font-semibold tracking-tight tabular-nums'>
-              {formatCents(record.arrivedCents)}
+              <MaskedText>{formatCents(record.arrivedCents)}</MaskedText>
             </p>
           )}
           <p className='text-muted-foreground text-sm'>

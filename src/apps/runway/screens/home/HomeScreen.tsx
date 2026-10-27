@@ -205,7 +205,6 @@ function HomeScreen() {
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             <IncomeDayCard
               day={nextDay}
-              isPrivate
               onOpen={() => openDay(nextDay.dayKey)}
             />
           </ul>

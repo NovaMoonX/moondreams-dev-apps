@@ -44,6 +44,7 @@ export function LineAmountList({
           emoji={item.emoji}
           detail={item.detail}
           figure={item.cents === null ? '–' : formatCents(item.cents)}
+          isPrivate={false}
           ariaLabel={`${item.name}, ${item.cents === null ? 'no amount' : formatCents(item.cents)}. Change`}
           onOpen={() => onOpen(item.id)}
         />

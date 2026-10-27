@@ -5,7 +5,9 @@ import AmountHero from '@/components/AmountHero';
 import SummaryRow from '@/components/SummaryRow';
 import Subview from '@/components/Subview';
 import { PillGroup } from '@/components/PillGroup';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useBackStep } from '@/hooks/useBackHistory';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
@@ -44,6 +46,7 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
   const [amountText, setAmountText] = useState('');
   const [picked, setPicked] = useState<string | null>(presetEnvelopeId);
   const [isChoosing, setIsChoosing] = useState(false);
+  const { isHidden } = useValuesHidden();
   useBackStep(isChoosing, () => setIsChoosing(false));
 
   const entries = envelopes.map(({ item, version }) => ({
@@ -131,7 +134,12 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
           {envelopeName}
         </SummaryRow>
       )}
-      {check && (
+      {check && isHidden && (
+        <p className='text-muted-foreground text-sm' role='status'>
+          {CHECK_WORDS.hidden}
+        </p>
+      )}
+      {check && !isHidden && (
         <div className='space-y-3' role='status'>
           <div className='border-border bg-accent space-y-2 rounded-2xl border p-4'>
             <p className='text-muted-foreground text-sm font-medium'>
@@ -213,7 +221,11 @@ function CheckAmountScreen({
   onClose,
 }: CheckAmountScreenProps) {
   return (
-    <Subview title={CHECK_WORDS.title} onClose={onClose}>
+    <Subview
+      title={CHECK_WORDS.title}
+      onClose={onClose}
+      headerAction={<ValuesEyeButton />}
+    >
       <CheckAmountBody presetEnvelopeId={presetEnvelopeId} />
     </Subview>
   );
