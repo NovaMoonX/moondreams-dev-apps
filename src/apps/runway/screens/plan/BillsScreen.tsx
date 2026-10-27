@@ -9,6 +9,8 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { PLAN_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import BillRow from '@apps/runway/components/BillRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
@@ -21,7 +23,6 @@ import {
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
-const SEARCH_THRESHOLD = 8;
 const ROWS_PER_CHUNK = 12;
 const ESTIMATED_ROW_HEIGHT = 69;
 
@@ -39,17 +40,19 @@ function BillsScreen() {
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
-  const hasSearch = bills.length >= SEARCH_THRESHOLD;
+  const hasSearch = bills.length >= PLAN_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = bills
-    .filter(({ version }) =>
-      version.payload.name.toLowerCase().includes(needle),
-    )
     .map(({ item, version }) => {
       const payment =
         (payments[item.id] ?? []).find((entry) => entry.dueOn >= today) ?? null;
       return { item, payload: version.payload, payment };
-    });
+    })
+    .filter(({ payload, payment }) =>
+      `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
+        .toLowerCase()
+        .includes(needle),
+    );
 
   const getBody = () => {
     if (!isLoaded) {

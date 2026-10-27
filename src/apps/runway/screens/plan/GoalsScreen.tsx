@@ -9,6 +9,8 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { PLAN_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
@@ -25,8 +27,6 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-
-const SEARCH_THRESHOLD = 8;
 
 function GoalsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -55,11 +55,13 @@ function GoalsScreen() {
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
   );
-  const hasSearch = goals.length >= SEARCH_THRESHOLD;
+  const hasSearch = goals.length >= PLAN_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = goals
     .filter(({ version }) =>
-      version.payload.name.toLowerCase().includes(needle),
+      `${version.payload.name} ${version.payload.targetDate === null ? '' : formatDateShortUTC(version.payload.targetDate)}`
+        .toLowerCase()
+        .includes(needle),
     )
     .map(({ item, version }) => ({
       item,

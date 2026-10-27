@@ -1206,3 +1206,6 @@ export const EFFECT_FOLD_WORDS = {
 
 /** Rows of "Things to fix" drawn before "Show N more". */
 export const FIX_ROWS_SHOWN = 12;
+
+/** Rows a Plan view (envelopes, bills, goals) holds before it offers a search. */
+export const PLAN_SEARCH_THRESHOLD = 5;
