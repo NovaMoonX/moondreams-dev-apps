@@ -1200,3 +1200,6 @@ export const EFFECT_FOLD_WORDS = {
       ? 'One income day: nothing else changes'
       : `${count} income days: nothing else changes`,
 } as const;
+
+/** Rows of "Things to fix" drawn before "Show N more". */
+export const FIX_ROWS_SHOWN = 12;
