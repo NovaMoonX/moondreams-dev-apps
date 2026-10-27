@@ -724,6 +724,7 @@ export const CHECK_WORDS = {
   chooseTitle: 'Which envelope?',
   amount: 'Amount',
   prompt: 'Pick an envelope and type an amount. Nothing is spent or moved.',
+  promptChosen: 'Type an amount. Nothing is spent or moved.',
   noEnvelopes: 'Add an envelope to check an amount against it.',
 } as const;
 

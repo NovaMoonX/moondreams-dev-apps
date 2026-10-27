@@ -117,7 +117,9 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
         value={amountText}
         onChange={setAmountText}
         autoFocus
-        hint={CHECK_WORDS.prompt}
+        hint={
+          envelopeId === null ? CHECK_WORDS.prompt : CHECK_WORDS.promptChosen
+        }
       />
       {envelopeId === null ? (
         <ActionSection caption={CHECK_WORDS.envelope}>{pills}</ActionSection>
