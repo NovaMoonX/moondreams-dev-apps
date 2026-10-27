@@ -13,6 +13,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 
 export type PairingOf = 'dayMoney' | 'remaining';
 
@@ -49,7 +50,6 @@ const TOP_UP_OPTIONS = [
   { value: 'topUp', label: 'Top up from the rest' },
 ] as const;
 
-const SEARCH_FROM = 8;
 
 interface PairingRowSheetProps {
   row: PairingRow;
@@ -90,7 +90,7 @@ function PairingRowSheet({
       return (
         <div className='flex flex-col gap-3'>
           <h3 className='text-2xl font-semibold'>What does it fund?</h3>
-          {choices.length > SEARCH_FROM && (
+          {choices.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
               value={query}
               onChange={setQuery}

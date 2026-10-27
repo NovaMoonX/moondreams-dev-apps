@@ -9,7 +9,7 @@ import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
-import { PLAN_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
@@ -54,7 +54,7 @@ function GoalsScreen() {
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
   );
-  const hasSearch = goals.length >= PLAN_SEARCH_THRESHOLD;
+  const hasSearch = goals.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = goals
     .filter(({ version }) =>

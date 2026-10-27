@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -29,6 +29,7 @@ import {
   FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
+  RUNWAY_SEARCH_THRESHOLD,
   MAX_NAME_LENGTH,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -63,7 +64,6 @@ import {
 const ORIGIN_PAGE = 20;
 const MOST_USED_SHOWN = 5;
 const RECENT_PURCHASES = 60;
-const ORIGIN_SEARCH_THRESHOLD = 8;
 const FREE_VALUE = 'free';
 
 interface PurchaseFormData {
@@ -681,10 +681,7 @@ function PurchaseForm({
                       .join(', ')}
               </SummaryRow>
               <div>
-                <RevealChip
-                  icon={<X className='h-4 w-4' />}
-                  onClick={stopSplit}
-                >
+                <RevealChip onClick={stopSplit}>
                   {SPEND_WORDS.unsplit}
                 </RevealChip>
               </div>
@@ -782,9 +779,6 @@ function PurchaseForm({
           )}
           <div className='flex flex-wrap gap-2'>
             <RevealChip
-              icon={
-                extras.merchant === null ? undefined : <X className='h-4 w-4' />
-              }
               onClick={() => {
                 setRevealed(extras.merchant === null ? 'merchant' : null);
                 setExtras({ merchant: extras.merchant === null ? '' : null });
@@ -795,9 +789,6 @@ function PurchaseForm({
                 : FORM_FLOW_WORDS.removePlace}
             </RevealChip>
             <RevealChip
-              icon={
-                extras.note === null ? undefined : <X className='h-4 w-4' />
-              }
               onClick={() => {
                 setRevealed(extras.note === null ? 'note' : null);
                 setExtras({ note: extras.note === null ? '' : null });
@@ -915,7 +906,7 @@ function PurchaseForm({
           >
             {SPEND_WORDS.noOriginal}
           </Button>
-          {others.length >= ORIGIN_SEARCH_THRESHOLD && (
+          {others.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
               value={originQuery}
               onChange={setOriginQuery}
@@ -960,7 +951,7 @@ function PurchaseForm({
         <div className='space-y-3'>
           <BackLink onBack={() => setView('form')} />
           <p className='text-lg font-semibold'>{FORM_FLOW_WORDS.moreTitle}</p>
-          {options.length >= ORIGIN_SEARCH_THRESHOLD && (
+          {options.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
               value={envelopeSearch}
               onChange={setEnvelopeSearch}

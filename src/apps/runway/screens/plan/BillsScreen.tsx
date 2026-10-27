@@ -9,7 +9,7 @@ import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
-import { PLAN_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import BillRow from '@apps/runway/components/BillRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
@@ -39,7 +39,7 @@ function BillsScreen() {
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
-  const hasSearch = bills.length >= PLAN_SEARCH_THRESHOLD;
+  const hasSearch = bills.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = bills
     .map(({ item, version }) => {

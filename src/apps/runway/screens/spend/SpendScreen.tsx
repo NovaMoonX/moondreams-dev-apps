@@ -19,7 +19,7 @@ import {
   SPEND_PERIOD_LABELS,
   SPEND_PERIOD_WORDS,
   SPEND_PERIODS,
-  SPEND_SEARCH_THRESHOLD,
+  RUNWAY_SEARCH_THRESHOLD,
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
@@ -121,7 +121,7 @@ function SpendScreen() {
     showSpendEnvelope(envelopeId);
     setShown(SPEND_PAGE_SIZE);
   };
-  const hasBar = purchases.length >= SPEND_SEARCH_THRESHOLD || counts.size >= 2;
+  const hasBar = purchases.length >= RUNWAY_SEARCH_THRESHOLD || counts.size >= 2;
   const needle = hasBar ? query.trim().toLowerCase() : '';
   const matches = purchases.filter(
     (purchase) =>

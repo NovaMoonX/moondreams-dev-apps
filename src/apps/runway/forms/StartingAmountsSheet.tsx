@@ -21,6 +21,7 @@ import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   FORM_FLOW_WORDS,
   START_AMOUNTS_WORDS,
+  RUNWAY_SEARCH_THRESHOLD,
   START_ROWS_PREVIEW,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -34,8 +35,6 @@ import {
   selectBills,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
-
-const SEARCH_FROM = 8;
 
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
@@ -79,7 +78,7 @@ export function AmountList({ label, rows, values, onChange }: AmountListProps) {
   return (
     <div className='space-y-2'>
       <SectionDivider label={label} />
-      {rows.length >= SEARCH_FROM && (
+      {rows.length >= RUNWAY_SEARCH_THRESHOLD && (
         <SearchInput
           value={query}
           onChange={setQuery}

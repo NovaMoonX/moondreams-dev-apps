@@ -4,7 +4,7 @@ import { Mail } from 'lucide-react';
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
 import SearchInput from '@/components/SearchInput';
-import { PLAN_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -35,7 +35,7 @@ function EnvelopesScreen() {
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
-  const hasSearch = envelopes.length >= PLAN_SEARCH_THRESHOLD;
+  const hasSearch = envelopes.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = envelopes.filter(({ version }) =>
     version.payload.name.toLowerCase().includes(needle),

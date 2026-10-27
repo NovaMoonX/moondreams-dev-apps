@@ -17,6 +17,7 @@ import {
   CHANGE_LOG_SPAN_LABELS,
   MAX_CHANGE_LOG_PAGE,
   MAX_WINDOW_CHANGES,
+  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
@@ -213,7 +214,7 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
               ]}
             />
           </div>
-          {isLoaded && changes.length >= 8 && (
+          {isLoaded && changes.length >= RUNWAY_SEARCH_THRESHOLD && (
             <div className='space-y-1'>
               <SearchInput
                 value={search}

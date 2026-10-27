@@ -10,7 +10,6 @@ import BackLink from '@/components/BackLink';
 import FoldedDateField from '@/components/FoldedDateField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import MoneyInput from '@/components/MoneyInput';
 import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
@@ -23,13 +22,16 @@ import {
   formatCents,
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
-import PriorityBadge from '@apps/runway/components/PriorityBadge';
+import {
+  LineAmountList,
+  LineAmountView,
+} from '@apps/runway/components/LineAmounts';
 import {
   CONFIRM_WORDS,
   DRAFT_WORDS,
   FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
+  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import {
   countUnresolvedHolds,
@@ -49,8 +51,6 @@ import {
 } from '@apps/runway/store/actions/dayActions';
 import type { DraftView } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, Stance } from '@apps/runway/types';
-
-const LINE_SEARCH_THRESHOLD = 8;
 
 interface ConfirmFormData {
   amount: string;
@@ -96,6 +96,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const [isNoting, setIsNoting] = useState(false);
   const [isChoosing, setIsChoosing] = useState(false);
   const [lineSearch, setLineSearch] = useState('');
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [lineInputs, setLineInputs] = useState<Record<string, string>>({});
   const [lineNotes, setLineNotes] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -126,6 +127,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const changedCount = adjusted.filter(
     (line, index) => line.cents !== lines[index].cents,
   ).length;
+  const editingIndex = lines.findIndex((line) => line.lineId === editingLineId);
   const searchText = lineSearch.trim().toLowerCase();
   const visibleLines = adjusted
     .map((line, index) => ({ line, index }))
@@ -342,7 +344,34 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
 
   return (
     <FormSheet isOpen onClose={requestClose} title={CONFIRM_WORDS.sheetTitle}>
-      {isChoosing && (
+      {isChoosing && editingIndex >= 0 && (
+        <LineAmountView
+          name={
+            lines[editingIndex].name === '' ? 'Bill' : lines[editingIndex].name
+          }
+          value={
+            Object.hasOwn(lineInputs, lines[editingIndex].lineId)
+              ? lineInputs[lines[editingIndex].lineId]
+              : centsToInputValue(lines[editingIndex].cents)
+          }
+          onChange={(text) => setLineInput(lines[editingIndex].lineId, text)}
+          onBack={() => setEditingLineId(null)}
+          plannedCents={lines[editingIndex].cents}
+          isChanged={adjusted[editingIndex].cents !== lines[editingIndex].cents}
+          note={{
+            value: lineNotes[lines[editingIndex].lineId] ?? '',
+            placeholder: CONFIRM_WORDS.lineNotePlaceholder,
+            onChange: (text) =>
+              setLineNotes((current) => ({
+                ...current,
+                [lines[editingIndex].lineId]: text,
+              })),
+          }}
+          isDisabled={isSaving}
+          footerNote={error ?? blocker}
+        />
+      )}
+      {isChoosing && editingIndex < 0 && (
         <div className='space-y-3'>
           <div className='space-y-3'>
             <BackLink onBack={() => setIsChoosing(false)} />
@@ -375,7 +404,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
                 </RevealChip>
               )}
             </div>
-            {adjusted.length >= LINE_SEARCH_THRESHOLD && (
+            {adjusted.length >= RUNWAY_SEARCH_THRESHOLD && (
               <SearchInput
                 value={lineSearch}
                 onChange={setLineSearch}
@@ -388,60 +417,23 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
               </p>
             )}
           </div>
-          <ul className='border-border divide-border max-h-[max(9rem,calc(92dvh-29rem))] divide-y overflow-y-auto rounded-2xl border [@media(max-height:499px)]:max-h-none'>
-            {visibleLines.map(({ line, index }) => {
+          <LineAmountList
+            className='max-h-[max(9rem,calc(92dvh-29rem))] [@media(max-height:499px)]:max-h-none'
+            onOpen={setEditingLineId}
+            items={visibleLines.map(({ line, index }) => {
               const original = lines[index];
-              const isChanged = line.cents !== original.cents;
-              const name = original.name === '' ? 'Bill' : original.name;
-              return (
-                <li key={line.lineId} className='space-y-2 p-3'>
-                  <div className='flex flex-wrap items-start gap-x-3 gap-y-2'>
-                    <ItemBadge name={name} emoji={original.emoji} />
-                    <div className='min-w-24 flex-1 space-y-1'>
-                      <p className='line-clamp-2 font-medium break-words'>
-                        {name}
-                      </p>
-                      <PriorityBadge priority={original.tier} />
-                    </div>
-                    <div className='w-28 max-[339px]:w-full'>
-                      <MoneyInput
-                        variant='outline'
-                        ariaLabel={`${name} amount`}
-                        value={
-                          Object.hasOwn(lineInputs, line.lineId)
-                            ? lineInputs[line.lineId]
-                            : centsToInputValue(original.cents)
-                        }
-                        onChange={(text) => setLineInput(line.lineId, text)}
-                        disabled={isSaving}
-                      />
-                    </div>
-                  </div>
-                  {isChanged && (
-                    <div className='space-y-1.5'>
-                      <p className='text-muted-foreground text-xs'>
-                        {CONFIRM_WORDS.planned} {formatCents(original.cents)}
-                      </p>
-                      <Input
-                        variant='outline'
-                        aria-label={`Note on ${name}`}
-                        maxLength={MAX_NOTE_LENGTH}
-                        placeholder={CONFIRM_WORDS.lineNotePlaceholder}
-                        value={lineNotes[line.lineId] ?? ''}
-                        disabled={isSaving}
-                        onChange={(event) =>
-                          setLineNotes((current) => ({
-                            ...current,
-                            [line.lineId]: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  )}
-                </li>
-              );
+              return {
+                id: line.lineId,
+                name: original.name === '' ? 'Bill' : original.name,
+                emoji: original.emoji,
+                cents: line.cents,
+                detail:
+                  line.cents !== original.cents
+                    ? `${CONFIRM_WORDS.planned} ${formatCents(original.cents)}`
+                    : null,
+              };
             })}
-          </ul>
+          />
           <ModalFooterActions
             note={error ?? blocker}
             rightActions={

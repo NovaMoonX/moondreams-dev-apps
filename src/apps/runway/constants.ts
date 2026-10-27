@@ -266,8 +266,6 @@ export const MAX_PURCHASE_CENTS = 99_999_999;
 export const SPEND_PAGE_SIZE = 30;
 /** More envelope filters than this become a searchable list instead of pills. */
 export const SPEND_PILL_LIMIT = 12;
-/** Rows before the Spend tab offers a search. */
-export const SPEND_SEARCH_THRESHOLD = 8;
 
 /** What a `start` move holds the starting amount of. */
 export const START_HOLDINGS = ['money', 'goal', 'bill', 'envelope'] as const;
@@ -1218,8 +1216,8 @@ export const EFFECT_FOLD_WORDS = {
 /** Rows of "Things to fix" drawn before "Show N more". */
 export const FIX_ROWS_SHOWN = 12;
 
-/** Rows a Plan view (envelopes, bills, goals) holds before it offers a search. */
-export const PLAN_SEARCH_THRESHOLD = 5;
+/** Rows any Runway list holds before it offers a search. */
+export const RUNWAY_SEARCH_THRESHOLD = 5;
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {

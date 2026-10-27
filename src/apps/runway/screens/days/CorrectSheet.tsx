@@ -9,7 +9,6 @@ import BackLink from '@/components/BackLink';
 import BeforeAfterRow from '@/components/BeforeAfterRow';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import MoneyInput from '@/components/MoneyInput';
 import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,12 +21,16 @@ import {
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import PriorityBadge from '@apps/runway/components/PriorityBadge';
+import {
+  LineAmountList,
+  LineAmountView,
+} from '@apps/runway/components/LineAmounts';
 import {
   CONFIRM_WORDS,
   CORRECT_WORDS,
   DRAFT_WORDS,
   MAX_NOTE_LENGTH,
+  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import {
   buildCorrection,
@@ -44,8 +47,6 @@ import {
   selectOpenDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, CorrectionChange } from '@apps/runway/types';
-
-const LINE_SEARCH_THRESHOLD = 8;
 
 interface CorrectSheetProps {
   dayKey: string;
@@ -69,6 +70,9 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const [amount, setAmount] = useState(centsToInputValue(base.arrivedCents));
   const [lineInputs, setLineInputs] = useState<Record<string, string>>({});
   const [search, setSearch] = useState('');
+  const [editingLineId, setEditingLineId] = useState<string | null>(null);
+  const editingLine =
+    base.lines.find((line) => line.lineId === editingLineId) ?? null;
   const [note, setNote] = useState('');
   const [isNoting, setIsNoting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -197,7 +201,29 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
 
   return (
     <FormSheet isOpen onClose={requestClose} title={CORRECT_WORDS.sheetTitle}>
-      {step === 'edit' ? (
+      {step === 'edit' && editingLine ? (
+        <LineAmountView
+          name={
+            editingLine.name === ''
+              ? DRAFT_WORDS.billFallback
+              : editingLine.name
+          }
+          value={
+            Object.hasOwn(lineInputs, editingLine.lineId)
+              ? lineInputs[editingLine.lineId]
+              : centsToInputValue(editingLine.cents)
+          }
+          onChange={(text) =>
+            setLineInputs((current) => ({
+              ...current,
+              [editingLine.lineId]: text,
+            }))
+          }
+          onBack={() => setEditingLineId(null)}
+          plannedCents={editingLine.cents}
+          footerNote={blocker}
+        />
+      ) : step === 'edit' ? (
         <div className='space-y-4'>
           <p className='text-muted-foreground text-sm'>{CORRECT_WORDS.intro}</p>
           <AmountHero
@@ -214,7 +240,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               </p>
             }
           />
-          {base.lines.length >= LINE_SEARCH_THRESHOLD && (
+          {base.lines.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
               value={search}
               onChange={setSearch}
@@ -226,40 +252,23 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               No line matches that.
             </p>
           )}
-          <ul className='border-border divide-border max-h-[max(12rem,calc(92dvh-30rem))] divide-y overflow-y-auto rounded-2xl border'>
-            {visibleLines.map((line) => {
-              const name =
-                line.name === '' ? DRAFT_WORDS.billFallback : line.name;
-              return (
-                <li key={line.lineId} className='space-y-2 p-3'>
-                  <div className='flex items-start gap-3'>
-                    <ItemBadge name={name} emoji={line.emoji} />
-                    <div className='min-w-0 flex-1 space-y-1'>
-                      <p className='line-clamp-2 font-medium break-words'>
-                        {name}
-                      </p>
-                      <PriorityBadge priority={line.tier} />
-                    </div>
-                  </div>
-                  <MoneyInput
-                    variant='outline'
-                    ariaLabel={`${name} amount`}
-                    value={
-                      Object.hasOwn(lineInputs, line.lineId)
-                        ? lineInputs[line.lineId]
-                        : centsToInputValue(line.cents)
-                    }
-                    onChange={(text) =>
-                      setLineInputs((current) => ({
-                        ...current,
-                        [line.lineId]: text,
-                      }))
-                    }
-                  />
-                </li>
-              );
-            })}
-          </ul>
+          <LineAmountList
+            className='max-h-[max(12rem,calc(92dvh-30rem))]'
+            onOpen={setEditingLineId}
+            items={visibleLines.map((line) => ({
+              id: line.lineId,
+              name: line.name === '' ? DRAFT_WORDS.billFallback : line.name,
+              emoji: line.emoji,
+              cents:
+                corrected?.lines.find((l) => l.lineId === line.lineId)?.cents ??
+                line.cents,
+              detail:
+                Object.hasOwn(edits, line.lineId) &&
+                edits[line.lineId] !== line.cents
+                  ? `${CONFIRM_WORDS.planned} ${formatCents(line.cents)}`
+                  : null,
+            }))}
+          />
           <ModalFooterActions
             note={blocker}
             cancelAction={

@@ -5,10 +5,11 @@ import { ChevronRight } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
 
-const SEARCH_FROM = 8;
+const ROWS_SHOWN = 8;
 
 interface StartRowListProps {
   rows: StartRow[];
@@ -26,12 +27,12 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
     text === ''
       ? rows
       : rows.filter((row) => row.name.toLowerCase().includes(text));
-  const shown = isAll || text !== '' ? matches : matches.slice(0, SEARCH_FROM);
+  const shown = isAll || text !== '' ? matches : matches.slice(0, ROWS_SHOWN);
 
   if (rows.length === 0) return null;
   return (
     <div className='space-y-2'>
-      {rows.length >= SEARCH_FROM && (
+      {rows.length >= RUNWAY_SEARCH_THRESHOLD && (
         <SearchInput
           value={query}
           onChange={setQuery}
@@ -79,7 +80,7 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
       {text !== '' && matches.length === 0 && (
         <p className='text-muted-foreground text-sm'>Nothing matches that.</p>
       )}
-      {text === '' && rows.length > SEARCH_FROM && (
+      {text === '' && rows.length > ROWS_SHOWN && (
         <ShowMoreButton
           isOpen={isAll}
           onClick={() => setIsAll((open) => !open)}
