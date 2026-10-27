@@ -1221,3 +1221,11 @@ export const FREE_SUM_WORDS = {
   laterFix:
     'To fix a balance later, correct the income day or the bill payment it came from.',
 } as const;
+
+export const GOAL_CHART_WORDS = {
+  door: 'Balance over time',
+  title: 'Balance over time',
+  hidden: 'Show amounts to see the chart',
+  key: 'Solid is what it has held. Dotted is where the plan takes it.',
+  reaches: 'Reaches target',
+} as const;
