@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import EmojiField from '@/components/EmojiField';
+import SuggestionChips from '@/components/SuggestionChips';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import FormSheet from '@/components/FormSheet';
@@ -14,6 +16,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import {
   CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
+  ENVELOPE_QUICK_PICKS,
   FORM_FLOW_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
@@ -23,6 +26,7 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createEnvelope } from '@apps/runway/store/actions/itemActions';
+import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import ChangeSection from '@apps/runway/components/ChangeSection';
@@ -62,6 +66,8 @@ interface EnvelopeFormProps {
   presetDayKey?: string;
   /** A question to open first when changing an envelope ("amount"); every answer starts folded otherwise. */
   openStep?: EnvelopeStepId | null;
+  /** Hands the built envelope over instead of writing it, for a person who has no plan yet. */
+  draft?: DraftSink<EnvelopeSealed>;
 }
 
 export type EnvelopeStepId =
@@ -111,13 +117,18 @@ function EnvelopeForm({
   editing,
   presetDayKey,
   openStep = null,
+  draft,
 }: EnvelopeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const [formData, setFormData] = useState<EnvelopeFormData>(() =>
-    editing ? getEditingData(editing.payload) : INITIAL_DATA,
+    editing
+      ? getEditingData(editing.payload)
+      : draft?.initial
+        ? getEditingData(draft.initial)
+        : INITIAL_DATA,
   );
   const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
@@ -125,7 +136,7 @@ function EnvelopeForm({
   const set = (patch: Partial<EnvelopeFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
-  const hasDays = comingDays.length > 0;
+  const hasDays = comingDays.length > 0 || !!draft;
   const blocker = getBlocker(formData, hasDays);
 
   const fundingSteps = buildFundingSteps({
@@ -133,6 +144,7 @@ function EnvelopeForm({
     set,
     comingDays,
     allowNone: false,
+    isDraft: !!draft,
     getAmountTitle: (unit) => `How much does it get ${unit}?`,
   });
   const steps: QuestionStep[] = [
@@ -143,14 +155,28 @@ function EnvelopeForm({
       summaryValue: formData.name.trim(),
       isAnswered: formData.name.trim() !== '',
       render: () => (
-        <Input
-          variant='outline'
-          aria-label={FORM_FLOW_WORDS.name}
-          placeholder='Groceries'
-          maxLength={MAX_NAME_LENGTH}
-          value={formData.name}
-          onChange={(event) => set({ name: event.target.value })}
-        />
+        <div className='space-y-4'>
+          <Input
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.name}
+            placeholder='Groceries'
+            maxLength={MAX_NAME_LENGTH}
+            value={formData.name}
+            onChange={(event) => set({ name: event.target.value })}
+          />
+          <SuggestionChips
+            label={FORM_FLOW_WORDS.commonEnvelopes}
+            suggestions={ENVELOPE_QUICK_PICKS.map(
+              (pick) => `${pick.emoji} ${pick.name}`,
+            )}
+            onPick={(label) => {
+              const found = ENVELOPE_QUICK_PICKS.find(
+                (pick) => `${pick.emoji} ${pick.name}` === label,
+              );
+              if (found) set({ name: found.name, emoji: found.emoji });
+            }}
+          />
+        </div>
       ),
     },
     ...fundingSteps,
@@ -182,22 +208,19 @@ function EnvelopeForm({
       isAnswered: true,
       isPreAnswered: true,
       render: () => (
-        <div className='w-24'>
-          <Input
-            variant='outline'
-            aria-label={FORM_FLOW_WORDS.emoji}
-            placeholder='🛒'
-            maxLength={MAX_EMOJI_LENGTH}
-            value={formData.emoji ?? ''}
-            onChange={(event) => set({ emoji: event.target.value })}
-          />
-        </div>
+        <EmojiField
+          value={formData.emoji ?? ''}
+          onChange={(emoji) => set({ emoji })}
+          ariaLabel={FORM_FLOW_WORDS.emoji}
+          placeholder='🛒'
+          maxLength={MAX_EMOJI_LENGTH}
+        />
       ),
     },
   ];
   const questions = useQuestionFlow({
     steps,
-    startFolded: editing !== undefined,
+    startFolded: editing !== undefined || !!draft?.initial,
     initialOpenId: editing ? openStep : null,
   });
 
@@ -256,7 +279,13 @@ function EnvelopeForm({
 
   const handleSubmit = async () => {
     const envelope = buildEnvelope(formData);
-    if (!user || !envelope) return;
+    if (!envelope) return;
+    if (draft) {
+      draft.onSave(envelope);
+      onClose();
+      return;
+    }
+    if (!user) return;
 
     setError(null);
     setIsSaving(true);
@@ -330,7 +359,11 @@ function EnvelopeForm({
                       void handleSubmit();
                     }}
                   >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
+                    {editing
+                      ? CHANGE_WORDS.review
+                      : draft?.initial
+                        ? 'Save'
+                        : 'Add'}
                   </Button>
                 )
               }

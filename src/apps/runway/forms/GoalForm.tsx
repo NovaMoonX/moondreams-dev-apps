@@ -35,6 +35,8 @@ import {
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createGoal } from '@apps/runway/store/actions/itemActions';
+import type { DraftSink } from '@apps/runway/forms/draftSink';
+import EmojiField from '@/components/EmojiField';
 import { recordHolding } from '@apps/runway/store/actions/moveActions';
 import { getPeriodIndex } from '@apps/runway/engine/calendar';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
@@ -81,6 +83,8 @@ interface GoalFormProps {
   presetDayKey?: string;
   /** A question to open first when changing a goal ("target", "amount"); every answer starts folded otherwise. */
   openStep?: GoalStepId | null;
+  /** Hands the built goal over instead of writing it, for a person who has no plan yet. */
+  draft?: DraftSink<GoalSealed>;
 }
 
 export type GoalStepId =
@@ -165,6 +169,7 @@ function GoalForm({
   editing,
   presetDayKey,
   openStep = null,
+  draft,
 }: GoalFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -172,7 +177,17 @@ function GoalForm({
   const goals = useAppSelector((state) => selectGoals(state, today));
   const plan = useAppSelector((state) => state.runway.plan);
   const [formData, setFormData] = useState<GoalFormData>(() =>
-    editing ? getEditingData(editing.payload) : INITIAL_DATA,
+    editing
+      ? getEditingData(editing.payload)
+      : draft?.initial
+        ? {
+            ...getEditingData(draft.initial),
+            current:
+              draft.initial.startingCents === undefined
+                ? ''
+                : centsToInputValue(draft.initial.startingCents),
+          }
+        : INITIAL_DATA,
   );
   const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
@@ -181,7 +196,7 @@ function GoalForm({
     setFormData((current) => ({ ...current, ...patch }));
 
   const targetCents = parseMoneyToCents(formData.target);
-  const hasDays = comingDays.length > 0;
+  const hasDays = comingDays.length > 0 || !!draft;
   const blocker = getBlocker(formData, targetCents, hasDays, today);
   const currentCents = parseMoneyToCents(formData.current) ?? 0;
 
@@ -225,6 +240,7 @@ function GoalForm({
     set,
     comingDays,
     allowNone: true,
+    isDraft: !!draft,
     getAmountTitle: (unit) => `How much goes in ${unit}?`,
     getAmountHint,
   });
@@ -358,22 +374,19 @@ function GoalForm({
       isAnswered: true,
       isPreAnswered: true,
       render: () => (
-        <div className='w-24'>
-          <Input
-            variant='outline'
-            aria-label={FORM_FLOW_WORDS.emoji}
-            placeholder='🏖️'
-            maxLength={MAX_EMOJI_LENGTH}
-            value={formData.emoji ?? ''}
-            onChange={(event) => set({ emoji: event.target.value })}
-          />
-        </div>
+        <EmojiField
+          value={formData.emoji ?? ''}
+          onChange={(emoji) => set({ emoji })}
+          ariaLabel={FORM_FLOW_WORDS.emoji}
+          placeholder='🏖️'
+          maxLength={MAX_EMOJI_LENGTH}
+        />
       ),
     },
   ];
   const questions = useQuestionFlow({
     steps,
-    startFolded: editing !== undefined,
+    startFolded: editing !== undefined || !!draft?.initial,
     initialOpenId: editing ? openStep : null,
     onAdvance: (fromId) => {
       const suggestion = getSuggestion(formData);
@@ -455,7 +468,13 @@ function GoalForm({
 
   const handleSubmit = async () => {
     const goal = buildGoal(formData);
-    if (!user || !goal) return;
+    if (!goal) return;
+    if (draft) {
+      draft.onSave(goal);
+      onClose();
+      return;
+    }
+    if (!user) return;
 
     setError(null);
     setIsSaving(true);
@@ -536,7 +555,11 @@ function GoalForm({
                       void handleSubmit();
                     }}
                   >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
+                    {editing
+                      ? CHANGE_WORDS.review
+                      : draft?.initial
+                        ? 'Save'
+                        : 'Add'}
                   </Button>
                 )
               }

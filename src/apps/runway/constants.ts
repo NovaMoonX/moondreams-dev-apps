@@ -729,23 +729,83 @@ export const START_WORDS = {
   later: 'Later',
   next: 'Next',
   done: 'Done',
+  stepOf: (step: number, total: number) => `Step ${step} of ${total}`,
   incomeAsk: 'Who pays you?',
   incomeHelp:
-    'Add an income source with how often it pays and the next day it is due. This is the one thing Runway needs.',
+    'Add where your money comes from, how much, and how often. This is the one thing Runway needs.',
   billsAsk: 'What do you pay?',
   billsHelp:
     'Add the bills and upcoming expenses you know about. Each is set aside a little at a time before it is due.',
   envelopesAsk: 'What do you spend money on?',
   envelopesHelp:
-    'Envelopes are for everyday spending, like groceries. Goals are things you are saving toward.',
+    'An envelope is money set aside for a kind of spending, like groceries. Goals come next.',
+  envelopeDoor: "What's an envelope?",
+  envelopeDoorBody:
+    'An envelope is money set aside for a kind of spending, like groceries, that you refill each period. A goal is different: you fill it toward a target, like a trip or a car.',
+  goalsAsk: 'What are you saving toward?',
+  goalsHelp:
+    'A goal is something you fill toward a target. It can have a date, and money does not have to go in on a schedule.',
   standAsk: 'Where do things stand today?',
   standHelp:
     'Say what you have on hand and what is already set aside, so the first numbers start true.',
+  standMany:
+    'Start with your most important bills and goals. You can add the rest later.',
   doneAsk: 'Your next income day is ready',
+  savedSummary: (parts: string) =>
+    parts === ''
+      ? 'Nothing has been added yet.'
+      : `Saved to your plan: ${parts}.`,
   billsEmpty: 'No bills yet. The ones you add are listed here.',
-  envelopesEmpty:
-    'No envelopes or goals yet. The ones you add are listed here.',
+  envelopesEmpty: 'No envelopes yet. The ones you add are listed here.',
+  goalsEmpty: 'No goals yet. The ones you add are listed here.',
   standEmpty: 'Not entered yet. Until you do, Free to spend reads Not set yet.',
+  addIncome: 'Add an income source',
+  addAnotherIncome: 'Add another income source',
+  addBill: 'Add a bill',
+  addAnotherBill: 'Add another bill',
+  addEnvelope: 'Add an envelope',
+  addAnotherEnvelope: 'Add another envelope',
+  addGoal: 'Add a goal',
+  addAnotherGoal: 'Add another goal',
+  needIncome: 'Add an income source to continue.',
+  localNotice:
+    'You are not signed in. What you enter stays on this device, unencrypted, for 7 days. Sign in to save it to your plan.',
+  resumeAsk: 'Pick up where you left off?',
+  resumeSummary: (parts: string) => `You have added ${parts}.`,
+  resumeContinue: 'Continue where you left off',
+  resumeStartOver: 'Start over',
+  startOverTitle: 'Start over?',
+  startOverLocal: (parts: string) =>
+    `This removes ${parts} from this device. It cannot be undone.`,
+  startOverPlan: (parts: string) =>
+    `This takes ${parts} off your plan. Their history stays in your change log.`,
+  startOverConfirm: 'Start over',
+  rowActionsChange: 'Change',
+  rowActionsRemove: 'Remove',
+  removeTitle: (name: string) => `Remove ${name}?`,
+  removeMessage: 'It comes off this list. You can add it again any time.',
+  removeFailed: 'That did not remove. Nothing was changed.',
+  saveAsk: 'Sign in to save your plan',
+  saveBody:
+    'Your answers are kept on this device only until you sign in. Signing in seals them with your account and writes them to your plan.',
+  saveSummary: (parts: string) =>
+    parts === '' ? 'Nothing has been added yet.' : `Ready to save: ${parts}.`,
+  saveButton: 'Sign in with Google',
+  handoffTitle: 'Save what you entered?',
+  handoffBody: (parts: string) =>
+    `This device has ${parts} from before you signed in, and your plan already has items. Which should stay?`,
+  handoffAdd: 'Add them to my plan',
+  handoffKeep: 'Keep my plan as it is',
+  handoffSaved: (count: number) =>
+    count === 1
+      ? 'Saved 1 item to your plan.'
+      : `Saved ${count} items to your plan.`,
+  handoffFailed:
+    'Some of what you entered did not save. It is still on this device.',
+  landingTitle: 'Plan before you sign in',
+  landingBody:
+    'You can go through Starting out now. Your answers stay on this device until you sign in.',
+  landingButton: 'Start planning',
 } as const;
 
 export const DELETE_PLAN_PHRASE = 'delete my plan';
@@ -836,8 +896,16 @@ export const FORM_FLOW_WORDS = {
   restLink: 'Whatever is left of each pay',
   exactLink: 'An amount',
   itVaries: 'It varies',
-  oneAmount: 'One amount',
-  chooseEnd: 'Plan it at one end',
+  oneAmount: 'The same each time',
+  chooseEnd: 'Choose which end to plan for',
+  endQuestion: 'Which end should the plan count on?',
+  endHelpTitle: 'Planning at one end',
+  endHelp: (end: string) =>
+    `Planning at ${end} means the plan counts on that amount only. If the real amount is better, the difference shows up as extra when it lands.`,
+  endSameAsPlan: 'like your plan',
+  howOftenNext: 'How often it arrives comes next.',
+  commonBills: 'Common bills',
+  commonEnvelopes: 'Common envelopes',
   cadenceTitle: 'Which pays does it get money from?',
   cadence: 'Pays',
   targetTitle: 'How much do you want to save?',
@@ -851,7 +919,7 @@ export const FORM_FLOW_WORDS = {
     `${amount} each income day reaches it by ${date}.`,
   sourceTitle: 'Where does it come from?',
   source: 'From',
-  takeHomeTitle: 'How much lands in your account?',
+  takeHomeTitle: 'How much lands?',
   takeHome: 'Take-home pay',
   expectedIncomeTitle: 'How much is coming?',
   scheduleTitle: 'How often, and when is the next one?',
@@ -898,7 +966,7 @@ export const FORM_FLOW_WORDS = {
   badPercent: 'Enter a whole or half percent, up to 100.',
   finishEnding: 'Finish when it ends.',
   pickDays: 'Pick at least one income day.',
-  otherPayday: 'Enter a second payday that is a different day of the month.',
+  otherPayday: 'Pick two different days of the month.',
   discardNew: (noun: string) => `Discard this ${noun}?`,
   discardChange: 'Discard this change?',
   asOf: 'As of',
@@ -1068,3 +1136,25 @@ export const SPEND_PERIOD_WORDS = {
   emptyPeriod: 'Nothing was spent in this period.',
   loading: 'Getting these purchases.',
 } as const;
+
+export const BILL_QUICK_PICKS = [
+  { name: 'Rent', emoji: '🏠' },
+  { name: 'Mortgage', emoji: '🏡' },
+  { name: 'Electricity', emoji: '💡' },
+  { name: 'Water', emoji: '🚰' },
+  { name: 'Internet', emoji: '🌐' },
+  { name: 'Phone', emoji: '📱' },
+  { name: 'Car payment', emoji: '🚗' },
+  { name: 'Car insurance', emoji: '🛡️' },
+  { name: 'Health insurance', emoji: '🩺' },
+  { name: 'Streaming', emoji: '📺' },
+  { name: 'Gym', emoji: '🏋️' },
+] as const;
+
+export const ENVELOPE_QUICK_PICKS = [
+  { name: 'Groceries', emoji: '🛒' },
+  { name: 'Dining out', emoji: '🍽️' },
+  { name: 'Gas', emoji: '⛽' },
+  { name: 'Household', emoji: '🧺' },
+  { name: 'Fun money', emoji: '🎟️' },
+] as const;

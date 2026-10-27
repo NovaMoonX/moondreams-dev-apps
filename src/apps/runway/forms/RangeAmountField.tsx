@@ -1,13 +1,13 @@
 import { useState } from 'react';
 
 import AmountField from '@/components/AmountField';
+import HelpTip from '@/components/HelpTip';
 import { PillGroup } from '@/components/PillGroup';
 import RangeNote from '@apps/runway/components/RangeNote';
 import {
   FORM_FLOW_WORDS,
   RANGE_END_WORDS,
   STANCE_FOLLOW_PLAN,
-  STANCE_LABELS,
   STANCES,
 } from '@apps/runway/constants';
 import {
@@ -61,16 +61,26 @@ function RangeAmountField({
   const [isChoosingEnd, setIsChoosingEnd] = useState(false);
   const range = parseAmountDraft(value);
   const stance = effectiveStance(planStance, getStanceOverride(value));
-  const stanceOptions = [
-    {
-      value: STANCE_FOLLOW_PLAN,
-      label: `Follow the plan (${STANCE_LABELS[planStance]})`,
-    },
-    ...STANCES.map((entry) => ({
-      value: entry,
-      label: STANCE_LABELS[entry],
-    })),
-  ];
+  const endOrder = ['low', 'middle', 'high'] as const;
+  const stanceOptions = [...STANCES]
+    .sort(
+      (a, b) =>
+        endOrder.indexOf(getRangeEnd(a, side)) -
+        endOrder.indexOf(getRangeEnd(b, side)),
+    )
+    .map((entry) => {
+      const words = RANGE_END_WORDS[getRangeEnd(entry, side)];
+      const end = `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+      return {
+        value: entry === planStance ? STANCE_FOLLOW_PLAN : entry,
+        label:
+          entry === planStance
+            ? `${end} (${FORM_FLOW_WORDS.endSameAsPlan})`
+            : end,
+      };
+    });
+  const selectedStance =
+    value.stance === planStance ? STANCE_FOLLOW_PLAN : value.stance;
   const getHint = () => {
     if (value.mode === 'exact') return hint;
     if (range) {
@@ -88,12 +98,17 @@ function RangeAmountField({
 
   const stancePills = (
     <div className='space-y-1.5'>
-      <p className='text-muted-foreground text-xs'>Plan it at</p>
+      <p className='text-muted-foreground flex items-center gap-1 text-xs'>
+        {FORM_FLOW_WORDS.endQuestion}
+        <HelpTip title={FORM_FLOW_WORDS.endHelpTitle}>
+          {FORM_FLOW_WORDS.endHelp(RANGE_END_WORDS[getRangeEnd(stance, side)])}
+        </HelpTip>
+      </p>
       <PillGroup
-        label='Plan it at'
+        label={FORM_FLOW_WORDS.endQuestion}
         isThin
         options={stanceOptions}
-        value={value.stance}
+        value={selectedStance}
         onChange={(next) => onChange({ ...value, stance: next })}
       />
     </div>

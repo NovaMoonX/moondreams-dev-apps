@@ -15,7 +15,7 @@ Most budgets start from a month and a bank balance. Money actually arrives in pi
 1. **Add your income.** Each source of money has one or more kinds of pay under it, each with its own schedule, amount and ending.
 2. **Add what goes out.** Bills that repeat, bills that happen once, bills that end, and spending with no date.
 3. **Make envelopes and goals.** Spending categories and savings targets, each with an amount or percentage, a timing rule and a priority: Must, Should or Want.
-4. **Say where things stand.** The money you have now and what is already set aside, all optional and in any order.
+4. **Say where things stand.** The money you have now and what is already set aside, all optional and in any order. You can start before signing in; your answers stay on this device for 7 days until you do.
 5. **Draft and confirm each income day.** Every coming income day has a draft with a reason on each line. When the money is in, you enter what arrived, adjust, and confirm.
 6. **Look ahead.** Plan upcoming income days now and see how far the plan holds.
 7. **Try a what-if.** Change a scratch copy of the plan and see every upcoming income day before deciding.

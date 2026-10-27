@@ -1,334 +1,496 @@
-import { useState, type ReactNode } from 'react';
-import { Mail, ReceiptText, Wallet } from 'lucide-react';
+import { HardDrive, Wallet } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
-import ModalFooterActions from '@/components/ModalFooterActions';
-import Subview from '@/components/Subview';
+import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
-import ItemBadge from '@apps/runway/components/ItemBadge';
 import { START_WORDS } from '@apps/runway/constants';
+import { collectStarted } from '@apps/runway/engine/progress';
+import StartRowList from '@apps/runway/screens/start/StartRowList';
+import type { StartRow } from '@apps/runway/screens/start/startRows';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
 import GoalForm from '@apps/runway/forms/GoalForm';
 import IncomeForm from '@apps/runway/forms/IncomeForm';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import StartFlow, {
+  type StartFormState,
+  type StartKind,
+} from '@apps/runway/screens/start/StartFlow';
+import {
+  describeCounts,
+  toBillRow,
+  toEnvelopeRow,
+  toGoalRow,
+  toIncomeRows,
+} from '@apps/runway/screens/start/startRows';
+import { archiveItem } from '@apps/runway/store/actions/itemActions';
 import {
   selectBills,
   selectEnvelopes,
   selectGoals,
+  selectIsPlanItemsLoaded,
   selectListedDays,
+  selectResolvedPlan,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import {
+  clearStartDraft,
+  removeDraftEntry,
+  saveDraftEntry,
+  saveDraftStep,
+  useStartDraft,
+  type DraftKind,
+  type StartStep,
+} from '@apps/runway/utils/startDraft';
 
-const STEPS = ['income', 'bills', 'envelopes', 'stand', 'done'] as const;
-type Step = (typeof STEPS)[number];
-type FormName = 'income' | 'bill' | 'envelope' | 'goal' | 'stand';
+const SAVED_STEPS: readonly StartStep[] = [
+  'income',
+  'bills',
+  'envelopes',
+  'goals',
+  'stand',
+  'done',
+];
+const DRAFT_STEPS: readonly StartStep[] = [
+  'income',
+  'bills',
+  'envelopes',
+  'goals',
+  'done',
+];
 
-interface AddedListProps {
-  rows: { id: string; name: string; emoji: string | null }[];
-  /** What the empty list says in place of nothing, so a step that has had no answer yet is still a card. */
-  emptyText: string;
-  emptyIcon: ReactNode;
-}
+const STAND_MANY = 8;
 
-/** What has been added in this step, capped so fifty bills stay a short list. */
-function AddedList({ rows, emptyText, emptyIcon }: AddedListProps) {
-  if (rows.length === 0)
-    return <EmptyCard icon={emptyIcon}>{emptyText}</EmptyCard>;
-  const shown = rows.slice(0, 4);
-  return (
-    <div className='border-border bg-card rounded-2xl border p-3'>
-      <ul className='space-y-2'>
-        {shown.map((row) => (
-          <li key={row.id} className='flex items-start gap-3'>
-            <ItemBadge name={row.name} emoji={row.emoji} />
-            <p className='line-clamp-2 min-w-0 flex-1 pt-2 font-medium break-words'>
-              {row.name}
-            </p>
-          </li>
-        ))}
-      </ul>
-      {rows.length > shown.length && (
-        <p className='text-muted-foreground pt-2 text-sm'>
-          and {rows.length - shown.length} more
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** A person who comes back part-way lands on the first step with nothing in it; a plan with an income source and nothing else is where they stopped. */
-const getFirstOpenStep = (
-  incomeCount: number,
-  billCount: number,
-  spendingCount: number,
-  hasStart: boolean,
-): Step => {
-  if (incomeCount === 0) return 'income';
-  if (billCount === 0 && spendingCount === 0 && !hasStart) return 'bills';
-  return 'income';
+const DRAFT_KINDS: Record<StartKind, DraftKind> = {
+  income: 'incomes',
+  bill: 'bills',
+  envelope: 'envelopes',
+  goal: 'goals',
 };
 
-/** First run: one short question at a time. Only the income source is required; every other step has a Later. */
-function StartingOutScreen() {
+/** A person who comes back part-way lands on the first step with nothing in it. */
+const getFirstOpenStep = (
+  counts: Record<StartKind, number>,
+  hasStart: boolean,
+): StartStep => {
+  if (counts.income === 0) return 'income';
+  if (counts.bill === 0) return 'bills';
+  if (counts.envelope === 0) return 'envelopes';
+  if (counts.goal === 0) return 'goals';
+  return hasStart ? 'done' : 'stand';
+};
+
+/** Starting out for someone with a plan: every answer is written to it as it is given. */
+function SavedStart({ uid }: { uid: string }) {
   const today = todayAsUtcDate(useNow(60_000));
-  const { closeView, openDay } = useRunwayUrlState();
-  const [form, setForm] = useState<{ name: FormName; key: number } | null>(
-    null,
-  );
-  const incomeCount = useAppSelector(
-    (state) =>
-      state.runway.items.filter(
-        (item) =>
-          item.kind === 'payLine' &&
-          item.archivedAt === null &&
-          (item.endedAt === null || item.endedAt >= today),
-      ).length,
-  );
+  const { openDay } = useRunwayUrlState();
+  const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const hasStart = useAppSelector(
     (state) => state.runway.plan?.startDate != null,
   );
+  const moves = useAppSelector((state) => state.runway.moves);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? null,
+  );
+  const started = collectStarted(moves, startDate);
+  const standRows: StartRow[] = [
+    ...(started.money === null || started.money === undefined
+      ? []
+      : [
+          {
+            id: 'money',
+            name: 'Money on hand',
+            emoji: null,
+            line: 'What you have to plan with',
+            amount: formatCentsShort(started.money),
+          },
+        ]),
+    ...[...bills, ...goals].flatMap(({ item, version }) =>
+      started.byItem[item.id] === undefined
+        ? []
+        : [
+            {
+              id: item.id,
+              name: version.payload.name,
+              emoji: version.payload.emoji,
+              line: item.kind === 'bill' ? 'Already set aside' : 'In it now',
+              amount: formatCentsShort(started.byItem[item.id]),
+            },
+          ],
+    ),
+  ];
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
 
-  const [step, setStep] = useState<Step>(() =>
-    getFirstOpenStep(
-      incomeCount,
-      bills.length,
-      envelopes.length + goals.length,
-      hasStart,
-    ),
+  const payLines = sources.flatMap((source) =>
+    source.payLines.map((line) => ({ source, line })),
   );
-  const index = STEPS.indexOf(step);
-  const openForm = (name: FormName) =>
-    setForm((current) => ({ name, key: (current?.key ?? 0) + 1 }));
-  const closeForm = () => setForm(null);
-  const goBack = () => (index === 0 ? closeView() : setStep(STEPS[index - 1]));
-  const goNext = () => setStep(STEPS[index + 1]);
-
-  const toRows = (
-    list: {
-      item: { id: string };
-      version: { payload: { name: string; emoji: string | null } };
-    }[],
-  ) =>
-    list.map(({ item, version }) => ({
-      id: item.id,
-      name: version.payload.name,
-      emoji: version.payload.emoji,
-    }));
-
-  const getBody = () => {
-    if (step === 'income') {
-      return {
-        ask: START_WORDS.incomeAsk,
-        help: START_WORDS.incomeHelp,
-        content: (
-          <>
-            {incomeCount > 0 && (
-              <p className='text-sm font-medium'>
-                {incomeCount === 1
-                  ? 'One income source added.'
-                  : `${incomeCount} income sources added.`}
-              </p>
-            )}
-            <Button
-              variant={incomeCount > 0 ? 'secondary' : 'primary'}
-              onClick={() => openForm('income')}
-            >
-              {incomeCount > 0 ? 'Add another' : 'Add an income source'}
-            </Button>
-          </>
-        ),
-        isDone: incomeCount > 0,
-        isRequired: true,
-      };
-    }
-    if (step === 'bills') {
-      return {
-        ask: START_WORDS.billsAsk,
-        help: START_WORDS.billsHelp,
-        content: (
-          <>
-            <AddedList
-              rows={toRows(bills)}
-              emptyIcon={<ReceiptText className='h-5 w-5' />}
-              emptyText={START_WORDS.billsEmpty}
-            />
-            <Button
-              variant={bills.length > 0 ? 'secondary' : 'primary'}
-              onClick={() => openForm('bill')}
-            >
-              {bills.length > 0 ? 'Add another bill' : 'Add a bill'}
-            </Button>
-          </>
-        ),
-        isDone: bills.length > 0,
-        isRequired: false,
-      };
-    }
-    if (step === 'envelopes') {
-      return {
-        ask: START_WORDS.envelopesAsk,
-        help: START_WORDS.envelopesHelp,
-        content: (
-          <>
-            <AddedList
-              rows={[...toRows(envelopes), ...toRows(goals)]}
-              emptyIcon={<Mail className='h-5 w-5' />}
-              emptyText={START_WORDS.envelopesEmpty}
-            />
-            <div className='flex flex-wrap gap-2'>
-              <Button
-                variant={envelopes.length > 0 ? 'secondary' : 'primary'}
-                onClick={() => openForm('envelope')}
-              >
-                Add an envelope
-              </Button>
-              <Button variant='secondary' onClick={() => openForm('goal')}>
-                Add a goal
-              </Button>
-            </div>
-          </>
-        ),
-        isDone: envelopes.length + goals.length > 0,
-        isRequired: false,
-      };
-    }
-    if (step === 'stand') {
-      return {
-        ask: START_WORDS.standAsk,
-        help: START_WORDS.standHelp,
-        content: (
-          <>
-            {!hasStart && (
-              <EmptyCard icon={<Wallet className='h-5 w-5' />}>
-                {START_WORDS.standEmpty}
-              </EmptyCard>
-            )}
-            <Button
-              variant={hasStart ? 'secondary' : 'primary'}
-              onClick={() => openForm('stand')}
-            >
-              {hasStart ? 'Change what you entered' : 'Say where things stand'}
-            </Button>
-          </>
-        ),
-        isDone: hasStart,
-        isRequired: false,
-      };
-    }
-    return {
-      ask: START_WORDS.doneAsk,
-      help: nextDay
-        ? 'Open it to see what it sets aside, or go to Home.'
-        : 'Go to Home to see where things stand.',
-      content: nextDay ? (
-        <ul className='border-border bg-card rounded-2xl border'>
-          <IncomeDayCard
-            day={nextDay}
-            onOpen={() => {
-              closeView();
-              openDay(nextDay.dayKey);
-            }}
-          />
-        </ul>
-      ) : null,
-      isDone: true,
-      isRequired: false,
-    };
+  const rows = {
+    income: toIncomeRows(
+      payLines.map(({ source, line }) => ({
+        id: line.item.id,
+        sourceName: source.version.payload.name,
+        payLineName: line.version.payload.name,
+        amount: line.version.payload.amount,
+        schedule: line.version.payload.schedule,
+      })),
+    ),
+    bill: bills.map(({ item, version }) => toBillRow(item.id, version.payload)),
+    envelope: envelopes.map(({ item, version }) =>
+      toEnvelopeRow(item.id, version.payload),
+    ),
+    goal: goals.map(({ item, version }) => toGoalRow(item.id, version.payload)),
+  };
+  const counts = {
+    income: new Set(rows.income.map((row) => row.group ?? row.id)).size,
+    bill: rows.bill.length,
+    envelope: rows.envelope.length,
+    goal: rows.goal.length,
   };
 
-  const body = getBody();
-  const isLast = step === 'done';
+  const archive = async (itemId: string, name: string) => {
+    const encryption = await getRunwayEncryption(uid);
+    await archiveItem(
+      uid,
+      encryption,
+      { itemId, summary: `Removed ${name}.`, note: null },
+      today,
+    );
+  };
 
-  return (
-    <Subview
-      overlay
-      title={START_WORDS.title}
-      onClose={closeView}
-      onBack={goBack}
-    >
-      <div className='flex flex-1 flex-col gap-4'>
-        <div className='space-y-1'>
-          <p className='text-muted-foreground text-xs'>
-            Step {index + 1} of {STEPS.length}
-          </p>
-          <h2 className='text-xl font-semibold text-balance'>{body.ask}</h2>
-          <p className='text-muted-foreground text-sm text-pretty'>
-            {body.help}
-          </p>
-        </div>
-        <div className='space-y-3'>{body.content}</div>
-        <ModalFooterActions
-          note={
-            body.isRequired && !body.isDone
-              ? 'Add an income source to continue.'
-              : null
-          }
-          cancelAction={
-            index === 0 ? null : (
-              <Button type='button' variant='secondary' onClick={goBack}>
-                Back
-              </Button>
-            )
-          }
-          rightActions={
-            isLast ? (
-              <Button type='button' onClick={closeView}>
-                {START_WORDS.done}
-              </Button>
-            ) : (
-              <Button
-                type='button'
-                variant={body.isDone ? 'primary' : 'secondary'}
-                disabled={body.isRequired && !body.isDone}
-                onClick={goNext}
-              >
-                {body.isDone || body.isRequired
-                  ? START_WORDS.next
-                  : START_WORDS.later}
-              </Button>
-            )
-          }
-        />
-      </div>
-      {form?.name === 'income' && (
+  const remove = async (kind: StartKind, id: string) => {
+    if (kind === 'income') {
+      const found = payLines.find(({ line }) => line.item.id === id);
+      if (!found) return;
+      await archive(id, found.source.version.payload.name);
+      if (found.source.payLines.length === 1) {
+        await archive(found.source.item.id, found.source.version.payload.name);
+      }
+      return;
+    }
+    const list =
+      kind === 'bill' ? bills : kind === 'envelope' ? envelopes : goals;
+    const found = list.find(({ item }) => item.id === id);
+    if (found) await archive(id, found.version.payload.name);
+  };
+
+  const startOver = async () => {
+    await Promise.all([
+      ...payLines.map(({ line, source }) =>
+        archive(line.item.id, source.version.payload.name),
+      ),
+      ...sources.map((source) =>
+        archive(source.item.id, source.version.payload.name),
+      ),
+      ...[...bills, ...envelopes, ...goals].map(({ item, version }) =>
+        archive(item.id, version.payload.name),
+      ),
+    ]);
+  };
+
+  const renderForm = (form: StartFormState, close: () => void) => {
+    const id = form.entryId;
+    if (form.name === 'income') {
+      const found = payLines.find(({ line }) => line.item.id === id);
+      return (
         <IncomeForm
           key={form.key}
           isOpen
           title='Income source'
           defaultFrequency={null}
-          onClose={closeForm}
+          editing={
+            found
+              ? {
+                  itemId: found.line.item.id,
+                  kind: 'payLine',
+                  payload: found.line.version.payload,
+                }
+              : undefined
+          }
+          onClose={close}
         />
-      )}
-      {form?.name === 'bill' && (
-        <BillForm key={form.key} isOpen title='Bill' onClose={closeForm} />
-      )}
-      {form?.name === 'envelope' && (
+      );
+    }
+    if (form.name === 'bill') {
+      const found = bills.find(({ item }) => item.id === id);
+      return (
+        <BillForm
+          key={form.key}
+          isOpen
+          title='Bill'
+          editing={
+            found
+              ? { itemId: found.item.id, payload: found.version.payload }
+              : undefined
+          }
+          onClose={close}
+        />
+      );
+    }
+    if (form.name === 'envelope') {
+      const found = envelopes.find(({ item }) => item.id === id);
+      return (
         <EnvelopeForm
           key={form.key}
           isOpen
           title='Envelope'
-          onClose={closeForm}
+          editing={
+            found
+              ? { itemId: found.item.id, payload: found.version.payload }
+              : undefined
+          }
+          onClose={close}
         />
+      );
+    }
+    if (form.name === 'goal') {
+      const found = goals.find(({ item }) => item.id === id);
+      return (
+        <GoalForm
+          key={form.key}
+          isOpen
+          title='Goal'
+          editing={
+            found
+              ? { itemId: found.item.id, payload: found.version.payload }
+              : undefined
+          }
+          onClose={close}
+        />
+      );
+    }
+    return <StartingAmountsSheet key={form.key} isOpen onClose={close} />;
+  };
+
+  return (
+    <StartFlow
+      steps={SAVED_STEPS}
+      rows={rows}
+      resumeStep={getFirstOpenStep(counts, hasStart)}
+      renderForm={renderForm}
+      isStandDone={hasStart}
+      standContent={(openStand) => (
+        <>
+          {bills.length + goals.length >= STAND_MANY && (
+            <p className='text-muted-foreground text-sm text-pretty'>
+              {START_WORDS.standMany}
+            </p>
+          )}
+          {!hasStart && (
+            <EmptyCard icon={<Wallet className='h-5 w-5' />}>
+              {START_WORDS.standEmpty}
+            </EmptyCard>
+          )}
+          <StartRowList
+            rows={standRows}
+            searchLabel='Search what you entered'
+            onOpen={openStand}
+          />
+          <Button
+            variant={hasStart ? 'secondary' : 'primary'}
+            onClick={openStand}
+          >
+            {hasStart ? 'Change what you entered' : 'Say where things stand'}
+          </Button>
+        </>
       )}
-      {form?.name === 'goal' && (
-        <GoalForm key={form.key} isOpen title='Goal' onClose={closeForm} />
+      doneAsk={START_WORDS.doneAsk}
+      doneHelp={
+        nextDay
+          ? 'Open it to see what it sets aside, or go to Home.'
+          : 'Go to Home to see where things stand.'
+      }
+      doneContent={(finish) => (
+        <>
+          <p className='text-sm text-pretty'>
+            {START_WORDS.savedSummary(describeCounts(counts))}
+          </p>
+          {nextDay && (
+            <ul className='border-border bg-card rounded-2xl border'>
+              <IncomeDayCard
+                day={nextDay}
+                onOpen={() => finish(() => openDay(nextDay.dayKey))}
+              />
+            </ul>
+          )}
+        </>
       )}
-      {form?.name === 'stand' && (
-        <StartingAmountsSheet key={form.key} isOpen onClose={closeForm} />
-      )}
-    </Subview>
+      remove={remove}
+      startOver={startOver}
+      startOverMessage={START_WORDS.startOverPlan}
+    />
   );
+}
+
+/** Starting out before signing in: answers are kept on this device for a week and written to the plan on sign-in. */
+function DeviceStart() {
+  const { signInWithGoogle } = useAuth();
+  const draft = useStartDraft();
+  const entries = {
+    incomes: draft?.incomes ?? [],
+    bills: draft?.bills ?? [],
+    envelopes: draft?.envelopes ?? [],
+    goals: draft?.goals ?? [],
+  };
+  const rows = {
+    income: toIncomeRows(
+      entries.incomes.map(({ id, value }) => ({
+        id,
+        sourceName: value.sourceName,
+        payLineName: value.payLineName,
+        amount: value.amount,
+        schedule: value.schedule,
+      })),
+    ),
+    bill: entries.bills.map(({ id, value }) => toBillRow(id, value)),
+    envelope: entries.envelopes.map(({ id, value }) =>
+      toEnvelopeRow(id, value),
+    ),
+    goal: entries.goals.map(({ id, value }) => toGoalRow(id, value)),
+  };
+
+  const counts = {
+    income: new Set(rows.income.map((row) => row.group ?? row.id)).size,
+    bill: rows.bill.length,
+    envelope: rows.envelope.length,
+    goal: rows.goal.length,
+  };
+
+  const remove = async (kind: StartKind, id: string) =>
+    removeDraftEntry(DRAFT_KINDS[kind], id);
+
+  const renderForm = (form: StartFormState, close: () => void) => {
+    const id = form.entryId;
+    if (form.name === 'income') {
+      return (
+        <IncomeForm
+          key={form.key}
+          isOpen
+          title='Income source'
+          defaultFrequency={null}
+          draft={{
+            initial:
+              entries.incomes.find((entry) => entry.id === id)?.value ?? null,
+            onSave: (value) => saveDraftEntry('incomes', value, id),
+          }}
+          onClose={close}
+        />
+      );
+    }
+    if (form.name === 'bill') {
+      return (
+        <BillForm
+          key={form.key}
+          isOpen
+          title='Bill'
+          draft={{
+            initial:
+              entries.bills.find((entry) => entry.id === id)?.value ?? null,
+            onSave: (value) => saveDraftEntry('bills', value, id),
+          }}
+          onClose={close}
+        />
+      );
+    }
+    if (form.name === 'envelope') {
+      return (
+        <EnvelopeForm
+          key={form.key}
+          isOpen
+          title='Envelope'
+          draft={{
+            initial:
+              entries.envelopes.find((entry) => entry.id === id)?.value ?? null,
+            onSave: (value) => saveDraftEntry('envelopes', value, id),
+          }}
+          onClose={close}
+        />
+      );
+    }
+    return (
+      <GoalForm
+        key={form.key}
+        isOpen
+        title='Goal'
+        draft={{
+          initial:
+            entries.goals.find((entry) => entry.id === id)?.value ?? null,
+          onSave: (value) => saveDraftEntry('goals', value, id),
+        }}
+        onClose={close}
+      />
+    );
+  };
+
+  return (
+    <StartFlow
+      steps={DRAFT_STEPS}
+      rows={rows}
+      resumeStep={draft?.step ?? 'income'}
+      onStepChange={(step) => {
+        if (draft) saveDraftStep(step);
+      }}
+      notice={
+        <div className='border-border bg-muted/50 flex items-start gap-3 rounded-2xl border p-3'>
+          <HardDrive
+            className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+            aria-hidden='true'
+          />
+          <p className='text-sm text-pretty'>{START_WORDS.localNotice}</p>
+        </div>
+      }
+      renderForm={renderForm}
+      doneAsk={START_WORDS.saveAsk}
+      doneHelp={START_WORDS.saveBody}
+      doneContent={() => (
+        <div className='border-border bg-muted/50 flex items-start gap-3 rounded-2xl border p-3'>
+          <HardDrive
+            className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+            aria-hidden='true'
+          />
+          <p className='text-sm text-pretty'>
+            {START_WORDS.saveSummary(describeCounts(counts))}
+          </p>
+        </div>
+      )}
+      doneAction={
+        <Button type='button' onClick={() => void signInWithGoogle()}>
+          {START_WORDS.saveButton}
+        </Button>
+      }
+      remove={remove}
+      startOver={async () => clearStartDraft()}
+      startOverMessage={START_WORDS.startOverLocal}
+    />
+  );
+}
+
+function StartingOutScreen() {
+  const { user } = useAuth();
+  const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  if (!user) return <DeviceStart />;
+  if (!isLoaded) {
+    return (
+      <div className='page'>
+        <div className='mx-auto max-w-4xl py-6'>
+          <EmptyCard icon={<Wallet className='h-5 w-5' />}>
+            Getting your plan ready.
+          </EmptyCard>
+        </div>
+      </div>
+    );
+  }
+  return <SavedStart uid={user.uid} />;
 }
 
 export default StartingOutScreen;

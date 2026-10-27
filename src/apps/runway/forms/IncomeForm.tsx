@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
@@ -35,6 +35,8 @@ import {
   createIncome,
   type CreateIncomeInput,
 } from '@apps/runway/store/actions/itemActions';
+import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
+import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import ChangeSection from '@apps/runway/components/ChangeSection';
@@ -71,6 +73,7 @@ interface IncomeFormData {
   amount: AmountDraft;
   frequency: Frequency | null;
   startDate: string;
+  firstDay: string;
   secondDay: string;
   endKind: EndKind;
   endDate: string;
@@ -89,6 +92,8 @@ interface IncomeFormProps {
   editing?: EditingIncome;
   /** A question to open first when changing a pay line ("amount"); every answer starts folded otherwise. */
   openStep?: IncomeStepId | null;
+  /** Hands the built income over instead of writing it, for a person who has no plan yet. */
+  draft?: DraftSink<CreateIncomeInput>;
 }
 
 export type IncomeStepId =
@@ -106,6 +111,25 @@ const endingOptions = INCOME_ENDINGS.map((value) => ({
   value,
   label: INCOME_ENDING_LABELS[value],
 }));
+
+const dayOptions = Array.from({ length: LAST_DAY }, (_, index) => ({
+  value: String(index + 1),
+  text: toOrdinal(index + 1),
+}));
+
+/** The first day on or after `from` that falls on one of the days of the month, with the last day standing for a short month's end. */
+const getNextPayday = (from: number, days: number[]) => {
+  const start = new Date(from);
+  const dates = [0, 1].flatMap((offset) =>
+    days.map((day) => {
+      const year = start.getUTCFullYear();
+      const month = start.getUTCMonth() + offset;
+      const length = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+      return Date.UTC(year, month, Math.min(day, length));
+    }),
+  );
+  return Math.min(...dates.filter((date) => date >= from));
+};
 
 const parseDay = (value: string) => {
   const day = Number(value);
@@ -148,8 +172,8 @@ const buildSchedule = (data: IncomeFormData): Schedule | null => {
   }
   if (data.frequency === 'twiceMonthly') {
     const second = parseDay(data.secondDay);
-    const first = new Date(anchor).getUTCDate();
-    if (second === null || second === first) return null;
+    const first = parseDay(data.firstDay);
+    if (first === null || second === null || second === first) return null;
     return {
       kind: 'twiceMonthly',
       anchor,
@@ -190,7 +214,7 @@ const getBlocker = (
   if (data.frequency === null) return 'Pick how often it arrives.';
   if (fromDateInputValue(data.startDate) === undefined) return 'Pick the date.';
   if (data.frequency === 'twiceMonthly' && buildSchedule(data) === null) {
-    return 'Enter a second payday that is a different day of the month.';
+    return 'Pick two different days of the month.';
   }
   if (buildEnding(data) === null) return 'Finish when it ends.';
   return null;
@@ -203,6 +227,7 @@ const getEditingData = (editing: EditingIncome): IncomeFormData => {
     amount: EMPTY_AMOUNT_DRAFT,
     frequency: null,
     startDate: '',
+    firstDay: '',
     secondDay: '',
     endKind: 'never',
     endDate: '',
@@ -221,14 +246,13 @@ const getEditingData = (editing: EditingIncome): IncomeFormData => {
       payload.schedule.anchor === null
         ? ''
         : toDateInputValue(payload.schedule.anchor),
+    firstDay:
+      payload.schedule.kind === 'twiceMonthly'
+        ? String(payload.schedule.monthDays[0] ?? '')
+        : '',
     secondDay:
       payload.schedule.kind === 'twiceMonthly'
-        ? String(
-            payload.schedule.monthDays.find(
-              (day) =>
-                day !== new Date(payload.schedule.anchor ?? 0).getUTCDate(),
-            ) ?? '',
-          )
+        ? String(payload.schedule.monthDays[1] ?? '')
         : '',
     endKind:
       payload.ending.onDate !== null
@@ -247,6 +271,37 @@ const getEditingData = (editing: EditingIncome): IncomeFormData => {
   };
 };
 
+const getDraftData = (input: CreateIncomeInput): IncomeFormData => {
+  const { schedule } = input;
+  const frequency = INCOME_FREQUENCIES.find((kind) => kind === schedule.kind);
+  const ending = input.ending;
+  return {
+    source: { choice: NEW_CHOICE, newText: input.sourceName },
+    payName:
+      input.payLineName === DEFAULT_PAY_LINE_NAME ? '' : input.payLineName,
+    amount: toAmountDraft(input.amount, input.stanceOverride),
+    frequency: frequency ?? null,
+    startDate:
+      schedule.anchor === null ? '' : toDateInputValue(schedule.anchor),
+    firstDay:
+      schedule.kind === 'twiceMonthly'
+        ? String(schedule.monthDays[0] ?? '')
+        : '',
+    secondDay:
+      schedule.kind === 'twiceMonthly'
+        ? String(schedule.monthDays[1] ?? '')
+        : '',
+    endKind:
+      ending.onDate !== null
+        ? 'date'
+        : ending.afterCount !== null
+          ? 'count'
+          : 'never',
+    endDate: ending.onDate === null ? '' : toDateInputValue(ending.onDate),
+    endCount: ending.afterCount === null ? '' : String(ending.afterCount),
+  };
+};
+
 function IncomeForm({
   isOpen,
   onClose,
@@ -255,6 +310,7 @@ function IncomeForm({
   defaultFrequency,
   editing,
   openStep = null,
+  draft,
 }: IncomeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -263,23 +319,39 @@ function IncomeForm({
   const [formData, setFormData] = useState<IncomeFormData>(() =>
     editing
       ? getEditingData(editing)
-      : {
-          source: { choice: '', newText: '' },
-          payName: '',
-          amount: EMPTY_AMOUNT_DRAFT,
-          frequency: defaultFrequency,
-          startDate: toDateInputValue(today),
-          secondDay: '',
-          endKind: 'never',
-          endDate: '',
-          endCount: '',
-        },
+      : draft?.initial
+        ? getDraftData(draft.initial)
+        : {
+            source: { choice: '', newText: '' },
+            payName: '',
+            amount: EMPTY_AMOUNT_DRAFT,
+            frequency: defaultFrequency,
+            startDate: toDateInputValue(today),
+            firstDay: '',
+            secondDay: '',
+            endKind: 'never',
+            endDate: '',
+            endCount: '',
+          },
   );
   const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<IncomeFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
+
+  const setPaydays = (patch: Partial<IncomeFormData>) =>
+    setFormData((current) => {
+      const next = { ...current, ...patch };
+      const days = [parseDay(next.firstDay), parseDay(next.secondDay)];
+      const [first, second] = days;
+      return first === null || second === null || first === second
+        ? next
+        : {
+            ...next,
+            startDate: toDateInputValue(getNextPayday(today, [first, second])),
+          };
+    });
 
   const sourceNames = Object.fromEntries(
     resolved.map((source) => [source.item.id, source.version.payload.name]),
@@ -306,11 +378,13 @@ function IncomeForm({
   const isScheduleAnswered =
     formData.frequency !== null && buildSchedule(formData) !== null;
   const scheduleText =
-    formData.frequency === null || startDate === undefined
-      ? ''
-      : isOnce
-        ? formatDateUTC(startDate)
-        : `${SCHEDULE_LABELS[formData.frequency]} · next ${formatDateUTC(startDate)}`;
+    formData.frequency === 'twiceMonthly' && isScheduleAnswered
+      ? `Twice a month · ${toOrdinal(Number(formData.firstDay))} and ${toOrdinal(Number(formData.secondDay))}`
+      : formData.frequency === null || startDate === undefined
+        ? ''
+        : isOnce
+          ? formatDateUTC(startDate)
+          : `${SCHEDULE_LABELS[formData.frequency]} · next ${formatDateUTC(startDate)}`;
   const endingText =
     formData.endKind === 'never'
       ? INCOME_ENDING_LABELS.never
@@ -380,7 +454,7 @@ function IncomeForm({
         <RangeAmountField
           isHero
           label={FORM_FLOW_WORDS.takeHome}
-          hint=''
+          hint={FORM_FLOW_WORDS.howOftenNext}
           side='income'
           planStance={planStance}
           value={formData.amount}
@@ -395,7 +469,7 @@ function IncomeForm({
       summaryValue: scheduleText,
       isAnswered: isScheduleAnswered,
       blocker:
-        formData.frequency === 'twiceMonthly' && formData.secondDay !== ''
+        formData.frequency === 'twiceMonthly'
           ? FORM_FLOW_WORDS.otherPayday
           : null,
       render: () => (
@@ -406,36 +480,38 @@ function IncomeForm({
             value={formData.frequency}
             onChange={(frequency) => set({ frequency })}
           />
-          {formData.frequency !== null && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>
-                {isOnce ? 'Arrives' : 'Next payday'}
-              </p>
-              <Input
-                type='date'
-                variant='outline'
-                aria-label={isOnce ? 'Arrives' : 'First payday'}
-                value={formData.startDate}
-                onChange={(event) => set({ startDate: event.target.value })}
-              />
-            </div>
-          )}
+          {formData.frequency !== null &&
+            formData.frequency !== 'twiceMonthly' && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>
+                  {isOnce ? 'Arrives' : 'Next payday'}
+                </p>
+                <Input
+                  type='date'
+                  variant='outline'
+                  aria-label={isOnce ? 'Arrives' : 'First payday'}
+                  value={formData.startDate}
+                  onChange={(event) => set({ startDate: event.target.value })}
+                />
+              </div>
+            )}
           {formData.frequency === 'twiceMonthly' && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>
-                Other payday of the month
-              </p>
-              <Input
-                type='number'
-                inputMode='numeric'
-                min={1}
-                max={31}
-                variant='outline'
-                aria-label='Other payday of the month'
-                placeholder='15'
-                value={formData.secondDay}
-                onChange={(event) => set({ secondDay: event.target.value })}
-              />
+            <div className='grid grid-cols-2 gap-3'>
+              {(['firstDay', 'secondDay'] as const).map((key) => (
+                <div key={key} className='space-y-1.5'>
+                  <p className='text-muted-foreground text-xs'>
+                    {key === 'firstDay'
+                      ? 'First payday of the month'
+                      : 'Second payday of the month'}
+                  </p>
+                  <Select
+                    options={dayOptions}
+                    value={formData[key]}
+                    placeholder='Pick a day'
+                    onChange={(value) => setPaydays({ [key]: value })}
+                  />
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -512,7 +588,7 @@ function IncomeForm({
   ];
   const questions = useQuestionFlow({
     steps: isEditingSource ? [sourceNameStep] : payLineSteps,
-    startFolded: isEditing,
+    startFolded: isEditing || !!draft?.initial,
     initialOpenId: isEditing ? openStep : null,
   });
 
@@ -569,7 +645,7 @@ function IncomeForm({
     const amount = parseAmountDraft(data.amount);
     const startDate = fromDateInputValue(data.startDate);
     if (
-      !user ||
+      (!draft && !user) ||
       !schedule ||
       !ending ||
       amount === null ||
@@ -590,6 +666,12 @@ function IncomeForm({
       startDate,
     };
 
+    if (draft) {
+      draft.onSave(input);
+      onClose();
+      return;
+    }
+    if (!user) return;
     setError(null);
     setIsSaving(true);
     try {
@@ -659,7 +741,11 @@ function IncomeForm({
                       void handleSubmit();
                     }}
                   >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
+                    {editing
+                      ? CHANGE_WORDS.review
+                      : draft?.initial
+                        ? 'Save'
+                        : 'Add'}
                   </Button>
                 )
               }

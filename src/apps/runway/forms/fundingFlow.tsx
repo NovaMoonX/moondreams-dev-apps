@@ -226,6 +226,8 @@ interface FundingStepsArgs {
   getAmountTitle: (unit: string) => string;
   /** One quiet line under the amount, when the form has something to suggest. */
   getAmountHint?: (data: FundingFormData) => ReactNode;
+  /** Nothing is saved yet, so income days are assumed and the ones to pick from are not offered. */
+  isDraft?: boolean;
 }
 
 /** The "How often?", "Which pays?" and amount questions an envelope's and a goal's forms share. */
@@ -236,8 +238,9 @@ export function buildFundingSteps({
   allowNone,
   getAmountTitle,
   getAmountHint,
+  isDraft = false,
 }: FundingStepsArgs): QuestionStep[] {
-  const hasDays = comingDays.length > 0;
+  const hasDays = comingDays.length > 0 || isDraft;
   const amount = getFundingAmount(data);
   const sources = getSources(comingDays, data.sourceId);
   const selectedSource = sources.find((source) => source.id === data.sourceId);
@@ -326,8 +329,9 @@ export function buildFundingSteps({
       <div className='space-y-3'>
         <PillGroup
           label={FORM_FLOW_WORDS.cadence}
-          options={(
-            ['everyIncomeDay', 'every2', 'every3', 'chosen'] as const
+          options={(isDraft
+            ? (['everyIncomeDay', 'every2', 'every3'] as const)
+            : (['everyIncomeDay', 'every2', 'every3', 'chosen'] as const)
           ).map((value) => ({
             value,
             label: FUNDING_CADENCE_LABELS[value],
