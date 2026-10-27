@@ -751,7 +751,10 @@ export const START_WORDS = {
   standMany:
     'Start with your most important bills and goals. You can add the rest later.',
   doneAsk: 'Your next income day is ready',
-  doneSavedAsk: 'You are set up',
+  savedSummary: (parts: string) =>
+    parts === ''
+      ? 'Nothing has been added yet.'
+      : `Saved to your plan: ${parts}.`,
   billsEmpty: 'No bills yet. The ones you add are listed here.',
   envelopesEmpty: 'No envelopes yet. The ones you add are listed here.',
   goalsEmpty: 'No goals yet. The ones you add are listed here.',

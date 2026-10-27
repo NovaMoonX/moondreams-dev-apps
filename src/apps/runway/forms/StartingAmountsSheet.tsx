@@ -44,6 +44,8 @@ const isOfflineFailure = (error: unknown) =>
 interface StartingAmountsSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Drawn as the page's own content, for a screen that is already a full page, instead of a sheet over it. */
+  isInline?: boolean;
   /** Called once the amounts are saved. */
   onSaved?: () => void;
 }
@@ -127,6 +129,7 @@ export function AmountList({ label, rows, values, onChange }: AmountListProps) {
 function StartingAmountsSheet({
   isOpen,
   onClose,
+  isInline = false,
   onSaved,
 }: StartingAmountsSheetProps) {
   const { user } = useAuth();
@@ -228,77 +231,82 @@ function StartingAmountsSheet({
     }
   };
 
+  const content = (
+    <div className='grid gap-4'>
+      <AmountHero
+        label={FORM_FLOW_WORDS.moneyOnHand}
+        value={money}
+        onChange={setMoney}
+        hint='What you have to plan with.'
+      />
+      <FoldedDateField
+        label={FORM_FLOW_WORDS.asOf}
+        value={date}
+        onChange={setDate}
+        todayValue={toDateInputValue(today)}
+        max={toDateInputValue(today)}
+      />
+      <AmountList
+        label='What each goal holds'
+        rows={askedGoals.map(({ item, version }) => ({
+          id: item.id,
+          name: version.payload.name,
+        }))}
+        values={amounts}
+        onChange={(id, value) =>
+          setAmounts((current) => ({ ...current, [id]: value }))
+        }
+      />
+      <AmountList
+        label='Already set aside for bills'
+        rows={bills.map(({ item, version }) => ({
+          id: item.id,
+          name: version.payload.name,
+        }))}
+        values={amounts}
+        onChange={(id, value) =>
+          setAmounts((current) => ({ ...current, [id]: value }))
+        }
+      />
+      {error && (
+        <p className='text-destructive text-sm' role='alert'>
+          {error}
+        </p>
+      )}
+      <ModalFooterActions
+        note={note}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={requestClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || note !== null}
+            onClick={() => void save()}
+          >
+            Save
+          </Button>
+        }
+      />
+    </div>
+  );
+
+  if (isInline) return content;
   return (
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
       title='Where things stand'
     >
-      <div className='grid gap-4'>
-        <AmountHero
-          label={FORM_FLOW_WORDS.moneyOnHand}
-          value={money}
-          onChange={setMoney}
-          hint='What you have to plan with.'
-        />
-        <FoldedDateField
-          label={FORM_FLOW_WORDS.asOf}
-          value={date}
-          onChange={setDate}
-          todayValue={toDateInputValue(today)}
-          max={toDateInputValue(today)}
-        />
-        <AmountList
-          label='What each goal holds'
-          rows={askedGoals.map(({ item, version }) => ({
-            id: item.id,
-            name: version.payload.name,
-          }))}
-          values={amounts}
-          onChange={(id, value) =>
-            setAmounts((current) => ({ ...current, [id]: value }))
-          }
-        />
-        <AmountList
-          label='Already set aside for bills'
-          rows={bills.map(({ item, version }) => ({
-            id: item.id,
-            name: version.payload.name,
-          }))}
-          values={amounts}
-          onChange={(id, value) =>
-            setAmounts((current) => ({ ...current, [id]: value }))
-          }
-        />
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        <ModalFooterActions
-          note={note}
-          cancelAction={
-            <Button
-              type='button'
-              variant='secondary'
-              onClick={requestClose}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-          }
-          rightActions={
-            <Button
-              type='button'
-              loading={isSaving}
-              disabled={isSaving || note !== null}
-              onClick={() => void save()}
-            >
-              Save
-            </Button>
-          }
-        />
-      </div>
+      {content}
     </FormSheet>
   );
 }

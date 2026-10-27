@@ -39,8 +39,14 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
         />
       )}
       <ul className='border-border bg-card divide-border divide-y overflow-hidden rounded-2xl border'>
-        {shown.map((row) => (
+        {shown.map((row, index) => (
           <li key={row.id}>
+            {row.group !== undefined &&
+              row.group !== shown[index - 1]?.group && (
+                <p className='bg-muted/50 text-muted-foreground px-3 py-1.5 text-sm font-medium'>
+                  {row.group}
+                </p>
+              )}
             <Button
               type='button'
               variant='tertiary'

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   CircleHelp,
   Mail,
@@ -24,6 +24,7 @@ import {
   describeCounts,
   type StartRow,
 } from '@apps/runway/screens/start/startRows';
+import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { StartStep } from '@apps/runway/utils/startDraft';
 
@@ -114,7 +115,8 @@ interface StartFlowProps {
   isStandDone?: boolean;
   doneAsk: string;
   doneHelp: string;
-  doneContent: ReactNode;
+  /** The step's body; `finish` leaves Starting out and then runs what it is given. */
+  doneContent: (finish: (then?: () => void) => void) => ReactNode;
   /** Replaces the final Done button, for the step that asks for a sign-in. */
   doneAction?: ReactNode;
   remove: (kind: StartKind, id: string) => Promise<void>;
@@ -143,7 +145,7 @@ function StartFlow({
   const { closeView } = useRunwayUrlState();
   const { confirm } = useActionModal();
   const counts = {
-    income: rows.income.length,
+    income: new Set(rows.income.map((row) => row.group ?? row.id)).size,
     bill: rows.bill.length,
     envelope: rows.envelope.length,
     goal: rows.goal.length,
@@ -169,7 +171,17 @@ function StartFlow({
     setStep(next);
     onStepChange?.(next);
   };
-  const goBack = () => (index === 0 ? closeView() : goTo(steps[index - 1]));
+  const isFinishing = useRef(false);
+  const leave = (then?: () => void) => {
+    if (then) leaveAfterSubviewCloses(then);
+    if (!window.history.state?.backLayerKey) {
+      closeView();
+      return;
+    }
+    isFinishing.current = true;
+    window.history.back();
+  };
+  const goBack = () => (index === 0 ? leave() : goTo(steps[index - 1]));
   const goNext = () => goTo(steps[index + 1]);
 
   const selectedRow =
@@ -269,7 +281,7 @@ function StartFlow({
     return {
       ask: doneAsk,
       help: doneHelp,
-      content: doneContent,
+      content: doneContent(leave),
       isDone: true,
       isRequired: false,
     };
@@ -278,96 +290,97 @@ function StartFlow({
   const body = getBody();
   const isLast = step === 'done';
 
-  if (isAsking) {
-    return (
-      <Subview
-        overlay
-        title={START_WORDS.title}
-        onClose={closeView}
-        onBack={closeView}
-      >
-        <div className='flex flex-1 flex-col gap-4'>
-          <div className='space-y-1'>
-            <h2 className='text-xl font-semibold text-balance'>
-              {START_WORDS.resumeAsk}
-            </h2>
-            <p className='text-muted-foreground text-sm text-pretty'>
-              {START_WORDS.resumeSummary(describeCounts(counts))}
-            </p>
-          </div>
-          <div className='flex flex-col gap-2'>
-            <Button onClick={() => setIsAsking(false)}>
-              {START_WORDS.resumeContinue}
-            </Button>
-            <Button variant='secondary' onClick={() => void handleStartOver()}>
-              {START_WORDS.resumeStartOver}
-            </Button>
-          </div>
-          {error && (
-            <p className='text-destructive text-sm' role='alert'>
-              {error}
-            </p>
-          )}
-        </div>
-      </Subview>
-    );
-  }
+  const asking = (
+    <div className='flex flex-1 flex-col gap-4'>
+      <div className='space-y-1'>
+        <h2 className='text-2xl font-semibold text-balance'>
+          {START_WORDS.resumeAsk}
+        </h2>
+        <p className='text-muted-foreground text-sm text-pretty'>
+          {START_WORDS.resumeSummary(describeCounts(counts))}
+        </p>
+      </div>
+      <div className='flex flex-col gap-2'>
+        <Button onClick={() => setIsAsking(false)}>
+          {START_WORDS.resumeContinue}
+        </Button>
+        <Button variant='secondary' onClick={() => void handleStartOver()}>
+          {START_WORDS.resumeStartOver}
+        </Button>
+      </div>
+      {error && (
+        <p className='text-destructive text-sm' role='alert'>
+          {error}
+        </p>
+      )}
+    </div>
+  );
 
   return (
     <Subview
       overlay
       title={START_WORDS.title}
       onClose={closeView}
-      onBack={goBack}
+      onBack={() => {
+        if (isFinishing.current) closeView();
+        else if (isAsking) leave();
+        else goBack();
+      }}
     >
-      <div className='flex flex-1 flex-col gap-4'>
-        <div className='space-y-1'>
-          <p className='text-muted-foreground text-xs'>
-            {START_WORDS.stepOf(index + 1, steps.length)}
-          </p>
-          <h2 className='text-xl font-semibold text-balance'>{body.ask}</h2>
-          <p className='text-muted-foreground text-sm text-pretty'>
-            {body.help}
-          </p>
-        </div>
-        {index === 0 && notice}
-        <div className='space-y-3'>{body.content}</div>
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        <ModalFooterActions
-          note={body.isRequired && !body.isDone ? START_WORDS.needIncome : null}
-          cancelAction={
-            index === 0 ? null : (
-              <Button type='button' variant='secondary' onClick={goBack}>
-                Back
-              </Button>
-            )
-          }
-          rightActions={
-            isLast ? (
-              (doneAction ?? (
-                <Button type='button' onClick={closeView}>
-                  {START_WORDS.done}
+      {isAsking ? (
+        asking
+      ) : (
+        <div className='flex flex-1 flex-col gap-4'>
+          <div className='space-y-1'>
+            <p className='text-muted-foreground text-xs'>
+              {START_WORDS.stepOf(index + 1, steps.length)}
+            </p>
+            <h2 className='text-2xl font-semibold text-balance'>{body.ask}</h2>
+            <p className='text-muted-foreground text-sm text-pretty'>
+              {body.help}
+            </p>
+          </div>
+          {index === 0 && notice}
+          <div className='space-y-3'>{body.content}</div>
+          {error && (
+            <p className='text-destructive text-sm' role='alert'>
+              {error}
+            </p>
+          )}
+          <ModalFooterActions
+            note={
+              body.isRequired && !body.isDone ? START_WORDS.needIncome : null
+            }
+            cancelAction={
+              index === 0 ? null : (
+                <Button type='button' variant='secondary' onClick={goBack}>
+                  Back
                 </Button>
-              ))
-            ) : (
-              <Button
-                type='button'
-                variant={body.isDone ? 'primary' : 'secondary'}
-                disabled={body.isRequired && !body.isDone}
-                onClick={goNext}
-              >
-                {body.isDone || body.isRequired
-                  ? START_WORDS.next
-                  : START_WORDS.later}
-              </Button>
-            )
-          }
-        />
-      </div>
+              )
+            }
+            rightActions={
+              isLast ? (
+                (doneAction ?? (
+                  <Button type='button' onClick={() => leave()}>
+                    {START_WORDS.done}
+                  </Button>
+                ))
+              ) : (
+                <Button
+                  type='button'
+                  variant={body.isDone ? 'primary' : 'secondary'}
+                  disabled={body.isRequired && !body.isDone}
+                  onClick={goNext}
+                >
+                  {body.isDone || body.isRequired
+                    ? START_WORDS.next
+                    : START_WORDS.later}
+                </Button>
+              )
+            }
+          />
+        </div>
+      )}
       {form && renderForm(form, closeForm)}
       <DetailSheet
         isOpen={selected !== null && selectedRow !== null}

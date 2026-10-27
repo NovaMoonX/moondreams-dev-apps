@@ -54,8 +54,19 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   ];
 
   return (
-    <Subview title={HOME_WORDS.freeToSpend} onClose={onClose}>
-      {!isLedgerReady ? (
+    <Subview
+      title={sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand'}
+      onClose={onClose}
+      onBack={sheetKey === null ? undefined : () => setSheetKey(null)}
+    >
+      {sheetKey !== null ? (
+        <StartingAmountsSheet
+          key={sheetKey}
+          isOpen
+          isInline
+          onClose={() => setSheetKey(null)}
+        />
+      ) : !isLedgerReady ? (
         <p className='text-muted-foreground text-sm'>Getting your plan.</p>
       ) : (
         <div className='space-y-4'>
@@ -119,13 +130,6 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
               />
             )}
           </ActionGroup>
-          {sheetKey !== null && (
-            <StartingAmountsSheet
-              key={sheetKey}
-              isOpen
-              onClose={() => setSheetKey(null)}
-            />
-          )}
         </div>
       )}
     </Subview>

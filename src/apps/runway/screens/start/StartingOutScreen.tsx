@@ -8,6 +8,10 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { START_WORDS } from '@apps/runway/constants';
+import { collectStarted } from '@apps/runway/engine/progress';
+import StartRowList from '@apps/runway/screens/start/StartRowList';
+import type { StartRow } from '@apps/runway/screens/start/startRows';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
@@ -24,7 +28,7 @@ import {
   toBillRow,
   toEnvelopeRow,
   toGoalRow,
-  toIncomeRow,
+  toIncomeRows,
 } from '@apps/runway/screens/start/startRows';
 import { archiveItem } from '@apps/runway/store/actions/itemActions';
 import {
@@ -86,7 +90,7 @@ const getFirstOpenStep = (
 /** Starting out for someone with a plan: every answer is written to it as it is given. */
 function SavedStart({ uid }: { uid: string }) {
   const today = todayAsUtcDate(useNow(60_000));
-  const { closeView, openDay } = useRunwayUrlState();
+  const { openDay } = useRunwayUrlState();
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -94,6 +98,37 @@ function SavedStart({ uid }: { uid: string }) {
   const hasStart = useAppSelector(
     (state) => state.runway.plan?.startDate != null,
   );
+  const moves = useAppSelector((state) => state.runway.moves);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? null,
+  );
+  const started = collectStarted(moves, startDate);
+  const standRows: StartRow[] = [
+    ...(started.money === null || started.money === undefined
+      ? []
+      : [
+          {
+            id: 'money',
+            name: 'Money on hand',
+            emoji: null,
+            line: 'What you have to plan with',
+            amount: formatCentsShort(started.money),
+          },
+        ]),
+    ...[...bills, ...goals].flatMap(({ item, version }) =>
+      started.byItem[item.id] === undefined
+        ? []
+        : [
+            {
+              id: item.id,
+              name: version.payload.name,
+              emoji: version.payload.emoji,
+              line: item.kind === 'bill' ? 'Already set aside' : 'In it now',
+              amount: formatCentsShort(started.byItem[item.id]),
+            },
+          ],
+    ),
+  ];
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
 
@@ -101,13 +136,14 @@ function SavedStart({ uid }: { uid: string }) {
     source.payLines.map((line) => ({ source, line })),
   );
   const rows = {
-    income: payLines.map(({ source, line }) =>
-      toIncomeRow(
-        line.item.id,
-        source.version.payload.name,
-        line.version.payload.amount,
-        line.version.payload.schedule,
-      ),
+    income: toIncomeRows(
+      payLines.map(({ source, line }) => ({
+        id: line.item.id,
+        sourceName: source.version.payload.name,
+        payLineName: line.version.payload.name,
+        amount: line.version.payload.amount,
+        schedule: line.version.payload.schedule,
+      })),
     ),
     bill: bills.map(({ item, version }) => toBillRow(item.id, version.payload)),
     envelope: envelopes.map(({ item, version }) =>
@@ -116,7 +152,7 @@ function SavedStart({ uid }: { uid: string }) {
     goal: goals.map(({ item, version }) => toGoalRow(item.id, version.payload)),
   };
   const counts = {
-    income: rows.income.length,
+    income: new Set(rows.income.map((row) => row.group ?? row.id)).size,
     bill: rows.bill.length,
     envelope: rows.envelope.length,
     goal: rows.goal.length,
@@ -255,6 +291,11 @@ function SavedStart({ uid }: { uid: string }) {
               {START_WORDS.standEmpty}
             </EmptyCard>
           )}
+          <StartRowList
+            rows={standRows}
+            searchLabel='Search what you entered'
+            onOpen={openStand}
+          />
           <Button
             variant={hasStart ? 'secondary' : 'primary'}
             onClick={openStand}
@@ -269,19 +310,21 @@ function SavedStart({ uid }: { uid: string }) {
           ? 'Open it to see what it sets aside, or go to Home.'
           : 'Go to Home to see where things stand.'
       }
-      doneContent={
-        nextDay ? (
-          <ul className='border-border bg-card rounded-2xl border'>
-            <IncomeDayCard
-              day={nextDay}
-              onOpen={() => {
-                closeView();
-                openDay(nextDay.dayKey);
-              }}
-            />
-          </ul>
-        ) : null
-      }
+      doneContent={(finish) => (
+        <>
+          <p className='text-sm text-pretty'>
+            {START_WORDS.savedSummary(describeCounts(counts))}
+          </p>
+          {nextDay && (
+            <ul className='border-border bg-card rounded-2xl border'>
+              <IncomeDayCard
+                day={nextDay}
+                onOpen={() => finish(() => openDay(nextDay.dayKey))}
+              />
+            </ul>
+          )}
+        </>
+      )}
       remove={remove}
       startOver={startOver}
       startOverMessage={START_WORDS.startOverPlan}
@@ -300,8 +343,14 @@ function DeviceStart() {
     goals: draft?.goals ?? [],
   };
   const rows = {
-    income: entries.incomes.map(({ id, value }) =>
-      toIncomeRow(id, value.sourceName, value.amount, value.schedule),
+    income: toIncomeRows(
+      entries.incomes.map(({ id, value }) => ({
+        id,
+        sourceName: value.sourceName,
+        payLineName: value.payLineName,
+        amount: value.amount,
+        schedule: value.schedule,
+      })),
     ),
     bill: entries.bills.map(({ id, value }) => toBillRow(id, value)),
     envelope: entries.envelopes.map(({ id, value }) =>
@@ -311,7 +360,7 @@ function DeviceStart() {
   };
 
   const counts = {
-    income: rows.income.length,
+    income: new Set(rows.income.map((row) => row.group ?? row.id)).size,
     bill: rows.bill.length,
     envelope: rows.envelope.length,
     goal: rows.goal.length,
@@ -403,7 +452,7 @@ function DeviceStart() {
       renderForm={renderForm}
       doneAsk={START_WORDS.saveAsk}
       doneHelp={START_WORDS.saveBody}
-      doneContent={
+      doneContent={() => (
         <div className='border-border bg-muted/50 flex items-start gap-3 rounded-2xl border p-3'>
           <HardDrive
             className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
@@ -413,7 +462,7 @@ function DeviceStart() {
             {START_WORDS.saveSummary(describeCounts(counts))}
           </p>
         </div>
-      }
+      )}
       doneAction={
         <Button type='button' onClick={() => void signInWithGoogle()}>
           {START_WORDS.saveButton}

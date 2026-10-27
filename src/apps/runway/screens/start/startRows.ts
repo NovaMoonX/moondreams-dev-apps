@@ -26,6 +26,8 @@ export interface StartRow {
   line: string;
   /** The figure on the right, or null when the row has none. */
   amount: string | null;
+  /** The source a pay line belongs to, when that source has several. */
+  group?: string;
 }
 
 const WEEKDAYS = [
@@ -55,6 +57,39 @@ export function describeSchedule(schedule: Schedule) {
   const known = (SCHEDULE_LABELS as Record<string, string>)[schedule.kind];
   return known ?? schedule.kind;
 }
+
+interface IncomeEntry {
+  id: string;
+  sourceName: string;
+  payLineName: string;
+  amount: MoneyRange;
+  schedule: Schedule;
+}
+
+/** One row per pay line, named for its source when that has one pay line and listed under the source's name when it has several. */
+export const toIncomeRows = (entries: IncomeEntry[]): StartRow[] => {
+  const keyOf = (entry: IncomeEntry) => entry.sourceName.trim().toLowerCase();
+  const sizes = entries.reduce<Record<string, number>>(
+    (acc, entry) => ({ ...acc, [keyOf(entry)]: (acc[keyOf(entry)] ?? 0) + 1 }),
+    {},
+  );
+  const ordered = [...entries].sort(
+    (a, b) =>
+      Object.keys(sizes).indexOf(keyOf(a)) -
+      Object.keys(sizes).indexOf(keyOf(b)),
+  );
+  return ordered.map((entry) => {
+    const row = toIncomeRow(
+      entry.id,
+      entry.sourceName,
+      entry.amount,
+      entry.schedule,
+    );
+    return sizes[keyOf(entry)] > 1
+      ? { ...row, name: entry.payLineName, group: entry.sourceName }
+      : row;
+  });
+};
 
 export const toIncomeRow = (
   id: string,
