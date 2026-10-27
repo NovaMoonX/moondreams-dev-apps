@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -75,7 +82,7 @@ interface FigureProps {
   value: string;
   onChange: (value: string) => void;
   sizeClass: string;
-  inputRef?: Ref<HTMLInputElement>;
+  inputRef: RefObject<HTMLInputElement | null>;
   isInvalid: boolean;
   disabled?: boolean;
 }
@@ -89,12 +96,29 @@ function Figure({
   isInvalid,
   disabled,
 }: FigureProps) {
-  const [isTyping, setIsTyping] = useState(false);
-  const shown = isTyping ? value : groupDigits(value);
+  const pendingCaret = useRef<number | null>(null);
+  const shown = groupDigits(value);
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
     if (settled !== value) onChange(settled);
   };
+  const applyCaret = () => {
+    const field = inputRef.current;
+    const significant = pendingCaret.current;
+    if (significant === null || !field) return;
+    pendingCaret.current = null;
+    if (document.activeElement !== field) return;
+    const seen = { count: 0 };
+    const position = Array.from(field.value).findIndex((char) => {
+      if (seen.count === significant) return true;
+      if (char !== ',') seen.count += 1;
+      return false;
+    });
+    const caret = position === -1 ? field.value.length : position;
+    field.setSelectionRange(caret, caret);
+  };
+
+  useLayoutEffect(applyCaret);
 
   return (
     <label
@@ -135,28 +159,27 @@ function Figure({
             'placeholder:text-muted-foreground/50',
           )}
           onChange={(event) => {
-            if (isTyping) {
-              onChange(event.target.value);
-              return;
-            }
             const field = event.target;
-            const text = field.value;
-            const caret = field.selectionStart ?? text.length;
-            const shift = text.slice(0, caret).split(',').length - 1;
-            setIsTyping(true);
-            onChange(text.replace(/,/g, ''));
-            window.requestAnimationFrame(() => {
-              if (document.activeElement !== field) return;
-              field.setSelectionRange(caret - shift, caret - shift);
-            });
+            const caret = field.selectionStart ?? field.value.length;
+            const countBefore = (text: string, end: number) =>
+              text.slice(0, end).replace(/,/g, '').length;
+            const typed = field.value.replace(/,/g, '');
+            const isCommaDeleted =
+              typed === value && field.value.length < shown.length;
+            const significant = countBefore(field.value, caret);
+            pendingCaret.current = isCommaDeleted
+              ? Math.max(0, significant - 1)
+              : significant;
+            onChange(
+              isCommaDeleted
+                ? value.slice(0, significant - 1) + value.slice(significant)
+                : typed,
+            );
+            window.requestAnimationFrame(applyCaret);
           }}
-          onBlur={() => {
-            setIsTyping(false);
-            settle();
-          }}
+          onBlur={settle}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
-              setIsTyping(false);
               settle();
             }
           }}
