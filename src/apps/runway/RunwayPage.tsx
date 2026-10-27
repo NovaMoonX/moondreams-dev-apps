@@ -8,6 +8,8 @@ import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
@@ -100,9 +102,12 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
   return (
     <div className='page pb-28'>
       <div className='mx-auto max-w-4xl space-y-4 py-6'>
-        <h1 className='text-2xl font-semibold'>
-          {RUNWAY_TAB_LABELS[activeTab]}
-        </h1>
+        <div className='flex h-10 items-center justify-between gap-3'>
+          <h1 className='text-2xl font-semibold'>
+            {RUNWAY_TAB_LABELS[activeTab]}
+          </h1>
+          <ValuesEyeButton />
+        </div>
         {getScreen(activeTab)}
       </div>
       <RunwayBottomNav value={activeTab} onChange={handleChange} />
@@ -110,7 +115,7 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
   );
 }
 
-function RunwayPage() {
+function RunwayContent() {
   const { user, loading } = useAuth();
   const {
     activeTab: requestedTab,
@@ -307,6 +312,14 @@ function RunwayPage() {
   }
 
   return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
+}
+
+function RunwayPage() {
+  return (
+    <ValuesHiddenProvider scopeId='runway'>
+      <RunwayContent />
+    </ValuesHiddenProvider>
+  );
 }
 
 export default RunwayPage;
