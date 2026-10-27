@@ -6,6 +6,7 @@ import { Plus, X } from 'lucide-react';
 import ActionChips from '@/components/ActionChips';
 import Pill from '@/components/Pill';
 import { PillOptions, type PillOption } from '@/components/PillGroup';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 /** The `choice` a `PickOrCreate` reports while the person is typing a new name. */
 export const NEW_CHOICE = '__add_new__';
@@ -54,7 +55,10 @@ function PickOrCreate({
   const newInput = (
     <Input
       value={newText}
-      autoFocus={options.length > 0 && (isFocusedOnOpen || hasTappedNew)}
+      autoFocus={
+        options.length > 0 &&
+        ((isFocusedOnOpen && canFocusFieldOnOpen()) || hasTappedNew)
+      }
       aria-label={newPlaceholder}
       placeholder={newPlaceholder}
       maxLength={maxLength}

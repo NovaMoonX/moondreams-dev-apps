@@ -53,16 +53,19 @@ function QuestionSheet({ step, onDone, shouldFocus }: QuestionSheetProps) {
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!shouldFocus) return;
-    const timer = window.setTimeout(() => {
-      const field = bodyRef.current?.querySelector<
-        HTMLInputElement | HTMLTextAreaElement
-      >(TYPED_FIELD);
-      field?.focus();
-      if (field instanceof HTMLInputElement && field.type === 'text')
-        field.select();
-    }, FIRST_FOCUS_DELAY_MS);
-    return () => window.clearTimeout(timer);
+    if (!shouldFocus || !canFocusFieldOnOpen()) return;
+    return runWhenDrawerSettled(
+      bodyRef.current,
+      () => {
+        const field = bodyRef.current?.querySelector<
+          HTMLInputElement | HTMLTextAreaElement
+        >(TYPED_FIELD);
+        field?.focus({ preventScroll: true });
+        if (field instanceof HTMLInputElement && field.type === 'text')
+          field.select();
+      },
+      FIRST_FOCUS_DELAY_MS,
+    );
   }, [shouldFocus]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
