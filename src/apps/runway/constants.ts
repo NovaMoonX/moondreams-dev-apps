@@ -1283,9 +1283,10 @@ export const PAIRING_STOP_WORDS = {
 
 /** What archiving or ending an item does with the money it holds. */
 export const RELEASE_WORDS = {
-  archive: (amount: string) => `The ${amount} it holds becomes Free to spend.`,
+  archive: (amount: string) =>
+    `The ${amount} it holds becomes Free\u00a0to\u00a0spend.`,
   end: (amount: string) =>
-    `After its last day, the ${amount} it holds becomes Free to spend.`,
+    `After its last day, the ${amount} it holds becomes Free\u00a0to\u00a0spend.`,
 } as const;
 
 // Round 7, package G8: money that arrives different from the plan.
@@ -1297,14 +1298,14 @@ export const CONFIRM_FLOW_WORDS = {
   lessNothingLeft: 'Nothing was left from this day to take it.',
   moreTitle: (amount: string) => `${amount} more than planned`,
   moreBody:
-    'Good to have. The extra is left from this day, so it adds to Free to spend.',
+    'Good to have. The extra is left from this day, so it adds to Free\u00a0to\u00a0spend.',
   coverCaption: 'Cover the difference',
-  coverLead: 'Free to spend is',
+  coverLead: 'Free\u00a0to\u00a0spend is',
   coverNone: (gap: string) =>
-    `Free to spend has nothing to cover the ${gap} difference, so some items get less this time.`,
-  coverAction: 'Cover it from Free to spend',
-  coverPartAction: 'Use Free to spend for part',
-  coveredAfter: 'Free to spend will be',
+    `Free\u00a0to\u00a0spend has nothing to cover the ${gap} difference, so some items get less this time.`,
+  coverAction: 'Cover it from Free\u00a0to\u00a0spend',
+  coverPartAction: 'Use Free\u00a0to\u00a0spend for part',
+  coveredAfter: 'Free\u00a0to\u00a0spend will be',
   undo: 'Undo',
   suggestCaption: 'What gets less',
   suggestIntro: 'Lowest priority first. Nothing changes until you choose.',
@@ -1317,7 +1318,7 @@ export const CONFIRM_FLOW_WORDS = {
     `${count} ${count === 1 ? 'item gets' : 'items get'} less this time.`,
   eachItem: 'What each item gets',
   needsCover: (gap: string) =>
-    `Items get ${gap} more than arrived. Cover it from Free to spend, or give some items less.`,
+    `Items get ${gap} more than arrived. Cover it from Free\u00a0to\u00a0spend, or give some items less.`,
   needsCuts: (rest: string) =>
     `Items get ${rest} more than arrived. Give some items less this time.`,
   correctTooMuch: (amount: string) =>
@@ -1333,19 +1334,20 @@ export const CONFIRM_FLOW_WORDS = {
 export const CONFIRM_COVER_WORDS = {
   coverAll: ', enough to cover it.',
   coverPart: ', which covers part of it.',
-  coverHidden: 'Free to spend can cover some or all of the difference.',
-  coverHiddenAction: 'Use Free to spend',
+  coverHidden:
+    'Free\u00a0to\u00a0spend can cover some or all of the difference.',
+  coverHiddenAction: 'Use Free\u00a0to\u00a0spend',
   coveredLead: 'Covered',
-  coveredTail: 'from Free to spend.',
+  coveredTail: 'from Free\u00a0to\u00a0spend.',
   suggestInstead:
     'Or give some items less, lowest priority first. Nothing changes until you choose.',
   suggestRest:
     'For the rest, lowest priority first. Nothing changes until you choose.',
   needsCover:
-    'Cover the difference from Free to spend, or give some items less.',
+    'Cover the difference from Free\u00a0to\u00a0spend, or give some items less.',
   needsCuts: 'Give some items less this time to confirm.',
   coverGone:
-    'Free to spend is now less than you chose to cover. Choose again before you confirm.',
+    'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you confirm.',
 } as const;
 
 /** A moved payday whose own choices could not follow it, round 7 review. */
