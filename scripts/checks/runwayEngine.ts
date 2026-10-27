@@ -8026,4 +8026,69 @@ console.log('runway engine: ok');
   );
 }
 
+// F1 (round 7 review): a pairing's need is counted per payment, so two drafted days can fund two payments of one bill.
+{
+  const rentPairing: Pairing = {
+    targetItemId: 'rent',
+    amount: { kind: 'exact', cents: 150_000 },
+    topUpFromAnySource: false,
+  };
+  const paydayOn = (key: string, on: number): DraftDayInput => ({
+    dayKey: key,
+    sourceId: 'src',
+    on,
+    amount: { lowCents: 200_000, highCents: 200_000 },
+    pairings: { day: null, payLine: [rentPairing], source: [] },
+  });
+  const rentBill: DraftBillInput = {
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amount: { lowCents: 120_000, highCents: 120_000 },
+    stanceOverride: null,
+    schedule: { kind: 'monthly', anchor: utc(2026, 11, 15), monthDays: [15] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: { funded: [], paid: [] },
+  };
+  const draftOver = (days: [string, number][]) =>
+    buildDraft({
+      days: days.map(([key, on]) => paydayOn(key, on)),
+      plan: {
+        envelopes: [],
+        bills: [rentBill],
+        goals: [],
+        horizon: utc(2027, 6, 1),
+        incomeDays: days.map(([dayKey, on]) => ({
+          dayKey,
+          on,
+          moneyCents: 200_000,
+        })),
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const rentOf = (draft: ReturnType<typeof buildDraft>, dayKey: string) =>
+    draft.lines.find((line) => line.lineId === `${dayKey}:rent`)?.cents ?? 0;
+  const twoMonths = draftOver([
+    ['job_a', utc(2026, 11, 6)],
+    ['job_b', utc(2026, 11, 20)],
+  ]);
+  assert.deepEqual(
+    [rentOf(twoMonths, 'job_a'), rentOf(twoMonths, 'job_b')],
+    [120_000, 120_000],
+    'F1: the Nov 6 pairing fills the Nov 15 rent and the Nov 20 pairing the Dec 15 rent, each in full',
+  );
+  const oneMonth = draftOver([
+    ['job_a', utc(2026, 11, 6)],
+    ['job_c', utc(2026, 11, 10)],
+  ]);
+  assert.deepEqual(
+    [rentOf(oneMonth, 'job_a'), rentOf(oneMonth, 'job_c')],
+    [120_000, 0],
+    'F1: two days before the same payment still send it only what it needs, once',
+  );
+}
+
 console.log('runway engine: ok');

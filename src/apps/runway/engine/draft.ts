@@ -439,13 +439,20 @@ export function buildDraft(input: DraftInput): Draft {
         planBillPayments(bill, chronological, input.plan.horizon, input.stance),
       ]),
   );
-  const getNeed = (itemId: string, on: number): Cents | null => {
-    if (goalNeeds.has(itemId)) return goalNeeds.get(itemId) as Cents;
+  const getNeed = (
+    itemId: string,
+    on: number,
+  ): { key: string; cents: Cents } | null => {
+    if (goalNeeds.has(itemId))
+      return { key: itemId, cents: goalNeeds.get(itemId) as Cents };
     const payments = billPayments.get(itemId);
     if (!payments) return null;
     const payment = payments.find((entry) => entry.dueOn >= on);
-    if (!payment || payment.paid) return 0;
-    return Math.max(0, payment.totalCents - payment.fundedCents);
+    if (!payment || payment.paid) return { key: itemId, cents: 0 };
+    return {
+      key: `${itemId}:${payment.dueOn}`,
+      cents: Math.max(0, payment.totalCents - payment.fundedCents),
+    };
   };
   const paired = dayMoney.reduce<{
     used: Map<string, Cents>;
@@ -466,15 +473,13 @@ export function buildDraft(input: DraftInput): Draft {
           const need = getNeed(itemId, day.on);
           return need === null
             ? null
-            : Math.max(0, need - (acc.used.get(itemId) ?? 0));
+            : Math.max(0, need.cents - (acc.used.get(need.key) ?? 0));
         },
       );
-      funded.outcomes.forEach(({ line }) =>
-        acc.used.set(
-          line.itemId,
-          (acc.used.get(line.itemId) ?? 0) + line.cents,
-        ),
-      );
+      funded.outcomes.forEach(({ line }) => {
+        const key = getNeed(line.itemId, day.on)?.key ?? line.itemId;
+        acc.used.set(key, (acc.used.get(key) ?? 0) + line.cents);
+      });
       return { used: acc.used, list: [...acc.list, { day, ...funded }] };
     },
     { used: new Map(), list: [] },

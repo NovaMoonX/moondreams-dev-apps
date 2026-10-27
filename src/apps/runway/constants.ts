@@ -1341,7 +1341,8 @@ export const CONFIRM_COVER_WORDS = {
     'Or give some items less, lowest priority first. Nothing changes until you choose.',
   suggestRest:
     'For the rest, lowest priority first. Nothing changes until you choose.',
-  needsCover: 'Cover the difference from Free to spend, or give some items less.',
+  needsCover:
+    'Cover the difference from Free to spend, or give some items less.',
   needsCuts: 'Give some items less this time to confirm.',
   coverGone:
     'Free to spend is now less than you chose to cover. Choose again before you confirm.',

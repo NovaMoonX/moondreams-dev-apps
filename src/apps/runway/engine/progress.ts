@@ -154,8 +154,7 @@ export function settlePaid(
           funded.filter(
             (entry) => entry.on <= Math.max(payment.dueOn, payment.paidOn),
           ),
-        ) -
-        acc.used;
+        ) - acc.used;
       const fromBill = Math.min(
         payment.amountCents - payment.fromFreeCents,
         Math.max(0, held),

@@ -180,9 +180,10 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const isOfferingCover = rest > 0 && coverable > 0 && cover === 0;
   const isNoticeShown = hasAmount && difference < 0;
   const nextDayOn = comingDays.find((coming) => coming.on > day.on)?.on ?? null;
-  const suggestion = rest > 0
-    ? suggestShortfall(adjusted, rest, getProtectedLineIds(draft, nextDayOn))
-    : {};
+  const suggestion =
+    rest > 0
+      ? suggestShortfall(adjusted, rest, getProtectedLineIds(draft, nextDayOn))
+      : {};
   const suggested = Object.entries(suggestion).map(([lineId, cents]) => {
     const index = adjusted.findIndex((line) => line.lineId === lineId);
     return { line: lines[index], from: adjusted[index].cents, to: cents };
@@ -408,8 +409,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           <p className='min-w-0 flex-1 text-sm' role='status'>
             {CONFIRM_COVER_WORDS.coveredLead}{' '}
             <SensitiveValue>{formatCents(cover)}</SensitiveValue>{' '}
-            {CONFIRM_COVER_WORDS.coveredTail}{' '}
-            {CONFIRM_FLOW_WORDS.coveredAfter}{' '}
+            {CONFIRM_COVER_WORDS.coveredTail} {CONFIRM_FLOW_WORDS.coveredAfter}{' '}
             <SensitiveValue>
               {formatCents((freeCents ?? 0) - cover)}
             </SensitiveValue>
