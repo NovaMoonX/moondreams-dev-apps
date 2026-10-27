@@ -4,29 +4,34 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
+const MASK = '••••';
+
 interface SensitiveValueProps {
   children: ReactNode;
   className?: string;
 }
 
-/** Wraps a figure or a short line that is private until the person shows it: blurred while hidden, at the same width so nothing reflows. */
+/** Wraps a figure or a short line that is private until the person shows it: while hidden it is replaced by one fixed mask in the neutral colour. */
 function SensitiveValue({ children, className }: SensitiveValueProps) {
   const { isHidden } = useValuesHidden();
 
-  return (
-    <span
-      className={join(
-        'inline-block max-w-full transition-none select-none',
-        !isHidden && 'select-text',
-        isHidden && 'pointer-events-none blur-[9px]',
-        className,
-      )}
-      aria-label={isHidden ? 'Hidden amount' : undefined}
-      role={isHidden ? 'img' : undefined}
-    >
-      <span aria-hidden={isHidden ? true : undefined}>{children}</span>
-    </span>
-  );
+  if (isHidden) {
+    // A blur keeps the figure's width, sign and colour, which give away its size and whether it is negative.
+    return (
+      <span
+        className={join(
+          'text-muted-foreground! inline-block tracking-widest select-none',
+          className,
+        )}
+        role='img'
+        aria-label='Hidden amount'
+      >
+        {MASK}
+      </span>
+    );
+  }
+
+  return <span className={join('select-text', className)}>{children}</span>;
 }
 
 export default SensitiveValue;
