@@ -25,14 +25,14 @@ function SheetHead({
   helpTitle,
 }: SheetHeadProps) {
   return (
-    <div className='border-border bg-accent rounded-2xl border p-4'>
+    <div className='border-border bg-accent rounded-2xl border p-4 [@media(max-height:599px)]:p-3'>
       <div className='flex min-h-6 items-center gap-1'>
         <p className='text-muted-foreground text-sm font-medium'>{label}</p>
         {help && <HelpTip title={helpTitle ?? label}>{help}</HelpTip>}
       </div>
       {figure && (
         <p className='break-words'>
-          <span className='text-4xl font-semibold tracking-tight tabular-nums'>
+          <span className='text-4xl font-semibold tracking-tight tabular-nums [@media(max-height:599px)]:text-3xl'>
             {figure}
           </span>
           {suffix && (

@@ -36,6 +36,13 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import {
+  ActionSection,
+  ActionTitle,
+} from '@apps/runway/components/ActionSection';
+import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
+import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
+import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
@@ -46,6 +53,8 @@ import {
   ENVELOPE_SPEND_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
+  ITEM_KIND_NOUNS,
+  ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_CHANGE_DAYS_AHEAD,
@@ -94,8 +103,9 @@ import {
   leaveAfterSubviewCloses,
 } from '@apps/runway/utils/leaveAfterClose';
 
-type View = 'menu' | 'pause' | 'resume' | 'end' | 'archive';
-type Phase = 'sheet' | 'change' | 'purchase' | 'funds';
+type View =
+  'menu' | 'pause' | 'resume' | 'end' | 'archive' | 'history' | 'purchases';
+type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 interface ItemSheetProps {
   itemId: string;
@@ -137,12 +147,22 @@ const getSchedule = (payload: PayLineSealed | BillSealed) =>
 
 const LAST_DAY_OTHER = 'other';
 
+const getActionTitle = (view: View, kind: ItemKind) => {
+  const noun = ITEM_KIND_NOUNS[kind];
+  if (view === 'end') return `End the ${noun}`;
+  if (view === 'archive') return `Archive the ${noun}`;
+  if (view === 'resume') return `Resume the ${noun}`;
+  return `Pause the ${noun}`;
+};
+
 const VIEW_NOTES: Record<View, string> = {
   menu: '',
   pause: LIFECYCLE_WORDS.pauseSub,
   resume: LIFECYCLE_WORDS.resumeSub,
-  end: LIFECYCLE_WORDS.endSub,
+  end: '',
   archive: LIFECYCLE_WORDS.archiveNote,
+  history: '',
+  purchases: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -166,8 +186,8 @@ function ItemSheet({
 }: ItemSheetProps) {
   const { user } = useAuth();
   const level = useAppSelector(selectLevel);
-  const { showSpend, openCheckAmount, openMoreEntry, setLogItem, closeDay } =
-    useRunwayUrlState();
+  const { openCheckAmount } = useRunwayUrlState();
+  const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const version = useAppSelector(
     (state): OpenVersion | null =>
       resolveCurrentOrNext(state.runway.versions, itemId, today) ?? null,
@@ -220,8 +240,8 @@ function ItemSheet({
       value: String(on),
       label:
         itemKind === 'bill'
-          ? `After the ${formatDateUTC(on)} payment`
-          : `After the ${formatDateUTC(on)} payday`,
+          ? `After the ${formatDateShortUTC(on)} payment`
+          : `After the ${formatDateShortUTC(on)} payday`,
     })),
     ...(upcoming.includes(today)
       ? []
@@ -350,7 +370,7 @@ function ItemSheet({
       return (
         <BillForm
           isOpen
-          title='Bill'
+          title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           openStep={openStep as BillStepId | null}
@@ -363,7 +383,7 @@ function ItemSheet({
       return (
         <EnvelopeForm
           isOpen
-          title='Envelope'
+          title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           openStep={openStep as EnvelopeStepId | null}
@@ -376,7 +396,7 @@ function ItemSheet({
       return (
         <GoalForm
           isOpen
-          title='Goal'
+          title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           openStep={openStep as GoalStepId | null}
@@ -388,7 +408,7 @@ function ItemSheet({
     return (
       <IncomeForm
         isOpen
-        title='Income'
+        title={payload.name}
         defaultFrequency={null}
         openStep={openStep as IncomeStepId | null}
         editing={
@@ -398,6 +418,17 @@ function ItemSheet({
         }
         onClose={onClose}
         onCancel={backToSheet}
+      />
+    );
+  }
+
+  if (phase === 'purchaseDetail' && purchaseId !== null) {
+    return (
+      <PurchaseScreen
+        key={purchaseId}
+        purchaseId={purchaseId}
+        onOpen={setPurchaseId}
+        onClose={backToSheet}
       />
     );
   }
@@ -426,6 +457,7 @@ function ItemSheet({
         initial={pairings}
         change={{ itemId, kind: version.kind, current: version.payload }}
         onClose={onClose}
+        onCancel={backToSheet}
       />
     );
   }
@@ -436,14 +468,6 @@ function ItemSheet({
       : view === 'archive'
         ? LIFECYCLE_WORDS.chipsArchive
         : LIFECYCLE_WORDS.chipsPause;
-  const confirmLabel =
-    view === 'end'
-      ? LIFECYCLE_WORDS.endConfirm
-      : view === 'archive'
-        ? LIFECYCLE_WORDS.archiveConfirm
-        : view === 'resume'
-          ? LIFECYCLE_WORDS.resumeConfirm
-          : LIFECYCLE_WORDS.pauseConfirm;
   const blocker =
     view === 'end' && !isEndValid ? LIFECYCLE_WORDS.endBlocker : null;
   const isStoppable = itemKind !== 'source' && header?.archivedAt == null;
@@ -455,14 +479,10 @@ function ItemSheet({
     setOpenStep(step);
     setPhase('change');
   };
-  const openHistory = leaveTo(() => {
-    keepEntryFor('day');
-    setLogItem(itemId);
-    openMoreEntry('changeLog');
-  });
+  const openHistory = () => goTo('history');
 
   const menu = (
-    <div className='space-y-4'>
+    <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
       <SheetHead
         label={figureLabel}
         figure={figure}
@@ -481,7 +501,7 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
-        {canChange && (
+        {canChange && !(itemKind === 'source' && quickChange) && (
           <ActionRow
             isGrouped
             hasChevron
@@ -577,11 +597,7 @@ function ItemSheet({
             hasChevron
             icon={<ReceiptText />}
             label={SPEND_WORDS.title}
-            onClick={leaveTo(() => {
-              keepEntryFor('day');
-              closeDay();
-              showSpend(itemId);
-            })}
+            onClick={() => goTo('purchases')}
           />
           <ActionRow
             isGrouped
@@ -597,7 +613,11 @@ function ItemSheet({
         </ActionGroup>
       )}
       {isStoppable && (
-        <ActionGroup caption={goal ? ITEM_SHEET_WORDS.stopHeading : undefined}>
+        <ActionGroup
+          caption={
+            goal ? ITEM_SHEET_WORDS.stopHeading : ITEM_SHEET_R2_WORDS.stopOnly
+          }
+        >
           {goal && !isPaused && (
             <ActionRow
               isGrouped
@@ -639,15 +659,39 @@ function ItemSheet({
     </div>
   );
 
+  const browse = (
+    <div className='flex flex-1 flex-col gap-4'>
+      <BackLink onBack={() => goTo('menu')} />
+      <p className='text-2xl font-semibold'>
+        {view === 'history'
+          ? ITEM_VIEW_WORDS.historyTitle
+          : ITEM_VIEW_WORDS.purchasesTitle}
+      </p>
+      {view === 'history' ? (
+        <ItemHistoryView itemId={itemId} />
+      ) : (
+        <ItemPurchasesView
+          envelopeId={itemId}
+          onOpen={(id) => {
+            setPurchaseId(id);
+            setPhase('purchaseDetail');
+          }}
+        />
+      )}
+    </div>
+  );
+
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
-      <p className='text-muted-foreground text-sm'>{VIEW_NOTES[view]}</p>
+      <div className='space-y-1'>
+        <ActionTitle>{getActionTitle(view, itemKind)}</ActionTitle>
+        {VIEW_NOTES[view] !== '' && (
+          <p className='text-muted-foreground text-sm'>{VIEW_NOTES[view]}</p>
+        )}
+      </div>
       {view === 'end' && (
-        <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>
-            {LIFECYCLE_WORDS.endHeading}
-          </p>
+        <ActionSection caption={LIFECYCLE_WORDS.endHeading}>
           <PillGroup
             label={LIFECYCLE_WORDS.endHeading}
             options={endOptions}
@@ -665,17 +709,14 @@ function ItemSheet({
               onChange={(event) => setEndDate(event.target.value)}
             />
           )}
-        </div>
+        </ActionSection>
       )}
       <EffectPreview
         changeJson={changeJson}
         emptyText={CHANGE_WORDS.previewNone}
       />
-      <p className='text-sm font-medium'>
-        {view === 'end' ? LIFECYCLE_WORDS.whyEnd : CHANGE_WORDS.whyHeading}
-      </p>
       <SuggestionChips
-        label={CHANGE_WORDS.whyHint}
+        label={CHANGE_WORDS.whyHeading}
         suggestions={chips}
         isDisabled={isSaving}
         onPick={setReason}
@@ -686,7 +727,7 @@ function ItemSheet({
         onChange={setReason}
         placeholder={CHANGE_WORDS.whyPlaceholder}
         maxLength={MAX_NOTE_LENGTH}
-        rows={3}
+        rows={1}
       />
       <ModalFooterActions
         note={error ?? blocker}
@@ -694,7 +735,7 @@ function ItemSheet({
           <Button
             type='button'
             variant='secondary'
-            onClick={onClose}
+            onClick={() => goTo('menu')}
             disabled={isSaving}
           >
             Cancel
@@ -708,7 +749,7 @@ function ItemSheet({
             disabled={isSaving || blocker !== null}
             onClick={() => void run()}
           >
-            {confirmLabel}
+            {getActionTitle(view, itemKind)}
           </Button>
         }
       />
@@ -717,7 +758,10 @@ function ItemSheet({
 
   return (
     <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={payload.name}>
-      <ChangeSteps isReason={view !== 'menu'} reason={action}>
+      <ChangeSteps
+        isReason={view !== 'menu'}
+        reason={view === 'history' || view === 'purchases' ? browse : action}
+      >
         {menu}
       </ChangeSteps>
     </FormSheet>

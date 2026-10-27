@@ -1,14 +1,14 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useStore } from 'react-redux';
 
-import BeforeAfterRow from '@/components/BeforeAfterRow';
-import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector, type RootState } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
+import { ActionSection } from '@apps/runway/components/ActionSection';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
+  EFFECT_FOLD_WORDS,
   FORM_FLOW_WORDS,
   PREVIEW_SHOWN,
 } from '@apps/runway/constants';
@@ -42,14 +42,72 @@ interface EffectPreviewProps {
   isCompact?: boolean;
 }
 
-const getLineText = (day: PreviewDay) => {
-  const lines = day.effect.lines.map(({ itemId, beforeCents, afterCents }) => {
-    const name = day.names[itemId]?.name ?? 'Something removed';
-    return `${name} ${formatCents(beforeCents)} to ${formatCents(afterCents)}`;
+interface EffectEntry {
+  key: string;
+  title: string;
+  note: string | null;
+  lines: { name: string; text: string }[];
+  more: number;
+  free: string | null;
+  detail: string | null;
+}
+
+const toDayEntry = (day: PreviewDay): EffectEntry => {
+  const lines = day.kind === 'changed' ? day.effect.lines : [];
+  const shown = lines.slice(0, MAX_LINES_SHOWN).map((line) => ({
+    name: day.names[line.itemId]?.name ?? 'Something removed',
+    text: `${formatCents(line.beforeCents)} → ${formatCents(line.afterCents)}`,
+  }));
+  const isFreeMoved =
+    day.kind === 'changed' &&
+    day.effect.freeBeforeCents !== day.effect.freeAfterCents;
+  return {
+    key: day.dayKey,
+    title: `${formatDateUTC(day.on)} · ${day.title}`,
+    note:
+      day.kind === 'added'
+        ? CHANGE_WORDS.added
+        : day.kind === 'removed'
+          ? CHANGE_WORDS.removed
+          : null,
+    lines: shown,
+    more: lines.length - shown.length,
+    free: isFreeMoved
+      ? `${formatCents(day.effect.freeBeforeCents)} → ${formatCents(day.effect.freeAfterCents)}`
+      : null,
+    detail: null,
+  };
+};
+
+/** Days that move the same way, with nothing of their own to say, become one row; the days with lines that change come first, each on its own. */
+const toEntries = (days: readonly PreviewDay[]): EffectEntry[] => {
+  const kindOf = (day: PreviewDay) =>
+    day.kind !== 'changed'
+      ? day.kind
+      : day.effect.lines.length === 0 &&
+          day.effect.freeBeforeCents === day.effect.freeAfterCents
+        ? 'same'
+        : 'own';
+  const own = days.filter((day) => kindOf(day) === 'own').map(toDayEntry);
+  const folded = (['removed', 'added', 'same'] as const).flatMap((kind) => {
+    const group = days.filter((day) => kindOf(day) === kind);
+    if (group.length === 0) return [];
+    if (group.length === 1 && kind !== 'same') return [toDayEntry(group[0])];
+    const first = formatDateUTC(group[0].on);
+    const last = formatDateUTC(group[group.length - 1].on);
+    return [
+      {
+        key: kind,
+        title: EFFECT_FOLD_WORDS[kind](group.length),
+        note: null,
+        lines: [],
+        more: 0,
+        free: null,
+        detail: group.length > 1 ? `${first} to ${last}` : first,
+      },
+    ];
   });
-  const shown = lines.slice(0, MAX_LINES_SHOWN);
-  const more = lines.length - shown.length;
-  return more > 0 ? [...shown, `and ${more} more`] : shown;
+  return [...own, ...folded];
 };
 
 /** Each upcoming income day a change would move, before and after, worked out by the same engine that drafts the days. */
@@ -138,7 +196,8 @@ function EffectPreview({
         </p>
       );
     }
-    const shown = isOpen ? days : days.slice(0, PREVIEW_SHOWN);
+    const entries = toEntries(days);
+    const shown = isOpen ? entries : entries.slice(0, PREVIEW_SHOWN);
     if (isCompact && !isOpen) {
       const [first] = days;
       const count =
@@ -164,41 +223,47 @@ function EffectPreview({
     return (
       <div className='space-y-1'>
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          {shown.map((day) => {
-            const lines = day.kind === 'changed' ? getLineText(day) : [];
-            const note =
-              day.kind === 'added'
-                ? CHANGE_WORDS.added
-                : day.kind === 'removed'
-                  ? CHANGE_WORDS.removed
-                  : null;
-            return (
-              <BeforeAfterRow
-                key={day.dayKey}
-                title={`${formatDateUTC(day.on)} · ${day.title}`}
-                before={formatCents(day.effect.freeBeforeCents)}
-                after={formatCents(day.effect.freeAfterCents)}
-                beforeLabel={CHANGE_WORDS.freeNow}
-                afterLabel={CHANGE_WORDS.freeAfter}
-                detail={
-                  note || lines.length > 0 ? (
-                    <div className='text-muted-foreground space-y-0.5 text-sm'>
-                      {note && <p>{note}</p>}
-                      {lines.map((line) => (
-                        <p key={line} className='break-words'>
-                          {line}
-                        </p>
-                      ))}
-                    </div>
-                  ) : undefined
-                }
-              />
-            );
-          })}
+          {shown.map((entry) => (
+            <li key={entry.key} className='space-y-1 p-3 text-sm'>
+              <p className='line-clamp-2 font-medium break-words'>
+                {entry.title}
+              </p>
+              {entry.lines.map((line) => (
+                <p
+                  key={line.name}
+                  className='flex items-baseline justify-between gap-3'
+                >
+                  <span className='min-w-0 break-words'>{line.name}</span>
+                  <span className='font-medium whitespace-nowrap tabular-nums'>
+                    {line.text}
+                  </span>
+                </p>
+              ))}
+              {entry.more > 0 && (
+                <p className='text-muted-foreground'>and {entry.more} more</p>
+              )}
+              {entry.free && (
+                <p className='text-muted-foreground flex items-baseline justify-between gap-3'>
+                  <span>{CHANGE_WORDS.freeNow}</span>
+                  <span className='whitespace-nowrap tabular-nums'>
+                    {entry.free}
+                  </span>
+                </p>
+              )}
+              {entry.note && (
+                <p className='text-muted-foreground'>{entry.note}</p>
+              )}
+              {entry.detail && (
+                <p className='text-muted-foreground'>{entry.detail}</p>
+              )}
+            </li>
+          ))}
         </ul>
-        {(days.length > PREVIEW_SHOWN || isCompact) && (
+        {(entries.length > PREVIEW_SHOWN || isCompact) && (
           <ShowMoreButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)}>
-            {isOpen ? 'Show fewer' : `Show all ${days.length}`}
+            {isOpen
+              ? 'Show fewer'
+              : `Show ${entries.length - PREVIEW_SHOWN} more`}
           </ShowMoreButton>
         )}
       </div>
@@ -206,13 +271,12 @@ function EffectPreview({
   };
 
   return (
-    <section aria-label={CHANGE_WORDS.previewHeading} className='space-y-2'>
-      <SectionDivider label={CHANGE_WORDS.previewHeading} />
+    <ActionSection caption={CHANGE_WORDS.previewHeading}>
       {getBody()}
       {holdsText?.text && !(isCompact && holdsText.isSame) && (
         <p className='text-sm'>{holdsText.text}</p>
       )}
-    </section>
+    </ActionSection>
   );
 }
 

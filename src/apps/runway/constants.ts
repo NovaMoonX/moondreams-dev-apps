@@ -333,6 +333,7 @@ export const CONFIRM_WORDS = {
   confirm: 'Confirm',
   confirmed: 'Confirmed',
   markNotArrived: 'Did not arrive',
+  markedNotArrived: 'Marked as not arrived',
   undoNotArrived: 'Put this day back',
   notArrivedLine: 'Marked as not arrived. Its draft is off your plan.',
   offline:
@@ -397,7 +398,7 @@ export const CHANGE_WORDS = {
   review: 'Next',
   whyHeading: 'Why the change?',
   whyHint: 'A note for your own records. You can leave it out.',
-  whyPlaceholder: 'Why it changed',
+  whyPlaceholder: 'Why it changed. You can leave this out.',
   saveWithNote: 'Save',
   saveWithoutNote: 'Save without a reason',
   unchanged: 'Change something to continue.',
@@ -994,6 +995,7 @@ export const ITEM_SHEET_R2_WORDS = {
   markedPaid: (name: string) => `Marked ${name} paid`,
   unmarkedPaid: (name: string) => `${name} is not marked paid`,
   undo: 'Undo',
+  stopOnly: 'Stop',
 } as const;
 
 // Round 3: paying a whole payday at once, a tick that needs a connection, and one word for a shortfall.
@@ -1158,3 +1160,43 @@ export const ENVELOPE_QUICK_PICKS = [
   { name: 'Household', emoji: '🧺' },
   { name: 'Fun money', emoji: '🎟️' },
 ] as const;
+
+// Round 4, package F: views an item sheet swaps in, and one wording for the action views.
+export const ITEM_VIEW_WORDS = {
+  historyTitle: 'History',
+  historyEmpty: 'Nothing has changed since you added it.',
+  historyLoading: 'Getting the changes.',
+  historyFailed: 'The history did not load. Nothing was changed.',
+  purchasesTitle: 'Purchases this month',
+  purchasesEmpty: 'Nothing spent from it this month.',
+} as const;
+
+export const CHECK_RESULT_WORDS = {
+  fits: 'It fits',
+  left: 'left',
+  over: (name: string) => `${name} would be over`,
+  overBy: 'over',
+  free: 'Free to spend',
+  fromFree: 'It could come from Free to spend, then the lowest priority first',
+  fromOthers: 'It could come from, lowest priority first',
+  uncovered: (amount: string) =>
+    `${amount} is more than Free to spend and the other envelopes hold. Free to spend would go over-assigned.`,
+} as const;
+
+export const ITEM_KIND_NOUNS = {
+  bill: 'bill',
+  envelope: 'envelope',
+  goal: 'goal',
+  payLine: 'pay line',
+  source: 'income source',
+  group: 'group',
+} as const;
+
+export const EFFECT_FOLD_WORDS = {
+  removed: (count: number) => `${count} income days go away`,
+  added: (count: number) => `${count} income days are added`,
+  same: (count: number) =>
+    count === 1
+      ? 'One income day: nothing else changes'
+      : `${count} income days: nothing else changes`,
+} as const;

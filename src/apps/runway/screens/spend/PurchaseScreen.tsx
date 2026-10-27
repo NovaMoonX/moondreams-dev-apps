@@ -49,14 +49,17 @@ const getRemovalEffect = (
 
 interface PurchaseScreenProps {
   purchaseId: string;
+  /** Opens a related purchase; the Spend list uses the address. */
+  onOpen?: (purchaseId: string) => void;
   onClose: () => void;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
-function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
+function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
-  const { openPurchase } = useRunwayUrlState();
+  const { openPurchase: openPurchaseInUrl } = useRunwayUrlState();
+  const openPurchase = onOpen ?? openPurchaseInUrl;
   const { addToast } = useToast();
   const purchases = useAppSelector(selectSpendPurchases);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
@@ -154,105 +157,104 @@ function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
     }
   };
 
-  if (editTarget !== null) {
-    return (
-      <PurchaseForm
-        key={editTarget.key}
-        isOpen
-        editing={editTarget.purchase}
-        onClose={() => setEditTarget(null)}
-      />
-    );
-  }
-
   return (
-    <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={title}>
-      <div className='space-y-4 pb-4'>
-        <SheetHead
-          label={SPEND_WORDS.detailTitle}
-          figure={refund ? `+${amount}` : amount}
-          fact={fact}
-        />
-        {(extraText.length > 0 || purchase.lines.length > 1) && (
-          <dl className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
-            {extraText.map((text) => (
-              <div key={text} className='p-3 break-words'>
-                <dt className='sr-only'>{SPEND_WORDS.note}</dt>
-                <dd>{text}</dd>
-              </div>
-            ))}
-            {purchase.lines.length > 1 &&
-              purchase.lines.map((line, index) => (
-                <div
-                  key={`${line.envelopeId ?? 'free'}-${index}`}
-                  className='flex items-start justify-between gap-3 p-3'
-                >
-                  <dt className='text-muted-foreground min-w-0 break-words'>
-                    {line.envelopeId === null
-                      ? SPEND_WORDS.freeToSpend
-                      : nameOf(line.envelopeId)}
-                  </dt>
-                  <dd className='font-medium whitespace-nowrap tabular-nums'>
-                    {formatCents(Math.abs(line.cents))}
-                  </dd>
+    <>
+      <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={title}>
+        <div className='space-y-4 pb-4'>
+          <SheetHead
+            label={SPEND_WORDS.detailTitle}
+            figure={refund ? `+${amount}` : amount}
+            fact={fact}
+          />
+          {(extraText.length > 0 || purchase.lines.length > 1) && (
+            <dl className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
+              {extraText.map((text) => (
+                <div key={text} className='p-3 break-words'>
+                  <dt className='sr-only'>{SPEND_WORDS.note}</dt>
+                  <dd>{text}</dd>
                 </div>
               ))}
-          </dl>
-        )}
-        <ActionGroup isRoomy>
-          <ActionRow
-            isGrouped
-            isRoomy
-            hasChevron
-            icon={<Pencil />}
-            label={SPEND_WORDS.edit}
-            isDisabled={isBusy}
-            onClick={() =>
-              setEditTarget((current) => ({
-                key: (current?.key ?? 0) + 1,
-                purchase,
-              }))
-            }
-          />
-          {original && (
+              {purchase.lines.length > 1 &&
+                purchase.lines.map((line, index) => (
+                  <div
+                    key={`${line.envelopeId ?? 'free'}-${index}`}
+                    className='flex items-start justify-between gap-3 p-3'
+                  >
+                    <dt className='text-muted-foreground min-w-0 break-words'>
+                      {line.envelopeId === null
+                        ? SPEND_WORDS.freeToSpend
+                        : nameOf(line.envelopeId)}
+                    </dt>
+                    <dd className='font-medium whitespace-nowrap tabular-nums'>
+                      {formatCents(Math.abs(line.cents))}
+                    </dd>
+                  </div>
+                ))}
+            </dl>
+          )}
+          <ActionGroup isRoomy>
             <ActionRow
               isGrouped
               isRoomy
               hasChevron
-              icon={<ReceiptText />}
-              label={`${SPEND_WORDS.refundOf} ${getPurchaseTitle(original, nameOf)}`}
-              onClick={() => openPurchase(original.id)}
+              icon={<Pencil />}
+              label={SPEND_WORDS.edit}
+              isDisabled={isBusy}
+              onClick={() =>
+                setEditTarget((current) => ({
+                  key: (current?.key ?? 0) + 1,
+                  purchase,
+                }))
+              }
             />
+            {original && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<ReceiptText />}
+                label={`${SPEND_WORDS.refundOf} ${getPurchaseTitle(original, nameOf)}`}
+                onClick={() => openPurchase(original.id)}
+              />
+            )}
+            {refundedCents > 0 && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron={refunds.length === 1}
+                icon={<Undo2 />}
+                label={`Refunded so far ${formatCents(refundedCents)}`}
+                onClick={() => {
+                  if (refunds.length === 1) openPurchase(refunds[0].id);
+                }}
+                isDisabled={refunds.length !== 1}
+              />
+            )}
+          </ActionGroup>
+          {error && (
+            <p className='text-destructive text-sm' role='alert'>
+              {error}
+            </p>
           )}
-          {refundedCents > 0 && (
-            <ActionRow
-              isGrouped
-              isRoomy
-              hasChevron={refunds.length === 1}
-              icon={<Undo2 />}
-              label={`Refunded so far ${formatCents(refundedCents)}`}
-              onClick={() => {
-                if (refunds.length === 1) openPurchase(refunds[0].id);
-              }}
-              isDisabled={refunds.length !== 1}
-            />
-          )}
-        </ActionGroup>
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        <ActionRow
-          isRoomy
-          isDestructive
-          icon={<Trash2 />}
-          label={SPEND_WORDS.removeLabel}
-          isDisabled={isBusy}
-          onClick={() => void remove()}
+          <ActionRow
+            isRoomy
+            isDestructive
+            icon={<Trash2 />}
+            label={SPEND_WORDS.removeLabel}
+            isDisabled={isBusy}
+            onClick={() => void remove()}
+          />
+        </div>
+      </FormSheet>
+      {editTarget !== null && (
+        <PurchaseForm
+          key={editTarget.key}
+          isOpen
+          editing={editTarget.purchase}
+          onClose={() => setEditTarget(null)}
         />
-      </div>
-    </FormSheet>
+      )}
+    </>
   );
 }
 

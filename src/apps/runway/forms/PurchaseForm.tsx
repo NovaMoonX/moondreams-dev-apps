@@ -322,6 +322,16 @@ function PurchaseForm({
   };
   const blocker = getBlocker();
 
+  const snapshot = JSON.stringify({
+    formData,
+    envelopeId,
+    isRefund,
+    splitIds,
+    shares,
+    originalId,
+    returnTo,
+  });
+  const [startSnapshot] = useState(snapshot);
   const isCounted =
     date !== null && countedFrom !== null && date >= countedFrom;
   const effect =
@@ -348,7 +358,10 @@ function PurchaseForm({
     }
     return null;
   };
-  const effectLine = getEffectLine();
+  const effectLine =
+    editing !== undefined && snapshot === startSnapshot
+      ? null
+      : getEffectLine();
 
   const startSplit = () => {
     const first = envelopeId !== null ? [envelopeId] : [];
@@ -719,16 +732,6 @@ function PurchaseForm({
     startFolded: editing !== undefined,
   });
   const isAsking = !questions.hasReviewed;
-  const snapshot = JSON.stringify({
-    formData,
-    envelopeId,
-    isRefund,
-    splitIds,
-    shares,
-    originalId,
-    returnTo,
-  });
-  const [startSnapshot] = useState(snapshot);
   const requestClose = useDiscardGuard({
     isDirty: snapshot !== startSnapshot,
     onClose: onCancel ?? onClose,

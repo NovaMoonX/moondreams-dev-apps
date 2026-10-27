@@ -706,7 +706,9 @@ function IncomeForm({
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
             <QuestionFlow flow={questions} />
-            {editing && questions.hasReviewed && <ChangeSection />}
+            {editing && !isEditingSource && questions.hasReviewed && (
+              <ChangeSection />
+            )}
             <ModalFooterActions
               note={error ?? (isAsking ? questions.blocker : shownBlocker)}
               cancelAction={

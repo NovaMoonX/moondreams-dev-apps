@@ -5,6 +5,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AmountHero from '@/components/AmountHero';
+import { ActionSection } from '@apps/runway/components/ActionSection';
 import BackLink from '@/components/BackLink';
 import BeforeAfterRow from '@/components/BeforeAfterRow';
 import FormSheet from '@/components/FormSheet';
@@ -281,53 +282,54 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
       ) : (
         <div className='space-y-4'>
           <BackLink onBack={() => setStep('edit')} />
-          <p className='text-sm font-medium'>{CORRECT_WORDS.reviewTitle}</p>
           {corrected && (
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {corrected.arrivedCents !== base.arrivedCents && (
+            <ActionSection caption={CORRECT_WORDS.reviewTitle}>
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                {corrected.arrivedCents !== base.arrivedCents && (
+                  <BeforeAfterRow
+                    title='Money that arrived'
+                    before={formatCents(base.arrivedCents)}
+                    after={formatCents(corrected.arrivedCents)}
+                    beforeLabel={CORRECT_WORDS.confirmed}
+                    afterLabel={CORRECT_WORDS.corrected}
+                  />
+                )}
                 <BeforeAfterRow
-                  title='Money that arrived'
-                  before={formatCents(base.arrivedCents)}
-                  after={formatCents(corrected.arrivedCents)}
+                  title={DRAFT_WORDS.dayLeft}
+                  before={formatCents(base.freeToSpendCents)}
+                  after={formatCents(corrected.freeToSpendCents)}
                   beforeLabel={CORRECT_WORDS.confirmed}
                   afterLabel={CORRECT_WORDS.corrected}
                 />
-              )}
-              <BeforeAfterRow
-                title={DRAFT_WORDS.dayLeft}
-                before={formatCents(base.freeToSpendCents)}
-                after={formatCents(corrected.freeToSpendCents)}
-                beforeLabel={CORRECT_WORDS.confirmed}
-                afterLabel={CORRECT_WORDS.corrected}
-              />
-              {changes.map((change) => {
-                const effect = getEffectText(change);
-                return (
-                  <BeforeAfterRow
-                    key={change.lineId}
-                    title={
-                      change.name === ''
-                        ? DRAFT_WORDS.billFallback
-                        : change.name
-                    }
-                    leading={
-                      <ItemBadge name={change.name} emoji={change.emoji} />
-                    }
-                    before={formatCents(change.beforeCents)}
-                    after={formatCents(change.afterCents)}
-                    beforeLabel={CORRECT_WORDS.confirmed}
-                    afterLabel={CORRECT_WORDS.corrected}
-                    detail={
-                      effect ? (
-                        <p className='text-muted-foreground text-sm'>
-                          {effect}
-                        </p>
-                      ) : undefined
-                    }
-                  />
-                );
-              })}
-            </ul>
+                {changes.map((change) => {
+                  const effect = getEffectText(change);
+                  return (
+                    <BeforeAfterRow
+                      key={change.lineId}
+                      title={
+                        change.name === ''
+                          ? DRAFT_WORDS.billFallback
+                          : change.name
+                      }
+                      leading={
+                        <ItemBadge name={change.name} emoji={change.emoji} />
+                      }
+                      before={formatCents(change.beforeCents)}
+                      after={formatCents(change.afterCents)}
+                      beforeLabel={CORRECT_WORDS.confirmed}
+                      afterLabel={CORRECT_WORDS.corrected}
+                      detail={
+                        effect ? (
+                          <p className='text-muted-foreground text-sm'>
+                            {effect}
+                          </p>
+                        ) : undefined
+                      }
+                    />
+                  );
+                })}
+              </ul>
+            </ActionSection>
           )}
           {hasUntick && (
             <p className='text-muted-foreground text-sm'>
@@ -344,8 +346,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               </RevealChip>
             </div>
           ) : (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>Note</p>
+            <ActionSection caption='Note'>
               <Input
                 variant='outline'
                 aria-label='Note on the correction'
@@ -356,7 +357,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                 disabled={isSaving}
                 onChange={(event) => setNote(event.target.value)}
               />
-            </div>
+            </ActionSection>
           )}
           <ModalFooterActions
             note={error}

@@ -85,8 +85,18 @@ export function useRunwayUrlState() {
     'checkEnvelope',
     parseAsString,
   );
-  const openCheckAmount = (envelopeId: string | null) => {
+  const [requestedCheckFrom, setRequestedCheckFrom] = useQueryState(
+    'checkFrom',
+    parseAsBoolean,
+  );
+  const openCheckAmount = (
+    envelopeId: string | null,
+    isFromFreeToSpend = false,
+  ) => {
     setRequestedCheckEnvelope(envelopeId, { history: 'replace' });
+    setRequestedCheckFrom(isFromFreeToSpend ? true : null, {
+      history: 'replace',
+    });
     setRequestedView('checkAmount', { history: 'replace' });
   };
 
@@ -192,6 +202,7 @@ export function useRunwayUrlState() {
   const closeView = () => {
     setRequestedView(null, { history: 'replace' });
     setRequestedCheckEnvelope(null, { history: 'replace' });
+    setRequestedCheckFrom(null, { history: 'replace' });
   };
 
   return {
@@ -204,6 +215,7 @@ export function useRunwayUrlState() {
     spendEnvelope: requestedSpendEnvelope,
     purchaseId: requestedPurchase,
     checkEnvelope: requestedCheckEnvelope,
+    isCheckFromFreeToSpend: requestedCheckFrom === true,
     openCheckAmount,
     openPurchase,
     closePurchase,
