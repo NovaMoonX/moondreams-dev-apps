@@ -27,7 +27,6 @@ import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { canChangeStart } from '@apps/runway/utils/startingCorrection';
-import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import type { PlanSection } from '@apps/runway/types';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -57,8 +56,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     checkEnvelope,
     openCheckAmount,
     closeCheckAmount,
-    showPlanSection,
-    showTab,
+    leaveViewForTab,
   } = useRunwayUrlState();
   const isChecking = view === 'checkAmount';
   const startDate = useAppSelector(
@@ -108,11 +106,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     },
   ];
   const openSection = (section: PlanSection) => {
-    onClose();
-    leaveAfterSubviewCloses(() => {
-      showPlanSection(section);
-      showTab('plan');
-    });
+    leaveViewForTab('plan', section);
   };
   const now = useNow(60_000);
   const startCreatedAt = useAppSelector((state) =>
