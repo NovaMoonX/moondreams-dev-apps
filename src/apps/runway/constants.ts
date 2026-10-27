@@ -1107,7 +1107,7 @@ export const FIX_WORDS = {
 
 export const DAYS_WORDS = {
   addExpected: 'Add expected money',
-  addExpectedShort: 'Add expected',
+  addExpectedShort: 'Add money',
 } as const;
 
 export const PLAN_VIEW_EMOJI = {

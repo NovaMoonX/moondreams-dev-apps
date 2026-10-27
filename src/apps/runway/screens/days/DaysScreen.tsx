@@ -19,7 +19,6 @@ import {
 } from '@apps/runway/constants';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
-import LookaheadWarnings from '@apps/runway/components/LookaheadWarnings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -107,7 +106,6 @@ function DaysScreen() {
           </p>
         ) : (
           <div className='space-y-2'>
-            {lookahead && <LookaheadWarnings lookahead={lookahead} />}
             <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
               {visibleDays.map((day) => (
                 <IncomeDayCard
@@ -208,12 +206,13 @@ function DaysScreen() {
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
             <CalendarPlus
-              className='h-4 w-4 min-[390px]:hidden'
+              className='h-4 w-4 max-[389px]:hidden'
               aria-hidden='true'
             />
-            <span className='max-[389px]:hidden'>
+            <span className='min-[390px]:hidden'>
               {DAYS_WORDS.addExpectedShort}
             </span>
+            <span className='max-[389px]:hidden'>{DAYS_WORDS.addExpected}</span>
           </Button>
         )}
       </div>

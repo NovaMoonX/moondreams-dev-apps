@@ -157,6 +157,18 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
     }
   };
 
+  if (editTarget !== null) {
+    return (
+      <PurchaseForm
+        key={editTarget.key}
+        isOpen
+        editing={editTarget.purchase}
+        onClose={() => setEditTarget(null)}
+        onCancel={() => setEditTarget(null)}
+      />
+    );
+  }
+
   return (
     <>
       <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={title}>
@@ -246,14 +258,6 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
           />
         </div>
       </FormSheet>
-      {editTarget !== null && (
-        <PurchaseForm
-          key={editTarget.key}
-          isOpen
-          editing={editTarget.purchase}
-          onClose={() => setEditTarget(null)}
-        />
-      )}
     </>
   );
 }
