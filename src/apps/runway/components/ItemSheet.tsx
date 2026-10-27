@@ -526,8 +526,7 @@ function ItemSheet({
             isGrouped
             hasChevron
             icon={<CircleMinus />}
-            label={HOW_OFTEN_WORDS.stopAdding}
-            subtitle={HOW_OFTEN_WORDS.stopAddingSub}
+            label={HOW_OFTEN_WORDS.changeOften}
             onClick={() => openChange('often')}
           />
         )}

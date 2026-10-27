@@ -1094,8 +1094,7 @@ export const HOW_OFTEN_WORDS = {
   noAddingHint:
     'Nothing goes into it. You can start adding to it whenever you like.',
   startAdding: 'Start adding to it',
-  stopAdding: 'Stop adding to it',
-  stopAddingSub: 'Keeps what is in it and the target',
+  changeOften: 'Change how often',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',

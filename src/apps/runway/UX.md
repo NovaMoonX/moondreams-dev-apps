@@ -202,7 +202,7 @@ Notes on the table:
 
 - Each tab's title line ends in one eye button (Home, Days, Plan, Spend, same place); it shows or hides amounts on every tab. Amounts start hidden on a device, and hide again after five minutes in the background.
 - Masked: Free to spend, envelope tiles and rows, bill, pay, goal and purchase rows, income day rows, the shortfall warning row and Spend's total. Names, dates and counts stay readable. Never masked: forms, a figure being typed and sheets or screens the person opened.
-- A goal's sheet offers "Stop adding to it" (while it is being added to) or "Start adding to it" (when it is not); both open the goal's "How often" question. A calendar envelope's sheet labels its figure by its cadence ("Monthly").
+- A goal's sheet offers "Change how often" (while it is being added to) or "Start adding to it" (when it is not); both open the goal's "How often" question. A calendar envelope's sheet labels its figure by its cadence ("Monthly").
 - "Things to fix" lists every short line of an income day as its own row, soonest first, the higher priority first within a day.
 
 ## Round 4 review fixes (screens)
