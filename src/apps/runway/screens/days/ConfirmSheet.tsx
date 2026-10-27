@@ -347,7 +347,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
 
   const getLessBody = () => {
     if (gap === 0) return CONFIRM_FLOW_WORDS.lessFromLeft;
-    if (rest === 0) return CONFIRM_FLOW_WORDS.coveredBody(formatCents(cover));
+    if (cover > 0) return CONFIRM_FLOW_WORDS.coveredBody(formatCents(cover));
     if (gap === Math.abs(difference) && changedCount === 0)
       return CONFIRM_FLOW_WORDS.lessNothingLeft;
     return CONFIRM_FLOW_WORDS.lessGap(formatCents(rest));
@@ -603,13 +603,30 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
               <InlineNotice tone='info'>
                 {CONFIRM_WORDS.adjustIntro}
               </InlineNotice>
-              <p className='text-sm font-medium'>
-                {DRAFT_WORDS.dayLeft} {formatCents(remainder + cover)}
-                <span className='text-muted-foreground font-normal'>
-                  {' '}
-                  of {arrivedCents === null ? '' : formatCents(arrivedCents)}
-                </span>
-              </p>
+              <div
+                className='flex flex-wrap items-baseline justify-between gap-x-3 pt-1'
+                role='status'
+              >
+                <p className='text-muted-foreground text-sm whitespace-nowrap'>
+                  {DRAFT_WORDS.dayLeft}
+                </p>
+                <p className='text-right whitespace-nowrap'>
+                  <span
+                    className={join(
+                      'text-xl font-semibold tabular-nums',
+                      remainder + cover < 0 && 'text-(--runway-warning-ink)',
+                    )}
+                  >
+                    {formatCents(remainder + cover)}
+                  </span>
+                  {arrivedCents !== null && (
+                    <span className='text-muted-foreground text-sm'>
+                      {' '}
+                      of {formatCents(arrivedCents)}
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
             <div className='flex flex-wrap gap-2'>
               {suggested.length > 0 && (
