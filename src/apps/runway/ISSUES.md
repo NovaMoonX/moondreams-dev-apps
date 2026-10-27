@@ -2432,3 +2432,33 @@ A second trusted person is Owner on the Google Cloud project and billing account
 - [ ] Both people receive billing and budget alerts.
 - [ ] The drill is repeated after each rotation and after either person changes.
 - [ ] Moving to Cloud KMS is not part of this issue.
+
+### Issue 76: Start from a budget you already have
+
+**Tier:** Next Steps (added after the roadmap was numbered; the owner asked for it in round 13).
+**Prerequisites:** Issue 17 (Starting out), and the round-13 Starting out changes (calendar cadence, goals with a current amount)
+**Target PR Size:** ~550 lines (split the reader callable from the review step if it runs over)
+**Files:**
+- `functions/src/apps/runway/readRunwayBudget.ts`, `functions/src/index.ts`, `functions/README.md`
+- `src/apps/runway/queries/budgetReadQueries.ts`
+- `src/apps/runway/screens/start/` (a "Start from your budget" way in, and the review step)
+
+**Context:** Read Pinch's reading flow (`CLAUDE.md` Product: "A document fills the form; it doesn't create records", "Every AI entry point says what happens") and the TDD's sealed-document rules.
+
+### Description
+Someone who already keeps a budget in a spreadsheet, a CSV, a notes file or a message can start from it: an AI reads the file or pasted text into proposed income, bills, envelopes and goals, and the person reviews each one in Starting out before anything is saved.
+
+### Possible Approach
+1. Starting out offers "Start from your budget" beside "Start fresh" as one `MethodPicker` (a file, or pasted text), saying before anything is sent that an AI reads it and that it isn't kept.
+2. The callable returns a structured answer (every field required and nullable; amounts in cents; cadence as one of the calendar cadences or per pay) and never saves; the file is not stored.
+3. The review step lists the proposals by kind with their amounts, each editable and removable, with what could not be read named; Save writes them through the same actions as Starting out, sealed.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** the proposals become real items only on Save. **Read / Update / Delete:** each proposal before saving.
+
+### Success Criteria
+- [ ] A CSV, a pasted list and a notes-style text each produce proposals a person can review; nothing is written before Save (emulator).
+- [ ] A value the source doesn't give stays empty and is named, never invented.
+- [ ] The callable checks `request.auth`, logs no content, and is in `functions/README.md`.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
+- [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
