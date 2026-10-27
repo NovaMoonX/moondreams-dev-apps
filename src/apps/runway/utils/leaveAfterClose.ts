@@ -17,5 +17,5 @@ export function keepEntryFor(param: string) {
   const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
   void backLayerKey;
   void backLayerSeq;
-  window.history.pushState(entry, '');
+  window.history.pushState({ ...entry, keptFor: param }, '');
 }
