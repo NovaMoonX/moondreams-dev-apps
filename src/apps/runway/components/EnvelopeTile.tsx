@@ -115,13 +115,17 @@ function EnvelopeTile({
           itemId={itemId}
           kind='envelope'
           today={today}
-          figureLabel={isPlan ? ITEM_SHEET_R2_WORDS.eachTime : capitalize(word)}
+          figureLabel={
+            isPlan
+              ? eachTime
+                ? describeCadenceLine(envelope.funding.cadence)
+                : ITEM_SHEET_R2_WORDS.eachTime
+              : capitalize(word)
+          }
           figure={isPlan ? (eachTime ?? undefined) : value}
           fact={[
             PRIORITY_LABELS[envelope.priority],
-            isPlan && eachTime
-              ? describeCadenceLine(envelope.funding.cadence)
-              : funding,
+            isPlan && eachTime ? null : funding,
             isPlan && cents !== 0 ? `${value} ${word}` : null,
           ]
             .filter(Boolean)
