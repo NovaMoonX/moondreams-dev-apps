@@ -1,10 +1,9 @@
 import { formatDateShortUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import { SCHEDULE_LABELS } from '@apps/runway/constants';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 import { describeBillRepeat } from '@apps/runway/utils/billText';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
-import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
   BillSealed,
   EnvelopeSealed,
@@ -12,6 +11,12 @@ import type {
   MoneyRange,
   Schedule,
 } from '@apps/runway/types';
+
+/** A range as short as it can be read: "$300–360", so the name keeps its room. */
+const formatRowRange = (range: MoneyRange) =>
+  range.lowCents === range.highCents
+    ? formatCentsShort(range.lowCents)
+    : `${formatCentsShort(range.lowCents)}–${formatCentsShort(range.highCents).replace('$', '')}`;
 
 export interface StartRow {
   id: string;
@@ -61,7 +66,7 @@ export const toIncomeRow = (
   name: sourceName,
   emoji: null,
   line: describeSchedule(schedule),
-  amount: formatRange(amount),
+  amount: formatRowRange(amount),
 });
 
 const describeBillLine = (schedule: Schedule) => {
@@ -77,7 +82,7 @@ export const toBillRow = (id: string, bill: BillSealed): StartRow => ({
   name: bill.name,
   emoji: bill.emoji,
   line: describeBillLine(bill.timing.schedule),
-  amount: formatRange(bill.amount),
+  amount: formatRowRange(bill.amount),
 });
 
 export const toEnvelopeRow = (
@@ -99,7 +104,7 @@ export const toGoalRow = (id: string, goal: GoalSealed): StartRow => ({
     goal.targetDate === null
       ? describeFundingShort(goal.funding)
       : `By ${formatDateShortUTC(goal.targetDate)}`,
-  amount: formatCents(goal.targetCents),
+  amount: formatCentsShort(goal.targetCents),
 });
 
 const NOUNS = {

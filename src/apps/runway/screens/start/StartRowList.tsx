@@ -49,7 +49,7 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
               onClick={() => onOpen(row.id)}
             >
               <ItemBadge name={row.name} emoji={row.emoji} />
-              <span className='min-w-0 flex-1'>
+              <span className='min-w-24 flex-1'>
                 <span className='line-clamp-2 block text-base font-medium break-words'>
                   {row.name}
                 </span>
@@ -58,7 +58,7 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
                 </span>
               </span>
               {row.amount && (
-                <span className='shrink-0 text-base font-semibold whitespace-nowrap tabular-nums'>
+                <span className='max-w-[40%] min-w-0 shrink text-right text-base font-semibold break-words tabular-nums'>
                   {row.amount}
                 </span>
               )}
