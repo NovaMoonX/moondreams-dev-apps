@@ -50,7 +50,10 @@ function ActionRow({
       {icon}
     </span>
   ) : (
-    <span className='w-5 shrink-0' aria-hidden='true'>
+    <span
+      className='grid w-5 shrink-0 place-items-center [&_svg]:size-4'
+      aria-hidden='true'
+    >
       {icon}
     </span>
   );
