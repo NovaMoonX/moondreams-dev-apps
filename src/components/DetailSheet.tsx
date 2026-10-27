@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import { useKeepFocusedFieldInView } from '@/hooks/useKeepFocusedFieldInView';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const SHORT_SCREEN_MAX_HEIGHT = 599;
@@ -48,6 +49,7 @@ function DetailSheet({
   const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
   const isDrawer = isBelow('sm') || (isShort && isBelow('lg'));
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
+  useKeepFocusedFieldInView(isOpen && isDrawer);
   const contentNode = useRef<HTMLDivElement | null>(null);
   const scrollTops = useRef(new Map<string, number>());
   const shownKey = useRef(viewKey);

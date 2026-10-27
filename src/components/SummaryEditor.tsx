@@ -16,6 +16,7 @@ import {
 } from '@/components/summaryGroup';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import { useKeepFocusedFieldInView } from '@/hooks/useKeepFocusedFieldInView';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const PHONE_FOCUS_DELAY_MS = 350;
@@ -120,6 +121,7 @@ function SummaryEditor({
     isOpen && isDrawer,
     close,
   );
+  useKeepFocusedFieldInView(isOpen && isDrawer);
   const isEmpty = summary === '';
   const isRoomy = isFramed || groupPosition !== undefined;
 
