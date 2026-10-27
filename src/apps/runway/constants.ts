@@ -420,7 +420,6 @@ export const CHANGE_WORDS = {
 } as const;
 
 export const LIFECYCLE_WORDS = {
-  more: 'More',
   pause: 'Pause saving',
   pauseSub: 'Nothing new goes in. The balance and history stay.',
   resume: 'Start saving again',
@@ -837,13 +836,6 @@ export const DELETE_PLAN_WORDS = {
 // Lists and screens: an item's sheet, the one row anatomy and the counted problems row.
 export const ITEM_SHEET_WORDS = {
   change: 'Change it',
-  changeSub: {
-    bill: 'The amount, the due date or how often',
-    envelope: 'The amount, how often or how much it matters',
-    goal: 'The target, the date or what goes in',
-    payLine: 'The amount or when it arrives',
-    source: 'Its name',
-  },
   changeDaySub: 'From this income day, or for this day alone',
   funds: 'What it funds',
   history: 'History',
