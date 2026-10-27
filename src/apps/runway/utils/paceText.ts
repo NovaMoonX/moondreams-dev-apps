@@ -1,4 +1,8 @@
-import { PACE_STATE_LABELS, PACE_WORDS } from '@apps/runway/constants';
+import {
+  HOW_OFTEN_WORDS,
+  PACE_STATE_LABELS,
+  PACE_WORDS,
+} from '@apps/runway/constants';
 import type { Pace } from '@apps/runway/engine/pace';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -21,6 +25,9 @@ export function describePace(goal: GoalSealed, pace: Pace): PaceWords {
   }
   if (goal.state === 'paused') {
     return { stateLabel: null, line: PACE_WORDS.paused };
+  }
+  if (goal.funding.cadence.kind === 'none') {
+    return { stateLabel: null, line: HOW_OFTEN_WORDS.notBeingAdded };
   }
   if (goal.funding.amount.kind === 'rest') {
     return { stateLabel: null, line: PACE_WORDS.rest };

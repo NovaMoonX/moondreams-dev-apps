@@ -425,3 +425,40 @@ export async function recordStart(
     });
   });
 }
+
+/**
+ * Records what one goal or bill holds on the plan's starting day, for an item added after that day.
+ * It writes a single `start` move and leaves the starting day, and every other holding, as they are.
+ */
+export async function recordHolding(
+  uid: string,
+  encryption: RunwayEncryption,
+  startDate: DateOnly,
+  holding: StartHoldingInput,
+): Promise<void> {
+  const now = Date.now();
+  const sealed = await sealJson(
+    {
+      amountCents: holding.amountCents,
+      holding: holding.holding,
+    } satisfies StartSealed,
+    encryption,
+  );
+  const ref = doc(db, 'apps', 'runway', 'plans', uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const plan = snapshot.data() as Partial<PlanDoc> | undefined;
+    if ((plan?.startDate ?? null) !== startDate) return;
+    markLedgerWrite(transaction, uid, plan, [startDate]);
+    const id = getStartMoveId(holding.refId, now);
+    transaction.set(moveRef(uid, id), {
+      id,
+      kind: 'start',
+      date: startDate,
+      refId: holding.refId,
+      reversesMoveId: null,
+      createdAt: now,
+      sealed,
+    } satisfies MoveDoc);
+  });
+}

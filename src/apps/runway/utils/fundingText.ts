@@ -1,7 +1,15 @@
 import { formatBps, formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import {
+  CALENDAR_PERIOD_LABELS,
+  CALENDAR_PERIOD_UNITS,
+  HOW_OFTEN_WORDS,
+} from '@apps/runway/constants';
 import type { FundingAmount, FundingRule } from '@apps/runway/types';
 
 const describeCadence = (cadence: FundingRule['cadence']) => {
+  if (cadence.kind === 'calendar') return CALENDAR_PERIOD_UNITS[cadence.period];
+  if (cadence.kind === 'none')
+    return HOW_OFTEN_WORDS.noAddingSummary.toLowerCase();
   if (cadence.kind === 'everyIncomeDay') return 'every income day';
   if (cadence.kind === 'everyNth') {
     return cadence.n === 2
@@ -28,13 +36,14 @@ export function describeAmount(amount: FundingAmount, of?: string) {
   if (amount.kind === 'exact') return formatCents(amount.cents);
   if (amount.kind === 'rest') return 'the rest';
   const target =
-    amount.of === 'remaining' ? 'what is left' : (of ?? "the day's money");
+    amount.of === 'remaining' ? 'what is left' : (of ?? 'each pay');
   const result = `${formatBps(amount.bps)}% of ${target}`;
   return result;
 }
 
 /** An envelope's funding in the words a row and a change entry share: "$50.00 every income day". */
 export function describeFunding(funding: FundingRule) {
+  if (funding.cadence.kind === 'none') return 'no contribution';
   const result = `${describeAmount(funding.amount)} ${describeCadence(funding.cadence)}`;
   return result;
 }
@@ -55,6 +64,8 @@ export function describePairedBy(
 
 /** How often an envelope or goal is funded, as a row's line: "Every income day", "On 3 chosen days". */
 export function describeCadenceLine(cadence: FundingRule['cadence']) {
+  if (cadence.kind === 'calendar')
+    return CALENDAR_PERIOD_LABELS[cadence.period];
   const words = describeCadence(cadence);
   const result = words.charAt(0).toUpperCase() + words.slice(1);
   return result;
@@ -62,6 +73,7 @@ export function describeCadenceLine(cadence: FundingRule['cadence']) {
 
 /** A funding rule in a short line: "$200 every income day", "10% of the day's money every other income day". */
 export function describeFundingShort(funding: FundingRule) {
+  if (funding.cadence.kind === 'none') return HOW_OFTEN_WORDS.notBeingAdded;
   const amount =
     funding.amount.kind === 'exact'
       ? formatCentsShort(funding.amount.cents)

@@ -20,6 +20,7 @@ import {
   toSplit,
   type EffectiveSplit,
 } from '@apps/runway/engine/correct';
+import { getEarliestPeriodStart } from '@apps/runway/engine/calendar';
 import { buildDraft, type Draft } from '@apps/runway/engine/draft';
 import {
   NO_PROGRESS,
@@ -54,6 +55,7 @@ import type {
   EnvelopeSealed,
   EnvelopeVersion,
   FundingAmount,
+  FundingRule,
   GoalSealed,
   GoalVersion,
   OpenVersion,
@@ -537,6 +539,34 @@ const hashProgress = (progress: BillProgressInput | undefined) => {
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 
+const priorDayCaches = new WeakMap<object, Map<string, ComingDay[]>>();
+
+/** The income days before the ones listed that fall in the first period of a calendar rule, which take their share of a period's amount first; none when no rule is on the calendar. */
+export function getPriorDays(
+  items: RootState['runway']['items'],
+  versions: RootState['runway']['versions'],
+  today: number,
+  days: readonly { dayKey: string; on: number }[],
+  fundings: readonly FundingRule[],
+): ComingDay[] {
+  if (days.length === 0) return [];
+  const firstOn = days.reduce(
+    (first, day) => Math.min(first, day.on),
+    Infinity,
+  );
+  const from = getEarliestPeriodStart(fundings, firstOn);
+  if (from === null) return [];
+  const cache = priorDayCaches.get(versions) ?? new Map<string, ComingDay[]>();
+  priorDayCaches.set(versions, cache);
+  const cacheKey = `${today}:${from}`;
+  const generated =
+    cache.get(cacheKey) ?? buildComingDays(items, versions, today, from);
+  cache.set(cacheKey, generated);
+  const listed = new Set(days.map((day) => day.dayKey));
+  const result = generated.filter((day) => !listed.has(day.dayKey));
+  return result;
+}
+
 export interface DraftViewOptions {
   /** The coming days when the caller already has them, so a walk over many days builds them once. */
   coming?: readonly ComingDay[];
@@ -610,6 +640,15 @@ export function computeDraftView(
       ? []
       : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
           ?.payload.pairings ?? []);
+  const priorDays = getPriorDays(
+    items,
+    versions,
+    today,
+    days,
+    [...resolved, ...resolvedGoals]
+      .map(({ version }) => version.payload.funding)
+      .concat(Object.values(dayPayloads).map((payload) => payload.funding)),
+  );
   const isCached = options.isCached ?? true;
   const key = !isCached
     ? ''
@@ -630,6 +669,7 @@ export function computeDraftView(
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
           [...returning].sort(),
+          hashText(priorDays.map((entry) => entry.dayKey).join(',')),
           resolvedBills.map(({ item }) => [
             item.endedAt,
             hashProgress(billProgress[item.id]),
@@ -703,7 +743,9 @@ export function computeDraftView(
         on: entry.on,
         amount: entry.amount,
         stanceOverride: entry.stanceOverride,
+        sourceId: entry.sourceId,
       })),
+      priorIncomeDays: priorDays,
     },
     stance,
     overrides: {

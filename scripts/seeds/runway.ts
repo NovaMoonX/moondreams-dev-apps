@@ -1094,6 +1094,7 @@ async function writeSeedEnvelopes(
   context: SeedContext,
   uid: string,
   encryption: Parameters<typeof sealJson>[1],
+  hasWeekly = false,
 ) {
   const plan = `apps/runway/plans/${uid}`;
   const today = startOfUtcDay(context.now);
@@ -1192,6 +1193,40 @@ async function writeSeedEnvelopes(
         },
       },
     },
+    {
+      id: 'seed-envelope-phone-internet',
+      payload: {
+        name: 'Phone and internet',
+        emoji: '📶',
+        priority: 'must',
+        orderIndex: 3,
+        funding: {
+          amount: exact(9_500),
+          cadence: { kind: 'calendar', period: 'monthly', startsOn: today },
+        },
+      },
+    },
+    ...(hasWeekly
+      ? [
+          {
+            id: 'seed-envelope-coffee',
+            payload: {
+              name: 'Coffee',
+              emoji: '☕',
+              priority: 'want' as const,
+              orderIndex: 3,
+              funding: {
+                amount: exact(2_000),
+                cadence: {
+                  kind: 'calendar' as const,
+                  period: 'weekly' as const,
+                  startsOn: today,
+                },
+              },
+            },
+          },
+        ]
+      : []),
   ];
 
   const sealedChanges = await Promise.all(
@@ -1497,6 +1532,19 @@ async function writeSeedGoals(
         },
       },
     },
+    {
+      id: 'seed-goal-house',
+      payload: {
+        name: 'House down payment',
+        emoji: '🏡',
+        priority: 'want',
+        orderIndex: 2,
+        targetCents: 1_500_000,
+        targetDate: null,
+        funding: { amount: exact(0), cadence: { kind: 'none' } },
+        state: 'active',
+      },
+    },
   ];
 
   const sealedChanges = await Promise.all(
@@ -1623,7 +1671,7 @@ async function seedTrackingPlan(
 
   const documents = [
     await writeSeedIncome(context, owner.uid, encryption),
-    await writeSeedEnvelopes(context, owner.uid, encryption),
+    await writeSeedEnvelopes(context, owner.uid, encryption, true),
     await writeSeedBills(context, owner.uid, encryption),
     await writeSeedGoals(context, owner.uid, encryption),
   ].reduce((sum, count) => sum + count, 0);
