@@ -32,6 +32,10 @@ export interface BalancesInput {
   expectedOn?: ReadonlyMap<string, DateOnly>;
   /** Which plan items are goals and which are bills, by item id. */
   kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope'>>;
+  /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to spend from then. */
+  releasedFrom?: Readonly<Record<string, DateOnly>>;
+  /** The day the figures are for, which `releasedFrom` is read against; every release counts when it is left out. */
+  asOf?: DateOnly;
   /** What was spent, only while tracking is on; a purchase dated before the starting point is not counted. */
   purchases?: readonly OpenPurchase[];
   /** What the ledger before the records, moves and purchases above summed to, counted from the same starting day; its spending is left out by the caller when spending is not counted. */
@@ -167,9 +171,12 @@ export function deriveBalances(input: BalancesInput): Balances {
         (spentByItem[id] ?? 0),
     ]),
   );
+  const isReleased = (id: string) =>
+    Object.hasOwn(input.releasedFrom ?? {}, id) &&
+    (input.releasedFrom?.[id] ?? 0) <= (input.asOf ?? Infinity);
   const sumKind = (kind: 'goal' | 'bill' | 'envelope') =>
     Object.entries(assignedByItem)
-      .filter(([id]) => input.kinds[id] === kind)
+      .filter(([id]) => input.kinds[id] === kind && !isReleased(id))
       .reduce(
         (sum, [, cents]) =>
           sum + (kind === 'envelope' ? Math.max(0, cents) : cents),
@@ -233,6 +240,7 @@ export function deriveBalancesBefore(
   );
   const result = deriveBalances({
     ...input,
+    asOf: Math.min(day - 1, input.asOf ?? Infinity),
     closing: input.closing ? closingBefore(input.closing, day) : null,
     moves: input.moves.filter(
       (move) =>

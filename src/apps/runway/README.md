@@ -184,7 +184,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### Goals, In Detail
 
 - **A goal is an envelope that keeps its money.** It does not spill into other envelopes. It has a target, an optional date, and a priority, and reaching the target ends it.
-- **States.** A goal is active, paused, completed or archived. Pausing "Vacation fund" to focus on "Car repair" stops new money going in and keeps the balance and history.
+- **States.** A goal is active, paused, completed or archived. Pausing "Vacation fund" to focus on "Car repair" stops new money going in and keeps the balance and history. Archiving a goal, envelope or bill, or reaching the end of one, keeps its history, and the money it held has no job any more, so it counts as Free to spend from then; the archive and end views say how much before you confirm.
 - **Pace.** For a goal with a date, Runway says what each income day needs to put in ("$110 each time gets you to $1,800 by June") and whether you are on track, in words.
 - **Where a goal is held.** A goal can sit in a real savings account, or be a slice of money inside a checking account. Until the account is linked, you keep the number. Once it is, Runway compares what your goals add up to against the account's balance and says the difference in one line ("Your savings account has $120 more than your goals add up to"). It never moves money or changes a goal on its own.
 - **Interest.** A goal in an account that earns interest grows by it on its own (see Rates and Scheduled Increases).

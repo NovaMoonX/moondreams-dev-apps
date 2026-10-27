@@ -1279,3 +1279,10 @@ export const PAIRING_STOP_WORDS = {
       ? `${names[0]} stops paying it first, so that money stays with the pay.`
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} stop paying it first, so that money stays with each pay.`,
 } as const;
+
+/** What archiving or ending an item does with the money it holds. */
+export const RELEASE_WORDS = {
+  archive: (amount: string) => `The ${amount} it holds becomes Free to spend.`,
+  end: (amount: string) =>
+    `After its last day, the ${amount} it holds becomes Free to spend.`,
+} as const;

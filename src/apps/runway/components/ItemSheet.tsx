@@ -65,6 +65,7 @@ import {
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
   PAIRING_STOP_WORDS,
+  RELEASE_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_CHANGE_DAYS_AHEAD,
   MAX_NOTE_LENGTH,
@@ -95,6 +96,9 @@ import {
 } from '@apps/runway/store/actions/itemActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectPairedBy } from '@apps/runway/store/selectors/runwaySelectors';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { formatCents } from '@/utils/moneyUtils';
 import InlineNotice from '@/components/InlineNotice';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import type {
@@ -210,6 +214,9 @@ function ItemSheet({
         ),
       ),
     ].join('\n'),
+  );
+  const heldCents = useAppSelector(
+    (state) => selectBalances(state).assignedByItem[itemId] ?? 0,
   );
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const version = useAppSelector(
@@ -747,6 +754,11 @@ function ItemSheet({
         changeJson={changeJson}
         emptyText={CHANGE_WORDS.previewNone}
       />
+      {(view === 'end' || view === 'archive') && heldCents > 0 && (
+        <InlineNotice tone='info'>
+          <MaskedText>{RELEASE_WORDS[view](formatCents(heldCents))}</MaskedText>
+        </InlineNotice>
+      )}
       {(view === 'pause' || view === 'end' || view === 'archive') &&
         pairedNames !== '' && (
           <InlineNotice tone='info'>

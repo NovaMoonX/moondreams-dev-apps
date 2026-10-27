@@ -4,6 +4,7 @@ import type { RootState } from '@/store';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectClosingBase } from '@apps/runway/store/selectors/historySelectors';
 import { withoutSpending } from '@apps/runway/engine/closings';
+import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   deriveBalances,
   type BalancesInput,
@@ -20,6 +21,7 @@ export const selectBalanceInputs = createSelector(
     (state: RootState) => state.runway.purchases,
     selectLevel,
     selectClosingBase,
+    () => todayAsUtcDate(),
   ],
   (
     startDate,
@@ -30,6 +32,7 @@ export const selectBalanceInputs = createSelector(
     purchases,
     level,
     closing,
+    today,
   ): BalancesInput => ({
     startDate,
     moves,
@@ -43,6 +46,16 @@ export const selectBalanceInputs = createSelector(
       closing !== null && level !== 'track'
         ? withoutSpending(closing)
         : closing,
+    releasedFrom: Object.fromEntries(
+      items.flatMap((item) => {
+        const ends = [
+          ...(item.archivedAt === null ? [] : [item.archivedAt]),
+          ...(item.endedAt === null ? [] : [item.endedAt + DAY_MS]),
+        ];
+        return ends.length === 0 ? [] : [[item.id, Math.min(...ends)]];
+      }),
+    ),
+    asOf: today,
     kinds: Object.fromEntries(
       items.flatMap((item) =>
         item.kind === 'goal' || item.kind === 'bill' || item.kind === 'envelope'

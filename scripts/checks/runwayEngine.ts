@@ -7586,4 +7586,74 @@ const version = (
   );
 }
 
+// B1 (round 7): money held for an item that stopped for good is Free to spend again.
+{
+  const start = utc(2026, 1, 1);
+  const startOf = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: 'money' | 'goal' | 'bill',
+  ): OpenMove => ({
+    id,
+    kind: 'start',
+    date: start,
+    refId,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: cents, holding },
+  });
+  const input = {
+    startDate: start,
+    moves: [
+      startOf('m', null, 100_000, 'money'),
+      startOf('g', 'trip', 30_000, 'goal'),
+      startOf('b', 'rent', 20_000, 'bill'),
+    ],
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds: { trip: 'goal', rent: 'bill' } as const,
+  };
+  assert.equal(
+    deriveBalances(input).freeToSpendCents,
+    50_000,
+    'B1: a goal and a bill hold their money',
+  );
+  const archived = deriveBalances({
+    ...input,
+    releasedFrom: { trip: utc(2026, 3, 1) },
+    asOf: utc(2026, 3, 1),
+  });
+  assert.deepEqual(
+    [
+      archived.freeToSpendCents,
+      archived.assignedToGoalsCents,
+      archived.assignedByItem.trip,
+    ],
+    [80_000, 0, 30_000],
+    'B1: from the day a goal is archived its $300 is Free to spend, and the goal still shows what it held',
+  );
+  assert.equal(
+    deriveBalances({
+      ...input,
+      releasedFrom: { rent: utc(2026, 3, 2) },
+      asOf: utc(2026, 3, 1),
+    }).freeToSpendCents,
+    50_000,
+    'B1: a bill that ends after today still holds its money until the day after its last day',
+  );
+  assert.equal(
+    deriveBalancesBefore(
+      {
+        ...input,
+        releasedFrom: { trip: utc(2026, 3, 1) },
+        asOf: utc(2026, 4, 1),
+      },
+      utc(2026, 2, 1),
+    ).freeToSpendCents,
+    50_000,
+    'B1: a figure as of a day before the archive still counts the goal as holding it',
+  );
+}
+
 console.log('runway engine: ok');
