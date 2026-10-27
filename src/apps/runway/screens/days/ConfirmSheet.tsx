@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -296,10 +295,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       {difference !== 0 &&
         (!isNoting && formData.note === '' ? (
           <div>
-            <RevealChip
-              icon={<Plus className='h-4 w-4' />}
-              onClick={() => setIsNoting(true)}
-            >
+            <RevealChip onClick={() => setIsNoting(true)}>
               {CONFIRM_WORDS.note}
             </RevealChip>
           </div>

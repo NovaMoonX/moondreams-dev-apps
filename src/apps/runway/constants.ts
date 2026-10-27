@@ -210,7 +210,7 @@ export const FUNDING_CADENCE_LABELS: Record<
 
 export const ENVELOPE_ORDER_STEP = 1;
 
-/** What "+ Expected" can add. */
+/** What "Add expected money" can add. */
 export const EXPECTED_KINDS = ['income', 'expense'] as const;
 
 /** The ways a bill can repeat that the bill form offers. */

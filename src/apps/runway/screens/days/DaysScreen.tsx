@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, CalendarPlus } from 'lucide-react';
+import { Banknote, CalendarDays } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -205,7 +205,7 @@ function DaysScreen() {
             aria-label={DAYS_WORDS.addExpected}
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
-            <CalendarPlus
+            <Banknote
               className='h-4 w-4 max-[389px]:hidden'
               aria-hidden='true'
             />

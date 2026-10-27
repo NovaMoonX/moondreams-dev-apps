@@ -430,6 +430,7 @@ function IncomeForm({
                 choice={formData.source.choice}
                 newText={formData.source.newText}
                 newPillLabel='New source'
+                hasPlus={false}
                 newPlaceholder='Employer or source'
                 maxLength={MAX_NAME_LENGTH}
                 onChange={(choice, newText) => {
