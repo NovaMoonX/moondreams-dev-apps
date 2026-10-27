@@ -18,6 +18,7 @@ import {
 import { toDayKey } from '@apps/runway/engine/dates';
 import type { Draft } from '@apps/runway/engine/draft';
 import { hashOverride } from '@apps/runway/engine/fingerprint';
+import { hasOwnChoices } from '@apps/runway/engine/moved';
 import { openJson, sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import type {
@@ -419,4 +420,78 @@ export async function correctDay(
   }).catch((error: unknown) => {
     throw asRaceMessage(error, CORRECT_WORDS.elsewhere);
   });
+}
+
+const readChoices = async (
+  sealed: IncomeDayDoc['sealed'] | undefined,
+  encryption: RunwayEncryption,
+): Promise<DayOverrideSealed> => {
+  const opened = sealed
+    ? await openJson<Partial<DayOverrideSealed>>(sealed, encryption)
+    : null;
+  return {
+    pairings: opened?.pairings ?? null,
+    holdResolutions: opened?.holdResolutions ?? {},
+    payloads: opened?.payloads ?? {},
+  };
+};
+
+/**
+ * Moves the person's own choices for each day to the date its payday moved to, one transaction per
+ * day: the old day is re-read and must still be a draft, and the new one must have no choices of its
+ * own, so nothing another device chose is written over. Returns how many moved.
+ */
+export async function carryDayOverrides(
+  uid: string,
+  encryption: RunwayEncryption,
+  moves: readonly { fromId: string; to: DayRef }[],
+): Promise<number> {
+  const sealedEmpty = await sealJson(EMPTY_OVERRIDE, encryption);
+  const results = await Promise.all(
+    moves.map(({ fromId, to }) => {
+      const toId = toDayKey(to.payLineId, to.expectedOn);
+      return runTransaction(db, async (transaction) => {
+        const [fromSnapshot, toSnapshot] = await Promise.all([
+          transaction.get(dayRef(uid, fromId)),
+          transaction.get(dayRef(uid, toId)),
+        ]);
+        const from = fromSnapshot.exists()
+          ? (fromSnapshot.data() as Partial<IncomeDayDoc>)
+          : null;
+        if (from?.status !== 'draft' || !from.sealed) return false;
+        const target = toSnapshot.exists()
+          ? (toSnapshot.data() as Partial<IncomeDayDoc>)
+          : null;
+        const theirs = await readChoices(target?.sealed, encryption);
+        const isTargetFree =
+          target === null ||
+          (target.status === 'draft' && !hasOwnChoices(theirs));
+        if (!isTargetFree) return false;
+        const sealed = await sealJson(
+          await readChoices(from.sealed, encryption),
+          encryption,
+        );
+        transaction.update(dayRef(uid, fromId), { sealed: sealedEmpty });
+        if (target) {
+          transaction.update(dayRef(uid, toId), { sealed });
+          return true;
+        }
+        transaction.set(dayRef(uid, toId), {
+          id: toId,
+          payLineId: to.payLineId,
+          sourceId: to.sourceId,
+          expectedOn: to.expectedOn,
+          arrivedOn: null,
+          status: 'draft',
+          createdAt: Date.now(),
+          confirmedAt: null,
+          doneLineIds: [],
+          sealed,
+        } satisfies IncomeDayDoc);
+        return true;
+      });
+    }),
+  );
+  const result = results.filter(Boolean).length;
+  return result;
 }

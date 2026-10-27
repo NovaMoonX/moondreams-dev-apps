@@ -13,6 +13,7 @@ import {
   CHANGE_WORDS,
   EFFECT_FOLD_WORDS,
   FORM_FLOW_WORDS,
+  MOVED_DAY_WORDS,
   PREVIEW_SHOWN,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -23,6 +24,7 @@ import {
 import {
   previewChange,
   previewLookahead,
+  previewOverrideCarry,
   type PreviewChange,
   type PreviewDay,
 } from '@apps/runway/store/selectors/previewSelectors';
@@ -172,6 +174,40 @@ function EffectPreview({
     billProgress,
   ]);
 
+  const movedNotes = useMemo(() => {
+    if (settledVirtual === null) return [];
+    const { carried, stranded } = previewOverrideCarry(
+      { items, versions, openDays, today, settledKey },
+      settledVirtual,
+    );
+    const result = [
+      ...(carried.length > 0
+        ? [
+            {
+              tone: 'info' as const,
+              text: MOVED_DAY_WORDS.carried(
+                carried.length,
+                formatDateUTC(carried[0].from.expectedOn),
+                formatDateUTC(carried[0].to.on),
+              ),
+            },
+          ]
+        : []),
+      ...(stranded.length > 0
+        ? [
+            {
+              tone: 'warning' as const,
+              text: MOVED_DAY_WORDS.stranded(
+                stranded.length,
+                formatDateUTC(stranded[0].expectedOn),
+              ),
+            },
+          ]
+        : []),
+    ];
+    return result;
+  }, [settledVirtual, items, versions, openDays, today, settledKey]);
+
   const holdsText = useMemo(() => {
     if (settledVirtual === null || !isLedgerReady) return null;
     const { before, after } = previewLookahead(
@@ -290,6 +326,11 @@ function EffectPreview({
   return (
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
       {getBody()}
+      {movedNotes.map((note) => (
+        <InlineNotice key={note.text} tone={note.tone}>
+          {note.text}
+        </InlineNotice>
+      ))}
       {holdsText &&
         !(isCompact && holdsText.isSame) &&
         holdsText.blocks.map((block) => (

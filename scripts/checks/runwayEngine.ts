@@ -43,6 +43,12 @@ import {
   spreadCalendarAmount,
 } from '../../src/apps/runway/engine/calendar.ts';
 import { describeFunding } from '../../src/apps/runway/utils/fundingText.ts';
+import type { OpenDay } from '../../src/apps/runway/types.ts';
+import type { ComingDay } from '../../src/apps/runway/engine/comingDays.ts';
+import {
+  matchMovedDates,
+  planOverrideCarry,
+} from '../../src/apps/runway/engine/moved.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -7336,6 +7342,137 @@ const version = (
     [fromClosing.freeToSpendCents, fromClosing.assignedToBillsCents],
     [after.freeToSpendCents, after.assignedToBillsCents],
     'B1: a closing over the corrected day and the payment gives the same figures as the ledger',
+  );
+}
+
+// B1 (round 7): a moved schedule keeps what was paid and what the person chose for a day.
+{
+  const monthlyOn = (anchor: number): Schedule => ({
+    kind: 'monthly',
+    anchor,
+    monthDays: [new Date(anchor).getUTCDate()],
+  });
+  const incomeDays = Array.from({ length: 6 }, (_, index) => ({
+    dayKey: 'pay_' + index,
+    on: utc(2026, 10, 25) + index * 14 * DAY_MS,
+  }));
+  const paidNov1 = {
+    moveId: 'paid_rent_20261101',
+    dueOn: utc(2026, 11, 1),
+    amountCents: 100_000,
+    paidOn: utc(2026, 10, 28),
+    fromFreeCents: 0,
+  };
+  const paidOct1 = {
+    moveId: 'paid_rent_20261001',
+    dueOn: utc(2026, 10, 1),
+    amountCents: 100_000,
+    paidOn: utc(2026, 10, 1),
+    fromFreeCents: 0,
+  };
+  const rentOn = (anchor: number): DraftBillInput => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amount: { lowCents: 100_000, highCents: 100_000 },
+    stanceOverride: null,
+    schedule: monthlyOn(anchor),
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: { funded: [], paid: [paidOct1, paidNov1] },
+  });
+  const paidDues = (anchor: number) =>
+    planBillPayments(rentOn(anchor), incomeDays, utc(2027, 2, 1))
+      .filter((payment) => payment.paid !== null)
+      .map((payment) => [toDayStamp(payment.dueOn), payment.paid?.moveId]);
+  assert.deepEqual(
+    paidDues(utc(2026, 10, 1)),
+    [
+      ['20261001', 'paid_rent_20261001'],
+      ['20261101', 'paid_rent_20261101'],
+    ],
+    'B1: a paid payment reads paid on its own due date',
+  );
+  assert.deepEqual(
+    paidDues(utc(2026, 10, 5)),
+    [
+      ['20261005', 'paid_rent_20261001'],
+      ['20261105', 'paid_rent_20261101'],
+    ],
+    'B1: moving the due date from the 1st to the 5th keeps each paid mark on its payment',
+  );
+  assert.deepEqual(
+    paidDues(utc(2026, 10, 28)),
+    [['20261028', 'paid_rent_20261101']],
+    'B1: moving it to the 28th takes the Nov 1 mark to Oct 28, the payment it became, and never marks a payment nobody paid',
+  );
+  assert.deepEqual(
+    [
+      ...matchMovedDates(
+        [utc(2026, 1, 1), utc(2026, 2, 1)],
+        [utc(2026, 5, 1), utc(2026, 6, 1)],
+      ),
+    ],
+    [],
+    'B1: a date far from every new one moves nowhere',
+  );
+
+  const comingOf = (dates: number[]): ComingDay[] =>
+    dates.map((on) => ({
+      dayKey: toDayKey('job', on),
+      payLineId: 'job',
+      sourceId: 'src',
+      on,
+      sourceName: 'Job',
+      payLineName: 'Job',
+      amount: { lowCents: 100_000, highCents: 100_000 },
+      stanceOverride: null,
+    }));
+  const biweeklyFrom = (first: number) =>
+    Array.from({ length: 4 }, (_, index) => first + index * 14 * DAY_MS);
+  const before = comingOf(biweeklyFrom(utc(2026, 11, 6)));
+  const after = comingOf(biweeklyFrom(utc(2026, 11, 7)));
+  const ownDay = (
+    on: number,
+    status: OpenDay['status'] = 'draft',
+  ): OpenDay => ({
+    id: toDayKey('job', on),
+    payLineId: 'job',
+    sourceId: 'src',
+    expectedOn: on,
+    arrivedOn: null,
+    confirmedAt: null,
+    status,
+    doneLineIds: [],
+    override: {
+      pairings: null,
+      holdResolutions: { rent: 'leaveShort' },
+      payloads: {},
+    },
+  });
+  const carry = planOverrideCarry([ownDay(utc(2026, 11, 20))], before, after);
+  assert.deepEqual(
+    carry.carried.map((entry) => [entry.from.id, entry.to.dayKey]),
+    [[toDayKey('job', utc(2026, 11, 20)), toDayKey('job', utc(2026, 11, 21))]],
+    'B1: a day the person changed moves its choices with it when its payday moves a day',
+  );
+  assert.deepEqual(carry.stranded, [], 'B1: and nothing is left behind');
+  const monthlyAfter = comingOf([utc(2026, 12, 15)]);
+  const lost = planOverrideCarry(
+    [ownDay(utc(2026, 11, 20))],
+    before,
+    monthlyAfter,
+  );
+  assert.deepEqual(
+    lost.stranded.map((day) => day.id),
+    [toDayKey('job', utc(2026, 11, 20))],
+    'B1: a day with no new date near it is listed as left behind, not dropped without a word',
+  );
+  assert.deepEqual(
+    planOverrideCarry([ownDay(utc(2026, 11, 20))], before, before),
+    { carried: [], stranded: [] },
+    'B1: a change that keeps the dates moves nothing',
   );
 }
 

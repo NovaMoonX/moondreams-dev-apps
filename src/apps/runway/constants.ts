@@ -1255,3 +1255,16 @@ export const GOAL_CHART_WORDS = {
 // Round 4, package G5.
 /** Changes an item's History shows before "Show all". */
 export const ITEM_HISTORY_PREVIEW = 6;
+
+// Round 7, package B1.
+/** What a moved payday does to the income days the person changed for themselves. */
+export const MOVED_DAY_WORDS = {
+  carried: (count: number, from: string, to: string) =>
+    count === 1
+      ? `What you changed for ${from} moves to ${to}.`
+      : `What you changed for ${count} income days moves to their new dates.`,
+  stranded: (count: number, from: string) =>
+    count === 1
+      ? `What you changed for ${from} has no new income day near it, so it stops applying.`
+      : `What you changed for ${count} income days has no new date near it, so it stops applying.`,
+} as const;

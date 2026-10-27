@@ -1,18 +1,27 @@
 import { useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { useStore } from 'react-redux';
+
+import { useAppSelector, type RootState } from '@/store';
 import { CHANGE_WORDS } from '@apps/runway/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { saveDayOverride } from '@apps/runway/store/actions/dayActions';
+import {
+  carryDayOverrides,
+  saveDayOverride,
+} from '@apps/runway/store/actions/dayActions';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
-import type {
-  PreviewChange,
-  PreviewVersion,
+import {
+  previewOverrideCarry,
+  type PreviewChange,
+  type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
-import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectComingDays,
+  selectSettledKey,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeChange,
   isSamePayload,
@@ -96,6 +105,7 @@ export function useChangeFlow({
   onDone,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
+  const store = useStore<RootState>();
   const today = todayAsUtcDate();
   const days = useAppSelector((state) => selectComingDays(state, today));
   const [from, setFrom] = useState(INITIAL_FROM_WHEN);
@@ -163,6 +173,20 @@ export function useChangeFlow({
           { itemId, summary, note: reason },
         );
       } else {
+        const state = store.getState();
+        const carry =
+          changeJson === null
+            ? null
+            : previewOverrideCarry(
+                {
+                  items: state.runway.items,
+                  versions: state.runway.versions,
+                  openDays: state.runway.days,
+                  today,
+                  settledKey: selectSettledKey(state),
+                },
+                JSON.parse(changeJson) as PreviewChange,
+              );
         await changeItem(user.uid, encryption, {
           itemId,
           kind,
@@ -172,6 +196,22 @@ export function useChangeFlow({
           effectiveFrom: span.effectiveFrom,
           effectiveUntil: span.effectiveUntil,
         });
+        if (carry !== null && carry.carried.length > 0) {
+          await carryDayOverrides(
+            user.uid,
+            encryption,
+            carry.carried.map(({ from, to }) => ({
+              fromId: from.id,
+              to: {
+                payLineId: to.payLineId,
+                sourceId: to.sourceId,
+                expectedOn: to.on,
+              },
+            })),
+          ).catch((carryError: unknown) => {
+            console.error('Moving day choices failed', carryError);
+          });
+        }
       }
       onDone();
     } catch (saveError) {

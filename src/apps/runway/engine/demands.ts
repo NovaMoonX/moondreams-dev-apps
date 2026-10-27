@@ -31,6 +31,7 @@ import { planGoalContributions } from './pace';
 import { effectiveStance, pick } from './stance';
 import { getCalendarCents } from './calendar';
 import { occurrences, selectRuleDays } from './schedule';
+import { matchMovedDates } from './moved';
 
 export type DraftCadence =
   | (typeof FUNDING_CADENCES)[number]
@@ -352,11 +353,20 @@ export function planBillPayments(
     bill.schedule.anchor ?? 0,
     horizon,
   );
+  const moved = matchMovedDates(
+    progress.paid.map((entry) => entry.dueOn),
+    dues,
+  );
+  const paidByDue = new Map(
+    [...progress.paid]
+      .reverse()
+      .map((entry) => [moved.get(entry.dueOn) ?? entry.dueOn, entry]),
+  );
   if (bill.fundedBy.kind === 'chosen') {
     const chosen = new Set(bill.fundedBy.dayKeys);
     const days = chronological.filter((day) => chosen.has(day.dayKey));
     return dues.slice(0, 1).map((dueOn) => {
-      const paid = progress.paid.find((entry) => entry.dueOn === dueOn) ?? null;
+      const paid = paidByDue.get(dueOn) ?? null;
       const fundedCents = sumFunded(progress.funded);
       const shares = allocate(
         paid ? 0 : Math.max(0, amountCents - fundedCents),
@@ -377,9 +387,6 @@ export function planBillPayments(
     });
   }
   const ordered = isInDayOrder(chronological);
-  const paidByDue = new Map(
-    [...progress.paid].reverse().map((entry) => [entry.dueOn, entry]),
-  );
   const first = getFirstNeeded(dues, options.firstDayOn);
   const result = dues.slice(first).map((dueOn, offset): BillPayment => {
     const index = first + offset;

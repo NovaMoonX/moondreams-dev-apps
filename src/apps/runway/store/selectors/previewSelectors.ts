@@ -1,6 +1,10 @@
 import type { RootState } from '@/store';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { buildComingDays } from '@apps/runway/engine/comingDays';
+import {
+  planOverrideCarry,
+  type OverrideCarry,
+} from '@apps/runway/engine/moved';
 import { type BillProgressInput } from '@apps/runway/engine/progress';
 import {
   compareDrafts,
@@ -262,5 +266,32 @@ export function previewLookahead(
     before: selectLookahead(state, today),
     after: selectLookahead(layeredState, today),
   };
+  return result;
+}
+
+/** Where the days the person changed for themselves go when a change moves their payday; nothing moves for any other change. */
+export function previewOverrideCarry(
+  inputs: Pick<
+    PreviewInputs,
+    'items' | 'versions' | 'openDays' | 'today' | 'settledKey'
+  >,
+  change: PreviewChange,
+): OverrideCarry {
+  if (change.kind !== 'version' || change.version.kind !== 'payLine') {
+    return { carried: [], stranded: [] };
+  }
+  const { items, versions, openDays, today } = inputs;
+  const settled = new Set(
+    inputs.settledKey === '' ? [] : inputs.settledKey.split(','),
+  );
+  const daysOf = (source: readonly OpenVersion[]) =>
+    buildComingDays(items, source, today).filter(
+      (day) => !settled.has(day.dayKey),
+    );
+  const result = planOverrideCarry(
+    openDays,
+    daysOf(versions),
+    daysOf(layerVersion<OpenVersion>(versions, change.version)),
+  );
   return result;
 }
