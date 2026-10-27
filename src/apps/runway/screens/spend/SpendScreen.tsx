@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { CalendarRange, Wallet } from 'lucide-react';
-
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { CalendarRange, ShoppingBag, Wallet } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import { PillGroup } from '@/components/PillGroup';
 import SensitiveValue from '@/components/SensitiveValue';
-import SearchInput from '@/components/SearchInput';
+import FilterBar, { FilterSection } from '@/components/FilterBar';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SummaryEditor from '@/components/SummaryEditor';
@@ -20,7 +19,6 @@ import {
   SPEND_PERIOD_LABELS,
   SPEND_PERIOD_WORDS,
   SPEND_PERIODS,
-  SPEND_PILL_LIMIT,
   SPEND_SEARCH_THRESHOLD,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -44,8 +42,6 @@ import {
 import type { OpenPurchase } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
-
-const ALL_ENVELOPES = 'all';
 
 const monthFormat = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -101,6 +97,10 @@ function SpendScreen() {
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
+  // The filter drawer's history step restores the address it opened on when it closes, so the pick is also kept here.
+  const [pickedEnvelope, setPickedEnvelope] = useState<
+    string | null | undefined
+  >(undefined);
 
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
@@ -110,12 +110,19 @@ function SpendScreen() {
     });
     return acc;
   }, new Map());
+  const chosenEnvelope =
+    pickedEnvelope === undefined ? spendEnvelope : pickedEnvelope;
   const filterId =
-    spendEnvelope !== null && counts.has(spendEnvelope) ? spendEnvelope : null;
-  const needle =
-    purchases.length >= SPEND_SEARCH_THRESHOLD
-      ? query.trim().toLowerCase()
-      : '';
+    chosenEnvelope !== null && counts.has(chosenEnvelope)
+      ? chosenEnvelope
+      : null;
+  const showEnvelope = (envelopeId: string | null) => {
+    setPickedEnvelope(envelopeId);
+    showSpendEnvelope(envelopeId);
+    setShown(SPEND_PAGE_SIZE);
+  };
+  const hasBar = purchases.length >= SPEND_SEARCH_THRESHOLD || counts.size >= 2;
+  const needle = hasBar ? query.trim().toLowerCase() : '';
   const matches = purchases.filter(
     (purchase) =>
       (filterId === null ||
@@ -235,46 +242,38 @@ function SpendScreen() {
             </p>
           </div>
         </div>
-        {purchases.length >= SPEND_SEARCH_THRESHOLD && (
-          <SearchInput
-            value={query}
-            onChange={(text) => {
+        {hasBar && (
+          <FilterBar
+            query={query}
+            onQueryChange={(text) => {
               setQuery(text);
               setShown(SPEND_PAGE_SIZE);
             }}
-            placeholder={SPEND_WORDS.search}
-          />
-        )}
-        {filterOptions.length > SPEND_PILL_LIMIT && (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>
-              {SPEND_WORDS.envelope}
-            </p>
-            <Select
-              searchable
-              options={filterOptions.map((option) => ({
-                text: `${option.label} · ${option.detail}`,
-                value: option.value === '' ? ALL_ENVELOPES : option.value,
-              }))}
-              value={filterId ?? ALL_ENVELOPES}
-              onChange={(value) => {
-                showSpendEnvelope(value === ALL_ENVELOPES ? null : value);
-                setShown(SPEND_PAGE_SIZE);
-              }}
-            />
-          </div>
-        )}
-        {counts.size >= 2 && filterOptions.length <= SPEND_PILL_LIMIT && (
-          <PillGroup
-            isThin
-            label='Envelope'
-            options={filterOptions}
-            value={filterId ?? ''}
-            onChange={(value) => {
-              showSpendEnvelope(value === '' ? null : value);
-              setShown(SPEND_PAGE_SIZE);
-            }}
-          />
+            searchPlaceholder={SPEND_WORDS.search}
+            filterLabel='Filter purchases'
+            activeFilters={
+              filterId === null
+                ? []
+                : [{ key: 'envelope', label: nameOf(filterId) }]
+            }
+            onRemoveFilter={() => showEnvelope(null)}
+            onClearFilters={() => showEnvelope(null)}
+            doneLabel={`Show ${matches.length} ${matches.length === 1 ? 'purchase' : 'purchases'}`}
+            compactDoneLabel={`Show ${matches.length}`}
+          >
+            {counts.size >= 2 && (
+              <FilterSection title={SPEND_WORDS.envelope}>
+                <PillGroup
+                  label={SPEND_WORDS.envelope}
+                  options={filterOptions}
+                  value={filterId ?? ''}
+                  onChange={(value) =>
+                    showEnvelope(value === '' ? null : value)
+                  }
+                />
+              </FilterSection>
+            )}
+          </FilterBar>
         )}
         {matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
@@ -313,19 +312,13 @@ function SpendScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title={SPEND_WORDS.title}
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            {SPEND_WORDS.newPurchase}
-          </Button>
-        }
-      />
+      <SectionHeader title={SPEND_WORDS.title} />
       {getBody()}
+      <FloatingAction
+        label={SPEND_WORDS.newPurchase}
+        icon={<ShoppingBag className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {purchaseId !== null && (
         <PurchaseScreen
           key={purchaseId}

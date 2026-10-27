@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import { Target } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
@@ -137,17 +136,13 @@ function GoalsScreen() {
             </HelpTip>
           )
         }
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            Add a goal
-          </Button>
-        }
       />
       {getBody()}
+      <FloatingAction
+        label='Add a goal'
+        icon={<Target className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {formKey !== null && (
         <GoalForm
           key={formKey}

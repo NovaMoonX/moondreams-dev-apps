@@ -4,6 +4,7 @@ import { Banknote, ChevronRight } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -254,17 +255,13 @@ function IncomeScreen() {
     <div className='space-y-4'>
       <SectionHeader
         title='Income'
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            Add income
-          </Button>
-        }
       />
       {getBody()}
+      <FloatingAction
+        label='Add income'
+        icon={<Banknote className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {formKey !== null && (
         <IncomeForm
           key={formKey}

@@ -23,6 +23,7 @@ function RunwayBottomNav({ value, onChange }: RunwayBottomNavProps) {
   return (
     <nav
       aria-label='Runway sections'
+      data-bottom-bar=''
       className='border-border bg-background/95 fixed inset-x-0 bottom-0 z-20 border-t pb-[env(safe-area-inset-bottom)] backdrop-blur'
     >
       <ul className='mx-auto grid max-w-md auto-cols-fr grid-flow-col px-3 py-1.5'>

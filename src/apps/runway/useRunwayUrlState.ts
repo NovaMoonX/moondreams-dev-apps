@@ -100,6 +100,12 @@ export function useRunwayUrlState() {
     setRequestedView('checkAmount', { history: 'replace' });
   };
 
+  const closeCheckAmount = () => {
+    setRequestedCheckEnvelope(null, { history: 'replace' });
+    setRequestedCheckFrom(null, { history: 'replace' });
+    setRequestedView('freeToSpend', { history: 'replace' });
+  };
+
   const [requestedFixes, setRequestedFixes] = useQueryState(
     'fixes',
     parseAsBoolean,
@@ -217,6 +223,7 @@ export function useRunwayUrlState() {
     checkEnvelope: requestedCheckEnvelope,
     isCheckFromFreeToSpend: requestedCheckFrom === true,
     openCheckAmount,
+    closeCheckAmount,
     openPurchase,
     closePurchase,
     showSpendEnvelope,

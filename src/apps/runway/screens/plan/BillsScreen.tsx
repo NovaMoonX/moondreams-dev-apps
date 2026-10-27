@@ -1,9 +1,8 @@
 import { useState, type CSSProperties } from 'react';
 import { Receipt } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
@@ -127,17 +126,13 @@ function BillsScreen() {
     <div className='space-y-4'>
       <SectionHeader
         title='Bills'
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            Add a bill
-          </Button>
-        }
       />
       {getBody()}
+      <FloatingAction
+        label='Add a bill'
+        icon={<Receipt className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {formKey !== null && (
         <BillForm
           key={formKey}

@@ -32,6 +32,8 @@ interface ItemRowProps {
   detail?: string | null;
   /** A detail that asks for a decision on this row reads in the normal colour. */
   isDetailStrong?: boolean;
+  /** A one-line warning in the detail's place: warning ink, the icon in its own fixed column and the text cut at the line's end. */
+  warningLine?: ReactNode;
   /** The detail says the plan falls short: warning ink and icon. */
   isDetailWarning?: boolean;
   figure?: string | null;
@@ -58,6 +60,7 @@ function ItemRow({
   detail,
   isDetailStrong = false,
   isDetailWarning = false,
+  warningLine,
   figure,
   isPrivate = false,
   isDetailPrivate = false,
@@ -74,7 +77,7 @@ function ItemRow({
       : givenAriaLabel;
   const hide = (node: ReactNode, isOn: boolean) =>
     isOn ? <SensitiveValue>{node}</SensitiveValue> : node;
-  const hasDetail = Boolean(detail);
+  const hasDetail = Boolean(detail) || Boolean(warningLine);
   const badge = tick
     ? null
     : (leading ?? <ItemBadge name={name} emoji={emoji} />);
@@ -97,7 +100,15 @@ function ItemRow({
           </span>
         )}
       </span>
-      {hasDetail && (
+      {warningLine && (
+        <span className='flex items-center text-sm text-(--runway-warning-ink)'>
+          <span className='flex w-5 shrink-0 justify-center'>
+            <TriangleAlert className='h-3.5 w-3.5' aria-hidden='true' />
+          </span>
+          <span className='min-w-0 flex-1 truncate'>{warningLine}</span>
+        </span>
+      )}
+      {hasDetail && !warningLine && (
         <span
           className={join(
             'block text-sm break-words',

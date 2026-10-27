@@ -39,6 +39,9 @@ import {
   ActionSection,
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
+import GoalBalanceView, {
+  GoalBalanceDoor,
+} from '@apps/runway/components/GoalBalanceView';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
@@ -47,6 +50,7 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
   CHANGE_WORDS,
+  GOAL_CHART_WORDS,
   HOW_OFTEN_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
@@ -100,6 +104,7 @@ import {
 
 type View =
   | 'menu'
+  | 'balance'
   | 'pause'
   | 'resume'
   | 'end'
@@ -164,6 +169,7 @@ const VIEW_NOTES: Record<View, string> = {
   end: '',
   archive: LIFECYCLE_WORDS.archiveNote,
   history: '',
+  balance: '',
   purchases: '',
   check: '',
 };
@@ -558,6 +564,14 @@ function ItemSheet({
             onClick={() => setPhase('funds')}
           />
         )}
+        {goal && (
+          <GoalBalanceDoor
+            goalId={itemId}
+            goal={goal}
+            today={today}
+            onOpen={() => goTo('balance')}
+          />
+        )}
         <ActionRow
           isGrouped
           hasChevron
@@ -653,13 +667,17 @@ function ItemSheet({
     <div className='flex flex-1 flex-col gap-4'>
       <BackLink onBack={() => goTo('menu')} />
       <p className='text-2xl font-semibold'>
-        {view === 'history'
-          ? ITEM_VIEW_WORDS.historyTitle
-          : view === 'check'
-            ? CHECK_WORDS.title
-            : ITEM_VIEW_WORDS.purchasesTitle}
+        {view === 'balance'
+          ? GOAL_CHART_WORDS.title
+          : view === 'history'
+            ? ITEM_VIEW_WORDS.historyTitle
+            : view === 'check'
+              ? CHECK_WORDS.title
+              : ITEM_VIEW_WORDS.purchasesTitle}
       </p>
-      {view === 'history' ? (
+      {view === 'balance' && goal ? (
+        <GoalBalanceView goalId={itemId} goal={goal} today={today} />
+      ) : view === 'history' ? (
         <ItemHistoryView itemId={itemId} />
       ) : view === 'check' ? (
         <CheckAmountBody presetEnvelopeId={itemId} />
@@ -755,7 +773,10 @@ function ItemSheet({
       <ChangeSteps
         isReason={view !== 'menu'}
         reason={
-          view === 'history' || view === 'purchases' || view === 'check'
+          view === 'history' ||
+          view === 'balance' ||
+          view === 'purchases' ||
+          view === 'check'
             ? browse
             : action
         }

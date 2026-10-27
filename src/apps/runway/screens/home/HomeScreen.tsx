@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ChevronRight, Home, ListChecks, ReceiptText } from 'lucide-react';
+import { ChevronRight, Home, ListChecks, ShoppingBag } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import HelpTip from '@/components/HelpTip';
 import SensitiveValue from '@/components/SensitiveValue';
 import SectionHeader from '@/components/SectionHeader';
@@ -170,35 +171,17 @@ function HomeScreen() {
           <SectionHeader
             title={HOME_WORDS.envelopes}
             action={
-              <span className='flex items-center gap-2'>
-                <LevelGate level='track'>
-                  <Button
-                    variant='secondary'
-                    size='sm'
-                    aria-label={SPEND_WORDS.envelopeAdd}
-                    onClick={() => setIsAddingPurchase(true)}
-                  >
-                    <ReceiptText
-                      className='h-4 w-4 min-[360px]:hidden'
-                      aria-hidden='true'
-                    />
-                    <span className='max-[359px]:hidden'>
-                      {SPEND_WORDS.envelopeAdd}
-                    </span>
-                  </Button>
-                </LevelGate>
-                {envelopes.length > shown.length && (
-                  <ShowMoreButton
-                    isHeaderAction
-                    onClick={() => {
-                      showPlanSection('envelopes');
-                      showTab('plan');
-                    }}
-                  >
-                    See all
-                  </ShowMoreButton>
-                )}
-              </span>
+              envelopes.length > shown.length && (
+                <ShowMoreButton
+                  isHeaderAction
+                  onClick={() => {
+                    showPlanSection('envelopes');
+                    showTab('plan');
+                  }}
+                >
+                  See all
+                </ShowMoreButton>
+              )
             }
           />
           <ul className='grid grid-cols-2 gap-2'>
@@ -227,6 +210,15 @@ function HomeScreen() {
             />
           </ul>
         </div>
+      )}
+      {envelopes.length > 0 && (
+        <LevelGate level='track'>
+          <FloatingAction
+            label={SPEND_WORDS.newPurchase}
+            icon={<ShoppingBag className='h-5 w-5' aria-hidden='true' />}
+            onClick={() => setIsAddingPurchase(true)}
+          />
+        </LevelGate>
       )}
       {isAddingPurchase && (
         <PurchaseForm isOpen onClose={() => setIsAddingPurchase(false)} />

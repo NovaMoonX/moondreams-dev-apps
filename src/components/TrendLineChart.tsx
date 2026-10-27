@@ -17,7 +17,8 @@ import {
 
 export interface TrendPoint {
   x: number;
-  y: number;
+  /** Null leaves a gap in the main line, for a stretch only the second line covers. */
+  y: number | null;
   /** A second line to compare against; drawn only when `secondaryLabel` is set. */
   y2?: number | null;
 }
@@ -200,7 +201,7 @@ function TrendLineChart({
   }
 
   const sorted = [...data].sort((left, right) => left.x - right.x);
-  const last = sorted[sorted.length - 1];
+  const last = sorted.filter((point) => point.y !== null).at(-1) ?? sorted[sorted.length - 1];
   const tickStyle = {
     fill: 'var(--color-muted-foreground)',
     fontSize: isSoft ? 11 : 12,
@@ -223,7 +224,7 @@ function TrendLineChart({
     return (
       <div className='border-border bg-popover text-popover-foreground rounded-full border px-2.5 py-1 text-[11px] whitespace-nowrap shadow-sm'>
         <span className='font-medium'>{formatX(Number(label))}</span>
-        {main && (
+        {main && main.value != null && (
           <span>
             {' '}
             · {readoutLabels?.main ?? seriesLabel ?? yLabel}{' '}
@@ -448,7 +449,7 @@ function TrendLineChart({
           {isSoft && (
             <ReferenceDot
               x={last.x}
-              y={last.y}
+              y={last.y ?? undefined}
               r={6}
               fill='var(--color-primary)'
               stroke='var(--color-popover)'
