@@ -112,7 +112,7 @@ For each MVP issue, in order:
    - **Title:** `<App Name>: <what it does>`.
    - **Base:** the previous branch.
    - **Body:**
-     - first line `Resolves <full issue URL>`;
+     - first line `Resolves <full issue URL>` (the keyword is what closes the issue: GitHub ignores it on a stacked PR, so `close-linked-issues.yml` closes it when this PR merges into the branch below);
      - "Stacked on <previous PR URL>";
      - What changed;
      - Rules / schema / seed: state when no change was needed and why;
