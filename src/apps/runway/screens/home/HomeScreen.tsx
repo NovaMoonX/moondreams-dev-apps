@@ -86,7 +86,7 @@ function HomeScreen() {
       <EmptyCard
         icon={<Home className='h-5 w-5' />}
         action={
-          <Button size='sm' onClick={() => openView('start')}>
+          <Button onClick={() => openView('start')}>
             {HOME_WORDS.getStarted}
           </Button>
         }

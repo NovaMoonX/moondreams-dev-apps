@@ -9,6 +9,7 @@ import { useAppSelector } from '@/store';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { START_WORDS } from '@apps/runway/constants';
 import { collectStarted } from '@apps/runway/engine/progress';
+import InlineNotice from '@/components/InlineNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
@@ -284,9 +285,7 @@ function SavedStart({ uid }: { uid: string }) {
       standContent={(openStand) => (
         <>
           {bills.length + goals.length >= STAND_MANY && (
-            <p className='text-muted-foreground text-sm text-pretty'>
-              {START_WORDS.standMany}
-            </p>
+            <InlineNotice tone='info'>{START_WORDS.standMany}</InlineNotice>
           )}
           {!hasStart && (
             <EmptyCard icon={<Wallet className='h-5 w-5' />}>

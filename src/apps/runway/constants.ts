@@ -399,7 +399,7 @@ export const CHANGE_WORDS = {
   whyPlaceholder: 'Why it changed. You can leave this out.',
   saveWithNote: 'Save',
   saveWithoutNote: 'Save without a reason',
-  unchanged: 'Change something to continue.',
+  unchanged: 'Enter a new value to continue.',
   change: 'Change',
   scheduled: 'From',
   fromDay: 'From this income day on',
@@ -740,7 +740,7 @@ export const START_WORDS = {
   stepOf: (step: number, total: number) => `Step ${step} of ${total}`,
   incomeAsk: 'Who pays you?',
   incomeHelp:
-    'Add where your money comes from, how much, and how often. This is the one thing Runway needs.',
+    'Where your money comes from, how much, and how often. It is the one thing Runway needs.',
   billsAsk: 'What do you pay?',
   billsHelp:
     'Add the bills and upcoming expenses you know about. Each is set aside a little at a time before it is due.',
@@ -773,7 +773,7 @@ export const START_WORDS = {
   addAnotherEnvelope: 'Add another envelope',
   addGoal: 'Add a goal',
   addAnotherGoal: 'Add another goal',
-  needIncome: 'Add an income source to continue.',
+  needIncome: 'Add one to continue.',
   localNotice:
     'You are not signed in. What you enter stays on this device, unencrypted, for 7 days. Sign in to save it to your plan.',
   resumeAsk: 'Pick up where you left off?',
