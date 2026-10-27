@@ -7418,6 +7418,16 @@ const version = (
     [],
     'B1: a date far from every new one moves nowhere',
   );
+  assert.deepEqual(
+    [...matchMovedDates([utc(2026, 11, 20)], [utc(2026, 11, 22)])],
+    [[utc(2026, 11, 20), utc(2026, 11, 22)]],
+    'B1: a one-time date moved two days follows to its new date',
+  );
+  assert.deepEqual(
+    [...matchMovedDates([utc(2026, 9, 1)], [utc(2026, 11, 22)])],
+    [],
+    'B1: but not from months away',
+  );
 
   const comingOf = (dates: number[]): ComingDay[] =>
     dates.map((on) => ({

@@ -1,11 +1,15 @@
 import type { DayOverrideSealed, OpenDay } from '@apps/runway/types';
 
 import type { ComingDay } from './comingDays';
+import { DAY_MS } from './dates';
+
+/** The span a date with no neighbours reaches across, half a month each way. */
+const LONE_GAP = 31 * DAY_MS;
 
 /**
  * Where each date of `old` that `next` no longer holds moved to: the nearest date of `next` within half
- * the gap to its neighbours, that is not itself one of `old`, each taken once, nearest pairs first. A
- * date far from every new one moved nowhere, so a payment or day long past never claims a new date.
+ * the gap to its neighbours (half a month each way for a lone date), that is not itself one of `old`,
+ * each taken once, nearest pairs first. A date far from every new one moved nowhere.
  */
 export function matchMovedDates(
   old: readonly number[],
@@ -16,13 +20,19 @@ export function matchMovedDates(
   const before = new Set(old);
   const gone = [...before].filter((date) => !kept.has(date));
   const pairs = sorted.flatMap((date, index) => {
-    if (before.has(date) || sorted.length < 2) return [];
+    if (before.has(date)) return [];
     const gapBefore =
-      index > 0 ? date - sorted[index - 1] : sorted[1] - sorted[0];
+      sorted.length < 2
+        ? LONE_GAP
+        : index > 0
+          ? date - sorted[index - 1]
+          : sorted[1] - sorted[0];
     const gapAfter =
-      index < sorted.length - 1
-        ? sorted[index + 1] - date
-        : date - sorted[index - 1];
+      sorted.length < 2
+        ? LONE_GAP
+        : index < sorted.length - 1
+          ? sorted[index + 1] - date
+          : date - sorted[index - 1];
     return gone
       .filter(
         (from) => from > date - gapBefore / 2 && from <= date + gapAfter / 2,
