@@ -194,3 +194,10 @@ Notes on the table:
 - **Spend.** One thin pill row picks the period (This month, Last month, Past 30 days, Past 90 days, Older with a month list) and "Spent $X" sits under it for the rows shown; `?period=` keeps it.
 - **Calls to action** carry no "+": "Add income", "Add a bill", "Add an envelope", "Add a goal", "Add a purchase", "Add expected".
 - **See all** sits on Home's Envelopes header line; "Show N more" on Days is a 14px muted row.
+
+## Round 4, package D: private amounts
+
+- Each tab's title line ends in one eye button (Home, Days, Plan, Spend, same place); it shows or hides amounts on every tab. Amounts start hidden on a device, and hide again after five minutes in the background.
+- Blurred: Free to spend, envelope tiles and rows, bill, pay, goal and purchase rows, income day rows, the shortfall warning row and Spend's total. Names, dates and counts stay readable. Not blurred: forms, a figure being typed and sheets or screens the person opened.
+- A goal's sheet offers "Stop adding to it" (while it is being added to) or "Start adding to it" (when it is not); both open the goal's "How often" question. A calendar envelope's sheet labels its figure by its cadence ("Monthly").
+- "Things to fix" lists every short line of an income day as its own row, soonest first, the higher priority first within a day.
