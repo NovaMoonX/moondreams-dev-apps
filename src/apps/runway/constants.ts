@@ -607,7 +607,7 @@ export const TRACKING_WORDS = {
   history: 'Tracking history',
   lineUpTitle: 'Where is your money now?',
   lineUpHelp:
-    'Say what you have and what each envelope, goal and bill holds at the start of the day tracking begins. Money that arrives or is paid from that day on is added to it. Amounts from days you already confirmed are filled in; add the rest.',
+    'Say what you have and what each envelope, goal and bill holds on the day tracking begins. Money that arrives or is paid after that day is added to it.',
   startsOn: 'Tracking starts',
   moneyOnHand: 'Money on hand',
   moneyHint: 'One total for all of it. Named accounts come later.',
