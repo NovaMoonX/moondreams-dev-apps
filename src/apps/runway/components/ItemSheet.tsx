@@ -240,8 +240,8 @@ function ItemSheet({
       value: String(on),
       label:
         itemKind === 'bill'
-          ? `After the ${formatDateUTC(on)} payment`
-          : `After the ${formatDateUTC(on)} payday`,
+          ? `After the ${formatDateShortUTC(on)} payment`
+          : `After the ${formatDateShortUTC(on)} payday`,
     })),
     ...(upcoming.includes(today)
       ? []
@@ -370,7 +370,7 @@ function ItemSheet({
       return (
         <BillForm
           isOpen
-          title='Bill'
+          title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           openStep={openStep as BillStepId | null}
@@ -383,7 +383,7 @@ function ItemSheet({
       return (
         <EnvelopeForm
           isOpen
-          title='Envelope'
+          title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           openStep={openStep as EnvelopeStepId | null}
@@ -396,7 +396,7 @@ function ItemSheet({
       return (
         <GoalForm
           isOpen
-          title='Goal'
+          title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           openStep={openStep as GoalStepId | null}
@@ -408,7 +408,7 @@ function ItemSheet({
     return (
       <IncomeForm
         isOpen
-        title='Income'
+        title={payload.name}
         defaultFrequency={null}
         openStep={openStep as IncomeStepId | null}
         editing={
@@ -501,7 +501,7 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
-        {canChange && (
+        {canChange && !(itemKind === 'source' && quickChange) && (
           <ActionRow
             isGrouped
             hasChevron
