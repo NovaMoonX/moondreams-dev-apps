@@ -159,6 +159,7 @@ function PayLineRow({
         name={payLine.name}
         detail={timing}
         figure={amount}
+        isPrivate
         ariaLabel={`${payLine.name}, ${amount}. ${timing}. Open`}
         onOpen={() => setIsOpen(true)}
       />
