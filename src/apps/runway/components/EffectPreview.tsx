@@ -5,12 +5,13 @@ import InlineNotice from '@/components/InlineNotice';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector, type RootState } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
+  COMPACT_MOVE_WORDS,
   EFFECT_FOLD_WORDS,
   FORM_FLOW_WORDS,
   MOVED_DAY_WORDS,
@@ -118,6 +119,42 @@ const toEntries = (days: readonly PreviewDay[]): EffectEntry[] => {
   return [...own, ...folded];
 };
 
+/** Days a change only moves to other dates, each keeping what it leaves: pairs of a day taken away and a day added, in date order. */
+const getMoves = (days: readonly PreviewDay[]) => {
+  const removed = days.filter((day) => day.kind === 'removed');
+  const added = days.filter((day) => day.kind === 'added');
+  const isMove =
+    removed.length > 0 &&
+    removed.length === added.length &&
+    removed.length + added.length === days.length &&
+    removed.every(
+      (day, index) =>
+        day.effect.freeBeforeCents === added[index].effect.freeAfterCents,
+    );
+  return { removed, added, isMove };
+};
+
+/** What a change does when no day's "Left from this day" moves, or it only follows a day to its new date: the dates that move, or how many days change. */
+const describeUnmoved = (days: readonly PreviewDay[]) => {
+  const { removed, added, isMove } = getMoves(days);
+  if (isMove && removed.length === 1)
+    return COMPACT_MOVE_WORDS.movesTo(
+      formatDateShortUTC(removed[0].on),
+      formatDateShortUTC(added[0].on),
+    );
+  if (isMove)
+    return COMPACT_MOVE_WORDS.manyMove(
+      removed.length,
+      formatDateShortUTC(removed[0].on),
+    );
+  if (days.length === 1)
+    return COMPACT_MOVE_WORDS.oneChanges(formatDateShortUTC(days[0].on));
+  return COMPACT_MOVE_WORDS.manyChange(
+    days.length,
+    formatDateShortUTC(days[0].on),
+  );
+};
+
 /** Each upcoming income day a change would move, before and after, worked out by the same engine that drafts the days. */
 function EffectPreview({
   changeJson,
@@ -185,6 +222,7 @@ function EffectPreview({
         ? [
             {
               tone: 'info' as const,
+              isOneCarried: carried.length === 1,
               text: MOVED_DAY_WORDS.carried(
                 carried.length,
                 formatDateUTC(carried[0].from.expectedOn),
@@ -197,6 +235,7 @@ function EffectPreview({
         ? [
             {
               tone: 'warning' as const,
+              isOneCarried: false,
               text: MOVED_DAY_WORDS.stranded(
                 stranded.length,
                 formatDateUTC(stranded[0].expectedOn),
@@ -229,6 +268,13 @@ function EffectPreview({
     isHidden,
   ]);
 
+  const isMoveSaid =
+    isCompact &&
+    !isOpen &&
+    days !== null &&
+    getMoves(days).isMove &&
+    getMoves(days).removed.length === 1;
+
   const getBody = () => {
     if (virtual === null || days === null) {
       return (
@@ -251,22 +297,30 @@ function EffectPreview({
     const entries = toEntries(days);
     const shown = isOpen ? entries : entries.slice(0, PREVIEW_SHOWN);
     if (isCompact && !isOpen) {
-      const [first] = days;
+      const first = getMoves(days).isMove
+        ? undefined
+        : days.find(
+            (day) => day.effect.freeBeforeCents !== day.effect.freeAfterCents,
+          );
       const count =
         days.length === 1
           ? FORM_FLOW_WORDS.compactOne
           : FORM_FLOW_WORDS.compactMany(days.length);
       return (
         <div className='space-y-1'>
-          <p className='text-sm'>
-            {count} {formatDateUTC(first.on)}:{' '}
-            <span className='whitespace-nowrap tabular-nums'>
-              <MaskedText>
-                {`${formatCents(first.effect.freeBeforeCents)} to ${formatCents(first.effect.freeAfterCents)}`}
-              </MaskedText>
-            </span>
-            {!isHidden && ` ${FORM_FLOW_WORDS.compactLeft}`}
-          </p>
+          {first === undefined ? (
+            <p className='text-sm'>{describeUnmoved(days)}</p>
+          ) : (
+            <p className='text-sm'>
+              {count} {formatDateUTC(first.on)}:{' '}
+              <span className='whitespace-nowrap tabular-nums'>
+                <MaskedText>
+                  {`${formatCents(first.effect.freeBeforeCents)} to ${formatCents(first.effect.freeAfterCents)}`}
+                </MaskedText>
+              </span>
+              {!isHidden && ` ${FORM_FLOW_WORDS.compactLeft}`}
+            </p>
+          )}
           <ShowMoreButton isOpen={false} onClick={() => setIsOpen(true)}>
             {FORM_FLOW_WORDS.compactDoor}
           </ShowMoreButton>
@@ -328,7 +382,9 @@ function EffectPreview({
       {getBody()}
       {movedNotes.map((note) => (
         <InlineNotice key={note.text} tone={note.tone}>
-          {note.text}
+          {note.isOneCarried && isMoveSaid
+            ? COMPACT_MOVE_WORDS.carriedWithIt
+            : note.text}
         </InlineNotice>
       ))}
       {holdsText &&

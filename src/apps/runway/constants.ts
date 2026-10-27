@@ -1357,3 +1357,14 @@ export const CARRY_WORDS = {
   failedBody: (dates: string) =>
     `What you chose for ${dates} did not move to the new date. The change is saved; open the day to choose again.`,
 } as const;
+
+/** The one-line effect of a change when what is left from each day does not move, round 7 review. */
+export const COMPACT_MOVE_WORDS = {
+  movesTo: (from: string, to: string) => `${from} moves to ${to}.`,
+  manyMove: (count: number, first: string) =>
+    `${count} income days move, starting ${first}.`,
+  oneChanges: (on: string) => `One income day changes, ${on}.`,
+  manyChange: (count: number, first: string) =>
+    `${count} income days change, starting ${first}.`,
+  carriedWithIt: 'What you changed for that day goes with it.',
+} as const;
