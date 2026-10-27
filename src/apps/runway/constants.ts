@@ -318,30 +318,30 @@ export const CONFIRM_WORDS = {
   shortFrom: 'The shortfall comes out of what is left from this day.',
   needsAmount: 'Enter the amount that arrived.',
   needsDate: 'Pick the date it arrived.',
-  holds: 'Choose for each line that is short first.',
+  holds: 'Choose what to do for each item that is short first.',
   linesTakeTooMuch:
-    'The lines take more than arrived. Lower a line or raise the amount.',
-  needsLineAmount: 'Enter an amount for each line you changed.',
-  adjustLines: 'Adjust the lines',
+    'The items get more than arrived. Give one less, or raise the amount.',
+  needsLineAmount: 'Enter an amount for each item you changed.',
+  adjustLines: 'Change what each item gets',
   adjustIntro:
-    'Change what a line gets. What is left from this day is what the lines leave.',
+    'Change what each item gets. What is left from this day is what they leave.',
   lowestFirst: 'Take from the lowest priority first',
-  resetLines: 'Reset lines to the draft',
-  lineNotePlaceholder: 'Why this line changed',
+  resetLines: 'Back to the plan for this day',
+  lineNotePlaceholder: 'Why it changed',
   adjustedDone: 'Done',
   confirm: 'Confirm',
   confirmed: 'Confirmed',
   markNotArrived: 'Did not arrive',
   markedNotArrived: 'Marked as not arrived',
   undoNotArrived: 'Put this day back',
-  notArrivedLine: 'Marked as not arrived. Its draft is off your plan.',
+  notArrivedLine: 'Marked as not arrived. It is off your plan.',
   offline:
     'Confirming needs a connection. Nothing was saved. Try again when you are back online.',
   planned: 'Planned',
   arrived: 'Arrived',
   recordTitle: 'Planned and confirmed',
   recordDoor: 'Planned and confirmed',
-  unchanged: 'Everything matched the draft.',
+  unchanged: 'Everything matched the plan.',
   missingRecords: 'The record of this day could not be read.',
 } as const;
 
@@ -350,7 +350,7 @@ export const CORRECT_WORDS = {
   doorHint: 'Fix an amount you confirmed. The original stays on record.',
   sheetTitle: 'Correct this day',
   intro:
-    'Change what arrived or what a line got. What is left from this day is what the lines leave.',
+    'Change what arrived or what an item got. What is left from this day is what the items leave.',
   review: 'See what changes',
   reviewTitle: 'What this changes',
   confirmed: 'Confirmed',
@@ -368,7 +368,7 @@ export const CORRECT_WORDS = {
   current: 'Current split',
   original: 'As confirmed',
   currentTag: 'Current',
-  untickedNote: 'Lines you change are unticked on the checklist.',
+  untickedNote: 'Items you change are unticked on the checklist.',
 } as const;
 export const MAX_PAIRINGS = 20;
 
@@ -508,7 +508,7 @@ export const DRAFT_CADENCE_WORDS: Record<
 
 export const DRAFT_WORDS = {
   fundedFrom: 'paid from',
-  outOfMoney: "This day's money ran out before it got to this line",
+  outOfMoney: "This day's money ran out before it got to this item",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',
   dayOnly: 'Changed for this income day only.',
@@ -539,7 +539,7 @@ export const DRAFT_WORDS = {
   leftShort: 'Left short',
   toppedUp: 'Topped up as far as the money allowed',
   holdsBlock:
-    'This day cannot be confirmed until you choose for each line that is short.',
+    'This day cannot be confirmed until you choose for each item that is short.',
   useThePlan: 'Undo my choices for this day',
   undoChoice: 'Undo my choice',
 } as const;
@@ -859,9 +859,9 @@ export const ITEM_SHEET_WORDS = {
   undoChoiceSub: 'Back to holding it until you choose',
   heldFlag: 'Held until you choose',
   fromThisDay: 'From this day',
-  draftStatus: 'Expected. A draft until the money arrives.',
+  draftStatus: 'Expected. This is the plan until the money arrives.',
   dayMore: 'More about this day',
-  notArrivedSub: 'Takes this draft off your plan until you put it back',
+  notArrivedSub: 'Takes this day off your plan until you put it back',
 } as const;
 
 export const PROBLEM_WORDS = {
@@ -964,7 +964,7 @@ export const FORM_FLOW_WORDS = {
   lessThanPlanned: (amount: string) =>
     `${amount} less than planned, taken from what is left.`,
   lessThanLeft: (amount: string) =>
-    `${amount} less than planned. A line has to get less.`,
+    `${amount} less than planned. An item has to get less.`,
   moreShort: (amount: string) => `${amount} more than planned.`,
   lessShort: (amount: string) => `${amount} less than planned.`,
   differenceWithLines: (lead: string, left: string) =>

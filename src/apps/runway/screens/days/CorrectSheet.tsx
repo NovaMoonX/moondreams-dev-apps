@@ -248,12 +248,12 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             <SearchInput
               value={search}
               onChange={setSearch}
-              placeholder='Find a line'
+              placeholder={CONFIRM_FLOW_WORDS.findItem}
             />
           )}
           {visibleLines.length === 0 && (
             <p className='text-muted-foreground text-sm'>
-              No line matches that.
+              {CONFIRM_FLOW_WORDS.noItemMatch}
             </p>
           )}
           <LineAmountList

@@ -212,8 +212,8 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
                 onClick={() => setIsMatchedOpen((open) => !open)}
               >
                 {matched.length === 1
-                  ? '1 line matched the draft'
-                  : `${matched.length} lines matched the draft`}
+                  ? '1 item matched the plan'
+                  : `${matched.length} items matched the plan`}
               </ShowMoreButton>
             )}
             {(isMatchedOpen || isUntouched) && (
