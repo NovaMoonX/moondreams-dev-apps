@@ -333,6 +333,7 @@ export const CONFIRM_WORDS = {
   confirm: 'Confirm',
   confirmed: 'Confirmed',
   markNotArrived: 'Did not arrive',
+  markedNotArrived: 'Marked as not arrived',
   undoNotArrived: 'Put this day back',
   notArrivedLine: 'Marked as not arrived. Its draft is off your plan.',
   offline:

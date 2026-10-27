@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CalendarX, ChevronRight, Link2, Mail, Undo2 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -19,6 +20,7 @@ import {
   CONFIRM_WORDS,
   CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
+  ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
 } from '@apps/runway/constants';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
@@ -27,6 +29,7 @@ import {
   EMPTY_OVERRIDE,
   markNotArrived,
   saveDayOverride,
+  undoNotArrived,
 } from '@apps/runway/store/actions/dayActions';
 import ConfirmedDayView from '@apps/runway/screens/days/ConfirmedDayView';
 import ConfirmSheet from '@apps/runway/screens/days/ConfirmSheet';
@@ -58,6 +61,7 @@ interface IncomeDayScreenProps {
 /** What one coming income day does with its money, worked out each time and never stored. */
 function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const { user } = useAuth();
+  const { addToast } = useToast();
   const [isConfirming, setIsConfirming] = useState(false);
   const [isEditingFunds, setIsEditingFunds] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -133,10 +137,19 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await markNotArrived(user.uid, encryption, {
+      const ref = {
         payLineId: day.payLineId,
         sourceId: day.sourceId,
         expectedOn: day.on,
+      };
+      await markNotArrived(user.uid, encryption, ref);
+      addToast({
+        title: CONFIRM_WORDS.markedNotArrived,
+        type: 'success',
+        action: {
+          label: ITEM_SHEET_R2_WORDS.undo,
+          onClick: () => void undoNotArrived(user.uid, encryption, ref),
+        },
       });
     } catch (markError) {
       setError(
