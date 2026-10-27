@@ -77,6 +77,7 @@ interface FigureProps {
   inputRef: RefObject<HTMLInputElement | null>;
   isInvalid: boolean;
   disabled?: boolean;
+  placeholder?: string;
 }
 
 function Figure({
@@ -87,6 +88,7 @@ function Figure({
   inputRef,
   isInvalid,
   disabled,
+  placeholder = '0',
 }: FigureProps) {
   const pendingCaret = useRef<number | null>(null);
   const shown = groupDigits(value);
@@ -142,7 +144,7 @@ function Figure({
           size={1}
           aria-label={ariaLabel}
           aria-invalid={isInvalid ? true : undefined}
-          placeholder='0'
+          placeholder={placeholder}
           value={shown}
           disabled={disabled}
           className={join(
@@ -280,27 +282,42 @@ function AmountHero({
     <div className='flex flex-col items-center gap-1 text-center'>
       <p className='text-muted-foreground text-sm'>{label}</p>
       <div className='flex max-w-full flex-wrap items-center justify-center gap-x-3 gap-y-1'>
-        <Figure
-          ariaLabel={isRange ? `${label}, ${rangeLabels.low}` : label}
-          value={value}
-          onChange={onChange}
-          sizeClass={sizeClass}
-          inputRef={inputRef}
-          isInvalid={Boolean(errorMessage)}
-          disabled={disabled}
-        />
+        <span className='inline-flex flex-col items-center'>
+          <Figure
+            ariaLabel={isRange ? `${label}, ${rangeLabels.low}` : label}
+            value={value}
+            onChange={onChange}
+            sizeClass={sizeClass}
+            inputRef={inputRef}
+            isInvalid={Boolean(errorMessage)}
+            disabled={disabled}
+          />
+          {isRange && (
+            <span className='text-muted-foreground text-xs capitalize'>
+              {rangeLabels.low}
+            </span>
+          )}
+        </span>
         {isRange && (
-          <span className='inline-flex max-w-full items-center gap-x-3 whitespace-nowrap'>
-            <span className='text-muted-foreground text-lg'>to</span>
-            <Figure
-              ariaLabel={`${label}, ${rangeLabels.high}`}
-              value={highValue}
-              onChange={(next) => onHighChange?.(next)}
-              sizeClass={sizeClass}
-              inputRef={highRef}
-              isInvalid={Boolean(errorMessage)}
-              disabled={disabled}
-            />
+          <span className='inline-flex max-w-full items-start gap-x-3 whitespace-nowrap'>
+            <span className='text-muted-foreground pt-[0.35em] text-lg'>
+              to
+            </span>
+            <span className='inline-flex flex-col items-center'>
+              <Figure
+                ariaLabel={`${label}, ${rangeLabels.high}`}
+                value={highValue}
+                onChange={(next) => onHighChange?.(next)}
+                sizeClass={sizeClass}
+                inputRef={highRef}
+                isInvalid={Boolean(errorMessage)}
+                disabled={disabled}
+                placeholder=''
+              />
+              <span className='text-muted-foreground text-xs capitalize'>
+                {rangeLabels.high}
+              </span>
+            </span>
           </span>
         )}
       </div>

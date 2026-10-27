@@ -153,7 +153,9 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
             disabled={isSaving}
             onClick={clearStartDraft}
           >
-            {hasPlanItems ? START_WORDS.handoffKeep : START_WORDS.handoffDiscard}
+            {hasPlanItems
+              ? START_WORDS.handoffKeep
+              : START_WORDS.handoffDiscard}
           </Button>
         </div>
       </div>

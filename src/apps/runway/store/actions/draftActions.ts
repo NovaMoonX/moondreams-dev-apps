@@ -95,7 +95,9 @@ export async function commitStartDraft(
     });
     result.added += 1;
   }
-  const mapFunding = <F extends { sourceId?: string | null }>(funding: F): F => {
+  const mapFunding = <F extends { sourceId?: string | null }>(
+    funding: F,
+  ): F => {
     const id = funding.sourceId ?? null;
     if (id === null || !id.startsWith('draft:')) return funding;
     const real = sourceIds.get(id.slice('draft:'.length)) ?? null;
@@ -133,11 +135,16 @@ export async function commitStartDraft(
       },
     });
     if (existing.startDate !== null && startingCents > 0) {
-      const isRecorded = await recordHolding(uid, encryption, existing.startDate, {
-        holding: 'goal',
-        refId: goalId,
-        amountCents: startingCents,
-      }).catch((error) => {
+      const isRecorded = await recordHolding(
+        uid,
+        encryption,
+        existing.startDate,
+        {
+          holding: 'goal',
+          refId: goalId,
+          amountCents: startingCents,
+        },
+      ).catch((error) => {
         console.error(error);
         return false;
       });

@@ -99,7 +99,13 @@ interface IncomeFormProps {
 }
 
 export type IncomeStepId =
-  'source' | 'amount' | 'schedule' | 'ends' | 'payName' | 'sourceName';
+  | 'source'
+  | 'amount'
+  | 'often'
+  | 'schedule'
+  | 'ends'
+  | 'payName'
+  | 'sourceName';
 
 export type EditingIncome =
   | { itemId: string; kind: 'payLine'; payload: PayLineSealed }
@@ -358,6 +364,19 @@ function IncomeForm({
           };
     });
 
+  const applyFrequency = (
+    frequency: NonNullable<IncomeFormData['frequency']>,
+  ) =>
+    frequency === 'twiceMonthly' &&
+    formData.firstDay === '' &&
+    formData.secondDay === ''
+      ? setPaydays({
+          frequency,
+          firstDay: DEFAULT_PAYDAYS[0],
+          secondDay: DEFAULT_PAYDAYS[1],
+        })
+      : set({ frequency });
+
   const sourceNames = Object.fromEntries(
     resolved.map((source) => [source.item.id, source.version.payload.name]),
   );
@@ -468,6 +487,25 @@ function IncomeForm({
       ),
     },
     {
+      id: 'often',
+      title: FORM_FLOW_WORDS.oftenTitle,
+      summaryLabel: FORM_FLOW_WORDS.often,
+      summaryValue:
+        formData.frequency === null ? '' : SCHEDULE_LABELS[formData.frequency],
+      isAnswered: formData.frequency !== null,
+      render: ({ moveOn }: QuestionControls) => (
+        <PillGroup
+          label='How often'
+          options={frequencyOptions}
+          value={formData.frequency}
+          onChange={(frequency) => {
+            applyFrequency(frequency);
+            moveOn();
+          }}
+        />
+      ),
+    },
+    {
       id: 'schedule',
       title: FORM_FLOW_WORDS.scheduleTitle,
       summaryLabel: FORM_FLOW_WORDS.schedule,
@@ -479,22 +517,6 @@ function IncomeForm({
           : null,
       render: () => (
         <div className='space-y-4'>
-          <PillGroup
-            label='How often'
-            options={frequencyOptions}
-            value={formData.frequency}
-            onChange={(frequency) =>
-              frequency === 'twiceMonthly' &&
-              formData.firstDay === '' &&
-              formData.secondDay === ''
-                ? setPaydays({
-                    frequency,
-                    firstDay: DEFAULT_PAYDAYS[0],
-                    secondDay: DEFAULT_PAYDAYS[1],
-                  })
-                : set({ frequency })
-            }
-          />
           {formData.frequency !== null &&
             formData.frequency !== 'twiceMonthly' && (
               <div className='space-y-1.5'>
