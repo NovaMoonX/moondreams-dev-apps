@@ -1,4 +1,5 @@
-import { formatCents } from '@/utils/moneyUtils';
+import SensitiveValue from '@/components/SensitiveValue';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -27,8 +28,8 @@ const getStatusLabel = (day: ListedDay) => {
 
 interface IncomeDayCardProps {
   day: ListedDay;
-  /** A line the lookahead has for this day, such as the item that runs short; it takes the detail line. */
-  note?: string;
+  /** What the plan leaves short on this day, in order; they become one warning line in the detail's place. */
+  shorts?: { name: string; shortBy: number }[];
   /** False under a "Confirmed" heading, which already says it. */
   isConfirmedShown?: boolean;
   /** Words that lead the detail line ("Next income day"). */
@@ -41,7 +42,7 @@ interface IncomeDayCardProps {
 /** One income day as a row: the date, where it comes from, one line and the take-home amount; it opens that day. */
 function IncomeDayCard({
   day,
-  note,
+  shorts = [],
   isConfirmedShown = true,
   lead,
   isPrivate = false,
@@ -68,6 +69,26 @@ function IncomeDayCard({
   ]
     .filter(Boolean)
     .join(' · ');
+  const [firstShort] = shorts;
+  const shortFigure = firstShort ? formatCentsShort(firstShort.shortBy) : '';
+  const note = firstShort
+    ? shorts.length === 1
+      ? `${firstShort.name} ${shortFigure} short`
+      : `${shorts.length} short, ${firstShort.name} ${shortFigure}`
+    : undefined;
+  const warningLine = !firstShort ? undefined : shorts.length === 1 ? (
+    <>
+      {firstShort.name} <SensitiveValue>{shortFigure}</SensitiveValue> short
+    </>
+  ) : (
+    <>
+      {shorts.length} short
+      <span className='max-[359px]:hidden'>
+        {' · '}
+        {firstShort.name} <SensitiveValue>{shortFigure}</SensitiveValue>
+      </span>
+    </>
+  );
   const detail = note ?? statusLabel ?? plain;
   const amount = formatCents(cents);
 
@@ -87,13 +108,11 @@ function IncomeDayCard({
           </span>
         </span>
       }
-      detail={detail}
-      isDetailStrong={Boolean(note)}
-      isDetailWarning={Boolean(note)}
+      detail={warningLine ? undefined : detail}
+      warningLine={warningLine}
       figure={amount}
       isPrivate={isPrivate}
       hiddenAriaLabel={`${formatDateUTC(day.on)}, ${title}. Amount hidden. Open this day`}
-      isDetailPrivate={Boolean(note)}
       ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}. Open this day`}
       onOpen={onOpen}
     />

@@ -8,7 +8,7 @@ import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import {
   COMING_DAYS_CAP,
   COMING_DAYS_PREVIEW,
@@ -110,11 +110,11 @@ function DaysScreen() {
                 <IncomeDayCard
                   key={day.dayKey}
                   day={day}
-                  note={
-                    lookahead?.shortByDay[day.dayKey]
-                      ? `The plan leaves ${lookahead.shortByDay[day.dayKey].name} ${formatCentsShort(lookahead.shortByDay[day.dayKey].shortBy)} short`
-                      : undefined
-                  }
+                  shorts={(lookahead?.problems ?? []).flatMap((problem) =>
+                    problem.kind === 'short' && problem.dayKey === day.dayKey
+                      ? [{ name: problem.name, shortBy: problem.shortBy }]
+                      : [],
+                  )}
                   isPrivate
                   onOpen={() => openDay(day.dayKey)}
                 />
