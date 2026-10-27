@@ -16,6 +16,9 @@ import { useNow } from '@/hooks/useNow';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useAppSelector } from '@/store';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
 import {
@@ -69,6 +72,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [openLineId, setOpenLineId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
@@ -233,16 +237,22 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   );
 
   return (
-    <Subview title={formatDayTitle(day.on)} onClose={onClose}>
+    <Subview
+      title={formatDayTitle(day.on)}
+      onClose={onClose}
+      headerAction={<ValuesEyeButton />}
+    >
       <div className='space-y-4'>
         <div className='border-border bg-accent rounded-2xl border p-4'>
           <p className='text-muted-foreground text-sm font-medium break-words'>
             {day.sourceName ? `${title}, ${day.payLineName}` : title}
           </p>
           <p className='text-4xl font-semibold tracking-tight tabular-nums'>
-            {formatCents(draft.moneyCents)}
+            <MaskedText>{formatCents(draft.moneyCents)}</MaskedText>
           </p>
-          <p className='text-muted-foreground text-sm'>{statusLine}</p>
+          <p className='text-muted-foreground text-sm'>
+            <MaskedText>{statusLine}</MaskedText>
+          </p>
         </div>
         {draft.lines.length === 0 ? (
           <EmptyCard icon={<Mail className='h-5 w-5' />}>
@@ -251,10 +261,12 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           </EmptyCard>
         ) : (
           <div className='space-y-4'>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {funded.map(renderLine)}
-              {dayLeft}
-            </ul>
+            {funded.length > 0 && (
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                {funded.map(renderLine)}
+              </ul>
+            )}
+            {dayLeft}
             {unfunded.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider label={DRAFT_WORDS.notFunded} />
@@ -318,15 +330,17 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                   onClick={() => setOpenLineId(firstHeld.lineId)}
                 >
                   <span className='min-w-0'>
-                    {(firstHeld.pairing?.heldCents ?? 0) > 0
-                      ? CHECKLIST_R3_WORDS.heldNote(
-                          firstHeldName,
-                          formatCentsShort(firstHeld.pairing?.heldCents ?? 0),
-                        )
-                      : CHECKLIST_R3_WORDS.shortNote(
-                          firstHeldName,
-                          formatCentsShort(firstHeld.shortBy),
-                        )}
+                    {isHidden
+                      ? CHECKLIST_R3_WORDS.hiddenNote(firstHeldName)
+                      : (firstHeld.pairing?.heldCents ?? 0) > 0
+                        ? CHECKLIST_R3_WORDS.heldNote(
+                            firstHeldName,
+                            formatCentsShort(firstHeld.pairing?.heldCents ?? 0),
+                          )
+                        : CHECKLIST_R3_WORDS.shortNote(
+                            firstHeldName,
+                            formatCentsShort(firstHeld.shortBy),
+                          )}
                   </span>
                   <ChevronRight
                     className='text-muted-foreground h-4 w-4 shrink-0'

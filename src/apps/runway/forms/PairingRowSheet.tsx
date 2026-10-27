@@ -7,12 +7,12 @@ import { Check } from 'lucide-react';
 import AmountField, { type AmountMode } from '@/components/AmountField';
 import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
-import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
+import ItemBadge from '@apps/runway/components/ItemBadge';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 
 export type PairingOf = 'dayMoney' | 'remaining';
@@ -29,6 +29,7 @@ export interface PairingRow {
 export interface PairingChoice {
   value: string;
   text: string;
+  emoji: string | null;
   description: string;
 }
 
@@ -50,7 +51,6 @@ const TOP_UP_OPTIONS = [
   { value: 'topUp', label: 'Top up from the rest' },
 ] as const;
 
-
 interface PairingRowSheetProps {
   row: PairingRow;
   /** Starts on the first question and walks through them, for a row just added. */
@@ -66,7 +66,7 @@ interface PairingRowSheetProps {
   onClose: () => void;
 }
 
-/** One thing a pay funds, edited one question at a time in a sheet over the form: what it funds, how much, and what happens when the money runs short. */
+/** One thing a pay funds, edited one question at a time in place of the list inside the same sheet: what it funds, how much, and what happens when the money runs short. */
 function PairingRowSheet({
   row,
   isNew,
@@ -103,20 +103,24 @@ function PairingRowSheet({
                 <Button
                   type='button'
                   variant='tertiary'
-                  className='text-foreground! h-auto min-h-12 w-full justify-between gap-3 px-3! py-2 text-left font-normal'
+                  className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
                   onClick={() => {
                     onChange({ targetItemId: choice.value });
                     setView(isNew ? 'how' : 'main');
                   }}
                 >
-                  <span className='min-w-0'>
+                  <ItemBadge name={choice.text} emoji={choice.emoji} />
+                  <span className='min-w-0 flex-1 text-left'>
                     <span className='block break-words'>{choice.text}</span>
                     <span className='text-muted-foreground block text-xs'>
                       {choice.description}
                     </span>
                   </span>
                   {choice.value === row.targetItemId && (
-                    <Check className='h-4 w-4 shrink-0' aria-label='Chosen' />
+                    <Check
+                      className='mt-0.5 h-4 w-4 shrink-0'
+                      aria-label='Chosen'
+                    />
                   )}
                 </Button>
               </li>
@@ -213,17 +217,23 @@ function PairingRowSheet({
     view === 'what' ? row.targetItemId !== null : problem === null;
 
   return (
-    <FormSheet isOpen onClose={onClose} title='Funds'>
+    <>
       <div className={join('space-y-4 pb-4')}>
-        {view !== 'main' && !(isNew && view === 'what') && (
-          <BackLink onBack={() => setView('main')} />
-        )}
+        <BackLink
+          onBack={() =>
+            view === 'main' || (isNew && view === 'what')
+              ? onClose()
+              : setView('main')
+          }
+        />
         {getBody()}
       </div>
       <ModalFooterActions
         note={view === 'main' && problem ? problem : null}
         leftActions={
-          <DeleteIconButton onClick={onRemove} label='Stop funding this' />
+          isNew ? undefined : (
+            <DeleteIconButton onClick={onRemove} label='Stop funding this' />
+          )
         }
         rightActions={
           <Button
@@ -235,7 +245,7 @@ function PairingRowSheet({
           </Button>
         }
       />
-    </FormSheet>
+    </>
   );
 }
 

@@ -8,6 +8,7 @@ import InlineNotice from '@/components/InlineNotice';
 import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SensitiveValue from '@/components/SensitiveValue';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
@@ -42,7 +43,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
 
   if (!first && !endsText) return null;
   const label = first
-    ? describeGroupShort(first)
+    ? describeGroupShort(first, isHidden)
     : { before: endsText ?? '', figure: null, after: '' };
   const more = groups.length - 1;
   const moreText = groups.every((group) => group.kind === 'day')
@@ -100,6 +101,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         isOpen={isFixesOpen}
         onClose={closeFixes}
         title={PROBLEM_WORDS.title}
+        actions={<ValuesEyeButton />}
       >
         {isFixesOpen && groups.length > 0 && (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>

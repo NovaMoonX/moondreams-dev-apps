@@ -137,7 +137,7 @@ function RangeAmountField({
           onChange={(low) => onChange({ ...value, low })}
           highValue={value.high}
           onHighChange={(high) => onChange({ ...value, high })}
-          hint={value.mode === 'exact' ? hint : getHint()}
+          hint={value.mode === 'exact' ? hint : undefined}
           extraWays={
             value.mode === 'range' && !isChoosingEnd
               ? [

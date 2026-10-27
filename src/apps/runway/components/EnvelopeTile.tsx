@@ -110,8 +110,6 @@ function EnvelopeTile({
           emoji={envelope.emoji}
           detail={rowDetail}
           figure={rowFigure}
-          isPrivate
-          isDetailPrivate={!(isPlan && eachTime)}
           ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
           onOpen={open}
         />
@@ -126,7 +124,9 @@ function EnvelopeTile({
               ? eachTime
                 ? describeCadenceLine(envelope.funding.cadence)
                 : ITEM_SHEET_R2_WORDS.eachTime
-              : capitalize(word)
+              : isHidden
+                ? ITEM_SHEET_R2_WORDS.balance
+                : capitalize(word)
           }
           figure={isPlan ? (eachTime ?? undefined) : value}
           fact={[

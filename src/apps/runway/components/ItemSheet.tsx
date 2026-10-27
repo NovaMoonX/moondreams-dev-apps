@@ -25,6 +25,7 @@ import BackLink from '@/components/BackLink';
 import FoldedDateField from '@/components/FoldedDateField';
 import RevealChip from '@/components/RevealChip';
 import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
@@ -48,6 +49,7 @@ import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
@@ -223,6 +225,7 @@ function ItemSheet({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const mask = useMaskedText();
   const paid = useBillPaid({
     billId: itemId,
     billName: version?.payload.name ?? '',
@@ -523,8 +526,7 @@ function ItemSheet({
             isGrouped
             hasChevron
             icon={<CircleMinus />}
-            label={HOW_OFTEN_WORDS.stopAdding}
-            subtitle={HOW_OFTEN_WORDS.stopAddingSub}
+            label={HOW_OFTEN_WORDS.changeOften}
             onClick={() => openChange('often')}
           />
         )}
@@ -549,9 +551,11 @@ function ItemSheet({
                 ? undefined
                 : payment.fundedCents >= payment.totalCents
                   ? ITEM_SHEET_WORDS.paidFromSetAside
-                  : ITEM_SHEET_R2_WORDS.paidFromFreeText(
-                      formatCentsShort(
-                        payment.totalCents - payment.fundedCents,
+                  : mask(
+                      ITEM_SHEET_R2_WORDS.paidFromFreeText(
+                        formatCentsShort(
+                          payment.totalCents - payment.fundedCents,
+                        ),
                       ),
                     )
             }
@@ -589,7 +593,7 @@ function ItemSheet({
             isGrouped
             hasChevron
             icon={<CalendarClock />}
-            label={line}
+            label={mask(line)}
             onClick={openHistory}
           />
         ))}
@@ -788,7 +792,13 @@ function ItemSheet({
   );
 
   return (
-    <FormSheet isOpen isDrawerWhenShort onClose={onClose} title={payload.name}>
+    <FormSheet
+      isOpen
+      isDrawerWhenShort
+      onClose={onClose}
+      title={payload.name}
+      actions={<ValuesEyeButton />}
+    >
       <ChangeSteps
         isReason={view !== 'menu'}
         reason={

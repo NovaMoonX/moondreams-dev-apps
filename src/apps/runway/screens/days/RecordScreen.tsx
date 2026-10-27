@@ -9,6 +9,9 @@ import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
 import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import RecordLineRow from '@apps/runway/components/RecordLineRow';
 import {
   CONFIRM_WORDS,
@@ -40,6 +43,7 @@ interface FigureProps {
 
 /** One figure kept twice: what the draft expected and what was confirmed. */
 function Figure({ label, planned, confirmed, confirmedWord }: FigureProps) {
+  const mask = useMaskedText();
   return (
     <li className='space-y-0.5 p-3'>
       <p className='text-muted-foreground text-xs'>{label}</p>
@@ -47,13 +51,13 @@ function Figure({ label, planned, confirmed, confirmedWord }: FigureProps) {
         <p className='text-sm'>
           {CONFIRM_WORDS.planned}{' '}
           <span className='font-medium whitespace-nowrap tabular-nums'>
-            {formatCents(planned)}
+            {mask(formatCents(planned))}
           </span>
         </p>
         <p className='text-sm'>
           {confirmedWord}{' '}
           <span className='font-semibold whitespace-nowrap tabular-nums'>
-            {formatCents(confirmed)}
+            {mask(formatCents(confirmed))}
           </span>
         </p>
       </div>
@@ -64,7 +68,15 @@ function Figure({ label, planned, confirmed, confirmedWord }: FigureProps) {
 const describeDifference = (
   difference: RecordDifference,
   hasLineChanges: boolean,
+  isHidden: boolean,
 ) => {
+  if (isHidden) {
+    return difference.kind === 'amount'
+      ? CONFIRM_WORDS.hiddenAmountDiffered
+      : CONFIRM_WORDS.hiddenLineDiffered(
+          difference.name === '' ? DRAFT_WORDS.billFallback : difference.name,
+        );
+  }
   if (difference.kind === 'amount') {
     return `${formatCents(difference.actualCents)} arrived against ${formatCents(difference.plannedCents)} expected.${
       hasLineChanges
@@ -87,6 +99,8 @@ const describeDifference = (
 /** A confirmed day as it was planned and as it was confirmed: the figures, each difference with its note, and the lines that matched folded away. */
 function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
   const [isMatchedOpen, setIsMatchedOpen] = useState(false);
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
   const isReady = useAppSelector(selectIsRecordsReady);
   const day = useAppSelector((state) => selectOpenDay(state, dayKey));
   const proposed = useAppSelector((state) =>
@@ -162,7 +176,9 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
                   }
                   className='space-y-1 p-3 text-sm'
                 >
-                  <p>{describeDifference(difference, hasLineChanges)}</p>
+                  <p>
+                    {describeDifference(difference, hasLineChanges, isHidden)}
+                  </p>
                   {difference.kind === 'amount' && difference.note && (
                     <p className='break-words'>{difference.note}</p>
                   )}
@@ -228,10 +244,12 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   <BeforeAfterRow
                     title={DRAFT_WORDS.dayLeft}
-                    before={formatCents(
-                      correction.payload.before.freeToSpendCents,
+                    before={mask(
+                      formatCents(correction.payload.before.freeToSpendCents),
                     )}
-                    after={formatCents(correction.payload.freeToSpendCents)}
+                    after={mask(
+                      formatCents(correction.payload.freeToSpendCents),
+                    )}
                     beforeLabel={CORRECT_WORDS.before}
                     afterLabel={CORRECT_WORDS.corrected}
                     detail={
@@ -250,8 +268,8 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
                           ? DRAFT_WORDS.billFallback
                           : change.name
                       }
-                      before={formatCents(change.beforeCents)}
-                      after={formatCents(change.afterCents)}
+                      before={mask(formatCents(change.beforeCents))}
+                      after={mask(formatCents(change.afterCents))}
                       beforeLabel={CORRECT_WORDS.before}
                       afterLabel={CORRECT_WORDS.corrected}
                     />
@@ -276,7 +294,12 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
   };
 
   return (
-    <Subview overlay title={CONFIRM_WORDS.recordTitle} onClose={onClose}>
+    <Subview
+      overlay
+      title={CONFIRM_WORDS.recordTitle}
+      onClose={onClose}
+      headerAction={<ValuesEyeButton />}
+    >
       <div className='space-y-4'>
         {day?.arrivedOn != null && (
           <p className='text-muted-foreground text-sm'>

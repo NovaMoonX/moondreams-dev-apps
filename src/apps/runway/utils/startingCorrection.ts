@@ -19,7 +19,8 @@ export function canChangeStart({
   confirmedDays,
   now,
 }: StartingCorrectionInput) {
-  if (startDate === null || startCreatedAt === null) return true;
+  if (startDate === null) return true;
+  if (startCreatedAt === null) return false;
   const isConfirmed = confirmedDays.some((day) => day >= startDate);
   const isExpired = now > startCreatedAt + STARTING_CORRECTION_DAYS * DAY_MS;
   const result = !isConfirmed && !isExpired;

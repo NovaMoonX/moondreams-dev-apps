@@ -9,6 +9,7 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 
 import SensitiveValue from '@/components/SensitiveValue';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -143,7 +144,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   };
 
   return (
-    <Subview title={getTitle()} onClose={onClose} onBack={getBack()}>
+    <Subview
+      title={getTitle()}
+      onClose={onClose}
+      onBack={getBack()}
+      headerAction={<ValuesEyeButton />}
+    >
       {isChecking ? (
         <CheckAmountBody presetEnvelopeId={checkEnvelope} />
       ) : sheetKey !== null ? (

@@ -1,16 +1,19 @@
 import { formatDateShortUTC } from '@/utils/formatUtils';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import type { OpenPurchase } from '@apps/runway/types';
-import { describeEnvelopes, isRefund } from '@apps/runway/utils/purchaseText';
+import {
+  describeEnvelopes,
+  getPurchaseTitle,
+  isRefund,
+} from '@apps/runway/utils/purchaseText';
 
 interface PurchaseRowProps {
   purchase: OpenPurchase;
   looks: ReadonlyMap<string, { name: string; emoji: string | null }>;
   onOpen: () => void;
-  /** Masked until shown, as on a tab's front; off in a sheet the person opened on purpose. */
-  isPrivate?: boolean;
 }
 
 /** One purchase in a list: where it was, the day and the envelopes it came out of, and the amount. A refund reads as money coming back. */
@@ -18,8 +21,8 @@ function PurchaseRow({
   purchase,
   looks,
   onOpen,
-  isPrivate = true,
 }: PurchaseRowProps) {
+  const { isHidden } = useValuesHidden();
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
   const refund = isRefund(purchase);
@@ -37,10 +40,9 @@ function PurchaseRow({
   const first = purchase.lines[0]?.envelopeId ?? null;
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateShortUTC(purchase.date);
-  const title =
-    named ?? (refund ? `Refund to ${envelopes}` : envelopes || 'Purchase');
+  const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const detail = named
-    ? `${date} · ${refund ? 'refund to ' : ''}${shortEnvelopes}`
+    ? `${date} · ${refund && !isHidden ? 'refund to ' : ''}${shortEnvelopes}`
     : date;
   const amount = refund
     ? `+${formatCents(-purchase.amountCents)}`
@@ -54,7 +56,6 @@ function PurchaseRow({
       }
       detail={detail}
       figure={amount}
-      isPrivate={isPrivate}
       ariaLabel={`${title}, ${amount}, ${detail}. Open`}
       onOpen={onOpen}
     />

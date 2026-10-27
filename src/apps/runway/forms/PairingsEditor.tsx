@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
 import {
@@ -11,6 +11,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
 import { useAppSelector } from '@/store';
+import ItemBadge from '@apps/runway/components/ItemBadge';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import { CHANGE_WORDS, MAX_PAIRINGS } from '@apps/runway/constants';
@@ -119,6 +120,20 @@ const getBlocker = (rows: PairingRow[], canBeEmpty: boolean) => {
   return null;
 };
 
+/** Hands the form field's own change callback to the sheet, so a row edited in place of the list still writes into the field. */
+function ValueChangeHandle({
+  onChange,
+  targetRef,
+}: {
+  onChange: (rows: PairingRow[]) => void;
+  targetRef: { current: ((rows: PairingRow[]) => void) | null };
+}) {
+  useEffect(() => {
+    targetRef.current = onChange;
+  });
+  return null;
+}
+
 /** Says which bills, envelopes and goals a source, pay line or day sends its money to, and whether a short one is topped up from the rest of the pool. */
 function PairingsEditor({
   isOpen,
@@ -141,6 +156,7 @@ function PairingsEditor({
   }));
   const [formData, setFormData] = useState<PairingsFormData>(initialData);
   const [nextKey, setNextKey] = useState(initialData.rows.length);
+  const changeRows = useRef<((rows: PairingRow[]) => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editingKey, setEditingKey] = useState<number | null>(
@@ -153,7 +169,8 @@ function PairingsEditor({
   const targets = [...envelopes, ...bills, ...goals].map(
     ({ item, version }) => ({
       value: item.id,
-      label: `${version.payload.emoji ? `${version.payload.emoji} ` : ''}${version.payload.name}`,
+      label: version.payload.name,
+      emoji: version.payload.emoji,
       kind: version.kind,
     }),
   );
@@ -162,9 +179,10 @@ function PairingsEditor({
   const lockedIds = new Set(locked.map((pairing) => pairing.targetItemId));
   const choices = targets
     .filter((target) => !lockedIds.has(target.value))
-    .map(({ value, label, kind }) => ({
+    .map(({ value, label, emoji, kind }) => ({
       value,
       text: label,
+      emoji,
       description:
         kind === 'bill' ? 'Bill' : kind === 'goal' ? 'Goal' : 'Envelope',
     }));
@@ -236,103 +254,96 @@ function PairingsEditor({
         : describeAmount(amount, fromLabel);
   };
 
+  const editingRow =
+    formData.rows.find((row) => row.key === editingKey) ?? null;
+  const patchRows = (rows: PairingRow[]) => {
+    changeRows.current?.(rows);
+    setFormData({ rows });
+  };
   const fields = [
     custom({
       name: 'rows',
       label: '',
       renderComponent: (props) => {
         const rows = props.value as PairingRow[];
-        const editingRow = rows.find((row) => row.key === editingKey) ?? null;
-        const update = (key: number, patch: Partial<PairingRow>) =>
-          props.onValueChange(
-            rows.map((row) => (row.key === key ? { ...row, ...patch } : row)),
-          );
         return (
-          <div className='space-y-3'>
-            {locked.length > 0 && (
-              <ul className='border-border divide-border divide-y rounded-2xl border'>
-                {locked.map((pairing) => (
-                  <li
-                    key={pairing.targetItemId}
-                    className='flex items-start justify-between gap-3 p-3 text-sm'
-                  >
-                    <span className='min-w-0 break-words'>
-                      {nameOf(pairing.targetItemId)}
-                    </span>
-                    <span className='text-muted-foreground shrink-0 text-right'>
-                      {describeAmount(pairing.amount, fromLabel)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {rows.length > 0 && (
-              <ul className='border-border divide-border divide-y rounded-2xl border'>
-                {rows.map((row) => (
-                  <li key={row.key}>
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      className='text-foreground! h-auto min-h-12 w-full justify-between gap-3 px-3! py-2 text-left font-normal'
-                      onClick={() => setEditingKey(row.key)}
+          <>
+            <ValueChangeHandle
+              onChange={props.onValueChange}
+              targetRef={changeRows}
+            />
+            <div className='space-y-3'>
+              {locked.length > 0 && (
+                <ul className='border-border divide-border divide-y rounded-2xl border'>
+                  {locked.map((pairing) => (
+                    <li
+                      key={pairing.targetItemId}
+                      className='flex items-start justify-between gap-3 p-3 text-sm'
                     >
                       <span className='min-w-0 break-words'>
-                        {row.targetItemId === null
-                          ? 'Pick what it funds'
-                          : nameOf(row.targetItemId)}
-                        <span className='text-muted-foreground'>
-                          {' · '}
-                          {getRowAmountText(row)}
-                        </span>
+                        {nameOf(pairing.targetItemId)}
                       </span>
-                      <ChevronRight
-                        className='text-muted-foreground h-5 w-5 shrink-0'
-                        aria-hidden='true'
-                      />
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            {rows.length + locked.length < MAX_PAIRINGS &&
-              choices.length > rows.length && (
-                <div>
-                  <RevealChip onClick={() => addRow(rows, props.onValueChange)}>
-                    Add something to fund
-                  </RevealChip>
-                </div>
+                      <span className='text-muted-foreground shrink-0 text-right'>
+                        {describeAmount(pairing.amount, fromLabel)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               )}
-            {editingRow && (
-              <PairingRowSheet
-                key={editingRow.key}
-                row={editingRow}
-                isNew={newKeys.includes(editingRow.key)}
-                choices={choices.filter(
-                  (choice) =>
-                    choice.value === editingRow.targetItemId ||
-                    !rows.some((row) => row.targetItemId === choice.value),
+              {rows.length > 0 && (
+                <ul className='border-border divide-border divide-y rounded-2xl border'>
+                  {rows.map((row) => (
+                    <li key={row.key}>
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
+                        onClick={() => setEditingKey(row.key)}
+                      >
+                        <ItemBadge
+                          name={
+                            row.targetItemId === null
+                              ? '?'
+                              : nameOf(row.targetItemId)
+                          }
+                          emoji={
+                            targets.find(
+                              (target) => target.value === row.targetItemId,
+                            )?.emoji ?? null
+                          }
+                        />
+                        <span className='min-w-0 flex-1 text-left break-words'>
+                          <span className='block'>
+                            {row.targetItemId === null
+                              ? 'Pick what it funds'
+                              : nameOf(row.targetItemId)}
+                          </span>
+                          <span className='text-muted-foreground block text-sm'>
+                            {getRowAmountText(row)}
+                          </span>
+                        </span>
+                        <ChevronRight
+                          className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+                          aria-hidden='true'
+                        />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {rows.length + locked.length < MAX_PAIRINGS &&
+                choices.length > rows.length && (
+                  <div>
+                    <RevealChip
+                      onClick={() => addRow(rows, props.onValueChange)}
+                    >
+                      Add something to fund
+                    </RevealChip>
+                  </div>
                 )}
-                fromLabel={fromLabel}
-                amountText={getRowAmountText(editingRow)}
-                problem={getBlocker([editingRow], true)}
-                onChange={(patch) => update(editingRow.key, patch)}
-                onRemove={() => {
-                  props.onValueChange(
-                    rows.filter((entry) => entry.key !== editingRow.key),
-                  );
-                  setEditingKey(null);
-                }}
-                onClose={() => {
-                  if (editingRow.targetItemId === null)
-                    props.onValueChange(
-                      rows.filter((entry) => entry.key !== editingRow.key),
-                    );
-                  setEditingKey(null);
-                }}
-              />
-            )}
-            {note && <p className='text-muted-foreground text-xs'>{note}</p>}
-          </div>
+              {note && <p className='text-muted-foreground text-xs'>{note}</p>}
+            </div>
+          </>
         );
       },
     }),
@@ -348,53 +359,91 @@ function PairingsEditor({
 
   return (
     <FormSheet isOpen={isOpen} onClose={onCancel ?? onClose} title={title}>
-      <ChangeSteps
-        isReason={flow.step === 'reason'}
-        reason={<ChangeReason flow={flow} onClose={onCancel ?? onClose} />}
-      >
-        <ChangeFlowContext value={flowValue}>
-          <Form
-            id='runway-pairings'
-            form={formFields}
-            initialData={initialData}
-            columns={1}
-            onDataChange={(data) => setFormData(data as PairingsFormData)}
-            onSubmit={() => {
-              if (change) {
-                flow.setStep('reason');
-                return;
+      {editingRow && (
+        <PairingRowSheet
+          key={editingRow.key}
+          row={editingRow}
+          isNew={newKeys.includes(editingRow.key)}
+          choices={choices.filter(
+            (choice) =>
+              choice.value === editingRow.targetItemId ||
+              !formData.rows.some((row) => row.targetItemId === choice.value),
+          )}
+          fromLabel={fromLabel}
+          amountText={getRowAmountText(editingRow)}
+          problem={getBlocker([editingRow], true)}
+          onChange={(patch) =>
+            patchRows(
+              formData.rows.map((row) =>
+                row.key === editingRow.key ? { ...row, ...patch } : row,
+              ),
+            )
+          }
+          onRemove={() => {
+            patchRows(
+              formData.rows.filter((entry) => entry.key !== editingRow.key),
+            );
+            setEditingKey(null);
+          }}
+          onClose={() => {
+            if (editingRow.targetItemId === null)
+              patchRows(
+                formData.rows.filter((entry) => entry.key !== editingRow.key),
+              );
+            setNewKeys((keys) => keys.filter((key) => key !== editingRow.key));
+            setEditingKey(null);
+          }}
+        />
+      )}
+      <div hidden={editingRow !== null}>
+        <ChangeSteps
+          isReason={flow.step === 'reason'}
+          reason={<ChangeReason flow={flow} onClose={onCancel ?? onClose} />}
+        >
+          <ChangeFlowContext value={flowValue}>
+            <Form
+              id='runway-pairings'
+              form={formFields}
+              initialData={initialData}
+              columns={1}
+              onDataChange={(data) => setFormData(data as PairingsFormData)}
+              onSubmit={() => {
+                if (change) {
+                  flow.setStep('reason');
+                  return;
+                }
+                void handleSave();
+              }}
+              submitButton={
+                <ModalFooterActions
+                  note={error ?? (change ? editBlocker : blocker)}
+                  cancelAction={
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      onClick={onCancel ?? onClose}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </Button>
+                  }
+                  rightActions={
+                    <Button
+                      type='submit'
+                      loading={isSaving}
+                      disabled={
+                        isSaving || (change ? editBlocker : blocker) !== null
+                      }
+                    >
+                      {change ? CHANGE_WORDS.review : 'Save'}
+                    </Button>
+                  }
+                />
               }
-              void handleSave();
-            }}
-            submitButton={
-              <ModalFooterActions
-                note={error ?? (change ? editBlocker : blocker)}
-                cancelAction={
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={onCancel ?? onClose}
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </Button>
-                }
-                rightActions={
-                  <Button
-                    type='submit'
-                    loading={isSaving}
-                    disabled={
-                      isSaving || (change ? editBlocker : blocker) !== null
-                    }
-                  >
-                    {change ? CHANGE_WORDS.review : 'Save'}
-                  </Button>
-                }
-              />
-            }
-          />
-        </ChangeFlowContext>
-      </ChangeSteps>
+            />
+          </ChangeFlowContext>
+        </ChangeSteps>
+      </div>
     </FormSheet>
   );
 }

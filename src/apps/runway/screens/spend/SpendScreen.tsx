@@ -5,6 +5,7 @@ import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
 import { PillGroup } from '@/components/PillGroup';
 import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
@@ -68,6 +69,7 @@ function SpendScreen() {
     (state) => state.runway.plan?.startDate ?? null,
   );
   const looks = useAppSelector(selectItemLooks);
+  const { isHidden } = useValuesHidden();
   const {
     spendEnvelope,
     showSpendEnvelope,
@@ -120,7 +122,7 @@ function SpendScreen() {
       (filterId === null ||
         purchase.lines.some((line) => line.envelopeId === filterId)) &&
       (needle === '' ||
-        `${getPurchaseTitle(purchase, nameOf)} ${purchase.merchant ?? ''} ${purchase.note ?? ''} ${purchase.lines.map((line) => (line.envelopeId === null ? SPEND_WORDS.freeToSpend : nameOf(line.envelopeId))).join(' ')} ${formatCents(Math.abs(purchase.amountCents))}`
+        `${getPurchaseTitle(purchase, nameOf, isHidden)} ${purchase.merchant ?? ''} ${purchase.note ?? ''} ${purchase.lines.map((line) => (line.envelopeId === null ? SPEND_WORDS.freeToSpend : nameOf(line.envelopeId))).join(' ')} ${isHidden ? '' : formatCents(Math.abs(purchase.amountCents))}`
           .toLowerCase()
           .includes(needle)),
   );

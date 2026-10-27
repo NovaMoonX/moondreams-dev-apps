@@ -4,6 +4,7 @@ import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
@@ -508,7 +509,10 @@ function IncomeForm({
     },
     {
       id: 'schedule',
-      title: FORM_FLOW_WORDS.scheduleTitle,
+      title:
+        formData.frequency === 'twiceMonthly'
+          ? FORM_FLOW_WORDS.scheduleTwiceTitle
+          : FORM_FLOW_WORDS.scheduleTitle,
       summaryLabel: FORM_FLOW_WORDS.schedule,
       summaryValue: scheduleText,
       isAnswered: isScheduleAnswered,
@@ -546,7 +550,7 @@ function IncomeForm({
                     options={dayOptions}
                     value={formData[key]}
                     placeholder='Pick a day'
-                    dropdownClassName='max-h-48!'
+                    dropdownClassName='top-auto! bottom-full! mt-0! mb-1 max-h-48! [&_[data-scroll-area-viewport]]:max-h-48!'
                     onChange={(value) => setPaydays({ [key]: value })}
                   />
                 </div>
@@ -740,7 +744,12 @@ function IncomeForm({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={requestClose} title={title}>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={title}
+      actions={<ValuesEyeButton />}
+    >
       <ChangeSteps
         isReason={flow.step === 'reason'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}

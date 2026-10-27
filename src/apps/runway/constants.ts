@@ -305,6 +305,8 @@ export const DAY_STATUS_LABELS = {
 } as const;
 
 export const CONFIRM_WORDS = {
+  hiddenAmountDiffered: 'The amount that arrived differed from what was expected.',
+  hiddenLineDiffered: (name: string) => `${name} changed on this day.`,
   action: 'Confirm money arrived',
   sheetTitle: 'Money arrived',
   amount: 'Amount that arrived',
@@ -397,7 +399,7 @@ export const CHANGE_WORDS = {
   whyPlaceholder: 'Why it changed. You can leave this out.',
   saveWithNote: 'Save',
   saveWithoutNote: 'Save without a reason',
-  unchanged: 'Change something to continue.',
+  unchanged: 'Enter a new value to continue.',
   change: 'Change',
   scheduled: 'From',
   fromDay: 'From this income day on',
@@ -726,6 +728,7 @@ export const CHECK_WORDS = {
   prompt: 'Pick an envelope and type an amount. Nothing is spent or moved.',
   promptChosen: 'Type an amount. Nothing is spent or moved.',
   noEnvelopes: 'Add an envelope to check an amount against it.',
+  hidden: 'Show amounts to see how it fits.',
 } as const;
 
 export const START_WORDS = {
@@ -736,7 +739,7 @@ export const START_WORDS = {
   stepOf: (step: number, total: number) => `Step ${step} of ${total}`,
   incomeAsk: 'Who pays you?',
   incomeHelp:
-    'Add where your money comes from, how much, and how often. This is the one thing Runway needs.',
+    'Where your money comes from, how much, and how often. It is the one thing Runway needs.',
   billsAsk: 'What do you pay?',
   billsHelp:
     'Add the bills and upcoming expenses you know about. Each is set aside a little at a time before it is due.',
@@ -769,7 +772,7 @@ export const START_WORDS = {
   addAnotherEnvelope: 'Add another envelope',
   addGoal: 'Add a goal',
   addAnotherGoal: 'Add another goal',
-  needIncome: 'Add an income source to continue.',
+  needIncome: 'Add one to continue.',
   localNotice:
     'You are not signed in. What you enter stays on this device, unencrypted, for 7 days. Sign in to save it to your plan.',
   resumeAsk: 'Pick up where you left off?',
@@ -895,6 +898,7 @@ export const FORM_FLOW_WORDS = {
   funding: 'Paid from',
   envelopeAmountTitle: 'How much does it get each time?',
   eachTime: 'Each time',
+  balance: 'Balance',
   percentLink: 'A % of each pay',
   restLink: 'Whatever is left of each pay',
   exactLink: 'An amount',
@@ -909,6 +913,7 @@ export const FORM_FLOW_WORDS = {
   howOftenNext: 'How often it arrives comes next.',
   commonBills: 'Common bills',
   commonEnvelopes: 'Common envelopes',
+  commonGoals: 'Common goals',
   cadenceTitle: 'Which pays does it get money from?',
   cadence: 'Pays',
   targetTitle: 'How much do you want to save?',
@@ -926,6 +931,7 @@ export const FORM_FLOW_WORDS = {
   takeHome: 'Take-home pay',
   expectedIncomeTitle: 'How much is coming?',
   scheduleTitle: 'When is the next one?',
+  scheduleTwiceTitle: 'Which two days of the month?',
   oftenTitle: 'How often does it arrive?',
   often: 'How often',
   schedule: 'When',
@@ -989,6 +995,7 @@ export const ITEM_SHEET_R2_WORDS = {
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to spend`,
   changeAmount: 'Change amount',
   eachTime: 'Each time',
+  balance: 'Balance',
   changeTarget: 'Change target',
   changeName: 'Change name',
   heldDetail: (amount: string) => `${amount} held · choose`,
@@ -1019,6 +1026,7 @@ export const CHECKLIST_R3_WORDS = {
   shortChoose: (amount: string) => `${amount} short · choose`,
   shortNote: (name: string, amount: string) =>
     `${name} is ${amount} short: choose before confirming`,
+  hiddenNote: (name: string) => `${name} is waiting: choose before confirming`,
   heldNote: (name: string, amount: string) =>
     `${name}: ${amount} held · choose before confirming`,
   notStarted: 'Not started',
@@ -1086,8 +1094,7 @@ export const HOW_OFTEN_WORDS = {
   noAddingHint:
     'Nothing goes into it. You can start adding to it whenever you like.',
   startAdding: 'Start adding to it',
-  stopAdding: 'Stop adding to it',
-  stopAddingSub: 'Keeps what is in it and the target',
+  changeOften: 'Change how often',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',
@@ -1157,6 +1164,14 @@ export const BILL_QUICK_PICKS = [
   { name: 'Health insurance', emoji: '🩺', priority: 'must' },
   { name: 'Streaming', emoji: '📺' },
   { name: 'Gym', emoji: '🏋️' },
+] as const;
+
+export const GOAL_QUICK_PICKS = [
+  { name: 'Emergency fund', emoji: '🛟' },
+  { name: 'Vacation', emoji: '🏖️' },
+  { name: 'New car', emoji: '🚗' },
+  { name: 'Home repairs', emoji: '🛠️' },
+  { name: 'Holiday gifts', emoji: '🎁' },
 ] as const;
 
 export const ENVELOPE_QUICK_PICKS = [

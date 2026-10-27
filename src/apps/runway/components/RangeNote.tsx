@@ -1,5 +1,6 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { RANGE_END_WORDS } from '@apps/runway/constants';
 import { getRangeEnd, type RangeSide } from '@apps/runway/engine/stance';
 import type { MoneyRange, Stance } from '@apps/runway/types';
@@ -30,7 +31,7 @@ function RangeNote({
     <span
       className={join('text-muted-foreground block', className ?? 'text-sm')}
     >
-      {text}
+      <MaskedText>{text}</MaskedText>
     </span>
   );
 }

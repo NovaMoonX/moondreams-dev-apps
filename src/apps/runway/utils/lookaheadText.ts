@@ -78,11 +78,15 @@ export function groupProblems(problems: readonly LookaheadProblem[]) {
 const getName = (problem: LookaheadProblem) =>
   problem.name === '' ? 'A bill' : problem.name;
 
-/** A day's short lines as one sentence: three in full, then "and N more". */
-function listShorts(shorts: readonly ShortProblem[]) {
+/** A day's short lines as one sentence: three in full, then "and N more". With amounts hidden it names what runs short and gives no figure. */
+function listShorts(shorts: readonly ShortProblem[], isHidden: boolean) {
   const shown = shorts
     .slice(0, 3)
-    .map((item) => `${getName(item)} ${formatCentsShort(item.shortBy)}`);
+    .map((item) =>
+      isHidden
+        ? getName(item)
+        : `${getName(item)} ${formatCentsShort(item.shortBy)}`,
+    );
   const rest = shorts.length - shown.length;
   const joined =
     rest > 0
@@ -94,17 +98,17 @@ function listShorts(shorts: readonly ShortProblem[]) {
 }
 
 /** A group as a list row: the day, and what runs short on it. */
-export function describeGroupRow(group: ProblemGroup) {
+export function describeGroupRow(group: ProblemGroup, isHidden = false) {
   if (group.kind === 'single') return describeProblemRow(group.problem);
   const result = {
     title: formatDateShortUTC(group.on),
-    detail: listShorts(group.shorts),
+    detail: listShorts(group.shorts, isHidden),
   };
   return result;
 }
 
 /** The first group in a few words, split around its one figure so only the figure is masked: "The plan leaves Rent [$30] short on Nov 1". */
-export function describeGroupShort(group: ProblemGroup) {
+export function describeGroupShort(group: ProblemGroup, isHidden = false) {
   const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {
     const problem = group.problem;
@@ -122,13 +126,19 @@ export function describeGroupShort(group: ProblemGroup) {
     };
   }
   const only = group.shorts[0];
+  if (isHidden) {
+    return {
+      before: `The plan leaves ${getName(only)} short on ${on}`,
+      figure: null,
+      after: '',
+    };
+  }
   return {
     before: `The plan leaves ${getName(only)} `,
     figure: formatCentsShort(only.shortBy),
     after: ` short on ${on}`,
   };
 }
-
 
 export interface HoldsBlock {
   tone: 'success' | 'warning';
@@ -138,7 +148,11 @@ export interface HoldsBlock {
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
-function describeChangeProblem(problem: LookaheadProblem, more: number) {
+function describeChangeProblem(
+  problem: LookaheadProblem,
+  more: number,
+  isHidden: boolean,
+) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
   const tail =
@@ -157,6 +171,12 @@ function describeChangeProblem(problem: LookaheadProblem, more: number) {
       figure: null,
     };
   }
+  if (isHidden) {
+    return {
+      text: `With this change, the plan leaves ${name} short on ${on}.${tail}`,
+      figure: null,
+    };
+  }
   const figure = formatCentsShort(problem.shortBy);
   return {
     text: `With this change, the plan leaves ${name} ${figure} short on ${on}.${tail}`,
@@ -168,6 +188,7 @@ function describeChangeProblem(problem: LookaheadProblem, more: number) {
 export function describeHoldsBlocks(
   before: Lookahead,
   after: Lookahead,
+  isHidden = false,
 ): HoldsBlock[] {
   const holds = (through: number): HoldsBlock => ({
     tone: 'success',
@@ -189,7 +210,7 @@ export function describeHoldsBlocks(
     ? [
         {
           tone: 'warning',
-          ...describeChangeProblem(first, after.problems.length - 1),
+          ...describeChangeProblem(first, after.problems.length - 1, isHidden),
         },
       ]
     : [];

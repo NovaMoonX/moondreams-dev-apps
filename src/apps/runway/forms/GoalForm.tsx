@@ -6,6 +6,8 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField from '@/components/AmountField';
 import FormSheet from '@/components/FormSheet';
+import SuggestionChips from '@/components/SuggestionChips';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
@@ -30,6 +32,7 @@ import {
   HOW_OFTEN_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_EMOJI_LENGTH,
+  GOAL_QUICK_PICKS,
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
@@ -258,14 +261,28 @@ function GoalForm({
       summaryValue: formData.name.trim(),
       isAnswered: formData.name.trim() !== '',
       render: () => (
-        <Input
-          variant='outline'
-          aria-label={FORM_FLOW_WORDS.name}
-          placeholder='Vacation fund'
-          maxLength={MAX_NAME_LENGTH}
-          value={formData.name}
-          onChange={(event) => set({ name: event.target.value })}
-        />
+        <div className='space-y-4'>
+          <Input
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.name}
+            placeholder='Vacation fund'
+            maxLength={MAX_NAME_LENGTH}
+            value={formData.name}
+            onChange={(event) => set({ name: event.target.value })}
+          />
+          <SuggestionChips
+            label={FORM_FLOW_WORDS.commonGoals}
+            suggestions={GOAL_QUICK_PICKS.map(
+              (pick) => `${pick.emoji} ${pick.name}`,
+            )}
+            onPick={(label) => {
+              const found = GOAL_QUICK_PICKS.find(
+                (pick) => `${pick.emoji} ${pick.name}` === label,
+              );
+              if (found) set({ name: found.name, emoji: found.emoji });
+            }}
+          />
+        </div>
       ),
     },
     {
@@ -533,7 +550,12 @@ function GoalForm({
   };
 
   return (
-    <FormSheet isOpen={isOpen} onClose={requestClose} title={title}>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={title}
+      actions={<ValuesEyeButton />}
+    >
       <ChangeSteps
         isReason={flow.step === 'reason'}
         reason={<ChangeReason flow={flow} onClose={requestClose} />}

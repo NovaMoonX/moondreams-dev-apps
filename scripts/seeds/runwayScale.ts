@@ -216,11 +216,11 @@ export async function seedRunwayScale(
   const today = startOfUtcDay(context.now);
   const startDate = today - 365 * YEARS * DAY_MS - 1 * DAY_MS;
   const plan = `apps/runway/plans/${owner.uid}`;
-  const writer = context.firestore.bulkWriter();
+  const pending: { path: string; value: object }[] = [];
   const written = { count: 0 };
   const put = (path: string, value: object) => {
     written.count += 1;
-    void writer.set(context.firestore.doc(path), value);
+    pending.push({ path, value });
   };
 
   const planCreatedAt = startDate - DAY_MS;
@@ -891,7 +891,19 @@ export async function seedRunwayScale(
     );
   });
 
-  await writer.close();
+  // The emulator commits one batch at a time and takes seconds over a few hundred sealed documents. A bulk writer sends many at once, so the first one waits behind the rest and its 60 second deadline expires; writing the batches one after another, once everything is built, never queues a batch behind another.
+  const BATCH_SIZE = 200;
+  await Array.from(
+    { length: Math.ceil(pending.length / BATCH_SIZE) },
+    (_, index) => pending.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
+  ).reduce(async (previous, slice) => {
+    await previous;
+    const batch = context.firestore.batch();
+    slice.forEach(({ path, value }) =>
+      batch.set(context.firestore.doc(path), value),
+    );
+    await batch.commit();
+  }, Promise.resolve());
   const closingDocuments = process.env.RUNWAY_SCALE_CLOSINGS
     ? await seedClosings(context, owner.uid, encryption, startDate)
     : 0;

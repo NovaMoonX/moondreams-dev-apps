@@ -201,16 +201,17 @@ Notes on the table:
 ## Round 4, package D: private amounts
 
 - Each tab's title line ends in one eye button (Home, Days, Plan, Spend, same place); it shows or hides amounts on every tab. Amounts start hidden on a device, and hide again after five minutes in the background.
-- Masked: Free to spend, envelope tiles and rows, bill, pay, goal and purchase rows, income day rows, the shortfall warning row and Spend's total. Names, dates and counts stay readable. Never masked: forms, a figure being typed and sheets or screens the person opened.
-- A goal's sheet offers "Stop adding to it" (while it is being added to) or "Start adding to it" (when it is not); both open the goal's "How often" question. A calendar envelope's sheet labels its figure by its cadence ("Monthly").
+- Masked: every figure on every surface (tab fronts, item sheets, a goal's "of $1,800", the day screens and their rows, Things to fix, the envelope sheet, Check an amount's result, Purchases, the change log and the record of a confirmed day), and every line that gives one away. Names, dates and counts stay readable. Never masked: the figure being typed and a form's own answers (the add and change forms, Confirm money arrived, Correct a day, Starting out's steps). Every sheet, screen or subview that draws a masked figure has the eye on its title line.
+- A goal's sheet offers "Change how often" (while it is being added to) or "Start adding to it" (when it is not); both open the goal's "How often" question. A calendar envelope's sheet labels its figure by its cadence ("Monthly").
 - "Things to fix" lists every short line of an income day as its own row, soonest first, the higher priority first within a day.
 
 ## Round 4 review fixes (screens)
 
 - Check an amount from an envelope's sheet is a view inside the sheet (Back chip, Escape and the browser's back each step out one layer); from Free to spend it stays a subview that returns to Free to spend.
 - Things to fix has one row per income day ("Nov 2" over "Groceries $150, Phone and internet $23.75 and Rent $30 short"), three names then "and N more", and a row for each problem not tied to a day; it shows 12 rows then "Show N more". The warning banner is on Home only (Days marks its short days on their cards). On a phone it reads "N things to fix" when there is more than one row; from `sm` up it keeps the sentence and the count of the rest in days.
-- Amounts: on a front only the figures are masked, never the sentence around them; sheets opened on purpose (the envelope sheet's Purchases) are never masked. The header eye is one "Show amounts" toggle (`aria-pressed`), drawn once the tab has a figure to hide.
+- Amounts: every figure is masked, never the sentence around them, and nothing beside a hidden figure gives away its sign or size (no over/left word, no refund wording, no amber or red keyed to the value). A plan-level warning stays without its figure. The header eye is one "Show amounts" toggle (`aria-pressed`), drawn once the tab has a figure to hide, and the same toggle sits on each sheet or screen that draws one.
 - Home shows the top four envelopes as tiles at every level; the next income day is its own section under a heading, 24px below Envelopes.
+- Days is a timeline of income days (about ten rows to scroll), so it has no search: people move through it by date, and its rows are found by the date they carry rather than by a name they would type.
 - The day sheet tints only the shortfalls that are in Things to fix and says in one inline block that the rest are left for later. Separate explanations (the lesser lines, a change's effect on how far the plan holds, what a check cannot cover, a last income day) are `Callout` blocks.
 - Plan's Envelopes, Bills and Goals search from 5 rows (`RUNWAY_SEARCH_THRESHOLD`); bills also match the next due date and goals their target date.
 - No call to action carries a "+" glyph.

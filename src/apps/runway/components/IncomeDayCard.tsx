@@ -1,4 +1,5 @@
 import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
@@ -34,8 +35,6 @@ interface IncomeDayCardProps {
   isConfirmedShown?: boolean;
   /** Words that lead the detail line ("Next income day"). */
   lead?: string;
-  /** The amount and any shortfall line are masked until shown; off inside a flow the person opened on purpose. */
-  isPrivate?: boolean;
   onOpen: () => void;
 }
 
@@ -45,9 +44,9 @@ function IncomeDayCard({
   shorts = [],
   isConfirmedShown = true,
   lead,
-  isPrivate = false,
   onOpen,
 }: IncomeDayCardProps) {
+  const { isHidden } = useValuesHidden();
   const stance = effectiveStance(
     useAppSelector(selectStance),
     day.stanceOverride,
@@ -78,15 +77,19 @@ function IncomeDayCard({
     : undefined;
   const warningLine = !firstShort ? undefined : shorts.length === 1 ? (
     <>
-      {firstShort.name} <SensitiveValue>{shortFigure}</SensitiveValue> short
+      {firstShort.name}{' '}
+      {!isHidden && <SensitiveValue>{`${shortFigure} `}</SensitiveValue>}
+      short
     </>
   ) : (
     <>
       {shorts.length} short
-      <span className='max-[359px]:hidden'>
-        {' · '}
-        {firstShort.name} <SensitiveValue>{shortFigure}</SensitiveValue>
-      </span>
+      {!isHidden && (
+        <span className='max-[359px]:hidden'>
+          {' · '}
+          {firstShort.name} <SensitiveValue>{shortFigure}</SensitiveValue>
+        </span>
+      )}
     </>
   );
   const detail = note ?? statusLabel ?? plain;
@@ -111,7 +114,6 @@ function IncomeDayCard({
       detail={warningLine ? undefined : detail}
       warningLine={warningLine}
       figure={amount}
-      isPrivate={isPrivate}
       hiddenAriaLabel={`${formatDateUTC(day.on)}, ${title}. Amount hidden. Open this day`}
       ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}. Open this day`}
       onOpen={onOpen}

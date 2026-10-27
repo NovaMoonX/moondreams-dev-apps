@@ -4,6 +4,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { CHECKLIST_R3_WORDS, CHECKLIST_WORDS } from '@apps/runway/constants';
@@ -78,6 +79,7 @@ export function useBillPaid({
 }: UseBillPaidOptions) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
+  const mask = useMaskedText();
   const { addToast } = useToast();
   const moves = useAppSelector((state) => state.runway.moves);
   const isLedgerReady = useAppSelector(
@@ -126,7 +128,7 @@ export function useBillPaid({
     if (unfundedCents > 0 && !isQuick) {
       const isConfirmed = await confirm({
         title: `Mark ${billName} paid`,
-        message: `${formatCents(unfundedCents)} of it is not set aside yet and comes out of Free to spend. Later income days stop setting this payment aside.`,
+        message: `${mask(formatCents(unfundedCents))} of it is not set aside yet and comes out of Free to spend. Later income days stop setting this payment aside.`,
         confirmText: CHECKLIST_WORDS.markPaid,
       });
       if (!isConfirmed) return false;
