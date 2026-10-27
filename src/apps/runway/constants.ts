@@ -785,6 +785,8 @@ export const START_WORDS = {
   saveAsk: 'Sign in to save your plan',
   saveBody:
     'Your answers are kept on this device only until you sign in. Signing in seals them with your account and writes them to your plan.',
+  saveSummary: (parts: string) =>
+    parts === '' ? 'Nothing has been added yet.' : `Ready to save: ${parts}.`,
   saveButton: 'Sign in with Google',
   handoffTitle: 'Save what you entered?',
   handoffBody: (parts: string) =>
@@ -961,7 +963,7 @@ export const FORM_FLOW_WORDS = {
   badPercent: 'Enter a whole or half percent, up to 100.',
   finishEnding: 'Finish when it ends.',
   pickDays: 'Pick at least one income day.',
-  otherPayday: 'Enter a second payday that is a different day of the month.',
+  otherPayday: 'Pick two different days of the month.',
   discardNew: (noun: string) => `Discard this ${noun}?`,
   discardChange: 'Discard this change?',
   asOf: 'As of',

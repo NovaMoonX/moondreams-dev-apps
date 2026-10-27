@@ -35,6 +35,7 @@ import {
   createIncome,
   type CreateIncomeInput,
 } from '@apps/runway/store/actions/itemActions';
+import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
@@ -110,19 +111,6 @@ const endingOptions = INCOME_ENDINGS.map((value) => ({
   value,
   label: INCOME_ENDING_LABELS[value],
 }));
-
-const LAST_DAY = 31;
-
-const toOrdinal = (day: number) => {
-  if (day === LAST_DAY) return 'Last day';
-  const tail = day % 100;
-  const suffix =
-    tail >= 11 && tail <= 13
-      ? 'th'
-      : (({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] ??
-        'th');
-  return `${day}${suffix}`;
-};
 
 const dayOptions = Array.from({ length: LAST_DAY }, (_, index) => ({
   value: String(index + 1),

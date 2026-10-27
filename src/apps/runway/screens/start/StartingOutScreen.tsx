@@ -20,6 +20,7 @@ import StartFlow, {
   type StartKind,
 } from '@apps/runway/screens/start/StartFlow';
 import {
+  describeCounts,
   toBillRow,
   toEnvelopeRow,
   toGoalRow,
@@ -309,6 +310,13 @@ function DeviceStart() {
     goal: entries.goals.map(({ id, value }) => toGoalRow(id, value)),
   };
 
+  const counts = {
+    income: rows.income.length,
+    bill: rows.bill.length,
+    envelope: rows.envelope.length,
+    goal: rows.goal.length,
+  };
+
   const remove = async (kind: StartKind, id: string) =>
     removeDraftEntry(DRAFT_KINDS[kind], id);
 
@@ -395,7 +403,17 @@ function DeviceStart() {
       renderForm={renderForm}
       doneAsk={START_WORDS.saveAsk}
       doneHelp={START_WORDS.saveBody}
-      doneContent={null}
+      doneContent={
+        <div className='border-border bg-muted/50 flex items-start gap-3 rounded-2xl border p-3'>
+          <HardDrive
+            className='text-muted-foreground mt-0.5 h-5 w-5 shrink-0'
+            aria-hidden='true'
+          />
+          <p className='text-sm text-pretty'>
+            {START_WORDS.saveSummary(describeCounts(counts))}
+          </p>
+        </div>
+      }
       doneAction={
         <Button type='button' onClick={() => void signInWithGoogle()}>
           {START_WORDS.saveButton}
