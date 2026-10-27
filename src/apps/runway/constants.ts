@@ -926,6 +926,7 @@ export const FORM_FLOW_WORDS = {
   takeHome: 'Take-home pay',
   expectedIncomeTitle: 'How much is coming?',
   scheduleTitle: 'When is the next one?',
+  scheduleTwiceTitle: 'Which two days of the month?',
   oftenTitle: 'How often does it arrive?',
   often: 'How often',
   schedule: 'When',
