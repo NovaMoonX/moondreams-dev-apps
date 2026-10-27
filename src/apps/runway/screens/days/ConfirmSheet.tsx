@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight, TriangleAlert, Undo2 } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
@@ -95,18 +95,13 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-const focusDoor = (target: HTMLElement | null) => {
-  target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  target?.focus({ preventScroll: true });
-};
-
 /** Asks the amount that arrived and the day it did, and confirms the day. When less arrives it offers to cover the difference from Free to spend and proposes what gets less; nothing moves without a tap. Needs a connection: the day and its two records are written together. */
 function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isMounted = useRef(true);
-  const coverRef = useRef<HTMLButtonElement>(null);
-  const cutsRef = useRef<HTMLButtonElement>(null);
+  const coverId = useId();
+  const cutsId = useId();
   const { day, draft } = view;
   const today = todayAsUtcDate();
   const balances = useAppSelector(selectBalances);
@@ -302,6 +297,12 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     setUndoInputs(null);
   };
 
+  const goToFix = (door: Blocker['door']) => {
+    const target = document.getElementById(door === 'cover' ? coverId : cutsId);
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target?.focus({ preventScroll: true });
+  };
+
   const getFooterNote = () => {
     if (error) return error;
     if (blocker === null) return null;
@@ -331,11 +332,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
         type='button'
         variant='tertiary'
         className='h-auto min-h-10 w-full items-start justify-between gap-2 px-0! text-left text-xs font-normal whitespace-normal'
-        onClick={() =>
-          focusDoor(
-            blocker.door === 'cover' ? coverRef.current : cutsRef.current,
-          )
-        }
+        onClick={() => goToFix(blocker.door)}
       >
         {icon}
         {words}
@@ -414,7 +411,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
             : CONFIRM_FLOW_WORDS.coverPart(formatCents(gap))}
         </p>
         <Button
-          ref={coverRef}
+          id={coverId}
           type='button'
           variant='secondary'
           className='w-full'
@@ -481,7 +478,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           </p>
         )}
         <Button
-          ref={cutsRef}
+          id={cutsId}
           type='button'
           variant='secondary'
           className='w-full'
