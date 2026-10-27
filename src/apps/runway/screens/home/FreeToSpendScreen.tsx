@@ -14,7 +14,7 @@ import {
   ENVELOPE_SPEND_WORDS,
   HOME_WORDS,
 } from '@apps/runway/constants';
-import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
+import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
@@ -36,7 +36,9 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const balances = useAppSelector(selectBalances);
   const level = useAppSelector(selectLevel);
   const words = getLevelWords(level);
-  const { openCheckAmount } = useRunwayUrlState();
+  const { view, checkEnvelope, openCheckAmount, closeCheckAmount } =
+    useRunwayUrlState();
+  const isChecking = view === 'checkAmount';
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -53,13 +55,20 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     [words.envelopesRow, formatCents(balances.assignedToEnvelopesCents)],
   ];
 
+  const getTitle = () => {
+    if (isChecking) return CHECK_WORDS.title;
+    return sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand';
+  };
+  const getBack = () => {
+    if (isChecking) return closeCheckAmount;
+    return sheetKey === null ? undefined : () => setSheetKey(null);
+  };
+
   return (
-    <Subview
-      title={sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand'}
-      onClose={onClose}
-      onBack={sheetKey === null ? undefined : () => setSheetKey(null)}
-    >
-      {sheetKey !== null ? (
+    <Subview title={getTitle()} onClose={onClose} onBack={getBack()}>
+      {isChecking ? (
+        <CheckAmountBody presetEnvelopeId={checkEnvelope} />
+      ) : sheetKey !== null ? (
         <StartingAmountsSheet
           key={sheetKey}
           isOpen
@@ -123,10 +132,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 icon={<Calculator />}
                 label={CHECK_WORDS.open}
                 subtitle={ENVELOPE_SPEND_WORDS.checkSub}
-                onClick={() => {
-                  onClose();
-                  leaveAfterSubviewCloses(() => openCheckAmount(null, true));
-                }}
+                onClick={() => openCheckAmount(null)}
               />
             )}
           </ActionGroup>

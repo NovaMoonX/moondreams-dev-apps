@@ -14,7 +14,6 @@ import Loading from '@/ui/Loading';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
-import CheckAmountScreen from '@apps/runway/screens/home/CheckAmountScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import DraftHandoff from '@apps/runway/screens/start/DraftHandoff';
 import SignedOutLanding from '@apps/runway/screens/start/SignedOutLanding';
@@ -138,8 +137,6 @@ function RunwayContent() {
     closeView,
     settingsView,
     closeSettingsView,
-    checkEnvelope,
-    isCheckFromFreeToSpend,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
@@ -274,22 +271,6 @@ function RunwayContent() {
     return <DraftHandoff draft={startDraft} />;
   }
 
-  if (view === 'checkAmount' && level === 'track') {
-    return (
-      <div>
-        <CheckAmountScreen
-          presetEnvelopeId={checkEnvelope}
-          onClose={() => {
-            closeView();
-            if (isCheckFromFreeToSpend) {
-              leaveAfterSubviewCloses(() => openView('freeToSpend'));
-            }
-          }}
-        />
-      </div>
-    );
-  }
-
   if (view === 'start') {
     return (
       <div>
@@ -298,7 +279,7 @@ function RunwayContent() {
     );
   }
 
-  if (view === 'freeToSpend') {
+  if (view === 'freeToSpend' || (view === 'checkAmount' && level === 'track')) {
     return (
       <div>
         <FreeToSpendScreen onClose={closeView} />
