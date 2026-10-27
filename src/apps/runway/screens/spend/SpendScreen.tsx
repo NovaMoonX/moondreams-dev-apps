@@ -97,10 +97,6 @@ function SpendScreen() {
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
-  // The filter drawer's history step restores the address it opened on when it closes, so the pick is also kept here.
-  const [pickedEnvelope, setPickedEnvelope] = useState<
-    string | null | undefined
-  >(undefined);
 
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
@@ -110,18 +106,14 @@ function SpendScreen() {
     });
     return acc;
   }, new Map());
-  const chosenEnvelope =
-    pickedEnvelope === undefined ? spendEnvelope : pickedEnvelope;
   const filterId =
-    chosenEnvelope !== null && counts.has(chosenEnvelope)
-      ? chosenEnvelope
-      : null;
+    spendEnvelope !== null && counts.has(spendEnvelope) ? spendEnvelope : null;
   const showEnvelope = (envelopeId: string | null) => {
-    setPickedEnvelope(envelopeId);
     showSpendEnvelope(envelopeId);
     setShown(SPEND_PAGE_SIZE);
   };
-  const hasBar = purchases.length >= RUNWAY_SEARCH_THRESHOLD || counts.size >= 2;
+  const hasBar =
+    purchases.length >= RUNWAY_SEARCH_THRESHOLD || counts.size >= 2;
   const needle = hasBar ? query.trim().toLowerCase() : '';
   const matches = purchases.filter(
     (purchase) =>
