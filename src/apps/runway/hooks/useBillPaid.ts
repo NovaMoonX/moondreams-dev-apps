@@ -33,7 +33,7 @@ export async function markPaymentPaid(
     billId,
     dueOn: payment.dueOn,
     amountCents: payment.totalCents,
-    fundedCents: payment.fundedCents,
+    fundedCents: payment.heldNowCents,
     paidOn: todayAsUtcDate(),
     marks: countMarks(moves, billId, payment.dueOn),
   });
@@ -124,7 +124,7 @@ export function useBillPaid({
 
   const mark = async () => {
     if (!payment || payment.paid) return false;
-    const unfundedCents = Math.max(0, payment.totalCents - payment.fundedCents);
+    const unfundedCents = Math.max(0, payment.totalCents - payment.heldNowCents);
     if (unfundedCents > 0 && !isQuick) {
       const isConfirmed = await confirm({
         title: `Mark ${billName} paid`,

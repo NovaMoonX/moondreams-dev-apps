@@ -814,13 +814,21 @@ export const selectDraft = createSelector(
 
 /** Every bill's payments with what has been set aside and what is paid, keyed by bill id; the bills screen and the checklist read the same plan. */
 export const selectBillPayments = createSelector(
-  [selectBills, selectComingDays, selectStance, selectBillProgress, selectOn],
+  [
+    selectBills,
+    selectComingDays,
+    selectStance,
+    selectBillProgress,
+    selectOn,
+    selectStartDate,
+  ],
   (
     bills,
     comingDays,
     stance,
     progress,
     today,
+    startDate,
   ): Record<string, BillPayment[]> => {
     const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
     const result = Object.fromEntries(
@@ -844,6 +852,7 @@ export const selectBillPayments = createSelector(
             comingDays,
             horizon,
             stance,
+            { today, startDate },
           ),
         ];
       }),

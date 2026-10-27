@@ -135,9 +135,10 @@ export const sumFunded = (funded: readonly FundedDay[]) =>
   funded.reduce((sum, entry) => sum + entry.cents, 0);
 
 /**
- * The payments as the bill's money stands now: a payment uses at most what the bill held by its due
- * date after the payments before it, and the rest came from Free to spend, so a correction that lowers
- * a day a paid payment used moves the cut to Free to spend instead of leaving the bill below zero.
+ * The payments as the bill's money stands now: a payment uses at most what the bill held by the later
+ * of its due date and the day it was paid, after the payments before it, and the rest came from Free to
+ * spend, so a correction that lowers a day a paid payment used moves the cut to Free to spend instead of
+ * leaving the bill below zero, and money set aside after the due date pays a late payment once.
  */
 export function settlePaid(
   funded: readonly FundedDay[],
@@ -149,7 +150,11 @@ export function settlePaid(
   const settled = order.reduce<{ used: Cents; byId: Map<string, Cents> }>(
     (acc, payment) => {
       const held =
-        sumFunded(funded.filter((entry) => entry.on <= payment.dueOn)) -
+        sumFunded(
+          funded.filter(
+            (entry) => entry.on <= Math.max(payment.dueOn, payment.paidOn),
+          ),
+        ) -
         acc.used;
       const fromBill = Math.min(
         payment.amountCents - payment.fromFreeCents,
@@ -164,5 +169,27 @@ export function settlePaid(
     ...payment,
     fromFreeCents: settled.byId.get(payment.moveId) ?? payment.fromFreeCents,
   }));
+  return result;
+}
+
+/** What a payment marked paid on `paidOn` would use from what the bill holds, as `settlePaid` reads it; the rest of `amountCents` comes from Free to spend. */
+export function getHeldForPayment(
+  progress: BillProgressInput,
+  payment: { dueOn: DateOnly; amountCents: Cents; paidOn: DateOnly },
+  startDate: DateOnly | null,
+): Cents {
+  const probe: PaidPayment = {
+    ...payment,
+    moveId: '',
+    fromFreeCents: 0,
+  };
+  const counted = progress.paid.filter(
+    (entry) => startDate === null || entry.paidOn >= startDate,
+  );
+  const settled = settlePaid(progress.funded, [...counted, probe]);
+  const fromFree =
+    settled.find((entry) => entry.moveId === '')?.fromFreeCents ??
+    payment.amountCents;
+  const result = payment.amountCents - fromFree;
   return result;
 }

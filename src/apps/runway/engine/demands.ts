@@ -22,6 +22,7 @@ import { allocate, percentOf, percentShares } from './money';
 import {
   countFundedDays,
   fundedInWindow,
+  getHeldForPayment,
   NO_PROGRESS,
   sumFunded,
   type BillProgressInput,
@@ -320,6 +321,8 @@ export interface BillPayment {
   fundedCents: Cents;
   /** Confirmed days that set money aside for it. */
   fundedDays: number;
+  /** What marking it paid today would use from what the bill holds, money set aside after its due date included; `fundedCents` when no day is given. */
+  heldNowCents: Cents;
   /** The mark that paid it, or null while it is unpaid; a paid payment asks nothing more. */
   paid: PaidPayment | null;
 }
@@ -334,8 +337,24 @@ export function planBillPayments(
   chronological: readonly IncomeDayRef[],
   horizon: number,
   stance: Stance = 'conservative',
-  options: { firstDayOn?: number } = {},
+  options: {
+    firstDayOn?: number;
+    today?: DateOnly;
+    startDate?: DateOnly | null;
+  } = {},
 ): BillPayment[] {
+  const getHeldNow = (
+    dueOn: DateOnly,
+    fundedCents: Cents,
+    paid: PaidPayment | null,
+  ) =>
+    options.today === undefined || paid !== null
+      ? fundedCents
+      : getHeldForPayment(
+          progress,
+          { dueOn, amountCents, paidOn: options.today },
+          options.startDate ?? null,
+        );
   const progress = bill.progress ?? NO_PROGRESS;
   const billStance = effectiveStance(stance, bill.stanceOverride);
   const amountCents = pick(billStance, bill.amount, 'expense');
@@ -382,6 +401,7 @@ export function planBillPayments(
           : days.map((day, index) => ({ day, cents: shares[index] })),
         fundedCents,
         fundedDays: countFundedDays(progress.funded),
+        heldNowCents: getHeldNow(dueOn, fundedCents, paid),
         paid,
       };
     });
@@ -416,6 +436,7 @@ export function planBillPayments(
           })),
       fundedCents,
       fundedDays: countFundedDays(confirmed),
+      heldNowCents: getHeldNow(dueOn, fundedCents, paid),
       paid,
     };
   });

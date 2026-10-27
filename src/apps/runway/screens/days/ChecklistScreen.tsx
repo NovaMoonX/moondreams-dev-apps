@@ -220,7 +220,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           billId,
           dueOn: payment.dueOn,
           amountCents: payment.totalCents,
-          fundedCents: payment.fundedCents,
+          fundedCents: payment.heldNowCents,
           paidOn: todayAsUtcDate(),
           marks: countMarks(moves, billId, payment.dueOn),
         })),

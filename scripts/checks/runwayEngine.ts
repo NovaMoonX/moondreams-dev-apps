@@ -173,6 +173,7 @@ import {
   getPaidMoveId,
   getUndoMoveId,
 } from '../../src/apps/runway/engine/progress.ts';
+import { getHeldForPayment } from '../../src/apps/runway/engine/progress.ts';
 import {
   getPace,
   planGoalContributions,
@@ -7669,6 +7670,180 @@ const version = (
   );
 }
 
+// F1 (round 7 review): a payment paid after its due date draws on money set aside up to the day it was paid.
+{
+  const jan = (day: number) => Date.UTC(2026, 0, day);
+  const kinds = { rent: 'bill' } as const;
+  const startOn = jan(10);
+  const startMove = (refId: string | null, amountCents: number): OpenMove => ({
+    id: 'start_' + (refId ?? 'money'),
+    kind: 'start',
+    date: startOn,
+    refId,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: {
+      amountCents,
+      holding: refId === null ? 'money' : 'bill',
+    },
+  });
+  const paidMove = (
+    dueOn: number,
+    paidOn: number,
+    fromFreeCents: number,
+  ): OpenMove => ({
+    id: 'paid_rent_' + dueOn,
+    kind: 'billPaid',
+    date: dueOn,
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: { amountCents: 20_000, paidOn, fromFreeCents },
+  });
+  const starts = [startMove(null, 100_000), startMove('rent', 20_000)];
+  const heldA = getHeldForPayment(
+    deriveBillProgress([], new Map(), starts, startOn, null).rent,
+    { dueOn: jan(5), amountCents: 20_000, paidOn: jan(12) },
+    startOn,
+  );
+  assert.equal(
+    heldA,
+    20_000,
+    'F1 A: marking a payment due before the start uses what the bill held at the start',
+  );
+  const movesA = [...starts, paidMove(jan(5), jan(12), 20_000 - heldA)];
+  const balancesA = deriveBalances({
+    startDate: startOn,
+    moves: movesA,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.deepEqual(
+    [balancesA.freeToSpendCents, balancesA.assignedToBillsCents],
+    [80_000, 0],
+    'F1 A: the rent held at the start pays it once: Free to spend 800, rent holds 0',
+  );
+
+  const rentLine = (cents: number) => ({
+    lineId: 'd20:rent',
+    itemId: 'rent',
+    name: 'Rent',
+    emoji: null,
+    tier: 'must' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const day20 = {
+    id: 'd20_confirmed',
+    dayId: 'd20',
+    createdAt: 2,
+    kind: 'confirmed',
+    payload: {
+      fingerprint: 'x',
+      stance: 'conservative',
+      arrivedCents: 50_000,
+      expectedCents: 50_000,
+      freeToSpendCents: 30_000,
+      differences: [],
+      lines: [rentLine(20_000)],
+    },
+  } satisfies OpenRecord;
+  const startB = jan(1);
+  const moneyB: OpenMove = { ...startMove(null, 0), date: startB };
+  const days = new Map([['d20', jan(20)]]);
+  const movesB = [moneyB, paidMove(jan(15), jan(21), 0)];
+  const balancesB = deriveBalances({
+    startDate: startB,
+    moves: movesB,
+    records: [day20],
+    arrivedOn: days,
+    expectedOn: days,
+    kinds,
+  });
+  assert.deepEqual(
+    [balancesB.freeToSpendCents, balancesB.assignedToBillsCents],
+    [30_000, 0],
+    'F1 B: a day dated after the due date that funded the rent is used by the payment made after it, so nothing phantom is held',
+  );
+  const progressB = deriveBillProgress([day20], days, movesB, startB, null);
+  assert.deepEqual(
+    progressB.rent.paid.map((payment) => payment.fromFreeCents),
+    [0],
+    'F1 B: and the paid mark says nothing came from Free to spend',
+  );
+  const earlyB = deriveBalances({
+    startDate: startB,
+    moves: [moneyB, paidMove(jan(15), jan(14), 0)],
+    records: [day20],
+    arrivedOn: days,
+    expectedOn: days,
+    kinds,
+  });
+  assert.equal(
+    earlyB.assignedToBillsCents,
+    20_000,
+    'F1 B: a payment made before that day leaves the later day held',
+  );
+
+  const closingOf = (
+    startDate: number,
+    dayList: { id: string; expectedOn: number; arrivedOn: number }[],
+    records: OpenRecord[],
+    moves: OpenMove[],
+  ) =>
+    buildClosing('2026-01', null, {
+      startDate,
+      days: dayList,
+      records,
+      moves,
+      purchases: [],
+      billIds: new Set(['rent']),
+    });
+  const closedA = closingOf(startOn, [], [], movesA);
+  const fromClosingA = deriveBalances({
+    startDate: startOn,
+    moves: starts,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closedA,
+  });
+  assert.deepEqual(
+    [fromClosingA.freeToSpendCents, fromClosingA.assignedToBillsCents],
+    [balancesA.freeToSpendCents, balancesA.assignedToBillsCents],
+    'F1 A: a closing over the late payment gives the same figures as the ledger',
+  );
+  const closedB = closingOf(
+    startB,
+    [{ id: 'd20', expectedOn: jan(20), arrivedOn: jan(20) }],
+    [day20],
+    movesB,
+  );
+  const fromClosingB = deriveBalances({
+    startDate: startB,
+    moves: [moneyB],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closedB,
+  });
+  assert.deepEqual(
+    [fromClosingB.freeToSpendCents, fromClosingB.assignedToBillsCents],
+    [balancesB.freeToSpendCents, balancesB.assignedToBillsCents],
+    'F1 B: a closing over the day and the late payment gives the same figures as the ledger',
+  );
+  assert.deepEqual(
+    deriveBillProgress([], new Map(), [moneyB], startB, closedB).rent.paid.map(
+      (payment) => payment.fromFreeCents,
+    ),
+    progressB.rent.paid.map((payment) => payment.fromFreeCents),
+    'F1 B: and the bill progress from the closing settles the payment the same way',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to spend, then what gets less.
@@ -7848,6 +8023,180 @@ console.log('runway engine: ok');
     decodeClosing(month, encodeClosing(closed)),
     closed,
     'and reads back sealed',
+  );
+}
+
+// F1 (round 7 review): a payment paid after its due date draws on money set aside up to the day it was paid.
+{
+  const jan = (day: number) => Date.UTC(2026, 0, day);
+  const kinds = { rent: 'bill' } as const;
+  const startOn = jan(10);
+  const startMove = (refId: string | null, amountCents: number): OpenMove => ({
+    id: 'start_' + (refId ?? 'money'),
+    kind: 'start',
+    date: startOn,
+    refId,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: {
+      amountCents,
+      holding: refId === null ? 'money' : 'bill',
+    },
+  });
+  const paidMove = (
+    dueOn: number,
+    paidOn: number,
+    fromFreeCents: number,
+  ): OpenMove => ({
+    id: 'paid_rent_' + dueOn,
+    kind: 'billPaid',
+    date: dueOn,
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: { amountCents: 20_000, paidOn, fromFreeCents },
+  });
+  const starts = [startMove(null, 100_000), startMove('rent', 20_000)];
+  const heldA = getHeldForPayment(
+    deriveBillProgress([], new Map(), starts, startOn, null).rent,
+    { dueOn: jan(5), amountCents: 20_000, paidOn: jan(12) },
+    startOn,
+  );
+  assert.equal(
+    heldA,
+    20_000,
+    'F1 A: marking a payment due before the start uses what the bill held at the start',
+  );
+  const movesA = [...starts, paidMove(jan(5), jan(12), 20_000 - heldA)];
+  const balancesA = deriveBalances({
+    startDate: startOn,
+    moves: movesA,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.deepEqual(
+    [balancesA.freeToSpendCents, balancesA.assignedToBillsCents],
+    [80_000, 0],
+    'F1 A: the rent held at the start pays it once: Free to spend 800, rent holds 0',
+  );
+
+  const rentLine = (cents: number) => ({
+    lineId: 'd20:rent',
+    itemId: 'rent',
+    name: 'Rent',
+    emoji: null,
+    tier: 'must' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const day20 = {
+    id: 'd20_confirmed',
+    dayId: 'd20',
+    createdAt: 2,
+    kind: 'confirmed',
+    payload: {
+      fingerprint: 'x',
+      stance: 'conservative',
+      arrivedCents: 50_000,
+      expectedCents: 50_000,
+      freeToSpendCents: 30_000,
+      differences: [],
+      lines: [rentLine(20_000)],
+    },
+  } satisfies OpenRecord;
+  const startB = jan(1);
+  const moneyB: OpenMove = { ...startMove(null, 0), date: startB };
+  const days = new Map([['d20', jan(20)]]);
+  const movesB = [moneyB, paidMove(jan(15), jan(21), 0)];
+  const balancesB = deriveBalances({
+    startDate: startB,
+    moves: movesB,
+    records: [day20],
+    arrivedOn: days,
+    expectedOn: days,
+    kinds,
+  });
+  assert.deepEqual(
+    [balancesB.freeToSpendCents, balancesB.assignedToBillsCents],
+    [30_000, 0],
+    'F1 B: a day dated after the due date that funded the rent is used by the payment made after it, so nothing phantom is held',
+  );
+  const progressB = deriveBillProgress([day20], days, movesB, startB, null);
+  assert.deepEqual(
+    progressB.rent.paid.map((payment) => payment.fromFreeCents),
+    [0],
+    'F1 B: and the paid mark says nothing came from Free to spend',
+  );
+  const earlyB = deriveBalances({
+    startDate: startB,
+    moves: [moneyB, paidMove(jan(15), jan(14), 0)],
+    records: [day20],
+    arrivedOn: days,
+    expectedOn: days,
+    kinds,
+  });
+  assert.equal(
+    earlyB.assignedToBillsCents,
+    20_000,
+    'F1 B: a payment made before that day leaves the later day held',
+  );
+
+  const closingOf = (
+    startDate: number,
+    dayList: { id: string; expectedOn: number; arrivedOn: number }[],
+    records: OpenRecord[],
+    moves: OpenMove[],
+  ) =>
+    buildClosing('2026-01', null, {
+      startDate,
+      days: dayList,
+      records,
+      moves,
+      purchases: [],
+      billIds: new Set(['rent']),
+    });
+  const closedA = closingOf(startOn, [], [], movesA);
+  const fromClosingA = deriveBalances({
+    startDate: startOn,
+    moves: starts,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closedA,
+  });
+  assert.deepEqual(
+    [fromClosingA.freeToSpendCents, fromClosingA.assignedToBillsCents],
+    [balancesA.freeToSpendCents, balancesA.assignedToBillsCents],
+    'F1 A: a closing over the late payment gives the same figures as the ledger',
+  );
+  const closedB = closingOf(
+    startB,
+    [{ id: 'd20', expectedOn: jan(20), arrivedOn: jan(20) }],
+    [day20],
+    movesB,
+  );
+  const fromClosingB = deriveBalances({
+    startDate: startB,
+    moves: [moneyB],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closedB,
+  });
+  assert.deepEqual(
+    [fromClosingB.freeToSpendCents, fromClosingB.assignedToBillsCents],
+    [balancesB.freeToSpendCents, balancesB.assignedToBillsCents],
+    'F1 B: a closing over the day and the late payment gives the same figures as the ledger',
+  );
+  assert.deepEqual(
+    deriveBillProgress([], new Map(), [moneyB], startB, closedB).rent.paid.map(
+      (payment) => payment.fromFreeCents,
+    ),
+    progressB.rent.paid.map((payment) => payment.fromFreeCents),
+    'F1 B: and the bill progress from the closing settles the payment the same way',
   );
 }
 
