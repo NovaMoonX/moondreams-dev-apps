@@ -8,6 +8,7 @@ import FormSheet from '@/components/FormSheet';
 import MoneyInput from '@/components/MoneyInput';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
+import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
@@ -33,6 +34,8 @@ import {
   selectBills,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
+
+const SEARCH_FROM = 8;
 
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
@@ -60,13 +63,27 @@ interface AmountListProps {
 /** One-line rows that each open their own amount, capped so fifty of them stay a short list. */
 export function AmountList({ label, rows, values, onChange }: AmountListProps) {
   const [isAll, setIsAll] = useState(false);
-  const shown = isAll ? rows : rows.slice(0, START_ROWS_PREVIEW);
+  const [query, setQuery] = useState('');
+  const text = query.trim().toLowerCase();
+  const matches =
+    text === ''
+      ? rows
+      : rows.filter((row) => row.name.toLowerCase().includes(text));
+  const shown =
+    isAll || text !== '' ? matches : matches.slice(0, START_ROWS_PREVIEW);
   const hiddenCount = rows.length - START_ROWS_PREVIEW;
 
   if (rows.length === 0) return null;
   return (
     <div className='space-y-2'>
       <SectionDivider label={label} />
+      {rows.length >= SEARCH_FROM && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={`Search ${label.toLowerCase()}`}
+        />
+      )}
       <div className='space-y-2'>
         {shown.map((row) => {
           const cents = parseMoneyToCents(values[row.id] ?? '');
@@ -91,7 +108,10 @@ export function AmountList({ label, rows, values, onChange }: AmountListProps) {
           );
         })}
       </div>
-      {hiddenCount > 0 && (
+      {text !== '' && matches.length === 0 && (
+        <p className='text-muted-foreground text-sm'>Nothing matches that.</p>
+      )}
+      {text === '' && hiddenCount > 0 && (
         <ShowMoreButton
           isOpen={isAll}
           onClick={() => setIsAll((open) => !open)}
@@ -126,6 +146,17 @@ function StartingAmountsSheet({
       Object.entries(started.byItem).map(([id, cents]) => [id, toText(cents)]),
     ),
   );
+  const askedGoals = goals.filter(
+    ({ item, version }) =>
+      started.byItem[item.id] === undefined &&
+      (version.payload.startingCents ?? null) === null,
+  );
+  const carriedGoals = goals.flatMap(({ item, version }) =>
+    started.byItem[item.id] === undefined &&
+    (version.payload.startingCents ?? 0) > 0
+      ? [{ id: item.id, cents: version.payload.startingCents ?? 0 }]
+      : [],
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const snapshot = JSON.stringify({ date, money, amounts });
@@ -158,7 +189,12 @@ function StartingAmountsSheet({
         : [
             { holding: 'money' as const, refId: null, amountCents: moneyCents },
           ]),
-      ...goals.flatMap(({ item }) => toHolding('goal', item.id)),
+      ...askedGoals.flatMap(({ item }) => toHolding('goal', item.id)),
+      ...carriedGoals.map(({ id, cents }) => ({
+        holding: 'goal' as const,
+        refId: id,
+        amountCents: cents,
+      })),
       ...bills.flatMap(({ item }) => toHolding('bill', item.id)),
     ];
   };
@@ -214,7 +250,7 @@ function StartingAmountsSheet({
         />
         <AmountList
           label='What each goal holds'
-          rows={goals.map(({ item, version }) => ({
+          rows={askedGoals.map(({ item, version }) => ({
             id: item.id,
             name: version.payload.name,
           }))}
