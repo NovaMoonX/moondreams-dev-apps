@@ -33,7 +33,7 @@ interface UseQuestionFlowOptions {
   onAdvance?: (fromId: string) => void;
 }
 
-/** Which question is open in a one-question-at-a-time form, the moves between them, and whether every answer has been seen once. */
+/** Which question is open in a one-question-at-a-time form, the moves between them, and whether every answer has been seen once. After that the form is only rows, and a reopened question is `reopenedId`. */
 export function useQuestionFlow({
   steps,
   startFolded = false,
@@ -75,6 +75,10 @@ export function useQuestionFlow({
     hasReviewed,
     blocker: open !== null && !open.isAnswered ? (open.blocker ?? null) : null,
     reopen: (id: string) => setOpenId(id),
+    /** The question the person reopened, which a reviewed form shows in its own sheet; null while none is. */
+    reopenedId: openId,
+    /** Closes a reopened question's sheet without moving on from it. */
+    close: () => setOpenId(null),
     advance,
     /** Moves on from a question its pick has just answered, before that answer has reached the steps. */
     moveOnFrom,
