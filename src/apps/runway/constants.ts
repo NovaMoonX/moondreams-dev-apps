@@ -738,8 +738,6 @@ export const START_WORDS = {
   billsHelp:
     'Add the bills and upcoming expenses you know about. Each is set aside a little at a time before it is due.',
   envelopesAsk: 'What do you spend money on?',
-  envelopesHelp:
-    'An envelope is money set aside for a kind of spending, like groceries. Goals come next.',
   envelopeDoor: "What's an envelope?",
   envelopeDoorBody:
     'An envelope is money set aside for a kind of spending, like groceries, that you refill each period. A goal is different: you fill it toward a target, like a trip or a car.',

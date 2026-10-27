@@ -44,7 +44,7 @@ const KIND_WORDS: Record<
   {
     step: StartStep;
     ask: string;
-    help: string;
+    help: string | null;
     add: string;
     addAnother: string;
     search: string;
@@ -75,7 +75,7 @@ const KIND_WORDS: Record<
   envelope: {
     step: 'envelopes',
     ask: START_WORDS.envelopesAsk,
-    help: START_WORDS.envelopesHelp,
+    help: null,
     add: START_WORDS.addEnvelope,
     addAnother: START_WORDS.addAnotherEnvelope,
     search: 'Search your envelopes',
@@ -336,9 +336,11 @@ function StartFlow({
               {START_WORDS.stepOf(index + 1, steps.length)}
             </p>
             <h2 className='text-2xl font-semibold text-balance'>{body.ask}</h2>
-            <p className='text-muted-foreground text-sm text-pretty'>
-              {body.help}
-            </p>
+            {body.help && (
+              <p className='text-muted-foreground text-sm text-pretty'>
+                {body.help}
+              </p>
+            )}
           </div>
           {index === 0 && notice}
           <div className='space-y-3'>{body.content}</div>
