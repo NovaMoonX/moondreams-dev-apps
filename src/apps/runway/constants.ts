@@ -689,7 +689,6 @@ export const SPEND_WORDS = {
   splitEvenly: 'Split evenly',
   splitDone: 'Done',
   refundOf: 'Refund of',
-  relatedTo: 'Related to',
   noOriginal: 'Not tied to a purchase',
   pickOriginal: 'Which purchase is it for?',
   returnsTo: 'Returns to',

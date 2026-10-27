@@ -234,13 +234,13 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                 }));
               }}
             />
-            {original && (
+            {original && !isHidden && (
               <ActionRow
                 isGrouped
                 isRoomy
                 hasChevron
                 icon={<ReceiptText />}
-                label={`${isHidden ? SPEND_WORDS.relatedTo : SPEND_WORDS.refundOf} ${getPurchaseTitle(original, nameOf, isHidden)}`}
+                label={`${SPEND_WORDS.refundOf} ${getPurchaseTitle(original, nameOf)}`}
                 onClick={() => openPurchase(original.id)}
               />
             )}
