@@ -914,6 +914,7 @@ export const FORM_FLOW_WORDS = {
   howOftenNext: 'How often it arrives comes next.',
   commonBills: 'Common bills',
   commonEnvelopes: 'Common envelopes',
+  commonGoals: 'Common goals',
   cadenceTitle: 'Which pays does it get money from?',
   cadence: 'Pays',
   targetTitle: 'How much do you want to save?',
@@ -1164,6 +1165,14 @@ export const BILL_QUICK_PICKS = [
   { name: 'Health insurance', emoji: '🩺', priority: 'must' },
   { name: 'Streaming', emoji: '📺' },
   { name: 'Gym', emoji: '🏋️' },
+] as const;
+
+export const GOAL_QUICK_PICKS = [
+  { name: 'Emergency fund', emoji: '🛟' },
+  { name: 'Vacation', emoji: '🏖️' },
+  { name: 'New car', emoji: '🚗' },
+  { name: 'Home repairs', emoji: '🛠️' },
+  { name: 'Holiday gifts', emoji: '🎁' },
 ] as const;
 
 export const ENVELOPE_QUICK_PICKS = [
