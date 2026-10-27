@@ -2254,6 +2254,41 @@ A maintainer can retire a master key id by re-wrapping every data key and grant 
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
 
+### Issue 77: History window and a production cold-start check
+
+**Prerequisites:** Issue 28
+**Target PR Size:** ~400 lines
+**Files:**
+- `src/apps/runway/store/listeners/` (the second listener tier, keyed on `(from, to)`)
+- `src/apps/runway/hooks/useRunwaySync.ts`, `store/runwaySlice.ts`
+- `src/apps/runway/screens/days/`, `screens/spend/SpendScreen.tsx`, `utils/spendPeriod.ts`
+- `scripts/seeds/runwayScale.ts`
+
+**Context:** Read the TDD's "Tier 2: the history window" and `TECHNICAL.md` "What reaches back, and what does not". Since Issue 28, Days and Spend list only what happened since the newest closing. Older purchases and income days count in every figure but can't be opened. Spend's period control (This month, Last month, Past 30 and 90 days) already loads a fixed period on demand, which is a small version of this window.
+
+### Description
+A person can open any older month in Days and Spend, find a purchase or an income day from it, and open, edit or correct it like a recent one. A plan's first screen stays fast on a production build.
+
+### Possible Approach
+1. Turn Spend's period read into the general window: a month picker back to the plan's start, read by `(from, to)` only while the view is open, one window at a time.
+2. Give Days the same window, so an income day older than the newest closing opens its record and its Correct a day.
+3. Search covers the window in view and says which window that is.
+4. An edit inside a closed month marks its closing stale through `markLedgerWrite`, as every other write does.
+5. Measure on `seed:runway-scale` (Morgan) with a production build (`npm run build` and `vite preview`) and with the dev build at 4× CPU.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Read:** a month older than the newest closing opens in Days and in Spend.
+- [ ] **Update:** an older purchase can be edited and an older income day corrected, and the closing is rebuilt.
+
+### Success Criteria
+- [ ] Cold start on the scale plan reaches the first useful screen within 1.5 s on a production build, and within 3.5 s on the dev build at 4× CPU (Issue 28 measured only the dev build).
+- [ ] Changing the history window takes under 300 ms on the scale plan.
+- [ ] Spend's "Earlier purchases are counted in your figures but not listed" note, the Days limit and the README's "Where it stands" line are removed or updated to match what shipped.
+- [ ] `npm run check:runway-engine` passes; a rebuild after an old edit matches a full replay (equivalence case).
+- [ ] The PR carries one `minor` label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] `UX.md` and `TECHNICAL.md` match what shipped.
+
+
 ## Beyond
 
 ### Issue 68: Describe a coming expense or income in words
