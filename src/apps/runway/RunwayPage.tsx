@@ -189,6 +189,7 @@ function RunwayContent() {
   if (isDeletingPlan && keyStatus === 'ready') {
     return (
       <div>
+        <SettingsScreen onClose={closeMoreEntry} />
         <DeletePlanScreen
           onClose={closeSettingsView}
           onDeleted={() => {
@@ -295,18 +296,13 @@ function RunwayContent() {
     );
   }
 
-  if (moreEntry === 'settings' && settingsView === 'tracking') {
-    return (
-      <div>
-        <TrackingScreen onClose={closeSettingsView} />
-      </div>
-    );
-  }
-
   if (moreEntry === 'settings') {
     return (
       <div>
         <SettingsScreen onClose={closeMoreEntry} />
+        {settingsView === 'tracking' && (
+          <TrackingScreen onClose={closeSettingsView} />
+        )}
       </div>
     );
   }

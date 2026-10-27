@@ -78,70 +78,71 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
     else void stop();
   };
 
-  if (isLineUp && level === 'plan') {
-    return <LineUpScreen onClose={() => setIsLineUp(false)} />;
-  }
-
   return (
-    <Subview title={TRACKING_WORDS.title} onClose={onClose}>
-      <div className='space-y-4'>
-        <div className='border-border bg-card space-y-3 rounded-2xl border p-4'>
-          <PillGroup
-            label={TRACKING_WORDS.choice}
-            options={levelOptions}
-            value={level}
-            onChange={choose}
-          />
-          <InlineNotice tone='info'>
-            {level === 'track'
-              ? TRACKING_WORDS.trackHelp
-              : TRACKING_WORDS.planHelp}
-          </InlineNotice>
-          <LevelGate level='track'>
-            {open && (
-              <p className='text-sm'>
-                Tracking since {formatDateUTC(open.from)}.
+    <>
+      <Subview overlay title={TRACKING_WORDS.title} onClose={onClose}>
+        <div className='space-y-4'>
+          <div className='border-border bg-card space-y-3 rounded-2xl border p-4'>
+            <PillGroup
+              label={TRACKING_WORDS.choice}
+              options={levelOptions}
+              value={level}
+              onChange={choose}
+            />
+            <InlineNotice tone='info'>
+              {level === 'track'
+                ? TRACKING_WORDS.trackHelp
+                : TRACKING_WORDS.planHelp}
+            </InlineNotice>
+            <LevelGate level='track'>
+              {open && (
+                <p className='text-sm'>
+                  Tracking since {formatDateUTC(open.from)}.
+                </p>
+              )}
+            </LevelGate>
+            {error && (
+              <p className='text-destructive text-sm' role='alert'>
+                {error}
               </p>
             )}
-          </LevelGate>
-          {error && (
-            <p className='text-destructive text-sm' role='alert'>
-              {error}
-            </p>
+          </div>
+          {periods.length > 0 && (
+            <div className='space-y-2'>
+              <h2 className='text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase'>
+                {TRACKING_WORDS.history}
+              </h2>
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                {shown.map((period) => (
+                  <li
+                    key={period.from}
+                    className='flex items-start justify-between gap-3 p-3 text-sm'
+                  >
+                    <span className='min-w-0'>
+                      {formatDateUTC(period.from)}
+                      {period.to === null
+                        ? ' to now'
+                        : ` to ${formatDateUTC(period.to)}`}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {periods.length > PERIODS_PREVIEW && (
+                <ShowMoreButton
+                  isOpen={isAll}
+                  onClick={() => setIsAll((current) => !current)}
+                >
+                  {isAll ? 'Show fewer' : `Show all ${periods.length}`}
+                </ShowMoreButton>
+              )}
+            </div>
           )}
         </div>
-        {periods.length > 0 && (
-          <div className='space-y-2'>
-            <h2 className='text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase'>
-              {TRACKING_WORDS.history}
-            </h2>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {shown.map((period) => (
-                <li
-                  key={period.from}
-                  className='flex items-start justify-between gap-3 p-3 text-sm'
-                >
-                  <span className='min-w-0'>
-                    {formatDateUTC(period.from)}
-                    {period.to === null
-                      ? ' to now'
-                      : ` to ${formatDateUTC(period.to)}`}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {periods.length > PERIODS_PREVIEW && (
-              <ShowMoreButton
-                isOpen={isAll}
-                onClick={() => setIsAll((current) => !current)}
-              >
-                {isAll ? 'Show fewer' : `Show all ${periods.length}`}
-              </ShowMoreButton>
-            )}
-          </div>
-        )}
-      </div>
-    </Subview>
+      </Subview>
+      {isLineUp && level === 'plan' && (
+        <LineUpScreen onClose={() => setIsLineUp(false)} />
+      )}
+    </>
   );
 }
 
