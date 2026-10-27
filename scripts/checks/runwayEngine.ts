@@ -6834,10 +6834,10 @@ const version = (
     look(day, [short(utc(2026, 10, 30), 'Car', 5000)]),
   );
   assert.ok(
-    text?.startsWith('Your plan still holds through') &&
-      text.includes('With this change') &&
+    text?.startsWith('With this change') &&
+      !text.includes('holds through') &&
       !text.includes('instead of'),
-    'a change that leaves the same last day but a new first problem never says the plan holds through a day instead of that day',
+    'a change that leaves the same last day but a new first problem says only the problem, never that the plan holds through a day',
   );
   assert.ok(
     describeHoldsChange(look(day), look(utc(2026, 11, 12)))?.includes(

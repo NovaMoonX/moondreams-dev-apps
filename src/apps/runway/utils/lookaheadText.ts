@@ -193,9 +193,7 @@ export function describeHoldsBlocks(
         },
       ]
     : [];
-  if (after.holdsThrough === null) return problem;
-  if (before.holdsThrough === after.holdsThrough)
-    return [holds(after.holdsThrough), ...problem];
+  if (after.holdsThrough === null || problem.length > 0) return problem;
   return [holds(after.holdsThrough)];
 }
 
