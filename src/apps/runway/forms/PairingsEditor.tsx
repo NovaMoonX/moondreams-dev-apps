@@ -1,28 +1,22 @@
 import { useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
 import {
   Button,
-  Checkbox,
   Form,
   FormFactories,
-  Select,
 } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import AmountField, { type AmountMode } from '@/components/AmountField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
-import {
-  CHANGE_WORDS,
-  MAX_PAIRINGS,
-  TICK_HIT_CLASS,
-} from '@apps/runway/constants';
+import { CHANGE_WORDS, MAX_PAIRINGS } from '@apps/runway/constants';
+import PairingRowSheet, {
+  type PairingRow,
+} from '@apps/runway/forms/PairingRowSheet';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import { changeField } from '@apps/runway/forms/changeField';
@@ -41,17 +35,6 @@ import type {
   SourceSealed,
 } from '@apps/runway/types';
 import { describeAmount } from '@apps/runway/utils/fundingText';
-
-type Of = 'dayMoney' | 'remaining';
-
-interface PairingRow {
-  key: number;
-  targetItemId: string | null;
-  mode: AmountMode;
-  of: Of;
-  amount: string;
-  topUp: boolean;
-}
 
 interface PairingsFormData {
   rows: PairingRow[];
@@ -93,17 +76,6 @@ const blankRow = (key: number): PairingRow => ({
   amount: '',
   topUp: false,
 });
-
-const MODES = [
-  { value: 'exact', label: 'Exact amount' },
-  { value: 'percent', label: '% of the money' },
-  { value: 'rest', label: 'The rest' },
-] as const;
-
-const OF_OPTIONS = [
-  { value: 'dayMoney', label: "Of the day's money" },
-  { value: 'remaining', label: 'Of what is left' },
-] as const;
 
 const toAmount = (row: PairingRow): FundingAmount | null => {
   if (row.mode === 'rest') return { kind: 'rest' };
@@ -171,6 +143,12 @@ function PairingsEditor({
   const [nextKey, setNextKey] = useState(initialData.rows.length);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [editingKey, setEditingKey] = useState<number | null>(
+    initialData.rows.length === 1 && initial.length === 0 && !change ? 0 : null,
+  );
+  const [newKeys, setNewKeys] = useState<number[]>(
+    initial.length === 0 && !change ? [0] : [],
+  );
 
   const targets = [...envelopes, ...bills, ...goals].map(
     ({ item, version }) => ({
@@ -243,7 +221,19 @@ function PairingsEditor({
     onChange: (rows: PairingRow[]) => void,
   ) => {
     setNextKey(nextKey + 1);
+    setNewKeys((keys) => [...keys, nextKey]);
+    setEditingKey(nextKey);
     onChange([...rows, blankRow(nextKey)]);
+  };
+  const getRowAmountText = (row: PairingRow) => {
+    const amount = toAmount(row);
+    return amount === null
+      ? row.mode === 'percent'
+        ? 'Percent not set'
+        : 'Amount not set'
+      : amount.kind === 'exact'
+        ? `${describeAmount(amount)} each pay`
+        : describeAmount(amount, fromLabel);
   };
 
   const fields = [
@@ -252,6 +242,7 @@ function PairingsEditor({
       label: '',
       renderComponent: (props) => {
         const rows = props.value as PairingRow[];
+        const editingRow = rows.find((row) => row.key === editingKey) ?? null;
         const update = (key: number, patch: Partial<PairingRow>) =>
           props.onValueChange(
             rows.map((row) => (row.key === key ? { ...row, ...patch } : row)),
@@ -275,87 +266,71 @@ function PairingsEditor({
                 ))}
               </ul>
             )}
-            {rows.map((row) => (
-              <div
-                key={row.key}
-                className='border-border space-y-3 rounded-2xl border p-3'
-              >
-                <div className='flex items-start gap-2'>
-                  <div className='min-w-0 flex-1 space-y-1.5'>
-                    <p className='text-muted-foreground text-xs'>Funds</p>
-                    <Select
-                      searchable={choices.length > 8}
-                      placeholder='A bill, envelope or goal'
-                      options={choices}
-                      value={row.targetItemId ?? ''}
-                      onChange={(value) =>
-                        update(row.key, { targetItemId: value })
-                      }
-                    />
-                  </div>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='sm'
-                    className='mt-6 size-10 shrink-0 p-0'
-                    aria-label='Remove this one'
-                    onClick={() =>
-                      props.onValueChange(
-                        rows.filter((entry) => entry.key !== row.key),
-                      )
-                    }
-                  >
-                    <X className='h-4 w-4' />
-                  </Button>
-                </div>
-                <AmountField
-                  label='How much'
-                  value={row.amount}
-                  onChange={(amount) => update(row.key, { amount })}
-                  mode={row.mode}
-                  modes={MODES}
-                  onModeChange={(mode) => update(row.key, { mode })}
-                  percentOfLabel={`of ${fromLabel}`}
-                  restHint={`Takes what is left of ${fromLabel} after the others.`}
-                />
-                {row.mode === 'percent' && (
-                  <PillGroup
-                    label='A percentage of'
-                    isThin
-                    options={OF_OPTIONS}
-                    value={row.of}
-                    onChange={(of) => update(row.key, { of })}
-                  />
-                )}
-                <div className='flex items-start gap-3'>
-                  <Checkbox
-                    className={join('mt-0.5', TICK_HIT_CLASS)}
-                    aria-label='Top up from the rest if short'
-                    checked={row.topUp}
-                    onCheckedChange={(topUp) =>
-                      update(row.key, { topUp: Boolean(topUp) })
-                    }
-                  />
-                  <div className='min-w-0'>
-                    <p className='text-sm'>Top up from the rest if short</p>
-                    <p className='text-muted-foreground text-xs'>
-                      Off: a Must or Should is held until you choose.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
+            {rows.length > 0 && (
+              <ul className='border-border divide-border divide-y rounded-2xl border'>
+                {rows.map((row) => (
+                  <li key={row.key}>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      className='text-foreground! h-auto min-h-12 w-full justify-between gap-3 px-3! py-2 text-left font-normal'
+                      onClick={() => setEditingKey(row.key)}
+                    >
+                      <span className='min-w-0 break-words'>
+                        {row.targetItemId === null
+                          ? 'Pick what it funds'
+                          : nameOf(row.targetItemId)}
+                        <span className='text-muted-foreground'>
+                          {' · '}
+                          {getRowAmountText(row)}
+                        </span>
+                      </span>
+                      <ChevronRight
+                        className='text-muted-foreground h-5 w-5 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {rows.length + locked.length < MAX_PAIRINGS &&
               choices.length > rows.length && (
                 <div>
-                  <RevealChip
-                    icon={<Plus className='h-4 w-4' />}
-                    onClick={() => addRow(rows, props.onValueChange)}
-                  >
+                  <RevealChip onClick={() => addRow(rows, props.onValueChange)}>
                     Add something to fund
                   </RevealChip>
                 </div>
               )}
+            {editingRow && (
+              <PairingRowSheet
+                key={editingRow.key}
+                row={editingRow}
+                isNew={newKeys.includes(editingRow.key)}
+                choices={choices.filter(
+                  (choice) =>
+                    choice.value === editingRow.targetItemId ||
+                    !rows.some((row) => row.targetItemId === choice.value),
+                )}
+                fromLabel={fromLabel}
+                amountText={getRowAmountText(editingRow)}
+                problem={getBlocker([editingRow], true)}
+                onChange={(patch) => update(editingRow.key, patch)}
+                onRemove={() => {
+                  props.onValueChange(
+                    rows.filter((entry) => entry.key !== editingRow.key),
+                  );
+                  setEditingKey(null);
+                }}
+                onClose={() => {
+                  if (editingRow.targetItemId === null)
+                    props.onValueChange(
+                      rows.filter((entry) => entry.key !== editingRow.key),
+                    );
+                  setEditingKey(null);
+                }}
+              />
+            )}
             {note && <p className='text-muted-foreground text-xs'>{note}</p>}
           </div>
         );
