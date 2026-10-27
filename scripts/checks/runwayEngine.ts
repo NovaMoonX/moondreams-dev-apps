@@ -43,7 +43,8 @@ import {
   spreadCalendarAmount,
 } from '../../src/apps/runway/engine/calendar.ts';
 import { describeFunding } from '../../src/apps/runway/utils/fundingText.ts';
-import type { OpenDay } from '../../src/apps/runway/types.ts';
+import type { OpenDay, Pairing } from '../../src/apps/runway/types.ts';
+import type { DraftDayInput } from '../../src/apps/runway/engine/demands.ts';
 import type { ComingDay } from '../../src/apps/runway/engine/comingDays.ts';
 import {
   matchMovedDates,
@@ -7473,6 +7474,115 @@ const version = (
     planOverrideCarry([ownDay(utc(2026, 11, 20))], before, before),
     { carried: [], stranded: [] },
     'B1: a change that keeps the dates moves nothing',
+  );
+}
+
+// B1 (round 7): a pairing never sends a target more than it still needs.
+{
+  const on = utc(2026, 11, 6);
+  const payday = (pairings: DraftDayInput['pairings']): DraftDayInput => ({
+    dayKey: 'job_20261106',
+    sourceId: 'src',
+    on,
+    amount: { lowCents: 200_000, highCents: 200_000 },
+    pairings,
+  });
+  const goal = (heldCents: number): DraftGoalInput => ({
+    itemId: 'trip',
+    createdAt: 1,
+    priority: 'should',
+    orderIndex: 1,
+    funding: { amount: { kind: 'exact', cents: 0 }, cadence: { kind: 'none' } },
+    targetCents: 100_000,
+    heldCents,
+  });
+  const rent = (paid: boolean): DraftBillInput => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amount: { lowCents: 120_000, highCents: 120_000 },
+    stanceOverride: null,
+    schedule: { kind: 'monthly', anchor: utc(2026, 11, 15), monthDays: [15] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: {
+      funded: [{ dayKey: 'old', on: utc(2026, 10, 25), cents: 30_000 }],
+      paid: paid
+        ? [
+            {
+              moveId: 'paid_rent_20261115',
+              dueOn: utc(2026, 11, 15),
+              amountCents: 120_000,
+              paidOn: utc(2026, 11, 1),
+              fromFreeCents: 90_000,
+            },
+          ]
+        : [],
+    },
+  });
+  const draftWith = (
+    pairing: Pairing,
+    goals: DraftGoalInput[],
+    bills: DraftBillInput[],
+  ) =>
+    buildDraft({
+      days: [payday({ day: null, payLine: [pairing], source: [] })],
+      plan: {
+        envelopes: [],
+        bills,
+        goals,
+        horizon: utc(2027, 6, 1),
+        incomeDays: [{ dayKey: 'job_20261106', on, moneyCents: 200_000 }],
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const toTrip: Pairing = {
+    targetItemId: 'trip',
+    amount: { kind: 'exact', cents: 50_000 },
+    topUpFromAnySource: false,
+  };
+  const lineOf = (draft: ReturnType<typeof buildDraft>, itemId: string) =>
+    draft.lines.find((line) => line.itemId === itemId)?.cents ?? 0;
+  const nearly = draftWith(toTrip, [goal(80_000)], []);
+  assert.equal(
+    lineOf(nearly, 'trip'),
+    20_000,
+    'B1: a $500 pairing to a goal $200 from its target sends $200',
+  );
+  assert.equal(
+    nearly.freeToSpend.cents,
+    180_000,
+    'B1: and the rest of the pay stays with the day',
+  );
+  assert.equal(
+    lineOf(draftWith(toTrip, [goal(100_000)], []), 'trip'),
+    0,
+    'B1: a goal at its target gets nothing from a pairing',
+  );
+  const toRent: Pairing = {
+    targetItemId: 'rent',
+    amount: { kind: 'exact', cents: 150_000 },
+    topUpFromAnySource: false,
+  };
+  assert.equal(
+    lineOf(draftWith(toRent, [], [rent(false)]), 'rent'),
+    90_000,
+    'B1: a pairing to a bill sends what its next payment still needs, not more',
+  );
+  assert.equal(
+    lineOf(draftWith(toRent, [], [rent(true)]), 'rent'),
+    0,
+    'B1: a pairing to a bill already marked paid sends nothing',
+  );
+  assert.equal(
+    lineOf(
+      draftWith({ ...toTrip, amount: { kind: 'rest' } }, [goal(80_000)], []),
+      'trip',
+    ),
+    20_000,
+    'B1: a pairing that takes the rest stops at what the goal needs',
   );
 }
 

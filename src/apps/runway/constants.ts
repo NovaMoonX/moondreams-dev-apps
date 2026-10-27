@@ -1268,3 +1268,14 @@ export const MOVED_DAY_WORDS = {
       ? `What you changed for ${from} has no new income day near it, so it stops applying.`
       : `What you changed for ${count} income days has no new date near it, so it stops applying.`,
 } as const;
+
+/** What happens to "Pay these first" when the item it pays has stopped. */
+export const PAIRING_STOP_WORDS = {
+  archived: 'Archived, so it gets nothing from this pay',
+  ended: (date: string) => `Ended ${date}, so it gets nothing from this pay`,
+  paused: 'Paused, so it gets nothing from this pay',
+  stops: (names: readonly string[]) =>
+    names.length === 1
+      ? `${names[0]} stops paying it first, so that money stays with the pay.`
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} stop paying it first, so that money stays with each pay.`,
+} as const;

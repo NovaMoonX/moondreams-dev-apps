@@ -6,6 +6,7 @@ import {
   Form,
   FormFactories,
 } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -18,7 +19,9 @@ import {
   CHANGE_WORDS,
   ITEM_SHEET_WORDS,
   MAX_PAIRINGS,
+  PAIRING_STOP_WORDS,
 } from '@apps/runway/constants';
+import { formatDateUTC } from '@/utils/formatUtils';
 import InlineNotice from '@/components/InlineNotice';
 import PairingRowSheet, {
   type PairingRow,
@@ -33,6 +36,7 @@ import {
   selectBills,
   selectEnvelopes,
   selectGoals,
+  selectItemNames,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   FundingAmount,
@@ -156,6 +160,8 @@ function PairingsEditor({
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const items = useAppSelector((state) => state.runway.items);
+  const itemNames = useAppSelector(selectItemNames);
   const [initialData] = useState<PairingsFormData>(() => ({
     rows: initial.length > 0 || change ? initial.map(toRow) : [blankRow(0)],
   }));
@@ -180,7 +186,21 @@ function PairingsEditor({
     }),
   );
   const nameOf = (id: string) =>
-    targets.find((target) => target.value === id)?.label ?? 'Something removed';
+    targets.find((target) => target.value === id)?.label ??
+    itemNames.find((entry) => entry.id === id)?.name ??
+    'Something removed';
+  const getStopText = (id: string | null) => {
+    if (id === null) return null;
+    const header = items.find((item) => item.id === id);
+    if (header?.archivedAt != null && header.archivedAt <= today)
+      return PAIRING_STOP_WORDS.archived;
+    if (header?.endedAt != null && header.endedAt < today)
+      return PAIRING_STOP_WORDS.ended(formatDateUTC(header.endedAt));
+    const goal = goals.find((entry) => entry.item.id === id);
+    if (goal && (goal.version.payload.state ?? 'active') === 'paused')
+      return PAIRING_STOP_WORDS.paused;
+    return null;
+  };
   const lockedIds = new Set(locked.map((pairing) => pairing.targetItemId));
   const choices = targets
     .filter((target) => !lockedIds.has(target.value))
@@ -292,7 +312,8 @@ function PairingsEditor({
                         {nameOf(pairing.targetItemId)}
                       </span>
                       <span className='text-muted-foreground shrink-0 text-right'>
-                        {describeAmount(pairing.amount, fromLabel)}
+                        {getStopText(pairing.targetItemId) ??
+                          describeAmount(pairing.amount, fromLabel)}
                       </span>
                     </li>
                   ))}
@@ -326,8 +347,16 @@ function PairingsEditor({
                               ? 'Pick what comes out first'
                               : nameOf(row.targetItemId)}
                           </span>
-                          <span className='text-muted-foreground block text-sm'>
-                            {getRowAmountText(row)}
+                          <span
+                            className={join(
+                              'block text-sm',
+                              getStopText(row.targetItemId) === null
+                                ? 'text-muted-foreground'
+                                : 'text-(--runway-warning-ink)',
+                            )}
+                          >
+                            {getStopText(row.targetItemId) ??
+                              getRowAmountText(row)}
                           </span>
                         </span>
                         <ChevronRight

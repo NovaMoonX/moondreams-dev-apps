@@ -64,6 +64,7 @@ import {
   ITEM_KIND_NOUNS,
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
+  PAIRING_STOP_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_CHANGE_DAYS_AHEAD,
   MAX_NOTE_LENGTH,
@@ -93,6 +94,8 @@ import {
   setGoalState,
 } from '@apps/runway/store/actions/itemActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { selectPairedBy } from '@apps/runway/store/selectors/runwaySelectors';
+import InlineNotice from '@/components/InlineNotice';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import type {
   BillSealed,
@@ -199,6 +202,15 @@ function ItemSheet({
 }: ItemSheetProps) {
   const { user } = useAuth();
   const level = useAppSelector(selectLevel);
+  const pairedNames = useAppSelector((state) =>
+    [
+      ...new Set(
+        (selectPairedBy(state, today)[itemId] ?? []).map(
+          (entry) => entry.sourceName,
+        ),
+      ),
+    ].join('\n'),
+  );
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const version = useAppSelector(
     (state): OpenVersion | null =>
@@ -735,6 +747,12 @@ function ItemSheet({
         changeJson={changeJson}
         emptyText={CHANGE_WORDS.previewNone}
       />
+      {(view === 'pause' || view === 'end' || view === 'archive') &&
+        pairedNames !== '' && (
+          <InlineNotice tone='info'>
+            {PAIRING_STOP_WORDS.stops(pairedNames.split('\n'))}
+          </InlineNotice>
+        )}
       {isReasonOpen && (
         <>
           <SuggestionChips
