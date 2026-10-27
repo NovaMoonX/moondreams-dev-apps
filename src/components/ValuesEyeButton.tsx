@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Eye, EyeOff } from 'lucide-react';
@@ -15,12 +15,12 @@ function ValuesEyeButton() {
   const label = 'Show amounts';
   const Icon = isHidden ? Eye : EyeOff;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const surface = anchor.current?.closest(SURFACE);
     if (!surface) return;
     const check = () =>
       setHasValues(surface.querySelector('[data-sensitive]') !== null);
-    const frame = requestAnimationFrame(check);
+    check();
     let pending = 0;
     const observer = new MutationObserver(() => {
       cancelAnimationFrame(pending);
@@ -28,7 +28,6 @@ function ValuesEyeButton() {
     });
     observer.observe(surface, { childList: true, subtree: true });
     return () => {
-      cancelAnimationFrame(frame);
       cancelAnimationFrame(pending);
       observer.disconnect();
     };

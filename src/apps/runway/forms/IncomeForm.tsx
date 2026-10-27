@@ -540,7 +540,14 @@ function IncomeForm({
           {formData.frequency === 'twiceMonthly' && (
             <div className='grid grid-cols-2 items-start gap-3'>
               {(['firstDay', 'secondDay'] as const).map((key) => (
-                <div key={key} className='space-y-1.5'>
+                <div
+                  key={key}
+                  role='group'
+                  aria-label={
+                    key === 'firstDay' ? 'First payday' : 'Second payday'
+                  }
+                  className='space-y-1.5'
+                >
                   <p className='text-muted-foreground text-xs'>
                     {key === 'firstDay' ? 'First' : 'Second'}
                   </p>

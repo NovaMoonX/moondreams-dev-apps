@@ -1,7 +1,10 @@
 const SELECTOR = 'input[type="date"]';
 
 const sync = (input: HTMLInputElement) => {
-  input.toggleAttribute('data-empty', input.value === '');
+  input.toggleAttribute(
+    'data-empty',
+    input.value === '' && !input.validity.badInput,
+  );
 };
 
 const syncWithin = (node: Node) => {
@@ -13,8 +16,11 @@ const syncWithin = (node: Node) => {
 /** Marks every date input that has no date (`data-empty`), so `index.css` can hide the browser's "mm/dd/yyyy" segments until one is picked. */
 export function installEmptyDateInputs() {
   const onEvent = (event: Event) => {
-    if (event.target instanceof HTMLInputElement && event.target.type === 'date')
-      sync(event.target);
+    const { target } = event;
+    if (!(target instanceof HTMLInputElement) || target.type !== 'date') return;
+    // A partly typed date only reports itself as bad input after focus has left.
+    sync(target);
+    requestAnimationFrame(() => sync(target));
   };
   ['input', 'change', 'focusout'].forEach((name) =>
     document.addEventListener(name, onEvent, true),

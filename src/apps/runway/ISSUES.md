@@ -278,7 +278,7 @@ Open a coming income day and see exactly what its money does: every envelope fun
 
 ### Possible Approach
 1. `buildDraft({ days, plan, stance, state, overrides })` with the ordered steps from the TDD: day money (exact amounts only, so the stance is not yet read), demands for envelopes whose cadence selects the day, sort by tier, `dueBeforeNext`, `orderIndex`, `createdAt`, `itemId`, walk the pool first-in-first-out, record `shortBy`, a reason code and `tieBrokenBy`, and Free to spend.
-2. Lines have stable ids `${dayKey}:${itemId}` and a structured `reason` the screen words ("Dining: Should, funded from Main job"). Wording lives in `constants.ts`.
+2. Lines have stable ids `${dayKey}:${itemId}` and a structured `reason` the screen words ("Dining: Should, paid from Main job"). Wording lives in `constants.ts`.
 3. `selectDraft` is a memoized `createSelector` keyed on the plan fingerprint (a hash of the resolved versions). Keep the draft free of `Date.now()`; the clock is passed in.
 4. The Income day screen shows the headline, the lines in sort order with `PriorityBadge`, "Not funded" lines with their reasons, and Free to spend. Rows on Days open it.
 5. Add the properties to the check: shuffling inputs changes nothing; line cents plus Free to spend equal the day's money; no line is negative; dropping a lower-priority demand never reduces a higher one; the same inputs give identical JSON.
