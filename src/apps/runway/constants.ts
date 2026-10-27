@@ -1122,19 +1122,19 @@ export const PLAN_MORE_LABEL = 'Settings and tools';
 /** Quick periods on Spend, as the URL keeps them; any other value is a month as `yyyy-mm`. */
 export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
-export const SPEND_OTHER_MONTH = 'other' as const;
 
 export const SPEND_PERIOD_LABELS = {
   month: 'This month',
   lastMonth: 'Last month',
   '30': 'Past 30 days',
   '90': 'Past 90 days',
-  other: 'Older',
 } as const;
 
 export const SPEND_PERIOD_WORDS = {
   total: 'Spent',
-  pickMonth: 'Month',
+  period: 'Period',
+  months: 'Older months',
+  failed: 'These purchases did not load. Nothing was changed.',
   emptyPeriod: 'Nothing was spent in this period.',
   loading: 'Getting these purchases.',
 } as const;

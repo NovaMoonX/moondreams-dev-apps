@@ -49,6 +49,8 @@ export interface RunwayState {
   /** The purchases of the period Spend shows, and the range key they were read for. */
   periodPurchases: OpenPurchase[];
   periodFor: string | null;
+  /** The range key whose read failed; Spend says so, the rest of the app is unaffected. */
+  periodFailedFor: string | null;
 }
 
 const initialState: RunwayState = {
@@ -76,6 +78,7 @@ const initialState: RunwayState = {
   changesFailedFor: null,
   periodPurchases: [],
   periodFor: null,
+  periodFailedFor: null,
 };
 
 export const runwaySlice = createSlice({
@@ -143,6 +146,15 @@ export const runwaySlice = createSlice({
     ) => {
       state.periodPurchases = action.payload.purchases;
       state.periodFor = action.payload.key;
+      state.periodFailedFor = null;
+    },
+    clearPeriodPurchases: (state) => {
+      state.periodPurchases = [];
+      state.periodFor = null;
+      state.periodFailedFor = null;
+    },
+    setPeriodFailed: (state, action: PayloadAction<string>) => {
+      state.periodFailedFor = action.payload;
     },
     setClosing: (
       state,
@@ -174,6 +186,8 @@ export const {
   setMoves,
   setPurchases,
   setPeriodPurchases,
+  clearPeriodPurchases,
+  setPeriodFailed,
   setClosing,
   setLoadDay,
   setFailedRebuild,

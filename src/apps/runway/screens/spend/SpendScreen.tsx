@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wallet } from 'lucide-react';
+import { CalendarRange, Wallet } from 'lucide-react';
 
 import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 
@@ -9,13 +9,13 @@ import SensitiveValue from '@/components/SensitiveValue';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
+import SummaryEditor from '@/components/SummaryEditor';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import PurchaseRow from '@apps/runway/components/PurchaseRow';
 import {
   DEFAULT_SPEND_PERIOD,
-  SPEND_OTHER_MONTH,
   SPEND_PAGE_SIZE,
   SPEND_PERIOD_LABELS,
   SPEND_PERIOD_WORDS,
@@ -47,13 +47,7 @@ import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 
 const ALL_ENVELOPES = 'all';
 
-const monthName = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
-
-const monthLabel = new Intl.DateTimeFormat('en-US', {
+const monthFormat = new Intl.DateTimeFormat('en-US', {
   month: 'long',
   year: 'numeric',
   timeZone: 'UTC',
@@ -62,7 +56,7 @@ const monthLabel = new Intl.DateTimeFormat('en-US', {
 /** Groups newest-first purchases under the month they happened in. */
 const groupByMonth = (purchases: readonly OpenPurchase[]) =>
   purchases.reduce<{ label: string; rows: OpenPurchase[] }[]>((groups, row) => {
-    const label = monthLabel.format(row.date);
+    const label = monthFormat.format(row.date);
     const last = groups.at(-1);
     return last && last.label === label
       ? [...groups.slice(0, -1), { label, rows: [...last.rows, row] }]
@@ -89,6 +83,9 @@ function SpendScreen() {
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const periodFor = useAppSelector((state) => state.runway.periodFor);
+  const periodFailedFor = useAppSelector(
+    (state) => state.runway.periodFailedFor,
+  );
 
   const range = getSpendRange(spendPeriod, today);
   const purchases = allSpendPurchases.filter(
@@ -133,21 +130,32 @@ function SpendScreen() {
   const isRecent = spendPeriod === DEFAULT_SPEND_PERIOD;
   const currentMonth = toMonthKey(today);
   const startMonth = toMonthKey(startDate ?? today - 365 * 86_400_000);
-  const olderMonths = listMonths(startMonth, getPreviousMonth(currentMonth))
+  const isQuickPeriod = (SPEND_PERIODS as readonly string[]).includes(
+    spendPeriod,
+  );
+  const olderChoices = listMonths(startMonth, getPreviousMonth(currentMonth))
     .reverse()
-    .slice(0, 120);
-  const olderChoices =
-    olderMonths.length > 0 ? olderMonths : [getPreviousMonth(currentMonth)];
-  const pillValue = (SPEND_PERIODS as readonly string[]).includes(spendPeriod)
-    ? spendPeriod
-    : SPEND_OTHER_MONTH;
-  const periodOptions = [
-    ...SPEND_PERIODS.map((value) => ({
-      value: value as string,
-      label: SPEND_PERIOD_LABELS[value],
-    })),
-    { value: SPEND_OTHER_MONTH as string, label: SPEND_PERIOD_LABELS.other },
-  ];
+    .slice(0, 120)
+    .filter(
+      (month) =>
+        month === spendPeriod ||
+        recentFrom === null ||
+        getMonthStart(month) < recentFrom ||
+        allSpendPurchases.some(
+          (purchase) => toMonthKey(purchase.date) === month,
+        ),
+    );
+  const periodLabel = isQuickPeriod
+    ? SPEND_PERIOD_LABELS[spendPeriod as keyof typeof SPEND_PERIOD_LABELS]
+    : monthFormat.format(range.from);
+  const periodOptions = SPEND_PERIODS.map((value) => ({
+    value: value as string,
+    label: SPEND_PERIOD_LABELS[value],
+  }));
+  const monthOptions = olderChoices.map((month) => ({
+    value: month,
+    label: monthFormat.format(getMonthStart(month)),
+  }));
 
   const filterOptions = [
     {
@@ -167,6 +175,13 @@ function SpendScreen() {
   ];
 
   const getBody = () => {
+    if (periodFailedFor === range.key && !isPeriodReady) {
+      return (
+        <p className='text-muted-foreground text-sm'>
+          {SPEND_PERIOD_WORDS.failed}
+        </p>
+      );
+    }
     if (!isLoaded || !isPeriodReady) {
       return (
         <p className='text-muted-foreground text-sm'>{SPEND_WORDS.loading}</p>
@@ -181,37 +196,44 @@ function SpendScreen() {
     }
     return (
       <div className='space-y-4'>
-        <div className='space-y-2'>
-          <PillGroup
-            isThin
-            label='Period'
-            options={periodOptions}
-            value={pillValue}
-            onChange={(value) =>
-              showSpendPeriod(
-                value === SPEND_OTHER_MONTH
-                  ? (olderChoices[1] ?? olderChoices[0])
-                  : value,
-              )
-            }
-          />
-          {pillValue === SPEND_OTHER_MONTH && (
-            <Select
-              aria-label={SPEND_PERIOD_WORDS.pickMonth}
-              options={olderChoices.map((month) => ({
-                text: monthName.format(getMonthStart(month)),
-                value: month,
-              }))}
-              value={spendPeriod}
-              onChange={(value) => showSpendPeriod(value)}
+        <div className='space-y-3'>
+          <SummaryEditor
+            label={SPEND_PERIOD_WORDS.period}
+            summary={periodLabel}
+            placeholder=''
+            title={SPEND_PERIOD_WORDS.period}
+            icon={<CalendarRange />}
+            isFramed
+            shouldFocus={false}
+          >
+            <PillGroup
+              label={SPEND_PERIOD_WORDS.period}
+              options={periodOptions}
+              value={isQuickPeriod ? spendPeriod : null}
+              onChange={showSpendPeriod}
             />
-          )}
-          <p className='text-muted-foreground text-sm'>
-            {SPEND_PERIOD_WORDS.total}{' '}
-            <span className='text-foreground font-semibold tabular-nums'>
+            {monthOptions.length > 0 && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>
+                  {SPEND_PERIOD_WORDS.months}
+                </p>
+                <PillGroup
+                  label={SPEND_PERIOD_WORDS.months}
+                  options={monthOptions}
+                  value={isQuickPeriod ? null : spendPeriod}
+                  onChange={showSpendPeriod}
+                />
+              </div>
+            )}
+          </SummaryEditor>
+          <div>
+            <p className='text-muted-foreground text-xs'>
+              {SPEND_PERIOD_WORDS.total}
+            </p>
+            <p className='text-3xl font-semibold tracking-tight tabular-nums'>
               <SensitiveValue>{formatCents(total)}</SensitiveValue>
-            </span>
-          </p>
+            </p>
+          </div>
         </div>
         {purchases.length >= SPEND_SEARCH_THRESHOLD && (
           <SearchInput
