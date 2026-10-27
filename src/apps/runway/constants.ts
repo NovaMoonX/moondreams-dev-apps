@@ -420,6 +420,8 @@ export const CHANGE_WORDS = {
 } as const;
 
 export const LIFECYCLE_WORDS = {
+  addReason: 'Add a reason',
+  removeReason: 'Remove the reason',
   pause: 'Pause saving',
   pauseSub: 'Nothing new goes in. The balance and history stay.',
   resume: 'Start saving again',

@@ -17,11 +17,13 @@ import {
   Undo2,
 } from 'lucide-react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
+import FoldedDateField from '@/components/FoldedDateField';
+import RevealChip from '@/components/RevealChip';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
@@ -215,6 +217,7 @@ function ItemSheet({
   const [openStep, setOpenStep] = useState<string | null>(null);
   const [view, setView] = useState<View>('menu');
   const [reason, setReason] = useState('');
+  const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [endPick, setEndPick] = useState<string>(String(today));
   const [endDate, setEndDate] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -286,6 +289,7 @@ function ItemSheet({
   const goTo = (nextView: View) => {
     setError(null);
     setReason('');
+    setIsReasonOpen(false);
     setView(nextView);
   };
 
@@ -711,14 +715,13 @@ function ItemSheet({
             onChange={setEndPick}
           />
           {endPick === LAST_DAY_OTHER && (
-            <Input
-              type='date'
-              variant='outline'
-              aria-label={LIFECYCLE_WORDS.endDateLabel}
+            <FoldedDateField
+              label={LIFECYCLE_WORDS.endDateLabel}
+              todayValue={toDateInputValue(today)}
               min={toDateInputValue(today)}
               max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
               value={endDate}
-              onChange={(event) => setEndDate(event.target.value)}
+              onChange={setEndDate}
             />
           )}
         </ActionSection>
@@ -727,20 +730,36 @@ function ItemSheet({
         changeJson={changeJson}
         emptyText={CHANGE_WORDS.previewNone}
       />
-      <SuggestionChips
-        label={CHANGE_WORDS.whyHeading}
-        suggestions={chips}
-        isDisabled={isSaving}
-        onPick={setReason}
-      />
-      <NoteTextField
-        label='Note'
-        value={reason}
-        onChange={setReason}
-        placeholder={CHANGE_WORDS.whyPlaceholder}
-        maxLength={MAX_NOTE_LENGTH}
-        rows={1}
-      />
+      {isReasonOpen && (
+        <>
+          <SuggestionChips
+            label={CHANGE_WORDS.whyHeading}
+            suggestions={chips}
+            isDisabled={isSaving}
+            onPick={setReason}
+          />
+          <NoteTextField
+            label='Note'
+            value={reason}
+            onChange={setReason}
+            placeholder={CHANGE_WORDS.whyPlaceholder}
+            maxLength={MAX_NOTE_LENGTH}
+            rows={1}
+          />
+        </>
+      )}
+      <div>
+        <RevealChip
+          onClick={() => {
+            if (isReasonOpen) setReason('');
+            setIsReasonOpen(!isReasonOpen);
+          }}
+        >
+          {isReasonOpen
+            ? LIFECYCLE_WORDS.removeReason
+            : LIFECYCLE_WORDS.addReason}
+        </RevealChip>
+      </div>
       <ModalFooterActions
         note={error ?? blocker}
         cancelAction={
