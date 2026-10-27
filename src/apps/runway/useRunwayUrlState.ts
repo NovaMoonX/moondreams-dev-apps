@@ -1,4 +1,5 @@
 import {
+  parseAsBoolean,
   parseAsInteger,
   parseAsString,
   parseAsStringLiteral,
@@ -10,6 +11,8 @@ import {
   CHANGE_LOG_SPANS,
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
+  DEFAULT_SPEND_PERIOD,
+  SPEND_PERIODS,
   MAX_CHANGE_LOG_PAGE,
   DEFAULT_RUNWAY_TAB,
   MORE_ENTRIES,
@@ -18,6 +21,7 @@ import {
   RUNWAY_VIEWS,
   SETTINGS_VIEWS,
 } from '@apps/runway/constants';
+import { isMonthKey } from '@apps/runway/engine/closings';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
 /** Runway's open tab and income day, kept in the URL so a reload and a return from another app land on the same tab. */
@@ -86,6 +90,28 @@ export function useRunwayUrlState() {
     setRequestedView('checkAmount', { history: 'replace' });
   };
 
+  const [requestedFixes, setRequestedFixes] = useQueryState(
+    'fixes',
+    parseAsBoolean,
+  );
+  const openFixes = () => setRequestedFixes(true, { history: 'replace' });
+  const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
+
+  const [requestedPeriod, setRequestedPeriod] = useQueryState(
+    'period',
+    parseAsString,
+  );
+  const spendPeriod =
+    requestedPeriod !== null &&
+    (isMonthKey(requestedPeriod) ||
+      (SPEND_PERIODS as readonly string[]).includes(requestedPeriod))
+      ? requestedPeriod
+      : DEFAULT_SPEND_PERIOD;
+  const showSpendPeriod = (period: string) =>
+    setRequestedPeriod(period === DEFAULT_SPEND_PERIOD ? null : period, {
+      history: 'replace',
+    });
+
   const logSpan = requestedSpan ?? DEFAULT_CHANGE_LOG_SPAN;
   const logPage = Math.min(
     MAX_CHANGE_LOG_PAGE,
@@ -114,6 +140,7 @@ export function useRunwayUrlState() {
     );
   const showTab = (tab: RunwayTab) => {
     if (tab === activeTab) return;
+    if (requestedFixes !== null) closeFixes();
     if (tab === DEFAULT_RUNWAY_TAB) {
       if (window.history.state?.runwayTabStep) {
         navigate(-1);
@@ -192,6 +219,11 @@ export function useRunwayUrlState() {
     moreEntry: requestedMore,
     openMoreEntry,
     closeMoreEntry,
+    isFixesOpen: requestedFixes === true,
+    openFixes,
+    closeFixes,
+    spendPeriod,
+    showSpendPeriod,
     logSpan,
     logPage,
     logItem: requestedItem,

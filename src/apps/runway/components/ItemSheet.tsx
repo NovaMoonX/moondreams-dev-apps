@@ -86,7 +86,10 @@ import {
   describeChange,
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
-import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
+import {
+  keepEntryFor,
+  leaveAfterSubviewCloses,
+} from '@apps/runway/utils/leaveAfterClose';
 
 type View = 'menu' | 'pause' | 'resume' | 'end' | 'archive';
 type Phase = 'sheet' | 'change' | 'purchase' | 'funds';
@@ -160,7 +163,7 @@ function ItemSheet({
 }: ItemSheetProps) {
   const { user } = useAuth();
   const level = useAppSelector(selectLevel);
-  const { showSpend, openCheckAmount, openMoreEntry, setLogItem } =
+  const { showSpend, openCheckAmount, openMoreEntry, setLogItem, closeDay } =
     useRunwayUrlState();
   const version = useAppSelector(
     (state): OpenVersion | null =>
@@ -450,6 +453,7 @@ function ItemSheet({
     setPhase('change');
   };
   const openHistory = leaveTo(() => {
+    keepEntryFor('day');
     setLogItem(itemId);
     openMoreEntry('changeLog');
   });
@@ -551,7 +555,11 @@ function ItemSheet({
             hasChevron
             icon={<ReceiptText />}
             label={SPEND_WORDS.title}
-            onClick={leaveTo(() => showSpend(itemId))}
+            onClick={leaveTo(() => {
+              keepEntryFor('day');
+              closeDay();
+              showSpend(itemId);
+            })}
           />
           <ActionRow
             isGrouped
@@ -559,7 +567,10 @@ function ItemSheet({
             icon={<Calculator />}
             label={CHECK_WORDS.open}
             subtitle={ITEM_SHEET_R2_WORDS.checkSub}
-            onClick={leaveTo(() => openCheckAmount(itemId))}
+            onClick={leaveTo(() => {
+              keepEntryFor('day');
+              openCheckAmount(itemId);
+            })}
           />
         </ActionGroup>
       )}

@@ -267,7 +267,7 @@ function IncomeScreen() {
             size='sm'
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
-            + Add income
+            Add income
           </Button>
         }
       />

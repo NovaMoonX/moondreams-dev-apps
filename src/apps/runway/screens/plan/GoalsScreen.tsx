@@ -130,7 +130,7 @@ function GoalsScreen() {
             size='sm'
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
-            + New goal
+            Add a goal
           </Button>
         }
       />

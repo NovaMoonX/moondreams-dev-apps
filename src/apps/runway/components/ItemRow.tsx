@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, TriangleAlert } from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -16,6 +16,8 @@ interface ItemRowProps {
   detail?: string | null;
   /** A detail that asks for a decision on this row reads in the normal colour. */
   isDetailStrong?: boolean;
+  /** The detail says the plan falls short: warning ink and icon. */
+  isDetailWarning?: boolean;
   figure?: string | null;
   /** A word under the figure that says what it counts ("left", "over"). */
   figureWord?: string | null;
@@ -33,6 +35,7 @@ function ItemRow({
   leading,
   detail,
   isDetailStrong = false,
+  isDetailWarning = false,
   figure,
   figureWord,
   onOpen,
@@ -67,8 +70,15 @@ function ItemRow({
           className={join(
             'block text-sm break-words',
             isDetailStrong ? 'text-foreground' : 'text-muted-foreground',
+            isDetailWarning && 'flex items-start gap-1.5',
           )}
         >
+          {isDetailWarning && (
+            <TriangleAlert
+              className='mt-0.5 h-3.5 w-3.5 shrink-0 text-(--runway-warning-ink)'
+              aria-hidden='true'
+            />
+          )}
           <span className='line-clamp-2'>{detail}</span>
         </span>
       )}

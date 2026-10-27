@@ -648,8 +648,8 @@ export const START_AMOUNTS_WORDS = {
 
 export const SPEND_WORDS = {
   title: 'Purchases',
-  newPurchase: 'New purchase',
-  envelopeAdd: 'Add purchase',
+  newPurchase: 'Add a purchase',
+  envelopeAdd: 'Add a purchase',
   sheetTitle: 'Purchase',
   empty:
     'Nothing spent yet. Add what you spend and each envelope shows what is left.',
@@ -946,4 +946,51 @@ export const CHECKLIST_R3_WORDS = {
     `Marked ${marked} of ${of} bills paid`,
   restNeedsConnection: 'The rest need a connection.',
   restNotSaved: 'The rest did not save. Try them again.',
+} as const;
+
+/** Round 4, package C: Home, Days, Plan and Spend screens. */
+export const FIX_WORDS = {
+  notPaid: (name: string) => `${name} is not marked paid`,
+  noIncome: (name: string) => `${name} has no income before it is due`,
+  short: (name: string, amount: string) => `${name} ${amount} short`,
+  dueOn: (date: string) => `Due ${date}`,
+  runsShortOn: (date: string) => `On ${date}`,
+  openDay: 'Open this income day',
+  openBills: 'Open your bills',
+  incomeEnds: (date: string) =>
+    `Your last income day is ${date}. Nothing is planned after it.`,
+} as const;
+
+export const DAYS_WORDS = {
+  addExpected: 'Add expected money',
+  addExpectedShort: 'Add expected',
+} as const;
+
+export const PLAN_VIEW_EMOJI = {
+  income: '💵',
+  bills: '🧾',
+  envelopes: '✉️',
+  goals: '🎯',
+} as const;
+
+export const PLAN_MORE_LABEL = 'Settings and tools';
+
+/** Quick periods on Spend, as the URL keeps them; any other value is a month as `yyyy-mm`. */
+export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
+export const DEFAULT_SPEND_PERIOD = 'month' as const;
+export const SPEND_OTHER_MONTH = 'other' as const;
+
+export const SPEND_PERIOD_LABELS = {
+  month: 'This month',
+  lastMonth: 'Last month',
+  '30': 'Past 30 days',
+  '90': 'Past 90 days',
+  other: 'Older',
+} as const;
+
+export const SPEND_PERIOD_WORDS = {
+  total: 'Spent',
+  pickMonth: 'Month',
+  emptyPeriod: 'Nothing was spent in this period.',
+  loading: 'Getting these purchases.',
 } as const;

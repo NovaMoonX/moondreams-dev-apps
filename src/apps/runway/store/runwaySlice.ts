@@ -46,6 +46,9 @@ export interface RunwayState {
   changes: OpenChange[];
   changesFor: string | null;
   changesFailedFor: string | null;
+  /** The purchases of the period Spend shows, and the range key they were read for. */
+  periodPurchases: OpenPurchase[];
+  periodFor: string | null;
 }
 
 const initialState: RunwayState = {
@@ -71,6 +74,8 @@ const initialState: RunwayState = {
   changes: [],
   changesFor: null,
   changesFailedFor: null,
+  periodPurchases: [],
+  periodFor: null,
 };
 
 export const runwaySlice = createSlice({
@@ -132,6 +137,13 @@ export const runwaySlice = createSlice({
       state.purchases = action.payload.purchases;
       state.purchasesFrom = action.payload.from;
     },
+    setPeriodPurchases: (
+      state,
+      action: PayloadAction<{ key: string; purchases: OpenPurchase[] }>,
+    ) => {
+      state.periodPurchases = action.payload.purchases;
+      state.periodFor = action.payload.key;
+    },
     setClosing: (
       state,
       action: PayloadAction<{ closing: ClosingState | null; key: string }>,
@@ -161,6 +173,7 @@ export const {
   setRecords,
   setMoves,
   setPurchases,
+  setPeriodPurchases,
   setClosing,
   setLoadDay,
   setFailedRebuild,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays } from 'lucide-react';
+import { CalendarDays, CalendarPlus } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -9,10 +9,11 @@ import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import {
   COMING_DAYS_CAP,
   COMING_DAYS_PREVIEW,
+  DAYS_WORDS,
   PROBLEM_WORDS,
   SETTLED_DAYS_PREVIEW,
 } from '@apps/runway/constants';
@@ -114,7 +115,7 @@ function DaysScreen() {
                   day={day}
                   note={
                     lookahead?.shortByDay[day.dayKey]
-                      ? `The plan leaves ${lookahead.shortByDay[day.dayKey].name} short`
+                      ? `The plan leaves ${lookahead.shortByDay[day.dayKey].name} ${formatCentsShort(lookahead.shortByDay[day.dayKey].shortBy)} short`
                       : undefined
                   }
                   onOpen={() => openDay(day.dayKey)}
@@ -122,14 +123,16 @@ function DaysScreen() {
               ))}
             </ul>
             {hasFold && (
-              <ShowMoreButton
-                isOpen={isExpanded}
-                onClick={() => setIsExpanded((open) => !open)}
-              >
-                {isExpanded
-                  ? 'Show fewer'
-                  : `Show ${days.length - COMING_DAYS_PREVIEW} more`}
-              </ShowMoreButton>
+              <div className='[&_button]:text-muted-foreground! [&_button]:text-sm'>
+                <ShowMoreButton
+                  isOpen={isExpanded}
+                  onClick={() => setIsExpanded((open) => !open)}
+                >
+                  {isExpanded
+                    ? 'Show fewer'
+                    : `Show ${days.length - COMING_DAYS_PREVIEW} more`}
+                </ShowMoreButton>
+              </div>
             )}
             {allDays.length > COMING_DAYS_CAP && (
               <p className='text-muted-foreground text-sm'>
@@ -153,14 +156,16 @@ function DaysScreen() {
               ))}
             </ul>
             {hasSettledFold && (
-              <ShowMoreButton
-                isOpen={isSettledExpanded}
-                onClick={() => setIsSettledExpanded((open) => !open)}
-              >
-                {isSettledExpanded
-                  ? 'Show fewer'
-                  : `Show ${confirmed.length - SETTLED_DAYS_PREVIEW} earlier`}
-              </ShowMoreButton>
+              <div className='[&_button]:text-muted-foreground! [&_button]:text-sm'>
+                <ShowMoreButton
+                  isOpen={isSettledExpanded}
+                  onClick={() => setIsSettledExpanded((open) => !open)}
+                >
+                  {isSettledExpanded
+                    ? 'Show fewer'
+                    : `Show ${confirmed.length - SETTLED_DAYS_PREVIEW} earlier`}
+                </ShowMoreButton>
+              </div>
             )}
           </div>
         )}
@@ -170,7 +175,7 @@ function DaysScreen() {
 
   return (
     <div className='space-y-4'>
-      <div className='flex items-center justify-between gap-3'>
+      <div className='flex items-center justify-between gap-2'>
         <div className='min-w-0 flex-1'>
           {lookahead && days.length > 0 && (
             <HoldsThroughLine
@@ -200,10 +205,17 @@ function DaysScreen() {
           <Button
             variant='secondary'
             size='sm'
-            className="relative ml-auto shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            className="relative shrink-0 gap-1.5 before:absolute before:-inset-2 before:content-['']"
+            aria-label={DAYS_WORDS.addExpected}
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
-            + Expected
+            <CalendarPlus
+              className='h-4 w-4 min-[390px]:hidden'
+              aria-hidden='true'
+            />
+            <span className='max-[389px]:hidden'>
+              {DAYS_WORDS.addExpectedShort}
+            </span>
           </Button>
         )}
       </div>

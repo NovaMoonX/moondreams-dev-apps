@@ -893,12 +893,18 @@ export const selectItemLooks = createSelector([selectVersions], (versions) => {
 });
 
 const selectPurchases = (state: RootState) => state.runway.purchases;
+const selectPeriodPurchases = (state: RootState) =>
+  state.runway.periodPurchases;
 
-/** The recent window's purchases, newest day first and, within a day, the last one added first. */
+/** The recent window's purchases and those of the period Spend is showing, newest day first and, within a day, the last one added first. */
 export const selectSpendPurchases = createSelector(
-  [selectPurchases],
-  (purchases) => {
-    const result = [...purchases].sort(
+  [selectPurchases, selectPeriodPurchases],
+  (purchases, periodPurchases) => {
+    const known = new Set(purchases.map((purchase) => purchase.id));
+    const result = [
+      ...purchases,
+      ...periodPurchases.filter((purchase) => !known.has(purchase.id)),
+    ].sort(
       (a, b) =>
         b.date - a.date ||
         b.createdAt - a.createdAt ||

@@ -246,14 +246,6 @@ function RunwayPage() {
     );
   }
 
-  if (openDayKey !== null && (hasOpenDay || !isItemsLoaded)) {
-    return (
-      <div>
-        <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
-      </div>
-    );
-  }
-
   if (view === 'checkAmount' && level === 'track') {
     return (
       <div>
@@ -301,6 +293,15 @@ function RunwayPage() {
     return (
       <div>
         <SettingsScreen onClose={closeMoreEntry} />
+      </div>
+    );
+  }
+
+  // Screens opened from an income day sit above it, so the day is checked last.
+  if (openDayKey !== null && (hasOpenDay || !isItemsLoaded)) {
+    return (
+      <div>
+        <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
       </div>
     );
   }

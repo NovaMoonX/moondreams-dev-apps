@@ -43,14 +43,14 @@ export function HoldsThroughLine({ lookahead, help }: HoldsThroughLineProps) {
   const headline = `${ITEM_SHEET_R2_WORDS.holdsThrough} ${formatDateShortUTC(lookahead.holdsThrough).replace(/ /g, '\u00a0')}`;
   const isClear = lookahead.problems.length === 0;
   return (
-    <div className='flex min-h-10 items-center gap-2'>
+    <div className='flex min-h-10 items-center gap-1'>
       {isClear && (
         <CircleCheck
           className='text-primary h-4 w-4 shrink-0'
           aria-hidden='true'
         />
       )}
-      <p className='min-w-0 text-sm font-medium'>{headline}</p>
+      <p className='text-sm font-medium'>{headline}</p>
       {help}
     </div>
   );

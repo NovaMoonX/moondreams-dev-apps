@@ -1,5 +1,6 @@
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { FIX_WORDS } from '@apps/runway/constants';
 import type {
   Lookahead,
   LookaheadProblem,
@@ -62,4 +63,26 @@ export function describeProblemShort(problem: LookaheadProblem) {
     return `${name} on ${on} has no income before it`;
   const result = `The plan leaves ${name} ${formatCentsShort(problem.shortBy)} short on ${on}`;
   return result;
+}
+
+/** The problems soonest first, the order the summary row and the list it opens both use. */
+export function sortProblems(problems: readonly LookaheadProblem[]) {
+  const result = [...problems].sort((a, b) => a.on - b.on);
+  return result;
+}
+
+/** One problem as a list row: what is short or missing, and on which day. */
+export function describeProblemRow(problem: LookaheadProblem) {
+  const name = problem.name === '' ? 'A bill' : problem.name;
+  const on = formatDateShortUTC(problem.on);
+  if (problem.kind === 'overdue') {
+    return { title: FIX_WORDS.notPaid(name), detail: FIX_WORDS.dueOn(on) };
+  }
+  if (problem.kind === 'noIncome') {
+    return { title: FIX_WORDS.noIncome(name), detail: FIX_WORDS.dueOn(on) };
+  }
+  return {
+    title: FIX_WORDS.short(name, formatCentsShort(problem.shortBy)),
+    detail: FIX_WORDS.runsShortOn(on),
+  };
 }
