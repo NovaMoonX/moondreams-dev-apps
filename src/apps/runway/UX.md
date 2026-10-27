@@ -224,3 +224,5 @@ Notes on the table:
 - **A day's warning** is one line: "Groceries $160 short", or "3 short · Groceries $160" (the count alone below 360px), the icon in a fixed column.
 - **A goal's balance over time** is a row in its sheet ("Balance over time", only with two or more points): the held amount by date, a dotted path to the target date at the planned contribution, a guide at the target and a marker where the plan reaches it. While amounts are hidden it says "Show amounts to see the chart".
 - **Check an amount** swaps in place inside Free to spend's card, so no frame shows the page between them; Back returns to Free to spend and one more leaves it.
+- **End, Pause and Archive** ask for a reason behind one "Add a reason" chip; End's last day opens in its own editor from "A date". An item's History shows its latest six changes with "Show all".
+- **Tracking, Line up and Delete your plan** open over Settings (one Back each), and Delete says what goes and what stays in two sentences.
