@@ -23,6 +23,7 @@ import {
   BILL_FUNDING_LABELS,
   BILL_FUNDINGS,
   CHANGE_WORDS,
+  BILL_QUICK_PICKS,
   ENVELOPE_ORDER_STEP,
   FORM_FLOW_WORDS,
   INCOME_ENDING_LABELS,
@@ -38,6 +39,9 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
+import type { DraftSink } from '@apps/runway/forms/draftSink';
+import EmojiField from '@/components/EmojiField';
+import SuggestionChips from '@/components/SuggestionChips';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import ChangeSection from '@apps/runway/components/ChangeSection';
@@ -99,6 +103,8 @@ interface BillFormProps {
   noun?: 'bill' | 'expense';
   /** A question to open first when changing a bill ("amount"); every answer starts folded otherwise. */
   openStep?: BillStepId | null;
+  /** Hands the built bill over instead of writing it, for a person who has no plan yet. */
+  draft?: DraftSink<BillSealed>;
 }
 
 export type BillStepId =
@@ -135,6 +141,9 @@ const fundingOptions = BILL_FUNDINGS.map((value) => ({
   value,
   label: BILL_FUNDING_LABELS[value],
 }));
+
+const toPickLabel = (pick: { name: string; emoji: string }) =>
+  `${pick.emoji} ${pick.name}`;
 
 const describeEnding = (data: BillFormData) => {
   if (data.endKind === 'never') return INCOME_ENDING_LABELS.never;
@@ -233,14 +242,15 @@ function BillForm({
   presetDayKey,
   noun = 'bill',
   openStep = null,
+  draft,
 }: BillFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const [formData, setFormData] = useState<BillFormData>(() =>
-    editing
-      ? getEditingData(editing.payload)
+    editing || draft?.initial
+      ? getEditingData((editing?.payload ?? draft?.initial) as BillSealed)
       : {
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,
@@ -299,14 +309,28 @@ function BillForm({
       summaryValue: formData.name.trim(),
       isAnswered: formData.name.trim() !== '',
       render: () => (
-        <Input
-          variant='outline'
-          aria-label={FORM_FLOW_WORDS.name}
-          placeholder={noun === 'bill' ? 'Rent' : 'Vet visit'}
-          maxLength={MAX_NAME_LENGTH}
-          value={formData.name}
-          onChange={(event) => set({ name: event.target.value })}
-        />
+        <div className='space-y-4'>
+          <Input
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.name}
+            placeholder={noun === 'bill' ? 'Rent' : 'Vet visit'}
+            maxLength={MAX_NAME_LENGTH}
+            value={formData.name}
+            onChange={(event) => set({ name: event.target.value })}
+          />
+          {noun === 'bill' && (
+            <SuggestionChips
+              label={FORM_FLOW_WORDS.commonBills}
+              suggestions={BILL_QUICK_PICKS.map(toPickLabel)}
+              onPick={(pick) => {
+                const found = BILL_QUICK_PICKS.find(
+                  (entry) => toPickLabel(entry) === pick,
+                );
+                if (found) set({ name: found.name, emoji: found.emoji });
+              }}
+            />
+          )}
+        </div>
       ),
     },
     {
@@ -505,22 +529,19 @@ function BillForm({
       isAnswered: true,
       isPreAnswered: true,
       render: () => (
-        <div className='w-24'>
-          <Input
-            variant='outline'
-            aria-label={FORM_FLOW_WORDS.emoji}
-            placeholder='🏠'
-            maxLength={MAX_EMOJI_LENGTH}
-            value={formData.emoji ?? ''}
-            onChange={(event) => set({ emoji: event.target.value })}
-          />
-        </div>
+        <EmojiField
+          value={formData.emoji ?? ''}
+          onChange={(emoji) => set({ emoji })}
+          ariaLabel={FORM_FLOW_WORDS.emoji}
+          placeholder='🏠'
+          maxLength={MAX_EMOJI_LENGTH}
+        />
       ),
     },
   ];
   const questions = useQuestionFlow({
     steps,
-    startFolded: editing !== undefined,
+    startFolded: editing !== undefined || !!draft?.initial,
     initialOpenId: editing ? openStep : null,
   });
 
@@ -606,7 +627,13 @@ function BillForm({
 
   const handleSubmit = async () => {
     const bill = buildBill(formData);
-    if (!user || !bill) return;
+    if (!bill) return;
+    if (draft) {
+      draft.onSave(bill);
+      onClose();
+      return;
+    }
+    if (!user) return;
 
     setError(null);
     setIsSaving(true);
@@ -677,7 +704,11 @@ function BillForm({
                       void handleSubmit();
                     }}
                   >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
+                    {editing
+                      ? CHANGE_WORDS.review
+                      : draft?.initial
+                        ? 'Save'
+                        : 'Add'}
                   </Button>
                 )
               }

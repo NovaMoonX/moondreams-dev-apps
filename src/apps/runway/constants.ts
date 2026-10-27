@@ -836,8 +836,16 @@ export const FORM_FLOW_WORDS = {
   restLink: 'Whatever is left of each pay',
   exactLink: 'An amount',
   itVaries: 'It varies',
-  oneAmount: 'One amount',
-  chooseEnd: 'Plan it at one end',
+  oneAmount: 'The same each time',
+  chooseEnd: 'Choose which end to plan for',
+  endQuestion: 'Which end should the plan count on?',
+  endHelpTitle: 'Planning at one end',
+  endHelp: (end: string) =>
+    `Planning at ${end} means the plan counts on that amount only. If the real amount is better, the difference shows up as extra when it lands.`,
+  endSameAsPlan: 'like your plan',
+  howOftenNext: 'How often it arrives comes next.',
+  commonBills: 'Common bills',
+  commonEnvelopes: 'Common envelopes',
   cadenceTitle: 'Which pays does it get money from?',
   cadence: 'Pays',
   targetTitle: 'How much do you want to save?',
@@ -851,7 +859,7 @@ export const FORM_FLOW_WORDS = {
     `${amount} each income day reaches it by ${date}.`,
   sourceTitle: 'Where does it come from?',
   source: 'From',
-  takeHomeTitle: 'How much lands in your account?',
+  takeHomeTitle: 'How much lands?',
   takeHome: 'Take-home pay',
   expectedIncomeTitle: 'How much is coming?',
   scheduleTitle: 'How often, and when is the next one?',
@@ -1068,3 +1076,25 @@ export const SPEND_PERIOD_WORDS = {
   emptyPeriod: 'Nothing was spent in this period.',
   loading: 'Getting these purchases.',
 } as const;
+
+export const BILL_QUICK_PICKS = [
+  { name: 'Rent', emoji: '🏠' },
+  { name: 'Mortgage', emoji: '🏡' },
+  { name: 'Electricity', emoji: '💡' },
+  { name: 'Water', emoji: '🚰' },
+  { name: 'Internet', emoji: '🌐' },
+  { name: 'Phone', emoji: '📱' },
+  { name: 'Car payment', emoji: '🚗' },
+  { name: 'Car insurance', emoji: '🛡️' },
+  { name: 'Health insurance', emoji: '🩺' },
+  { name: 'Streaming', emoji: '📺' },
+  { name: 'Gym', emoji: '🏋️' },
+] as const;
+
+export const ENVELOPE_QUICK_PICKS = [
+  { name: 'Groceries', emoji: '🛒' },
+  { name: 'Dining out', emoji: '🍽️' },
+  { name: 'Gas', emoji: '⛽' },
+  { name: 'Household', emoji: '🧺' },
+  { name: 'Fun money', emoji: '🎟️' },
+] as const;
