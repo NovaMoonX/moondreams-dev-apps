@@ -1,4 +1,4 @@
-import { useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import { generateUuid } from '@/utils/idUtils';
 import type { CreateIncomeInput } from '@apps/runway/store/actions/itemActions';
@@ -173,5 +173,8 @@ const subscribe = (onChange: () => void) => {
 export function useStartDraft(): StartDraft | null {
   const raw = useSyncExternalStore(subscribe, readRaw, () => null);
   const draft = useMemo(() => parseStartDraft(raw, readClock()), [raw]);
+  useEffect(() => {
+    if (raw !== null && draft === null) clearStartDraft();
+  }, [raw, draft]);
   return draft;
 }
