@@ -13,7 +13,10 @@ import {
   PREVIEW_SHOWN,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { describeHoldsChange } from '@apps/runway/utils/lookaheadText';
+import {
+  describeHoldsChange,
+  isSameLookahead,
+} from '@apps/runway/utils/lookaheadText';
 import {
   previewChange,
   previewLookahead,
@@ -172,10 +175,7 @@ function EffectPreview({
       today,
       settledVirtual,
     );
-    const isSame =
-      before.holdsThrough === after.holdsThrough &&
-      JSON.stringify(before.problems[0] ?? null) ===
-        JSON.stringify(after.problems[0] ?? null);
+    const isSame = isSameLookahead(before, after);
     return { text: describeHoldsChange(before, after), isSame };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps

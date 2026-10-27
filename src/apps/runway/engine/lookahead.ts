@@ -72,6 +72,26 @@ const TIER_RANK: Record<Priority, number> = { must: 0, should: 1, want: 2 };
 const getTierRank = (problem: LookaheadProblem) =>
   problem.kind === 'short' ? TIER_RANK[problem.tier] : 0;
 
+/** The one order problems are listed in: date, then kind, then priority, then name. */
+export function sortProblems(problems: readonly LookaheadProblem[]) {
+  const result = [...problems].sort(
+    (a, b) =>
+      a.on - b.on ||
+      PROBLEM_RANK[a.kind] - PROBLEM_RANK[b.kind] ||
+      getTierRank(a) - getTierRank(b) ||
+      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+  );
+  return result;
+}
+
+/** Whether two lookaheads say the same to a person: how far the plan holds and every problem. */
+export function isSameLookahead(before: Lookahead, after: Lookahead) {
+  const key = (look: Lookahead) =>
+    JSON.stringify([look.holdsThrough, sortProblems(look.problems)]);
+  const result = key(before) === key(after);
+  return result;
+}
+
 const nextCarry = (
   carry: LookaheadCarry,
   day: ComingDay,
@@ -192,17 +212,11 @@ export function lookahead(input: LookaheadInput): Lookahead {
     },
     { carry: EMPTY_CARRY, shorts: [] },
   );
-  const problems = [
+  const problems = sortProblems([
     ...findOverdue(input),
     ...findNoIncome(input),
     ...walked.shorts,
-  ].sort(
-    (a, b) =>
-      a.on - b.on ||
-      PROBLEM_RANK[a.kind] - PROBLEM_RANK[b.kind] ||
-      getTierRank(a) - getTierRank(b) ||
-      (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
-  );
+  ]);
   const incomeEndsOn = getIncomeEnd(input);
   const first = problems[0] ?? null;
   const getThrough = (): DateOnly | null => {
@@ -220,7 +234,13 @@ export function lookahead(input: LookaheadInput): Lookahead {
     holdsThrough: getThrough(),
     problems,
     shortByDay: Object.fromEntries(
-      [...walked.shorts].reverse().map((short) => [short.dayKey, short]),
+      problems
+        .filter(
+          (problem): problem is Extract<LookaheadProblem, { kind: 'short' }> =>
+            problem.kind === 'short',
+        )
+        .reverse()
+        .map((short) => [short.dayKey, short]),
     ),
     incomeEndsOn,
   };

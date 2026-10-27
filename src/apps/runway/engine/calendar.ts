@@ -10,8 +10,8 @@ import { allocate } from './money';
 
 /** A Monday, so a week and a two-week block count from the same day everywhere. */
 const WEEK_EPOCH = Date.UTC(1970, 0, 5);
-/** Periods walked from the first income day at most, a guard against a runaway span. */
-const MAX_PERIODS = 1_200;
+/** Periods walked from the first income day at most, a guard against a runaway span far past any lookahead. */
+export const MAX_PERIODS = 20_000;
 
 interface DayRef {
   dayKey: string;
@@ -119,7 +119,13 @@ export function spreadCalendarAmount(
   return new Map([...result].filter(([key]) => asked.has(key)));
 }
 
-/** The cents a calendar rule asks of each of the days given; null when the rule is not a calendar rule. */
+const spreadCache = new Map<string, Map<string, Cents>>();
+const SPREAD_CACHE_LIMIT = 4_000;
+
+const toDaysKey = (days: readonly DayRef[]) =>
+  days.map((day) => `${day.dayKey}@${day.on}`).join(',');
+
+/** The cents a calendar rule asks of each of the days given; null when the rule is not a calendar rule. A rule asked the same days again (every draft of one walk) is worked out once. */
 export function getCalendarCents(
   funding: FundingRule,
   days: readonly DayRef[],
@@ -127,15 +133,22 @@ export function getCalendarCents(
 ): Map<string, Cents> | null {
   const { cadence, amount } = funding;
   if (cadence.kind !== 'calendar' || amount.kind !== 'exact') return null;
+  const scoped = scopeToSource(funding, days);
+  const scopedPrior = scopeToSource(funding, priorDays);
+  const key = `${cadence.period}|${cadence.startsOn}|${amount.cents}|${toDaysKey(scoped)}|${toDaysKey(scopedPrior)}`;
+  const cached = spreadCache.get(key);
+  if (cached) return cached;
   const result = spreadCalendarAmount(
     {
       period: cadence.period,
       startsOn: cadence.startsOn,
       cents: amount.cents,
     },
-    scopeToSource(funding, days),
-    scopeToSource(funding, priorDays),
+    scoped,
+    scopedPrior,
   );
+  if (spreadCache.size >= SPREAD_CACHE_LIMIT) spreadCache.clear();
+  spreadCache.set(key, result);
   return result;
 }
 

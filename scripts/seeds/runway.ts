@@ -1202,7 +1202,11 @@ async function writeSeedEnvelopes(
         orderIndex: 3,
         funding: {
           amount: exact(9_500),
-          cadence: { kind: 'calendar', period: 'monthly', startsOn: today },
+          cadence: {
+            kind: 'calendar',
+            period: 'monthly',
+            startsOn: today - 3 * DAY_MS,
+          },
         },
       },
     },
@@ -1220,7 +1224,7 @@ async function writeSeedEnvelopes(
                 cadence: {
                   kind: 'calendar' as const,
                   period: 'weekly' as const,
-                  startsOn: today,
+                  startsOn: today - 3 * DAY_MS,
                 },
               },
             },

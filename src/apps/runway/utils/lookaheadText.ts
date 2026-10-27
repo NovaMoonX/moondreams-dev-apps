@@ -1,10 +1,14 @@
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { FIX_WORDS } from '@apps/runway/constants';
-import type {
-  Lookahead,
-  LookaheadProblem,
+import {
+  isSameLookahead,
+  sortProblems,
+  type Lookahead,
+  type LookaheadProblem,
 } from '@apps/runway/engine/lookahead';
+
+export { isSameLookahead, sortProblems };
 
 /** One problem in a sentence: what stops the plan, on which day, never as missing money. */
 export function describeProblem(problem: LookaheadProblem) {
@@ -28,22 +32,21 @@ export function describeHoldsThrough(lookahead: Lookahead) {
 
 /** What a change does to how far the plan holds, in one sentence; null when there is nothing to say. */
 export function describeHoldsChange(before: Lookahead, after: Lookahead) {
-  const key = (look: Lookahead) =>
-    JSON.stringify([look.holdsThrough, look.problems[0] ?? null]);
-  if (key(before) === key(after)) {
+  if (isSameLookahead(before, after)) {
     return after.holdsThrough === null
       ? null
       : `Your plan still holds through ${formatDateUTC(after.holdsThrough)}.`;
   }
-  const first = after.problems[0];
+  const [first] = sortProblems(after.problems);
+  const more = after.problems.length - 1;
+  const describeFirst = (problem: LookaheadProblem) =>
+    `With this change, ${describeProblem(problem)}${more > 0 ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.` : ''}`;
   if (after.holdsThrough === null) {
-    return first ? `With this change, ${describeProblem(first)}` : null;
+    return first ? describeFirst(first) : null;
   }
   if (before.holdsThrough === after.holdsThrough) {
     const still = `Your plan still holds through ${formatDateUTC(after.holdsThrough)}.`;
-    return first
-      ? `${still} With this change, ${describeProblem(first)}`
-      : still;
+    return first ? `${still} ${describeFirst(first)}` : still;
   }
   const was =
     before.holdsThrough === null
@@ -62,12 +65,6 @@ export function describeProblemShort(problem: LookaheadProblem) {
   if (problem.kind === 'noIncome')
     return `${name} on ${on} has no income before it`;
   const result = `The plan leaves ${name} ${formatCentsShort(problem.shortBy)} short on ${on}`;
-  return result;
-}
-
-/** The problems soonest first, the order the summary row and the list it opens both use. */
-export function sortProblems(problems: readonly LookaheadProblem[]) {
-  const result = [...problems].sort((a, b) => a.on - b.on);
   return result;
 }
 

@@ -69,7 +69,9 @@ export function planGoalContributions<D extends PaceDay>(
       const cents = isRest
         ? acc.left
         : Math.min(
-            calendar?.get(day.dayKey) ?? getDayAsk(goal.funding, day),
+            calendar
+              ? (calendar.get(day.dayKey) ?? 0)
+              : getDayAsk(goal.funding, day),
             acc.left,
           );
       return {
