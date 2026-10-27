@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   CircleHelp,
   Mail,
@@ -171,14 +171,14 @@ function StartFlow({
     setStep(next);
     onStepChange?.(next);
   };
-  const isFinishing = useRef(false);
+  const [isLeaving, setIsLeaving] = useState(false);
   const leave = (then?: () => void) => {
     if (then) leaveAfterSubviewCloses(then);
     if (!window.history.state?.backLayerKey) {
       closeView();
       return;
     }
-    isFinishing.current = true;
+    setIsLeaving(true);
     window.history.back();
   };
   const goBack = () => (index === 0 ? leave() : goTo(steps[index - 1]));
@@ -322,7 +322,7 @@ function StartFlow({
       title={START_WORDS.title}
       onClose={closeView}
       onBack={() => {
-        if (isFinishing.current) closeView();
+        if (isLeaving) closeView();
         else if (isAsking) leave();
         else goBack();
       }}
