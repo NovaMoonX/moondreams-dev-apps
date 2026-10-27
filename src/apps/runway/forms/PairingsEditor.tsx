@@ -60,6 +60,8 @@ interface PairingsFormData {
 interface PairingsEditorProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Where cancelling goes, when that is not where saving goes (back to the sheet it opened from). */
+  onCancel?: () => void;
   title: string;
   /** Who the money comes from, in the person's words: "Main job", "this pay". */
   fromLabel: string;
@@ -149,6 +151,7 @@ const getBlocker = (rows: PairingRow[], canBeEmpty: boolean) => {
 function PairingsEditor({
   isOpen,
   onClose,
+  onCancel,
   title,
   fromLabel,
   locked,
@@ -369,10 +372,10 @@ function PairingsEditor({
   const formFields = change ? [...fields, changeField] : fields;
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
+    <FormSheet isOpen={isOpen} onClose={onCancel ?? onClose} title={title}>
       <ChangeSteps
         isReason={flow.step === 'reason'}
-        reason={<ChangeReason flow={flow} onClose={onClose} />}
+        reason={<ChangeReason flow={flow} onClose={onCancel ?? onClose} />}
       >
         <ChangeFlowContext value={flowValue}>
           <Form
@@ -395,7 +398,7 @@ function PairingsEditor({
                   <Button
                     type='button'
                     variant='secondary'
-                    onClick={onClose}
+                    onClick={onCancel ?? onClose}
                     disabled={isSaving}
                   >
                     Cancel

@@ -444,6 +444,7 @@ function ItemSheet({
         initial={pairings}
         change={{ itemId, kind: version.kind, current: version.payload }}
         onClose={onClose}
+        onCancel={backToSheet}
       />
     );
   }
@@ -726,7 +727,7 @@ function ItemSheet({
           <Button
             type='button'
             variant='secondary'
-            onClick={onClose}
+            onClick={() => goTo('menu')}
             disabled={isSaving}
           >
             Cancel
