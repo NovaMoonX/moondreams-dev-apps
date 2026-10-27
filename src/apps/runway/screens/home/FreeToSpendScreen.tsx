@@ -114,7 +114,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 subtitle={ENVELOPE_SPEND_WORDS.checkSub}
                 onClick={() => {
                   onClose();
-                  leaveAfterSubviewCloses(() => openCheckAmount(null));
+                  leaveAfterSubviewCloses(() => openCheckAmount(null, true));
                 }}
               />
             )}

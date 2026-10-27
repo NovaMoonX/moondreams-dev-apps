@@ -129,6 +129,8 @@ function RunwayContent() {
     settingsView,
     closeSettingsView,
     checkEnvelope,
+    isCheckFromFreeToSpend,
+    openView,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
@@ -256,7 +258,12 @@ function RunwayContent() {
       <div>
         <CheckAmountScreen
           presetEnvelopeId={checkEnvelope}
-          onClose={closeView}
+          onClose={() => {
+            closeView();
+            if (isCheckFromFreeToSpend) {
+              leaveAfterSubviewCloses(() => openView('freeToSpend'));
+            }
+          }}
         />
       </div>
     );
