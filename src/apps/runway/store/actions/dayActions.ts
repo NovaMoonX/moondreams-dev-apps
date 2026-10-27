@@ -445,15 +445,16 @@ const readChoices = async (
 /**
  * Moves the person's own choices for each day to the date its payday moved to, one transaction per
  * day: the old day is re-read and must still be a draft, and the new one must have no choices of its
- * own, so nothing another device chose is written over. Returns how many moved.
+ * own, so nothing another device chose is written over. Every day is tried; returns how many moved and
+ * the old dates of the days whose write failed.
  */
 export async function carryDayOverrides(
   uid: string,
   encryption: RunwayEncryption,
-  moves: readonly { fromId: string; to: DayRef }[],
-): Promise<number> {
+  moves: readonly { fromId: string; fromOn: DateOnly; to: DayRef }[],
+): Promise<{ moved: number; failedOn: DateOnly[] }> {
   const sealedEmpty = await sealJson(EMPTY_OVERRIDE, encryption);
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     moves.map(({ fromId, to }) => {
       const toId = toDayKey(to.payLineId, to.expectedOn);
       return runTransaction(db, async (transaction) => {
@@ -498,6 +499,19 @@ export async function carryDayOverrides(
       });
     }),
   );
-  const result = results.filter(Boolean).length;
+  const failed = results.flatMap((outcome, index) =>
+    outcome.status === 'rejected'
+      ? [{ on: moves[index].fromOn, error: outcome.reason as unknown }]
+      : [],
+  );
+  failed.forEach(({ error }) =>
+    console.error('Moving day choices failed', error),
+  );
+  const result = {
+    moved: results.filter(
+      (outcome) => outcome.status === 'fulfilled' && outcome.value,
+    ).length,
+    failedOn: failed.map(({ on }) => on),
+  };
   return result;
 }

@@ -1346,3 +1346,13 @@ export const CONFIRM_COVER_WORDS = {
   coverGone:
     'Free to spend is now less than you chose to cover. Choose again before you confirm.',
 } as const;
+
+/** A moved payday whose own choices could not follow it, round 7 review. */
+export const CARRY_WORDS = {
+  failedTitle: (count: number) =>
+    count === 1
+      ? '1 income day kept its old choices'
+      : `${count} income days kept their old choices`,
+  failedBody: (dates: string) =>
+    `What you chose for ${dates} did not move to the new date. The change is saved; open the day to choose again.`,
+} as const;
