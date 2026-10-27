@@ -95,6 +95,12 @@ export async function commitStartDraft(
     });
     result.added += 1;
   }
+  const mapFunding = <F extends { sourceId?: string | null }>(funding: F): F => {
+    const id = funding.sourceId ?? null;
+    if (id === null || !id.startsWith('draft:')) return funding;
+    const real = sourceIds.get(id.slice('draft:'.length)) ?? null;
+    return { ...funding, sourceId: real };
+  };
   for (const { value } of draft.envelopes) {
     if (taken.envelopes.has(norm(value.name))) {
       result.skipped += 1;
@@ -104,6 +110,7 @@ export async function commitStartDraft(
       startDate: today,
       envelope: {
         ...value,
+        funding: mapFunding(value.funding),
         orderIndex: nextRank('envelopes', value.priority),
       },
     });
@@ -120,6 +127,7 @@ export async function commitStartDraft(
       startDate: today,
       goal: {
         ...value,
+        funding: mapFunding(value.funding),
         orderIndex: nextRank('goals', value.priority),
         ...(hasStartDay ? { startingCents: undefined } : {}),
       },

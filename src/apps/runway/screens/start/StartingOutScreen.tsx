@@ -19,6 +19,7 @@ import GoalForm from '@apps/runway/forms/GoalForm';
 import IncomeForm from '@apps/runway/forms/IncomeForm';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { toDraftSourceId } from '@apps/runway/forms/fundingFlow';
 import StartFlow, {
   type StartFormState,
   type StartKind,
@@ -342,6 +343,14 @@ function DeviceStart() {
     envelopes: draft?.envelopes ?? [],
     goals: draft?.goals ?? [],
   };
+  const draftSources = [
+    ...new Map(
+      entries.incomes.map(({ value }) => [
+        toDraftSourceId(value.sourceName),
+        { id: toDraftSourceId(value.sourceName), name: value.sourceName },
+      ]),
+    ).values(),
+  ];
   const rows = {
     income: toIncomeRows(
       entries.incomes.map(({ id, value }) => ({
@@ -412,6 +421,7 @@ function DeviceStart() {
             initial:
               entries.envelopes.find((entry) => entry.id === id)?.value ?? null,
             onSave: (value) => saveDraftEntry('envelopes', value, id),
+            sources: draftSources,
           }}
           onClose={close}
         />
@@ -426,6 +436,7 @@ function DeviceStart() {
           initial:
             entries.goals.find((entry) => entry.id === id)?.value ?? null,
           onSave: (value) => saveDraftEntry('goals', value, id),
+          sources: draftSources,
         }}
         onClose={close}
       />

@@ -245,6 +245,7 @@ function GoalForm({
     comingDays,
     allowNone: true,
     isDraft: !!draft,
+    draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much goes in ${unit}?`,
     getAmountHint,
   });

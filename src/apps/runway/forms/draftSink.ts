@@ -3,4 +3,6 @@ export interface DraftSink<T> {
   /** A saved answer to change; null starts a new one. */
   initial: T | null;
   onSave: (value: T) => void;
+  /** The income sources entered so far, which "From a paycheck" offers in place of a plan's pay days. */
+  sources?: { id: string; name: string }[];
 }

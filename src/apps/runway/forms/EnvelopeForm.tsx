@@ -147,6 +147,7 @@ function EnvelopeForm({
     comingDays,
     allowNone: false,
     isDraft: !!draft,
+    draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much does it get ${unit}?`,
   });
   const steps: QuestionStep[] = [
