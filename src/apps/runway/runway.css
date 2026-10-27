@@ -106,6 +106,13 @@ html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.sh
   overflow-y: auto;
 }
 
+/* On a screen tall enough for a form to fit, the card does not clip, so an open Select's list can run past its edge. */
+@media (min-height: 700px) {
+  html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
+    overflow: visible;
+  }
+}
+
 /* A scroller's padding insets what sticks to its bottom, so the pinned footer is pulled down over it. */
 html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl .form-footer {
   bottom: -1.5rem;

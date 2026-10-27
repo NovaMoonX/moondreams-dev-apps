@@ -112,6 +112,9 @@ const endingOptions = INCOME_ENDINGS.map((value) => ({
   label: INCOME_ENDING_LABELS[value],
 }));
 
+/** A short month's end stands in for the 30th, as the schedule already clamps any day past a month's length. */
+const DEFAULT_PAYDAYS = ['15', '30'] as const;
+
 const dayOptions = Array.from({ length: LAST_DAY }, (_, index) => ({
   value: String(index + 1),
   text: toOrdinal(index + 1),
@@ -478,7 +481,17 @@ function IncomeForm({
             label='How often'
             options={frequencyOptions}
             value={formData.frequency}
-            onChange={(frequency) => set({ frequency })}
+            onChange={(frequency) =>
+              frequency === 'twiceMonthly' &&
+              formData.firstDay === '' &&
+              formData.secondDay === ''
+                ? setPaydays({
+                    frequency,
+                    firstDay: DEFAULT_PAYDAYS[0],
+                    secondDay: DEFAULT_PAYDAYS[1],
+                  })
+                : set({ frequency })
+            }
           />
           {formData.frequency !== null &&
             formData.frequency !== 'twiceMonthly' && (
@@ -508,6 +521,7 @@ function IncomeForm({
                     options={dayOptions}
                     value={formData[key]}
                     placeholder='Pick a day'
+                    dropdownClassName='max-h-48!'
                     onChange={(value) => setPaydays({ [key]: value })}
                   />
                 </div>
