@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight, TriangleAlert } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Callout } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
@@ -100,7 +100,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         onClose={closeFixes}
         title={PROBLEM_WORDS.title}
       >
-        {isFixesOpen && (
+        {isFixesOpen && groups.length > 0 && (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {shown.map((group) => (
               <li
@@ -122,10 +122,10 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
                 </ShowMoreButton>
               </li>
             )}
-            {endsText !== null && (
-              <li className='text-muted-foreground p-3 text-sm'>{endsText}</li>
-            )}
           </ul>
+        )}
+        {isFixesOpen && endsText !== null && (
+          <Callout variant='info' description={endsText} className='mt-3' />
         )}
       </DetailSheet>
     </>

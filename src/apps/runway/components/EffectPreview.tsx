@@ -1,6 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useStore } from 'react-redux';
 
+import { Callout } from '@moondreamsdev/dreamer-ui/components';
+
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector, type RootState } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -176,7 +178,11 @@ function EffectPreview({
       before.holdsThrough === after.holdsThrough &&
       JSON.stringify(before.problems[0] ?? null) ===
         JSON.stringify(after.problems[0] ?? null);
-    return { text: describeHoldsChange(before, after), isSame };
+    return {
+      text: describeHoldsChange(before, after),
+      isSame,
+      isProblem: after.problems.length > 0,
+    };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledVirtual, isLedgerReady, today, items, versions, openDays]);
@@ -274,7 +280,10 @@ function EffectPreview({
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
       {getBody()}
       {holdsText?.text && !(isCompact && holdsText.isSame) && (
-        <p className='text-sm'>{holdsText.text}</p>
+        <Callout
+          variant={holdsText.isProblem ? 'warning' : 'success'}
+          description={holdsText.text}
+        />
       )}
     </ActionSection>
   );

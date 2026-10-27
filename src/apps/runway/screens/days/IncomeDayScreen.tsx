@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CalendarX, ChevronRight, Link2, Mail, Undo2 } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Callout } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -261,9 +261,13 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                   {unfunded.map(renderLine)}
                 </ul>
                 {lesserCount > 0 && (
-                  <p className='text-muted-foreground text-sm'>
-                    {DRAFT_WORDS.lesserLeft(lesserCount, unfunded.length)}
-                  </p>
+                  <Callout
+                    variant='info'
+                    description={DRAFT_WORDS.lesserLeft(
+                      lesserCount,
+                      unfunded.length,
+                    )}
+                  />
                 )}
               </div>
             )}
