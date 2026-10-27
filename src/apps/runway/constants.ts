@@ -791,16 +791,23 @@ export const START_WORDS = {
     parts === '' ? 'Nothing has been added yet.' : `Ready to save: ${parts}.`,
   saveButton: 'Sign in with Google',
   handoffTitle: 'Save what you entered?',
-  handoffBody: (parts: string) =>
-    `This device has ${parts} from before you signed in, and your plan already has items. Which should stay?`,
+  handoffBody: (parts: string, hasItems: boolean) =>
+    hasItems
+      ? `This device has ${parts} from before you signed in, and your plan already has items. Which should stay?`
+      : `This device has ${parts} from before you signed in. Add them to your plan?`,
   handoffAdd: 'Add them to my plan',
   handoffKeep: 'Keep my plan as it is',
+  handoffDiscard: 'Do not add them',
   handoffSaved: (count: number) =>
     count === 1
       ? 'Saved 1 item to your plan.'
       : `Saved ${count} items to your plan.`,
   handoffFailed:
     'Some of what you entered did not save. It is still on this device.',
+  handoffNotReady:
+    'Your plan is still opening. Try again in a moment. Nothing was added.',
+  handoffUnrecorded: (names: string) =>
+    `What is in it now did not record for ${names}. Add it under Where things stand.`,
   landingTitle: 'Plan before you sign in',
   landingBody:
     'You can go through Starting out now. Your answers stay on this device until you sign in.',
@@ -1087,6 +1094,8 @@ export const HOW_OFTEN_WORDS = {
   currentTitle: 'How much is in it now?',
   current: 'In it now',
   currentHint: 'Leave it at $0 if you are starting from nothing.',
+  holdingNotRecorded: (name: string) =>
+    `${name} was added, but what is in it now did not record. Add it under Where things stand.`,
   notBeingAdded: 'Not being added to',
 } as const;
 

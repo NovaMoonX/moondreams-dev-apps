@@ -10,6 +10,8 @@ import type {
 
 export const START_DRAFT_KEY = 'runway:start-draft';
 export const START_DRAFT_DAYS = 7;
+/** Bumped when the shape of a stored draft changes; a draft of another version is dropped. */
+export const START_DRAFT_VERSION = 1;
 const DAY_MS = 86_400_000;
 
 export const START_STEPS = [
@@ -31,6 +33,7 @@ export type DraftKind = 'incomes' | 'bills' | 'envelopes' | 'goals';
 
 /** What a person entered in Starting out before signing in. Kept unencrypted in this browser only. */
 export interface StartDraft {
+  version: number;
   savedAt: number;
   step: StartStep;
   incomes: DraftEntry<CreateIncomeInput>[];
@@ -40,6 +43,7 @@ export interface StartDraft {
 }
 
 export const EMPTY_START_DRAFT: StartDraft = {
+  version: START_DRAFT_VERSION,
   savedAt: 0,
   step: 'income',
   incomes: [],
@@ -62,7 +66,17 @@ const readRaw = (): string | null => {
 
 const notify = () => listeners.forEach((listener) => listener());
 
-const asList = (value: unknown) => (Array.isArray(value) ? value : []);
+const isEntry = (value: unknown) =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as DraftEntry<unknown>).id === 'string' &&
+  typeof (value as DraftEntry<unknown>).value === 'object' &&
+  (value as DraftEntry<unknown>).value !== null;
+
+const asList = (value: unknown): DraftEntry<never>[] | null => {
+  if (value === undefined) return [];
+  return Array.isArray(value) && value.every(isEntry) ? value : null;
+};
 
 /** The draft a stored string holds, or null when it is missing, unreadable or older than a week. */
 export const parseStartDraft = (
@@ -72,15 +86,22 @@ export const parseStartDraft = (
   if (raw === null) return null;
   try {
     const data = JSON.parse(raw) as Partial<StartDraft>;
+    if (data.version !== START_DRAFT_VERSION) return null;
     if (typeof data.savedAt !== 'number') return null;
     if (now - data.savedAt > START_DRAFT_DAYS * DAY_MS) return null;
+    const incomes = asList(data.incomes);
+    const bills = asList(data.bills);
+    const envelopes = asList(data.envelopes);
+    const goals = asList(data.goals);
+    if (!incomes || !bills || !envelopes || !goals) return null;
     const draft: StartDraft = {
+      version: START_DRAFT_VERSION,
       savedAt: data.savedAt,
       step: START_STEPS.find((step) => step === data.step) ?? 'income',
-      incomes: asList(data.incomes),
-      bills: asList(data.bills),
-      envelopes: asList(data.envelopes),
-      goals: asList(data.goals),
+      incomes,
+      bills,
+      envelopes,
+      goals,
     };
     return draft;
   } catch {
@@ -105,10 +126,18 @@ export const readStartDraft = (): StartDraft | null => {
 };
 
 const writeStartDraft = (draft: StartDraft) => {
+  if (countDraft(draft) === 0) {
+    clearStartDraft();
+    return;
+  }
   try {
     window.localStorage.setItem(
       START_DRAFT_KEY,
-      JSON.stringify({ ...draft, savedAt: Date.now() }),
+      JSON.stringify({
+        ...draft,
+        version: START_DRAFT_VERSION,
+        savedAt: Date.now(),
+      }),
     );
   } catch {
     // Storage can be blocked; the answers then last until the page closes.

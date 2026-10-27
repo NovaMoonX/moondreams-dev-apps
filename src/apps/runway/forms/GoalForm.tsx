@@ -1,5 +1,7 @@
 import { useState } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField from '@/components/AmountField';
@@ -386,6 +388,7 @@ function GoalForm({
       ),
     },
   ];
+  const { addToast } = useToast();
   const [isAll, setIsAll] = useState(false);
   const questions = useQuestionFlow({
     steps,
@@ -489,11 +492,24 @@ function GoalForm({
         goal,
       });
       if (plan?.startDate != null && currentCents > 0) {
-        await recordHolding(user.uid, encryption, plan.startDate, {
-          holding: 'goal',
-          refId: goalId,
-          amountCents: currentCents,
-        }).catch((holdingError) => console.error(holdingError));
+        const isRecorded = await recordHolding(
+          user.uid,
+          encryption,
+          plan.startDate,
+          {
+            holding: 'goal',
+            refId: goalId,
+            amountCents: currentCents,
+          },
+        ).catch((holdingError) => {
+          console.error(holdingError);
+          return false;
+        });
+        if (!isRecorded)
+          addToast({
+            title: HOW_OFTEN_WORDS.holdingNotRecorded(goal.name),
+            type: 'warning',
+          });
       }
       onClose();
     } catch (saveError) {
