@@ -4776,6 +4776,74 @@ const version = (
     'a short Want bill due after the next income day is not yet a gap',
   );
 
+  // Every short line on an income day is its own problem, soonest first, ties by priority, and the count agrees with the list.
+  const shortLine = (
+    itemId: string,
+    tier: 'must' | 'should' | 'want',
+    shortBy: number,
+  ) =>
+    ({
+      lineId: itemId,
+      dayKey: 'x',
+      itemId,
+      tier,
+      bill: { dueOn: today + DAY_MS, totalCents: 1_000, ranged: null },
+      cents: 0,
+      shortBy,
+    }) as never;
+  const shortNames = {
+    rent: { name: 'Rent' },
+    groc: { name: 'Groceries' },
+    gas: { name: 'Gas' },
+  };
+  const shortsOn = (lines: ReturnType<typeof shortLine>[]) =>
+    run([day(today), day(today + 7 * DAY_MS)], {
+      draftOf: (entry) => ({
+        draft: emptyDraft(entry.on === today ? lines : []),
+        names: shortNames,
+      }),
+    });
+  const one = shortsOn([shortLine('groc', 'must', 4_000)]);
+  assert.deepEqual(
+    one.problems.map((problem) => problem.kind === 'short' && problem.name),
+    ['Groceries'],
+    'one short line is one problem',
+  );
+  const two = shortsOn([
+    shortLine('groc', 'should', 4_000),
+    shortLine('rent', 'must', 3_000),
+  ]);
+  assert.deepEqual(
+    two.problems.map((problem) => problem.kind === 'short' && problem.name),
+    ['Rent', 'Groceries'],
+    'two short lines on one day are two problems, the higher priority first',
+  );
+  const three = shortsOn([
+    shortLine('gas', 'must', 1_000),
+    shortLine('groc', 'must', 4_000),
+    shortLine('rent', 'should', 3_000),
+  ]);
+  assert.deepEqual(
+    three.problems.map((problem) => problem.kind === 'short' && problem.name),
+    ['Gas', 'Groceries', 'Rent'],
+    'three short lines are three problems, ties by priority then name',
+  );
+  assert.equal(
+    three.problems.length,
+    3,
+    'the summary count and the list are the same number',
+  );
+  assert.equal(
+    three.holdsThrough,
+    null,
+    'a plan short on its first day holds through nothing',
+  );
+  assert.equal(
+    Object.keys(three.shortByDay).length,
+    1,
+    'a day with three short lines has one first line',
+  );
+
   // A change that starts in two months shows early, and leaves every earlier draft alone.
   const planItems: PlanItemDoc[] = [
     item('pay', 1, { kind: 'payLine', parentId: 'src' }),

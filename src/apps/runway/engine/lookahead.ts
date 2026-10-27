@@ -1,5 +1,11 @@
 import { CUSHION_DAYS, INCOME_END_GAP_DAYS } from '@apps/runway/constants';
-import type { Cents, DateOnly, MoneyRange, Stance } from '@apps/runway/types';
+import type {
+  Cents,
+  DateOnly,
+  MoneyRange,
+  Priority,
+  Stance,
+} from '@apps/runway/types';
 
 import type { ComingDay } from './comingDays';
 import type { BillPayment } from './demands';
@@ -32,6 +38,7 @@ export type LookaheadProblem =
       name: string;
       shortBy: Cents;
       isBill: boolean;
+      tier: Priority;
     };
 
 export interface LookaheadInput {
@@ -52,7 +59,7 @@ export interface Lookahead {
   holdsThrough: DateOnly | null;
   /** In date order, an overdue bill first. */
   problems: LookaheadProblem[];
-  /** The first problem on each income day, by day key. */
+  /** The first short line on each income day, by day key. */
   shortByDay: Record<string, Extract<LookaheadProblem, { kind: 'short' }>>;
   /** The last income day when nothing follows it for a long stretch. */
   incomeEndsOn: DateOnly | null;
@@ -60,6 +67,10 @@ export interface Lookahead {
 
 const EMPTY_CARRY: LookaheadCarry = { funded: {}, added: {} };
 const PROBLEM_RANK = { overdue: 0, noIncome: 1, short: 2 } as const;
+
+const TIER_RANK: Record<Priority, number> = { must: 0, should: 1, want: 2 };
+const getTierRank = (problem: LookaheadProblem) =>
+  problem.kind === 'short' ? TIER_RANK[problem.tier] : 0;
 
 const nextCarry = (
   carry: LookaheadCarry,
@@ -91,29 +102,29 @@ const nextCarry = (
     };
   }, carry);
 
-/** A Must that goes unfunded, or a bill that falls due before the next income day and is not set aside in full. */
-const findShort = (
+/** Every Must that goes unfunded, and every bill that falls due before the next income day and is not set aside in full, in the draft's own order. */
+const findShorts = (
   day: ComingDay,
   nextOn: DateOnly,
   result: LookaheadDraft,
-): Extract<LookaheadProblem, { kind: 'short' }> | null => {
-  const line = result.draft.lines.find(
-    (entry) =>
-      entry.shortBy > 0 &&
-      (entry.tier === 'must' ||
-        (entry.bill !== null && entry.bill.dueOn < nextOn)),
-  );
-  if (!line) return null;
-  return {
-    kind: 'short',
-    on: day.on,
-    dayKey: day.dayKey,
-    itemId: line.itemId,
-    name: result.names[line.itemId]?.name ?? '',
-    shortBy: line.shortBy,
-    isBill: line.bill !== null,
-  };
-};
+): Extract<LookaheadProblem, { kind: 'short' }>[] =>
+  result.draft.lines
+    .filter(
+      (entry) =>
+        entry.shortBy > 0 &&
+        (entry.tier === 'must' ||
+          (entry.bill !== null && entry.bill.dueOn < nextOn)),
+    )
+    .map((line) => ({
+      kind: 'short',
+      on: day.on,
+      dayKey: day.dayKey,
+      itemId: line.itemId,
+      name: result.names[line.itemId]?.name ?? '',
+      shortBy: line.shortBy,
+      isBill: line.bill !== null,
+      tier: line.tier,
+    }));
 
 /** The first payment of each bill that is past due and not marked paid, since the bill began to be tracked. */
 const findOverdue = (input: LookaheadInput): LookaheadProblem[] =>
@@ -174,10 +185,9 @@ export function lookahead(input: LookaheadInput): Lookahead {
       const result = input.draftOf(day, acc.carry);
       if (!result) return acc;
       const nextOn = days[index + 1]?.on ?? input.horizon + DAY_MS;
-      const short = findShort(day, nextOn, result);
       return {
         carry: nextCarry(acc.carry, day, result.draft),
-        shorts: short ? [...acc.shorts, short] : acc.shorts,
+        shorts: [...acc.shorts, ...findShorts(day, nextOn, result)],
       };
     },
     { carry: EMPTY_CARRY, shorts: [] },
@@ -190,6 +200,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     (a, b) =>
       a.on - b.on ||
       PROBLEM_RANK[a.kind] - PROBLEM_RANK[b.kind] ||
+      getTierRank(a) - getTierRank(b) ||
       (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
   );
   const incomeEndsOn = getIncomeEnd(input);
@@ -209,7 +220,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     holdsThrough: getThrough(),
     problems,
     shortByDay: Object.fromEntries(
-      walked.shorts.map((short) => [short.dayKey, short]),
+      [...walked.shorts].reverse().map((short) => [short.dayKey, short]),
     ),
     incomeEndsOn,
   };
