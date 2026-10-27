@@ -7,6 +7,7 @@ import AmountHero from '@/components/AmountHero';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import BackLink from '@/components/BackLink';
 import BeforeAfterRow from '@/components/BeforeAfterRow';
+import InlineNotice from '@/components/InlineNotice';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
@@ -225,7 +226,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
         />
       ) : step === 'edit' ? (
         <div className='space-y-4'>
-          <p className='text-muted-foreground text-sm'>{CORRECT_WORDS.intro}</p>
+          <InlineNotice tone='info'>{CORRECT_WORDS.intro}</InlineNotice>
           <AmountHero
             label={CONFIRM_WORDS.amount}
             value={amount}
@@ -340,9 +341,9 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             </ActionSection>
           )}
           {hasUntick && (
-            <p className='text-muted-foreground text-sm'>
+            <InlineNotice tone='info'>
               {CORRECT_WORDS.untickedNote}
-            </p>
+            </InlineNotice>
           )}
           {!isNoting && note === '' ? (
             <div>

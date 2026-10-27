@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import InlineNotice from '@/components/InlineNotice';
 import { Activity, ChevronRight, Gauge, Trash2 } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -130,17 +131,17 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
             value={stance}
             onChange={(next) => void choose(next)}
           />
-          <p className='text-muted-foreground text-sm'>{STANCE_HELP[stance]}</p>
+          <InlineNotice tone='info'>{STANCE_HELP[stance]}</InlineNotice>
           {error && (
             <p className='text-destructive text-sm' role='alert'>
               {error}
             </p>
           )}
         </SummaryEditor>
-        <p className='text-muted-foreground px-1 text-sm'>
+        <InlineNotice tone='info'>
           A pay line or bill with a range can plan at its own end instead. You
           choose that where you add it.
-        </p>
+        </InlineNotice>
         <SettingsRow
           icon={<Activity />}
           label={TRACKING_WORDS.rowLabel}

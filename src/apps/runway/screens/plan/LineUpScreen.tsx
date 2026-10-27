@@ -1,9 +1,11 @@
 import { useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
-import MoneyInput from '@/components/MoneyInput';
+import AmountHero from '@/components/AmountHero';
+import FoldedDateField from '@/components/FoldedDateField';
+import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
@@ -192,43 +194,24 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
       onClose={() => void close()}
     >
       <div className='flex flex-1 flex-col gap-4'>
-        <p className='text-muted-foreground text-sm text-pretty'>
+        <InlineNotice tone='info'>
           {TRACKING_WORDS.lineUpHelp}
-        </p>
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>
-            {TRACKING_WORDS.startsOn}
-          </p>
-          <Input
-            type='date'
-            variant='outline'
-            aria-label={TRACKING_WORDS.startsOn}
-            min={floor === 0 ? undefined : toDateInputValue(floor)}
-            max={toDateInputValue(today)}
-            value={date}
-            onChange={(event) => setDate(event.target.value)}
-          />
-          {earliest !== null && (
-            <p className='text-muted-foreground text-xs'>
-              {TRACKING_WORDS.freshStart}
-            </p>
-          )}
-        </div>
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>
-            {TRACKING_WORDS.moneyOnHand}
-          </p>
-          <MoneyInput
-            variant='outline'
-            ariaLabel={TRACKING_WORDS.moneyOnHand}
-            value={money}
-            onChange={setMoneyEdit}
-            placeholder='What you have on that day'
-          />
-          <p className='text-muted-foreground text-xs'>
-            {TRACKING_WORDS.moneyHint}
-          </p>
-        </div>
+          {earliest !== null && ` ${TRACKING_WORDS.freshStart}`}
+        </InlineNotice>
+        <FoldedDateField
+          label={TRACKING_WORDS.startsOn}
+          value={date}
+          onChange={setDate}
+          todayValue={defaultDate}
+          min={floor === 0 ? undefined : toDateInputValue(floor)}
+          max={toDateInputValue(today)}
+        />
+        <AmountHero
+          label={TRACKING_WORDS.moneyOnHand}
+          value={money}
+          onChange={setMoneyEdit}
+          hint={TRACKING_WORDS.moneyHint}
+        />
         <dl className='border-border bg-accent rounded-2xl border p-4'>
           <div className='flex items-start justify-between gap-3 text-sm'>
             <dt className='text-muted-foreground'>

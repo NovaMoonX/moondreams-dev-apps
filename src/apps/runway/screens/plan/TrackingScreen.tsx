@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import InlineNotice from '@/components/InlineNotice';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { PillGroup } from '@/components/PillGroup';
@@ -91,11 +92,11 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
             value={level}
             onChange={choose}
           />
-          <p className='text-muted-foreground text-sm text-pretty'>
+          <InlineNotice tone='info'>
             {level === 'track'
               ? TRACKING_WORDS.trackHelp
               : TRACKING_WORDS.planHelp}
-          </p>
+          </InlineNotice>
           <LevelGate level='track'>
             {open && (
               <p className='text-sm'>

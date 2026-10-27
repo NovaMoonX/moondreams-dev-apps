@@ -8,6 +8,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import FoldedDateField from '@/components/FoldedDateField';
+import InlineNotice from '@/components/InlineNotice';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
@@ -376,9 +377,9 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           <div className='space-y-3'>
             <BackLink onBack={() => setIsChoosing(false)} />
             <div className='space-y-1'>
-              <p className='text-muted-foreground text-sm'>
+              <InlineNotice tone='info'>
                 {CONFIRM_WORDS.adjustIntro}
-              </p>
+              </InlineNotice>
               <p className='text-sm font-medium'>
                 {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
                 <span className='text-muted-foreground font-normal'>
