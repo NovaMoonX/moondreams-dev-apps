@@ -14,7 +14,12 @@ import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
-import { CHANGE_WORDS, MAX_PAIRINGS } from '@apps/runway/constants';
+import {
+  CHANGE_WORDS,
+  ITEM_SHEET_WORDS,
+  MAX_PAIRINGS,
+} from '@apps/runway/constants';
+import InlineNotice from '@/components/InlineNotice';
 import PairingRowSheet, {
   type PairingRow,
 } from '@apps/runway/forms/PairingRowSheet';
@@ -107,12 +112,12 @@ const toRow = (pairing: Pairing, key: number): PairingRow => {
 
 const getBlocker = (rows: PairingRow[], canBeEmpty: boolean) => {
   if (rows.length === 0)
-    return canBeEmpty ? null : 'Add something this money should fund.';
+    return canBeEmpty ? null : 'Add something to pay first from this money.';
   if (rows.some((row) => row.targetItemId === null))
-    return 'Pick what each one funds.';
+    return 'Pick what each one pays first.';
   const ids = rows.map((row) => row.targetItemId);
   if (new Set(ids).size !== ids.length)
-    return 'Each bill, envelope or goal can be funded once.';
+    return 'Each bill, envelope or goal can be listed once.';
   if (rows.some((row) => toAmount(row) === null))
     return 'Enter an amount for each one.';
   if (rows.filter((row) => row.mode === 'rest').length > 1)
@@ -273,6 +278,9 @@ function PairingsEditor({
               targetRef={changeRows}
             />
             <div className='space-y-3'>
+              <InlineNotice tone='info'>
+                {ITEM_SHEET_WORDS.fundsNotice}
+              </InlineNotice>
               {locked.length > 0 && (
                 <ul className='border-border divide-border divide-y rounded-2xl border'>
                   {locked.map((pairing) => (
@@ -315,7 +323,7 @@ function PairingsEditor({
                         <span className='min-w-0 flex-1 text-left break-words'>
                           <span className='block'>
                             {row.targetItemId === null
-                              ? 'Pick what it funds'
+                              ? 'Pick what comes out first'
                               : nameOf(row.targetItemId)}
                           </span>
                           <span className='text-muted-foreground block text-sm'>
@@ -337,7 +345,7 @@ function PairingsEditor({
                     <RevealChip
                       onClick={() => addRow(rows, props.onValueChange)}
                     >
-                      Add something to fund
+                      Add something to pay first
                     </RevealChip>
                   </div>
                 )}

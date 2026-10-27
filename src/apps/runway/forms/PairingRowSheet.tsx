@@ -89,7 +89,7 @@ function PairingRowSheet({
     if (view === 'what') {
       return (
         <div className='flex flex-col gap-3'>
-          <h3 className='text-2xl font-semibold'>What does it fund?</h3>
+          <h3 className='text-2xl font-semibold'>What comes out first?</h3>
           {choices.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
               value={query}
@@ -193,7 +193,7 @@ function PairingRowSheet({
     }
     return (
       <div className='space-y-2'>
-        <SummaryRow label='Funds' onClick={() => setView('what')}>
+        <SummaryRow label='Paid first' onClick={() => setView('what')}>
           {picked?.text ?? 'Pick one'}
         </SummaryRow>
         <SummaryRow label='How much' onClick={() => setView('how')}>
@@ -232,7 +232,7 @@ function PairingRowSheet({
         note={view === 'main' && problem ? problem : null}
         leftActions={
           isNew ? undefined : (
-            <DeleteIconButton onClick={onRemove} label='Stop funding this' />
+            <DeleteIconButton onClick={onRemove} label='Stop paying this first' />
           )
         }
         rightActions={

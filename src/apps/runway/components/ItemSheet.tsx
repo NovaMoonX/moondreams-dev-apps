@@ -461,7 +461,7 @@ function ItemSheet({
     return (
       <PairingsEditor
         isOpen
-        title='Funds'
+        title={ITEM_SHEET_WORDS.fundsTitle(payload.name)}
         fromLabel={payload.name}
         locked={[]}
         initial={pairings}
@@ -569,6 +569,7 @@ function ItemSheet({
             hasChevron
             icon={<Link2 />}
             label={ITEM_SHEET_WORDS.funds}
+            subtitle={ITEM_SHEET_WORDS.fundsSub}
             onClick={() => setPhase('funds')}
           />
         )}
