@@ -1293,27 +1293,21 @@ export const CONFIRM_FLOW_WORDS = {
   lessTitle: (amount: string) => `${amount} less than planned`,
   lessFromLeft: 'It comes out of what is left from this day.',
   lessGap: (gap: string) =>
-    `The items on this day still get ${gap} more than arrived.`,
+    `The items on this day get ${gap} more than arrived.`,
   lessNothingLeft: 'Nothing was left from this day to take it.',
-  coveredBody: (amount: string) => `${amount} of it comes from Free to spend.`,
   moreTitle: (amount: string) => `${amount} more than planned`,
   moreBody:
     'Good to have. The extra is left from this day, so it adds to Free to spend.',
   coverCaption: 'Cover the difference',
   coverLead: 'Free to spend is',
-  coverAll: (gap: string) => `, enough to cover the ${gap} difference.`,
-  coverPart: (gap: string) => `, which covers part of the ${gap} difference.`,
   coverNone: (gap: string) =>
     `Free to spend has nothing to cover the ${gap} difference, so some items get less this time.`,
   coverAction: 'Cover it from Free to spend',
   coverPartAction: 'Use Free to spend for part',
-  covered: (amount: string) => `Covered ${amount} from Free to spend.`,
   coveredAfter: 'Free to spend will be',
   undo: 'Undo',
   suggestCaption: 'What gets less',
   suggestIntro: 'Lowest priority first. Nothing changes until you choose.',
-  suggestRest: (rest: string) =>
-    `For the other ${rest}, lowest priority first. Nothing changes until you choose.`,
   suggestDetail: (planned: string) => `Planned ${planned}`,
   suggestMore: (count: number) =>
     `and ${count} more ${count === 1 ? 'item' : 'items'}`,
@@ -1333,4 +1327,22 @@ export const CONFIRM_FLOW_WORDS = {
   whyChanged: 'Why it changed',
   amountOf: (name: string) => `What ${name} gets`,
   coveredDay: 'Covered from Free to spend',
+} as const;
+
+/** Confirm money arrived, round 7 review: the gap said once, and nothing that gives Free to spend away while amounts are hidden. */
+export const CONFIRM_COVER_WORDS = {
+  coverAll: ', enough to cover it.',
+  coverPart: ', which covers part of it.',
+  coverHidden: 'Free to spend can cover some or all of the difference.',
+  coverHiddenAction: 'Use Free to spend',
+  coveredLead: 'Covered',
+  coveredTail: 'from Free to spend.',
+  suggestInstead:
+    'Or give some items less, lowest priority first. Nothing changes until you choose.',
+  suggestRest:
+    'For the rest, lowest priority first. Nothing changes until you choose.',
+  needsCover: 'Cover the difference from Free to spend, or give some items less.',
+  needsCuts: 'Give some items less this time to confirm.',
+  coverGone:
+    'Free to spend is now less than you chose to cover. Choose again before you confirm.',
 } as const;

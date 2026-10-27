@@ -19,7 +19,9 @@ import SummaryRow from '@/components/SummaryRow';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -31,6 +33,7 @@ import { ActionSection } from '@apps/runway/components/ActionSection';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { LineAmountEditList } from '@apps/runway/components/LineAmounts';
 import {
+  CONFIRM_COVER_WORDS,
   CONFIRM_FLOW_WORDS,
   CONFIRM_WORDS,
   DRAFT_WORDS,
@@ -99,6 +102,8 @@ const isOfflineFailure = (error: unknown) =>
 function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
   const isMounted = useRef(true);
   const coverId = useId();
   const cutsId = useId();
@@ -150,6 +155,9 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const changedCount = adjusted.filter(
     (line, index) => line.cents !== lines[index].cents,
   ).length;
+  const loweredCount = adjusted.filter(
+    (line, index) => line.cents < lines[index].cents,
+  ).length;
   const searchText = lineSearch.trim().toLowerCase();
   const visibleLines = adjusted
     .map((line, index) => ({ line, index }))
@@ -166,11 +174,13 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const figure = getFreeToSpendFigure(balances);
   const freeCents = figure.kind === 'amount' ? figure.cents : null;
   const coverable = getCoverable(gap, freeCents);
-  const cover = Math.min(coverChoice, gap);
+  const isCoverGone = coverChoice > (freeCents ?? 0);
+  const cover = isCoverGone ? 0 : Math.min(coverChoice, gap);
   const rest = gap - cover;
+  const isOfferingCover = rest > 0 && coverable > 0 && cover === 0;
+  const isNoticeShown = hasAmount && difference < 0;
   const nextDayOn = comingDays.find((coming) => coming.on > day.on)?.on ?? null;
-  const isSuggesting = rest > 0 && (coverable === 0 || cover > 0);
-  const suggestion = isSuggesting
+  const suggestion = rest > 0
     ? suggestShortfall(adjusted, rest, getProtectedLineIds(draft, nextDayOn))
     : {};
   const suggested = Object.entries(suggestion).map(([lineId, cents]) => {
@@ -185,14 +195,20 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     if (arrivedOn === null || arrivedOn > today)
       return { text: CONFIRM_WORDS.needsDate, door: null };
     if (hasBadLine) return { text: CONFIRM_WORDS.needsLineAmount, door: null };
-    if (rest > 0 && coverable > 0 && cover === 0)
+    if (isOfferingCover)
       return {
-        text: CONFIRM_FLOW_WORDS.needsCover(formatCents(gap)),
+        text: isNoticeShown
+          ? CONFIRM_COVER_WORDS.needsCover
+          : CONFIRM_FLOW_WORDS.needsCover(formatCents(gap)),
         door: 'cover',
       };
     if (rest > 0)
       return {
-        text: CONFIRM_FLOW_WORDS.needsCuts(formatCents(rest)),
+        text: isNoticeShown
+          ? CONFIRM_COVER_WORDS.needsCuts
+          : CONFIRM_FLOW_WORDS.needsCuts(
+              cover > 0 ? mask(formatCents(rest)) : formatCents(rest),
+            ),
         door: 'cuts',
       };
     return null;
@@ -213,7 +229,11 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   };
 
   const openLines = () => {
-    if (Object.keys(lineInputs).length === 0 && suggested.length > 0)
+    if (
+      Object.keys(lineInputs).length === 0 &&
+      suggested.length > 0 &&
+      !isOfferingCover
+    )
       applyCuts();
     setIsChoosing(true);
   };
@@ -229,6 +249,15 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       arrivedOn === null
     )
       return;
+    const currentFree = getFreeToSpendFigure(selectBalances(store.getState()));
+    if (
+      cover > 0 &&
+      cover > (currentFree.kind === 'amount' ? currentFree.cents : 0)
+    ) {
+      setCoverChoice(0);
+      setError(CONFIRM_COVER_WORDS.coverGone);
+      return;
+    }
     setError(null);
     setIsSaving(true);
     try {
@@ -347,10 +376,9 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
 
   const getLessBody = () => {
     if (gap === 0) return CONFIRM_FLOW_WORDS.lessFromLeft;
-    if (cover > 0) return CONFIRM_FLOW_WORDS.coveredBody(formatCents(cover));
     if (gap === Math.abs(difference) && changedCount === 0)
       return CONFIRM_FLOW_WORDS.lessNothingLeft;
-    return CONFIRM_FLOW_WORDS.lessGap(formatCents(rest));
+    return CONFIRM_FLOW_WORDS.lessGap(formatCents(gap));
   };
 
   const getNotice = () => {
@@ -378,7 +406,9 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       return (
         <div className='flex flex-wrap items-center justify-between gap-2'>
           <p className='min-w-0 flex-1 text-sm' role='status'>
-            {CONFIRM_FLOW_WORDS.covered(formatCents(cover))}{' '}
+            {CONFIRM_COVER_WORDS.coveredLead}{' '}
+            <SensitiveValue>{formatCents(cover)}</SensitiveValue>{' '}
+            {CONFIRM_COVER_WORDS.coveredTail}{' '}
             {CONFIRM_FLOW_WORDS.coveredAfter}{' '}
             <SensitiveValue>
               {formatCents((freeCents ?? 0) - cover)}
@@ -403,13 +433,17 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     }
     return (
       <div className='space-y-3'>
-        <p className='text-sm'>
-          {CONFIRM_FLOW_WORDS.coverLead}{' '}
-          <SensitiveValue>{formatCents(freeCents ?? 0)}</SensitiveValue>
-          {coverable === gap
-            ? CONFIRM_FLOW_WORDS.coverAll(formatCents(gap))
-            : CONFIRM_FLOW_WORDS.coverPart(formatCents(gap))}
-        </p>
+        {isHidden ? (
+          <p className='text-sm'>{CONFIRM_COVER_WORDS.coverHidden}</p>
+        ) : (
+          <p className='text-sm'>
+            {CONFIRM_FLOW_WORDS.coverLead}{' '}
+            <SensitiveValue>{formatCents(freeCents ?? 0)}</SensitiveValue>
+            {coverable === gap
+              ? CONFIRM_COVER_WORDS.coverAll
+              : CONFIRM_COVER_WORDS.coverPart}
+          </p>
+        )}
         <Button
           id={coverId}
           type='button'
@@ -418,9 +452,11 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           disabled={isSaving}
           onClick={() => setCoverChoice(coverable)}
         >
-          {coverable === gap
-            ? CONFIRM_FLOW_WORDS.coverAction
-            : CONFIRM_FLOW_WORDS.coverPartAction}
+          {isHidden
+            ? CONFIRM_COVER_WORDS.coverHiddenAction
+            : coverable === gap
+              ? CONFIRM_FLOW_WORDS.coverAction
+              : CONFIRM_FLOW_WORDS.coverPartAction}
         </Button>
       </div>
     );
@@ -430,7 +466,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     undoInputs !== null ? (
       <div className='border-border flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3'>
         <p className='min-w-0 flex-1 text-sm' role='status'>
-          {CONFIRM_FLOW_WORDS.used(changedCount)}
+          {CONFIRM_FLOW_WORDS.used(loweredCount)}
         </p>
         <RevealChip
           icon={<Undo2 className='h-4 w-4' aria-hidden='true' />}
@@ -446,8 +482,10 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       <div className='space-y-3'>
         <p className='text-muted-foreground text-sm'>
           {cover > 0
-            ? CONFIRM_FLOW_WORDS.suggestRest(formatCents(rest))
-            : CONFIRM_FLOW_WORDS.suggestIntro}
+            ? CONFIRM_COVER_WORDS.suggestRest
+            : isOfferingCover
+              ? CONFIRM_COVER_WORDS.suggestInstead
+              : CONFIRM_FLOW_WORDS.suggestIntro}
         </p>
         <ul className='border-border divide-border divide-y rounded-2xl border'>
           {suggested.slice(0, SUGGESTIONS_SHOWN).map(({ line, from, to }) => {
@@ -464,7 +502,11 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
                   </span>
                 </span>
                 <span className='text-base font-semibold whitespace-nowrap tabular-nums'>
-                  {formatCents(to)}
+                  {cover > 0 ? (
+                    <SensitiveValue>{formatCents(to)}</SensitiveValue>
+                  ) : (
+                    formatCents(to)
+                  )}
                 </span>
               </li>
             );
@@ -617,7 +659,13 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
                       remainder + cover < 0 && 'text-(--runway-warning-ink)',
                     )}
                   >
-                    {formatCents(remainder + cover)}
+                    {cover > 0 ? (
+                      <SensitiveValue>
+                        {formatCents(remainder + cover)}
+                      </SensitiveValue>
+                    ) : (
+                      formatCents(remainder + cover)
+                    )}
                   </span>
                   {arrivedCents !== null && (
                     <span className='text-muted-foreground text-sm'>
