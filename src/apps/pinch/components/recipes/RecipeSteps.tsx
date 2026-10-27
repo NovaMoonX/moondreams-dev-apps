@@ -8,6 +8,7 @@ import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MAX_RECIPE_STEPS, MAX_STEP_LENGTH } from '@apps/pinch/constants';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 interface StepDrawerMode {
   index: number;
@@ -37,6 +38,7 @@ function StepDrawer({
 
   // The drawer takes focus itself while it slides in, so the text box is focused once that settles.
   useEffect(() => {
+    if (!canFocusFieldOnOpen()) return;
     const timer = window.setTimeout(() => textRef.current?.focus(), 350);
     return () => window.clearTimeout(timer);
   }, [index]);

@@ -1,7 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 
 import SummaryRow from '@/components/SummaryRow';
-import { runWhenDrawerSettled } from '@/hooks/useKeepFocusedFieldInView';
+import { canFocusFieldOnOpen, runWhenDrawerSettled } from '@/utils/focusUtils';
 import type { QuestionFlowState, QuestionStep } from '@/hooks/useQuestionFlow';
 
 const FIRST_FOCUS_DELAY_MS = 500;
@@ -71,10 +71,12 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
           SCROLL_MARGIN_PX;
         scroller.scrollTo({ top });
       }
-      const field =
-        block.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-          TYPED_FIELD,
-        ) ?? headingRef.current;
+      const typed = canFocusFieldOnOpen()
+        ? block.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+            TYPED_FIELD,
+          )
+        : null;
+      const field = typed ?? headingRef.current;
       field?.focus({ preventScroll: true });
       // A filled answer reopened to change is replaced by typing, as a tap or Tab would.
       if (field instanceof HTMLInputElement && field.type === 'text')

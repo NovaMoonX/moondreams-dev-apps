@@ -17,13 +17,13 @@ import {
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import {
+  canFocusFieldOnOpen,
   focusFieldQuietly,
   runWhenDrawerSettled,
-  useKeepFocusedFieldInView,
-} from '@/hooks/useKeepFocusedFieldInView';
+} from '@/utils/focusUtils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
-const PHONE_FOCUS_DELAY_MS = 500;
+const DRAWER_FOCUS_DELAY_MS = 500;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 const SHORT_SCREEN_MAX_HEIGHT = 599;
 
@@ -43,7 +43,7 @@ function EditorBody({
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!shouldFocus) {
+    if (!shouldFocus || !canFocusFieldOnOpen()) {
       return;
     }
     return runWhenDrawerSettled(
@@ -128,7 +128,6 @@ function SummaryEditor({
     isOpen && isDrawer,
     close,
   );
-  useKeepFocusedFieldInView(isOpen && isDrawer);
   const isEmpty = summary === '';
   const isRoomy = isFramed || groupPosition !== undefined;
 
@@ -222,7 +221,7 @@ function SummaryEditor({
           >
             <div className='pb-4'>
               <EditorBody
-                focusDelay={PHONE_FOCUS_DELAY_MS}
+                focusDelay={DRAWER_FOCUS_DELAY_MS}
                 shouldFocus={shouldFocus}
                 onDone={close}
               >

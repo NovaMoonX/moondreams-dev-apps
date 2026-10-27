@@ -5,7 +5,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
-import { useKeepFocusedFieldInView } from '@/hooks/useKeepFocusedFieldInView';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const SHORT_SCREEN_MAX_HEIGHT = 599;
@@ -52,7 +51,6 @@ function FormSheet({
   const isPhone =
     isBelow('sm') || (isDrawerWhenShort && isShort && isBelow('lg'));
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
-  useKeepFocusedFieldInView(isOpen && isPhone);
 
   if (isPhone) {
     return (

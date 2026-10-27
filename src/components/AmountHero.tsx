@@ -16,11 +16,10 @@ import {
   isAmountText,
   useAmountTyping,
 } from '@/hooks/useAmountTyping';
-import { runWhenDrawerSettled } from '@/hooks/useKeepFocusedFieldInView';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { canFocusFieldOnOpen, runWhenDrawerSettled } from '@/utils/focusUtils';
 import { toTwoDecimalAmount } from '@/utils/moneyUtils';
 
-const PHONE_FOCUS_DELAY_MS = 500;
+const FOCUS_DELAY_MS = 500;
 const MAX_WAYS_SHOWN = 2;
 
 /** Another way to give the amount (a range, a share of something), offered as a chip under the figure. */
@@ -248,11 +247,10 @@ function AmountHero({
   errorMessage,
   disabled,
 }: AmountHeroProps) {
-  const isPhone = useMediaQuery().isBelow('sm');
   const [isShowingAllWays, setIsShowingAllWays] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const highRef = useRef<HTMLInputElement>(null);
-  const shouldFocus = autoFocus && isPhone;
+  const shouldFocus = autoFocus && canFocusFieldOnOpen();
   const [isFocusingOnOpen] = useState(focusOnOpen);
 
   useEffect(() => {
@@ -272,7 +270,7 @@ function AmountHero({
     return runWhenDrawerSettled(
       inputRef.current,
       () => focusWhole(inputRef.current),
-      PHONE_FOCUS_DELAY_MS,
+      FOCUS_DELAY_MS,
     );
   }, [shouldFocus]);
 
