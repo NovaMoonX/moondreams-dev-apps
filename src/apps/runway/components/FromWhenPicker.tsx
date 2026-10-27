@@ -1,6 +1,9 @@
 import { useState } from 'react';
 
-import { Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+
+import FormSheet from '@/components/FormSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 
 import { PillGroup } from '@/components/PillGroup';
 import SummaryRow from '@/components/SummaryRow';
@@ -34,7 +37,7 @@ const STRETCH_OPTIONS = [
 
 const hasDayOnly = (kind: ItemKind) => kind === 'envelope' || kind === 'goal';
 
-/** When a change starts and how long it lasts: opened on an income day's own screen with that day's choices first, and elsewhere folded to one row until tapped since "From now on" is nearly always right. Earlier days keep what they had; only choices that mean something here are drawn. */
+/** When a change starts and how long it lasts: always one summary row, whose choices open in their own sheet (on an income day's own screen with that day's choices first), so the form's rows never move. Earlier days keep what they had; only choices that mean something here are drawn. */
 function FromWhenPicker({
   value,
   onChange,
@@ -64,32 +67,18 @@ function FromWhenPicker({
     preset !== null
       ? [...dayFirst, ...rest]
       : [rest[0], ...dayFirst, ...rest.slice(1)];
-  const [isOpen, setIsOpen] = useState(preset !== null);
+  const [isOpen, setIsOpen] = useState(false);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
     label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
 
-  if (!isOpen) {
-    const chosen =
-      options.find((option) => option.value === value.choice)?.label ??
-      CHANGE_WORDS.fromNow;
-    return (
-      <SummaryRow
-        label={CHANGE_WORDS.fromHeading}
-        ariaLabel={`${CHANGE_WORDS.fromHeading}: ${chosen}. Change`}
-        onClick={isDisabled ? undefined : () => setIsOpen(true)}
-      >
-        {chosen}
-      </SummaryRow>
-    );
-  }
+  const chosen =
+    options.find((option) => option.value === value.choice)?.label ??
+    CHANGE_WORDS.fromNow;
 
-  return (
-    <div className='space-y-2'>
-      <p className='text-muted-foreground text-xs'>
-        {CHANGE_WORDS.fromHeading}
-      </p>
+  const controls = (
+    <div className='space-y-4'>
       <PillGroup
         label={CHANGE_WORDS.fromHeading}
         options={options}
@@ -178,6 +167,34 @@ function FromWhenPicker({
         </div>
       )}
     </div>
+  );
+
+  return (
+    <>
+      <SummaryRow
+        label={CHANGE_WORDS.fromHeading}
+        ariaLabel={`${CHANGE_WORDS.fromHeading}: ${chosen}. Change`}
+        onClick={isDisabled ? undefined : () => setIsOpen(true)}
+      >
+        {chosen}
+      </SummaryRow>
+      {isOpen && (
+        <FormSheet
+          isOpen
+          onClose={() => setIsOpen(false)}
+          title={CHANGE_WORDS.fromHeading}
+        >
+          <div className='pb-4'>{controls}</div>
+          <ModalFooterActions
+            rightActions={
+              <Button type='button' onClick={() => setIsOpen(false)}>
+                Done
+              </Button>
+            }
+          />
+        </FormSheet>
+      )}
+    </>
   );
 }
 
