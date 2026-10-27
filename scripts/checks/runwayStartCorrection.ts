@@ -23,8 +23,8 @@ assert.equal(
 );
 assert.equal(
   canChangeStart({ ...base, startCreatedAt: null }),
-  true,
-  'no record in hand',
+  false,
+  'a start date with no start record in hand is not a correction window',
 );
 assert.equal(
   canChangeStart({ ...base, now: made + STARTING_CORRECTION_DAYS * DAY }),
