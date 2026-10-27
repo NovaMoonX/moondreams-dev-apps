@@ -1,13 +1,22 @@
+import { useState } from 'react';
+
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import MoneyInput from '@/components/MoneyInput';
+import RevealChip from '@/components/RevealChip';
 import { formatCents } from '@/utils/moneyUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
+import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { MAX_NOTE_LENGTH } from '@apps/runway/constants';
+import {
+  CONFIRM_FLOW_WORDS,
+  FORM_FLOW_WORDS,
+  MAX_NOTE_LENGTH,
+} from '@apps/runway/constants';
 
 export interface LineAmountItem {
   id: string;
@@ -125,5 +134,100 @@ export function LineAmountView({
         />
       )}
     </div>
+  );
+}
+
+export interface LineAmountField {
+  id: string;
+  name: string;
+  emoji: string | null;
+  /** What the person typed, or the planned amount while untouched. */
+  value: string;
+  plannedCents: number;
+  isChanged: boolean;
+  /** Why it changed, asked only once it differs. */
+  note: string;
+}
+
+interface LineAmountEditListProps {
+  items: readonly LineAmountField[];
+  onChange: (id: string, text: string) => void;
+  onNote: (id: string, text: string) => void;
+  notePlaceholder: string;
+  isDisabled?: boolean;
+  className?: string;
+}
+
+/** Every item of a day with its amount typed in place, as roomy rows in one hairline frame: the badge, the name over what was planned, and the amount field, which drops under the name when the row is narrow. */
+export function LineAmountEditList({
+  items,
+  onChange,
+  onNote,
+  notePlaceholder,
+  isDisabled = false,
+  className,
+}: LineAmountEditListProps) {
+  const [noting, setNoting] = useState<ReadonlySet<string>>(new Set());
+
+  return (
+    <ul
+      className={join(
+        'border-border divide-border divide-y overflow-y-auto rounded-2xl border',
+        className,
+      )}
+    >
+      {items.map((item) => (
+        <li key={item.id} className='flex items-start gap-3 px-3 py-3'>
+          <ItemBadge name={item.name} emoji={item.emoji} />
+          <div className='min-w-0 flex-1 space-y-2'>
+            <div className='flex flex-wrap items-start gap-x-3 gap-y-2'>
+              <div className='min-w-32 flex-1'>
+                <p className='text-base font-medium break-words'>
+                  <span className='line-clamp-2'>{item.name}</span>
+                </p>
+                <p className='text-muted-foreground text-sm'>
+                  {item.isChanged
+                    ? CONFIRM_FLOW_WORDS.suggestDetail(
+                        formatCents(item.plannedCents),
+                      )
+                    : FORM_FLOW_WORDS.linesAsPlanned}
+                </p>
+              </div>
+              <MoneyInput
+                variant='outline'
+                className='h-10 text-base!'
+                ariaLabel={CONFIRM_FLOW_WORDS.amountOf(item.name)}
+                value={item.value}
+                disabled={isDisabled}
+                onChange={(text) => onChange(item.id, text)}
+                wrapperClassName='w-28 shrink-0'
+              />
+            </div>
+            {item.isChanged &&
+              (noting.has(item.id) || item.note !== '' ? (
+                <Input
+                  variant='outline'
+                  className='text-base!'
+                  aria-label={`${CONFIRM_FLOW_WORDS.whyChanged}: ${item.name}`}
+                  maxLength={MAX_NOTE_LENGTH}
+                  placeholder={notePlaceholder}
+                  value={item.note}
+                  autoFocus={noting.has(item.id) && item.note === ''}
+                  disabled={isDisabled}
+                  onChange={(event) => onNote(item.id, event.target.value)}
+                />
+              ) : (
+                <RevealChip
+                  onClick={() =>
+                    setNoting((current) => new Set([...current, item.id]))
+                  }
+                >
+                  {CONFIRM_FLOW_WORDS.whyChanged}
+                </RevealChip>
+              ))}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

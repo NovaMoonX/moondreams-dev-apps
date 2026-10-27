@@ -68,19 +68,25 @@ export function applyLineEdits(
 const tierRank = (tier: RecordLine['tier']) => PRIORITIES.indexOf(tier);
 
 /**
- * New amounts that take `needCents` out of the lines, lowest priority first and the later line of a
- * tier before the earlier one, never taking a line below zero. The person can change any of it.
+ * New amounts that take `needCents` out of the lines: Wants, then Shoulds, then Musts, and a protected
+ * line (a bill due before the next income day) only once nothing else is left; the later line of a tier
+ * goes before the earlier one, and no line goes below zero. The person can change any of it.
  */
 export function suggestShortfall(
   lines: readonly RecordLine[],
   needCents: Cents,
+  protectedIds: ReadonlySet<string> = new Set(),
 ): Record<string, Cents> {
   if (needCents <= 0) return {};
+  const group = (line: RecordLine) =>
+    protectedIds.has(line.lineId) ? 2 : line.tier === 'must' ? 1 : 0;
   const order = lines
     .map((line, index) => ({ line, index }))
     .sort(
       (a, b) =>
-        tierRank(b.line.tier) - tierRank(a.line.tier) || b.index - a.index,
+        group(a.line) - group(b.line) ||
+        tierRank(b.line.tier) - tierRank(a.line.tier) ||
+        b.index - a.index,
     );
   const { edits } = order.reduce<{
     edits: Record<string, Cents>;
@@ -97,6 +103,21 @@ export function suggestShortfall(
     { edits: {}, left: needCents },
   );
   return edits;
+}
+
+/** How much of a day's gap (what its lines take beyond the money that arrived) Free to spend can cover: all of it, part, or nothing when Free to spend is empty or unknown. */
+export function getCoverable(gapCents: Cents, freeCents: Cents | null): Cents {
+  const result = Math.max(0, Math.min(gapCents, freeCents ?? 0));
+  return result;
+}
+
+/** A confirmed day may leave less than nothing only by what the person chose to cover from Free to spend. */
+export function isWithinCover(
+  freeToSpendCents: Cents,
+  coverCents: Cents,
+): boolean {
+  const result = freeToSpendCents >= -Math.max(0, coverCents);
+  return result;
 }
 
 /** The lines that are not what the draft proposed, each with the person's note when there is one. A line the draft did not have counts as planned at nothing. */

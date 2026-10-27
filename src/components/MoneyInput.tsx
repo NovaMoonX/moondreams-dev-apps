@@ -18,6 +18,8 @@ interface MoneyInputProps {
   errorMessage?: string;
   ariaLabel?: string;
   className?: string;
+  /** Sizes the whole field (its border and $) where a row places it. */
+  wrapperClassName?: string;
   autoFocus?: boolean;
   /** `outline` leaves the fill clear so it matches an outline `Input` beside it in a modal or drawer. */
   variant?: 'solid' | 'outline';
@@ -34,6 +36,7 @@ function MoneyInput({
   errorMessage,
   ariaLabel,
   className,
+  wrapperClassName,
   autoFocus,
   variant = 'solid',
   allowNegative = false,
@@ -48,7 +51,7 @@ function MoneyInput({
   };
 
   return (
-    <div className='space-y-1'>
+    <div className={join('space-y-1', wrapperClassName)}>
       <div
         className={join(
           'border-border flex items-center rounded-full border pl-4 focus-within:border-current/60',

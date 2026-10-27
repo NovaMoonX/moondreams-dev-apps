@@ -305,7 +305,8 @@ export const DAY_STATUS_LABELS = {
 } as const;
 
 export const CONFIRM_WORDS = {
-  hiddenAmountDiffered: 'The amount that arrived differed from what was expected.',
+  hiddenAmountDiffered:
+    'The amount that arrived differed from what was expected.',
   hiddenLineDiffered: (name: string) => `${name} changed on this day.`,
   action: 'Confirm money arrived',
   sheetTitle: 'Money arrived',
@@ -1255,3 +1256,50 @@ export const GOAL_CHART_WORDS = {
 // Round 4, package G5.
 /** Changes an item's History shows before "Show all". */
 export const ITEM_HISTORY_PREVIEW = 6;
+
+// Round 7, package G8: money that arrives different from the plan.
+export const CONFIRM_FLOW_WORDS = {
+  lessTitle: (amount: string) => `${amount} less than planned`,
+  lessFromLeft: 'It comes out of what is left from this day.',
+  lessGap: (gap: string) =>
+    `The items on this day still get ${gap} more than arrived.`,
+  lessNothingLeft: 'Nothing was left from this day to take it.',
+  coveredBody: (amount: string) => `${amount} of it comes from Free to spend.`,
+  moreTitle: (amount: string) => `${amount} more than planned`,
+  moreBody:
+    'Good to have. The extra is left from this day, so it adds to Free to spend.',
+  coverCaption: 'Cover the difference',
+  coverLead: 'Free to spend is',
+  coverAll: (gap: string) => `, enough to cover the ${gap} difference.`,
+  coverPart: (gap: string) => `, which covers part of the ${gap} difference.`,
+  coverNone: (gap: string) =>
+    `Free to spend has nothing to cover the ${gap} difference, so some items get less this time.`,
+  coverAction: 'Cover it from Free to spend',
+  coverPartAction: 'Use Free to spend for part',
+  covered: (amount: string) => `Covered ${amount} from Free to spend.`,
+  coveredAfter: 'Free to spend will be',
+  undo: 'Undo',
+  suggestCaption: 'What gets less',
+  suggestIntro: 'Lowest priority first. Nothing changes until you choose.',
+  suggestRest: (rest: string) =>
+    `For the other ${rest}, lowest priority first. Nothing changes until you choose.`,
+  suggestDetail: (planned: string) => `Planned ${planned}`,
+  suggestMore: (count: number) =>
+    `and ${count} more ${count === 1 ? 'item' : 'items'}`,
+  useThese: 'Use these',
+  changeEach: 'Change what each item gets',
+  used: (count: number) =>
+    `${count} ${count === 1 ? 'item gets' : 'items get'} less this time.`,
+  eachItem: 'What each item gets',
+  needsCover: (gap: string) =>
+    `Items get ${gap} more than arrived. Cover it from Free to spend, or give some items less.`,
+  needsCuts: (rest: string) =>
+    `Items get ${rest} more than arrived. Give some items less this time.`,
+  correctTooMuch: (amount: string) =>
+    `Items get ${amount} more than arrived. Give some less, or raise the amount.`,
+  findItem: 'Find an item',
+  noItemMatch: 'No item matches that.',
+  whyChanged: 'Why it changed',
+  amountOf: (name: string) => `What ${name} gets`,
+  coveredDay: 'Covered from Free to spend',
+} as const;

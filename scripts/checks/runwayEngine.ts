@@ -71,6 +71,7 @@ import type {
   OpenMove,
   OpenPurchase,
   OpenRecord,
+  RecordLine,
 } from '../../src/apps/runway/types.ts';
 import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
 import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
@@ -121,7 +122,9 @@ import {
 import {
   applyLineEdits,
   getLineDifferences,
+  getCoverable,
   getRemainder,
+  isWithinCover,
   sumLines,
   suggestShortfall,
 } from '../../src/apps/runway/engine/differences.ts';
@@ -7170,6 +7173,186 @@ const version = (
     }),
     '$50.00 every income day',
     'a legacy rule reads as it did',
+  );
+}
+
+// Round 7, package G8: money that arrives short. Cover from Free to spend, then what gets less.
+{
+  const base: RecordLine = {
+    lineId: '',
+    itemId: '',
+    name: '',
+    emoji: null,
+    tier: 'must',
+    demandCents: 0,
+    cents: 0,
+    shortBy: 0,
+    paidBy: [],
+  };
+  const line = (
+    lineId: string,
+    tier: RecordLine['tier'],
+    cents: number,
+  ): RecordLine => ({ ...base, lineId, itemId: lineId, tier, cents });
+  const lines = [
+    line('a', 'must', 30_000),
+    line('b', 'want', 10_000),
+    line('c', 'should', 15_000),
+    line('d', 'want', 5_000),
+    line('e', 'want', 8_000),
+  ];
+  const dueBill = new Set(['e']);
+  assert.deepEqual(
+    suggestShortfall(lines, 12_000, dueBill),
+    { d: 0, b: 3_000 },
+    'Wants go first, the later one before the earlier, and a bill due before the next income day is left alone',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 25_000, dueBill),
+    { d: 0, b: 0, c: 5_000 },
+    'Shoulds once the Wants are used up, still never a Must or a due bill',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 40_000, dueBill),
+    { d: 0, b: 0, c: 0, a: 20_000 },
+    'a Must only once no Want or Should is left, and the due bill still after it',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 68_000, dueBill),
+    { d: 0, b: 0, c: 0, a: 0, e: 0 },
+    'a due bill only when nothing else is left',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 12_000),
+    { e: 0, d: 1_000 },
+    'without a due bill the same item is an ordinary Want',
+  );
+  [1, 999, 12_345, 33_333, 59_999, 68_000].forEach((need) => {
+    const edits = suggestShortfall(lines, need, dueBill);
+    const taken = Object.entries(edits).reduce(
+      (sum, [id, cents]) =>
+        sum + (lines.find((l) => l.lineId === id)!.cents - cents),
+      0,
+    );
+    assert.equal(taken, need, `the cuts add up to the gap, ${need} cents`);
+    assert.ok(Object.values(edits).every((cents) => cents >= 0));
+  });
+
+  assert.equal(getCoverable(20_000, 50_000), 20_000, 'an exact cover');
+  assert.equal(getCoverable(20_000, 5_000), 5_000, 'a partial cover');
+  assert.equal(getCoverable(20_000, 0), 0);
+  assert.equal(getCoverable(20_000, -3_000), 0, 'over-assigned covers none');
+  assert.equal(getCoverable(20_000, null), 0, 'unknown covers none');
+  assert.equal(getCoverable(0, 50_000), 0);
+  assert.ok(isWithinCover(-10_000, 10_000));
+  assert.ok(!isWithinCover(-10_001, 10_000), 'never past what was covered');
+  assert.ok(isWithinCover(0, 0));
+  assert.ok(!isWithinCover(-1, 0), 'nothing covered, nothing below zero');
+
+  // A covered day keeps its items and leaves less than nothing; Free to spend drops by exactly that.
+  const start = 10 * DAY_MS;
+  const startMoney = (cents: number): OpenMove => ({
+    id: 'start-money',
+    kind: 'start',
+    date: start,
+    refId: null,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: cents, holding: 'money' },
+  });
+  const kinds = { a: 'envelope', b: 'goal', c: 'envelope' } as const;
+  const coveredDay = (
+    arrivedCents: number,
+    cents: Record<string, number>,
+  ): OpenRecord => {
+    const confirmedLines = Object.entries(cents).map(([id, amount]) =>
+      line(id, 'should', amount),
+    );
+    return {
+      id: 'g8_confirmed',
+      dayId: 'g8',
+      createdAt: 5,
+      kind: 'confirmed',
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative',
+        arrivedCents,
+        expectedCents: 50_000,
+        freeToSpendCents: getRemainder(arrivedCents, confirmedLines),
+        differences: [],
+        lines: confirmedLines,
+      },
+    };
+  };
+  const arrivedOn = new Map([['g8', start + DAY_MS]]);
+  const balancesOf = (money: number, records: OpenRecord[]) =>
+    deriveBalances({
+      startDate: start,
+      moves: [startMoney(money)],
+      records,
+      arrivedOn,
+      kinds,
+    }).freeToSpendCents;
+
+  const exact = coveredDay(40_000, { a: 30_000, b: 10_000, c: 10_000 });
+  assert.equal(exact.payload.freeToSpendCents, -10_000);
+  assert.equal(balancesOf(25_000, []), 25_000);
+  assert.equal(
+    balancesOf(25_000, [exact]),
+    15_000,
+    'an exact cover takes the gap, and only the gap, from Free to spend',
+  );
+
+  const gap = 10_000;
+  const freeBefore = 6_000;
+  const cover = getCoverable(gap, freeBefore);
+  const planned = [line('a', 'must', 30_000), line('c', 'want', 20_000)];
+  const cuts = suggestShortfall(planned, gap - cover);
+  assert.deepEqual(cuts, { c: 16_000 });
+  const partial = coveredDay(40_000, { a: 30_000, c: cuts.c });
+  assert.equal(partial.payload.freeToSpendCents, -cover);
+  assert.ok(isWithinCover(partial.payload.freeToSpendCents, cover));
+  assert.equal(
+    balancesOf(freeBefore, [partial]),
+    0,
+    'a partial cover uses all of Free to spend and the cuts take the rest',
+  );
+
+  // A closing rebuilt after a covered day matches a full replay.
+  const entries: ClosingEntries = {
+    startDate: start,
+    days: [{ id: 'g8', expectedOn: start + DAY_MS, arrivedOn: start + DAY_MS }],
+    records: [exact],
+    moves: [startMoney(25_000)],
+    purchases: [],
+    billIds: new Set(),
+  };
+  const month = toMonthKey(start);
+  const closed = buildClosing(month, null, entries);
+  const fromClosing = deriveBalances({
+    startDate: start,
+    moves: [startMoney(25_000)],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closed,
+  });
+  const replayed = deriveBalances({
+    startDate: start,
+    moves: [startMoney(25_000)],
+    records: [exact],
+    arrivedOn,
+    kinds,
+  });
+  assert.deepEqual(
+    fromClosing,
+    replayed,
+    'a closing over a covered day equals the replay',
+  );
+  assert.deepEqual(
+    decodeClosing(month, encodeClosing(closed)),
+    closed,
+    'and reads back sealed',
   );
 }
 
