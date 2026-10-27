@@ -1209,3 +1209,15 @@ export const FIX_ROWS_SHOWN = 12;
 
 /** Rows a Plan view (envelopes, bills, goals) holds before it offers a search. */
 export const PLAN_SEARCH_THRESHOLD = 5;
+
+// Round 4, package G4.
+export const FREE_SUM_WORDS = {
+  onHand: 'Money on hand',
+  bills: 'Held for bills',
+  goals: 'Held for goals',
+  envelopesTrack: 'Left in envelopes',
+  envelopesPlan: 'Set aside in envelopes',
+  result: 'Free to spend',
+  laterFix:
+    'To fix a balance later, correct the income day or the bill payment it came from.',
+} as const;
