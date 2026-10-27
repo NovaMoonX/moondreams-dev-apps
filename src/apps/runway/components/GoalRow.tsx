@@ -5,6 +5,7 @@ import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
+  HOW_OFTEN_WORDS,
   ITEM_SHEET_R2_WORDS,
   LIFECYCLE_WORDS,
   PACE_STATE_LABELS,
@@ -32,6 +33,8 @@ const describePaceShort = (
 ) => {
   if (pace.isComplete) return PACE_WORDS.completed;
   if (goal.state === 'paused') return LIFECYCLE_WORDS.paused;
+  if (goal.funding.cadence.kind === 'none')
+    return HOW_OFTEN_WORDS.notBeingAdded;
   if (goal.funding.amount.kind === 'rest') return 'Takes what is left';
   const reaches = pace.reachedOn
     ? `reaches it ${formatDateShortUTC(pace.reachedOn.on)}`
@@ -73,7 +76,11 @@ function GoalRow({ goalId, goal, pace, heldCents, today }: GoalRowProps) {
           figureLabel='Saved'
           figure={formatCents(savedCents)}
           figureSuffix={`of ${formatCentsShort(goal.targetCents)}`}
-          fact={`${PRIORITY_LABELS[goal.priority]} · ${funding} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`}
+          fact={
+            goal.funding.cadence.kind === 'none'
+              ? `${PRIORITY_LABELS[goal.priority]} · ${funding}`
+              : `${PRIORITY_LABELS[goal.priority]} · ${funding} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
+          }
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.changeTarget,
             step: 'target',

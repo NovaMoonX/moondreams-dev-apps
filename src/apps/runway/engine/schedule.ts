@@ -1,6 +1,7 @@
 import { MAX_OCCURRENCES } from '@apps/runway/constants';
 import type { Ending, FundingRule, Schedule } from '@apps/runway/types';
 
+import { scopeToSource } from './calendar';
 import { DAY_MS, daysInUtcMonth } from './dates';
 
 const steppedDates = (anchor: number, to: number, stepDays: number) => {
@@ -97,7 +98,10 @@ export function selectFundedDays<D extends { dayKey: string; on: number }>(
     (a, b) =>
       a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
   );
-  if (cadence.kind === 'everyIncomeDay') return ordered;
+  if (cadence.kind === 'none') return [];
+  if (cadence.kind === 'everyIncomeDay' || cadence.kind === 'calendar') {
+    return ordered;
+  }
   if (cadence.kind === 'chosen') {
     const chosen = new Set(cadence.dayKeys);
     return ordered.filter((day) => chosen.has(day.dayKey));
@@ -107,6 +111,17 @@ export function selectFundedDays<D extends { dayKey: string; on: number }>(
   const result = ordered.filter(
     (_, index) =>
       index >= anchorIndex && (index - anchorIndex) % cadence.n === 0,
+  );
+  return result;
+}
+
+/** Of the income days, the ones a funding rule counts: its source's pays only when it names one, then its cadence's. */
+export function selectRuleDays<
+  D extends { dayKey: string; on: number; sourceId?: string | null },
+>(funding: FundingRule, days: readonly D[]): D[] {
+  const result = selectFundedDays(
+    funding.cadence,
+    scopeToSource(funding, days),
   );
   return result;
 }

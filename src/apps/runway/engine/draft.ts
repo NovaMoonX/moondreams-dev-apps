@@ -55,6 +55,13 @@ export interface DraftInput {
       amount?: MoneyRange;
       stanceOverride?: Stance | null;
       moneyCents?: Cents;
+      sourceId?: string | null;
+    }[];
+    /** Earlier income days of the periods a calendar rule spreads over, which take their share first and are not drafted. */
+    priorIncomeDays?: readonly {
+      dayKey: string;
+      on: number;
+      sourceId?: string | null;
     }[];
   };
   /** The plan's stance: which end of every range a figure is planned at. */
@@ -370,6 +377,7 @@ export function buildDraft(input: DraftInput): Draft {
     input.plan.incomeDays.map((entry) => ({
       dayKey: entry.dayKey,
       on: entry.on,
+      sourceId: entry.sourceId,
       moneyCents: entry.amount
         ? pick(
             effectiveStance(input.stance, entry.stanceOverride),
@@ -384,6 +392,7 @@ export function buildDraft(input: DraftInput): Draft {
     input.plan.goals,
     dayMoneyByKey,
     input.stance,
+    input.plan.priorIncomeDays ?? [],
   );
 
   const targets = new Map<string, Target>(

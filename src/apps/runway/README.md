@@ -148,9 +148,8 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### Envelopes, In Detail
 
 - **An envelope sets its own timing.** Each envelope has an amount and a funding rule:
-  - every income day
-  - every other, or every third
-  - once a month, taken from the month's first income day, its last, or split across all of them (so a month with three of them does not quietly change what you set aside)
+  - on the calendar: weekly, every 2 weeks, twice a month, monthly or yearly, as an amount for that period (a $600 monthly envelope asks $300 of each of two paydays and $200 of each of three, and a month with no payday carries over to the next)
+  - from a paycheck: each pay of one source or of all of them, every other, or every third, as an amount, a percentage of the pay or whatever is left of it
   - only the days you choose, such as one a few months away
 
   Any single income day can override the rule: add to an envelope, skip it, or change the amount, in the draft or in lookahead.
@@ -301,7 +300,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [x] Point a source, a pay line or one income day at the envelopes, bills and goals it funds
 - [x] Planning stance (conservative by default), with an override per source or bill
 - [x] Add bills: one time, repeating, or repeating until an ending, exact or a range, funded from the income days you choose, and marked paid, including ahead of time
-- [x] Add envelopes funded every income day, every other, or on chosen days
+- [x] Add envelopes funded on the calendar (weekly to yearly) or from each paycheck, every other, or on chosen days
 - [x] Add, pause, complete and archive savings goals, with a pace line
 - [x] A priority (Must, Should, Want) on every bill, envelope and goal, used to order drafts and flag what is unfunded
 - [x] A draft for every coming income day, each line saying why, confirmed when the money is in with the amount that arrived and its date, every amount adjustable, with a way to mark a day as not arrived
@@ -333,7 +332,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [ ] Cover it: choose what gives when a new bill leaves a day short, lowest priority first
 - [ ] Put it to work: where new income or a raise would go
 - [ ] Notes, links, receipts and expense groups on purchases at the Track level, with receipt photos kept for one year and a keep-or-download offer
-- [ ] Monthly envelope funding, taken from the first income day, the last, or split
+- [x] Monthly envelope funding, split across the month's income days
 - [ ] Move leftover envelope money to another envelope or a goal
 - [ ] Open the plan as of a past date
 - [ ] Group bills and expected expenses (Subscriptions, Housing, Car), with a monthly total and a starting priority per group

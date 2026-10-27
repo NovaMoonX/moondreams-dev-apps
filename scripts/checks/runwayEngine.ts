@@ -37,6 +37,12 @@ import {
   type ClosingEntries,
   type ClosingState,
 } from '../../src/apps/runway/engine/closings.ts';
+import {
+  getPeriodIndex,
+  getPeriodStart,
+  spreadCalendarAmount,
+} from '../../src/apps/runway/engine/calendar.ts';
+import { describeFunding } from '../../src/apps/runway/utils/fundingText.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -57,6 +63,7 @@ import {
   toChosenLines,
 } from '../../src/apps/runway/engine/purchases.ts';
 import type {
+  FundingRule,
   OpenMove,
   OpenPurchase,
   OpenRecord,
@@ -1805,7 +1812,7 @@ const version = (
 
   // Words and legacy shapes.
   assert.equal(describeAmount(percent(1_250), 'Main job'), '12.5% of Main job');
-  assert.equal(describeAmount(percent(1_000)), "10% of the day's money");
+  assert.equal(describeAmount(percent(1_000)), '10% of each pay');
   assert.equal(describeAmount(rest), 'the rest');
   assert.deepEqual(
     normalizeFunding({
@@ -6695,6 +6702,288 @@ const version = (
       'would hold through',
     ),
     'a later last day reads as a move',
+  );
+}
+
+// Calendar funding: a period's amount is shared out over the income days that fall in it.
+{
+  type Period = Parameters<typeof spreadCalendarAmount>[0]['period'];
+  type Pay = { dayKey: string; on: number; sourceId?: string | null };
+  const spread = (
+    period: Period,
+    cents: number,
+    days: Pay[],
+    options: { startsOn?: number | null; prior?: Pay[] } = {},
+  ) => [
+    ...spreadCalendarAmount(
+      { period, cents, startsOn: options.startsOn ?? null },
+      days,
+      options.prior ?? [],
+    ).entries(),
+  ];
+  const pay = (key: string, on: number): Pay => ({ dayKey: key, on });
+
+  assert.deepEqual(
+    spread('monthly', 60_000, [
+      pay('a', utc(2026, 6, 5)),
+      pay('b', utc(2026, 6, 19)),
+    ]),
+    [
+      ['a', 30_000],
+      ['b', 30_000],
+    ],
+    'a monthly amount over two paydays asks half of each',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_000, [
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+      pay('c', utc(2026, 1, 30)),
+    ]),
+    [
+      ['a', 20_000],
+      ['b', 20_000],
+      ['c', 20_000],
+    ],
+    'three paydays in a month split it three ways',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_001, [
+      pay('c', utc(2026, 1, 30)),
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+    ]).sort(),
+    [
+      ['a', 20_001],
+      ['b', 20_000],
+      ['c', 20_000],
+    ],
+    'the odd cent goes to the lowest id, whatever order the days arrive in',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_000, [
+      pay('a', utc(2026, 1, 15)),
+      pay('b', utc(2026, 3, 10)),
+    ]),
+    [
+      ['a', 60_000],
+      ['b', 120_000],
+    ],
+    'a month with no payday passes its amount to the next payday',
+  );
+  assert.deepEqual(
+    spread('weekly', 10_000, [
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+      pay('c', utc(2026, 1, 30)),
+    ]),
+    [
+      ['a', 10_000],
+      ['b', 20_000],
+      ['c', 20_000],
+    ],
+    'a weekly amount over a biweekly payday asks two weeks of it each time after the first',
+  );
+  assert.deepEqual(
+    spread('every2Weeks', 50_000, [
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+      pay('c', utc(2026, 1, 30)),
+    ]),
+    [
+      ['a', 50_000],
+      ['b', 50_000],
+      ['c', 50_000],
+    ],
+    'a two-week amount over a biweekly payday asks the whole amount each time',
+  );
+  assert.deepEqual(
+    spread('yearly', 120_000, [
+      pay('a', utc(2026, 6, 5)),
+      pay('b', utc(2026, 12, 4)),
+      pay('c', utc(2027, 1, 1)),
+    ]),
+    [
+      ['a', 60_000],
+      ['b', 60_000],
+      ['c', 120_000],
+    ],
+    'a yearly amount is shared over the paydays of its calendar year',
+  );
+  assert.deepEqual(
+    spread('twiceMonthly', 30_000, [
+      pay('a', utc(2026, 6, 15)),
+      pay('b', utc(2026, 6, 16)),
+      pay('c', utc(2026, 6, 30)),
+    ]),
+    [
+      ['a', 30_000],
+      ['b', 15_000],
+      ['c', 15_000],
+    ],
+    'twice a month splits at the 15th and the 16th',
+  );
+  assert.deepEqual(
+    spread(
+      'monthly',
+      60_000,
+      [
+        pay('a', utc(2026, 6, 5)),
+        pay('b', utc(2026, 6, 19)),
+        pay('c', utc(2026, 7, 3)),
+        pay('d', utc(2026, 7, 17)),
+      ],
+      { startsOn: utc(2026, 6, 10) },
+    ),
+    [
+      ['b', 60_000],
+      ['c', 30_000],
+      ['d', 30_000],
+    ],
+    'a rule that starts mid-period asks its whole amount of the days left and leaves earlier days alone',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_000, [pay('b', utc(2026, 6, 19))], {
+      prior: [pay('a', utc(2026, 6, 5))],
+    }),
+    [['b', 30_000]],
+    'an earlier payday of the period takes its share first',
+  );
+
+  const zone = process.env.TZ;
+  process.env.TZ = 'America/Los_Angeles';
+  const march1 = utc(2026, 3, 1);
+  assert.notEqual(
+    getPeriodIndex('monthly', march1),
+    getPeriodIndex('monthly', march1 - DAY_MS),
+    'a date-only first of the month is in its own month west of UTC',
+  );
+  assert.equal(getPeriodStart('monthly', utc(2026, 3, 20)), march1);
+  assert.equal(getPeriodIndex('yearly', utc(2027, 1, 1)), 2027);
+  assert.equal(getPeriodStart('weekly', utc(2026, 1, 2)), utc(2025, 12, 29));
+  assert.equal(
+    getPeriodIndex('twiceMonthly', utc(2026, 6, 15)) + 1,
+    getPeriodIndex('twiceMonthly', utc(2026, 6, 16)),
+    'the 15th and the 16th are different halves west of UTC',
+  );
+  if (zone === undefined) delete process.env.TZ;
+  else process.env.TZ = zone;
+
+  const calendarRule = (
+    cents: number,
+    period: Period = 'monthly',
+    sourceId?: string,
+  ): FundingRule => ({
+    amount: { kind: 'exact', cents },
+    cadence: { kind: 'calendar', period, startsOn: null },
+    ...(sourceId === undefined ? {} : { sourceId }),
+  });
+  const pays = [
+    { dayKey: 'k1', on: utc(2026, 6, 5), sourceId: 'src-a' },
+    { dayKey: 'k2', on: utc(2026, 6, 19), sourceId: 'src-b' },
+  ];
+  const plannedDays = pays.map((p) => ({
+    ...p,
+    amount: { lowCents: 100_000, highCents: 100_000 },
+  }));
+  const envelopeOf = (funding: FundingRule) => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must' as const,
+    orderIndex: 1,
+    funding,
+  });
+  assert.deepEqual(
+    buildDemands(plannedDays, pays, [envelopeOf(calendarRule(60_000))]).map(
+      (d) => [d.dayKey, d.cents, d.cadence, d.ask.kind],
+    ),
+    [
+      ['k1', 30_000, 'monthly', 'exact'],
+      ['k2', 30_000, 'monthly', 'exact'],
+    ],
+    'a monthly envelope asks its share on each payday and says which cadence it is',
+  );
+  assert.deepEqual(
+    buildDemands(plannedDays, pays, [
+      envelopeOf(calendarRule(60_000, 'monthly', 'src-a')),
+    ]).map((d) => [d.dayKey, d.cents]),
+    [['k1', 60_000]],
+    "a rule that names a source counts only that source's pays",
+  );
+  assert.deepEqual(
+    buildDemands(plannedDays, pays, [
+      envelopeOf({
+        amount: { kind: 'exact', cents: 5_000 },
+        cadence: { kind: 'everyIncomeDay' },
+      }),
+    ]).map((d) => [d.dayKey, d.cents, d.cadence]),
+    [
+      ['k1', 5_000, 'everyIncomeDay'],
+      ['k2', 5_000, 'everyIncomeDay'],
+    ],
+    'a rule written before calendar cadences asks per income day as it did',
+  );
+
+  const goalDays = [
+    { dayKey: 'k1', on: utc(2026, 6, 5), moneyCents: 100_000 },
+    { dayKey: 'k2', on: utc(2026, 6, 19), moneyCents: 100_000 },
+    { dayKey: 'k3', on: utc(2026, 7, 3), moneyCents: 100_000 },
+  ];
+  assert.deepEqual(
+    planGoalContributions(
+      { targetCents: 70_000, heldCents: 0, funding: calendarRule(60_000) },
+      goalDays,
+    ).map((part) => [part.day.dayKey, part.cents]),
+    [
+      ['k1', 30_000],
+      ['k2', 30_000],
+      ['k3', 10_000],
+    ],
+    'a calendar goal stops at its target',
+  );
+  const idle = {
+    targetCents: 70_000,
+    targetDate: utc(2026, 8, 1),
+    heldCents: 0,
+    funding: {
+      amount: { kind: 'exact', cents: 0 },
+      cadence: { kind: 'none' },
+    } as FundingRule,
+  };
+  assert.deepEqual(
+    planGoalContributions(idle, goalDays),
+    [],
+    'a goal that is not being added to asks nothing',
+  );
+  const idlePace = getPace(idle, goalDays);
+  assert.equal(idlePace.state, null, 'it has no pace state');
+  assert.equal(idlePace.reachedOn, null, 'and never reaches its target');
+  assert.deepEqual(
+    buildDemands(goalDays, goalDays, [], [], 0, [
+      { ...idle, itemId: 'g', createdAt: 1, priority: 'should', orderIndex: 1 },
+    ]),
+    [],
+    'and the draft has no line for it',
+  );
+  const calendarPace = getPace(
+    { ...idle, funding: calendarRule(60_000) },
+    goalDays.slice(1),
+    [goalDays[0]],
+  );
+  assert.equal(
+    calendarPace.plannedByDateCents,
+    70_000,
+    'a calendar goal counts an earlier payday of the period when it works out the pace',
+  );
+  assert.equal(describeFunding(calendarRule(60_000)), '$600.00 a month');
+  assert.equal(describeFunding(idle.funding), 'no contribution');
+  assert.equal(
+    describeFunding({
+      amount: { kind: 'exact', cents: 5_000 },
+      cadence: { kind: 'everyIncomeDay' },
+    }),
+    '$50.00 every income day',
+    'a legacy rule reads as it did',
   );
 }
 

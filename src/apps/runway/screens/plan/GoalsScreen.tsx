@@ -16,6 +16,7 @@ import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import GoalForm from '@apps/runway/forms/GoalForm';
 import {
+  getPriorDays,
   selectComingDays,
   selectHeldByItem,
   selectGoals,
@@ -39,6 +40,15 @@ function GoalsScreen() {
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const stance = useAppSelector(selectStance);
   const heldByItem = useAppSelector(selectHeldByItem);
+  const items = useAppSelector((state) => state.runway.items);
+  const versions = useAppSelector((state) => state.runway.versions);
+  const priorDays = getPriorDays(
+    items,
+    versions,
+    today,
+    comingDays,
+    goals.map(({ version }) => version.payload.funding),
+  );
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
@@ -64,6 +74,7 @@ function GoalsScreen() {
             'income',
           ),
         })),
+        priorDays,
       ),
     }));
 

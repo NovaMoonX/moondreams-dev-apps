@@ -2,26 +2,19 @@ import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
-import AmountField, { type AmountMode } from '@/components/AmountField';
-import { AmountHeroLink } from '@/components/AmountHero';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
+import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
-import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
   FORM_FLOW_WORDS,
-  FUNDING_CADENCE_LABELS,
-  FUNDING_CADENCES,
-  MAX_CHOSEN_DAYS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
@@ -36,27 +29,23 @@ import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
-import { toFundingInput } from '@apps/runway/utils/fundingInput';
-import { describeAmount } from '@apps/runway/utils/fundingText';
+import {
+  buildFundingRule,
+  buildFundingSteps,
+  getFundingBlocker,
+  INITIAL_FUNDING_FORM,
+  toFundingForm,
+  type FundingFormData,
+} from '@apps/runway/forms/fundingFlow';
 import {
   selectComingDays,
   selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type {
-  FundingAmount,
-  FundingRule,
-  EnvelopeSealed,
-  Priority,
-} from '@apps/runway/types';
+import type { EnvelopeSealed, Priority } from '@apps/runway/types';
 
-type Cadence = (typeof FUNDING_CADENCES)[number];
-
-interface EnvelopeFormData {
+interface EnvelopeFormData extends FundingFormData {
   name: string;
   priority: Priority | null;
-  amount: string;
-  cadence: Cadence;
-  dayKeys: string[];
   /** Null until the person adds one. */
   emoji: string | null;
 }
@@ -76,42 +65,11 @@ interface EnvelopeFormProps {
 }
 
 export type EnvelopeStepId =
-  'name' | 'amount' | 'cadence' | 'priority' | 'emoji';
-
-const AMOUNT_MODES = [
-  {
-    value: 'exact',
-    label: 'Exact amount',
-    linkLabel: FORM_FLOW_WORDS.exactLink,
-  },
-  {
-    value: 'percent',
-    label: "% of the day's money",
-    linkLabel: FORM_FLOW_WORDS.percentLink,
-  },
-  { value: 'rest', label: 'The rest', linkLabel: FORM_FLOW_WORDS.restLink },
-] as const;
-
-const getFundingAmount = (
-  mode: AmountMode,
-  text: string,
-): FundingAmount | null => {
-  if (mode === 'rest') return { kind: 'rest' };
-  if (mode === 'percent') {
-    const bps = parsePercentToBps(text);
-    return bps === null ? null : { kind: 'percent', bps, of: 'dayMoney' };
-  }
-  const cents = parseMoneyToCents(text);
-  return cents === null || cents <= 0 ? null : { kind: 'exact', cents };
-};
+  'name' | 'often' | 'amount' | 'cadence' | 'priority' | 'emoji';
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
   label: PRIORITY_LABELS[value],
-}));
-const cadenceOptions = FUNDING_CADENCES.map((value) => ({
-  value,
-  label: FUNDING_CADENCE_LABELS[value],
 }));
 
 const EMPTY_ENVELOPE: EnvelopeSealed = {
@@ -125,44 +83,24 @@ const EMPTY_ENVELOPE: EnvelopeSealed = {
   },
 };
 
-const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => {
-  const { amount, cadence, dayKeys } = toFundingInput(payload.funding);
-  return {
-    name: payload.name,
-    priority: payload.priority,
-    amount,
-    cadence,
-    dayKeys,
-    emoji: payload.emoji,
-  };
-};
+const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => ({
+  ...toFundingForm(payload.funding),
+  name: payload.name,
+  priority: payload.priority,
+  emoji: payload.emoji,
+});
 
 const INITIAL_DATA: EnvelopeFormData = {
+  ...INITIAL_FUNDING_FORM,
   name: '',
   priority: 'should',
-  amount: '',
-  cadence: 'everyIncomeDay',
-  dayKeys: [],
   emoji: null,
 };
 
-const getBlocker = (
-  data: EnvelopeFormData,
-  amount: FundingAmount | null,
-  mode: AmountMode,
-  hasDays: boolean,
-) => {
+const getBlocker = (data: EnvelopeFormData, hasDays: boolean) => {
   if (data.name.trim() === '') return 'Name the envelope.';
   if (data.priority === null) return 'Pick how much it matters.';
-  if (amount === null)
-    return mode === 'percent'
-      ? 'Enter a whole or half percent, up to 100.'
-      : 'Enter how much it gets each time.';
-  if (data.cadence !== 'everyIncomeDay' && !hasDays)
-    return 'Add an income source first, so there are days to count.';
-  if (data.cadence === 'chosen' && data.dayKeys.length === 0)
-    return 'Pick at least one day.';
-  return null;
+  return getFundingBlocker(data, hasDays);
 };
 
 function EnvelopeForm({
@@ -187,31 +125,16 @@ function EnvelopeForm({
   const set = (patch: Partial<EnvelopeFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
-  const [amountMode, setAmountMode] = useState<AmountMode>(
-    editing ? toFundingInput(editing.payload.funding).mode : 'exact',
-  );
-  const [startMode] = useState(amountMode);
-  const amount = getFundingAmount(amountMode, formData.amount);
-  const blocker = getBlocker(
-    formData,
-    amount,
-    amountMode,
-    comingDays.length > 0,
-  );
-
-  const dayOptions = comingDays.map((day) => ({
-    value: day.dayKey,
-    label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
-  }));
   const hasDays = comingDays.length > 0;
-  const isCadenceAnswered =
-    (formData.cadence === 'everyIncomeDay' || hasDays) &&
-    (formData.cadence !== 'chosen' || formData.dayKeys.length > 0);
-  const cadenceText =
-    formData.cadence === 'chosen'
-      ? `${FUNDING_CADENCE_LABELS.chosen} · ${formData.dayKeys.length}`
-      : FUNDING_CADENCE_LABELS[formData.cadence];
+  const blocker = getBlocker(formData, hasDays);
 
+  const fundingSteps = buildFundingSteps({
+    data: formData,
+    set,
+    comingDays,
+    allowNone: false,
+    getAmountTitle: (unit) => `How much does it get ${unit}?`,
+  });
   const steps: QuestionStep[] = [
     {
       id: 'name',
@@ -230,83 +153,7 @@ function EnvelopeForm({
         />
       ),
     },
-    {
-      id: 'amount',
-      title: FORM_FLOW_WORDS.envelopeAmountTitle,
-      summaryLabel: FORM_FLOW_WORDS.eachTime,
-      summaryValue: amount === null ? '' : describeAmount(amount),
-      isAnswered: amount !== null,
-      blocker:
-        formData.amount.trim() === ''
-          ? null
-          : amountMode === 'percent'
-            ? FORM_FLOW_WORDS.badPercent
-            : FORM_FLOW_WORDS.badAmount,
-      render: () => (
-        <AmountField
-          isHero
-          label={FORM_FLOW_WORDS.eachTime}
-          mode={amountMode}
-          modes={AMOUNT_MODES}
-          onModeChange={(mode) => {
-            setAmountMode(mode);
-            set({ amount: '' });
-          }}
-          percentOfLabel="of the day's money"
-          restHint='Whatever is left of the day after the lines above it.'
-          value={formData.amount}
-          onChange={(value) => set({ amount: value })}
-          suffix={
-            questions.hasReviewed ? undefined : (
-              <AmountHeroLink onClick={() => questions.reopen('cadence')}>
-                {cadenceText} ›
-              </AmountHeroLink>
-            )
-          }
-        />
-      ),
-    },
-    {
-      id: 'cadence',
-      title: FORM_FLOW_WORDS.cadenceTitle,
-      summaryLabel: FORM_FLOW_WORDS.cadence,
-      summaryValue: cadenceText,
-      isAnswered: isCadenceAnswered,
-      blocker: !hasDays
-        ? 'Add an income source first, so there are days to count.'
-        : FORM_FLOW_WORDS.pickDays,
-      isPreAnswered: true,
-      render: ({ moveOn }) => (
-        <div className='space-y-3'>
-          <PillGroup
-            label={FORM_FLOW_WORDS.cadence}
-            options={cadenceOptions}
-            value={formData.cadence}
-            onChange={(cadence) => {
-              set({ cadence });
-              if (
-                (cadence === 'everyIncomeDay' || hasDays) &&
-                (cadence !== 'chosen' || formData.dayKeys.length > 0)
-              )
-                moveOn();
-            }}
-          />
-          {formData.cadence === 'chosen' && dayOptions.length > 0 && (
-            <div className='space-y-2'>
-              <p className='text-muted-foreground text-xs'>Which income days</p>
-              <MultiPillGroup
-                label='Which income days'
-                options={dayOptions}
-                values={formData.dayKeys}
-                onChange={(values) =>
-                  set({ dayKeys: values.slice(0, MAX_CHOSEN_DAYS) })
-                }
-              />
-            </div>
-          )}
-        </div>
-      ),
-    },
+    ...fundingSteps,
     {
       id: 'priority',
       title: FORM_FLOW_WORDS.priorityTitle,
@@ -354,46 +201,13 @@ function EnvelopeForm({
     initialOpenId: editing ? openStep : null,
   });
 
-  const buildFunding = (data: EnvelopeFormData, amount: FundingAmount) => {
-    const saved = editing?.payload.funding.cadence;
-    if (data.cadence === 'every2' || data.cadence === 'every3') {
-      const n = data.cadence === 'every2' ? 2 : 3;
-      const funding: FundingRule = {
-        amount,
-        cadence: {
-          kind: 'everyNth',
-          n,
-          anchorDayKey:
-            saved?.kind === 'everyNth' && saved.n === n
-              ? saved.anchorDayKey
-              : (comingDays[0]?.dayKey ?? ''),
-        },
-      };
-      return funding;
-    }
-    if (data.cadence === 'chosen') {
-      const chosen = new Set(data.dayKeys);
-      const funding: FundingRule = {
-        amount,
-        cadence: {
-          kind: 'chosen',
-          dayKeys: comingDays
-            .filter((day) => chosen.has(day.dayKey))
-            .map((day) => day.dayKey),
-        },
-      };
-      return funding;
-    }
-    const funding: FundingRule = {
-      amount,
-      cadence: { kind: 'everyIncomeDay' },
-    };
-    return funding;
-  };
-
   const buildEnvelope = (data: EnvelopeFormData): EnvelopeSealed | null => {
-    const amount = getFundingAmount(amountMode, data.amount);
-    if (data.priority === null || amount === null) return null;
+    const funding = buildFundingRule(data, {
+      comingDays,
+      saved: editing?.payload.funding,
+      today,
+    });
+    if (data.priority === null || funding === null) return null;
 
     const tier = envelopes.filter(
       (envelope) => envelope.version.payload.priority === data.priority,
@@ -410,7 +224,7 @@ function EnvelopeForm({
       emoji: data.emoji?.trim() || null,
       priority: data.priority,
       orderIndex,
-      funding: buildFunding(data, amount),
+      funding,
     };
     return result;
   };
@@ -427,7 +241,6 @@ function EnvelopeForm({
   const editBlocker = flow.getBlocker(blocker);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) ||
-    amountMode !== startMode ||
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
   const requestClose = useDiscardGuard({

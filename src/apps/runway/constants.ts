@@ -202,10 +202,10 @@ export const FUNDING_CADENCE_LABELS: Record<
   (typeof FUNDING_CADENCES)[number],
   string
 > = {
-  everyIncomeDay: 'Every income day',
-  every2: 'Every other',
-  every3: 'Every third',
-  chosen: 'Chosen days',
+  everyIncomeDay: 'Every pay',
+  every2: 'Every other pay',
+  every3: 'Every third pay',
+  chosen: 'Pays I choose',
 };
 
 export const ENVELOPE_ORDER_STEP = 1;
@@ -486,6 +486,7 @@ export const DRAFT_TIE_KEYS = ['createdAt', 'itemId'] as const;
 
 export const DRAFT_CADENCE_WORDS: Record<
   | (typeof FUNDING_CADENCES)[number]
+  | (typeof CALENDAR_PERIODS)[number]
   | (typeof BILL_DRAFT_CADENCES)[number]
   | (typeof PAIRING_DRAFT_CADENCES)[number],
   string
@@ -497,6 +498,11 @@ export const DRAFT_CADENCE_WORDS: Record<
   every2: 'Every other income day',
   every3: 'Every third income day',
   chosen: 'A day you chose',
+  weekly: 'Part of the weekly amount',
+  every2Weeks: 'Part of the amount for every 2 weeks',
+  twiceMonthly: 'Part of the twice-a-month amount',
+  monthly: 'Part of the monthly amount',
+  yearly: 'Part of the yearly amount',
 };
 
 export const DRAFT_WORDS = {
@@ -826,14 +832,14 @@ export const FORM_FLOW_WORDS = {
   funding: 'Paid from',
   envelopeAmountTitle: 'How much does it get each time?',
   eachTime: 'Each time',
-  percentLink: 'A % of pay',
-  restLink: 'Whatever is left',
+  percentLink: 'A % of each pay',
+  restLink: 'Whatever is left of each pay',
   exactLink: 'An amount',
   itVaries: 'It varies',
   oneAmount: 'One amount',
   chooseEnd: 'Plan it at one end',
-  cadenceTitle: 'Which income days does it get money?',
-  cadence: 'Funded',
+  cadenceTitle: 'Which pays does it get money from?',
+  cadence: 'Pays',
   targetTitle: 'How much do you want to save?',
   target: 'Target',
   byWhenTitle: 'By when?',
@@ -946,4 +952,72 @@ export const CHECKLIST_R3_WORDS = {
     `Marked ${marked} of ${of} bills paid`,
   restNeedsConnection: 'The rest need a connection.',
   restNotSaved: 'The rest did not save. Try them again.',
+} as const;
+
+// Round 4: how often an envelope or goal gets money, calendar first and paycheck second.
+export const CALENDAR_PERIODS = [
+  'weekly',
+  'every2Weeks',
+  'twiceMonthly',
+  'monthly',
+  'yearly',
+] as const;
+
+export const CALENDAR_PERIOD_LABELS: Record<
+  (typeof CALENDAR_PERIODS)[number],
+  string
+> = {
+  weekly: 'Weekly',
+  every2Weeks: 'Every 2 weeks',
+  twiceMonthly: 'Twice a month',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+};
+
+/** What follows the amount for one period: "$600 a month". */
+export const CALENDAR_PERIOD_UNITS: Record<
+  (typeof CALENDAR_PERIODS)[number],
+  string
+> = {
+  weekly: 'a week',
+  every2Weeks: 'every 2 weeks',
+  twiceMonthly: 'twice a month',
+  monthly: 'a month',
+  yearly: 'a year',
+};
+
+/** The answers to "How often?": a calendar period, or a share of each pay. */
+export const HOW_OFTEN_PAYCHECK = 'paycheck';
+/** A goal that is not being added to. */
+export const HOW_OFTEN_NONE = 'none';
+
+export const HOW_OFTEN_WORDS = {
+  title: 'How often does it get money?',
+  goalTitle: 'How often does money go in?',
+  caption: 'How often',
+  paycheck: 'From a paycheck',
+  none: 'Not adding to it',
+  perPeriodLabel: 'Amount',
+  paycheckAmountTitle: 'How much from each pay?',
+  fromWhich: 'Which pay',
+  allSources: 'Each pay, all sources',
+  eachSource: (name: string) => `Each ${name} pay`,
+  unnamedSource: 'that source',
+  percentOf: 'of each pay',
+  percentOfSource: (name: string) => `of each ${name} pay`,
+  restTitle: 'Whatever is left of each pay',
+  restHelp:
+    'What is left of that pay after your bills and the envelopes above this one in priority.',
+  noAddingSummary: 'Not being added to',
+  noAddingHint:
+    'Nothing goes into it. You can start adding to it whenever you like.',
+  startAdding: 'Start adding to it',
+  stopAdding: 'Stop adding to it',
+  stopAddingSub: 'Keeps what is in it and the target',
+  needsIncome: 'Add an income source first, so there are pays to count.',
+  badAmount: 'Enter an amount above $0, like 600.00.',
+  currentTitle: 'How much is in it now?',
+  current: 'In it now',
+  currentHint: 'Leave it at $0 if you are starting from nothing.',
+  notBeingAdded: 'Not being added to',
 } as const;
