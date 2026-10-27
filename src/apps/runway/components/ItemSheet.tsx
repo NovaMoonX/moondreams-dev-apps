@@ -14,7 +14,6 @@ import {
   Play,
   ReceiptText,
   ShoppingBag,
-  SlidersHorizontal,
   Undo2,
 } from 'lucide-react';
 
@@ -499,16 +498,12 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
-        {canChange && !(itemKind === 'source' && quickChange) && (
+        {canChange && !quickChange && (
           <ActionRow
             isGrouped
             hasChevron
-            icon={quickChange ? <SlidersHorizontal /> : <Pencil />}
-            label={
-              quickChange
-                ? ITEM_SHEET_R2_WORDS.changeElse
-                : ITEM_SHEET_WORDS.change
-            }
+            icon={<Pencil />}
+            label={ITEM_SHEET_WORDS.change}
             subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
             onClick={() => openChange(null)}
           />

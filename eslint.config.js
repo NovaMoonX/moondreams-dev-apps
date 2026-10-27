@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', '.claude']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -17,6 +17,21 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+    },
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@moondreamsdev/dreamer-ui/components',
+              importNames: ['Callout'],
+              message:
+                "Use '@/components/InlineNotice': Callout hard-codes dark-mode text colours that disappear on a light theme.",
+            },
+          ],
+        },
+      ],
     },
   },
   {

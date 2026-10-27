@@ -1,7 +1,6 @@
 import { useState } from 'react';
 
-import { Callout } from '@moondreamsdev/dreamer-ui/components';
-
+import InlineNotice from '@/components/InlineNotice';
 import AmountHero from '@/components/AmountHero';
 import Subview from '@/components/Subview';
 import { PillGroup } from '@/components/PillGroup';
@@ -172,12 +171,9 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
             </ActionSection>
           )}
           {check.kind === 'over' && check.uncoveredCents > 0 && (
-            <Callout
-              variant='warning'
-              description={CHECK_RESULT_WORDS.uncovered(
-                formatCents(check.uncoveredCents),
-              )}
-            />
+            <InlineNotice tone='warning'>
+              {CHECK_RESULT_WORDS.uncovered(formatCents(check.uncoveredCents))}
+            </InlineNotice>
           )}
         </div>
       )}

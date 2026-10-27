@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { CalendarX, ChevronRight, Link2, Mail, Undo2 } from 'lucide-react';
 
-import { Button, Callout } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import InlineNotice from '@/components/InlineNotice';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import EmptyCard from '@/components/EmptyCard';
@@ -261,13 +262,9 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                   {unfunded.map(renderLine)}
                 </ul>
                 {lesserCount > 0 && (
-                  <Callout
-                    variant='info'
-                    description={DRAFT_WORDS.lesserLeft(
-                      lesserCount,
-                      unfunded.length,
-                    )}
-                  />
+                  <InlineNotice tone='info'>
+                    {DRAFT_WORDS.lesserLeft(lesserCount, unfunded.length)}
+                  </InlineNotice>
                 )}
               </div>
             )}

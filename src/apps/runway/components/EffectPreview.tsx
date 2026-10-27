@@ -1,8 +1,7 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import { useStore } from 'react-redux';
 
-import { Callout } from '@moondreamsdev/dreamer-ui/components';
-
+import InlineNotice from '@/components/InlineNotice';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector, type RootState } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -15,7 +14,10 @@ import {
   PREVIEW_SHOWN,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { describeHoldsChange } from '@apps/runway/utils/lookaheadText';
+import {
+  describeHoldsBlocks,
+  isSameLookahead,
+} from '@apps/runway/utils/lookaheadText';
 import {
   previewChange,
   previewLookahead,
@@ -174,15 +176,8 @@ function EffectPreview({
       today,
       settledVirtual,
     );
-    const isSame =
-      before.holdsThrough === after.holdsThrough &&
-      JSON.stringify(before.problems[0] ?? null) ===
-        JSON.stringify(after.problems[0] ?? null);
-    return {
-      text: describeHoldsChange(before, after),
-      isSame,
-      isProblem: after.problems.length > 0,
-    };
+    const isSame = isSameLookahead(before, after);
+    return { blocks: describeHoldsBlocks(before, after), isSame };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledVirtual, isLedgerReady, today, items, versions, openDays]);
@@ -196,9 +191,11 @@ function EffectPreview({
       );
     }
     if (days.length === 0) {
-      return (
+      return emptyText ? (
+        <InlineNotice tone='info'>{emptyText}</InlineNotice>
+      ) : (
         <p className='text-muted-foreground text-sm'>
-          {emptyText ?? CHANGE_WORDS.previewNone}
+          {CHANGE_WORDS.previewNone}
         </p>
       );
     }
@@ -279,12 +276,25 @@ function EffectPreview({
   return (
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
       {getBody()}
-      {holdsText?.text && !(isCompact && holdsText.isSame) && (
-        <Callout
-          variant={holdsText.isProblem ? 'warning' : 'success'}
-          description={holdsText.text}
-        />
-      )}
+      {holdsText &&
+        !(isCompact && holdsText.isSame) &&
+        holdsText.blocks.map((block) => (
+          <InlineNotice key={block.text} tone={block.tone}>
+            {block.figure === null ? (
+              block.text
+            ) : (
+              <>
+                {block.text.slice(0, block.text.indexOf(block.figure))}
+                <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
+                  {block.figure}
+                </strong>
+                {block.text.slice(
+                  block.text.indexOf(block.figure) + block.figure.length,
+                )}
+              </>
+            )}
+          </InlineNotice>
+        ))}
     </ActionSection>
   );
 }

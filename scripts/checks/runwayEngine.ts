@@ -49,7 +49,11 @@ import {
   describePurchaseRemoval,
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
-import { describeHoldsChange } from '../../src/apps/runway/utils/lookaheadText.ts';
+import {
+  describeHoldsChange,
+  isSameLookahead,
+  sortProblems,
+} from '../../src/apps/runway/utils/lookaheadText.ts';
 import type { Lookahead } from '../../src/apps/runway/engine/lookahead.ts';
 import {
   getLineEffect,
@@ -5159,6 +5163,49 @@ const version = (
     `runway engine: 50-envelope lookahead over ${buildComingDays(manyItems, manyVersions, today).length} days median ${timings[2].toFixed(0)} ms, worst ${timings[4].toFixed(0)} ms`,
   );
 
+  const calendarVersions: OpenVersion[] = [
+    ...baseVersions.filter((entry) => entry.kind !== 'envelope'),
+    ...Array.from(
+      { length: 50 },
+      (_, i): OpenVersion =>
+        ({
+          id: `vc${i}`,
+          itemId: `e${i}`,
+          kind: 'envelope',
+          createdAt: i + 2,
+          effectiveFrom: today,
+          effectiveUntil: null,
+          changeId: 'c',
+          payload: {
+            name: `Envelope ${i}`,
+            emoji: null,
+            priority: 'must',
+            orderIndex: i,
+            funding: {
+              amount: { kind: 'exact', cents: 20_000 + i },
+              cadence: {
+                kind: 'calendar',
+                period: i < 25 ? 'monthly' : 'weekly',
+                startsOn: today - 3 * DAY_MS,
+              },
+            },
+          },
+        }) as unknown as OpenVersion,
+    ),
+  ];
+  const calendarTimings = Array.from({ length: 5 }, () => {
+    const started = performance.now();
+    lookaheadOf(manyItems, calendarVersions);
+    return performance.now() - started;
+  }).sort((a, b) => a - b);
+  assert.ok(
+    calendarTimings[2] < Math.max(250, timings[2] * 4),
+    `25 monthly and 25 weekly calendar envelopes: lookahead median ${calendarTimings[2]}ms against ${timings[2]}ms for every-income-day rules`,
+  );
+  console.log(
+    `runway engine: 25 monthly and 25 weekly calendar envelopes, lookahead over ${buildComingDays(manyItems, calendarVersions, today).length} days median ${calendarTimings[2].toFixed(0)} ms, worst ${calendarTimings[4].toFixed(0)} ms (every-income-day rules ${timings[2].toFixed(0)} ms)`,
+  );
+
   const fiveYearsAgo = today - 1_826 * DAY_MS;
   const longBills = Array.from({ length: 60 }, (_, i) =>
     item(`lb${i}`, fiveYearsAgo + i, { kind: 'bill' }),
@@ -6753,8 +6800,35 @@ const version = (
       name,
       shortBy,
       isBill: true,
+      tier: 'must',
     }) as const;
   const day = utc(2026, 10, 29);
+  const rentShort = short(utc(2026, 10, 30), 'Rent', 22000);
+  assert.equal(
+    isSameLookahead(
+      look(day, [rentShort]),
+      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+    ),
+    false,
+    'a change that makes a second item short is not the same plan',
+  );
+  const twoShorts = sortProblems([
+    short(utc(2026, 11, 2), 'Car', 5000),
+    rentShort,
+    short(utc(2026, 10, 30), 'Gas', 100),
+  ]);
+  assert.deepEqual(
+    twoShorts.map((problem) => problem.name),
+    ['Gas', 'Rent', 'Car'],
+    'problems sort by date, then name, the one order everywhere',
+  );
+  assert.ok(
+    describeHoldsChange(
+      look(day, [rentShort]),
+      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+    )?.includes('1 more item needs a look'),
+    'the sentence counts the other problems',
+  );
   const text = describeHoldsChange(
     look(day, [short(utc(2026, 10, 30), 'Rent', 22000)]),
     look(day, [short(utc(2026, 10, 30), 'Car', 5000)]),
@@ -7042,6 +7116,50 @@ const version = (
     calendarPace.plannedByDateCents,
     70_000,
     'a calendar goal counts an earlier payday of the period when it works out the pace',
+  );
+  const lateStart: FundingRule = {
+    amount: { kind: 'exact', cents: 60_000 },
+    cadence: {
+      kind: 'calendar',
+      period: 'monthly',
+      startsOn: utc(2026, 11, 10),
+    },
+  };
+  const novDays = [
+    { dayKey: 'n1', on: utc(2026, 11, 1), moneyCents: 100_000 },
+    { dayKey: 'n2', on: utc(2026, 11, 20), moneyCents: 100_000 },
+  ];
+  assert.deepEqual(
+    buildDemands(novDays, novDays, [envelopeOf(lateStart)]).map((d) => [
+      d.dayKey,
+      d.cents,
+    ]),
+    [
+      ['n1', 0],
+      ['n2', 60_000],
+    ],
+    'an income day before a calendar rule starts asks nothing, not the full amount',
+  );
+  assert.deepEqual(
+    planGoalContributions(
+      { targetCents: 90_000, heldCents: 0, funding: lateStart },
+      novDays,
+    ).map((part) => [part.day.dayKey, part.cents]),
+    [['n2', 60_000]],
+    'and a goal on that rule adds nothing on it',
+  );
+  const farDays = [
+    { dayKey: 'f0', on: utc(2026, 1, 5) },
+    { dayKey: 'f1', on: utc(2026, 1, 5) + 1_500 * 7 * DAY_MS },
+  ];
+  const farSpread = spreadCalendarAmount(
+    { period: 'weekly', startsOn: null, cents: 10_000 },
+    farDays,
+  );
+  assert.deepEqual(
+    farDays.map((day) => farSpread.get(day.dayKey)),
+    [10_000, 15_000_000],
+    'a span of 1,500 periods is walked to its last day, not cut at 1,200, and the empty periods pass their amounts on',
   );
   assert.equal(describeFunding(calendarRule(60_000)), '$600.00 a month');
   assert.equal(describeFunding(idle.funding), 'no contribution');

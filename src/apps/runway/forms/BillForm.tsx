@@ -44,6 +44,8 @@ import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
+import BackLink from '@/components/BackLink';
+import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
@@ -108,7 +110,14 @@ interface BillFormProps {
 }
 
 export type BillStepId =
-  'name' | 'amount' | 'due' | 'ends' | 'funding' | 'priority' | 'emoji';
+  | 'name'
+  | 'amount'
+  | 'due'
+  | 'repeats'
+  | 'ends'
+  | 'funding'
+  | 'priority'
+  | 'emoji';
 
 const EMPTY_BILL: BillSealed = {
   name: '',
@@ -308,7 +317,7 @@ function BillForm({
       summaryLabel: FORM_FLOW_WORDS.name,
       summaryValue: formData.name.trim(),
       isAnswered: formData.name.trim() !== '',
-      render: () => (
+      render: ({ moveOn }) => (
         <div className='space-y-4'>
           <Input
             variant='outline'
@@ -326,7 +335,13 @@ function BillForm({
                 const found = BILL_QUICK_PICKS.find(
                   (entry) => toPickLabel(entry) === pick,
                 );
-                if (found) set({ name: found.name, emoji: found.emoji });
+                if (!found) return;
+                set({
+                  name: found.name,
+                  emoji: found.emoji,
+                  ...('priority' in found ? { priority: found.priority } : {}),
+                });
+                moveOn();
               }}
             />
           )}
@@ -359,54 +374,52 @@ function BillForm({
       id: 'due',
       title: FORM_FLOW_WORDS.dueTitle,
       summaryLabel: FORM_FLOW_WORDS.due,
-      summaryValue:
-        dueDate === undefined
-          ? ''
-          : formData.frequency === null
-            ? formatDateUTC(dueDate)
-            : `${formatDateUTC(dueDate)} · ${BILL_FREQUENCY_LABELS[formData.frequency]}`,
-      isAnswered: isDueValid && formData.frequency !== null,
+      summaryValue: dueDate === undefined ? '' : formatDateUTC(dueDate),
+      isAnswered: isDueValid,
       blocker:
-        dueDate !== undefined && !isDueValid
-          ? FORM_FLOW_WORDS.pastDay
-          : dueDate !== undefined && formData.frequency === null
-            ? FORM_FLOW_WORDS.pickRepeat
-            : null,
-      render: ({ moveOn }) => (
-        <div className='space-y-4'>
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>
-              {isDueWord ? 'Due' : 'Starts'}
-            </p>
-            <Input
-              type='date'
-              variant='outline'
-              aria-label={isDueWord ? 'Due' : 'Starts'}
-              min={startMin}
-              value={formData.startDate}
-              onChange={(event) =>
-                set({
-                  startDate: event.target.value,
-                  frequency:
-                    formData.frequency ??
-                    (noun === 'bill' ? 'monthly' : 'once'),
-                })
-              }
-            />
-          </div>
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>Repeats</p>
-            <PillGroup
-              label='Repeats'
-              options={frequencyOptions}
-              value={formData.frequency}
-              onChange={(frequency) => {
-                set({ frequency });
-                if (isDueValid) moveOn();
-              }}
-            />
-          </div>
+        dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
+      render: () => (
+        <div className='space-y-1.5'>
+          <p className='text-muted-foreground text-xs'>
+            {isDueWord ? 'Due' : 'Starts'}
+          </p>
+          <Input
+            type='date'
+            variant='outline'
+            aria-label={isDueWord ? 'Due' : 'Starts'}
+            min={startMin}
+            value={formData.startDate}
+            onChange={(event) =>
+              set({
+                startDate: event.target.value,
+                frequency:
+                  formData.frequency ?? (noun === 'bill' ? 'monthly' : 'once'),
+              })
+            }
+          />
         </div>
+      ),
+    },
+    {
+      id: 'repeats',
+      title: FORM_FLOW_WORDS.repeatsTitle,
+      summaryLabel: FORM_FLOW_WORDS.repeats,
+      summaryValue:
+        formData.frequency === null
+          ? ''
+          : BILL_FREQUENCY_LABELS[formData.frequency],
+      isAnswered: formData.frequency !== null,
+      blocker: FORM_FLOW_WORDS.pickRepeat,
+      render: ({ moveOn }) => (
+        <PillGroup
+          label='Repeats'
+          options={frequencyOptions}
+          value={formData.frequency}
+          onChange={(frequency) => {
+            set({ frequency });
+            moveOn();
+          }}
+        />
       ),
     },
     ...(isOnce || formData.frequency === null
@@ -539,10 +552,10 @@ function BillForm({
       ),
     },
   ];
+  const [isAll, setIsAll] = useState(false);
   const questions = useQuestionFlow({
     steps,
     startFolded: editing !== undefined || !!draft?.initial,
-    initialOpenId: editing ? openStep : null,
   });
 
   const getChosenKeys = (picked: string[]) =>
@@ -622,6 +635,8 @@ function BillForm({
       ? FORM_FLOW_WORDS.discardChange
       : FORM_FLOW_WORDS.discardNew(noun),
   });
+  const quickStep = steps.find((step) => step.id === openStep) ?? null;
+  const isQuick = !!editing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
@@ -668,7 +683,16 @@ function BillForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow flow={questions} />
+            {isQuick && quickStep ? (
+              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+            ) : (
+              <>
+                {openStep !== null && editing && (
+                  <BackLink onBack={() => setIsAll(false)} />
+                )}
+                <QuestionFlow flow={questions} />
+              </>
+            )}
             {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
               note={error ?? (isAsking ? questions.blocker : shownBlocker)}

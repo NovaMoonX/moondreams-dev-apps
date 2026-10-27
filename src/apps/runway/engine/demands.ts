@@ -233,9 +233,9 @@ export function buildDemands(
         dueBeforeNext: false,
         orderIndex: envelope.orderIndex,
         createdAt: envelope.createdAt,
-        cents:
-          calendar?.get(day.dayKey) ??
-          getDemandCents(envelope.funding, moneyOf(day)),
+        cents: calendar
+          ? (calendar.get(day.dayKey) ?? 0)
+          : getDemandCents(envelope.funding, moneyOf(day)),
         cadence: cadenceCode(envelope.funding.cadence),
         bill: null,
         ask: getAsk(envelope.funding),

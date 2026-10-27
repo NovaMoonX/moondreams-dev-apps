@@ -21,10 +21,7 @@ import {
 import { useAuth } from '@hooks/useAuth';
 import { APP_REGISTRY_ID_MAP } from '@lib/app';
 import { db, isUsingFirebaseEmulators } from '@lib/firebase/config';
-import {
-  normalizeAppStatus,
-  type AppMetadata,
-} from '@lib/types/appCatalog';
+import { normalizeAppStatus, type AppMetadata } from '@lib/types/appCatalog';
 import { User } from 'firebase/auth';
 
 function normalizeAppMetadata(
@@ -113,9 +110,13 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   const queryKey = getQueryKey(user, isAdmin);
   // True until every query for this user has resolved at least once — not
   // just the first one — so a restricted app isn't missing from `apps` yet.
-  const loading = resolvedQueryKey !== queryKey;
+  // An app that works signed out (Runway's start) has no use for the catalog, which the rules refuse a visitor.
+  const isSkipped =
+    user === null && window.location.pathname.startsWith('/runway');
+  const loading = !isSkipped && resolvedQueryKey !== queryKey;
 
   useEffect(() => {
+    if (isSkipped) return;
     const currentQueryKey = getQueryKey(user, isAdmin);
     const queries = buildAppQueries(user, isAdmin);
     const appMap = new Map<string, AppMetadata>();
@@ -145,7 +146,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
             return;
           }
 
-          const nextApps = Array.from(appMap.values())
+          const nextApps = Array.from(appMap.values());
           setAllApps(nextApps);
           markQueryResolved(index);
         },
@@ -163,7 +164,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
       isActive = false;
       unsubscribers.forEach((unsubscribe) => unsubscribe());
     };
-  }, [isAdmin, user]);
+  }, [isAdmin, user, isSkipped]);
 
   const apps = useMemo(() => {
     if (canSeeAllApps(isAdmin)) {
@@ -171,7 +172,9 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
     }
 
     if (!user) {
-      return allApps.filter((app) => app.status === 'public' && !app.isRestricted);
+      return allApps.filter(
+        (app) => app.status === 'public' && !app.isRestricted,
+      );
     }
 
     return allApps.filter((app) => {

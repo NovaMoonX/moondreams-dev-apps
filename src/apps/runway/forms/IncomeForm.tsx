@@ -39,6 +39,8 @@ import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
+import BackLink from '@/components/BackLink';
+import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
@@ -97,7 +99,13 @@ interface IncomeFormProps {
 }
 
 export type IncomeStepId =
-  'source' | 'amount' | 'schedule' | 'ends' | 'payName' | 'sourceName';
+  | 'source'
+  | 'amount'
+  | 'often'
+  | 'schedule'
+  | 'ends'
+  | 'payName'
+  | 'sourceName';
 
 export type EditingIncome =
   | { itemId: string; kind: 'payLine'; payload: PayLineSealed }
@@ -111,6 +119,9 @@ const endingOptions = INCOME_ENDINGS.map((value) => ({
   value,
   label: INCOME_ENDING_LABELS[value],
 }));
+
+/** A short month's end stands in for the 30th, as the schedule already clamps any day past a month's length. */
+const DEFAULT_PAYDAYS = ['15', '30'] as const;
 
 const dayOptions = Array.from({ length: LAST_DAY }, (_, index) => ({
   value: String(index + 1),
@@ -353,6 +364,19 @@ function IncomeForm({
           };
     });
 
+  const applyFrequency = (
+    frequency: NonNullable<IncomeFormData['frequency']>,
+  ) =>
+    frequency === 'twiceMonthly' &&
+    formData.firstDay === '' &&
+    formData.secondDay === ''
+      ? setPaydays({
+          frequency,
+          firstDay: DEFAULT_PAYDAYS[0],
+          secondDay: DEFAULT_PAYDAYS[1],
+        })
+      : set({ frequency });
+
   const sourceNames = Object.fromEntries(
     resolved.map((source) => [source.item.id, source.version.payload.name]),
   );
@@ -464,6 +488,25 @@ function IncomeForm({
       ),
     },
     {
+      id: 'often',
+      title: FORM_FLOW_WORDS.oftenTitle,
+      summaryLabel: FORM_FLOW_WORDS.often,
+      summaryValue:
+        formData.frequency === null ? '' : SCHEDULE_LABELS[formData.frequency],
+      isAnswered: formData.frequency !== null,
+      render: ({ moveOn }: QuestionControls) => (
+        <PillGroup
+          label='How often'
+          options={frequencyOptions}
+          value={formData.frequency}
+          onChange={(frequency) => {
+            applyFrequency(frequency);
+            moveOn();
+          }}
+        />
+      ),
+    },
+    {
       id: 'schedule',
       title: FORM_FLOW_WORDS.scheduleTitle,
       summaryLabel: FORM_FLOW_WORDS.schedule,
@@ -475,12 +518,6 @@ function IncomeForm({
           : null,
       render: () => (
         <div className='space-y-4'>
-          <PillGroup
-            label='How often'
-            options={frequencyOptions}
-            value={formData.frequency}
-            onChange={(frequency) => set({ frequency })}
-          />
           {formData.frequency !== null &&
             formData.frequency !== 'twiceMonthly' && (
               <div className='space-y-1.5'>
@@ -509,6 +546,7 @@ function IncomeForm({
                     options={dayOptions}
                     value={formData[key]}
                     placeholder='Pick a day'
+                    dropdownClassName='max-h-48!'
                     onChange={(value) => setPaydays({ [key]: value })}
                   />
                 </div>
@@ -587,10 +625,10 @@ function IncomeForm({
       ),
     },
   ];
+  const [isAll, setIsAll] = useState(false);
   const questions = useQuestionFlow({
     steps: isEditingSource ? [sourceNameStep] : payLineSteps,
     startFolded: isEditing || !!draft?.initial,
-    initialOpenId: isEditing ? openStep : null,
   });
 
   const buildPayLine = (data: IncomeFormData): PayLineSealed | null => {
@@ -636,6 +674,9 @@ function IncomeForm({
       ? FORM_FLOW_WORDS.discardChange
       : FORM_FLOW_WORDS.discardNew('income'),
   });
+  const quickStep =
+    questions.steps.find((step) => step.id === openStep) ?? null;
+  const isQuick = !!isEditing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
@@ -706,7 +747,16 @@ function IncomeForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow flow={questions} />
+            {isQuick && quickStep ? (
+              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+            ) : (
+              <>
+                {openStep !== null && isEditing && (
+                  <BackLink onBack={() => setIsAll(false)} />
+                )}
+                <QuestionFlow flow={questions} />
+              </>
+            )}
             {editing && !isEditingSource && questions.hasReviewed && (
               <ChangeSection />
             )}

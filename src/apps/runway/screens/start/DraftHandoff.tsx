@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Loader } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -14,6 +14,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { describeCounts } from '@apps/runway/screens/start/startRows';
 import {
   commitStartDraft,
+  DraftPlanNotReady,
   EMPTY_TIER_RANKS,
   type ExistingNames,
 } from '@apps/runway/store/actions/draftActions';
@@ -54,12 +55,12 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const items = useAppSelector((state) => state.runway.items);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const hasStarted = useRef(false);
   const hasPlanItems =
     sources.length + bills.length + envelopes.length + goals.length > 0;
 
@@ -78,10 +79,11 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
         goals: toTopRanks(goals),
       },
       startDate,
+      itemCount: items.length,
     };
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      const { added } = await commitStartDraft(
+      const { added, unrecordedHoldings } = await commitStartDraft(
         user.uid,
         encryption,
         draft,
@@ -93,20 +95,21 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
         title: START_WORDS.handoffSaved(added),
         type: 'success',
       });
+      if (unrecordedHoldings.length > 0)
+        addToast({
+          title: START_WORDS.handoffUnrecorded(unrecordedHoldings.join(', ')),
+          type: 'warning',
+        });
     } catch (saveError) {
       console.error(saveError);
-      setError(START_WORDS.handoffFailed);
+      setError(
+        saveError instanceof DraftPlanNotReady
+          ? START_WORDS.handoffNotReady
+          : START_WORDS.handoffFailed,
+      );
       setIsSaving(false);
-      hasStarted.current = false;
     }
   };
-
-  useEffect(() => {
-    if (!isLoaded || hasPlanItems || hasStarted.current || error) return;
-    hasStarted.current = true;
-    void save();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoaded, hasPlanItems, error]);
 
   const counts = {
     income: draft.incomes.length,
@@ -115,7 +118,7 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
     goal: draft.goals.length,
   };
 
-  if (!isLoaded || ((!hasPlanItems || isSaving) && !error)) {
+  if (!isLoaded) {
     return (
       <div className='page'>
         <div className='mx-auto max-w-4xl py-6'>
@@ -133,7 +136,7 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
         <div className='space-y-1'>
           <h1 className='text-2xl font-semibold'>{START_WORDS.handoffTitle}</h1>
           <p className='text-muted-foreground text-sm text-pretty'>
-            {START_WORDS.handoffBody(describeCounts(counts))}
+            {START_WORDS.handoffBody(describeCounts(counts), hasPlanItems)}
           </p>
         </div>
         {error && (
@@ -150,7 +153,9 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
             disabled={isSaving}
             onClick={clearStartDraft}
           >
-            {START_WORDS.handoffKeep}
+            {hasPlanItems
+              ? START_WORDS.handoffKeep
+              : START_WORDS.handoffDiscard}
           </Button>
         </div>
       </div>

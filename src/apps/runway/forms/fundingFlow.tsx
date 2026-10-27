@@ -169,10 +169,16 @@ export function getFundingBlocker(
   return null;
 }
 
+/** The id a drafted income source goes by until it is written to a plan. */
+export const toDraftSourceId = (name: string) =>
+  `draft:${name.trim().toLowerCase()}`;
+
 const getSources = (
   comingDays: readonly ComingDay[],
   savedId: string | null,
+  draftSources?: readonly { id: string; name: string }[],
 ) => {
+  if (draftSources !== undefined) return [...draftSources];
   const found = new Map(
     comingDays.flatMap((day): [string, string][] =>
       day.sourceId !== null && day.sourceName !== null
@@ -228,6 +234,8 @@ interface FundingStepsArgs {
   getAmountHint?: (data: FundingFormData) => ReactNode;
   /** Nothing is saved yet, so income days are assumed and the ones to pick from are not offered. */
   isDraft?: boolean;
+  /** The drafted income sources, when nothing is saved yet. */
+  draftSources?: readonly { id: string; name: string }[];
 }
 
 /** The "How often?", "Which pays?" and amount questions an envelope's and a goal's forms share. */
@@ -239,10 +247,11 @@ export function buildFundingSteps({
   getAmountTitle,
   getAmountHint,
   isDraft = false,
+  draftSources,
 }: FundingStepsArgs): QuestionStep[] {
   const hasDays = comingDays.length > 0 || isDraft;
   const amount = getFundingAmount(data);
-  const sources = getSources(comingDays, data.sourceId);
+  const sources = getSources(comingDays, data.sourceId, draftSources);
   const selectedSource = sources.find((source) => source.id === data.sourceId);
   const oftenOptions = [
     ...CALENDAR_PERIODS.map((value) => ({

@@ -1,0 +1,37 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
+
+import type { QuestionStep } from '@/hooks/useQuestionFlow';
+import { ITEM_SHEET_R2_WORDS } from '@apps/runway/constants';
+
+interface QuickChangeProps {
+  step: QuestionStep;
+  /** Opens the view that lists every other field as a row. */
+  onAll: () => void;
+}
+
+/** The most frequent change to an item: only its one question, with one door to the rest of its fields. */
+function QuickChange({ step, onAll }: QuickChangeProps) {
+  return (
+    <div className='space-y-4' role='group' aria-label={step.title}>
+      <h3 className='text-2xl leading-tight font-semibold break-words'>
+        {step.title}
+      </h3>
+      {step.render({ moveOn: () => undefined })}
+      <Button
+        type='button'
+        variant='secondary'
+        className='text-foreground! relative h-auto min-h-11 w-full justify-between rounded-2xl px-3! py-2 font-normal'
+        onClick={onAll}
+      >
+        <span>{ITEM_SHEET_R2_WORDS.changeElse}</span>
+        <ChevronRight
+          className='text-muted-foreground h-5 w-5'
+          aria-hidden='true'
+        />
+      </Button>
+    </div>
+  );
+}
+
+export default QuickChange;

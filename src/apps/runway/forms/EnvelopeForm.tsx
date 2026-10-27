@@ -29,6 +29,8 @@ import { createEnvelope } from '@apps/runway/store/actions/itemActions';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
+import BackLink from '@/components/BackLink';
+import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
@@ -145,6 +147,7 @@ function EnvelopeForm({
     comingDays,
     allowNone: false,
     isDraft: !!draft,
+    draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much does it get ${unit}?`,
   });
   const steps: QuestionStep[] = [
@@ -218,10 +221,10 @@ function EnvelopeForm({
       ),
     },
   ];
+  const [isAll, setIsAll] = useState(false);
   const questions = useQuestionFlow({
     steps,
     startFolded: editing !== undefined || !!draft?.initial,
-    initialOpenId: editing ? openStep : null,
   });
 
   const buildEnvelope = (data: EnvelopeFormData): EnvelopeSealed | null => {
@@ -274,6 +277,8 @@ function EnvelopeForm({
       ? FORM_FLOW_WORDS.discardChange
       : FORM_FLOW_WORDS.discardNew('envelope'),
   });
+  const quickStep = steps.find((step) => step.id === openStep) ?? null;
+  const isQuick = !!editing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
   const shownBlocker = editing ? editBlocker : blocker;
 
@@ -323,7 +328,16 @@ function EnvelopeForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
-            <QuestionFlow flow={questions} />
+            {isQuick && quickStep ? (
+              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+            ) : (
+              <>
+                {openStep !== null && editing && (
+                  <BackLink onBack={() => setIsAll(false)} />
+                )}
+                <QuestionFlow flow={questions} />
+              </>
+            )}
             {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
               note={error ?? (isAsking ? questions.blocker : shownBlocker)}

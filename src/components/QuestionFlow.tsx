@@ -1,5 +1,9 @@
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import FormSheet from '@/components/FormSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import SummaryRow from '@/components/SummaryRow';
 import { canFocusFieldOnOpen, runWhenDrawerSettled } from '@/utils/focusUtils';
 import type { QuestionFlowState, QuestionStep } from '@/hooks/useQuestionFlow';
@@ -38,9 +42,69 @@ const getRowName = (step: QuestionStep) => {
   return result;
 };
 
-/** A form asked one question at a time: the open one is large with only its control, the answered ones fold into rows that reopen it. Until every answer has been seen nothing follows the open question; after, a reopened answer keeps the rest folded around it. The way forward is the form's pinned footer (`flow.advance` while asking). */
+interface QuestionSheetProps {
+  step: QuestionStep;
+  onDone: () => void;
+  shouldFocus: boolean;
+}
+
+/** A reviewed form's reopened question: its controls in a sheet over the form, ending in Done, so the rows underneath never move. */
+function QuestionSheet({ step, onDone, shouldFocus }: QuestionSheetProps) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!shouldFocus) return;
+    const timer = window.setTimeout(() => {
+      const field = bodyRef.current?.querySelector<
+        HTMLInputElement | HTMLTextAreaElement
+      >(TYPED_FIELD);
+      field?.focus();
+      if (field instanceof HTMLInputElement && field.type === 'text')
+        field.select();
+    }, FIRST_FOCUS_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [shouldFocus]);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Enter' || !(event.target instanceof HTMLInputElement))
+      return;
+    event.preventDefault();
+    if (step.isAnswered) onDone();
+  };
+
+  return (
+    <FormSheet isOpen onClose={onDone} title={step.title}>
+      <div ref={bodyRef} className='space-y-4 pb-4' onKeyDown={handleKeyDown}>
+        {step.render({ moveOn: onDone })}
+      </div>
+      <ModalFooterActions
+        note={step.isAnswered ? null : (step.blocker ?? null)}
+        rightActions={
+          <Button type='button' disabled={!step.isAnswered} onClick={onDone}>
+            Done
+          </Button>
+        }
+      />
+    </FormSheet>
+  );
+}
+
+/** A form asked one question at a time: the open one is large with only its control, the answered ones fold into rows above it and nothing follows it. Once every answer has been seen the form is only rows, and a tapped row opens its question in a sheet over the form, so no row moves. The way forward is the form's pinned footer (`flow.advance` while asking). */
 function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
-  const { steps, open, reopen, advance, moveOnFrom, hasReviewed } = flow;
+  const {
+    steps,
+    open: asked,
+    reopen,
+    advance,
+    moveOnFrom,
+    hasReviewed,
+    reopenedId,
+    close,
+  } = flow;
+  const open = hasReviewed ? null : asked;
+  const reopened = hasReviewed
+    ? (steps.find((step) => step.id === reopenedId) ?? null)
+    : null;
   const rootRef = useRef<HTMLDivElement>(null);
   const openRef = useRef<HTMLDivElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -96,7 +160,6 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
   const openIndex =
     open === null ? steps.length : steps.findIndex((s) => s.id === open.id);
   const before = steps.slice(0, openIndex);
-  const after = open !== null && hasReviewed ? steps.slice(openIndex + 1) : [];
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key !== 'Enter' || !(event.target instanceof HTMLInputElement))
@@ -145,7 +208,14 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
           {open.render({ moveOn: () => moveOnFrom(open.id) })}
         </div>
       )}
-      {rows(after)}
+      {reopened && (
+        <QuestionSheet
+          key={reopened.id}
+          step={reopened}
+          shouldFocus={shouldFocus}
+          onDone={close}
+        />
+      )}
     </div>
   );
 }

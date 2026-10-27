@@ -429,13 +429,14 @@ export async function recordStart(
 /**
  * Records what one goal or bill holds on the plan's starting day, for an item added after that day.
  * It writes a single `start` move and leaves the starting day, and every other holding, as they are.
+ * Resolves false when the plan's starting day is no longer the one given, so nothing was written.
  */
 export async function recordHolding(
   uid: string,
   encryption: RunwayEncryption,
   startDate: DateOnly,
   holding: StartHoldingInput,
-): Promise<void> {
+): Promise<boolean> {
   const now = Date.now();
   const sealed = await sealJson(
     {
@@ -445,10 +446,10 @@ export async function recordHolding(
     encryption,
   );
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  await runTransaction(db, async (transaction) => {
+  const isWritten = await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(ref);
     const plan = snapshot.data() as Partial<PlanDoc> | undefined;
-    if ((plan?.startDate ?? null) !== startDate) return;
+    if ((plan?.startDate ?? null) !== startDate) return false;
     markLedgerWrite(transaction, uid, plan, [startDate]);
     const id = getStartMoveId(holding.refId, now);
     transaction.set(moveRef(uid, id), {
@@ -460,5 +461,7 @@ export async function recordHolding(
       createdAt: now,
       sealed,
     } satisfies MoveDoc);
+    return true;
   });
+  return isWritten;
 }

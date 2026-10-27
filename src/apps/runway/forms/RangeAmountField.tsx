@@ -93,7 +93,14 @@ function RangeAmountField({
         />
       );
     }
-    return `The plan uses ${RANGE_END_WORDS[getRangeEnd(stance, side)]} of a range.`;
+    return (
+      <span className='inline-flex items-center gap-1'>
+        {`The plan uses ${RANGE_END_WORDS[getRangeEnd(stance, side)]}.`}
+        <HelpTip title={FORM_FLOW_WORDS.endHelpTitle}>
+          {FORM_FLOW_WORDS.endHelp(RANGE_END_WORDS[getRangeEnd(stance, side)])}
+        </HelpTip>
+      </span>
+    );
   };
 
   const stancePills = (

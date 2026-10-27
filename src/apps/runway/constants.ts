@@ -740,8 +740,6 @@ export const START_WORDS = {
   billsHelp:
     'Add the bills and upcoming expenses you know about. Each is set aside a little at a time before it is due.',
   envelopesAsk: 'What do you spend money on?',
-  envelopesHelp:
-    'An envelope is money set aside for a kind of spending, like groceries. Goals come next.',
   envelopeDoor: "What's an envelope?",
   envelopeDoorBody:
     'An envelope is money set aside for a kind of spending, like groceries, that you refill each period. A goal is different: you fill it toward a target, like a trip or a car.',
@@ -795,16 +793,23 @@ export const START_WORDS = {
     parts === '' ? 'Nothing has been added yet.' : `Ready to save: ${parts}.`,
   saveButton: 'Sign in with Google',
   handoffTitle: 'Save what you entered?',
-  handoffBody: (parts: string) =>
-    `This device has ${parts} from before you signed in, and your plan already has items. Which should stay?`,
+  handoffBody: (parts: string, hasItems: boolean) =>
+    hasItems
+      ? `This device has ${parts} from before you signed in, and your plan already has items. Which should stay?`
+      : `This device has ${parts} from before you signed in. Add them to your plan?`,
   handoffAdd: 'Add them to my plan',
   handoffKeep: 'Keep my plan as it is',
+  handoffDiscard: 'Do not add them',
   handoffSaved: (count: number) =>
     count === 1
       ? 'Saved 1 item to your plan.'
       : `Saved ${count} items to your plan.`,
   handoffFailed:
     'Some of what you entered did not save. It is still on this device.',
+  handoffNotReady:
+    'Your plan is still opening. Try again in a moment. Nothing was added.',
+  handoffUnrecorded: (names: string) =>
+    `What is in it now did not record for ${names}. Add it under Where things stand.`,
   landingTitle: 'Plan before you sign in',
   landingBody:
     'Runway plans each paycheck: what goes to bills, envelopes and goals, and what is left to spend. You can go through Starting out now. Your answers stay on this device until you sign in.',
@@ -887,8 +892,10 @@ export const FORM_FLOW_WORDS = {
   billAmountTitle: 'How much is it?',
   expenseAmountTitle: 'How much will it be?',
   amount: 'Amount',
-  dueTitle: 'When is it due, and does it repeat?',
+  dueTitle: 'When is it due?',
   due: 'Due',
+  repeatsTitle: 'Does it repeat?',
+  repeats: 'Repeats',
   endsTitle: 'Does it end?',
   ends: 'Ends',
   fundingTitle: 'Which income days pay for it?',
@@ -925,7 +932,9 @@ export const FORM_FLOW_WORDS = {
   takeHomeTitle: 'How much lands?',
   takeHome: 'Take-home pay',
   expectedIncomeTitle: 'How much is coming?',
-  scheduleTitle: 'How often, and when is the next one?',
+  scheduleTitle: 'When is the next one?',
+  oftenTitle: 'How often does it arrive?',
+  often: 'How often',
   schedule: 'When',
   payNameTitle: 'What is this pay called?',
   payName: 'Called',
@@ -1091,6 +1100,8 @@ export const HOW_OFTEN_WORDS = {
   currentTitle: 'How much is in it now?',
   current: 'In it now',
   currentHint: 'Leave it at $0 if you are starting from nothing.',
+  holdingNotRecorded: (name: string) =>
+    `${name} was added, but what is in it now did not record. Add it under Where things stand.`,
   notBeingAdded: 'Not being added to',
 } as const;
 
@@ -1142,15 +1153,15 @@ export const SPEND_PERIOD_WORDS = {
 } as const;
 
 export const BILL_QUICK_PICKS = [
-  { name: 'Rent', emoji: '🏠' },
-  { name: 'Mortgage', emoji: '🏡' },
+  { name: 'Rent', emoji: '🏠', priority: 'must' },
+  { name: 'Mortgage', emoji: '🏡', priority: 'must' },
   { name: 'Electricity', emoji: '💡' },
   { name: 'Water', emoji: '🚰' },
   { name: 'Internet', emoji: '🌐' },
   { name: 'Phone', emoji: '📱' },
   { name: 'Car payment', emoji: '🚗' },
-  { name: 'Car insurance', emoji: '🛡️' },
-  { name: 'Health insurance', emoji: '🩺' },
+  { name: 'Car insurance', emoji: '🛡️', priority: 'must' },
+  { name: 'Health insurance', emoji: '🩺', priority: 'must' },
   { name: 'Streaming', emoji: '📺' },
   { name: 'Gym', emoji: '🏋️' },
 ] as const;
@@ -1190,7 +1201,7 @@ export const ITEM_KIND_NOUNS = {
   bill: 'bill',
   envelope: 'envelope',
   goal: 'goal',
-  payLine: 'pay line',
+  payLine: 'pay',
   source: 'income source',
   group: 'group',
 } as const;

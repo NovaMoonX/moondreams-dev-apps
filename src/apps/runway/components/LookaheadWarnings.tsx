@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { ChevronRight, TriangleAlert } from 'lucide-react';
 
-import { Button, Callout } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import InlineNotice from '@/components/InlineNotice';
 import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SensitiveValue from '@/components/SensitiveValue';
@@ -125,7 +126,9 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
           </ul>
         )}
         {isFixesOpen && endsText !== null && (
-          <Callout variant='info' description={endsText} className='mt-3' />
+          <InlineNotice tone='info' className='mt-3'>
+            {endsText}
+          </InlineNotice>
         )}
       </DetailSheet>
     </>
