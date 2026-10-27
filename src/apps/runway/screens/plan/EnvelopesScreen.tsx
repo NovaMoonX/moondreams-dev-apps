@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Mail } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
@@ -49,7 +49,7 @@ function EnvelopesScreen() {
     }
     if (envelopes.length === 0) {
       return (
-        <EmptyCard icon={<Mail className='h-5 w-5' />}>
+        <EmptyCard icon={<Wallet className='h-5 w-5' />}>
           An envelope is spending with no due date, like groceries or gas. Add
           one and say how often it gets money.
         </EmptyCard>
@@ -94,7 +94,7 @@ function EnvelopesScreen() {
       {getBody()}
       <FloatingAction
         label='Add an envelope'
-        icon={<Mail className='h-5 w-5' aria-hidden='true' />}
+        icon={<Wallet className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
       {formKey !== null && (
