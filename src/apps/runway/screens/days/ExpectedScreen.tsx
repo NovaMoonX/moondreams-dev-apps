@@ -17,7 +17,7 @@ interface ExpectedScreenProps {
   onClose: () => void;
 }
 
-/** Reached from "+ Expected" on Days: money coming in or an expense coming up, asked first as two large choices because it decides the questions after it. */
+/** Reached from "Add expected" on Days: money coming in or an expense coming up, asked first as two large choices because it decides the questions after it. */
 function ExpectedScreen({ onClose }: ExpectedScreenProps) {
   const [kind, setKind] = useState<ExpectedKind | null>(null);
 

@@ -130,7 +130,7 @@ function BillsScreen() {
             size='sm'
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
-            + Add bill
+            Add a bill
           </Button>
         }
       />

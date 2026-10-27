@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, Home, ListChecks } from 'lucide-react';
+import { ChevronRight, Home, ListChecks, ReceiptText } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -167,15 +167,39 @@ function HomeScreen() {
           <SectionHeader
             title={HOME_WORDS.envelopes}
             action={
-              <LevelGate level='track'>
-                <Button
-                  variant='secondary'
-                  size='sm'
-                  onClick={() => setIsAddingPurchase(true)}
-                >
-                  + {SPEND_WORDS.envelopeAdd}
-                </Button>
-              </LevelGate>
+              <span className='flex items-center gap-2'>
+                <LevelGate level='track'>
+                  <Button
+                    variant='secondary'
+                    size='sm'
+                    aria-label={SPEND_WORDS.envelopeAdd}
+                    onClick={() => setIsAddingPurchase(true)}
+                  >
+                    <ReceiptText
+                      className='h-4 w-4 min-[360px]:hidden'
+                      aria-hidden='true'
+                    />
+                    <span className='max-[359px]:hidden'>
+                      {SPEND_WORDS.envelopeAdd}
+                    </span>
+                  </Button>
+                </LevelGate>
+                {envelopes.length > shown.length && (
+                  <Button
+                    variant='tertiary'
+                    size='sm'
+                    className='text-muted-foreground! gap-0.5 px-1! text-sm font-normal'
+                    aria-label={`See all ${envelopes.length} envelopes`}
+                    onClick={() => {
+                      showPlanSection('envelopes');
+                      showTab('plan');
+                    }}
+                  >
+                    See all
+                    <ChevronRight className='h-4 w-4' aria-hidden='true' />
+                  </Button>
+                )}
+              </span>
             }
           />
           <ul
@@ -197,19 +221,6 @@ function HomeScreen() {
               />
             ))}
           </ul>
-          {envelopes.length > shown.length && (
-            <Button
-              variant='tertiary'
-              className='h-10 gap-1 px-0!'
-              onClick={() => {
-                showPlanSection('envelopes');
-                showTab('plan');
-              }}
-            >
-              See all {envelopes.length} envelopes
-              <ChevronRight className='h-4 w-4' aria-hidden='true' />
-            </Button>
-          )}
         </div>
       )}
       {nextDay && (

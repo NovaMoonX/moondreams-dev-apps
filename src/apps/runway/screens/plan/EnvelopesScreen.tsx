@@ -98,7 +98,7 @@ function EnvelopesScreen() {
             size='sm'
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
-            + New envelope
+            Add an envelope
           </Button>
         }
       />

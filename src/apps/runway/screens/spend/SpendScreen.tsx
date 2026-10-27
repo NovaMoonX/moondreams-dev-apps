@@ -10,11 +10,15 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import PurchaseRow from '@apps/runway/components/PurchaseRow';
 import {
+  DEFAULT_SPEND_PERIOD,
+  SPEND_OTHER_MONTH,
   SPEND_PAGE_SIZE,
+  SPEND_PERIOD_LABELS,
+  SPEND_PERIOD_WORDS,
+  SPEND_PERIODS,
   SPEND_PILL_LIMIT,
   SPEND_SEARCH_THRESHOLD,
   SPEND_WORDS,
@@ -22,6 +26,15 @@ import {
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
+import {
+  getMonthStart,
+  getPreviousMonth,
+  listMonths,
+  toMonthKey,
+} from '@apps/runway/engine/closings';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getSpendRange } from '@apps/runway/utils/spendPeriod';
+import { useNow } from '@/hooks/useNow';
 import {
   selectItemLooks,
   selectIsMovesLoaded,
@@ -32,6 +45,12 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 
 const ALL_ENVELOPES = 'all';
+
+const monthName = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
 
 const monthLabel = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -52,7 +71,7 @@ const groupByMonth = (purchases: readonly OpenPurchase[]) =>
 /** What was spent since the newest closing, newest first; earlier purchases are counted in the figures and arrive with the history view. Search covers the window in view. */
 function SpendScreen() {
   const isLoaded = useAppSelector(selectIsMovesLoaded);
-  const purchases = useAppSelector(selectSpendPurchases);
+  const allSpendPurchases = useAppSelector(selectSpendPurchases);
   const recentFrom = useAppSelector(selectRecentFrom);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
@@ -64,7 +83,23 @@ function SpendScreen() {
     openPurchase,
     purchaseId,
     closePurchase,
+    spendPeriod,
+    showSpendPeriod,
   } = useRunwayUrlState();
+  const today = todayAsUtcDate(useNow(60_000));
+  const periodFor = useAppSelector((state) => state.runway.periodFor);
+
+  const range = getSpendRange(spendPeriod, today);
+  const purchases = allSpendPurchases.filter(
+    (purchase) => purchase.date >= range.from && purchase.date < range.to,
+  );
+  const isPeriodReady =
+    periodFor === range.key ||
+    (recentFrom !== null && range.from >= recentFrom);
+  const total = purchases.reduce(
+    (sum, purchase) => sum + purchase.amountCents,
+    0,
+  );
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -93,11 +128,25 @@ function SpendScreen() {
           .includes(needle)),
   );
   const visible = matches.slice(0, shown);
-  const isWholeLedger = recentFrom === null || recentFrom <= (startDate ?? 0);
-  const windowNote = isWholeLedger
-    ? null
-    : `${SPEND_WORDS.windowFrom} ${formatDateUTC(recentFrom)}. ${SPEND_WORDS.windowNote}`;
   const groups = groupByMonth(visible);
+  const isRecent = spendPeriod === DEFAULT_SPEND_PERIOD;
+  const currentMonth = toMonthKey(today);
+  const startMonth = toMonthKey(startDate ?? today - 365 * 86_400_000);
+  const olderMonths = listMonths(startMonth, getPreviousMonth(currentMonth))
+    .reverse()
+    .slice(0, 120);
+  const olderChoices =
+    olderMonths.length > 0 ? olderMonths : [getPreviousMonth(currentMonth)];
+  const pillValue = (SPEND_PERIODS as readonly string[]).includes(spendPeriod)
+    ? spendPeriod
+    : SPEND_OTHER_MONTH;
+  const periodOptions = [
+    ...SPEND_PERIODS.map((value) => ({
+      value: value as string,
+      label: SPEND_PERIOD_LABELS[value],
+    })),
+    { value: SPEND_OTHER_MONTH as string, label: SPEND_PERIOD_LABELS.other },
+  ];
 
   const filterOptions = [
     {
@@ -117,12 +166,12 @@ function SpendScreen() {
   ];
 
   const getBody = () => {
-    if (!isLoaded) {
+    if (!isLoaded || !isPeriodReady) {
       return (
         <p className='text-muted-foreground text-sm'>{SPEND_WORDS.loading}</p>
       );
     }
-    if (purchases.length === 0) {
+    if (allSpendPurchases.length === 0 && purchases.length === 0 && isRecent) {
       return (
         <EmptyCard icon={<Wallet className='h-5 w-5' />}>
           {SPEND_WORDS.empty}
@@ -131,6 +180,38 @@ function SpendScreen() {
     }
     return (
       <div className='space-y-4'>
+        <div className='space-y-2'>
+          <PillGroup
+            isThin
+            label='Period'
+            options={periodOptions}
+            value={pillValue}
+            onChange={(value) =>
+              showSpendPeriod(
+                value === SPEND_OTHER_MONTH
+                  ? (olderChoices[1] ?? olderChoices[0])
+                  : value,
+              )
+            }
+          />
+          {pillValue === SPEND_OTHER_MONTH && (
+            <Select
+              aria-label={SPEND_PERIOD_WORDS.pickMonth}
+              options={olderChoices.map((month) => ({
+                text: monthName.format(getMonthStart(month)),
+                value: month,
+              }))}
+              value={spendPeriod}
+              onChange={(value) => showSpendPeriod(value)}
+            />
+          )}
+          <p className='text-muted-foreground text-sm'>
+            {SPEND_PERIOD_WORDS.total}{' '}
+            <span className='text-foreground font-semibold tabular-nums'>
+              {formatCents(total)}
+            </span>
+          </p>
+        </div>
         {purchases.length >= SPEND_SEARCH_THRESHOLD && (
           <SearchInput
             value={query}
@@ -173,7 +254,11 @@ function SpendScreen() {
           />
         )}
         {matches.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>{SPEND_WORDS.noMatch}</p>
+          <p className='text-muted-foreground text-sm'>
+            {purchases.length === 0
+              ? SPEND_PERIOD_WORDS.emptyPeriod
+              : SPEND_WORDS.noMatch}
+          </p>
         ) : (
           groups.map((group) => (
             <div key={group.label} className='space-y-2'>
@@ -192,15 +277,14 @@ function SpendScreen() {
           ))
         )}
         {matches.length > visible.length && (
-          <ShowMoreButton
-            onClick={() => setShown((current) => current + SPEND_PAGE_SIZE)}
-          >
-            Show {Math.min(SPEND_PAGE_SIZE, matches.length - visible.length)}{' '}
-            more
-          </ShowMoreButton>
-        )}
-        {windowNote && (
-          <p className='text-muted-foreground text-xs'>{windowNote}</p>
+          <div className='[&_button]:text-muted-foreground! [&_button]:text-sm'>
+            <ShowMoreButton
+              onClick={() => setShown((current) => current + SPEND_PAGE_SIZE)}
+            >
+              Show {Math.min(SPEND_PAGE_SIZE, matches.length - visible.length)}{' '}
+              more
+            </ShowMoreButton>
+          </div>
         )}
       </div>
     );
@@ -216,7 +300,7 @@ function SpendScreen() {
             size='sm'
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
           >
-            + {SPEND_WORDS.newPurchase}
+            {SPEND_WORDS.newPurchase}
           </Button>
         }
       />

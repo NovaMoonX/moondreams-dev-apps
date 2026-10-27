@@ -86,6 +86,7 @@ function IncomeDayCard({
       }
       detail={detail}
       isDetailStrong={Boolean(note)}
+      isDetailWarning={Boolean(note)}
       figure={amount}
       ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}. Open this day`}
       onOpen={onOpen}

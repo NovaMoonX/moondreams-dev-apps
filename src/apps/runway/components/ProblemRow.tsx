@@ -4,52 +4,53 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import type { LookaheadProblem } from '@apps/runway/engine/lookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { describeProblem } from '@apps/runway/utils/lookaheadText';
-import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
+import { describeProblemRow } from '@apps/runway/utils/lookaheadText';
+import { FIX_WORDS } from '@apps/runway/constants';
+import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
 
 interface ProblemRowProps {
   problem: LookaheadProblem;
-  /** Closes the sheet the row sits in; the row then opens its door once the sheet's history step is done. */
-  onLeave?: () => void;
 }
 
-/** One thing that stops the plan, as a row that opens the income day it runs short on, or the bills for a bill with no income or one past due. */
-function ProblemRow({ problem, onLeave }: ProblemRowProps) {
-  const { openDay, showPlanSection, showTab } = useRunwayUrlState();
-  const text = describeProblem(problem);
+/** One thing that stops the plan: what is short or missing, by how much and on which day, as a row that opens the income day it runs short on, or the bills. */
+function ProblemRow({ problem }: ProblemRowProps) {
+  const { openDay, showPlanSection, showTab, closeFixes } = useRunwayUrlState();
+  const { title, detail } = describeProblemRow(problem);
+  const isDay = problem.kind === 'short';
 
-  const go = () => {
+  const open = () => {
     if (problem.kind === 'short') {
+      keepEntryFor('fixes');
       openDay(problem.dayKey);
       return;
     }
+    closeFixes();
     showPlanSection('bills');
     showTab('plan');
-  };
-  const open = () => {
-    if (!onLeave) {
-      go();
-      return;
-    }
-    onLeave();
-    leaveAfterSubviewCloses(go);
   };
 
   return (
     <Button
       type='button'
       variant='tertiary'
-      className='h-auto min-h-11 w-full items-start justify-start gap-3 p-3 text-left text-sm font-normal whitespace-normal'
-      aria-label={`${text} ${problem.kind === 'short' ? 'Open this income day' : 'Open your bills'}`}
+      className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
+      aria-label={`${title}, ${detail}. ${isDay ? FIX_WORDS.openDay : FIX_WORDS.openBills}`}
       onClick={open}
     >
-      <TriangleAlert
-        className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+      <span
+        className='grid size-9 shrink-0 place-items-center rounded-full bg-(--runway-warning-soft) text-(--runway-warning-ink) shadow-[inset_0_0_0_1px_var(--runway-warning-edge)]'
         aria-hidden='true'
-      />
-      <span className='min-w-0 flex-1 break-words'>{text}</span>
+      >
+        <TriangleAlert className='h-4 w-4' />
+      </span>
+      <span className='min-w-0 flex-1'>
+        <span className='block font-medium break-words'>{title}</span>
+        <span className='text-muted-foreground block text-sm break-words'>
+          {detail}
+        </span>
+      </span>
       <ChevronRight
-        className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+        className='text-muted-foreground mt-2.5 h-4 w-4 shrink-0'
         aria-hidden='true'
       />
     </Button>

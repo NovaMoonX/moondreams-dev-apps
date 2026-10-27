@@ -19,6 +19,7 @@ import {
   startRecordsListener,
 } from '@apps/runway/store/listeners/dayListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
+import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { startPurchasesListener } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
@@ -43,6 +44,7 @@ import {
   setKeyStatus,
   setLoadDay,
   setMoves,
+  setPeriodPurchases,
   setPlan,
   setPurchases,
   setRecords,
@@ -222,8 +224,47 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     };
   }, [uid, keyStatus, confirmedDayIds, dispatch]);
 
-  const { moreEntry, logSpan, logPage, logItem } = useRunwayUrlState();
+  const { moreEntry, logSpan, logPage, logItem, activeTab, spendPeriod } =
+    useRunwayUrlState();
+  const isSpendOpen = activeTab === 'spend';
+  const {
+    from: periodFrom,
+    to: periodTo,
+    key: periodKey,
+  } = getSpendRange(spendPeriod, todayAsUtcDate());
   const isChangeLogOpen = moreEntry === 'changeLog';
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !isSpendOpen) return;
+
+    const stop: { current: (() => void) | null } = { current: null };
+    const run = { isCurrent: true };
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        stop.current = startPurchasesListener(
+          uid,
+          encryption,
+          periodFrom,
+          (purchases) =>
+            dispatch(setPeriodPurchases({ key: periodKey, purchases })),
+          (error) => {
+            console.error('The purchases did not open', error);
+            dispatch(setKeyStatus('failed'));
+          },
+          periodTo,
+        );
+      })
+      .catch(() => {
+        if (run.isCurrent) dispatch(setKeyStatus('failed'));
+      });
+
+    return () => {
+      run.isCurrent = false;
+      stop.current?.();
+    };
+  }, [uid, keyStatus, isSpendOpen, periodFrom, periodTo, periodKey, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || !isChangeLogOpen) return;
