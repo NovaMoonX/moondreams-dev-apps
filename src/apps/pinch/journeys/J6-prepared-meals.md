@@ -301,7 +301,7 @@ Ordered by value to the person. Sizes: S = a label or a line; M = a screen or co
 7. **The frequent action works offline like the action that created the record.** Taking a portion out is queued like putting one away, and transactions are for rare corrections. → `CLAUDE.md` State, data, and performance.
 8. **An action with an Undo toast asks no confirm.** Confirms are for what can't be undone. → `CLAUDE.md` Design & UX (a note under the deletes rule).
 9. **Challenge "no Calendar or Overview surface and no push for an eat-by date"** → "Prepared meals live under Kitchen. The plan builder may offer what's due in one captioned row, and an eat-by nudge is opt-in, once a day, and answerable." → `.claude/rules/pinch.md`.
-10. **Review check for record-keeping features:** count the taps to keep the data true for a week at real frequency, and walk the "a week later, nothing was logged" state (stale stock, past-dated pile) before calling it done. → `.claude/skills/pr-wrap-up/references/review-agents.md` (product agent).
+10. **Review check for record-keeping features:** count the taps to keep the data true for a week at real frequency, and walk the "a week later, nothing was logged" state (stale stock, past-dated pile) before calling it done. → the reviewer agents in `.claude/agents/` (product agent).
 
 ## 8. Open questions for the owner
 

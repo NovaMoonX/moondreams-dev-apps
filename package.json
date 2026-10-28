@@ -65,8 +65,10 @@
     "fb:version": "tsx scripts/publishAppVersion.ts",
     "fb:invoker": "tsx scripts/fbInvoker.ts",
     "fb:all": "npm run fb:deploy:smart",
-    "issues:create": "bash scripts/createGithubIssues.sh",
-    "issues:create:dry-run": "bash scripts/createGithubIssues.sh"
+    "issues:create": "tsx scripts/createGithubIssues.ts",
+    "issues:create:dry-run": "tsx scripts/createGithubIssues.ts",
+    "prs:check": "bash scripts/prSync.sh",
+    "prs:sync": "bash scripts/prSync.sh --merge"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",

@@ -10,8 +10,8 @@ export type AppRegistryEntry = {
   resumeParams?: string[];
 };
 
-/* IMPORTANT: A new app is more than an entry here: follow the "New mini-app checklist" in
-   .github/copilot-instructions.md (usage tracking hook and finder, store, rules, seed, docs).
+/* IMPORTANT: A new app is more than an entry here: follow the New app checklist in
+   docs/conventions/new-app.md (usage tracking hook and finder, store, rules, seed, docs).
    Keep the following in sync with this registry:
    - in /public folder: logos and banners
    - cloudflare-worker.js

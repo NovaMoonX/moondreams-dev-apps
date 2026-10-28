@@ -1,8 +1,6 @@
----
-applyTo: 'src/**/*'
----
+# Dreamer UI components
 
-# Dreamer UI Components
+A one-page reference to the component library. Check `src/components` and `src/ui` first (`CLAUDE.md` "Shared components first, then Dreamer UI"), and the installed version in `node_modules/@moondreamsdev/dreamer-ui/dist/src/components` when a prop here looks out of date.
 
 All components are imported from `@moondreamsdev/dreamer-ui/components`.
 

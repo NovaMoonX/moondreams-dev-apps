@@ -457,7 +457,7 @@ Ordered by value. I say where I agree or differ with the journey audits.
 | R9 | **Quiet is the default; depth is opt-in.** A new kind of row line starts off unless it is a decision for that row; a View option exists for preference, not to tame a loud default | `.claude/rules/pinch.md` "Rows can hide their numbers"; CLAUDE.md *Product* "Lists show the least by default" |
 | R10 | **Pinch: food to eat soon shows where dinner is decided** (one Calendar line when due, the plan builder's empty plate), and rows show stock only when due | `.claude/rules/pinch.md` (replaces "no Calendar or Overview surface") |
 | R11 | **A missing price is said once per surface**, in one vocabulary ("no price yet", "not priced", "+"), and the nudge sits only where the gap is owned: the recipe, the period summary, Kitchen's batch | `.claude/rules/pinch.md` ("Missing details appear only as in-context nudge lines", "The nudge lives on the drawers") |
-| R12 | **Review checklist: count what a screen volunteers.** For each touched screen, list the volunteered items at 390×844 for the seeded, empty and scale fixtures, classify each (decision / status / reference / noise), and fail on any noise, anything over budget, or one fact shown twice in one view | `.claude/skills/pr-wrap-up/references/review-agents.md` (design and product agents) |
+| R12 | **Review checklist: count what a screen volunteers.** For each touched screen, list the volunteered items at 390×844 for the seeded, empty and scale fixtures, classify each (decision / status / reference / noise), and fail on any noise, anything over budget, or one fact shown twice in one view | the reviewer agents in `.claude/agents/` (design and product agents) |
 
 ---
 

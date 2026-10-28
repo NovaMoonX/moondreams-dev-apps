@@ -249,7 +249,7 @@ flowchart TD
 5. **An action on a recipe defaults to the whole recipe** (its own servings), and a stepper says what its unit means. → `.claude/rules/pinch.md`.
 6. **A total with nothing priced says "No prices yet", never $0.00, and a caveat about frozen days appears only when a frozen day is in view.** → `.claude/rules/pinch.md`.
 7. **A stepping sheet carries the previous row's answer to the same question as the next row's default.** It's the person's own answer, so it's an exception to "nothing preselected". → `CLAUDE.md` Design & UX.
-8. **Review as Jamie.** Every PR that adds a surface opens it on an empty kitchen and lists what appears with no data. Anything that counts, warns or prompts about nothing is a finding. → `.claude/skills/pr-wrap-up/references/review-agents.md` (product and design checklists).
+8. **Review as Jamie.** Every PR that adds a surface opens it on an empty kitchen and lists what appears with no data. Anything that counts, warns or prompts about nothing is a finding. → the reviewer agents in `.claude/agents/` (product and design checklists).
 
 ## 8. Open questions for the owner
 

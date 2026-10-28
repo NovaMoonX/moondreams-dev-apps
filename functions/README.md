@@ -16,7 +16,7 @@ Server-side code for the mini-apps. Every function:
 | `getCalendarShare` | callable, **no sign-in** | A-List Tracker | `{ shareId, pin? }` → `{ status: 'ok', calendar }`, or `pin_required`, `wrong_pin`, `not_found`. Serves a calendar share to anyone with its link |
 | `findTheatres` | callable | A-List Tracker | `{ query }` (a 5-digit zip code, a city or state, or part of a theater's name), `{ state }` or `{ latitude, longitude }` → `{ theatres, places, area }`: the closest AMC theaters (up to 10 nearest first, 25 for a state, each with its time zone), or for a typed city or state the places to confirm plus theaters matching the name, from the AMC Theatres API |
 | `findShowtimes` | callable | A-List Tracker | `{ theatreId, date, title }` → `{ showtimes }`: a movie's showings at an AMC theater that day, with format, list price, a Standard price to compare and a purchase link |
-| `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](src/apps/worth-the-wait/README.md)) |
+| `triggerBoxAction` | callable | Worth the Wait | Runs the locked reveal/raffle workflow ([details](../src/apps/worth-the-wait/PRODUCT.md)) |
 | `deleteTrip` | callable | Waypoint | Deletes a trip and everything a client `deleteDoc` can't reach (subcollections, requests, email invitations, members' personal expenses, reminders, cover) |
 | `shiftTripDates` | callable | Waypoint | Moves a trip's dates while keeping every event, stay, rental and expense on its calendar day ("keep original dates"); checklist due days stay relative to the trip's start and are left alone |
 | `rescheduleTripReminders` | Firestore update on `apps/waypoint/trips/{tripId}` | Waypoint | Re-times event reminders when a relative trip's dates or time zone change |
