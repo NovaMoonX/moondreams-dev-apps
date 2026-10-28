@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -327,7 +328,7 @@ function StartFlow({
       overlay
       title={START_WORDS.title}
       onClose={closeView}
-      headerAction={headerAction}
+      headerAction={headerAction ?? <ValuesEyeButton />}
       onBack={() => {
         if (isLeaving) closeView();
         else if (isAsking) leave();

@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 
+import SensitiveValue, { MASK } from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+
 interface BeforeAfterRowProps {
   /** What the row is about; it wraps to two lines. */
   title: string;
@@ -13,6 +16,8 @@ interface BeforeAfterRowProps {
   afterLabel: string;
   /** A line under the values (a note, a reason). */
   detail?: ReactNode;
+  /** The two values are private figures: masked while amounts are hidden, in the row's name too. */
+  isPrivate?: boolean;
 }
 
 /** A row with two values side by side, the earlier one quiet and the later one in full weight. */
@@ -24,11 +29,16 @@ function BeforeAfterRow({
   beforeLabel,
   afterLabel,
   detail,
+  isPrivate = false,
 }: BeforeAfterRowProps) {
+  const { isHidden } = useValuesHidden();
+  const isMasked = isPrivate && isHidden;
+  const show = (value: string) =>
+    isPrivate ? <SensitiveValue>{value}</SensitiveValue> : value;
   return (
     <li
       className='flex items-start gap-3 p-3'
-      aria-label={`${title}: ${beforeLabel} ${before}, ${afterLabel} ${after}`}
+      aria-label={`${title}: ${beforeLabel} ${isMasked ? MASK : before}, ${afterLabel} ${isMasked ? MASK : after}`}
     >
       {leading}
       <div className='min-w-0 flex-1 space-y-1'>
@@ -36,12 +46,14 @@ function BeforeAfterRow({
         <div className='flex flex-wrap items-baseline gap-x-4 gap-y-0.5 text-sm'>
           <p className='text-muted-foreground'>
             {beforeLabel}{' '}
-            <span className='whitespace-nowrap tabular-nums'>{before}</span>
+            <span className='whitespace-nowrap tabular-nums'>
+              {show(before)}
+            </span>
           </p>
           <p>
             {afterLabel}{' '}
             <span className='font-semibold whitespace-nowrap tabular-nums'>
-              {after}
+              {show(after)}
             </span>
           </p>
         </div>

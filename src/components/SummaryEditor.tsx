@@ -80,6 +80,8 @@ interface SummaryEditorProps {
   label: string;
   /** What the field holds; empty shows `placeholder` instead. */
   summary: string;
+  /** The summary drawn as nodes in place of its words (a figure kept private); `summary` still decides whether it is empty. */
+  summaryNode?: ReactNode;
   placeholder: string;
   /** Why what is stored can't be used, shown under the summary so a closed editor never hides it. */
   problem?: string | null;
@@ -107,6 +109,7 @@ interface SummaryEditorProps {
 function SummaryEditor({
   label,
   summary,
+  summaryNode,
   placeholder,
   problem = null,
   title,
@@ -180,7 +183,7 @@ function SummaryEditor({
             isEmpty && 'text-muted-foreground',
           )}
         >
-          {isEmpty ? placeholder : summary}
+          {isEmpty ? placeholder : (summaryNode ?? summary)}
         </span>
         {problem && (
           <span className='text-destructive block text-xs font-normal'>

@@ -11,6 +11,7 @@ import {
 } from '@apps/runway/engine/confirm';
 import {
   buildCorrection,
+  getCorrectionCover,
   getCorrectionId,
   keepTicks,
   type EffectiveSplit,
@@ -355,6 +356,8 @@ export interface CorrectDayInput {
   /** The amounts the person gave lines in place of the current ones, by line id. */
   edits: Record<string, Cents>;
   note: string | null;
+  /** What the person chose to cover from Free to spend beyond the cover the day already had. */
+  addedCoverCents: Cents;
 }
 
 /**
@@ -378,7 +381,7 @@ export async function correctDay(
   if (
     !isWithinCover(
       sealedPayload.freeToSpendCents,
-      -Math.min(0, base.freeToSpendCents),
+      getCorrectionCover(base, input.addedCoverCents),
     ) ||
     sealedPayload.lines.some((line) => line.cents < 0)
   ) {

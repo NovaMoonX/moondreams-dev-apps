@@ -2,6 +2,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { useStore } from 'react-redux';
 
 import InlineNotice from '@/components/InlineNotice';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector, type RootState } from '@/store';
@@ -274,6 +275,8 @@ function EffectPreview({
     days !== null &&
     getMoves(days).isMove &&
     getMoves(days).removed.length === 1;
+  const isCarrySaid =
+    isMoveSaid && movedNotes.some((note) => note.isOneCarried);
 
   const getBody = () => {
     if (virtual === null || days === null) {
@@ -309,7 +312,10 @@ function EffectPreview({
       return (
         <div className='space-y-1'>
           {first === undefined ? (
-            <p className='text-sm'>{describeUnmoved(days)}</p>
+            <p className='text-sm'>
+              {describeUnmoved(days)}
+              {isCarrySaid && ` ${COMPACT_MOVE_WORDS.carriedWithIt}`}
+            </p>
           ) : (
             <p className='text-sm'>
               {count} {formatDateUTC(first.on)}:{' '}
@@ -380,32 +386,36 @@ function EffectPreview({
   return (
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
       {getBody()}
-      {movedNotes.map((note) => (
-        <InlineNotice key={note.text} tone={note.tone}>
-          {note.isOneCarried && isMoveSaid
-            ? COMPACT_MOVE_WORDS.carriedWithIt
-            : note.text}
-        </InlineNotice>
-      ))}
-      {holdsText &&
-        !(isCompact && holdsText.isSame) &&
-        holdsText.blocks.map((block) => (
-          <InlineNotice key={block.text} tone={block.tone}>
-            {block.figure === null ? (
-              block.text
-            ) : (
-              <>
-                {block.text.slice(0, block.text.indexOf(block.figure))}
-                <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
-                  {block.figure}
-                </strong>
-                {block.text.slice(
-                  block.text.indexOf(block.figure) + block.figure.length,
-                )}
-              </>
-            )}
+      {movedNotes
+        .filter((note) => !(note.isOneCarried && isCarrySaid))
+        .map((note) => (
+          <InlineNotice key={note.text} tone={note.tone}>
+            {note.text}
           </InlineNotice>
         ))}
+      {holdsText &&
+        !(isCompact && holdsText.isSame) &&
+        holdsText.blocks.map((block) =>
+          isHidden && block.tone === 'warning' ? (
+            <NeedsALookRow key={block.text} />
+          ) : (
+            <InlineNotice key={block.text} tone={block.tone}>
+              {block.figure === null ? (
+                block.text
+              ) : (
+                <>
+                  {block.text.slice(0, block.text.indexOf(block.figure))}
+                  <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
+                    {block.figure}
+                  </strong>
+                  {block.text.slice(
+                    block.text.indexOf(block.figure) + block.figure.length,
+                  )}
+                </>
+              )}
+            </InlineNotice>
+          ),
+        )}
     </ActionSection>
   );
 }

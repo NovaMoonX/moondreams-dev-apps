@@ -9,11 +9,18 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
+import { DAY_MS } from '@apps/runway/engine/dates';
+import {
+  getHeldReleaseDay,
+  readHeldReleasedOn,
+  type HeldChoice,
+} from '@apps/runway/engine/endings';
 import type { ItemPayload } from '@apps/runway/utils/changeText';
 import type {
   BillSealed,
   ChangeDoc,
   ChangeSealed,
+  DateOnly,
   EnvelopeSealed,
   GoalSealed,
   Ending,
@@ -100,6 +107,7 @@ export async function createIncome(
     createdAt: now,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   });
   const firstVersion = (
     itemId: string,
@@ -177,6 +185,7 @@ export async function createEnvelope(
     createdAt: now,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -240,6 +249,7 @@ export async function createBill(
     createdAt: now,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -305,6 +315,7 @@ export async function createGoal(
     createdAt: now,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   };
   const version: PlanVersionDoc = {
     id: generateUuid(),
@@ -397,6 +408,8 @@ export interface EndItemInput {
   endedOn: number;
   summary: string;
   note: string | null;
+  /** What the person chose for the money it holds; null when it holds none and none was asked. */
+  heldChoice: HeldChoice | null;
 }
 
 /**
@@ -429,7 +442,13 @@ export async function endItem(
       itemIds: [input.itemId],
       sealed,
     };
-    transaction.update(headerRef, { endedAt: input.endedOn });
+    transaction.update(headerRef, {
+      endedAt: input.endedOn,
+      heldReleasedOn:
+        input.heldChoice === null
+          ? null
+          : getHeldReleaseDay(input.heldChoice, input.endedOn + DAY_MS),
+    });
     transaction.set(itemPath(uid, 'changes', changeId), entry);
     return true;
   });
@@ -440,6 +459,8 @@ export interface ArchiveItemInput {
   itemId: string;
   summary: string;
   note: string | null;
+  /** What the person chose for the money it holds; null when it holds none and none was asked. */
+  heldChoice: HeldChoice | null;
 }
 
 /**
@@ -472,8 +493,56 @@ export async function archiveItem(
       itemIds: [input.itemId],
       sealed,
     };
-    transaction.update(headerRef, { archivedAt });
+    transaction.update(headerRef, {
+      archivedAt,
+      heldReleasedOn:
+        input.heldChoice === null
+          ? null
+          : getHeldReleaseDay(input.heldChoice, archivedAt),
+    });
     transaction.set(itemPath(uid, 'changes', changeId), entry);
+    return true;
+  });
+  return written;
+}
+
+/**
+ * Releases what a stopped item kept: from `releasedOn` it is Free to spend. Only a header that is
+ * stopped and still keeps its money is changed, so a second tap or another device writes nothing;
+ * returns whether this call wrote it.
+ */
+export async function releaseHeld(
+  uid: string,
+  itemId: string,
+  releasedOn: DateOnly,
+): Promise<boolean> {
+  const headerRef = itemPath(uid, 'items', itemId);
+  const written = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(headerRef);
+    if (!snapshot.exists()) throw new Error('This item no longer exists.');
+    const header = snapshot.data() as Partial<PlanItemDoc>;
+    const isStopped =
+      (header.archivedAt ?? null) !== null || (header.endedAt ?? null) !== null;
+    if (!isStopped || readHeldReleasedOn(header) !== null) return false;
+    transaction.update(headerRef, { heldReleasedOn: releasedOn });
+    return true;
+  });
+  return written;
+}
+
+/** Undoes `releaseHeld`: the item keeps its money again, only while the release is still the one this device wrote. */
+export async function undoReleaseHeld(
+  uid: string,
+  itemId: string,
+  releasedOn: DateOnly,
+): Promise<boolean> {
+  const headerRef = itemPath(uid, 'items', itemId);
+  const written = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(headerRef);
+    if (!snapshot.exists()) return false;
+    const header = snapshot.data() as Partial<PlanItemDoc>;
+    if ((header.heldReleasedOn ?? null) !== releasedOn) return false;
+    transaction.update(headerRef, { heldReleasedOn: null });
     return true;
   });
   return written;

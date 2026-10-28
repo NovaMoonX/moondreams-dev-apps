@@ -326,6 +326,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
               endedOn,
               summary: `${name}: ended after its last payday, ${formatDateUTC(endedOn)}.`,
               note: null,
+              heldChoice: null,
             }),
           ),
         ),

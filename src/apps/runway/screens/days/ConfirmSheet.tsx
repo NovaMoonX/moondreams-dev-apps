@@ -1,5 +1,4 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ChevronRight, TriangleAlert, Undo2 } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -30,8 +29,13 @@ import {
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
-import ItemBadge from '@apps/runway/components/ItemBadge';
+import {
+  BlockerDoor,
+  CoverCard,
+  CutsSection,
+} from '@apps/runway/components/ShortfallJourney';
 import { LineAmountEditList } from '@apps/runway/components/LineAmounts';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CONFIRM_COVER_WORDS,
   CONFIRM_FLOW_WORDS,
@@ -79,8 +83,6 @@ interface ConfirmSheetProps {
 }
 
 type Blocker = { text: string; door: 'cover' | 'cuts' | null };
-
-const SUGGESTIONS_SHOWN = 3;
 
 const toInputs = (
   edits: Record<string, Cents>,
@@ -200,16 +202,14 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       return {
         text: isNoticeShown
           ? CONFIRM_COVER_WORDS.needsCover
-          : CONFIRM_FLOW_WORDS.needsCover(formatCents(gap)),
+          : mask(CONFIRM_FLOW_WORDS.needsCover(formatCents(gap))),
         door: 'cover',
       };
     if (rest > 0)
       return {
         text: isNoticeShown
           ? CONFIRM_COVER_WORDS.needsCuts
-          : CONFIRM_FLOW_WORDS.needsCuts(
-              cover > 0 ? mask(formatCents(rest)) : formatCents(rest),
-            ),
+          : mask(CONFIRM_FLOW_WORDS.needsCuts(formatCents(rest))),
         door: 'cuts',
       };
     return null;
@@ -337,40 +337,12 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     if (error) return error;
     if (blocker === null) return null;
     if (blocker.door === null) return blocker.text;
-    const icon = (
-      <TriangleAlert
-        key='icon'
-        className='text-warning mt-0.5 h-4 w-4 shrink-0'
-        aria-hidden='true'
-      />
-    );
-    const words = (
-      <span key='words' className='text-foreground min-w-0 flex-1'>
-        {blocker.text}
-      </span>
-    );
-    if (isChoosing) {
-      return (
-        <span className='flex items-start gap-2'>
-          {icon}
-          {words}
-        </span>
-      );
-    }
     return (
-      <Button
-        type='button'
-        variant='tertiary'
-        className='h-auto min-h-10 w-full items-start justify-between gap-2 px-0! text-left text-xs font-normal whitespace-normal'
-        onClick={() => goToFix(blocker.door)}
-      >
-        {icon}
-        {words}
-        <ChevronRight
-          className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
-          aria-hidden='true'
-        />
-      </Button>
+      <BlockerDoor
+        text={blocker.text}
+        isDoor={!isChoosing}
+        onOpen={() => goToFix(blocker.door)}
+      />
     );
   };
   const footerNote = getFooterNote();
@@ -389,156 +361,43 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       return (
         <InlineNotice
           tone='success'
-          title={CONFIRM_FLOW_WORDS.moreTitle(amount)}
+          title={
+            <MaskedText>{CONFIRM_FLOW_WORDS.moreTitle(amount)}</MaskedText>
+          }
         >
           {CONFIRM_FLOW_WORDS.moreBody}
         </InlineNotice>
       );
     }
     return (
-      <InlineNotice tone='warning' title={CONFIRM_FLOW_WORDS.lessTitle(amount)}>
-        {getLessBody()}
+      <InlineNotice
+        tone='warning'
+        title={<MaskedText>{CONFIRM_FLOW_WORDS.lessTitle(amount)}</MaskedText>}
+      >
+        <MaskedText>{getLessBody()}</MaskedText>
       </InlineNotice>
     );
   };
 
-  const getCoverBody = () => {
-    if (cover > 0) {
-      return (
-        <div className='flex flex-wrap items-center justify-between gap-2'>
-          <p className='min-w-0 flex-1 text-sm' role='status'>
-            {CONFIRM_COVER_WORDS.coveredLead}{' '}
-            <SensitiveValue>{formatCents(cover)}</SensitiveValue>{' '}
-            {CONFIRM_COVER_WORDS.coveredTail} {CONFIRM_FLOW_WORDS.coveredAfter}{' '}
-            <SensitiveValue>
-              {formatCents((freeCents ?? 0) - cover)}
-            </SensitiveValue>
-            .
-          </p>
-          <RevealChip
-            icon={<Undo2 className='h-4 w-4' aria-hidden='true' />}
-            onClick={() => setCoverChoice(0)}
-          >
-            {CONFIRM_FLOW_WORDS.undo}
-          </RevealChip>
-        </div>
-      );
-    }
-    if (coverable === 0) {
-      return (
-        <p className='text-sm'>
-          {CONFIRM_FLOW_WORDS.coverNone(formatCents(gap))}
-        </p>
-      );
-    }
-    return (
-      <div className='space-y-3'>
-        {isHidden ? (
-          <p className='text-sm'>{CONFIRM_COVER_WORDS.coverHidden}</p>
-        ) : (
-          <p className='text-sm'>
-            {CONFIRM_FLOW_WORDS.coverLead}{' '}
-            <SensitiveValue>{formatCents(freeCents ?? 0)}</SensitiveValue>
-            {coverable === gap
-              ? CONFIRM_COVER_WORDS.coverAll
-              : CONFIRM_COVER_WORDS.coverPart}
-          </p>
-        )}
-        <Button
-          id={coverId}
-          type='button'
-          variant='secondary'
-          className='w-full'
-          disabled={isSaving}
-          onClick={() => setCoverChoice(coverable)}
-        >
-          {isHidden
-            ? CONFIRM_COVER_WORDS.coverHiddenAction
-            : coverable === gap
-              ? CONFIRM_FLOW_WORDS.coverAction
-              : CONFIRM_FLOW_WORDS.coverPartAction}
-        </Button>
-      </div>
-    );
-  };
-
-  const cutsStatus =
-    undoInputs !== null ? (
-      <div className='border-border flex flex-wrap items-center justify-between gap-2 rounded-2xl border p-3'>
-        <p className='min-w-0 flex-1 text-sm' role='status'>
-          {CONFIRM_FLOW_WORDS.used(loweredCount)}
-        </p>
-        <RevealChip
-          icon={<Undo2 className='h-4 w-4' aria-hidden='true' />}
-          onClick={undoCuts}
-        >
-          {CONFIRM_FLOW_WORDS.undo}
-        </RevealChip>
-      </div>
-    ) : null;
-
-  const cutsOffer =
-    suggested.length > 0 ? (
-      <div className='space-y-3'>
-        <p className='text-muted-foreground text-sm'>
-          {cover > 0
-            ? CONFIRM_COVER_WORDS.suggestRest
-            : isOfferingCover
-              ? CONFIRM_COVER_WORDS.suggestInstead
-              : CONFIRM_FLOW_WORDS.suggestIntro}
-        </p>
-        <ul className='border-border divide-border divide-y rounded-2xl border'>
-          {suggested.slice(0, SUGGESTIONS_SHOWN).map(({ line, from, to }) => {
-            const name = line.name === '' ? 'Bill' : line.name;
-            return (
-              <li key={line.lineId} className='flex items-start gap-3 p-3'>
-                <ItemBadge name={name} emoji={line.emoji} />
-                <span className='min-w-0 flex-1'>
-                  <span className='block text-base font-medium break-words'>
-                    <span className='line-clamp-2'>{name}</span>
-                  </span>
-                  <span className='text-muted-foreground block text-sm'>
-                    {CONFIRM_FLOW_WORDS.suggestDetail(formatCents(from))}
-                  </span>
-                </span>
-                <span className='text-base font-semibold whitespace-nowrap tabular-nums'>
-                  {cover > 0 ? (
-                    <SensitiveValue>{formatCents(to)}</SensitiveValue>
-                  ) : (
-                    formatCents(to)
-                  )}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-        {suggested.length > SUGGESTIONS_SHOWN && (
-          <p className='text-muted-foreground text-sm'>
-            {CONFIRM_FLOW_WORDS.suggestMore(
-              suggested.length - SUGGESTIONS_SHOWN,
-            )}
-          </p>
-        )}
-        <Button
-          id={cutsId}
-          type='button'
-          variant='secondary'
-          className='w-full'
-          disabled={isSaving}
-          onClick={applyCuts}
-        >
-          {CONFIRM_FLOW_WORDS.useThese}
-        </Button>
-      </div>
-    ) : null;
-
-  const cutsSection =
-    cutsStatus !== null || cutsOffer !== null ? (
-      <div className='space-y-3'>
-        {cutsStatus}
-        {cutsOffer}
-      </div>
-    ) : null;
+  const cutsSection = (
+    <CutsSection
+      id={cutsId}
+      suggested={suggested.map(({ line, from, to }) => ({
+        lineId: line.lineId,
+        name: line.name === '' ? 'Bill' : line.name,
+        emoji: line.emoji,
+        fromCents: from,
+        toCents: to,
+      }))}
+      usedCount={undoInputs === null ? null : loweredCount}
+      isCovered={cover > 0}
+      isOfferingCover={isOfferingCover}
+      isDisabled={isSaving}
+      onApply={applyCuts}
+      onUndo={undoCuts}
+    />
+  );
+  const hasCuts = undoInputs !== null || suggested.length > 0;
 
   const formBody = (
     <div className='space-y-5'>
@@ -554,11 +413,22 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       {hasAmount && gap > 0 && (
         <ActionSection caption={CONFIRM_FLOW_WORDS.coverCaption}>
           <div className='border-border rounded-2xl border p-3'>
-            {getCoverBody()}
+            <CoverCard
+              id={coverId}
+              gapCents={gap}
+              coverableCents={coverable}
+              coverCents={cover}
+              freeCents={freeCents ?? 0}
+              freeAfterCents={(freeCents ?? 0) - cover}
+              isHidden={isHidden}
+              isDisabled={isSaving}
+              onCover={() => setCoverChoice(coverable)}
+              onUndo={() => setCoverChoice(0)}
+            />
           </div>
         </ActionSection>
       )}
-      {hasAmount && cutsSection && (
+      {hasAmount && hasCuts && (
         <ActionSection caption={CONFIRM_FLOW_WORDS.suggestCaption}>
           {cutsSection}
         </ActionSection>
@@ -656,21 +526,22 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
                   <span
                     className={join(
                       'text-xl font-semibold tabular-nums',
-                      remainder + cover < 0 && 'text-(--runway-warning-ink)',
+                      remainder + cover < 0 &&
+                        !isHidden &&
+                        'text-(--runway-warning-ink)',
                     )}
                   >
-                    {cover > 0 ? (
-                      <SensitiveValue>
-                        {formatCents(remainder + cover)}
-                      </SensitiveValue>
-                    ) : (
-                      formatCents(remainder + cover)
-                    )}
+                    <SensitiveValue>
+                      {formatCents(remainder + cover)}
+                    </SensitiveValue>
                   </span>
                   {arrivedCents !== null && (
                     <span className='text-muted-foreground text-sm'>
                       {' '}
-                      of {formatCents(arrivedCents)}
+                      of{' '}
+                      <SensitiveValue>
+                        {formatCents(arrivedCents)}
+                      </SensitiveValue>
                     </span>
                   )}
                 </p>

@@ -5,7 +5,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
-import { DAY_STATUS_LABELS } from '@apps/runway/constants';
+import { DAY_STATUS_LABELS, NEEDS_LOOK_WORDS } from '@apps/runway/constants';
 import {
   selectEffectiveSplit,
   selectStance,
@@ -79,7 +79,9 @@ function IncomeDayCard({
       ? `${firstShort.name} ${shortFigure} short`
       : `${shorts.length} short, ${firstShort.name} ${shortFigure}`
     : undefined;
-  const warningLine = !firstShort ? undefined : shorts.length === 1 ? (
+  const warningLine = !firstShort ? undefined : isHidden ? (
+    NEEDS_LOOK_WORDS.short
+  ) : shorts.length === 1 ? (
     <>
       {firstShort.name}{' '}
       {!isHidden && <SensitiveValue>{`${shortFigure} `}</SensitiveValue>}

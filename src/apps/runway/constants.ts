@@ -277,7 +277,7 @@ export const TICK_HIT_CLASS =
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
-/** The most checklist ticks a day keeps; the rules cap the list at the same size. */
+/** The most checklist ticks a day keeps; the device keeps the cap, since the beta rules check no shape. */
 export const MAX_DONE_LINE_IDS = 200;
 /** How far back the recent listeners read while no closing applies (a plan too new to have one, or one that could not be rebuilt). */
 export const RECENT_DAYS_WINDOW = 180;
@@ -592,9 +592,6 @@ export const ENVELOPE_FIGURE_WORDS: Record<(typeof LEVELS)[number], string> = {
   plan: 'assigned',
   track: 'left',
 };
-
-/** Periods of tracking one plan keeps; the rules cap the list at the same size. */
-export const MAX_TRACKING_PERIODS = 50;
 
 export const TRACKING_WORDS = {
   title: 'Tracking',
@@ -1030,7 +1027,6 @@ export const CHECKLIST_R3_WORDS = {
   shortChoose: (amount: string) => `${amount} short · choose`,
   shortNote: (name: string, amount: string) =>
     `${name} is ${amount} short: choose before confirming`,
-  hiddenNote: (name: string) => `${name} is waiting: choose before confirming`,
   heldNote: (name: string, amount: string) =>
     `${name}: ${amount} held · choose before confirming`,
   notStarted: 'Not started',
@@ -1281,14 +1277,6 @@ export const PAIRING_STOP_WORDS = {
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} stop paying it first, so that money stays with each pay.`,
 } as const;
 
-/** What archiving or ending an item does with the money it holds. */
-export const RELEASE_WORDS = {
-  archive: (amount: string) =>
-    `The ${amount} it holds becomes Free\u00a0to\u00a0spend.`,
-  end: (amount: string) =>
-    `After its last day, the ${amount} it holds becomes Free\u00a0to\u00a0spend.`,
-} as const;
-
 // Round 7, package G8: money that arrives different from the plan.
 export const CONFIRM_FLOW_WORDS = {
   lessTitle: (amount: string) => `${amount} less than planned`,
@@ -1369,4 +1357,58 @@ export const COMPACT_MOVE_WORDS = {
   manyChange: (count: number, first: string) =>
     `${count} income days change, starting ${first}.`,
   carriedWithIt: 'What you changed for that day goes with it.',
+} as const;
+
+// Round 7, package G9: a correction that leaves its day short offers the same cover and cuts as Confirm.
+export const CORRECT_COVER_WORDS = {
+  coverNoneHidden:
+    'Free\u00a0to\u00a0spend has nothing to cover the difference, so some items get less this time.',
+  shortTitle: (amount: string) => `${amount} short`,
+  shortBody: 'The items on this day would get more than arrived.',
+  shortBeyondCover: (covered: string) =>
+    `That is beyond the ${covered} this day already covers from Free\u00a0to\u00a0spend.`,
+  needsCuts: 'Give some items less this time to correct the day.',
+  freeRow: 'Free\u00a0to\u00a0spend',
+  now: 'Now',
+  freeLead:
+    'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
+  coverGone:
+    'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
+} as const;
+
+/** Runway's Settings, round 7 package G9: its rows grouped under captions. */
+export const SETTINGS_GROUP_WORDS = {
+  planning: 'How the plan works',
+  plan: 'Your plan',
+  rangeNote:
+    'A pay or bill with a range can plan at its own end instead. You choose that where you add it.',
+} as const;
+
+/** Round 7 package G9: archiving or ending an item that holds money asks what happens to it. */
+export const HELD_WORDS = {
+  caption: (amount: string) => `The ${amount} it holds`,
+  freeTitle: 'Make it Free\u00a0to\u00a0spend',
+  freeArchive: 'From today.',
+  freeEnd: (date: string) => `From ${date}.`,
+  keepTitle: 'Keep it held',
+  keepBody: 'Until you release it.',
+  blocker: 'Choose what happens to the money it holds.',
+  release: 'Release what it holds',
+  releaseNow: 'It becomes Free\u00a0to\u00a0spend.',
+  releaseOn: (date: string) =>
+    `It becomes Free\u00a0to\u00a0spend from ${date}.`,
+  released: (name: string) => `What ${name} held is Free to spend`,
+  releaseFailed: (name: string) => `${name} was not changed`,
+  undo: 'Undo',
+  stoppedDivider: 'Stopped, still holding money',
+  archived: 'Archived',
+  ended: (date: string) => `Ended ${date}`,
+  holds: 'Holds',
+} as const;
+
+/** Round 7 package G9: while amounts are hidden, one neutral door stands in for the plan's warnings. */
+export const NEEDS_LOOK_WORDS = {
+  title: 'Something needs a look',
+  door: 'Show amounts to see it',
+  short: 'Needs a look',
 } as const;

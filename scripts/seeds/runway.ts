@@ -96,6 +96,7 @@ export const header = (
   createdAt,
   endedAt: null,
   archivedAt: null,
+  heldReleasedOn: null,
 });
 export const version = (
   id: string,
@@ -367,6 +368,12 @@ async function writeSeedLifecycle(
       ...header(entry.id, entry.kind, null, createdAt),
       endedAt: 'endedAt' in entry ? entry.endedAt : null,
       archivedAt: 'archivedAt' in entry ? entry.archivedAt : null,
+      heldReleasedOn:
+        'archivedAt' in entry
+          ? entry.archivedAt
+          : 'endedAt' in entry
+            ? entry.endedAt + DAY_MS
+            : null,
     });
     batch.set(
       context.firestore.doc(`${plan}/versions/seed-version-${entry.id}`),

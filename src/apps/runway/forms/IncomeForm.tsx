@@ -66,6 +66,9 @@ import type {
   Schedule,
   SourceSealed,
 } from '@apps/runway/types';
+import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 type Frequency = (typeof INCOME_FREQUENCIES)[number];
 type EndKind = (typeof INCOME_ENDINGS)[number];
@@ -635,8 +638,15 @@ function IncomeForm({
     },
   ];
   const [isAll, setIsAll] = useState(false);
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const maskNote = (note: string | null | undefined) =>
+    note ? mask(note) : null;
   const questions = useQuestionFlow({
-    steps: isEditingSource ? [sourceNameStep] : payLineSteps,
+    steps: maskSummaries(
+      isEditingSource ? [sourceNameStep] : payLineSteps,
+      isHidden,
+    ),
     startFolded: isEditing || !!draft?.initial,
   });
 
@@ -775,7 +785,9 @@ function IncomeForm({
               <ChangeSection />
             )}
             <ModalFooterActions
-              note={error ?? (isAsking ? questions.blocker : shownBlocker)}
+              note={
+                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+              }
               cancelAction={
                 <Button
                   type='button'

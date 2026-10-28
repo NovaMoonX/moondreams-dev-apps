@@ -71,6 +71,9 @@ import type {
   Ending,
   Priority,
 } from '@apps/runway/types';
+import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 type Frequency = (typeof BILL_FREQUENCIES)[number];
 type Funding = (typeof BILL_FUNDINGS)[number];
@@ -554,8 +557,12 @@ function BillForm({
     },
   ];
   const [isAll, setIsAll] = useState(false);
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const maskNote = (note: string | null | undefined) =>
+    note ? mask(note) : null;
   const questions = useQuestionFlow({
-    steps,
+    steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
   });
 
@@ -701,7 +708,9 @@ function BillForm({
             )}
             {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
-              note={error ?? (isAsking ? questions.blocker : shownBlocker)}
+              note={
+                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+              }
               cancelAction={
                 <Button
                   type='button'

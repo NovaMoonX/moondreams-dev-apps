@@ -10,6 +10,7 @@ import {
 } from '@apps/runway/components/LineAmounts';
 import { SPEND_WORDS } from '@apps/runway/constants';
 import { getLineEffect } from '@apps/runway/engine/purchases';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 
 export interface SplitEnvelope {
   id: string;
@@ -94,7 +95,7 @@ function SplitEditor({
         )}
         {getRestLine() && (
           <p className='text-muted-foreground text-sm' role='status'>
-            {getRestLine()}
+            <MaskedText>{getRestLine() ?? ''}</MaskedText>
           </p>
         )}
       </div>

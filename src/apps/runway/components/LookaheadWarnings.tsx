@@ -21,6 +21,7 @@ import {
   groupProblems,
 } from '@apps/runway/utils/lookaheadText';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ProblemRow from '@apps/runway/components/ProblemRow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
@@ -53,6 +54,20 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
   const isLabelPrivate = label.figure !== null;
   const shown = isAllShown ? groups : groups.slice(0, FIX_ROWS_SHOWN);
 
+  if (isHidden) {
+    return (
+      <>
+        <NeedsALookRow />
+        <DetailSheet
+          isOpen={isFixesOpen}
+          onClose={closeFixes}
+          title={PROBLEM_WORDS.title}
+        >
+          {isFixesOpen && <NeedsALookRow />}
+        </DetailSheet>
+      </>
+    );
+  }
   return (
     <>
       <Button

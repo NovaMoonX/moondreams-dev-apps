@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarRange, ShoppingBag, Wallet } from 'lucide-react';
+import { ShoppingBag, Wallet } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
@@ -9,7 +9,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
-import SummaryEditor from '@/components/SummaryEditor';
+import ScopeChip from '@/components/ScopeChip';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
@@ -175,6 +175,43 @@ function SpendScreen() {
       .sort((a, b) => a.label.localeCompare(b.label)),
   ];
 
+  const isFirstRun =
+    allSpendPurchases.length === 0 && purchases.length === 0 && isRecent;
+  const periodChip =
+    isLoaded && !isFirstRun ? (
+      <ScopeChip label={periodLabel} title={SPEND_PERIOD_WORDS.period}>
+        {(close) => (
+          <>
+            <PillGroup
+              label={SPEND_PERIOD_WORDS.period}
+              options={periodOptions}
+              value={isQuickPeriod ? spendPeriod : null}
+              onChange={(value) => {
+                showSpendPeriod(value);
+                close();
+              }}
+            />
+            {monthOptions.length > 0 && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>
+                  {SPEND_PERIOD_WORDS.months}
+                </p>
+                <PillGroup
+                  label={SPEND_PERIOD_WORDS.months}
+                  options={monthOptions}
+                  value={isQuickPeriod ? null : spendPeriod}
+                  onChange={(value) => {
+                    showSpendPeriod(value);
+                    close();
+                  }}
+                />
+              </div>
+            )}
+          </>
+        )}
+      </ScopeChip>
+    ) : null;
+
   const getBody = () => {
     if (periodFailedFor === range.key && !isPeriodReady) {
       return (
@@ -188,7 +225,7 @@ function SpendScreen() {
         <p className='text-muted-foreground text-sm'>{SPEND_WORDS.loading}</p>
       );
     }
-    if (allSpendPurchases.length === 0 && purchases.length === 0 && isRecent) {
+    if (isFirstRun) {
       return (
         <EmptyCard icon={<Wallet className='h-5 w-5' />}>
           {SPEND_WORDS.empty}
@@ -198,35 +235,6 @@ function SpendScreen() {
     return (
       <div className='space-y-4'>
         <div className='space-y-3'>
-          <SummaryEditor
-            label={SPEND_PERIOD_WORDS.period}
-            summary={periodLabel}
-            placeholder=''
-            title={SPEND_PERIOD_WORDS.period}
-            icon={<CalendarRange />}
-            isFramed
-            shouldFocus={false}
-          >
-            <PillGroup
-              label={SPEND_PERIOD_WORDS.period}
-              options={periodOptions}
-              value={isQuickPeriod ? spendPeriod : null}
-              onChange={showSpendPeriod}
-            />
-            {monthOptions.length > 0 && (
-              <div className='space-y-1.5'>
-                <p className='text-muted-foreground text-xs'>
-                  {SPEND_PERIOD_WORDS.months}
-                </p>
-                <PillGroup
-                  label={SPEND_PERIOD_WORDS.months}
-                  options={monthOptions}
-                  value={isQuickPeriod ? null : spendPeriod}
-                  onChange={showSpendPeriod}
-                />
-              </div>
-            )}
-          </SummaryEditor>
           <div>
             <p className='text-muted-foreground text-xs'>
               {SPEND_PERIOD_WORDS.total}
@@ -306,7 +314,7 @@ function SpendScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title={SPEND_WORDS.title} />
+      <SectionHeader title={SPEND_WORDS.title} action={periodChip} />
       {getBody()}
       <FloatingAction
         label={SPEND_WORDS.newPurchase}

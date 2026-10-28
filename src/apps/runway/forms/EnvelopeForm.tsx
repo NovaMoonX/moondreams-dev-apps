@@ -49,6 +49,9 @@ import {
   selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
+import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 interface EnvelopeFormData extends FundingFormData {
   name: string;
@@ -223,8 +226,12 @@ function EnvelopeForm({
     },
   ];
   const [isAll, setIsAll] = useState(false);
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const maskNote = (note: string | null | undefined) =>
+    note ? mask(note) : null;
   const questions = useQuestionFlow({
-    steps,
+    steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
   });
 
@@ -346,7 +353,9 @@ function EnvelopeForm({
             )}
             {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
-              note={error ?? (isAsking ? questions.blocker : shownBlocker)}
+              note={
+                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+              }
               cancelAction={
                 <Button
                   type='button'

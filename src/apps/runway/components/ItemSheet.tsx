@@ -5,6 +5,7 @@ import {
   CalendarOff,
   Calculator,
   Check,
+  HandCoins,
   CircleMinus,
   History,
   Link2,
@@ -18,6 +19,8 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -65,7 +68,7 @@ import {
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
   PAIRING_STOP_WORDS,
-  RELEASE_WORDS,
+  HELD_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_CHANGE_DAYS_AHEAD,
   MAX_NOTE_LENGTH,
@@ -92,12 +95,17 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveItem,
   endItem,
+  releaseHeld,
   setGoalState,
+  undoReleaseHeld,
 } from '@apps/runway/store/actions/itemActions';
+import {
+  getLaterReleaseDay,
+  type HeldChoice,
+} from '@apps/runway/engine/endings';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectPairedBy } from '@apps/runway/store/selectors/runwaySelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { MaskedText } from '@apps/runway/components/MaskedText';
 import { formatCents } from '@/utils/moneyUtils';
 import InlineNotice from '@/components/InlineNotice';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
@@ -164,6 +172,67 @@ const getSchedule = (payload: PayLineSealed | BillSealed) =>
   'schedule' in payload ? payload.schedule : payload.timing.schedule;
 
 const LAST_DAY_OTHER = 'other';
+
+interface HeldChoiceListProps {
+  value: HeldChoice | null;
+  onChange: (choice: HeldChoice) => void;
+  freeBody: string;
+  keepBody: string;
+}
+
+/** The two answers for the money a stopping item holds, side by side, nothing chosen until the person taps one. */
+function HeldChoiceList({
+  value,
+  onChange,
+  freeBody,
+  keepBody,
+}: HeldChoiceListProps) {
+  const options: { choice: HeldChoice; title: string; body: string }[] = [
+    { choice: 'free', title: HELD_WORDS.freeTitle, body: freeBody },
+    { choice: 'keep', title: HELD_WORDS.keepTitle, body: keepBody },
+  ];
+  return (
+    <div className='grid grid-cols-2 gap-2'>
+      {options.map((option) => {
+        const isChosen = value === option.choice;
+        return (
+          <Button
+            key={option.choice}
+            type='button'
+            variant='tertiary'
+            aria-pressed={isChosen}
+            className={join(
+              'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-1.5! text-left font-normal whitespace-normal',
+              isChosen &&
+                'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+            )}
+            onClick={() => onChange(option.choice)}
+          >
+            <span className='flex w-full items-start justify-between gap-2'>
+              <span className='text-[15px] leading-[1.125rem] font-medium'>
+                {option.title}
+              </span>
+              <span
+                aria-hidden='true'
+                className={join(
+                  'grid size-5 shrink-0 place-items-center rounded-full border',
+                  isChosen
+                    ? 'border-primary bg-primary text-primary-foreground'
+                    : 'border-border',
+                )}
+              >
+                {isChosen && <Check className='size-3.5' />}
+              </span>
+            </span>
+            <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
+              {option.body}
+            </span>
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
 
 const getActionTitle = (view: View, kind: ItemKind) => {
   const noun = ITEM_KIND_NOUNS[kind];
@@ -242,6 +311,9 @@ function ItemSheet({
   const [endPick, setEndPick] = useState<string>(String(today));
   const [endDate, setEndDate] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
+  const [isReleasing, setIsReleasing] = useState(false);
+  const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const mask = useMaskedText();
@@ -287,6 +359,53 @@ function ItemSheet({
     endOn !== undefined &&
     endOn >= today &&
     endOn <= addUtcDays(today, MAX_CHANGE_DAYS_AHEAD);
+  const holdsMoney =
+    (itemKind === 'envelope' || itemKind === 'goal' || itemKind === 'bill') &&
+    heldCents > 0;
+  const isAskingHeld = (view === 'end' || view === 'archive') && holdsMoney;
+  const canRelease =
+    holdsMoney &&
+    header !== null &&
+    (header.archivedAt !== null || header.endedAt !== null) &&
+    header.heldReleasedOn === null;
+  const releaseOn = header ? getLaterReleaseDay(header, today) : today;
+
+  const release = async () => {
+    if (!user || isReleasing) return;
+    const name = payload.name;
+    setIsReleasing(true);
+    try {
+      const written = await releaseHeld(user.uid, itemId, releaseOn);
+      if (!written) return;
+      addToast({
+        title: HELD_WORDS.released(name),
+        type: 'success',
+        action: {
+          label: HELD_WORDS.undo,
+          onClick: () =>
+            void undoReleaseHeld(user.uid, itemId, releaseOn).catch(
+              (undoError: unknown) =>
+                addToast({
+                  title: HELD_WORDS.releaseFailed(name),
+                  description: getErrorMessage(
+                    undoError,
+                    'Nothing was changed.',
+                  ),
+                  type: 'error',
+                }),
+            ),
+        },
+      });
+    } catch (releaseError) {
+      addToast({
+        title: HELD_WORDS.releaseFailed(name),
+        description: getErrorMessage(releaseError, 'Nothing was changed.'),
+        type: 'error',
+      });
+    } finally {
+      setIsReleasing(false);
+    }
+  };
 
   const difference = next ? describeChange(payload, next.payload) : '';
   const planned = [
@@ -312,6 +431,7 @@ function ItemSheet({
     setError(null);
     setReason('');
     setIsReasonOpen(false);
+    setHeldChoice(null);
     setView(nextView);
   };
 
@@ -367,6 +487,7 @@ function ItemSheet({
           endedOn: endOn,
           summary: `${payload.name}: ended after ${formatDateUTC(endOn)}.`,
           note: why,
+          heldChoice: isAskingHeld ? heldChoice : null,
         });
         if (written) onClose();
         else setError(LIFECYCLE_WORDS.alreadyEnded);
@@ -376,7 +497,12 @@ function ItemSheet({
         const written = await archiveItem(
           user.uid,
           encryption,
-          { itemId, summary: `${payload.name}: archived.`, note: why },
+          {
+            itemId,
+            summary: `${payload.name}: archived.`,
+            note: why,
+            heldChoice: isAskingHeld ? heldChoice : null,
+          },
           today,
         );
         if (written) onClose();
@@ -497,9 +623,16 @@ function ItemSheet({
       : view === 'archive'
         ? LIFECYCLE_WORDS.chipsArchive
         : LIFECYCLE_WORDS.chipsPause;
-  const blocker =
-    view === 'end' && !isEndValid ? LIFECYCLE_WORDS.endBlocker : null;
-  const isStoppable = itemKind !== 'source' && header?.archivedAt == null;
+  const getBlocker = () => {
+    if (view === 'end' && !isEndValid) return LIFECYCLE_WORDS.endBlocker;
+    if (isAskingHeld && heldChoice === null) return HELD_WORDS.blocker;
+    return null;
+  };
+  const blocker = getBlocker();
+  const isStoppable =
+    itemKind !== 'source' &&
+    header?.archivedAt == null &&
+    (endedAt === null || endedAt >= today);
   const isTrackEnvelope = itemKind === 'envelope' && level === 'track';
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
   const hasBillRow = itemKind === 'bill' && paid.isReady && payment !== null;
@@ -607,6 +740,20 @@ function ItemSheet({
           label={ITEM_SHEET_WORDS.history}
           onClick={openHistory}
         />
+        {canRelease && (
+          <ActionRow
+            isGrouped
+            icon={<HandCoins />}
+            label={HELD_WORDS.release}
+            subtitle={
+              releaseOn > today
+                ? HELD_WORDS.releaseOn(formatDateShortUTC(releaseOn))
+                : HELD_WORDS.releaseNow
+            }
+            isDisabled={isReleasing}
+            onClick={() => void release()}
+          />
+        )}
         {planned.map((line) => (
           <ActionRow
             key={line}
@@ -753,11 +900,23 @@ function ItemSheet({
       <EffectPreview
         changeJson={changeJson}
         emptyText={CHANGE_WORDS.previewNone}
+        isCompact={isAskingHeld}
       />
-      {(view === 'end' || view === 'archive') && heldCents > 0 && (
-        <InlineNotice tone='info'>
-          <MaskedText>{RELEASE_WORDS[view](formatCents(heldCents))}</MaskedText>
-        </InlineNotice>
+      {isAskingHeld && (
+        <ActionSection
+          caption={mask(HELD_WORDS.caption(formatCents(heldCents)))}
+        >
+          <HeldChoiceList
+            value={heldChoice}
+            onChange={setHeldChoice}
+            freeBody={
+              view === 'end' && isEndValid
+                ? HELD_WORDS.freeEnd(formatDateShortUTC(endOn + DAY_MS))
+                : HELD_WORDS.freeArchive
+            }
+            keepBody={HELD_WORDS.keepBody}
+          />
+        </ActionSection>
       )}
       {(view === 'pause' || view === 'end' || view === 'archive') &&
         pairedNames !== '' && (

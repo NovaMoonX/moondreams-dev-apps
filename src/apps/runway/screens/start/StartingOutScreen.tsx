@@ -163,7 +163,7 @@ function SavedStart({ uid }: { uid: string }) {
     await archiveItem(
       uid,
       encryption,
-      { itemId, summary: `Removed ${name}.`, note: null },
+      { itemId, summary: `Removed ${name}.`, note: null, heldChoice: 'free' },
       today,
     );
   };
@@ -311,11 +311,7 @@ function SavedStart({ uid }: { uid: string }) {
           </p>
           {nextDay && (
             <ul className='border-border bg-card rounded-2xl border'>
-              <IncomeDayCard
-                day={nextDay}
-                lead='Next income day'
-                isPrivate={false}
-              />
+              <IncomeDayCard day={nextDay} lead='Next income day' />
             </ul>
           )}
         </>

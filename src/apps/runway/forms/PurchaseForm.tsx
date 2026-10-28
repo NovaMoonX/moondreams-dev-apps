@@ -60,6 +60,12 @@ import {
   describePurchaseEdit,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
+import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 
 const ORIGIN_PAGE = 20;
 const MOST_USED_SHOWN = 5;
@@ -535,7 +541,7 @@ function PurchaseForm({
 
   const effectNote = effectLine && (
     <p className='text-muted-foreground text-sm' role='status'>
-      {effectLine}
+      <MaskedText>{effectLine}</MaskedText>
     </p>
   );
   const getEnvelopeSummary = () => {
@@ -721,8 +727,12 @@ function PurchaseForm({
       ),
     },
   ];
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const maskNote = (note: string | null | undefined) =>
+    note ? mask(note) : null;
   const questions = useQuestionFlow({
-    steps,
+    steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined,
   });
   const isAsking = !questions.hasReviewed;
@@ -802,7 +812,7 @@ function PurchaseForm({
         </div>
       )}
       <ModalFooterActions
-        note={error ?? (isAsking ? questions.blocker : blocker)}
+        note={error ?? maskNote(isAsking ? questions.blocker : blocker)}
         cancelAction={
           <Button
             type='button'
@@ -854,6 +864,7 @@ function PurchaseForm({
       isOpen={isOpen}
       onClose={requestClose}
       title={SPEND_WORDS.sheetTitle}
+      actions={<ValuesEyeButton />}
     >
       {view === 'split' && amount !== null && (
         <div className='space-y-3'>
@@ -939,7 +950,9 @@ function PurchaseForm({
                     </span>
                   </span>
                   <span className='shrink-0 font-semibold whitespace-nowrap tabular-nums'>
-                    {formatCents(purchase.amountCents)}
+                    <SensitiveValue>
+                      {formatCents(purchase.amountCents)}
+                    </SensitiveValue>
                   </span>
                 </Button>
               </li>
@@ -984,7 +997,9 @@ function PurchaseForm({
                       {option.name}
                     </span>
                     <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap tabular-nums'>
-                      {formatCents(option.leftCents)}
+                      <SensitiveValue>
+                        {formatCents(option.leftCents)}
+                      </SensitiveValue>
                     </span>
                   </span>
                 </Button>
