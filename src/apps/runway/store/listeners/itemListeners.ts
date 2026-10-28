@@ -14,6 +14,7 @@ import type {
   RunwayEncryption,
   SourceSealed,
 } from '@apps/runway/types';
+import { normalizeFunding } from '@apps/runway/utils/fundingText';
 
 const planPath = (uid: string, name: string) =>
   collection(db, 'apps', 'runway', 'plans', uid, name);
@@ -44,7 +45,11 @@ async function openVersion(
   }
   if (version.kind === 'envelope') {
     const payload = await openJson<EnvelopeSealed>(version.sealed, encryption);
-    return { ...base, kind: 'envelope', payload };
+    return {
+      ...base,
+      kind: 'envelope',
+      payload: { ...payload, funding: normalizeFunding(payload.funding) },
+    };
   }
   if (version.kind === 'bill') {
     const payload = await openJson<BillSealed>(version.sealed, encryption);
@@ -52,7 +57,11 @@ async function openVersion(
   }
   if (version.kind === 'goal') {
     const payload = await openJson<GoalSealed>(version.sealed, encryption);
-    return { ...base, kind: 'goal', payload };
+    return {
+      ...base,
+      kind: 'goal',
+      payload: { ...payload, funding: normalizeFunding(payload.funding) },
+    };
   }
   return null;
 }

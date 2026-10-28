@@ -8,7 +8,7 @@ import {
   Input,
 } from '@moondreamsdev/dreamer-ui/components';
 
-import AmountField from '@/components/AmountField';
+import AmountField, { type AmountMode } from '@/components/AmountField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
@@ -18,7 +18,7 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
-import { parseMoneyToCents } from '@/utils/moneyUtils';
+import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
   ENVELOPE_ORDER_STEP,
   FUNDING_CADENCE_LABELS,
@@ -37,7 +37,7 @@ import {
   selectComingDays,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { FundingRule, Priority } from '@apps/runway/types';
+import type { FundingAmount, FundingRule, Priority } from '@apps/runway/types';
 
 type Cadence = (typeof FUNDING_CADENCES)[number];
 
@@ -62,6 +62,25 @@ interface GoalFormProps {
 
 const { custom } = FormFactories;
 
+const AMOUNT_MODES = [
+  { value: 'exact', label: 'Exact amount' },
+  { value: 'percent', label: "% of the day's money" },
+  { value: 'rest', label: 'The rest' },
+] as const;
+
+const getFundingAmount = (
+  mode: AmountMode,
+  text: string,
+): FundingAmount | null => {
+  if (mode === 'rest') return { kind: 'rest' };
+  if (mode === 'percent') {
+    const bps = parsePercentToBps(text);
+    return bps === null ? null : { kind: 'percent', bps, of: 'dayMoney' };
+  }
+  const cents = parseMoneyToCents(text);
+  return cents === null || cents <= 0 ? null : { kind: 'exact', cents };
+};
+
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
   label: PRIORITY_LABELS[value],
@@ -85,7 +104,8 @@ const INITIAL_DATA: GoalFormData = {
 const getBlocker = (
   data: GoalFormData,
   targetCents: number | null,
-  amountCents: number | null,
+  amount: FundingAmount | null,
+  mode: AmountMode,
   hasDays: boolean,
   today: number,
 ) => {
@@ -101,8 +121,10 @@ const getBlocker = (
     if (date > lastDate)
       return `Pick a date within the next ${LOOKAHEAD_MONTHS} months, which is as far as the income days are planned, or remove it.`;
   }
-  if (amountCents === null || amountCents <= 0)
-    return 'Enter how much it gets each time.';
+  if (amount === null)
+    return mode === 'percent'
+      ? 'Enter a whole or half percent, up to 100.'
+      : 'Enter how much it gets each time.';
   if (data.cadence !== 'everyIncomeDay' && !hasDays)
     return 'Add an income source first, so there are days to count.';
   if (data.cadence === 'chosen' && data.dayKeys.length === 0)
@@ -119,12 +141,14 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const amountCents = parseMoneyToCents(formData.amount);
+  const [amountMode, setAmountMode] = useState<AmountMode>('exact');
+  const amount = getFundingAmount(amountMode, formData.amount);
   const targetCents = parseMoneyToCents(formData.target);
   const blocker = getBlocker(
     formData,
     targetCents,
-    amountCents,
+    amount,
+    amountMode,
     comingDays.length > 0,
     today,
   );
@@ -234,6 +258,14 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
           <AmountField
             label='Each time'
             hint='What it gets on each income day it is funded.'
+            mode={amountMode}
+            modes={AMOUNT_MODES}
+            onModeChange={(mode) => {
+              setAmountMode(mode);
+              props.onValueChange('');
+            }}
+            percentOfLabel="of the day's money"
+            restHint='Whatever is left of the day after the lines above it.'
             value={props.value as string}
             onChange={(value) => props.onValueChange(value)}
           />
@@ -323,10 +355,9 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
       }),
     ];
     return result;
-  }, [formData.cadence, dayOptions, today]);
+  }, [amountMode, formData.cadence, dayOptions, today]);
 
-  const buildFunding = (data: GoalFormData, cents: number) => {
-    const amount = { kind: 'exact' as const, cents };
+  const buildFunding = (data: GoalFormData, amount: FundingAmount) => {
     const anchorDayKey = comingDays[0]?.dayKey ?? '';
     if (data.cadence === 'every2' || data.cadence === 'every3') {
       const funding: FundingRule = {
@@ -360,9 +391,9 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
   };
 
   const handleSubmit = async (data: GoalFormData) => {
-    const cents = parseMoneyToCents(data.amount);
+    const amount = getFundingAmount(amountMode, data.amount);
     const target = parseMoneyToCents(data.target);
-    if (!user || data.priority === null || cents === null || target === null)
+    if (!user || data.priority === null || amount === null || target === null)
       return;
 
     const tier = goals.filter(
@@ -386,7 +417,7 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
           targetCents: target,
           targetDate:
             data.date === null ? null : (fromDateInputValue(data.date) ?? null),
-          funding: buildFunding(data, cents),
+          funding: buildFunding(data, amount),
         },
       });
       onClose();

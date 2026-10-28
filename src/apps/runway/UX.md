@@ -117,7 +117,7 @@ Existing repo components are used as they are. A new component whose props name 
 | `StatTile`, `HelpTip` | Home, Envelope | A number with a caveat or explanation | Existing |
 | `EmptyCard`, `SearchInput`, `ShowMoreButton`, `UndoSnackbar` | Lists | Empty state, search, folds, undo | Existing |
 | `UnderlineTabs` | Envelope, Income source | One tab bar per detail screen | Existing |
-| `AmountField` | Pay line, Bill, Envelope, Goal | Exact amount, range, or rate × hours, with a stance label | New, in the app |
+| `AmountField` | Pay line, Bill, Envelope, Goal | Exact amount, range, or rate × hours, with a stance label; a percentage of a caller-named thing (whole and half percents) and the rest are modes on the envelope and goal forms | New, in the app |
 | `EffectPreview` | Change, What if, Expected | Before and after for each affected income day | New, in the app |
 | `FromWhenPicker` | Change | This day, from now on, from a date, for a stretch, end it | New, in the app |
 | `IncomeDayCard` | Home, Days | Date, source, amount, status | New, in the app |

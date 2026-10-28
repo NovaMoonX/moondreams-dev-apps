@@ -23,7 +23,16 @@ import {
   getPace,
   planGoalContributions,
 } from '../../src/apps/runway/engine/pace.ts';
-import { allocate, percentOf } from '../../src/apps/runway/engine/money.ts';
+import {
+  describeAmount,
+  normalizeFunding,
+} from '../../src/apps/runway/utils/fundingText.ts';
+import { parsePercentToBps } from '../../src/utils/moneyUtils.ts';
+import {
+  allocate,
+  percentOf,
+  percentShares,
+} from '../../src/apps/runway/engine/money.ts';
 import {
   resolve,
   resolveCurrentOrNext,
@@ -1426,6 +1435,260 @@ const version = (
       [15_000, 15_000, 15_000, 15_000],
     );
   });
+}
+
+// Percentages and the rest (Issue 10).
+{
+  assert.equal(percentOf(1_999, 1_000), 199, 'percentOf rounds down once');
+  assert.deepEqual(
+    percentShares(10_001, [3_333, 3_333, 3_333], ['c', 'a', 'b']),
+    [3_333, 3_333, 3_333],
+    'three 33.33% lines of $100.01 add to the one rounded total',
+  );
+  assert.deepEqual(
+    percentShares(101, [5_000, 5_000], ['b', 'a']),
+    [50, 51],
+    'two halves of $1.01 share $1.01, the odd cent going to the first id',
+  );
+  assert.deepEqual(
+    percentShares(1_000, [10_000, 1_000], ['a', 'b']),
+    [1_000, 100],
+    'over 100% in all, each rounds on its own and the walk cuts the later line',
+  );
+
+  const on = utc(2026, 11, 6);
+  const day = {
+    dayKey: toDayKey('line-p', on),
+    sourceId: 'src-a',
+    on,
+    amount: { lowCents: 100_001, highCents: 100_001 },
+  };
+  const incomeDays = [
+    { dayKey: day.dayKey, on, moneyCents: 100_001 },
+    ...[1, 2, 3].map((n) => ({
+      dayKey: toDayKey('line-p', on + n * 14 * DAY_MS),
+      on: on + n * 14 * DAY_MS,
+      moneyCents: 100_001,
+    })),
+  ];
+  const line = (
+    itemId: string,
+    priority: 'must' | 'should' | 'want',
+    orderIndex: number,
+    amount: DraftInput['plan']['envelopes'][number]['funding']['amount'],
+  ) => ({
+    itemId,
+    createdAt: 1_000,
+    priority,
+    orderIndex,
+    funding: { amount, cadence: { kind: 'everyIncomeDay' as const } },
+  });
+  const percent = (bps: number) =>
+    ({ kind: 'percent', bps, of: 'dayMoney' }) as const;
+  const draftOf = (
+    envelopes: DraftInput['plan']['envelopes'],
+    dayCents = 100_001,
+    goals: DraftGoalInput[] = [],
+  ) =>
+    buildDraft({
+      days: [day],
+      plan: { envelopes, bills: [], goals, horizon: 0, incomeDays },
+      stance: 'conservative',
+      overrides: { dayCents: { [day.dayKey]: dayCents } },
+    });
+  const spent = (draft: ReturnType<typeof draftOf>) =>
+    draft.lines.reduce((sum, item) => sum + item.cents, 0);
+
+  // A 100% line plus any other line never funds more than the day's money.
+  [1, 500, 2_500, 10_000].forEach((bps) => {
+    const draft = draftOf([
+      line('whole', 'must', 1, percent(10_000)),
+      line('other', 'should', 1, percent(bps)),
+      line('plain', 'want', 1, { kind: 'exact', cents: 500_000 }),
+    ]);
+    assert.ok(spent(draft) <= 100_001, `100% plus ${bps} bps stays in the day`);
+    assert.equal(
+      spent(draft) + draft.freeToSpend.cents,
+      100_001,
+      'lines plus free to spend equal the day money',
+    );
+  });
+  assert.deepEqual(
+    draftOf([
+      line('whole', 'must', 1, percent(10_000)),
+      line('other', 'should', 1, percent(1_000)),
+    ]).lines.map((item) => [item.itemId, item.cents]),
+    [
+      ['whole', 100_001],
+      ['other', 0],
+    ],
+    'a 100% line takes the whole day; the later line is left short',
+  );
+
+  // Percent lines on one day share one rounded total; the odd cent goes to the first id.
+  const halves = draftOf([
+    line('b', 'should', 1, percent(5_000)),
+    line('a', 'should', 2, percent(5_000)),
+  ]);
+  assert.deepEqual(
+    halves.lines.map((item) => [item.itemId, item.cents]).sort(),
+    [
+      ['a', 50_001],
+      ['b', 50_000],
+    ],
+    'two halves of $1,000.01 add to $1,000.01, the odd cent to the first id',
+  );
+  assert.equal(
+    halves.lines.find((item) => item.itemId === 'a')?.ask.kind,
+    'percent',
+  );
+
+  // Rest takes what its day then holds, last in its tier, and a second rest follows the normal order.
+  const rest = { kind: 'rest' } as const;
+  const withRest = draftOf([
+    line('rest', 'should', 1, rest),
+    line('ten', 'should', 2, percent(1_000)),
+    line('rent', 'must', 1, { kind: 'exact', cents: 30_000 }),
+    line('fun', 'want', 1, { kind: 'exact', cents: 5_000 }),
+  ]);
+  assert.deepEqual(
+    withRest.lines.map((item) => [item.itemId, item.cents]),
+    [
+      ['rent', 30_000],
+      ['ten', 10_000],
+      ['rest', 60_001],
+      ['fun', 0],
+    ],
+    'rest sorts last in its tier, takes the pool then and leaves the lower tier nothing',
+  );
+  assert.equal(withRest.freeToSpend.cents, 0);
+  const twoRests = draftOf([
+    line('r2', 'should', 2, rest),
+    line('r1', 'should', 1, rest),
+  ]);
+  assert.deepEqual(
+    twoRests.lines.map((item) => [item.itemId, item.cents, item.reason.code]),
+    [
+      ['r1', 100_001, 'funded'],
+      ['r2', 0, 'nothingLeft'],
+    ],
+    'two rest demands in a tier follow the normal order; the second finds nothing',
+  );
+  const empty = draftOf([
+    line('rent', 'must', 1, { kind: 'exact', cents: 100_001 }),
+    line('rest', 'want', 1, rest),
+  ]);
+  assert.deepEqual(
+    empty.lines.map((item) => [
+      item.itemId,
+      item.cents,
+      item.shortBy,
+      item.reason.code,
+    ]),
+    [
+      ['rent', 100_001, 0, 'funded'],
+      ['rest', 0, 0, 'nothingLeft'],
+    ],
+    'rest on a day with nothing left shows $0 funded and says why',
+  );
+
+  // A rest line takes only its own day's money in a draft of several days.
+  const nextOn = on + 14 * DAY_MS;
+  const second = {
+    dayKey: toDayKey('line-p', nextOn),
+    sourceId: 'src-b',
+    on: nextOn,
+    amount: { lowCents: 40_000, highCents: 40_000 },
+  };
+  const together = buildDraft({
+    days: [day, second],
+    plan: {
+      envelopes: [
+        line('rent', 'must', 1, { kind: 'exact', cents: 20_000 }),
+        line('rest', 'want', 1, rest),
+      ],
+      bills: [],
+      goals: [],
+      horizon: 0,
+      incomeDays,
+    },
+    stance: 'conservative',
+    overrides: { dayCents: {} },
+  });
+  assert.deepEqual(
+    together.lines
+      .filter((item) => item.itemId === 'rest')
+      .map((item) => [item.dayKey === day.dayKey, item.cents]),
+    [
+      [true, 60_001],
+      [false, 40_000],
+    ],
+    'each day funds its rest from what is left of its own money, after the earlier lines drew from the front of the pool',
+  );
+
+  // A goal at a percentage stops at its target; a rest goal is capped by it.
+  const goal = (amount: ReturnType<typeof percent> | typeof rest) => ({
+    ...line('goal', 'should', 1, amount),
+    targetCents: 150_000,
+    heldCents: 0,
+  });
+  assert.deepEqual(
+    planGoalContributions(goal(percent(5_000)), incomeDays).map(
+      (part) => part.cents,
+    ),
+    [50_000, 50_000, 50_000],
+    '50% of $1,000.01 each day, three days reach $1,500',
+  );
+  assert.equal(
+    getPace({ ...goal(rest), targetDate: null }, incomeDays).state,
+    null,
+    'a rest goal has no pace to measure',
+  );
+  assert.deepEqual(
+    draftOf([], 100_001, [goal(rest)]).lines.map((item) => item.cents),
+    [100_001],
+    'a rest goal takes the day when the target is far',
+  );
+  assert.deepEqual(
+    draftOf([], 100_001, [{ ...goal(rest), targetCents: 30_000 }]).lines.map(
+      (item) => item.cents,
+    ),
+    [30_000],
+    'a rest goal never takes more than the target left',
+  );
+
+  // Words and legacy shapes.
+  assert.equal(describeAmount(percent(1_250), 'Main job'), '12.5% of Main job');
+  assert.equal(describeAmount(percent(1_000)), "10% of the day's money");
+  assert.equal(describeAmount(rest), 'the rest');
+  assert.deepEqual(
+    normalizeFunding({
+      amount: { cents: 1_500 },
+      cadence: { kind: 'everyIncomeDay' },
+    } as never).amount,
+    { kind: 'exact', cents: 1_500 },
+    'a funding amount written before it had a kind reads as exact',
+  );
+  assert.deepEqual(
+    ['10', '12.5', '12.50', '0', '100', '100.5', '12.3', 'x', ''].map(
+      parsePercentToBps,
+    ),
+    [1_000, 1_250, 1_250, null, 10_000, null, null, null, null],
+    'whole and half percents only, above zero up to 100',
+  );
+
+  // Order of the input changes nothing.
+  const mixed = [
+    line('a', 'should', 1, percent(2_500)),
+    line('b', 'should', 2, percent(2_500)),
+    line('c', 'should', 3, rest),
+    line('d', 'must', 1, { kind: 'exact', cents: 12_345 }),
+  ];
+  assert.deepEqual(
+    draftOf([...mixed].reverse()),
+    draftOf(mixed),
+    'shuffled envelopes give the same draft',
+  );
 }
 
 console.log('runway engine: ok');
