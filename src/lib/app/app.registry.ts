@@ -61,6 +61,14 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
       'Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.',
     createdAt: '2026-10-12',
   },
+  {
+    id: 'runway',
+    name: 'Runway',
+    path: '/runway',
+    description:
+      'An income-first budget planner for money that does not arrive or leave on a tidy schedule: draft where each income day should go, look ahead to see how far the plan holds, and change it when life changes.',
+    createdAt: '2026-10-23',
+  },
 ];
 
 export const APP_REGISTRY_ID_MAP = Object.fromEntries(

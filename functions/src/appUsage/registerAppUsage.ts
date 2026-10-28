@@ -5,6 +5,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { findFirstActivityAt as findAListStart } from '../apps/a-list/findFirstActivityAt.js';
 import { findFirstActivityAt as findNineLivesStart } from '../apps/nine-lives/findFirstActivityAt.js';
 import { findFirstActivityAt as findPinchStart } from '../apps/pinch/findFirstActivityAt.js';
+import { findFirstActivityAt as findRunwayStart } from '../apps/runway/findFirstActivityAt.js';
 import { findFirstActivityAt as findWaypointStart } from '../apps/waypoint/findFirstActivityAt.js';
 import { findFirstActivityAt as findWorthTheWaitStart } from '../apps/worth-the-wait/findFirstActivityAt.js';
 
@@ -18,6 +19,7 @@ const FIRST_ACTIVITY_FINDERS: Record<string, (firestore: Firestore, uid: string)
   'a-list': findAListStart,
   'nine-lives': findNineLivesStart,
   pinch: findPinchStart,
+  runway: findRunwayStart,
   waypoint: findWaypointStart,
   'worth-the-wait': findWorthTheWaitStart,
 };
