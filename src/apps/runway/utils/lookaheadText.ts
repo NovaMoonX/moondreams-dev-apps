@@ -14,7 +14,7 @@ export function describeProblem(problem: LookaheadProblem) {
   if (problem.kind === 'noIncome') {
     return `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
   }
-  const result = `On ${formatDateUTC(problem.on)}, ${name} runs short by ${formatCents(problem.shortBy)}.`;
+  const result = `On ${formatDateUTC(problem.on)}, the plan leaves ${name} short by ${formatCents(problem.shortBy)}.`;
   return result;
 }
 
@@ -37,6 +37,12 @@ export function describeHoldsChange(before: Lookahead, after: Lookahead) {
   const first = after.problems[0];
   if (after.holdsThrough === null) {
     return first ? `With this change, ${describeProblem(first)}` : null;
+  }
+  if (before.holdsThrough === after.holdsThrough) {
+    const still = `Your plan still holds through ${formatDateUTC(after.holdsThrough)}.`;
+    return first
+      ? `${still} With this change, ${describeProblem(first)}`
+      : still;
   }
   const was =
     before.holdsThrough === null

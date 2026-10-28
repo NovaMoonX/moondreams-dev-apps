@@ -33,6 +33,7 @@ interface ChangeLogScreenProps {
 }
 
 const ALL_ITEMS = 'all';
+const MIN_HIDDEN_ROWS = 3;
 const spanOptions = CHANGE_LOG_SPANS.map((value) => ({
   value,
   label: CHANGE_LOG_SPAN_LABELS[value],
@@ -92,6 +93,8 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
     { value: ALL_ITEMS, label: 'All items' },
     ...itemNames.map((item) => ({ value: item.id, label: item.name })),
   ];
+  const cutoff =
+    visible.length - shown <= MIN_HIDDEN_ROWS ? visible.length : shown;
   const range = `${formatDateUTC(window.firstDay)} to ${formatDateUTC(window.lastDay)}`;
 
   const getBody = () => {
@@ -126,7 +129,7 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
     return (
       <div className='space-y-2'>
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          {visible.slice(0, shown).map((change) => (
+          {visible.slice(0, cutoff).map((change) => (
             <ChangeRow
               key={change.id}
               change={change}
@@ -135,11 +138,11 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
             />
           ))}
         </ul>
-        {visible.length > shown && (
+        {visible.length > cutoff && (
           <ShowMoreButton
             onClick={() => setShown(shown + CHANGE_LOG_PAGE_SIZE)}
           >
-            Show more ({visible.length - shown} left)
+            Show more ({visible.length - cutoff} left)
           </ShowMoreButton>
         )}
         {changes.length >= MAX_WINDOW_CHANGES && (
@@ -163,27 +166,25 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
             value={logSpan}
             onChange={setLogSpan}
           />
-          <div className='border-border bg-card rounded-2xl border'>
-            <SummaryEditor
+          <SummaryEditor
+            label='Item'
+            summary={itemName ?? ''}
+            placeholder='All items'
+            title='Item'
+            icon={<ListFilter />}
+            isFramed
+            shouldFocus={false}
+          >
+            <PillGroup
               label='Item'
-              summary={itemName ?? ''}
-              placeholder='All items'
-              title='Item'
-              icon={<ListFilter />}
-              isFramed
-              shouldFocus={false}
-            >
-              <PillGroup
-                label='Item'
-                options={itemOptions}
-                value={logItem ?? ALL_ITEMS}
-                onChange={(value) => {
-                  setShown(CHANGE_LOG_PAGE_SIZE);
-                  setLogItem(value === ALL_ITEMS ? null : value);
-                }}
-              />
-            </SummaryEditor>
-          </div>
+              options={itemOptions}
+              value={logItem ?? ALL_ITEMS}
+              onChange={(value) => {
+                setShown(CHANGE_LOG_PAGE_SIZE);
+                setLogItem(value === ALL_ITEMS ? null : value);
+              }}
+            />
+          </SummaryEditor>
           <div className='flex flex-wrap items-center justify-between gap-2'>
             <p className='text-sm font-medium'>{range}</p>
             <ActionChips

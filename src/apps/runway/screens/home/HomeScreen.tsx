@@ -1,4 +1,5 @@
-import { ChevronRight, Home } from 'lucide-react';
+import { useState } from 'react';
+import { ChevronRight, Home, ListChecks } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -14,13 +15,19 @@ import {
   CHECK_WORDS,
   HOME_ENVELOPE_TILES,
   HOME_WORDS,
+  SPEND_WORDS,
 } from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
+  selectBills,
+  selectHasIncome,
   selectEnvelopes,
+  selectGoals,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
@@ -39,21 +46,29 @@ function HomeScreen() {
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const isLoaded = isItemsLoaded && isDaysLoaded;
-  const hasIncome = useAppSelector((state) =>
-    state.runway.items.some(
-      (item) =>
-        item.kind === 'payLine' &&
-        item.archivedAt === null &&
-        (item.endedAt === null || item.endedAt >= today),
-    ),
+  const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
+  const isSetupOpen = useAppSelector(
+    (state) =>
+      selectBills(state, today).length === 0 &&
+      selectEnvelopes(state, today).length === 0 &&
+      selectGoals(state, today).length === 0 &&
+      state.runway.plan?.startDate == null,
   );
   const balances = useAppSelector(selectBalances);
   const lookahead = useDeferredLookahead(today, isLedgerReady);
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
-  const { openView, openDay, showTab, showPlanSection, openCheckAmount } =
-    useRunwayUrlState();
+  const [isAddingPurchase, setIsAddingPurchase] = useState(false);
+  const level = useAppSelector(selectLevel);
+  const {
+    openView,
+    openDay,
+    showTab,
+    showPlanSection,
+    showSpend,
+    openCheckAmount,
+  } = useRunwayUrlState();
 
   if (!isLoaded) {
     return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
@@ -80,18 +95,33 @@ function HomeScreen() {
 
   const free = describeFreeToSpend(getFreeToSpendFigure(balances));
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
-  const shown = envelopes.slice(0, HOME_ENVELOPE_TILES);
+  const withMoney = envelopes.filter(
+    ({ item }) =>
+      level !== 'plan' || (balances.assignedByItem[item.id] ?? 0) !== 0,
+  );
+  const shown = (withMoney.length > 0 ? withMoney : envelopes).slice(
+    0,
+    withMoney.length > 0 ? HOME_ENVELOPE_TILES : 3,
+  );
+  const openEnvelope = (itemId: string) => {
+    if (level === 'plan') {
+      showPlanSection('envelopes');
+      showTab('plan');
+      return;
+    }
+    showSpend(itemId);
+  };
 
   return (
     <div className='space-y-5'>
       <div className='space-y-2'>
         <Button
           variant='tertiary'
-          className='border-border bg-accent h-auto w-full items-start justify-between gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal'
+          className='border-border bg-accent text-foreground! h-auto w-full items-center justify-start gap-3 rounded-2xl border p-4 text-left font-normal whitespace-normal sm:max-w-md'
           aria-label={`${free.label}, ${free.value}. See it in detail`}
           onClick={() => openView('freeToSpend')}
         >
-          <span className='min-w-0'>
+          <span className='min-w-0 flex-1'>
             <span className='text-muted-foreground block text-sm font-medium'>
               {free.label}
             </span>
@@ -100,7 +130,7 @@ function HomeScreen() {
             </span>
           </span>
           <ChevronRight
-            className='text-muted-foreground mt-1 h-5 w-5 shrink-0'
+            className='text-muted-foreground h-5 w-5 shrink-0'
             aria-hidden='true'
           />
         </Button>
@@ -114,6 +144,18 @@ function HomeScreen() {
           <div className='min-h-5' aria-hidden='true' />
         )}
       </div>
+      {isSetupOpen && (
+        <EmptyCard
+          icon={<ListChecks className='h-5 w-5' />}
+          action={
+            <Button size='sm' onClick={() => openView('start')}>
+              {HOME_WORDS.resumeAction}
+            </Button>
+          }
+        >
+          {HOME_WORDS.resume}
+        </EmptyCard>
+      )}
       {nextDay && (
         <div className='space-y-2'>
           <SectionHeader title={HOME_WORDS.nextIncome} />
@@ -127,7 +169,20 @@ function HomeScreen() {
       )}
       {envelopes.length > 0 && (
         <div className='space-y-2'>
-          <SectionHeader title={HOME_WORDS.envelopes} />
+          <SectionHeader
+            title={HOME_WORDS.envelopes}
+            action={
+              <LevelGate level='track'>
+                <Button
+                  variant='secondary'
+                  size='sm'
+                  onClick={() => setIsAddingPurchase(true)}
+                >
+                  + {SPEND_WORDS.envelopeAdd}
+                </Button>
+              </LevelGate>
+            }
+          />
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {shown.map(({ item, version }) => (
               <EnvelopeTile
@@ -135,32 +190,39 @@ function HomeScreen() {
                 name={version.payload.name}
                 emoji={version.payload.emoji}
                 cents={balances.assignedByItem[item.id] ?? 0}
+                onOpen={() => openEnvelope(item.id)}
               />
             ))}
           </ul>
-          <LevelGate level='track'>
-            <Button
-              variant='secondary'
-              size='sm'
-              className='h-10'
-              onClick={() => openCheckAmount(null)}
-            >
-              {CHECK_WORDS.open}
-            </Button>
-          </LevelGate>
-          {envelopes.length > shown.length && (
-            <Button
-              variant='tertiary'
-              className='h-10 justify-start px-0!'
-              onClick={() => {
-                showPlanSection('envelopes');
-                showTab('plan');
-              }}
-            >
-              See all {envelopes.length} envelopes
-            </Button>
-          )}
+          <div className='flex flex-wrap items-center gap-x-4 gap-y-1'>
+            <LevelGate level='track'>
+              <Button
+                variant='secondary'
+                size='sm'
+                className='h-10'
+                onClick={() => openCheckAmount(null)}
+              >
+                {CHECK_WORDS.open}
+              </Button>
+            </LevelGate>
+            {envelopes.length > shown.length && (
+              <Button
+                variant='tertiary'
+                className='h-10 gap-1 px-0!'
+                onClick={() => {
+                  showPlanSection('envelopes');
+                  showTab('plan');
+                }}
+              >
+                See all {envelopes.length} envelopes
+                <ChevronRight className='h-4 w-4' aria-hidden='true' />
+              </Button>
+            )}
+          </div>
         </div>
+      )}
+      {isAddingPurchase && (
+        <PurchaseForm isOpen onClose={() => setIsAddingPurchase(false)} />
       )}
     </div>
   );

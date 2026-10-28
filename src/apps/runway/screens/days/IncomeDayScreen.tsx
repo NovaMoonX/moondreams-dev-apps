@@ -148,6 +148,15 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       ...current,
       holdResolutions: { ...current.holdResolutions, [line.itemId]: choice },
     }));
+  const undoChoice = (line: DraftLineData) =>
+    save((current) => ({
+      ...current,
+      holdResolutions: Object.fromEntries(
+        Object.entries(current.holdResolutions).filter(
+          ([itemId]) => itemId !== line.itemId,
+        ),
+      ),
+    }));
   const funded = draft.lines.filter((line) => line.shortBy === 0);
   const unfunded = draft.lines.filter((line) => line.shortBy > 0);
   const title = day.sourceName ?? day.payLineName;
@@ -166,7 +175,9 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         name={envelope.name}
         emoji={envelope.emoji}
         sourceNames={sourceNames}
+        daySourceId={day.sourceId}
         onChoose={choose}
+        onUndoChoice={undoChoice}
         isChoosing={isSaving}
         isDayOnly={Object.hasOwn(override?.payloads ?? {}, line.itemId)}
         onChange={
@@ -221,7 +232,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           )}
         </div>
         {heldLines.length > 0 && (
-          <p className='bg-accent border-border rounded-2xl border p-3 text-sm'>
+          <p className='bg-muted/50 border-border rounded-2xl border p-3 text-sm'>
             {DRAFT_WORDS.holdsBlock}
           </p>
         )}

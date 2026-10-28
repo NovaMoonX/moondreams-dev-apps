@@ -22,9 +22,13 @@ interface DraftLineProps {
   name: string;
   emoji: string | null;
   sourceNames: Record<string, string>;
+  /** The source that pays the whole day, so a line need not repeat it. */
+  daySourceId?: string | null;
   /** Answers a short pairing; absent where the line cannot be answered. */
   onChoose?: (line: DraftLineData, choice: HoldChoice) => void;
   isChoosing?: boolean;
+  /** Takes back the choice made for a held line; absent where the line cannot be answered. */
+  onUndoChoice?: (line: DraftLineData) => void;
   /** Opens the item to change it from this income day or for this day alone; absent where the item cannot be changed. */
   onChange?: () => void;
   /** This income day takes its own version of the line. */
@@ -37,12 +41,14 @@ function DraftLine({
   name,
   emoji,
   sourceNames,
+  daySourceId,
   onChoose,
+  onUndoChoice,
   isChoosing = false,
   onChange,
   isDayOnly = false,
 }: DraftLineProps) {
-  const reason = describeLineReason(line, sourceNames, name);
+  const reason = describeLineReason(line, sourceNames, name, daySourceId);
   const tieNote = describeTieBreak(line);
   const billShare = describeBillShare(line);
   const isShort = line.shortBy > 0;
@@ -62,7 +68,8 @@ function DraftLine({
     if (state === 'offered') return shortSentence;
     if (state === 'leftShort')
       return `${DRAFT_WORDS.leftShort}. ${shortSentence}`;
-    if (state === 'toppedUp' && isShort) return DRAFT_WORDS.toppedUp;
+    if (state === 'toppedUp' && isShort)
+      return `${DRAFT_WORDS.toppedUp}. ${name} is still ${formatCents(line.shortBy)} short.`;
     return null;
   };
   const pairingNote = getPairingNote();
@@ -134,6 +141,21 @@ function DraftLine({
                 {label}
               </Button>
             ))}
+          </div>
+        )}
+        {onUndoChoice && (state === 'toppedUp' || state === 'leftShort') && (
+          <div className='pt-2'>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              rounded='full'
+              className="text-foreground! relative h-7! min-h-0! w-fit px-3! py-0! before:absolute before:-inset-1.5 before:content-['']"
+              disabled={isChoosing}
+              onClick={() => onUndoChoice(line)}
+            >
+              {DRAFT_WORDS.undoChoice}
+            </Button>
           </div>
         )}
         {isDayOnly && (

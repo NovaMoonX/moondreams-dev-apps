@@ -53,6 +53,7 @@ import type {
   Pairing,
   EnvelopeSealed,
   EnvelopeVersion,
+  FundingAmount,
   GoalSealed,
   GoalVersion,
   OpenVersion,
@@ -138,6 +139,47 @@ export const selectResolvedPlan = createSelector(
           });
         return [{ item, version, payLines }];
       });
+    return result;
+  },
+);
+
+export interface PairedBy {
+  sourceName: string;
+  amount: FundingAmount;
+}
+
+/** For each bill, envelope or goal a pairing names, the sources that send it money and how much: a pairing replaces the item's own rule on that source's income days. */
+export const selectPairedBy = createSelector(
+  [selectResolvedPlan],
+  (plan): Record<string, PairedBy[]> => {
+    const entries = plan.flatMap(({ version, payLines }) => {
+      const sets = payLines.map(({ version: line }) =>
+        line.payload.pairings.length > 0
+          ? line.payload.pairings
+          : version.payload.pairings,
+      );
+      const used = sets.length > 0 ? sets : [version.payload.pairings];
+      return used.flatMap((pairings) =>
+        pairings.map((pairing) => ({
+          targetItemId: pairing.targetItemId,
+          sourceName: version.payload.name,
+          amount: pairing.amount,
+        })),
+      );
+    });
+    const result = entries.reduce<Record<string, PairedBy[]>>(
+      (acc, { targetItemId, sourceName, amount }) => {
+        const own = acc[targetItemId] ?? [];
+        const key = JSON.stringify([sourceName, amount]);
+        const isSeen = own.some(
+          (entry) => JSON.stringify([entry.sourceName, entry.amount]) === key,
+        );
+        return isSeen
+          ? acc
+          : { ...acc, [targetItemId]: [...own, { sourceName, amount }] };
+      },
+      {},
+    );
     return result;
   },
 );
@@ -784,6 +826,19 @@ export const selectChangeableKey = (state: RootState): ReadonlySet<string> => {
   changeableCache.set(items, result);
   return result;
 };
+
+/** Whether the plan has an income source that is still paying: the one thing every other screen waits for. */
+export const selectHasIncome = (state: RootState, today: number) =>
+  state.runway.items.some(
+    (item) =>
+      item.kind === 'payLine' &&
+      item.archivedAt === null &&
+      (item.endedAt === null || item.endedAt >= today),
+  );
+
+/** Whether the plan has ever had an income source, ended or archived included: a first run has none, and every screen but Home waits for one. */
+export const selectHasEverHadIncome = (state: RootState) =>
+  state.runway.items.some((item) => item.kind === 'payLine');
 
 /** The pay lines whose ending has been reached and whose header is not yet marked ended, as JSON of `[itemId, lastDay, name]` rows ('' when none), so a consumer re-runs only when the set changes. */
 export const selectReachedEndingsKey = (state: RootState, today: number) => {

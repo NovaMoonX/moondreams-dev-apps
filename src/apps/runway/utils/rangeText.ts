@@ -21,3 +21,17 @@ export const formatRange = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCents(range.lowCents)
     : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
+
+/** One line for the standing ranges behind a figure: "Any range of pay is planned at the low end and of bills at the high end." */
+export function describeRangeBasis(
+  stance: Stance,
+  sides: { income: boolean; expense: boolean },
+): string {
+  const income = RANGE_END_WORDS[getRangeEnd(stance, 'income')];
+  const expense = RANGE_END_WORDS[getRangeEnd(stance, 'expense')];
+  if (sides.income && sides.expense)
+    return `Any range of pay is planned at ${income} and of bills at ${expense}.`;
+  return sides.income
+    ? `Any range of pay is planned at ${income}.`
+    : `Any range of bills is planned at ${expense}.`;
+}

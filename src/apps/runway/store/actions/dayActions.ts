@@ -122,7 +122,7 @@ export async function saveDayOverride(
 /** A day another device settled or changed first; the screen may already have moved on, so it is also said in a toast. */
 export class DayChangedElsewhere extends Error {}
 
-/** The rules refuse a write built on a day another device has since settled; the person is told that, not the rule's words. */
+/** A record another device already created is refused on its id; the person is told the day changed, not the rule's words. */
 const asRaceMessage = (error: unknown, message: string) =>
   typeof error === 'object' &&
   error !== null &&

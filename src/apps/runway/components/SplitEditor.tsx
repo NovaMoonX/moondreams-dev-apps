@@ -46,7 +46,7 @@ function SplitEditor({
   );
   const rest = totalCents - assigned;
   const getRestLine = () => {
-    if (chosen.length < 2) return 'Pick at least two envelopes.';
+    if (chosen.length < 2) return null;
     if (rest === 0) return `All ${formatCents(totalCents)} is placed.`;
     return rest > 0
       ? `${formatCents(rest)} of ${formatCents(totalCents)} is still to place.`
@@ -71,9 +71,11 @@ function SplitEditor({
         {chosen.length >= 2 && (
           <RevealChip onClick={onEvenly}>{SPEND_WORDS.splitEvenly}</RevealChip>
         )}
-        <p className='text-muted-foreground text-sm' role='status'>
-          {getRestLine()}
-        </p>
+        {getRestLine() && (
+          <p className='text-muted-foreground text-sm' role='status'>
+            {getRestLine()}
+          </p>
+        )}
       </div>
       {chosen.length > 0 && (
         <ul className='border-border divide-border divide-y rounded-2xl border'>

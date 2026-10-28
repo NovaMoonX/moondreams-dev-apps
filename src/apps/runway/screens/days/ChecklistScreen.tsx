@@ -3,13 +3,18 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import BillPaidChip from '@apps/runway/components/BillPaidChip';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import { BILL_WORDS, CHECKLIST_WORDS } from '@apps/runway/constants';
+import {
+  BILL_WORDS,
+  CHECKLIST_WORDS,
+  TICK_HIT_CLASS,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import {
@@ -28,6 +33,10 @@ interface ChecklistScreenProps {
 /** What to do with the money of a confirmed day: the bills it set money aside for, ready to pay or still waiting for the rest. */
 function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const { user } = useAuth();
+  const { isBelow } = useMediaQuery();
+  const everythingLabel = isBelow('sm')
+    ? CHECKLIST_WORDS.everythingShort
+    : CHECKLIST_WORDS.everything;
   const { addToast } = useToast();
   const today = todayAsUtcDate(useNow(60_000));
   const items = useAppSelector((state) => state.runway.items);
@@ -72,14 +81,13 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
       {ready.length > 0 && (
         <div className='border-border bg-card flex min-h-12 items-center gap-3 rounded-2xl border px-3'>
           <Checkbox
+            className={TICK_HIT_CLASS}
             checked={doneCount === ready.length}
             indeterminate={doneCount > 0 && doneCount < ready.length}
             onCheckedChange={(next) => setDone(readyIds, Boolean(next))}
             aria-label={CHECKLIST_WORDS.everything}
           />
-          <span className='min-w-0 flex-1 font-medium'>
-            {CHECKLIST_WORDS.everything}
-          </span>
+          <span className='min-w-0 flex-1 font-medium'>{everythingLabel}</span>
           <span className='text-muted-foreground text-sm whitespace-nowrap tabular-nums'>
             {doneCount} of {ready.length}
           </span>
@@ -95,6 +103,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
             <li key={line.lineId} className='flex items-start gap-3 p-3'>
               <div className='flex h-10 shrink-0 items-center'>
                 <Checkbox
+                  className={TICK_HIT_CLASS}
                   checked={done.has(line.lineId)}
                   onCheckedChange={(next) =>
                     setDone([line.lineId], Boolean(next))

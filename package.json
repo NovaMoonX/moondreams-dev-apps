@@ -56,6 +56,7 @@
     "check:option-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/optionMatch.ts",
     "check:runway-engine": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayEngine.ts",
     "check:runway-keys": "firebase emulators:exec --only firestore --project moondreams-dev-apps \"tsx scripts/checks/runwayKeyGuard.ts\"",
+    "check:runway-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/runway/rulesMatrix.py\"",
     "check:indexes": "tsx scripts/checkFirestoreIndexes.ts",
     "check:rules-size": "tsx scripts/checkRulesSize.ts",
     "fb:indexes": "firebase deploy --only firestore:indexes",

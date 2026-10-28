@@ -39,6 +39,10 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
     selectEffectiveSplit(state, day.dayKey),
   );
   const title = day.sourceName ?? day.payLineName;
+  const items = useAppSelector((state) => state.runway.items);
+  const billIds = new Set(
+    items.filter((item) => item.kind === 'bill').map((item) => item.id),
+  );
 
   const getBody = () => {
     if (!isReady) {
@@ -52,8 +56,11 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
       );
     }
     const { arrivedCents, freeToSpendCents, lines } = record;
-    const funded = lines.filter((line) => line.shortBy === 0);
-    const unfunded = lines.filter((line) => line.shortBy > 0);
+    const otherLines = lines.filter(
+      (line) => !(billIds.has(line.itemId) && line.cents > 0),
+    );
+    const funded = otherLines.filter((line) => line.shortBy === 0);
+    const unfunded = otherLines.filter((line) => line.shortBy > 0);
     return (
       <div className='space-y-4'>
         <CoverageHeadline
@@ -91,7 +98,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           <EmptyCard icon={<FileText className='h-5 w-5' />}>
             Nothing was set to be funded from this day.
           </EmptyCard>
-        ) : (
+        ) : otherLines.length === 0 ? null : (
           <div className='space-y-4'>
             {funded.length > 0 && (
               <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>

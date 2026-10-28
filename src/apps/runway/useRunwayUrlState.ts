@@ -4,6 +4,7 @@ import {
   parseAsStringLiteral,
   useQueryState,
 } from 'nuqs';
+import { useNavigate } from 'react-router-dom';
 
 import {
   CHANGE_LOG_SPANS,
@@ -21,6 +22,7 @@ import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
 /** Runway's open tab and income day, kept in the URL so a reload and a return from another app land on the same tab. */
 export function useRunwayUrlState() {
+  const navigate = useNavigate();
   const [requestedTab, setRequestedTab] = useQueryState(
     'tab',
     parseAsStringLiteral(RUNWAY_TABS),
@@ -103,14 +105,33 @@ export function useRunwayUrlState() {
   };
 
   const activeTab: RunwayTab = requestedTab ?? DEFAULT_RUNWAY_TAB;
-  const showTab = (tab: RunwayTab) =>
-    setRequestedTab(tab === DEFAULT_RUNWAY_TAB ? null : tab, {
-      history: 'replace',
-    });
+  // nuqs writes the URL without telling the router, so the entry Home leaves by carries its own marker
+  // and Back from any other tab pops to it; only leaving Home adds an entry.
+  const markTabStep = () =>
+    window.history.replaceState(
+      { ...window.history.state, runwayTabStep: true },
+      '',
+    );
+  const showTab = (tab: RunwayTab) => {
+    if (tab === activeTab) return;
+    if (tab === DEFAULT_RUNWAY_TAB) {
+      if (window.history.state?.runwayTabStep) {
+        navigate(-1);
+        return;
+      }
+      setRequestedTab(null, { history: 'replace' });
+      return;
+    }
+    if (activeTab === DEFAULT_RUNWAY_TAB) {
+      void setRequestedTab(tab, { history: 'push' }).then(markTabStep);
+      return;
+    }
+    setRequestedTab(tab, { history: 'replace' });
+  };
 
   const showSpend = (envelopeId: string | null) => {
     setRequestedSpendEnvelope(envelopeId, { history: 'replace' });
-    setRequestedTab('spend', { history: 'replace' });
+    showTab('spend');
   };
   const showSpendEnvelope = (envelopeId: string | null) =>
     setRequestedSpendEnvelope(envelopeId, { history: 'replace' });

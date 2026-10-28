@@ -6,6 +6,7 @@ export function describeAmountCheck(
   check: AmountCheck,
   envelopeName: string,
   nameOf: (envelopeId: string) => string,
+  freeName = 'Free to spend',
 ) {
   if (check.kind === 'fits') {
     return {
@@ -17,16 +18,20 @@ export function describeAmountCheck(
   }
   const sources = check.sources.map(
     (source) =>
-      `${nameOf(source.envelopeId)} could give ${formatCents(source.takeCents)}, leaving ${formatCents(source.leftAfterCents)}.`,
+      `${source.envelopeId === null ? freeName : nameOf(source.envelopeId)} could give ${formatCents(source.takeCents)}, leaving ${formatCents(source.leftAfterCents)}.`,
   );
   const rest =
     check.uncoveredCents > 0
-      ? `${formatCents(check.uncoveredCents)} is more than the other envelopes hold. It would come out of Free to spend.`
+      ? `${formatCents(check.uncoveredCents)} is more than Free to spend and the other envelopes hold. Free to spend would go over-assigned.`
       : null;
   return {
     headline: `${envelopeName} would be ${formatCents(check.overCents)} over.`,
     lead:
-      sources.length > 0 ? 'It could come from, lowest priority first:' : null,
+      sources.length === 0
+        ? null
+        : check.sources[0].envelopeId === null
+          ? 'It could come from Free to spend, then the lowest priority first:'
+          : 'It could come from, lowest priority first:',
     sources,
     rest,
   };

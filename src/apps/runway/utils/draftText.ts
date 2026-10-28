@@ -32,6 +32,8 @@ export function describeLineReason(
   line: DraftLine,
   sourceNames: Record<string, string>,
   name?: string,
+  /** The source the whole day is paid by: when every part of the line comes from it, the screen's header already says so. */
+  daySourceId?: string | null,
 ) {
   if (line.reason.code === 'returns' && name !== undefined)
     return `${name} ${DRAFT_WORDS.returnsTo} ${formatCents(line.cents)} ${DRAFT_WORDS.returnsThisTime}`;
@@ -48,11 +50,18 @@ export function describeLineReason(
   ];
   const cadence = DRAFT_CADENCE_WORDS[line.reason.cadence];
   const ask = describeLineAsk(line, sourceNames);
-  const funded = `${DRAFT_WORDS.fundedFrom} ${joinNames(names)}`;
+  const isFromDaySource =
+    daySourceId !== undefined &&
+    daySourceId !== null &&
+    line.paidBy.length > 0 &&
+    line.paidBy.every((part) => part.sourceId === daySourceId);
+  const funded = isFromDaySource
+    ? ''
+    : `, ${DRAFT_WORDS.fundedFrom} ${joinNames(names)}`;
   if (line.ask.kind === 'percent') {
     return `${ask}, ${cadence.toLowerCase()}`;
   }
-  const result = `${ask ? `${ask}, ${cadence.toLowerCase()}` : cadence}, ${funded}`;
+  const result = `${ask ? `${ask}, ${cadence.toLowerCase()}` : cadence}${funded}`;
   return result;
 }
 

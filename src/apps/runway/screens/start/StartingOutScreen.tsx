@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Mail, ReceiptText, Wallet } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
@@ -29,11 +31,15 @@ type FormName = 'income' | 'bill' | 'envelope' | 'goal' | 'stand';
 
 interface AddedListProps {
   rows: { id: string; name: string; emoji: string | null }[];
+  /** What the empty list says in place of nothing, so a step that has had no answer yet is still a card. */
+  emptyText: string;
+  emptyIcon: ReactNode;
 }
 
 /** What has been added in this step, capped so fifty bills stay a short list. */
-function AddedList({ rows }: AddedListProps) {
-  if (rows.length === 0) return null;
+function AddedList({ rows, emptyText, emptyIcon }: AddedListProps) {
+  if (rows.length === 0)
+    return <EmptyCard icon={emptyIcon}>{emptyText}</EmptyCard>;
   const shown = rows.slice(0, 4);
   return (
     <div className='border-border bg-card rounded-2xl border p-3'>
@@ -56,11 +62,22 @@ function AddedList({ rows }: AddedListProps) {
   );
 }
 
+/** A person who comes back part-way lands on the first step with nothing in it; a plan with an income source and nothing else is where they stopped. */
+const getFirstOpenStep = (
+  incomeCount: number,
+  billCount: number,
+  spendingCount: number,
+  hasStart: boolean,
+): Step => {
+  if (incomeCount === 0) return 'income';
+  if (billCount === 0 && spendingCount === 0 && !hasStart) return 'bills';
+  return 'income';
+};
+
 /** First run: one short question at a time. Only the income source is required; every other step has a Later. */
 function StartingOutScreen() {
   const today = todayAsUtcDate(useNow(60_000));
   const { closeView, openDay } = useRunwayUrlState();
-  const [step, setStep] = useState<Step>('income');
   const [form, setForm] = useState<{ name: FormName; key: number } | null>(
     null,
   );
@@ -82,6 +99,14 @@ function StartingOutScreen() {
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
 
+  const [step, setStep] = useState<Step>(() =>
+    getFirstOpenStep(
+      incomeCount,
+      bills.length,
+      envelopes.length + goals.length,
+      hasStart,
+    ),
+  );
   const index = STEPS.indexOf(step);
   const openForm = (name: FormName) =>
     setForm((current) => ({ name, key: (current?.key ?? 0) + 1 }));
@@ -133,7 +158,11 @@ function StartingOutScreen() {
         help: START_WORDS.billsHelp,
         content: (
           <>
-            <AddedList rows={toRows(bills)} />
+            <AddedList
+              rows={toRows(bills)}
+              emptyIcon={<ReceiptText className='h-5 w-5' />}
+              emptyText={START_WORDS.billsEmpty}
+            />
             <Button
               variant={bills.length > 0 ? 'secondary' : 'primary'}
               onClick={() => openForm('bill')}
@@ -152,7 +181,11 @@ function StartingOutScreen() {
         help: START_WORDS.envelopesHelp,
         content: (
           <>
-            <AddedList rows={[...toRows(envelopes), ...toRows(goals)]} />
+            <AddedList
+              rows={[...toRows(envelopes), ...toRows(goals)]}
+              emptyIcon={<Mail className='h-5 w-5' />}
+              emptyText={START_WORDS.envelopesEmpty}
+            />
             <div className='flex flex-wrap gap-2'>
               <Button
                 variant={envelopes.length > 0 ? 'secondary' : 'primary'}
@@ -175,12 +208,19 @@ function StartingOutScreen() {
         ask: START_WORDS.standAsk,
         help: START_WORDS.standHelp,
         content: (
-          <Button
-            variant={hasStart ? 'secondary' : 'primary'}
-            onClick={() => openForm('stand')}
-          >
-            {hasStart ? 'Change what you entered' : 'Say where things stand'}
-          </Button>
+          <>
+            {!hasStart && (
+              <EmptyCard icon={<Wallet className='h-5 w-5' />}>
+                {START_WORDS.standEmpty}
+              </EmptyCard>
+            )}
+            <Button
+              variant={hasStart ? 'secondary' : 'primary'}
+              onClick={() => openForm('stand')}
+            >
+              {hasStart ? 'Change what you entered' : 'Say where things stand'}
+            </Button>
+          </>
         ),
         isDone: hasStart,
         isRequired: false,

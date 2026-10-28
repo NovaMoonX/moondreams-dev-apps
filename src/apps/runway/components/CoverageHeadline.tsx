@@ -1,13 +1,11 @@
 import { formatCents } from '@/utils/moneyUtils';
 import { DRAFT_WORDS, HOME_WORDS } from '@apps/runway/constants';
 import { useAppSelector } from '@/store';
-import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
-import {
-  describeHoldsThrough,
-  describeProblem,
-} from '@apps/runway/utils/lookaheadText';
+import ProblemRow from '@apps/runway/components/ProblemRow';
+import { describeHoldsThrough } from '@apps/runway/utils/lookaheadText';
+import { describeRangeBasis } from '@apps/runway/utils/rangeText';
 
 interface CoverageHeadlineProps {
   freeCents: number;
@@ -18,13 +16,13 @@ interface CoverageHeadlineProps {
 function CoverageHeadline({ freeCents, moneyCents }: CoverageHeadlineProps) {
   const detail =
     freeCents > 0
-      ? `Left from ${formatCents(moneyCents)} after the envelopes`
+      ? `Of ${formatCents(moneyCents)} after the envelopes`
       : DRAFT_WORDS.nothingLeft;
 
   return (
     <div className='border-border bg-accent rounded-2xl border p-4'>
       <p className='text-muted-foreground text-sm font-medium'>
-        {DRAFT_WORDS.freeToSpend}
+        {DRAFT_WORDS.dayLeft}
       </p>
       <p className='text-3xl font-semibold tracking-tight tabular-nums'>
         {formatCents(freeCents)}
@@ -40,6 +38,8 @@ interface HoldsThroughLineProps {
   rangeSides: { income: boolean; expense: boolean };
   /** True on Home, which names only the first problem; Days lists them all. */
   isFirstProblemShown?: boolean;
+  /** False where each row already says which end it is planned at (Days). */
+  hasRangeNote?: boolean;
 }
 
 /** How far the plan holds. A gap is said as a gap in the plan, never as missing money. */
@@ -47,6 +47,7 @@ export function HoldsThroughLine({
   lookahead,
   rangeSides,
   isFirstProblemShown = false,
+  hasRangeNote = true,
 }: HoldsThroughLineProps) {
   const stance = useAppSelector(selectStance);
   if (!lookahead.hasBills) {
@@ -60,15 +61,14 @@ export function HoldsThroughLine({
     <div className='space-y-0.5'>
       {headline && <p className='text-sm font-medium'>{headline}</p>}
       {isFirstProblemShown && first && (
-        <p className='text-muted-foreground text-sm'>
-          {describeProblem(first)}
-        </p>
+        <div className='border-border bg-card rounded-2xl border'>
+          <ProblemRow problem={first} />
+        </div>
       )}
-      {rangeSides.income && (
-        <RangeBasisNote stance={stance} side='income' className='text-xs' />
-      )}
-      {rangeSides.expense && (
-        <RangeBasisNote stance={stance} side='expense' className='text-xs' />
+      {hasRangeNote && (rangeSides.income || rangeSides.expense) && (
+        <span className='text-muted-foreground block text-xs'>
+          {describeRangeBasis(stance, rangeSides)}
+        </span>
       )}
     </div>
   );

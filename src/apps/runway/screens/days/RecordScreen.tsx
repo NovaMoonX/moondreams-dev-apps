@@ -123,6 +123,7 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
     const differing = rows.filter((row) => row.plannedCents !== row.line.cents);
     const matched = rows.filter((row) => row.plannedCents === row.line.cents);
     const { differences } = confirmed.payload;
+    const isUntouched = differences.length === 0 && differing.length === 0;
     const hasLineChanges = differences.some((d) => d.kind === 'line');
     const notes = new Map(
       differences.flatMap((difference) =>
@@ -142,7 +143,7 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
             confirmedWord={CONFIRM_WORDS.arrived}
           />
           <Figure
-            label={DRAFT_WORDS.freeToSpend}
+            label={DRAFT_WORDS.dayLeft}
             planned={proposed.payload.freeToSpendCents}
             confirmed={confirmed.payload.freeToSpendCents}
             confirmedWord={CONFIRM_WORDS.confirmed}
@@ -182,17 +183,24 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
             ))}
           </ul>
         )}
+        {isUntouched && (
+          <p className='text-muted-foreground text-sm'>
+            {CONFIRM_WORDS.unchanged}
+          </p>
+        )}
         {matched.length > 0 && (
           <div className='space-y-2'>
-            <ShowMoreButton
-              isOpen={isMatchedOpen}
-              onClick={() => setIsMatchedOpen((open) => !open)}
-            >
-              {matched.length === 1
-                ? '1 line matched the draft'
-                : `${matched.length} lines matched the draft`}
-            </ShowMoreButton>
-            {isMatchedOpen && (
+            {!isUntouched && (
+              <ShowMoreButton
+                isOpen={isMatchedOpen}
+                onClick={() => setIsMatchedOpen((open) => !open)}
+              >
+                {matched.length === 1
+                  ? '1 line matched the draft'
+                  : `${matched.length} lines matched the draft`}
+              </ShowMoreButton>
+            )}
+            {(isMatchedOpen || isUntouched) && (
               <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                 {matched.map(({ line }) => (
                   <RecordLineRow key={line.lineId} line={line} />
@@ -200,11 +208,6 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
               </ul>
             )}
           </div>
-        )}
-        {differences.length === 0 && differing.length === 0 && (
-          <p className='text-muted-foreground text-sm'>
-            {CONFIRM_WORDS.unchanged}
-          </p>
         )}
         {corrections.length > 0 && (
           <div className='space-y-2'>
@@ -224,7 +227,7 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   <BeforeAfterRow
-                    title={DRAFT_WORDS.freeToSpend}
+                    title={DRAFT_WORDS.dayLeft}
                     before={formatCents(
                       correction.payload.before.freeToSpendCents,
                     )}

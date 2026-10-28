@@ -3,13 +3,14 @@ import { Plus, X } from 'lucide-react';
 
 import {
   Button,
+  Checkbox,
   Form,
   FormFactories,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AmountField, { type AmountMode } from '@/components/AmountField';
-import AppToggle from '@/components/AppToggle';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
@@ -17,7 +18,11 @@ import RevealChip from '@/components/RevealChip';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
-import { CHANGE_WORDS, MAX_PAIRINGS } from '@apps/runway/constants';
+import {
+  CHANGE_WORDS,
+  MAX_PAIRINGS,
+  TICK_HIT_CLASS,
+} from '@apps/runway/constants';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import { changeField } from '@apps/runway/forms/changeField';
@@ -319,18 +324,21 @@ function PairingsEditor({
                     onChange={(of) => update(row.key, { of })}
                   />
                 )}
-                <div className='flex items-start justify-between gap-3'>
+                <div className='flex items-start gap-3'>
+                  <Checkbox
+                    className={join('mt-0.5', TICK_HIT_CLASS)}
+                    aria-label='Top up from the rest if short'
+                    checked={row.topUp}
+                    onCheckedChange={(topUp) =>
+                      update(row.key, { topUp: Boolean(topUp) })
+                    }
+                  />
                   <div className='min-w-0'>
                     <p className='text-sm'>Top up from the rest if short</p>
                     <p className='text-muted-foreground text-xs'>
                       Off: a Must or Should is held until you choose.
                     </p>
                   </div>
-                  <AppToggle
-                    aria-label='Top up from the rest if short'
-                    checked={row.topUp}
-                    onCheckedChange={(topUp) => update(row.key, { topUp })}
-                  />
                 </div>
               </div>
             ))}

@@ -361,10 +361,12 @@ function PurchaseForm({
   };
 
   const toggleRefund = () => {
+    if (!isRefund)
+      setReturnTo((isSplit ? splitIds[0] : envelopeId) ?? FREE_VALUE);
+    else if (returnTo !== FREE_VALUE) setEnvelopeId(returnTo);
     setIsRefund((current) => !current);
     setIsSplit(false);
     setOriginalId(null);
-    setReturnTo(FREE_VALUE);
   };
 
   const evenShares = () => {
@@ -681,14 +683,17 @@ function PurchaseForm({
     }),
   ];
 
-  const splitBlocker =
-    amount !== null &&
-    splitIds.reduce(
+  const getSplitBlocker = () => {
+    if (splitIds.length < 2) return SPEND_WORDS.needsTwo;
+    const placed = splitIds.reduce(
       (sum, id) => sum + (parseMoneyToCents(shares[id] ?? '') ?? 0),
       0,
-    ) !== amount
+    );
+    return amount !== null && placed !== amount
       ? SPEND_WORDS.needsShares
       : null;
+  };
+  const splitBlocker = getSplitBlocker();
 
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={SPEND_WORDS.sheetTitle}>
@@ -717,7 +722,7 @@ function PurchaseForm({
             rightActions={
               <Button
                 type='button'
-                disabled={splitBlocker !== null || splitIds.length < 2}
+                disabled={splitBlocker !== null}
                 onClick={() => setView('form')}
               >
                 {SPEND_WORDS.splitDone}
@@ -768,7 +773,7 @@ function PurchaseForm({
                   }}
                 >
                   <span className='min-w-0'>
-                    <span className='line-clamp-2 block font-medium break-words'>
+                    <span className='line-clamp-2 font-medium break-words'>
                       {getPurchaseTitle(purchase, nameOf)}
                     </span>
                     <span className='text-muted-foreground block text-sm'>

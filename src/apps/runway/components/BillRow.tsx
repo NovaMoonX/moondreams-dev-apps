@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import BillPaidChip from '@apps/runway/components/BillPaidChip';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -41,6 +43,11 @@ function BillRow({ billId, bill, payment, planStance, footer }: BillRowProps) {
   const isSettled =
     payment !== null &&
     (payment.paid !== null || payment.fundedCents >= payment.totalCents);
+  const statusLine =
+    progressText ??
+    (payment && !isSettled
+      ? describeBillFunding(payment, bill.fundedBy)
+      : null);
 
   return (
     <li className='flex items-start gap-3 p-3'>
@@ -61,10 +68,14 @@ function BillRow({ billId, bill, payment, planStance, footer }: BillRowProps) {
           isOwnStance={Boolean(bill.stanceOverride)}
         />
         <p className='text-muted-foreground text-sm'>{dueText}</p>
-        {progressText && <p className='text-sm font-medium'>{progressText}</p>}
-        {payment && !isSettled && (
-          <p className='text-muted-foreground text-sm'>
-            {describeBillFunding(payment, bill.fundedBy)}
+        {statusLine && (
+          <p
+            className={join(
+              'text-sm',
+              progressText ? 'font-medium' : 'text-muted-foreground',
+            )}
+          >
+            {statusLine}
           </p>
         )}
         <div className='flex flex-wrap items-center gap-2 pt-1'>

@@ -126,7 +126,7 @@ const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => {
 
 const INITIAL_DATA: EnvelopeFormData = {
   name: '',
-  priority: null,
+  priority: 'should',
   amount: '',
   cadence: 'everyIncomeDay',
   dayKeys: [],

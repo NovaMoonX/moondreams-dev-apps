@@ -8,6 +8,7 @@ import {
   readKeyring,
   wrapDataKey,
 } from '../../functions/src/apps/runway/planKey.ts';
+import { formatDateUTC } from '../../src/utils/formatUtils.ts';
 import { DEFAULT_CURRENCY_CODE } from '../../src/apps/runway/constants.ts';
 import {
   DAY_MS,
@@ -328,7 +329,7 @@ async function writeSeedLifecycle(
     sealJson(stretchPayload, encryption),
     sealJson(
       {
-        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${new Date(today).toISOString().slice(0, 10)} through ${new Date(stretchEnd - DAY_MS).toISOString().slice(0, 10)}, then it goes back.`,
+        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateUTC(today)} through ${formatDateUTC(stretchEnd - DAY_MS)}, then it goes back.`,
         note: 'Covering the car registration',
       } satisfies ChangeSealed,
       encryption,
@@ -545,7 +546,7 @@ async function writeSeedStart(
     itemIds: [],
     sealed: await sealJson(
       {
-        summary: `Started from ${new Date(startDate).toISOString().slice(0, 10)}.`,
+        summary: `Started from ${formatDateUTC(startDate)}.`,
       } satisfies ChangeSealed,
       encryption,
     ),
@@ -1389,12 +1390,7 @@ async function writeSeedBills(
     new Date(today).getUTCMonth() + 2,
     1,
   );
-  const raiseText = new Date(raiseFromStart).toLocaleDateString('en-US', {
-    timeZone: 'UTC',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  const raiseText = formatDateUTC(raiseFromStart);
   const [raiseSealed, raiseChangeSealed] = await Promise.all([
     sealJson(raise, encryption),
     sealJson(
@@ -1618,7 +1614,7 @@ async function seedTrackingPlan(
     itemIds: [],
     sealed: await sealJson(
       {
-        summary: `Started tracking from ${new Date(startDate).toISOString().slice(0, 10)}.`,
+        summary: `Started tracking from ${formatDateUTC(startDate)}.`,
       } satisfies ChangeSealed,
       encryption,
     ),
@@ -1790,7 +1786,7 @@ async function writeSeedPurchases(
     {
       id: 'seed-change-purchase-removed',
       createdAt: removedDate + 14 * 3_600_000,
-      summary: `Purchase removed: Walgreens, $12.40 on ${new Date(removedDate).toISOString().slice(0, 10)}.`,
+      summary: `Purchase removed: Walgreens, $12.40 on ${formatDateUTC(removedDate)}.`,
     },
   ];
   await Promise.all(

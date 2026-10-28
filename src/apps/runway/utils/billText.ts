@@ -62,5 +62,5 @@ export function describeBillProgress(payment: BillPayment) {
   if (fundedCents <= 0) return null;
   if (fundedCents >= totalCents) return BILL_WORDS.readyToPay;
   const days = payment.fundedDays + payment.parts.length;
-  return `${formatCents(fundedCents)} of ${formatCents(totalCents)} set aside · ${payment.fundedDays} of ${days} days`;
+  return `${formatCents(fundedCents)} of ${formatCents(totalCents)} set aside · ${payment.fundedDays} of ${days} income days`;
 }

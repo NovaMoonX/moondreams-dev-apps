@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { ChevronRight, Gauge } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { Activity, ChevronRight, Gauge, Trash2 } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -27,6 +28,59 @@ const stanceOptions = STANCES.map((value) => ({
   value,
   label: STANCE_LABELS[value],
 }));
+
+interface SettingsRowProps {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  isDestructive?: boolean;
+  onOpen: () => void;
+}
+
+/** A row that opens a settings view, drawn like the stance's summary row so the screen has one anatomy. */
+function SettingsRow({
+  icon,
+  label,
+  value,
+  isDestructive = false,
+  onOpen,
+}: SettingsRowProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='border-border hover:bg-muted text-foreground! h-auto min-h-16 w-full items-start justify-start gap-3 rounded-2xl border px-3! py-2 text-left font-normal whitespace-normal'
+      onClick={onOpen}
+    >
+      <span
+        className={join(
+          'mt-0.5 grid size-10 shrink-0 place-items-center rounded-full [&_svg]:size-5',
+          isDestructive
+            ? 'bg-destructive/10 text-destructive'
+            : 'bg-accent text-accent-foreground',
+        )}
+        aria-hidden='true'
+      >
+        {icon}
+      </span>
+      <span className='flex min-h-11 min-w-0 flex-1 flex-col justify-center'>
+        <span
+          className={join(
+            'block text-base',
+            isDestructive && 'text-destructive',
+          )}
+        >
+          {label}
+        </span>
+        <span className='text-muted-foreground block text-sm'>{value}</span>
+      </span>
+      <ChevronRight
+        className='text-muted-foreground mt-3 -ml-1 size-5 shrink-0'
+        aria-hidden='true'
+      />
+    </Button>
+  );
+}
 
 interface SettingsScreenProps {
   onClose: () => void;
@@ -61,74 +115,49 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   return (
     <Subview title='Settings' onClose={onClose}>
       <div className='space-y-3'>
-        <div className='border-border bg-card rounded-2xl border'>
-          <SummaryEditor
-            label='Planning stance'
-            summary={STANCE_LABELS[stance]}
-            placeholder=''
-            title='Planning stance'
-            icon={<Gauge />}
-            isFramed
-            shouldFocus={false}
-          >
-            <PillGroup
-              label='Planning stance'
-              options={stanceOptions}
-              value={stance}
-              onChange={(next) => void choose(next)}
-            />
-            <p className='text-muted-foreground text-sm'>
-              {STANCE_HELP[stance]}
-            </p>
-            {error && (
-              <p className='text-destructive text-sm' role='alert'>
-                {error}
-              </p>
-            )}
-          </SummaryEditor>
-        </div>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='border-border bg-card h-auto min-h-14 w-full items-start justify-between gap-3 rounded-2xl border p-3 text-left font-normal whitespace-normal'
-          onClick={() => openSettingsView('tracking')}
+        <SummaryEditor
+          label='Planning stance'
+          summary={STANCE_LABELS[stance]}
+          placeholder=''
+          title='Planning stance'
+          icon={<Gauge />}
+          isFramed
+          shouldFocus={false}
         >
-          <span className='min-w-0 flex-1'>
-            <span className='block font-medium'>{TRACKING_WORDS.rowLabel}</span>
-            <span className='text-muted-foreground block text-sm'>
-              {open === null
-                ? 'Plan only'
-                : `Track, since ${formatDateUTC(open.from)}`}
-            </span>
-          </span>
-          <ChevronRight
-            className='text-muted-foreground mt-1 h-4 w-4 shrink-0'
-            aria-hidden='true'
+          <PillGroup
+            label='Planning stance'
+            options={stanceOptions}
+            value={stance}
+            onChange={(next) => void choose(next)}
           />
-        </Button>
+          <p className='text-muted-foreground text-sm'>{STANCE_HELP[stance]}</p>
+          {error && (
+            <p className='text-destructive text-sm' role='alert'>
+              {error}
+            </p>
+          )}
+        </SummaryEditor>
         <p className='text-muted-foreground px-1 text-sm'>
           A pay line or bill with a range can plan at its own end instead. You
           choose that where you add it.
         </p>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='border-border bg-card h-auto min-h-14 w-full items-start justify-between gap-3 rounded-2xl border p-3 text-left font-normal whitespace-normal'
-          onClick={() => openSettingsView('delete')}
-        >
-          <span className='min-w-0 flex-1'>
-            <span className='text-destructive block font-medium'>
-              {DELETE_PLAN_WORDS.rowLabel}
-            </span>
-            <span className='text-muted-foreground block text-sm'>
-              {DELETE_PLAN_WORDS.rowHelp}
-            </span>
-          </span>
-          <ChevronRight
-            className='text-muted-foreground mt-1 h-4 w-4 shrink-0'
-            aria-hidden='true'
-          />
-        </Button>
+        <SettingsRow
+          icon={<Activity />}
+          label={TRACKING_WORDS.rowLabel}
+          value={
+            open === null
+              ? 'Plan only'
+              : `Track, since ${formatDateUTC(open.from)}`
+          }
+          onOpen={() => openSettingsView('tracking')}
+        />
+        <SettingsRow
+          icon={<Trash2 />}
+          label={DELETE_PLAN_WORDS.rowLabel}
+          value={DELETE_PLAN_WORDS.rowHelp}
+          isDestructive
+          onOpen={() => openSettingsView('delete')}
+        />
       </div>
     </Subview>
   );
