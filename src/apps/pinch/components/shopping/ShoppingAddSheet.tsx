@@ -31,6 +31,7 @@ import {
 import { addDaysToKey } from '@apps/pinch/utils/dayKeys';
 import { getShoppingPickIds } from '@apps/pinch/utils/pickerSuggestions';
 import { getShoppingItemId } from '@apps/pinch/utils/shopping';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 const PLAN_DAYS = 7;
 
@@ -77,6 +78,7 @@ function ShoppingAddSheet({ uid, onClose }: ShoppingAddSheetProps) {
 
   // The drawer takes focus itself while it slides in, so the field is focused once that settles.
   useEffect(() => {
+    if (!canFocusFieldOnOpen()) return;
     const timer = window.setTimeout(
       () => fieldRef.current?.querySelector('input')?.focus(),
       350,

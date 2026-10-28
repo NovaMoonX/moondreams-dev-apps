@@ -15,6 +15,8 @@ export interface TicketDraft {
   /** Until the member types or picks one, the fee and tax follow the suggestion for the theater, format and price. */
   isFeeEdited: boolean;
   isTaxEdited: boolean;
+  /** True while the tax is AMC's figure for the picked showing, so a pick with none gives the learned rate back. */
+  isTaxFromAmc?: boolean;
 }
 
 export function getInitialTicketDraft(ticket: Ticket | null): TicketDraft {
@@ -74,6 +76,7 @@ export function applyTicketFormChange(
     ...data,
     isFeeEdited: draft.isFeeEdited || edited.fee,
     isTaxEdited: draft.isTaxEdited || edited.tax,
+    isTaxFromAmc: edited.tax ? false : draft.isTaxFromAmc,
   };
   return result;
 }

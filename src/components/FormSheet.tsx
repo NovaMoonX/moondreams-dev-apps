@@ -1,10 +1,28 @@
 import type { ReactNode } from 'react';
 
-import { Drawer, Modal, Panel } from '@moondreamsdev/dreamer-ui/components';
+import { X } from 'lucide-react';
+
+import {
+  Button,
+  Drawer,
+  Modal,
+  Panel,
+} from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+
+const SHORT_SCREEN_MAX_HEIGHT = 599;
+
+// A title that is an element loses the dialog's label (it points at a heading that is never drawn),
+// so the heading names the dialog itself.
+const labelDialog = (heading: HTMLHeadingElement | null) => {
+  heading
+    ?.closest('[role="dialog"]')
+    ?.setAttribute('aria-labelledby', heading.id);
+};
 
 interface FormSheetProps {
   isOpen: boolean;
@@ -14,6 +32,10 @@ interface FormSheetProps {
   children: ReactNode;
   /** What a wide screen gets: a centered modal, or a panel sliding in from the right. */
   wide?: 'modal' | 'panel';
+  /** A short landscape screen (under 600px tall, below 1024px wide) gets the drawer too, for a sheet of rows rather than fields. */
+  isDrawerWhenShort?: boolean;
+  /** Icon buttons on the title's line (40×40, each with an `aria-label`), such as the eye that shows or hides private figures. */
+  actions?: ReactNode;
 }
 
 const STICKY_FOOTER =
@@ -31,9 +53,45 @@ function FormSheet({
   title,
   children,
   wide = 'modal',
+  isDrawerWhenShort = false,
+  actions,
 }: FormSheetProps) {
-  const isPhone = useMediaQuery().isBelow('sm');
+  const { isBelow } = useMediaQuery();
+  const isShort = useIsShortScreen(SHORT_SCREEN_MAX_HEIGHT);
+  const isPhone =
+    isBelow('sm') || (isDrawerWhenShort && isShort && isBelow('lg'));
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
+  const heading = actions ? (
+    <div
+      className={join('flex items-start gap-2', isPhone && !isShort && 'pt-2')}
+    >
+      <h2
+        ref={labelDialog}
+        id={`${dialogId}-title`}
+        className={join(
+          'min-w-0 flex-1 font-semibold wrap-break-word',
+          isPhone && !isShort ? 'text-2xl' : 'text-xl',
+        )}
+      >
+        {title}
+      </h2>
+      <div className='relative z-10 -my-1 -mr-2 flex shrink-0 items-center gap-1'>
+        {actions}
+        {!isPhone && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            aria-label='Close'
+            onClick={onDialogClose}
+            className='text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0'
+          >
+            <X className='h-5 w-5' aria-hidden='true' />
+          </Button>
+        )}
+      </div>
+    </div>
+  ) : null;
 
   if (isPhone) {
     return (
@@ -41,7 +99,20 @@ function FormSheet({
         id={dialogId}
         isOpen={isOpen}
         onClose={onDialogClose}
-        title={title}
+        title={
+          heading ??
+          (isShort ? (
+            <h2
+              ref={labelDialog}
+              id={`${dialogId}-title`}
+              className='text-xl font-semibold'
+            >
+              {title}
+            </h2>
+          ) : (
+            title
+          ))
+        }
         showCloseButton
         disableCloseOnOverlayClick
         className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
@@ -65,7 +136,7 @@ function FormSheet({
         id={dialogId}
         isOpen={isOpen}
         onClose={onDialogClose}
-        title={title}
+        title={heading ?? title}
       >
         <div
           className={join(
@@ -80,7 +151,13 @@ function FormSheet({
   }
 
   return (
-    <Modal id={dialogId} isOpen={isOpen} onClose={onDialogClose} title={title}>
+    <Modal
+      id={dialogId}
+      isOpen={isOpen}
+      onClose={onDialogClose}
+      title={heading ?? title}
+      hideCloseButton={actions !== undefined}
+    >
       <div
         className={join(
           STICKY_FOOTER,

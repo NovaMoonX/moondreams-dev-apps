@@ -709,12 +709,12 @@ My roster entry asks for facts, not proposals. These are the moves the counts im
 
 ## 7. Rule candidates
 
-1. **An entry-point budget.** Every feature has one home. Every extra door names, in the PR body, the journey it serves ("from tonight's planned meal, to read the recipe"). A start action with more than 3 doors, or a look-up with fewer than the surfaces that name the thing, is a finding. → `CLAUDE.md` Design & UX. Also add it to the product review agent's checklist in `.claude/skills/pr-wrap-up/references/review-agents.md`.
+1. **An entry-point budget.** Every feature has one home. Every extra door names, in the PR body, the journey it serves ("from tonight's planned meal, to read the recipe"). A start action with more than 3 doors, or a look-up with fewer than the surfaces that name the thing, is a finding. → `CLAUDE.md` Design & UX. Also add it to the product review agent's checklist in the reviewer agents in `.claude/agents/`.
 2. **One fact, one number.** A count or total shown on more than one surface is the same number wherever its scope is the same. Where the scope differs, the label names the scope. A sentence that only explains why two numbers differ means the numbers are wrong. → `CLAUDE.md` Product.
 3. **One word, one concept.** Pinch keeps a short glossary in its rules pair. A UI word used for one concept (meal, list, note, Got it, made) is not reused for another, and a help tip's dismiss button never repeats a label on the same screen. → `.claude/rules/pinch.md`. The design review checklist greps new copy against it.
 4. **Copy that says "go to X" is a missing door.** Text pointing to another tab or screen ("from the Calendar's gear", "from the ingredient in Kitchen") is replaced by a button that opens it, or by moving the feature to where it is needed. → `CLAUDE.md` Design & UX.
 5. **A name on screen opens its thing.** A row or line that names a recipe, ingredient or day opens it (in place inside a drawer), unless a stated reason says why not. → `.claude/rules/pinch.md`.
-6. **PRs report first-view counts.** A PR that adds or changes a tab, drawer or row type records its first-view insight count at 390×844 for Alex and Jamie, before and after. → `.claude/skills/pr-wrap-up/references/review-agents.md` (design checklist).
+6. **PRs report first-view counts.** A PR that adds or changes a tab, drawer or row type records its first-view insight count at 390×844 for Alex and Jamie, before and after. → the reviewer agents in `.claude/agents/` (design checklist).
 7. **UX.md tracks entry points.** A PR that adds, removes or moves a door updates `UX.md`'s sitemap edge in the same PR, and the technical review checks the sitemap against the code. → `CLAUDE.md` Validation (it already asks for docs greps; name the sitemap).
 
 ## 8. Open questions for the owner

@@ -21,6 +21,7 @@ const waiting: BackLayer[] = [];
 let lastSeq = 0;
 let steppedAt = 0;
 let isFlushQueued = false;
+let adoptUrl: string | null = null;
 
 const readEntry = () => {
   const state: unknown = window.history.state;
@@ -56,9 +57,19 @@ const nextSeq = () => {
 
 const isStepping = () => Date.now() - steppedAt < STEP_TIMEOUT_MS;
 
+// An entry pushed to keep a closing layer's place (`keepEntryFor`) is dead once its param is gone.
+const isKeptEntryDone = () => {
+  const keptFor: unknown = window.history.state?.keptFor;
+  if (typeof keptFor !== 'string') return false;
+  const result = !new URLSearchParams(window.location.search).has(keptFor);
+  return result;
+};
+
 const isOnDeadEntry = () => {
   const { key } = readEntry();
-  const result = key !== null && !layers.some((layer) => layer.key === key);
+  const result =
+    (key !== null && !layers.some((layer) => layer.key === key)) ||
+    (key === null && isKeptEntryDone());
   return result;
 };
 
@@ -75,9 +86,14 @@ const writeEntry = (layer: BackLayer) => {
   window.history.pushState(next, '');
 };
 
-const leaveDeadEntry = () => {
+const leaveDeadEntry = (isClosing = false) => {
   if (isStepping() || !isOnDeadEntry()) return;
   steppedAt = Date.now();
+  adoptUrl = isClosing ? window.location.href : null;
+  // A step that never lands (no entry below) must not leave the address waiting for a later, unrelated pop.
+  window.setTimeout(() => {
+    adoptUrl = null;
+  }, STEP_TIMEOUT_MS);
   window.history.back();
 };
 
@@ -111,6 +127,14 @@ const closePopped = (popped: BackLayer[]) => {
 
 const handlePop = () => {
   steppedAt = 0;
+  const wasClosing = adoptUrl !== null;
+  // A layer closed by its own control leaves its entry; stepping off it keeps the screen as it is,
+  // so the entry below takes this address, or a param it still carries reopens what just closed.
+  // Runs before the router's own listener, which reads the address after it.
+  if (adoptUrl !== null) {
+    window.history.replaceState(window.history.state, '', adoptUrl);
+    adoptUrl = null;
+  }
   const { seq } = readEntry();
   const popped = layers.filter(
     (layer) => layer.seq > seq && !waiting.includes(layer),
@@ -119,7 +143,7 @@ const handlePop = () => {
     closePopped(popped);
   }
   waiting.splice(0).forEach(writeEntry);
-  leaveDeadEntry();
+  leaveDeadEntry(wasClosing);
 };
 
 const OPEN_POPUP_SELECTOR =
@@ -153,7 +177,7 @@ const queueFlush = () => {
   isFlushQueued = true;
   window.setTimeout(() => {
     isFlushQueued = false;
-    leaveDeadEntry();
+    leaveDeadEntry(true);
   }, 0);
 };
 

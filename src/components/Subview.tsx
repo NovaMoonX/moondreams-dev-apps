@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -13,6 +13,7 @@ const OPEN_POPUP_SELECTOR =
   '[aria-haspopup][aria-expanded="true"], [role="listbox"], [role="menu"]';
 
 const openSubviews = { count: 0 };
+const escapeOrder: object[] = [];
 
 function useSubviewOpenMarker() {
   useLayoutEffect(() => {
@@ -114,6 +115,14 @@ function Subview({
   useSubviewHistory(onClose, onBack);
   useSubviewOpenMarker();
 
+  const [escapeToken] = useState<object>(() => ({}));
+  useEffect(() => {
+    escapeOrder.push(escapeToken);
+    return () => {
+      escapeOrder.splice(escapeOrder.indexOf(escapeToken), 1);
+    };
+  }, [escapeToken]);
+
   useEffect(() => {
     if (overlay) {
       return;
@@ -132,7 +141,8 @@ function Subview({
       if (
         event.key !== 'Escape' ||
         event.defaultPrevented ||
-        hasDialogOnTop()
+        hasDialogOnTop() ||
+        escapeOrder[escapeOrder.length - 1] !== escapeToken
       ) {
         return;
       }
@@ -151,7 +161,7 @@ function Subview({
       }
       window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [overlay, goBack]);
+  }, [overlay, goBack, escapeToken]);
 
   if (overlay) {
     return createPortal(

@@ -1,65 +1,35 @@
 # Worth the Wait
 
-<img width="1727" height="933" alt="image" src="https://github.com/user-attachments/assets/e39dd70a-4d4c-426c-a002-c3d90365d94a" />
+Worth the Wait is a private space for two people to share thoughts, ideas, hopes and wishes at a time when they cannot be shared freely. It was made while two people who were getting ready to date again needed time before some topics, out of respect. Instead of holding those thoughts and risking forgetting them, each person places them in a shared box, and they stay hidden until both are ready.
 
-## Overview
+Once two people are in a space, no one else can join it. The private text of each box and item is encrypted, and it is built for quick entries on a phone.
 
-### The short
+## How it works
 
-Worth the Wait (WTW) is a private, digital space to share the matters of the mind and of the heart during a time when they couldn't be shared freely. Rather than holding onto these thoughts, ideas, hopes, and desires for what feels like forever (and potentially risking it being forgotten), we place them here until we're both ready to share and explore them together.
+1. One person creates a space, and the other joins with an invite code once the creator approves.
+2. Open a box, either one of the starter boxes or one you make, and add a thought, idea or wish.
+3. The item waits in the shared box, hidden from the other person.
+4. When you are both present and agree the time is right, reveal a box.
+5. Choose a raffle, which picks one item at random, or a full reveal of everything in the box.
 
-### The story
+## Status
 
-Going to keep this brief. This was developed during August 2026, a time where I and my ex were preparing to date again. Given the time that had past since our last relationship, along with many other "complications" of this period which come with romantic relationships (especially with an ex), we needed time before hopping back into the romantic flow of things. Therefore, certain topics were considered "off-limit" — not in a stern sense, but in a "out of respect" sense. This wouldn't mean that these matters wouldn't come to mind (or to the heart), however, which is where Worth the Wait comes from. What started off as a "place it in the *** jar" as a joke has become a more organized, structured, and still fun way of sharing — when the time is right.
+Built:
+- [x] Creating a space and joining it with an invite code and approval
+- [x] Starter boxes and boxes of your own, with delete after a confirm
+- [x] Adding, viewing and removing items, hidden from the other person by default
+- [x] Raffle and full reveal, with both people present
+- [x] Encrypted box and item text
+- [x] Pending-request approval, so the creator decides who joins
 
-## The Experience
+Next:
+- [ ] Editing custom boxes and items
+- [ ] Approval from the other person before a custom box appears
+- [ ] Revealing a single item instead of a whole box
+- [ ] Customizable box colors and wallpapers
+- [ ] Image attachments inside items
 
-## How it Starts
+## Docs
 
-One person creates a space first. Afterwards, the other person can join this space with the invite code and wait for the creator to approve the request. Once a person is in a space, they are locked in until the space is closed. Once both people are present, no others can join the space.
-
-## How it Works
-
-1. **Share:** Person opens a box (default or custom) and adds a thought, idea, or desire
-2. **Wait:** The item is now in the shared box and hidden from the other person
-3. **Reveal:** When both parties agree that the time is right, they have two options:
-  - Raffle: box is shuffled and one item is randomly selected to be revealed
-  - Full Reveal: all hidden items in the box is revealed
-
-For the reveal phase (either raffle or full reveal) to take place, both people must be present.
-
-## Privacy & Content Encryption
-
-Worth the Wait encrypts the private, user-authored content fields for each space using a per-space AES-256-GCM key tied to the active members list. The sensitive fields are the box name/description/emoji plus each item body, while metadata such as created timestamps, reveal history, and creator IDs remains unencrypted so the app can still query, reveal, and audit flows without exposing private text.
-
-### How it Feels
-- **Comfort First:** Sharing thoughts, ideas, hopes, and desires feels natural and safe.
-- **Zero Pressure:** Neither person ever feels rushed or obligated to share or open a box.
-- **Lighthearted:** The overall experience stays fun, funny, and unserious.
-- **Mobile-Centered:** Designed around quick, on-the-go entries on phone screens.
-
-## The Build Plan
-
-### Core MVP
-
-- [ ] Seeded default boxes (i.e. _Future Dates_, _Joys from Last Time_, _Appreciations of Each Other_, _Bedroom Desires_, _Places to Travel to Together_)
-- [ ] Custom box creation (name, emoji, short description)
-- [ ] Box deletion with confirmation
-- [ ] Adding, viewing, removing items in a box
-- [ ] Items are hidden from others by defaults
-- [ ] Boxes reflect if they have contents or are empty
-- [ ] Mutual agreement mechanism to reveal items in box
-
-### Next Steps
-
-- [ ] Authentication and "lock" to protect space
-- [ ] Ability to edit custom boxes and items
-- [ ] Custom boxes require approval from the other person before existing in space
-  - [ ] Pending custom boxes can include items, which are automatically added post-approval
-- [ ] Individual item reveal mechanism over full-box reveal
-
-### Stretch Goals
-
-- [ ] Game-like mobile UI with customizable box colors and background wallpapers
-- [ ] Smooth animations when opening and closing boxes
-- [ ] Support for image attachments inside items
+- [PRODUCT.md](PRODUCT.md): the full product doc (story, how each part works in detail, build plan)
+- [TECHNICAL.md](TECHNICAL.md): data model, rules, architecture

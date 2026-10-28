@@ -13,11 +13,18 @@ export interface MembershipProfile {
   monthlyGoal: number | null;
   /** The theater new showings default to; null for none. Documents written before theaters existed lack the key. */
   favoriteTheatreId: string | null;
+  /** Which AMC ticket price showtimes show and tickets start from; null means Adult. Documents written before it existed lack the key. */
+  ticketPriceKind: TicketPriceKind | null;
   /** Immutable; its presence is what "Setup is done" means. */
   setupCompletedAt: number;
   createdAt: number;
   lastEditedAt: number;
 }
+
+export type TicketPriceKind = 'ADULT' | 'SENIOR' | 'CHILD';
+
+/** AMC's list price for each kind of ticket, before tax and fees; null when AMC lists none. */
+export type TicketPrices = Record<TicketPriceKind, number | null>;
 
 export type AListTab = 'dashboard' | 'calendar' | 'watchlist';
 
@@ -25,7 +32,7 @@ export type AmcFormat =
   'STANDARD' | 'DOLBY_CINEMA' | 'IMAX' | 'PRIME' | 'REALD_3D' | 'LASER';
 export type WatchPriority = 'MUST_SEE' | 'WANT_TO_SEE' | 'IF_I_HAVE_TIME';
 export type ViewingStatus = 'PLANNED' | 'SEEN';
-export type WatchlistFilter = 'opening' | WatchPriority | 'seen';
+export type WatchlistFilter = 'opening' | WatchPriority | 'seen' | 'archived';
 
 export type WatchlistSort = 'default' | 'releaseDate' | 'title' | 'addedAt';
 export type TicketEntryMode = 'ITEMIZED' | 'ALL_IN';
@@ -87,6 +94,10 @@ export interface WatchlistItem {
   priority: WatchPriority;
   /** null = no preference. */
   preferredFormat: AmcFormat | null;
+  /** Instant: when the member archived it; null while it is on the active list. Documents written before archiving existed lack the key. */
+  archivedAt: number | null;
+  /** Why it was archived; set exactly when `archivedAt` is. Documents written before archiving existed lack the key. */
+  archiveReason: string | null;
   createdAt: number;
   lastEditedAt: number;
 }
@@ -224,10 +235,18 @@ export interface ShowtimeOption {
   /** Instant: when the showing starts. */
   startsAt: number;
   format: AmcFormat;
-  /** The adult price before tax and fees; null when AMC lists none. */
+  /** The price of the member's chosen ticket kind (Adult unless they changed it) before tax and fees; null when AMC lists none. */
   priceCents: number | null;
   /** The cheapest Standard showing of the same movie that day, for a premium showing; null otherwise. */
   standardPriceCents: number | null;
+  /** Every kind of ticket AMC lists for this showing. */
+  prices: TicketPrices;
+  /** The nearest Standard showing's price of every kind, for a premium showing. */
+  standardPrices: TicketPrices;
+  /** The sales tax AMC lists on one ticket of each kind. */
+  taxes: TicketPrices;
+  /** The tax on one ticket of the member's chosen kind; null when AMC lists none. */
+  taxCents: number | null;
   /** https link to buy this showing on amctheatres.com. */
   purchaseUrl: string;
   isSoldOut: boolean;
@@ -239,6 +258,8 @@ export interface PurchasePlan {
   format: AmcFormat;
   priceCents: number | null;
   standardPriceCents: number | null;
+  /** AMC's sales tax on one ticket at that price; null when AMC listed none. Plans saved before it existed lack the key. */
+  taxCents: number | null;
   purchaseUrl: string;
   /** Instant: when the member last left for AMC to buy; null until they do. */
   startedAt: number | null;

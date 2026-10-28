@@ -63,8 +63,9 @@ export function useRefreshUnreleasedMovies(
     const todayDay = fromDateInputValue(toLocalDateInputValue(now)) ?? 0;
     const rows = selectWatchlistRows(store.getState(), now);
     const eligible = rows.filter(
-      ({ item, isSeen }) =>
+      ({ item, isSeen, isArchived }) =>
         !isSeen &&
+        !isArchived &&
         /^(imdb|tmdb)-/.test(item.movieKey) &&
         (item.movie.releaseDate === null || item.movie.releaseDate >= todayDay),
     );

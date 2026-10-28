@@ -85,6 +85,12 @@ export const selectWatchlistItems = createSelector(
   },
 );
 
+/** Items still on the list; an archived movie is offered by the pickers as new, and adding it brings it back. */
+export const selectActiveWatchlistItems = createSelector(
+  [selectWatchlistItems],
+  (items) => items.filter((item) => (item.archivedAt ?? null) === null),
+);
+
 export const selectViewingItems = (state: RootState) =>
   state.aList.viewings.items;
 
@@ -285,7 +291,7 @@ export const selectOpeningRows = createSelector(
     const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
     const result = rows
       .flatMap((row) => {
-        const daysUntil = row.isSeen
+        const daysUntil = row.isSeen || row.isArchived
           ? null
           : getDaysUntilOpening(row.item.movie.releaseDate, todayDay);
         return daysUntil === null ? [] : [{ ...row, daysUntil }];

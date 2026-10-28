@@ -1489,7 +1489,7 @@ Set a goal and see the plan against it, only for metrics that are on.
 **Files:**
 - Public share function, `pages` entry in `cloudflare-worker.js`, `useNoIndex`
 
-**Context:** CLAUDE.md "Security and privacy" (allowlist, unguessable ids, read through a function).
+**Context:** docs/conventions/security-privacy.md "Security and privacy" (allowlist, unguessable ids, read through a function).
 
 ### Description
 A link to a recipe that shows ingredient names and steps, never stores or prices.

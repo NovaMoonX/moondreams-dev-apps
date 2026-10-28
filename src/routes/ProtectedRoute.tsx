@@ -9,16 +9,22 @@ import Loading from '@ui/Loading';
 type ProtectedRouteProps = {
   appId?: string;
   requireAdmin?: boolean;
+  /** Lets a signed-out visitor reach the page, which then decides what it shows them. */
+  allowSignedOut?: boolean;
   children: ReactNode;
 };
 
-function ProtectedRoute({ appId, requireAdmin = false, children }: ProtectedRouteProps) {
+function ProtectedRoute({ appId, requireAdmin = false, allowSignedOut = false, children }: ProtectedRouteProps) {
   const { user, isAdmin, loading: authLoading } = useAuth();
   const { apps, loading: catalogLoading } = useAppCatalog();
   const location = useLocation();
 
-  if (authLoading || catalogLoading) {
+  if (authLoading || (catalogLoading && !(allowSignedOut && !user))) {
     return <Loading />;
+  }
+
+  if (allowSignedOut && !user) {
+    return <>{children}</>;
   }
 
   if (requireAdmin) {

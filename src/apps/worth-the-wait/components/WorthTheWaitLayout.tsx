@@ -1,12 +1,12 @@
 import { useAuth } from '@hooks/useAuth';
 import {
   Button,
-  Callout,
   CopyButton,
   HelpIcon,
 } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import InlineNotice from '@/components/InlineNotice';
 import { APP_REGISTRY_ID_MAP } from '@/lib/app';
 import { formatList } from '@/utils';
 import { useEffect, useMemo, useState } from 'react';
@@ -164,22 +164,20 @@ function WorthTheWaitLayout() {
           {hasLockedSpace && (
             <div className='mt-8 space-y-5'>
               {updateList.length > 0 ? (
-                <Callout
-                  variant='info'
-                  title={<span className='text-blue-700 dark:text-blue-400'>What's changed since your last visit?</span>}
-                  description={
-                    <ul className='list-disc space-y-1 pl-5 text-blue-600 dark:text-blue-200'>
-                      {updateList.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
-                  }
-                  icon='✨'
-                  dismissible
+                <InlineNotice
+                  tone='info'
+                  title="What's changed since your last visit?"
+                  dismissLabel='Dismiss what has changed'
                   onDismiss={() => {
                     void markMemberUpdatesAsSeen();
                   }}
-                />
+                >
+                  <ul className='list-disc space-y-1 pl-5'>
+                    {updateList.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </InlineNotice>
               ) : null}
 
               <div className='flex flex-wrap items-center justify-between gap-4 sm:flex-nowrap'>

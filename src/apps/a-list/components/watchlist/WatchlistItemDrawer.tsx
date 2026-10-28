@@ -1,11 +1,19 @@
 import { useState } from 'react';
 
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Drawer, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { CalendarPlus, ChevronLeft, Pencil, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  CalendarPlus,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { generateUuid } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -16,6 +24,7 @@ import {
 } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDate, formatDuration } from '@/utils/formatUtils';
+import Pill from '@/components/Pill';
 import { AddFlow } from '@apps/a-list/components/add/AddFlow';
 import FormatBadge from '@apps/a-list/components/shared/FormatBadge';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
@@ -24,13 +33,22 @@ import WatchlistDetailsFields, {
   type WatchlistDetailsValues,
 } from '@apps/a-list/components/watchlist/WatchlistDetailsFields';
 import {
+  ARCHIVE_REASONS,
+  MAX_ARCHIVE_REASON_LENGTH,
+} from '@apps/a-list/constants';
+import {
+  archiveWatchlistItem,
   removeWatchlistItem,
+  restoreWatchlistItem,
   updateWatchlistItem,
 } from '@apps/a-list/store/actions/watchlistActions';
 import { selectWatchlistRows } from '@apps/a-list/store/selectors';
 import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 
-type DrawerView = 'details' | 'addToCalendar' | 'edit';
+const UNDO_TOAST_MS = 6000;
+const undoneToasts = new Set<string>();
+
+type DrawerView = 'details' | 'addToCalendar' | 'edit' | 'archive';
 
 interface WatchlistItemDrawerProps {
   movieKey: string;
@@ -41,7 +59,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
   const now = useNow();
   const row = useAppSelector(
     (state) =>
@@ -51,6 +69,8 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
   );
   const [view, setView] = useState<DrawerView>('details');
   const [editValues, setEditValues] = useState<WatchlistDetailsValues | null>(null);
+  const [archiveReason, setArchiveReason] = useState<string | null>(null);
+  const [customReason, setCustomReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,6 +114,8 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
   const showView = (next: DrawerView) => {
     setError(null);
     setEditValues(null);
+    setArchiveReason(null);
+    setCustomReason('');
     setView(next);
   };
 
@@ -115,6 +137,89 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
     } catch (saveError) {
       setError(getErrorMessage(saveError, 'Unable to save this movie.'));
     } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const finalReason =
+    archiveReason === 'OTHER' ? customReason.trim() : (archiveReason ?? '');
+
+  const handleArchive = async () => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const archivedAt = await dispatch(
+        archiveWatchlistItem({
+          uid: user.uid,
+          movieKey,
+          reason: finalReason,
+        }),
+      ).unwrap();
+      const toastId = generateUuid();
+      addToast({
+        id: toastId,
+        title: 'Archived',
+        description: item.movie.title,
+        duration: UNDO_TOAST_MS,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            removeToast(toastId);
+            if (undoneToasts.has(toastId)) return;
+
+            undoneToasts.add(toastId);
+            void dispatch(
+              restoreWatchlistItem({
+                uid: user.uid,
+                movieKey,
+                ifArchivedAt: archivedAt,
+              }),
+            )
+              .unwrap()
+              .then(({ restored }) =>
+                addToast({
+                  title: restored
+                    ? 'Back on your watchlist'
+                    : 'Already changed on another device',
+                  description: item.movie.title,
+                }),
+              )
+              .catch((undoError) =>
+                addToast({
+                  title: getErrorMessage(
+                    undoError,
+                    'Unable to restore this movie.',
+                  ),
+                  description: 'You can still find it under Archived.',
+                  type: 'error',
+                }),
+              );
+          },
+        },
+      });
+      onClose();
+    } catch (archiveError) {
+      setError(getErrorMessage(archiveError, 'Unable to archive this movie.'));
+      setIsSaving(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setIsSaving(true);
+    setError(null);
+    try {
+      const { restored } = await dispatch(
+        restoreWatchlistItem({ uid: user.uid, movieKey }),
+      ).unwrap();
+      addToast({
+        title: restored
+          ? 'Back on your watchlist'
+          : 'Already changed on another device',
+        description: item.movie.title,
+      });
+      onClose();
+    } catch (restoreError) {
+      setError(getErrorMessage(restoreError, 'Unable to restore this movie.'));
       setIsSaving(false);
     }
   };
@@ -166,18 +271,82 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
       );
     }
 
+    if (view === 'archive') {
+      return (
+        <div className='space-y-4'>
+          <BackLink label='Back to movie' onBack={() => showView('details')} />
+          <p className='text-lg leading-tight font-semibold'>
+            {item.movie.title}
+          </p>
+          <div className='space-y-2'>
+            <Label>Why set it aside?</Label>
+            <div className='flex flex-wrap gap-2'>
+              {ARCHIVE_REASONS.map((reason) => (
+                <Pill
+                  key={reason}
+                  isSelected={archiveReason === reason}
+                  onClick={() => setArchiveReason(reason)}
+                >
+                  {reason}
+                </Pill>
+              ))}
+              <Pill
+                isSelected={archiveReason === 'OTHER'}
+                onClick={() => setArchiveReason('OTHER')}
+              >
+                Something else
+              </Pill>
+            </div>
+            {archiveReason === 'OTHER' && (
+              <Input
+                variant='outline'
+                rounded='full'
+                aria-label='Your reason'
+                placeholder='What changed?'
+                maxLength={MAX_ARCHIVE_REASON_LENGTH}
+                value={customReason}
+                onChange={(event) => setCustomReason(event.target.value)}
+              />
+            )}
+            <p className='text-muted-foreground text-sm'>
+              It leaves your list but stays under Archived, and its showings
+              stay on your calendar.
+            </p>
+          </div>
+          {error && <p className='text-destructive text-sm'>{error}</p>}
+          <ModalFooterActions
+            note={finalReason === '' ? 'Pick a reason to archive.' : undefined}
+            rightActions={
+              <>
+                <Button
+                  type='button'
+                  rounded='full'
+                  variant='secondary'
+                  disabled={isSaving}
+                  onClick={() => showView('details')}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type='button'
+                  rounded='full'
+                  loading={isSaving}
+                  disabled={finalReason === '' || isSaving}
+                  onClick={() => void handleArchive()}
+                >
+                  Archive
+                </Button>
+              </>
+            }
+          />
+        </div>
+      );
+    }
+
     if (view === 'edit') {
       return (
         <div className='space-y-4'>
-          <Button
-            type='button'
-            variant='link'
-            size='sm'
-            className='gap-1 px-0'
-            onClick={() => showView('details')}
-          >
-            <ChevronLeft className='h-4 w-4' /> Back to movie
-          </Button>
+          <BackLink label='Back to movie' onBack={() => showView('details')} />
           <div className='flex items-center gap-3'>
             <span className='h-24 w-16 shrink-0 overflow-hidden rounded-xl shadow-md'>
               <PosterCover
@@ -230,6 +399,9 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
           item.movie.contentRating,
         ].filter((part): part is string => part !== null),
       },
+      ...(row.isArchived && item.archiveReason
+        ? [{ emoji: '🗄️', parts: [`Archived: ${item.archiveReason}`] }]
+        : []),
       ...(row.nextPlannedAt === null
         ? []
         : [
@@ -277,7 +449,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
                   <span className='w-5 shrink-0 text-center' aria-hidden='true'>
                     {line.emoji}
                   </span>
-                  <span className='min-w-0 flex-1'>
+                  <span className='min-w-0 flex-1 break-words'>
                     {line.parts.map((part, index) => (
                       <span key={part} className={join(index > 0 && 'whitespace-nowrap')}>
                         {index > 0 && '· '}
@@ -312,7 +484,28 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
           >
             <Pencil className='h-4 w-4' /> Edit
           </Button>
+          {row.isArchived ? (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='w-full justify-start gap-2 rounded-none'
+              disabled={isSaving}
+              onClick={() => void handleRestore()}
+            >
+              <ArchiveRestore className='h-4 w-4' /> Back on my watchlist
+            </Button>
+          ) : (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='w-full justify-start gap-2 rounded-none'
+              onClick={() => showView('archive')}
+            >
+              <Archive className='h-4 w-4' /> Archive
+            </Button>
+          )}
         </div>
+        {error && <p className='text-destructive text-sm'>{error}</p>}
         <Button
           type='button'
           variant='tertiary'

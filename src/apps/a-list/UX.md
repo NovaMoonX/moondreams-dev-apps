@@ -738,3 +738,7 @@ flowchart LR
 - **Formats** — settled: the app never looks up which formats a movie plays in; the member picks from the fixed list.
 - **Perks copy** — the exact A-List perk wording for the confirm step needs to come from AMC's own page.
 - **Membership cost over time** — not modelled yet: one monthly cost applies to the whole history. Supporting price changes is a planned future goal.
+
+- **Ticket price:** showtimes show Adult prices unless the member picks Senior or Child under Membership settings → Ticket prices.
+- **Archive:** a watchlist movie can be archived with a reason (suggestions such as "No longer in theaters", or their own words) from its drawer; archived movies live under the Archived pill and can be put back.
+- **Tax from AMC:** when AMC lists the tax on a showing, the ticket form starts with that exact figure; otherwise the tax is filled from the member's usual rate as before.

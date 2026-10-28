@@ -1,0 +1,147 @@
+/*
+ * Runway's theme: plain and matter-of-fact. Cool, near-white surfaces with hairlines, a deep slate-blue primary for
+ * the one action on a screen, and a pale blue for selections and tints. No warm accents and no tint on body text.
+ * The class sits on <html> (see useRunwayTheme) so modals and drawers, which render outside the app's container,
+ * pick it up too.
+ */
+html.runway-theme {
+  --color-background: oklch(0.99 0.003 250);
+  --color-primary: oklch(0.38 0.09 255);
+  --color-primary-foreground: oklch(0.99 0.003 250);
+  --color-secondary: oklch(0.95 0.012 250);
+  --color-secondary-foreground: oklch(0.27 0.04 255);
+  --color-muted: oklch(0.965 0.008 250);
+  --color-muted-foreground: var(--color-slate-500);
+  --color-accent: oklch(0.93 0.03 250);
+  --color-accent-foreground: oklch(0.27 0.06 255);
+  --color-border: oklch(0.9 0.01 250);
+  --color-card: oklch(0.998 0.002 250);
+  --color-popover: oklch(0.998 0.002 250);
+  --color-popover-foreground: oklch(0.25 0.03 255);
+  --color-tooltip: oklch(0.25 0.03 255);
+  --color-tooltip-foreground: oklch(0.99 0.003 250);
+
+  --runway-selected: var(--color-blue-700);
+  --runway-selected-soft: color-mix(in oklab, var(--runway-selected) 10%, var(--color-background));
+
+  --subview-backdrop: color-mix(in oklab, var(--color-primary) 14%, var(--color-background));
+}
+
+html.runway-theme.dark {
+  --color-background: oklch(0.17 0.012 255);
+  --color-primary: oklch(0.82 0.08 250);
+  --color-primary-foreground: oklch(0.2 0.02 255);
+  --color-secondary: oklch(0.27 0.02 255);
+  --color-secondary-foreground: oklch(0.93 0.01 250);
+  --color-muted: oklch(0.225 0.015 255);
+  --color-muted-foreground: var(--color-slate-400);
+  --color-accent: oklch(0.31 0.04 255);
+  --color-accent-foreground: oklch(0.93 0.01 250);
+  --color-border: oklch(0.32 0.02 255);
+  --color-card: oklch(0.21 0.015 255);
+  --color-popover: oklch(0.21 0.015 255);
+  --color-popover-foreground: oklch(0.93 0.01 250);
+  --color-tooltip: oklch(0.93 0.01 250);
+  --color-tooltip-foreground: oklch(0.2 0.02 255);
+
+  --runway-selected: var(--color-blue-300);
+  --runway-selected-soft: color-mix(in oklab, var(--runway-selected) 16%, var(--color-background));
+
+  --subview-backdrop-dark: oklch(0.11 0.012 255);
+  --subview-border: color-mix(in oklab, var(--runway-selected) 22%, var(--color-border));
+}
+
+/* A rounded field needs its text inset from the curve, or the first letter looks pressed against the edge. */
+html.runway-theme
+  :is(input, textarea):not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='file'],
+    [type='color'],
+    [class*='pl-'],
+    [class*='ps-']
+  ) {
+  padding-inline: 0.875rem;
+}
+
+/* An option is a hairline pill; the chosen one gets a pale tint and a blue outline, so a dark label stays as readable as on an unchosen one. */
+html.runway-theme [data-pill] {
+  min-height: 2.5rem;
+  background-color: transparent;
+  color: var(--color-foreground);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+html.runway-theme [data-pill]:not(:disabled):hover {
+  background-color: var(--color-secondary);
+}
+
+html.runway-theme [data-pill][aria-pressed='true'] {
+  background-color: var(--runway-selected-soft);
+  box-shadow: inset 0 0 0 1.5px var(--runway-selected);
+}
+
+/* A tertiary button is a row or a quiet action, not a link: its text stays the normal text color so a screen of tappable rows isn't a screen of blue. Anything that sets its own color with `!` wins, and a link-variant button keeps the primary. */
+html.runway-theme
+  button.text-primary:not(:disabled):not([class*='bg-']):not(
+    [class*='border-primary']
+  ):not([class*='underline-offset']) {
+  color: var(--color-foreground);
+}
+
+/* A link-style button stays underlined: on a phone there is no hover to reveal it. */
+html.runway-theme button[class*='underline-offset'] {
+  text-decoration-line: underline;
+}
+
+/* The soft tinted blocks that group a drawer's actions need an edge in dark, where the tint all but disappears into the sheet. */
+html.runway-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+/* A modal's card is capped to the screen and scrolls inside itself, so a long form never runs past the viewport with its title cut off above it. */
+html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+}
+
+/* On a screen tall enough for a form to fit, the card does not clip, so an open Select's list can run past its edge. */
+@media (min-height: 700px) {
+  html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
+    overflow: visible;
+  }
+}
+
+/* A scroller's padding insets what sticks to its bottom, so the pinned footer is pulled down over it. */
+html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl .form-footer {
+  bottom: -1.5rem;
+  margin-bottom: -1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+/* Five section pills are 28px wider than a 320px screen, so below 380px they sit a little closer in and stay on one line. */
+@media (max-width: 379px) {
+  html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill] {
+    padding-inline: 0.375rem;
+  }
+}
+
+/* The four views drop their emoji below 360px so they stay on one line. */
+@media (max-width: 359px) {
+  html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill-emoji] {
+    display: none;
+  }
+}
+
+/* A warning: the warning hue for the tint and edge, a deeper amber for ink so an icon reads on the tint in light and dark. */
+html.runway-theme {
+  --runway-warning-soft: color-mix(in oklab, var(--color-warning) 16%, var(--color-background));
+  --runway-warning-edge: color-mix(in oklab, var(--color-warning) 50%, var(--color-border));
+  --runway-warning-ink: oklch(0.46 0.1 65);
+}
+
+html.runway-theme.dark {
+  --runway-warning-soft: color-mix(in oklab, var(--color-warning) 14%, var(--color-background));
+  --runway-warning-ink: var(--color-amber-300);
+}

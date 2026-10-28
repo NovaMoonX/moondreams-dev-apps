@@ -77,10 +77,18 @@ export const addViewing = createAsyncThunk<
             movie: snapshot,
             priority: DEFAULT_WATCH_PRIORITY,
             preferredFormat: null,
+            archivedAt: null,
+            archiveReason: null,
             createdAt: now,
             lastEditedAt: now,
           };
           transaction.set(itemRef, item);
+        } else if (itemSnapshot.get('archivedAt') != null) {
+          transaction.update(itemRef, {
+            archivedAt: null,
+            archiveReason: null,
+            lastEditedAt: now,
+          });
         }
 
         const endsAt = computeEndsAt(showtimeAt, snapshot.runtimeMinutes);

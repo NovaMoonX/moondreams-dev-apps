@@ -22,13 +22,20 @@ import {
 import { formatDateUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import MoneyInput from '@/components/MoneyInput';
+import Pill from '@/components/Pill';
 import WeekResetHelp from '@apps/a-list/components/shared/WeekResetHelp';
-import { MAX_MONTHLY_GOAL, MAX_WEEKLY_GOAL } from '@apps/a-list/constants';
+import {
+  MAX_MONTHLY_GOAL,
+  MAX_WEEKLY_GOAL,
+  TICKET_PRICE_KIND_LABELS,
+  TICKET_PRICE_KINDS,
+} from '@apps/a-list/constants';
 import {
   updateMembership,
   type MembershipEditableFields,
 } from '@apps/a-list/store/actions/membershipActions';
-import type { MembershipProfile } from '@apps/a-list/types';
+import type { MembershipProfile, TicketPriceKind } from '@apps/a-list/types';
+import { getTicketPriceKind } from '@apps/a-list/utils/ticketPrice';
 import {
   evaluateCostStep,
   type CostStepValues,
@@ -89,6 +96,9 @@ function MembershipSettingsSubview({
     weeklyGoal: membership.weeklyGoal?.toString() ?? '',
     monthlyGoal: membership.monthlyGoal?.toString() ?? '',
   });
+  const [ticketPriceKind, setTicketPriceKind] = useState<TicketPriceKind>(
+    getTicketPriceKind(membership),
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,11 +120,14 @@ function MembershipSettingsSubview({
       startDate: cost.startDate,
       weeklyGoal: weekly.goal,
       monthlyGoal: monthly.goal,
+      ticketPriceKind,
     };
     const changed = Object.fromEntries(
       Object.entries(next).filter(
         ([key, value]) =>
-          openedWith[key as keyof MembershipEditableFields] !== value,
+          (key === 'ticketPriceKind'
+            ? getTicketPriceKind(openedWith)
+            : openedWith[key as keyof MembershipEditableFields]) !== value,
       ),
     ) as Partial<MembershipEditableFields>;
     // Cost, total and rate are derived from each other, so they're written as one group.
@@ -305,6 +318,25 @@ function MembershipSettingsSubview({
               setCostValues({ ...costValues, startDate: event.target.value })
             }
           />
+        </div>
+        <SectionDivider label='🎟️ Ticket prices' />
+        <div className='space-y-2'>
+          <Label>Which AMC price should showtimes show?</Label>
+          <div className='flex flex-wrap gap-2'>
+            {TICKET_PRICE_KINDS.map((kind) => (
+              <Pill
+                key={kind}
+                isSelected={ticketPriceKind === kind}
+                onClick={() => setTicketPriceKind(kind)}
+              >
+                {TICKET_PRICE_KIND_LABELS[kind]}
+              </Pill>
+            ))}
+          </div>
+          <p className='text-muted-foreground text-sm'>
+            Tickets you add from a showtime start from this price. Tickets you
+            already saved keep theirs.
+          </p>
         </div>
         <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
         <Form
