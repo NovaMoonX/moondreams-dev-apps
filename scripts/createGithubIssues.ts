@@ -12,9 +12,10 @@
  * GitHub) becomes the real `#123`. Re-running is safe: an issue found by its
  * prefixed or bare title is reused, keeps its board Status and its edited
  * body, and only gets its label, Apps and links. The app's name comes from
- * APP_REGISTRY, or `--app-name` before the app is registered; the board's Apps
- * field needs an option of that name. Needs `gh` signed in with the `project` and
- * `read:project` scopes; the dry run needs nothing.
+ * APP_REGISTRY, or `--app-name` before the app is registered; a missing Apps
+ * option is added to the board, keeping every item's existing Apps value.
+ * Needs `gh` signed in with the `project` and `read:project` scopes; the dry
+ * run needs nothing.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -205,16 +206,127 @@ const ensureLabel = (repo: string, label: string, existing: Set<string>) => {
   existing.add(label);
 };
 
-const findAppsOption = (fields: ProjectField[], appName: string) => {
+interface SelectOption {
+  id: string;
+  name: string;
+  color: string;
+  description: string;
+}
+
+const readOptions = (fieldId: string) => {
+  const query = `query($field: ID!) { node(id: $field) { ... on ProjectV2SingleSelectField { options { id name color description } } } }`;
+  const result = ghJson<{ data: { node: { options: SelectOption[] } } }>([
+    'api',
+    'graphql',
+    '-f',
+    `query=${query}`,
+    '-f',
+    `field=${fieldId}`,
+  ]).data.node.options;
+  return result;
+};
+
+// Every item's current Apps value, by option name, so it can be put back if
+// rewriting the option list gives the options new ids.
+const readAppsValues = (projectId: string) => {
+  const query = `query($project: ID!, $endCursor: String) { node(id: $project) { ... on ProjectV2 { items(first: 100, after: $endCursor) { nodes { id fieldValueByName(name: "${APPS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } pageInfo { hasNextPage endCursor } } } } }`;
+  const lines = gh([
+    'api',
+    'graphql',
+    '--paginate',
+    '-f',
+    `query=${query}`,
+    '-f',
+    `project=${projectId}`,
+    '--jq',
+    '.data.node.items.nodes[] | select(.fieldValueByName.name != null) | [.id, .fieldValueByName.name] | @tsv',
+  ]);
+  const result = lines
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [itemId, name] = line.split('\t');
+      return { itemId, name };
+    });
+  return result;
+};
+
+const ensureAppsOption = (
+  projectId: string,
+  fields: ProjectField[],
+  appName: string,
+) => {
   const appsField =
     fields.find((field) => field.name === APPS_FIELD) ??
     fail(`No "${APPS_FIELD}" field on project ${PROJECT_NUMBER}.`);
-  const option =
-    appsField.options?.find((entry) => entry.name === appName) ??
-    fail(
-      `The board's ${APPS_FIELD} field has no "${appName}" option. Add it once in the board's field settings, then run this again.`,
+  const existing = appsField.options?.find((entry) => entry.name === appName);
+  if (existing) return { fieldId: appsField.id, optionId: existing.id };
+
+  // The API can only add an option by rewriting the whole list, and its input
+  // carries no ids, so every item's value is recorded first and restored if
+  // the rewrite changed the ids.
+  const before = readOptions(appsField.id);
+  const values = readAppsValues(projectId);
+  console.log(
+    `Adding "${appName}" to the board's ${APPS_FIELD} field (${values.length} items carry an ${APPS_FIELD} value)`,
+  );
+  const options = [
+    ...before.map(({ name, color, description }) => ({
+      name,
+      color,
+      description,
+    })),
+    { name: appName, color: 'GRAY', description: '' },
+  ];
+  const mutation = `mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) { updateProjectV2Field(input: { fieldId: $field, singleSelectOptions: $options }) { projectV2Field { ... on ProjectV2SingleSelectField { options { id name color description } } } } }`;
+  const payload = JSON.stringify({
+    query: mutation,
+    variables: { field: appsField.id, options },
+  });
+  const after = JSON.parse(
+    execFileSync('gh', ['api', 'graphql', '--input', '-'], {
+      input: payload,
+      encoding: 'utf8',
+      stdio: ['pipe', 'pipe', 'inherit'],
+    }),
+  ).data.updateProjectV2Field.projectV2Field.options as SelectOption[];
+
+  const idByName = new Map(after.map((option) => [option.name, option.id]));
+  const idsChanged = before.some(
+    (option) => idByName.get(option.name) !== option.id,
+  );
+  if (idsChanged) {
+    console.log(
+      `GitHub gave the ${APPS_FIELD} options new ids; putting back ${values.length} items' values`,
     );
-  const result = { fieldId: appsField.id, optionId: option.id };
+    const failed = values.filter(({ itemId, name }) => {
+      try {
+        gh([
+          'project',
+          'item-edit',
+          '--id',
+          itemId,
+          '--project-id',
+          projectId,
+          '--field-id',
+          appsField.id,
+          '--single-select-option-id',
+          idByName.get(name) ?? '',
+        ]);
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    if (failed.length > 0)
+      fail(
+        `Couldn't put back ${failed.length} ${APPS_FIELD} values. Set these by hand (item id, app):\n${failed.map(({ itemId, name }) => `  ${itemId}\t${name}`).join('\n')}`,
+      );
+  }
+  const optionId =
+    idByName.get(appName) ??
+    fail(`The new ${APPS_FIELD} option did not come back.`);
+  const result = { fieldId: appsField.id, optionId };
   return result;
 };
 
@@ -297,7 +409,7 @@ const run = async () => {
   const statusOption =
     statusField.options?.find((option) => option.name === STATUS_VALUE) ??
     fail(`No "${STATUS_VALUE}" status on the board.`);
-  const apps = findAppsOption(fields, appName);
+  const apps = ensureAppsOption(projectId, fields, appName);
 
   const labels = new Set(
     gh([

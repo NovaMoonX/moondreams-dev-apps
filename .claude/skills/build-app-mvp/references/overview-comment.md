@@ -51,7 +51,7 @@ npm run issues:create:dry-run -- <id>
 ```bash
 npm run issues:create -- <id>
 ```
-Say whether the board's Apps field already has a "<App Name>" option; if not, the owner adds it once in the board's field settings first.
+The script adds a missing "<App Name>" option to the board's Apps field itself.
 
 ### 6. Brand assets
 Include the light and dark icon SVG sources inline in fenced `svg` blocks. Say that the logo and banner in the repo are placeholders built from them, and that the user creates the final assets.

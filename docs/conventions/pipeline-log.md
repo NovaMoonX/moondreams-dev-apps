@@ -4,6 +4,8 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-28 | shared | Owner: "mark ready for review" listed as a must-do; a post-merge check handed to the owner | Status comment never lists givens; post-merge checks are the watching session's, reported after the merge event | `orchestrate/SKILL.md` | changed |
+| 2026-10-28 | shared | Owner: the issue script stopped when the board had no Apps option for the app | It adds the option, recording and restoring every item's Apps value because the API rewrites the whole list without ids (tested against a fake gh) | `scripts/createGithubIssues.ts` | changed |
 | 2026-10-28 | shared | The gate still sized #523 L because `functions/README.md` matched its risky paths | Markdown is left out of the risky and UI path checks too, not only the line count | `.claude/hooks/pr-gate.sh` | changed |
 | 2026-10-28 | shared | Owner: keep unrelated PRs current when one merges, with no conflict ever handed back to them | Each session watches the PRs it opens and syncs or resolves them when the workflow's label arrives; conflict routing table in orchestrate | `orchestrate/SKILL.md` | changed |
 | 2026-10-28 | shared | Same request | Auto-update every PR from a workflow with a `PR_SYNC_TOKEN` fine-grained token, so CI re-runs | `pr-sync-check.yml` | owner held off |
