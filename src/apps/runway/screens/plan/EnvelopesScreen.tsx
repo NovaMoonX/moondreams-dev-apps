@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Wallet } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
+import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
 import SearchInput from '@/components/SearchInput';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
@@ -88,10 +89,9 @@ function EnvelopesScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Envelopes'
-      />
+      <SectionHeader title='Envelopes' />
       {getBody()}
+      {isLoaded && <StoppedHoldingList kind='envelope' today={today} />}
       <FloatingAction
         label='Add an envelope'
         icon={<Wallet className='h-5 w-5' aria-hidden='true' />}

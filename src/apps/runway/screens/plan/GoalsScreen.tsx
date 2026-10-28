@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Target } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
+import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
 import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
@@ -138,6 +139,7 @@ function GoalsScreen() {
         }
       />
       {getBody()}
+      {isLoaded && <StoppedHoldingList kind='goal' today={today} />}
       <FloatingAction
         label='Add a goal'
         icon={<Target className='h-5 w-5' aria-hidden='true' />}

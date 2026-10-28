@@ -1281,14 +1281,6 @@ export const PAIRING_STOP_WORDS = {
       : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} stop paying it first, so that money stays with each pay.`,
 } as const;
 
-/** What archiving or ending an item does with the money it holds. */
-export const RELEASE_WORDS = {
-  archive: (amount: string) =>
-    `The ${amount} it holds becomes Free\u00a0to\u00a0spend.`,
-  end: (amount: string) =>
-    `After its last day, the ${amount} it holds becomes Free\u00a0to\u00a0spend.`,
-} as const;
-
 // Round 7, package G8: money that arrives different from the plan.
 export const CONFIRM_FLOW_WORDS = {
   lessTitle: (amount: string) => `${amount} less than planned`,
@@ -1394,4 +1386,26 @@ export const SETTINGS_GROUP_WORDS = {
   plan: 'Your plan',
   rangeNote:
     'A pay or bill with a range can plan at its own end instead. You choose that where you add it.',
+} as const;
+
+/** Round 7 package G9: archiving or ending an item that holds money asks what happens to it. */
+export const HELD_WORDS = {
+  caption: (amount: string) => `The ${amount} it holds`,
+  freeTitle: 'Make it Free\u00a0to\u00a0spend',
+  freeArchive: 'From today.',
+  freeEnd: (date: string) => `From ${date}.`,
+  keepTitle: 'Keep it held',
+  keepBody: 'Until you release it.',
+  blocker: 'Choose what happens to the money it holds.',
+  release: 'Release what it holds',
+  releaseNow: 'It becomes Free\u00a0to\u00a0spend.',
+  releaseOn: (date: string) =>
+    `It becomes Free\u00a0to\u00a0spend from ${date}.`,
+  released: (name: string) => `What ${name} held is Free to spend`,
+  releaseFailed: (name: string) => `${name} was not changed`,
+  undo: 'Undo',
+  stoppedDivider: 'Stopped, still holding money',
+  archived: 'Archived',
+  ended: (date: string) => `Ended ${date}`,
+  holds: 'Holds',
 } as const;

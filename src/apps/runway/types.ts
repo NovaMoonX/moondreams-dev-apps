@@ -331,6 +331,8 @@ export interface PlanItemDoc {
   createdAt: number;
   endedAt: DateOnly | null;
   archivedAt: number | null;
+  /** From this day what the item holds is Free to spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
+  heldReleasedOn: DateOnly | null;
 }
 
 export interface PlanVersionDoc {

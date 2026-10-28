@@ -163,7 +163,7 @@ function SavedStart({ uid }: { uid: string }) {
     await archiveItem(
       uid,
       encryption,
-      { itemId, summary: `Removed ${name}.`, note: null },
+      { itemId, summary: `Removed ${name}.`, note: null, heldChoice: 'free' },
       today,
     );
   };

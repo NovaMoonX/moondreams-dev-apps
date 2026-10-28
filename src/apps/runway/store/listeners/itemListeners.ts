@@ -16,6 +16,7 @@ import type {
   SourceSealed,
 } from '@apps/runway/types';
 import { normalizeFunding } from '@apps/runway/utils/fundingText';
+import { readHeldReleasedOn } from '@apps/runway/engine/endings';
 
 /** A version written before pairings existed has none. */
 const normalizePairings = (pairings: Pairing[] | undefined): Pairing[] =>
@@ -101,6 +102,7 @@ export function startItemsListener(
             createdAt: data.createdAt ?? 0,
             endedAt: data.endedAt ?? null,
             archivedAt: data.archivedAt ?? null,
+            heldReleasedOn: readHeldReleasedOn(data),
           };
         }),
       ),

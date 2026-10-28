@@ -101,6 +101,9 @@ import { describeLineReason } from '../../src/apps/runway/utils/draftText.ts';
 import {
   capEnding,
   findReachedEnding,
+  getHeldReleaseDay,
+  getLaterReleaseDay,
+  readHeldReleasedOn,
 } from '../../src/apps/runway/engine/endings.ts';
 import {
   findReturning,
@@ -8299,6 +8302,169 @@ console.log('runway engine: ok');
         kinds,
       }),
       `G9: a closing over corrected day ${index + 1} equals the replay`,
+    );
+  });
+}
+
+// Round 7, package G9: archiving or ending an item that holds money asks; each choice and the closings.
+{
+  const start = utc(2026, 1, 1);
+  const startOf = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: 'money' | 'goal' | 'envelope',
+  ): OpenMove => ({
+    id,
+    kind: 'start',
+    date: start,
+    refId,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: cents, holding },
+  });
+  const moves = [
+    startOf('m', null, 100_000, 'money'),
+    startOf('g', 'trip', 30_000, 'goal'),
+    startOf('e', 'fun', 10_000, 'envelope'),
+  ];
+  const kinds = { trip: 'goal', fun: 'envelope' } as const;
+  const archivedOn = utc(2026, 3, 1);
+  const freeWith = (releasedFrom: Record<string, number>, asOf: number) =>
+    deriveBalances({
+      startDate: start,
+      moves,
+      records: [],
+      arrivedOn: new Map(),
+      kinds,
+      releasedFrom,
+      asOf,
+    }).freeToSpendCents;
+  const toReleased = (id: string, day: number | null) =>
+    day === null ? {} : { [id]: day };
+
+  const freeDay = getHeldReleaseDay('free', archivedOn);
+  assert.equal(
+    freeDay,
+    archivedOn,
+    'G9: "Make it Free to spend" releases from the archive day',
+  );
+  assert.equal(
+    freeWith(toReleased('trip', freeDay), archivedOn),
+    90_000,
+    "G9: the goal's $300 is Free to spend from the archive day",
+  );
+  const keepDay = getHeldReleaseDay('keep', archivedOn);
+  assert.equal(keepDay, null, 'G9: "Keep it held" writes no release day');
+  assert.equal(
+    freeWith(toReleased('trip', keepDay), archivedOn),
+    60_000,
+    'G9: a kept goal still holds its $300, so Free to spend does not move',
+  );
+  const later = utc(2026, 4, 10);
+  const laterDay = getLaterReleaseDay(
+    { archivedAt: archivedOn, endedAt: null },
+    later,
+  );
+  assert.equal(
+    laterDay,
+    later,
+    'G9: releasing a kept, archived item later releases from that day',
+  );
+  assert.deepEqual(
+    [
+      freeWith(toReleased('trip', laterDay), later - DAY_MS),
+      freeWith(toReleased('trip', laterDay), later),
+    ],
+    [60_000, 90_000],
+    'G9: and not a day before',
+  );
+
+  const lastDay = utc(2026, 5, 31);
+  const endFree = getHeldReleaseDay('free', lastDay + DAY_MS);
+  assert.deepEqual(
+    [
+      freeWith(toReleased('fun', endFree), lastDay),
+      freeWith(toReleased('fun', endFree), lastDay + DAY_MS),
+    ],
+    [60_000, 70_000],
+    'G9: an ended envelope made Free to spend holds through its last day and releases the day after',
+  );
+  assert.equal(
+    getLaterReleaseDay({ archivedAt: null, endedAt: lastDay }, utc(2026, 5, 1)),
+    lastDay + DAY_MS,
+    'G9: a kept item whose last day is ahead releases the day after it, never sooner',
+  );
+  assert.equal(
+    getLaterReleaseDay({ archivedAt: null, endedAt: lastDay }, utc(2026, 7, 1)),
+    utc(2026, 7, 1),
+  );
+
+  assert.equal(
+    readHeldReleasedOn({ archivedAt: archivedOn, endedAt: null }),
+    archivedOn,
+    'G9: a header archived before the choice existed reads as released, as round 7 shipped',
+  );
+  assert.equal(
+    readHeldReleasedOn({ archivedAt: null, endedAt: lastDay }),
+    lastDay + DAY_MS,
+  );
+  assert.equal(
+    readHeldReleasedOn({ archivedAt: archivedOn, endedAt: lastDay }),
+    archivedOn,
+    'G9: the earlier of the two',
+  );
+  assert.equal(readHeldReleasedOn({ archivedAt: null, endedAt: null }), null);
+  assert.equal(
+    readHeldReleasedOn({
+      archivedAt: archivedOn,
+      endedAt: null,
+      heldReleasedOn: null,
+    }),
+    null,
+    'G9: a stored null is the person keeping it',
+  );
+  assert.equal(
+    readHeldReleasedOn({
+      archivedAt: archivedOn,
+      endedAt: null,
+      heldReleasedOn: later,
+    }),
+    later,
+  );
+
+  // A closing over the plan gives the same figures with each choice.
+  const closed = buildClosing(toMonthKey(start), null, {
+    startDate: start,
+    days: [],
+    records: [],
+    moves,
+    purchases: [],
+    billIds: new Set(),
+  });
+  [freeDay, keepDay, laterDay].forEach((day, index) => {
+    const releasedFrom = toReleased('trip', day);
+    assert.deepEqual(
+      deriveBalances({
+        startDate: start,
+        moves,
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+        releasedFrom,
+        asOf: later,
+        closing: closed,
+      }),
+      deriveBalances({
+        startDate: start,
+        moves,
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+        releasedFrom,
+        asOf: later,
+      }),
+      `G9: a closing with choice ${index + 1} equals the replay`,
     );
   });
 }

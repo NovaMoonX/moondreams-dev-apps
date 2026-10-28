@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { Receipt } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
+import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
@@ -124,10 +125,9 @@ function BillsScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Bills'
-      />
+      <SectionHeader title='Bills' />
       {getBody()}
+      {isLoaded && <StoppedHoldingList kind='bill' today={today} />}
       <FloatingAction
         label='Add a bill'
         icon={<Receipt className='h-5 w-5' aria-hidden='true' />}
