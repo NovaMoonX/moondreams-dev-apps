@@ -125,3 +125,37 @@ export const FUNDING_CADENCE_LABELS: Record<
 export const ENVELOPE_ORDER_STEP = 1;
 export const MAX_CHOSEN_DAYS = 60;
 export const MAX_EMOJI_LENGTH = 8;
+
+/** Why a draft line got the money it did: funded in full, or cut short because the day's money ran out. */
+export const DRAFT_REASON_CODES = ['funded', 'poolExhausted'] as const;
+
+/** The key that decided which of two otherwise equal demands went first. */
+export const DRAFT_TIE_KEYS = ['createdAt', 'itemId'] as const;
+
+export const DRAFT_CADENCE_WORDS: Record<
+  (typeof FUNDING_CADENCES)[number],
+  string
+> = {
+  everyIncomeDay: 'Every income day',
+  every2: 'Every other income day',
+  every3: 'Every third income day',
+  chosen: 'A day you chose',
+};
+
+export const DRAFT_WORDS = {
+  fundedFrom: 'funded from',
+  shortBy: 'Short by',
+  outOfMoney: "This day's money ran out first",
+  nothingFunded: 'Nothing funded',
+  fundedOf: 'Funded',
+  of: 'of',
+  notFunded: 'Not funded',
+  freeToSpend: 'Free to spend',
+  nothingLeft: 'Nothing left after the envelopes',
+  tieCreatedAt:
+    'Same priority and order as another envelope, so the one added first goes first',
+  tieItemId:
+    'Same priority, order and date added as another envelope, so a fixed order decides',
+  unnamedSource: 'this income',
+  and: 'and',
+} as const;
