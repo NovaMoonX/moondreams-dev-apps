@@ -13,6 +13,7 @@ import {
   type Keyring,
 } from '../../functions/src/apps/runway/planKey.ts';
 import { checkRunwayKeys } from '../../functions/src/apps/runway/verifyRunwayKeys.ts';
+import { openTestPlan, seedTestPlan } from '../runway/drillKeyring.ts';
 import {
   addKeyToKeyring,
   assertPublishable,
@@ -190,6 +191,30 @@ for (const run of [ok, missingId, noCanary, wrongKey, badDigest]) {
   const text = JSON.stringify(run);
   assert.ok(!/[0-9a-f]{32}/.test(text), 'no hex run in a result');
 }
+
+// The recovery drill helper: opens with the escrowed keyring, not with another
+const drillRing = JSON.stringify(ring('m2', { m1: hex('a'), m2: hex('b') }));
+await firestore.doc('apps/runway/server/drill-test-plan/keys/data').delete();
+await assert.rejects(
+  openTestPlan(firestore, drillRing),
+  (error) => error instanceof Refusal && /not been seeded/.test(error.message),
+);
+assert.deepEqual(await seedTestPlan(firestore, drillRing), {
+  masterKeyId: 'm2',
+});
+await assert.rejects(seedTestPlan(firestore, drillRing));
+assert.deepEqual(await openTestPlan(firestore, drillRing), {
+  opened: true,
+  masterKeyId: 'm2',
+});
+const withoutM2 = JSON.stringify(ring('m1', { m1: hex('a') }));
+assert.deepEqual(await openTestPlan(firestore, withoutM2), {
+  opened: false,
+  masterKeyId: 'm2',
+});
+const otherM2 = JSON.stringify(ring('m2', { m2: hex('c') }));
+assert.equal((await openTestPlan(firestore, otherM2)).opened, false);
+await firestore.doc('apps/runway/server/drill-test-plan/keys/data').delete();
 
 await clearChecks();
 console.log('runway key guard: all checks passed');

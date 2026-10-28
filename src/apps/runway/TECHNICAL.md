@@ -1165,7 +1165,19 @@ Per the project instruction to keep `copilot-instructions.md` current, these fol
 
 Each becomes a spike or a decision in the Issue Roadmap rather than blocking it.
 
-1. **Destruction delay and Google checks.** Confirm the 90-day delay. In a scratch project, settle the three deny-policy questions in Master secret management (service supported, organization present, Owner cannot remove it) and confirm the audit-alert filter and the three alert policies fire. Escrow is settled (a password manager vault and a separate secure cloud account, one holder); revisit a second holder if anyone else ever has a stake in the data.
+1. **Destruction delay and Google checks. OPEN until the operator records outcomes.** Settled in the repo by Issue 26: the runbook ("Runway: master keyring protection runbook" in `functions/README.md`) holds the exact commands and checklists for the 90-day delay, the IAM audit, the three deny-policy questions and their three recordable outcomes (in place, impossible with compensating controls, deferred), the three alerts with their filters and how to test each, the escrow procedure and the recovery drill, and `scripts/runway/drillKeyring.ts` is the drill's helper (tested against the emulator only). Escrow is settled (a password manager vault and a separate secure cloud account, one holder); revisit a second holder if anyone else ever has a stake in the data. **Not settled, because none of it can be run from the repo's sandbox:** that Secret Manager is deny-supported and the project can hold a deny policy, whether Owner bypasses it, that each alert fires and its email arrives, that the 26-hour absence window is accepted by Cloud Monitoring (its documented maximum for an absence condition may be shorter than the daily cadence, in which case the runbook lists the alternatives to choose from), that the audit filter's method names match the real entries, and that an escrow copy restores a test plan. This question is closed only when every row of the operator record below is filled in by the owner, and the outcome of the deny policy is stated in "Master secret management" item 3 in place of "Not yet verified".
+
+   **Operator record** (filled in by the owner from the runbook's record table; empty means not done):
+
+   | Item | Done? | Date | Result |
+   | --- | --- | --- | --- |
+   | Each of the three alerts fired in a scratch project and the email arrived | | | |
+   | Each of the three alerts fired in the real project and the email arrived | | | |
+   | 26-hour heartbeat window: option chosen | | | |
+   | Recovery drill from escrow alone (duration, unclear points) | | | |
+   | Deny policy outcome: in place / impossible with compensating controls / deferred | | | |
+   | `--version-destroy-ttl=90d` set, no expiry, IAM audited | | | |
+
 2. **Closings (Decision 7).** Built last in the MVP, before Next Steps, and kept only if the scale seed shows cold start needs them. Measure on the scale seed; if a plan's current-month window plus incremental sums is fast enough without them, drop `dirtyFrom` and `closings` and keep the ledger.
 3. **Plaid access.** Plaid is the provider. Confirm production access (it may need an application and lead time), pricing per linked account, coverage of the accounts in the UX (checking, savings, cash management such as Wealthfront) and whether its investments product covers retirement and brokerage accounts.
 4. **CSV parsing.** Pick a parser already in the repo's dependencies if one exists; otherwise a small streaming one; handle the common bank layouts and a manual column map.
