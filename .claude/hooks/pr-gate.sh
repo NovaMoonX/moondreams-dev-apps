@@ -54,7 +54,9 @@ fi
 # changes that are not this PR's to review.
 pr_files=$(git diff --name-only "$base" HEAD)
 delta_files=$(comm -12 <(git diff --name-only "$since" HEAD | sort) <(echo "$pr_files" | sort))
-pr_lines=$(git diff --shortstat "$base" HEAD -- . ':(exclude)package-lock.json' ':(exclude)functions/package-lock.json' | awk '{print $4 + $6}')
+# Markdown and lockfiles never raise the size: docs moved between files count
+# twice (deleted and added) without being any riskier to review.
+pr_lines=$(git diff --shortstat "$base" HEAD -- . ':(exclude)*.md' ':(exclude)package-lock.json' ':(exclude)functions/package-lock.json' | awk '{print $4 + $6}')
 pr_lines=${pr_lines:-0}
 
 has() { echo "$1" | grep -qE "$2"; }
@@ -91,7 +93,7 @@ if has "$delta_files" "$code_re" || has "$delta_files" "$rules_re" || has "$delt
   else
     steps+=("Re-run any Regression check row whose area this push touched (pr-wrap-up §2).")
   fi
-  steps+=("Review at size $size ($pr_lines changed lines in the PR) per orchestrate 'Sizing the review', covering only what changed since the last review if one ran.")
+  steps+=("Review at size $size ($pr_lines changed lines of code in the PR) per orchestrate 'Sizing the review', covering only what changed since the last review if one ran.")
 else
   steps+=("This push changed no code (docs or config only): no screenshots or review agents; check the PR body still matches.")
 fi

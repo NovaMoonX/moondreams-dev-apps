@@ -59,7 +59,7 @@ Every task feeds `docs/conventions/pipeline.md` "The pipeline improves itself": 
 
 ## Sizing the review
 
-Measure the PR against its base with `git diff --shortstat <base>...HEAD` and the areas it touches, and record the size and why in the PR body's Review block.
+Measure the PR against its base with `git diff --shortstat <base>...HEAD -- . ':(exclude)*.md'` (lines of code: Markdown and lockfiles never raise the size, since a doc moved between files counts twice) and the areas it touches, and record the size and why in the PR body's Review block. A change to the convention docs or agent files is checked by reading it against what it replaces (a line check that nothing was lost, and the moved rules read in their new place), not by its line count.
 
 | Size | When | Review |
 |---|---|---|
