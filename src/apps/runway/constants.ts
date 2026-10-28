@@ -57,6 +57,9 @@ export const STANCE_FOLLOW_PLAN = 'plan' as const;
 /** Entries on Plan > More; one appears when the screen it opens exists. */
 export const MORE_ENTRIES = ['settings'] as const;
 
+/** The full screens Home opens, kept in the URL as `view`. */
+export const RUNWAY_VIEWS = ['start', 'freeToSpend'] as const;
+
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
   { settings: 'Settings' };
 
@@ -216,8 +219,17 @@ export const DAY_RECORD_KINDS = [
   'confirmed',
   'correction',
 ] as const;
-/** The kinds of ledger entry the client writes; a bill marked paid, and its undo (a `billPaid` that names the one it reverses). */
-export const MOVE_KINDS = ['billPaid'] as const;
+/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses) and a `start` holding. */
+export const MOVE_KINDS = ['billPaid', 'start'] as const;
+/** What a `start` move holds the starting amount of. */
+export const START_HOLDINGS = ['money', 'goal', 'bill'] as const;
+/** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
+export const START_DAY_KEY = 'start';
+/** Envelope tiles Home draws before it points at the full list. */
+export const HOME_ENVELOPE_TILES = 6;
+/** Rows of goals or bills the starting amounts list shows before "Show all". */
+export const START_ROWS_PREVIEW = 6;
+
 /** The most checklist ticks a day keeps; the rules cap the list at the same size. */
 export const MAX_DONE_LINE_IDS = 200;
 /** How far back the Days list and the confirmed-day records are read. */
@@ -397,4 +409,40 @@ export const BILL_WORDS = {
   paidAhead: 'Paid ahead',
   waiting: 'Waiting for the rest',
   readyToPay: 'Set aside in full',
+} as const;
+
+/** What an envelope's figure is called at each level; only Plan exists so far. */
+export const ENVELOPE_FIGURE_WORD = 'assigned';
+
+export const HOME_WORDS = {
+  freeToSpend: 'Free to spend',
+  notSet: 'Not set yet',
+  notSetHint: 'Say what you have on hand and Runway can work this out.',
+  overAssigned: 'Over-assigned',
+  noBills: 'No bills added yet',
+  nextIncome: 'Next income day',
+  envelopes: 'Envelopes',
+  noIncome:
+    'Add an income source to see what your next income day does with the money.',
+  getStarted: 'Get started',
+} as const;
+
+export const START_WORDS = {
+  title: 'Starting out',
+  later: 'Later',
+  next: 'Next',
+  done: 'Done',
+  incomeAsk: 'Who pays you?',
+  incomeHelp:
+    'Add an income source with how often it pays and the next day it is due. This is the one thing Runway needs.',
+  billsAsk: 'What do you pay?',
+  billsHelp:
+    'Add the bills and upcoming expenses you know about. Each is set aside a little at a time before it is due.',
+  envelopesAsk: 'What do you spend money on?',
+  envelopesHelp:
+    'Envelopes are for everyday spending, like groceries. Goals are things you are saving toward.',
+  standAsk: 'Where do things stand today?',
+  standHelp:
+    'Say what you have on hand and what is already set aside, so the first numbers start true.',
+  doneAsk: 'Your next income day is ready',
 } as const;

@@ -1,5 +1,7 @@
 import type { Cents, DateOnly, OpenMove, OpenRecord } from '@apps/runway/types';
 
+import { START_DAY_KEY } from '@apps/runway/constants';
+
 import { getEffectiveSplits } from './correct';
 import { toDayStamp } from './dates';
 
@@ -36,6 +38,28 @@ export function getPaidMoveId(billId: string, dueOn: DateOnly, marks: number) {
 
 /** Undoing a mark names the move it reverses, so a second undo of it is the same id. */
 export const getUndoMoveId = (paidMoveId: string) => `unpaid_${paidMoveId}`;
+
+/** What each goal or bill held on the starting day: the latest start move for it on that day, and none while no start is recorded. */
+export function collectStarted(
+  moves: readonly OpenMove[],
+  startDate: DateOnly | null,
+): { money: Cents | null; byItem: Record<string, Cents> } {
+  const latest = new Map<string, Extract<OpenMove, { kind: 'start' }>>();
+  moves.forEach((move) => {
+    if (move.kind !== 'start' || startDate === null || move.date !== startDate)
+      return;
+    const key = move.refId ?? '';
+    const held = latest.get(key);
+    if (!held || move.createdAt >= held.createdAt) latest.set(key, move);
+  });
+  const money = latest.get('')?.payload.amountCents ?? null;
+  const byItem = Object.fromEntries(
+    [...latest.entries()]
+      .filter(([key]) => key !== '')
+      .map(([key, move]) => [key, move.payload.amountCents]),
+  );
+  return { money, byItem };
+}
 
 /** Each bill's paid payments: the `billPaid` moves that no later move reverses. */
 export function collectPaid(
@@ -104,6 +128,10 @@ export const fundedInWindow = (
   after: number,
   through: number,
 ) => funded.filter((entry) => entry.on > after && entry.on <= through);
+
+/** The days that really set money aside, not the starting amount. */
+export const countFundedDays = (funded: readonly FundedDay[]) =>
+  funded.filter((entry) => entry.dayKey !== START_DAY_KEY).length;
 
 export const sumFunded = (funded: readonly FundedDay[]) =>
   funded.reduce((sum, entry) => sum + entry.cents, 0);

@@ -19,6 +19,7 @@ import type {
 
 import { allocate, percentOf, percentShares } from './money';
 import {
+  countFundedDays,
   fundedInWindow,
   NO_PROGRESS,
   sumFunded,
@@ -323,7 +324,7 @@ export function planBillPayments(
           ? []
           : days.map((day, index) => ({ day, cents: shares[index] })),
         fundedCents,
-        fundedDays: progress.funded.length,
+        fundedDays: countFundedDays(progress.funded),
         paid,
       };
     });
@@ -351,7 +352,7 @@ export function planBillPayments(
             cents: shares[position],
           })),
       fundedCents,
-      fundedDays: confirmed.length,
+      fundedDays: countFundedDays(confirmed),
       paid,
     };
   });

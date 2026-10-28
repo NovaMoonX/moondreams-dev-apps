@@ -39,6 +39,8 @@ import type {
   MoveDoc,
   PayLineSealed,
   SourceSealed,
+  StartHolding,
+  StartSealed,
 } from '../../src/apps/runway/types.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -140,6 +142,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     createdAt,
     updatedAt: createdAt,
     stance: 'conservative',
+    startDate: startOfUtcDay(context.now) - 45 * DAY_MS,
     keyId: data.keyId,
     sealed,
   });
@@ -151,6 +154,12 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   );
   const billDocuments = await writeSeedBills(context, owner.uid, encryption);
   const goalDocuments = await writeSeedGoals(context, owner.uid, encryption);
+  const startDocuments = await writeSeedStart(
+    context,
+    owner.uid,
+    encryption,
+    batch,
+  );
   const masterKeyIds = Object.keys(keyring.keys);
   masterKeyIds.forEach((masterKeyId) =>
     batch.set(
@@ -168,8 +177,65 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       envelopeDocuments +
       billDocuments +
       goalDocuments +
+      startDocuments +
       masterKeyIds.length,
   };
+}
+
+/** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside. One change and five holdings. */
+async function writeSeedStart(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+  batch: ReturnType<SeedContext['firestore']['batch']>,
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const startDate = startOfUtcDay(context.now) - 45 * DAY_MS;
+  const createdAt = context.now - 14 * DAY_MS;
+  const holdings: {
+    refId: string | null;
+    holding: StartHolding;
+    cents: number;
+  }[] = [
+    { refId: null, holding: 'money', cents: 340_000 },
+    { refId: 'seed-goal-vacation', holding: 'goal', cents: 25_000 },
+    { refId: 'seed-goal-cushion', holding: 'goal', cents: 20_000 },
+    { refId: 'seed-bill-rent', holding: 'bill', cents: 45_000 },
+    { refId: 'seed-bill-car', holding: 'bill', cents: 6_000 },
+  ];
+  const changeId = 'seed-change-start';
+  batch.set(context.firestore.doc(`${plan}/changes/${changeId}`), {
+    id: changeId,
+    kind: 'start',
+    createdAt,
+    effectiveFrom: startDate,
+    itemIds: [],
+    sealed: await sealJson(
+      {
+        summary: `Started from ${new Date(startDate).toISOString().slice(0, 10)}.`,
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  });
+  await Promise.all(
+    holdings.map(async ({ refId, holding, cents }) => {
+      const id = `start_${refId ?? 'money'}_${createdAt}`;
+      const move: MoveDoc = {
+        id,
+        kind: 'start',
+        date: startDate,
+        refId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: await sealJson(
+          { amountCents: cents, holding } satisfies StartSealed,
+          encryption,
+        ),
+      };
+      batch.set(context.firestore.doc(`${plan}/moves/${id}`), move);
+    }),
+  );
+  return 1 + holdings.length;
 }
 
 /** One source with two pay lines, sealed the way the app seals them: a paycheck every other week that ends after six, and a bonus that arrives once. */

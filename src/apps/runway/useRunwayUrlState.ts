@@ -6,6 +6,7 @@ import {
   MORE_ENTRIES,
   PLAN_SECTIONS,
   RUNWAY_TABS,
+  RUNWAY_VIEWS,
 } from '@apps/runway/constants';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
@@ -28,6 +29,11 @@ export function useRunwayUrlState() {
     parseAsStringLiteral(MORE_ENTRIES),
   );
 
+  const [requestedView, setRequestedView] = useQueryState(
+    'view',
+    parseAsStringLiteral(RUNWAY_VIEWS),
+  );
+
   const activeTab: RunwayTab = requestedTab ?? DEFAULT_RUNWAY_TAB;
   const showTab = (tab: RunwayTab) =>
     setRequestedTab(tab === DEFAULT_RUNWAY_TAB ? null : tab, {
@@ -48,8 +54,15 @@ export function useRunwayUrlState() {
     setRequestedMore(entry, { history: 'replace' });
   const closeMoreEntry = () => setRequestedMore(null, { history: 'replace' });
 
+  const openView = (view: (typeof RUNWAY_VIEWS)[number]) =>
+    setRequestedView(view, { history: 'replace' });
+  const closeView = () => setRequestedView(null, { history: 'replace' });
+
   return {
     activeTab,
+    view: requestedView,
+    openView,
+    closeView,
     showTab,
     planSection,
     showPlanSection,
