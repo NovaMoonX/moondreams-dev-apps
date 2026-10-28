@@ -324,7 +324,7 @@ Free to spend is the money nobody has claimed. Home shows it, and tapping it sho
 | Ending or archiving | a last day of today or later; archiving is from today | | the date picker stops at today |
 | "Change what you started with" | until the first income day after the start is confirmed, and at most 14 days after you first entered it | it is a correction, not a new plan | after that: "To fix a balance later, correct the income day or the bill payment it came from." |
 | Adding a purchase | today or earlier, on a day you were tracking, and not before tracking last started | an earlier stretch has another starting point, so it would never count | "Tracking started again on Oct 1, and an earlier day is not counted. Pick that day or a later one." |
-| Spend's list | This month, Last month, Past 30 or 90 days, or any month back to the plan's start (up to 120 months) | older months are read when you pick them | the "Period" row |
+| Spend's list | This month, Last month, Past 30 or 90 days, or any month back to the plan's start (up to 120 months) | older months are read when you pick them | the period chip beside "Purchases" |
 | Lookahead | 12 months | | a goal's date past it is refused; a gap of more than 45 days to the horizon reads as income ending |
 | Search | from 5 rows in every list | people look a bill or goal up by name | a search field above the list |
 
