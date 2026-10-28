@@ -38,10 +38,22 @@ Every part of the pipeline is open to change, not only the review agents: the sk
 
 **For each signal, decide:**
 1. **Name the class, not the instance**, and the one owner file that should change (the table above). A fix that would touch two owners means one of them is the owner and the other points at it.
-2. **Confident** (the owner said so, or the evidence is plain and the change is small and reversible): make the change in the PR you are on, as an audit of the section it lands in (merge, sharpen, delete; never only append), and tell the owner in one line what changed and why. "The owner said so" includes a correction about one case that plainly applies to its whole class.
-3. **Not confident, but worth it** (it changes cost or behaviour the owner may not want, it rests on one instance, or it trades one good against another): don't change it. Put it to the owner as a **pipeline proposal**: one line with the change, the evidence, and what doing it or not costs. Proposals go in the PR's status comment under "Pipeline proposals" and in your final message, and are applied only when the owner says yes. A proposal the owner declines is logged so it isn't raised again without new evidence.
-4. **Not worth it** (a one-off, or a fix that costs more than it prevents): leave it, and say nothing.
-5. **Log it** in `pipeline-log.md`: one row per change or proposal, newest first. Before changing a step, read its rows: three corrections of one agent or hook mean its design is wrong, not its wording, and that is a proposal to redesign it.
+2. **Pick its scope: one app, or every app.** Ask three questions:
+   - Does the rule name an app's things or its look (a recipe, a trip, Pinch's paper theme, A-List's theater rows)?
+   - Would a second app meet the same situation and want the same answer?
+   - Does another app already do it, the same way or worse?
+
+   Then file it by what the answers say:
+   - **One app's look, words or flow** goes in that app's rules file (`.github/instructions/<app>.instructions.md` and the identical `.claude/rules/<app>.md`) and its `UX.md`.
+   - **A pattern any app would follow** (a component, a layout, a copy or interaction convention) goes in the shared conventions file for its topic, with its line in CLAUDE.md's Pattern index. The apps that already do it differently are listed as follow-ups, or fixed in the PR when the change is small.
+   - **Something a second app needs now** moves from the app's rules file to the shared set in that PR, and its app line becomes a pointer (`design-ux.md` "Record the pattern you establish").
+   - **An agent's check** stays general (no app's words), and points at the rules files for app detail.
+
+   When you are sure it holds for the app but not that it generalizes, keep it in the app and make the generalizing step a pipeline proposal naming the other apps where it would apply. Never copy one rule into two apps' files: the second copy is the signal to move it to the shared set.
+3. **Confident** (the owner said so, or the evidence is plain and the change is small and reversible): make the change in the PR you are on, as an audit of the section it lands in (merge, sharpen, delete; never only append), and tell the owner in one line what changed and why. "The owner said so" includes a correction about one case that plainly applies to its whole class.
+4. **Not confident, but worth it** (it changes cost or behaviour the owner may not want, it rests on one instance, or it trades one good against another): don't change it. Put it to the owner as a **pipeline proposal**: one line with the change, the evidence, and what doing it or not costs. Proposals go in the PR's status comment under "Pipeline proposals" and in your final message, and are applied only when the owner says yes. A proposal the owner declines is logged so it isn't raised again without new evidence.
+5. **Not worth it** (a one-off, or a fix that costs more than it prevents): leave it, and say nothing.
+6. **Log it** in `pipeline-log.md`: one row per change or proposal, with its scope (an app id, or 'shared'), newest first. Before changing a step, read its rows: three corrections of one agent or hook mean its design is wrong, not its wording, and that is a proposal to redesign it.
 
 **A retro ends every orchestrated run** (a multi-issue run, a new app, a size L PR): in your final message, three lines at most on what cost the most, what a review missed or flagged as noise, and which briefs came back; each line becomes a change or a proposal by the rules above, or is dropped.
 
