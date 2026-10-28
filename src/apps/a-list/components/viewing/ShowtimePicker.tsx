@@ -4,6 +4,8 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { FirebaseError } from 'firebase/app';
 
+import { useAppSelector } from '@/store';
+
 import ExternalLinkText from '@/components/ExternalLinkText';
 import Pill from '@/components/Pill';
 import {
@@ -13,6 +15,9 @@ import {
 import { findShowtimesQueryOptions } from '@apps/a-list/queries/showtimeQueries';
 import type { ShowtimeOption, TheatreSnapshot } from '@apps/a-list/types';
 import { formatCents } from '@/utils/moneyUtils';
+import { TICKET_PRICE_KIND_LABELS } from '@apps/a-list/constants';
+import { selectMembership } from '@apps/a-list/store/selectors';
+import { getTicketPriceKind } from '@apps/a-list/utils/ticketPrice';
 import TheaterSheetModal from '@apps/a-list/components/theaters/TheaterSheetModal';
 import { isTypedTheatre } from '@apps/a-list/utils/theatres';
 import {
@@ -64,12 +69,16 @@ function ShowtimePicker({
       : pickedDateKey;
   const isPastDay = dateKey < getDayInZone(now, timeZone);
   const isTyped = isTypedTheatre(theatre);
+  const priceKind = getTicketPriceKind(useAppSelector(selectMembership));
   const showtimes = useQuery({
-    ...findShowtimesQueryOptions({
-      theatreId: theatre.theatreId,
-      date: dateKey,
-      title,
-    }),
+    ...findShowtimesQueryOptions(
+      {
+        theatreId: theatre.theatreId,
+        date: dateKey,
+        title,
+      },
+      priceKind,
+    ),
     enabled: !isPastDay && !isTyped && dateKey !== '',
   });
 
@@ -250,7 +259,7 @@ function ShowtimePicker({
       )}
       {open.length > 0 && (
         <p className='text-muted-foreground text-xs'>
-          Prices are AMC's list price before tax and fees.
+          Showing AMC&apos;s {TICKET_PRICE_KIND_LABELS[priceKind]} price, before tax and fees.
         </p>
       )}
     </div>

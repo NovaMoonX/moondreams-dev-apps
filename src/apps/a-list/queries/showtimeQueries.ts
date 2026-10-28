@@ -5,7 +5,8 @@ import { functions } from '@/lib/firebase/config';
 import { DAY_MS } from '@/lib/query/queryClient';
 import { normalizeString } from '@/utils/stringUtils';
 import { SHOWTIMES_STALE_MS } from '@apps/a-list/constants';
-import type { ShowtimeOption } from '@apps/a-list/types';
+import type { ShowtimeOption, TicketPriceKind } from '@apps/a-list/types';
+import { applyTicketPriceKind } from '@apps/a-list/utils/ticketPrice';
 
 export interface ShowtimeSearch {
   theatreId: string;
@@ -24,7 +25,7 @@ export const showtimeQueryKeys = {
   find: (search: ShowtimeSearch) =>
     [
       ...showtimeQueryKeys.all,
-      'v1',
+      'v3',
       search.theatreId,
       search.date,
       normalizeString(search.title),
@@ -32,7 +33,10 @@ export const showtimeQueryKeys = {
 };
 
 // Prices and sold-out flags move through the day, so this is neither cached long nor persisted.
-export function findShowtimesQueryOptions(search: ShowtimeSearch) {
+export function findShowtimesQueryOptions(
+  search: ShowtimeSearch,
+  priceKind: TicketPriceKind,
+) {
   return queryOptions({
     queryKey: showtimeQueryKeys.find(search),
     queryFn: async () => {
@@ -42,6 +46,8 @@ export function findShowtimesQueryOptions(search: ShowtimeSearch) {
       });
       return result.data.showtimes;
     },
+    select: (showtimes) =>
+      showtimes.map((option) => applyTicketPriceKind(option, priceKind)),
     staleTime: SHOWTIMES_STALE_MS,
     gcTime: DAY_MS,
     retry: false,

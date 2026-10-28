@@ -3,7 +3,10 @@ import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { toTheatre } from '@apps/a-list/store/actions/theatreActions';
-import type { MembershipProfile, TheatreDraft } from '@apps/a-list/types';
+import type {
+  MembershipProfile,
+  TheatreDraft,
+} from '@apps/a-list/types';
 import { getErrorMessage } from '@/utils/errorUtils';
 
 export interface SetupDraft {
@@ -41,6 +44,7 @@ export const completeSetup = createAsyncThunk<
       weeklyGoal: draft.weeklyGoal ?? null,
       monthlyGoal: draft.monthlyGoal ?? null,
       favoriteTheatreId: draft.favoriteTheatreId ?? null,
+      ticketPriceKind: 'ADULT',
       setupCompletedAt: now,
       createdAt: now,
       lastEditedAt: now,
@@ -75,6 +79,7 @@ export type MembershipEditableFields = Pick<
   | 'startDate'
   | 'weeklyGoal'
   | 'monthlyGoal'
+  | 'ticketPriceKind'
 >;
 
 interface UpdateMembershipInput {

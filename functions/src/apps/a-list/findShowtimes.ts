@@ -13,7 +13,7 @@ if (getApps().length === 0) {
 // Prices and sold-out flags move through the day, so a day's showings are only kept briefly.
 const SHOWTIMES_CACHE_MS = 15 * 60_000;
 // Bump when the shape of results changes, so older cached lookups are not served.
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 4;
 const MAX_TITLE_LENGTH = 200;
 
 export const findShowtimes = onCall(

@@ -4,6 +4,7 @@ import type {
   AListTab,
   AmcFormat,
   ShareRangeKind,
+  TicketPriceKind,
   WatchlistFilter,
   WatchlistSort,
   WatchPriority,
@@ -66,6 +67,25 @@ export const AMC_FORMAT_LABELS: Record<AmcFormat, string> = {
   REALD_3D: 'RealD 3D',
   LASER: 'Laser',
 };
+
+export const TICKET_PRICE_KINDS: TicketPriceKind[] = ['ADULT', 'SENIOR', 'CHILD'];
+
+export const TICKET_PRICE_KIND_LABELS: Record<TicketPriceKind, string> = {
+  ADULT: 'Adult',
+  SENIOR: 'Senior',
+  CHILD: 'Child',
+};
+
+export const DEFAULT_TICKET_PRICE_KIND: TicketPriceKind = 'ADULT';
+
+export const ARCHIVE_REASONS = [
+  'No longer in theaters',
+  'Not interested anymore',
+  'Watching it at home instead',
+  'Waiting for streaming',
+];
+
+export const MAX_ARCHIVE_REASON_LENGTH = 80;
 
 export const WATCH_PRIORITIES: WatchPriority[] = [
   'MUST_SEE',
@@ -150,6 +170,7 @@ export const WATCHLIST_FILTERS: WatchlistFilter[] = [
   'WANT_TO_SEE',
   'IF_I_HAVE_TIME',
   'seen',
+  'archived',
 ];
 
 export const MAX_CALENDAR_SHARES = 10;
