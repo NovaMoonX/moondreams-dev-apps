@@ -4,6 +4,7 @@ import { CalendarX, ChevronRight, Link2, Mail, Undo2 } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import InlineNotice from '@/components/InlineNotice';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -322,7 +323,9 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           <ModalFooterActions
             note={
               error ??
-              (firstHeld ? (
+              (firstHeld && isHidden ? (
+                <NeedsALookRow />
+              ) : firstHeld ? (
                 <Button
                   type='button'
                   variant='tertiary'
@@ -330,17 +333,15 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                   onClick={() => setOpenLineId(firstHeld.lineId)}
                 >
                   <span className='min-w-0'>
-                    {isHidden
-                      ? CHECKLIST_R3_WORDS.hiddenNote(firstHeldName)
-                      : (firstHeld.pairing?.heldCents ?? 0) > 0
-                        ? CHECKLIST_R3_WORDS.heldNote(
-                            firstHeldName,
-                            formatCentsShort(firstHeld.pairing?.heldCents ?? 0),
-                          )
-                        : CHECKLIST_R3_WORDS.shortNote(
-                            firstHeldName,
-                            formatCentsShort(firstHeld.shortBy),
-                          )}
+                    {(firstHeld.pairing?.heldCents ?? 0) > 0
+                      ? CHECKLIST_R3_WORDS.heldNote(
+                          firstHeldName,
+                          formatCentsShort(firstHeld.pairing?.heldCents ?? 0),
+                        )
+                      : CHECKLIST_R3_WORDS.shortNote(
+                          firstHeldName,
+                          formatCentsShort(firstHeld.shortBy),
+                        )}
                   </span>
                   <ChevronRight
                     className='text-muted-foreground h-4 w-4 shrink-0'

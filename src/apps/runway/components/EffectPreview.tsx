@@ -2,6 +2,7 @@ import { useDeferredValue, useMemo, useState } from 'react';
 import { useStore } from 'react-redux';
 
 import InlineNotice from '@/components/InlineNotice';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector, type RootState } from '@/store';
@@ -389,23 +390,27 @@ function EffectPreview({
       ))}
       {holdsText &&
         !(isCompact && holdsText.isSame) &&
-        holdsText.blocks.map((block) => (
-          <InlineNotice key={block.text} tone={block.tone}>
-            {block.figure === null ? (
-              block.text
-            ) : (
-              <>
-                {block.text.slice(0, block.text.indexOf(block.figure))}
-                <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
-                  {block.figure}
-                </strong>
-                {block.text.slice(
-                  block.text.indexOf(block.figure) + block.figure.length,
-                )}
-              </>
-            )}
-          </InlineNotice>
-        ))}
+        holdsText.blocks.map((block) =>
+          isHidden && block.tone === 'warning' ? (
+            <NeedsALookRow key={block.text} />
+          ) : (
+            <InlineNotice key={block.text} tone={block.tone}>
+              {block.figure === null ? (
+                block.text
+              ) : (
+                <>
+                  {block.text.slice(0, block.text.indexOf(block.figure))}
+                  <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
+                    {block.figure}
+                  </strong>
+                  {block.text.slice(
+                    block.text.indexOf(block.figure) + block.figure.length,
+                  )}
+                </>
+              )}
+            </InlineNotice>
+          ),
+        )}
     </ActionSection>
   );
 }

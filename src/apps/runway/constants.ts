@@ -1030,7 +1030,6 @@ export const CHECKLIST_R3_WORDS = {
   shortChoose: (amount: string) => `${amount} short · choose`,
   shortNote: (name: string, amount: string) =>
     `${name} is ${amount} short: choose before confirming`,
-  hiddenNote: (name: string) => `${name} is waiting: choose before confirming`,
   heldNote: (name: string, amount: string) =>
     `${name}: ${amount} held · choose before confirming`,
   notStarted: 'Not started',
@@ -1408,4 +1407,11 @@ export const HELD_WORDS = {
   archived: 'Archived',
   ended: (date: string) => `Ended ${date}`,
   holds: 'Holds',
+} as const;
+
+/** Round 7 package G9: while amounts are hidden, one neutral door stands in for the plan's warnings. */
+export const NEEDS_LOOK_WORDS = {
+  title: 'Something needs a look',
+  door: 'Show amounts to see it',
+  short: 'Needs a look',
 } as const;

@@ -35,6 +35,7 @@ import {
   CutsSection,
 } from '@apps/runway/components/ShortfallJourney';
 import { LineAmountEditList } from '@apps/runway/components/LineAmounts';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CONFIRM_COVER_WORDS,
   CONFIRM_FLOW_WORDS,
@@ -201,16 +202,14 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       return {
         text: isNoticeShown
           ? CONFIRM_COVER_WORDS.needsCover
-          : CONFIRM_FLOW_WORDS.needsCover(formatCents(gap)),
+          : mask(CONFIRM_FLOW_WORDS.needsCover(formatCents(gap))),
         door: 'cover',
       };
     if (rest > 0)
       return {
         text: isNoticeShown
           ? CONFIRM_COVER_WORDS.needsCuts
-          : CONFIRM_FLOW_WORDS.needsCuts(
-              cover > 0 ? mask(formatCents(rest)) : formatCents(rest),
-            ),
+          : mask(CONFIRM_FLOW_WORDS.needsCuts(formatCents(rest))),
         door: 'cuts',
       };
     return null;
@@ -362,15 +361,20 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       return (
         <InlineNotice
           tone='success'
-          title={CONFIRM_FLOW_WORDS.moreTitle(amount)}
+          title={
+            <MaskedText>{CONFIRM_FLOW_WORDS.moreTitle(amount)}</MaskedText>
+          }
         >
           {CONFIRM_FLOW_WORDS.moreBody}
         </InlineNotice>
       );
     }
     return (
-      <InlineNotice tone='warning' title={CONFIRM_FLOW_WORDS.lessTitle(amount)}>
-        {getLessBody()}
+      <InlineNotice
+        tone='warning'
+        title={<MaskedText>{CONFIRM_FLOW_WORDS.lessTitle(amount)}</MaskedText>}
+      >
+        <MaskedText>{getLessBody()}</MaskedText>
       </InlineNotice>
     );
   };
@@ -522,21 +526,22 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
                   <span
                     className={join(
                       'text-xl font-semibold tabular-nums',
-                      remainder + cover < 0 && 'text-(--runway-warning-ink)',
+                      remainder + cover < 0 &&
+                        !isHidden &&
+                        'text-(--runway-warning-ink)',
                     )}
                   >
-                    {cover > 0 ? (
-                      <SensitiveValue>
-                        {formatCents(remainder + cover)}
-                      </SensitiveValue>
-                    ) : (
-                      formatCents(remainder + cover)
-                    )}
+                    <SensitiveValue>
+                      {formatCents(remainder + cover)}
+                    </SensitiveValue>
                   </span>
                   {arrivedCents !== null && (
                     <span className='text-muted-foreground text-sm'>
                       {' '}
-                      of {formatCents(arrivedCents)}
+                      of{' '}
+                      <SensitiveValue>
+                        {formatCents(arrivedCents)}
+                      </SensitiveValue>
                     </span>
                   )}
                 </p>

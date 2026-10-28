@@ -17,6 +17,7 @@ import {
   FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 
 export interface LineAmountItem {
   id: string;
@@ -53,7 +54,6 @@ export function LineAmountList({
           emoji={item.emoji}
           detail={item.detail}
           figure={item.cents === null ? '–' : formatCents(item.cents)}
-          isPrivate={false}
           ariaLabel={`${item.name}, ${item.cents === null ? 'no amount' : formatCents(item.cents)}. Change`}
           onOpen={() => onOpen(item.id)}
         />
@@ -107,7 +107,7 @@ export function LineAmountView({
         suffix={
           plannedCents === null ? undefined : (
             <p className='text-muted-foreground'>
-              Planned {formatCents(plannedCents)}
+              <MaskedText>{`Planned ${formatCents(plannedCents)}`}</MaskedText>
             </p>
           )
         }
@@ -186,11 +186,15 @@ export function LineAmountEditList({
                   <span className='line-clamp-2'>{item.name}</span>
                 </p>
                 <p className='text-muted-foreground text-sm'>
-                  {item.isChanged
-                    ? CONFIRM_FLOW_WORDS.suggestDetail(
+                  {item.isChanged ? (
+                    <MaskedText>
+                      {CONFIRM_FLOW_WORDS.suggestDetail(
                         formatCents(item.plannedCents),
-                      )
-                    : FORM_FLOW_WORDS.linesAsPlanned}
+                      )}
+                    </MaskedText>
+                  ) : (
+                    FORM_FLOW_WORDS.linesAsPlanned
+                  )}
                 </p>
               </div>
               <MoneyInput

@@ -65,6 +65,9 @@ import {
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GoalSealed, Priority } from '@apps/runway/types';
+import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 interface GoalFormData extends FundingFormData {
   name: string;
@@ -408,8 +411,12 @@ function GoalForm({
   ];
   const { addToast } = useToast();
   const [isAll, setIsAll] = useState(false);
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const maskNote = (note: string | null | undefined) =>
+    note ? mask(note) : null;
   const questions = useQuestionFlow({
-    steps,
+    steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
     onAdvance: (fromId) => {
       const suggestion = getSuggestion(formData);
@@ -574,7 +581,9 @@ function GoalForm({
             )}
             {editing && questions.hasReviewed && <ChangeSection />}
             <ModalFooterActions
-              note={error ?? (isAsking ? questions.blocker : shownBlocker)}
+              note={
+                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+              }
               cancelAction={
                 <Button
                   type='button'

@@ -35,6 +35,8 @@ import {
   selectBills,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import SensitiveValue from '@/components/SensitiveValue';
 
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
@@ -93,6 +95,11 @@ export function AmountList({ label, rows, values, onChange }: AmountListProps) {
               key={row.id}
               label={row.name}
               summary={cents === null ? '' : formatCents(cents)}
+              summaryNode={
+                cents === null ? undefined : (
+                  <SensitiveValue>{formatCents(cents)}</SensitiveValue>
+                )
+              }
               placeholder='Add an amount'
               title={row.name}
               isFramed
@@ -304,6 +311,7 @@ function StartingAmountsSheet({
       isOpen={isOpen}
       onClose={requestClose}
       title='Where things stand'
+      actions={<ValuesEyeButton />}
     >
       {content}
     </FormSheet>

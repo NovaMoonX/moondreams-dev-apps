@@ -7,6 +7,8 @@ import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
 
 const ROWS_SHOWN = 8;
@@ -20,6 +22,7 @@ interface StartRowListProps {
 
 /** What has been added in a step: one-line rows that each open their item, searchable from eight and folded after a few. */
 function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
+  const mask = useMaskedText();
   const [query, setQuery] = useState('');
   const [isAll, setIsAll] = useState(false);
   const text = query.trim().toLowerCase();
@@ -52,7 +55,9 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
               type='button'
               variant='tertiary'
               className='text-foreground! h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3 py-2 text-left font-normal'
-              aria-label={`${row.name}${row.amount ? `, ${row.amount}` : ''}, ${row.line}`}
+              aria-label={mask(
+                `${row.name}${row.amount ? `, ${row.amount}` : ''}, ${row.line}`,
+              )}
               onClick={() => onOpen(row.id)}
             >
               <ItemBadge name={row.name} emoji={row.emoji} />
@@ -61,12 +66,12 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
                   {row.name}
                 </span>
                 <span className='text-muted-foreground line-clamp-2 block text-sm break-words'>
-                  {row.line}
+                  <MaskedText>{row.line}</MaskedText>
                 </span>
               </span>
               {row.amount && (
                 <span className='max-w-[40%] min-w-0 shrink text-right text-base font-semibold break-words tabular-nums'>
-                  {row.amount}
+                  <MaskedText>{row.amount}</MaskedText>
                 </span>
               )}
               <ChevronRight

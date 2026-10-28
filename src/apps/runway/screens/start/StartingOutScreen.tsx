@@ -311,11 +311,7 @@ function SavedStart({ uid }: { uid: string }) {
           </p>
           {nextDay && (
             <ul className='border-border bg-card rounded-2xl border'>
-              <IncomeDayCard
-                day={nextDay}
-                lead='Next income day'
-                isPrivate={false}
-              />
+              <IncomeDayCard day={nextDay} lead='Next income day' />
             </ul>
           )}
         </>

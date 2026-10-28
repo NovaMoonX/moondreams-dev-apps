@@ -14,6 +14,7 @@ import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector } from '@/store';
@@ -33,7 +34,7 @@ import {
   CoverCard,
   CutsSection,
 } from '@apps/runway/components/ShortfallJourney';
-import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -89,7 +90,6 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const coverId = useId();
   const cutsId = useId();
   const { isHidden } = useValuesHidden();
-  const mask = useMaskedText();
   const balances = useAppSelector(selectBalances);
   const items = useAppSelector((state) => state.runway.items);
   const held = useAppSelector(selectHeldByItem);
@@ -362,26 +362,34 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             onChange={changeAmount}
             suffix={
               <p className='font-medium'>
-                {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
-                <span className='text-muted-foreground font-normal'>
-                  {' '}
-                  of {arrivedCents === null ? '' : formatCents(arrivedCents)}
-                </span>
+                {DRAFT_WORDS.dayLeft}{' '}
+                <SensitiveValue>{formatCents(remainder)}</SensitiveValue>
+                {arrivedCents !== null && (
+                  <span className='text-muted-foreground font-normal'>
+                    {' '}
+                    of{' '}
+                    <SensitiveValue>{formatCents(arrivedCents)}</SensitiveValue>
+                  </span>
+                )}
               </p>
             }
           />
           {gap > 0 && (
             <InlineNotice
               tone='warning'
-              title={CORRECT_COVER_WORDS.shortTitle(mask(formatCents(gap)))}
+              title={
+                <MaskedText>
+                  {CORRECT_COVER_WORDS.shortTitle(formatCents(gap))}
+                </MaskedText>
+              }
             >
-              {heldCover > 0
-                ? mask(
-                    CORRECT_COVER_WORDS.shortBeyondCover(
-                      formatCents(heldCover),
-                    ),
-                  )
-                : CORRECT_COVER_WORDS.shortBody}
+              {heldCover > 0 ? (
+                <MaskedText>
+                  {CORRECT_COVER_WORDS.shortBeyondCover(formatCents(heldCover))}
+                </MaskedText>
+              ) : (
+                CORRECT_COVER_WORDS.shortBody
+              )}
             </InlineNotice>
           )}
           {gap > 0 && (
@@ -476,6 +484,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                 {corrected.arrivedCents !== base.arrivedCents && (
                   <BeforeAfterRow
+                    isPrivate
                     title='Money that arrived'
                     before={formatCents(base.arrivedCents)}
                     after={formatCents(corrected.arrivedCents)}
@@ -485,6 +494,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                 )}
                 {cover > 0 && (
                   <BeforeAfterRow
+                    isPrivate
                     title={CORRECT_COVER_WORDS.freeRow}
                     before={formatCents(freeCents ?? 0)}
                     after={formatCents(
@@ -497,6 +507,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                   />
                 )}
                 <BeforeAfterRow
+                  isPrivate
                   title={DRAFT_WORDS.dayLeft}
                   before={formatCents(base.freeToSpendCents)}
                   after={formatCents(corrected.freeToSpendCents)}
@@ -507,6 +518,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                   const effect = getEffectText(change);
                   return (
                     <BeforeAfterRow
+                      isPrivate
                       key={change.lineId}
                       title={
                         change.name === ''
@@ -523,7 +535,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                       detail={
                         effect ? (
                           <p className='text-muted-foreground text-sm'>
-                            {effect}
+                            <MaskedText>{effect}</MaskedText>
                           </p>
                         ) : undefined
                       }

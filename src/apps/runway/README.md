@@ -267,6 +267,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### Privacy and Security, In Detail
 
 - **A plan belongs to one person.** Income, bills and goals are visible to that person's account only. There is no shared household.
+- **Amounts stay hidden until you show them.** Every figure is masked on this device until you tap the eye, forms included: a folded answer, a notice and a footer reason are masked too, and only the field you are typing in shows its value. While hidden, a warning about the plan names neither an amount nor an item; one row says "Something needs a look" and shows amounts when you tap it.
 - **View-only access may come later,** so a person can let someone else look at their plan without changing it.
 - **Sensitive details are encrypted.** Names of sources, bills, goals, envelopes and accounts, amounts, balances, notes, merchant names and receipt images are stored as ciphertext. Dates and item types, which Runway needs to sort and filter and which identify nothing on their own, are not. Which fields identify someone alone or together is settled field by field in the technical design.
 - **Everything is encrypted in transit,** and the platform encrypts stored data.
