@@ -1435,3 +1435,10 @@ export const COVER_GROWN_WORDS = {
   coverMore: (amount: string) => `Cover ${amount} instead`,
   coverMoreHidden: 'Cover the larger difference',
 } as const;
+
+/** Round 7b package F2: a release Undo that finds the item changed since. */
+export const RELEASE_UNDO_WORDS = {
+  notUndone: (name: string) => `${name} was not changed back`,
+  changedSince:
+    'It was changed after the release, maybe on another device, so nothing was undone. Open it again to see where it stands.',
+} as const;

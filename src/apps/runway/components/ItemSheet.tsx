@@ -68,6 +68,7 @@ import {
   LIFECYCLE_WORDS,
   PAIRING_STOP_WORDS,
   HELD_WORDS,
+  RELEASE_UNDO_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_CHANGE_DAYS_AHEAD,
   MAX_NOTE_LENGTH,
@@ -322,8 +323,16 @@ function ItemSheet({
         action: {
           label: HELD_WORDS.undo,
           onClick: () =>
-            void undoReleaseHeld(user.uid, itemId, releaseOn).catch(
-              (undoError: unknown) =>
+            void undoReleaseHeld(user.uid, itemId, releaseOn)
+              .then((isUndone) => {
+                if (isUndone) return;
+                addToast({
+                  title: RELEASE_UNDO_WORDS.notUndone(name),
+                  description: RELEASE_UNDO_WORDS.changedSince,
+                  type: 'error',
+                });
+              })
+              .catch((undoError: unknown) =>
                 addToast({
                   title: HELD_WORDS.releaseFailed(name),
                   description: getErrorMessage(
@@ -332,7 +341,7 @@ function ItemSheet({
                   ),
                   type: 'error',
                 }),
-            ),
+              ),
         },
       });
     } catch (releaseError) {
