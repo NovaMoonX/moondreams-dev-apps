@@ -15,7 +15,7 @@ You are the one who knows everything: the request, the plan, the conventions, wh
 | A planned chunk with named files and a clear "done when" (a component, a thunk and its callers, a migration of N call sites, a doc rewrite) | `implementer` (sonnet) | Long edit loops are cheaper on Sonnet; the brief carries what it needs. |
 | Typecheck, eslint, `check:*`, the repo-rule greps | `validator` (haiku) | Mechanical; a long output reduced to failures. |
 | A search across many files when you need only the answer | `Explore` | Keeps file dumps out of your context. |
-| Keeping a run's PRs current with their bases | `pr-syncer` (haiku) over `scripts/prSync.sh` | Git answers it exactly; a model only runs the command. |
+| Keeping several PRs current with their bases at once | `pr-syncer` (haiku) over `scripts/prSync.sh` | Git answers it exactly; for one PR, run the command yourself. |
 | Review | sized, below | |
 | Planning a new app | `plan-app` | |
 
@@ -35,13 +35,23 @@ Every brief has: the goal in one line; the files to touch (and not to touch); wh
 
 When the owner assigns a list of issues, work them in order, one PR each (stacked when one builds on the last), and for each: plan it from the issue's checklists, build it through the table above, validate, size and run the review, fix, push, and refresh that PR's **status comment** before starting the next. The owner opens any PR and reads where it stands without scrolling the conversation.
 
-## Keeping several PRs current
+## Keeping your PRs current
 
-Freshness is checked by git, not by reading: `scripts/prSync.sh` says per PR whether its base is fully merged in and whether merging it would conflict (`git merge-tree`, no checkout), and `npm run prs:sync -- <head:base>…` also merges and pushes each named branch that merges cleanly (it refuses to merge without explicit pairs, so it never pushes to someone else's branch), after which `git pull --ff-only` brings the merge into a local checkout.
-- **When you open a stacked PR**, record its base: `git config branch.<head>.prBase <base>`, so the Stop hook checks it against the right branch.
-- **The Stop hook** checks the current branch on every pushed HEAD for free and names a merge only when it is behind or conflicts.
-- **Before starting the next issue of a run, and on each check-in,** spawn `pr-syncer` (haiku) with every open PR of the run as `head:base` pairs, bottom of the stack first. It merges what is clean and reports conflicts, which you resolve yourself (merge, never rebase), validate and push.
-- **Between sessions,** the `PR sync check` workflow (`.github/workflows/pr-sync-check.yml`) runs on every push to main and every six hours, and labels each open PR `behind-base` or `merge-conflict`. A label arriving on a PR you watch is an event: sync or resolve it. Put the PR's freshness in its status comment's "Last verified" line.
+"Current" means one thing: the PR's own base (main, or the PR beneath it in a stack) is merged into its branch. Its diff against that base stays exactly its own changes; nothing from another open PR ever enters it, and unrelated PRs are never stacked on each other. The session that opened a PR keeps it current for as long as it watches it, so the owner never has to ask.
+
+1. **Watch every PR you open.** Subscribe to its activity right after opening it, without asking (`CLAUDE.md` "Every PR ends the same way"). A stacked PR also records its base: `git config branch.<head>.prBase <base>`.
+2. **Main moving wakes you, at no cost until it does.** The `PR sync check` workflow (`.github/workflows/pr-sync-check.yml`, git only, no tokens) runs on every push to main, on each PR push and every six hours, and labels each open PR `behind-base` or `merge-conflict`. On a PR you watch, that label is an event, as is the harness's merge-conflict notice. The Stop hook also checks your current branch on every push.
+3. **On the event, run one command.** `npm run -s prs:sync -- <head>:<base>` merges the base in and pushes when it merges cleanly (`scripts/prSync.sh`, `git merge-tree`, no checkout; it never touches a branch you didn't name), then `git pull --ff-only` in your checkout. That is one tool call: spawn `pr-syncer` (haiku) only when you drive several PRs at once (a stack or a run, bottom of the stack first), where its loop saves your turns.
+4. **On a conflict, resolve it yourself and tell the owner; never ask them to.**
+
+   | What conflicts | Who resolves it | How |
+   |---|---|---|
+   | Lockfiles, generated files | you, or `implementer` (sonnet) when it is large | Regenerate with the repo's tooling, never by hand. |
+   | Both sides adding to the same list, table or doc | you, or `implementer` | Keep both, in the order each side meant. |
+   | Code | you | You hold the PR's intent: keep both sides' behaviour where they combine, and main's behaviour with the PR's change rebuilt on top where they can't. |
+
+   Merge, never rebase or force-push. Validate as for any push, push, and say in the status comment what conflicted and what you chose. Only where one side's behaviour had to give way, add a "Must do: check the conflict resolution in `<file>`" line to the status comment so the owner knows to look.
+5. **Stay cheap between events.** Your safety-net check-in rules stand (about 50 minutes after the last activity, then every four hours, stopping after three quiet ones). A quiet check-in re-arms without a message. Put the PR's freshness in its status comment's "Last verified" line.
 
 ## Improving as you go
 

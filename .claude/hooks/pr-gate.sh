@@ -96,7 +96,7 @@ else
   steps+=("This push changed no code (docs or config only): no screenshots or review agents; check the PR body still matches.")
 fi
 case "$sync_line" in
-  *CONFLICTS*) steps+=("The branch conflicts with '$pr_base' ($sync_line): merge '$pr_base' in and resolve it yourself (never rebase or force-push), then validate and push.") ;;
+  *CONFLICTS*) steps+=("The branch conflicts with '$pr_base' ($sync_line): merge '$pr_base' in and resolve it by orchestrate 'Keeping your PRs current' (never rebase or force-push, never ask the owner to resolve it), validate, push, and say what you chose in the status comment.") ;;
   *behind*) steps+=("The branch is behind '$pr_base': run 'npm run prs:sync -- $current_branch:$pr_base' (merges and pushes on origin), then 'git pull --ff-only' so your local branch has the merge, and validate.") ;;
 esac
 steps+=("Rewrite the PR's status comment (orchestrate 'The PR status comment') with what must and should be done, next moves and where the PR sits among the planned issues.")

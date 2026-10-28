@@ -1,6 +1,6 @@
 ---
 name: pr-syncer
-description: "Keeps a set of PR branches current with their bases: runs scripts/prSync.sh over the head:base pairs it is given (a stack bottom to top), merges the base into each branch that is behind and merges cleanly, pushes, and reports any conflict without touching it. Use from orchestrate before starting the next issue in a multi-PR run, on each check-in, and when a PR gets the behind-base label."
+description: "For a session driving several PRs at once (a stack or a multi-issue run): keeps them current with their bases; runs scripts/prSync.sh over the head:base pairs it is given (a stack bottom to top), merges the base into each branch that is behind and merges cleanly, pushes, and reports any conflict without touching it. Use from orchestrate before starting the next issue in a multi-PR run, on each check-in, and when a PR gets the behind-base label."
 model: haiku
 tools: Bash, Read
 ---
@@ -14,6 +14,6 @@ You keep PR branches current. You never resolve a conflict, rebase, force-push, 
 3. If a line says `failed`, run `git status` and `git worktree list` once, and report what you see. Don't retry.
 
 Report one line per pair, exactly as the script printed it, and then:
-- **Conflicts**: each branch, its base and the conflicting files. The orchestrator resolves these.
+- **Conflicts**: each branch, its base and the conflicting files. The session resolves these by orchestrate "Keeping your PRs current".
 - **Merged**: the branches you pushed. Their CI re-runs, and the orchestrator must `git pull --ff-only` any of them it has checked out.
 - Nothing else.
