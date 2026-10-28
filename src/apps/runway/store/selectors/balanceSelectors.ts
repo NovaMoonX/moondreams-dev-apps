@@ -1,6 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   deriveBalances,
   type BalancesInput,
@@ -14,14 +15,25 @@ export const selectBalanceInputs = createSelector(
     (state: RootState) => state.runway.records,
     (state: RootState) => state.runway.days,
     (state: RootState) => state.runway.items,
+    (state: RootState) => state.runway.purchases,
+    selectLevel,
   ],
-  (startDate, moves, records, days, items): BalancesInput => ({
+  (
+    startDate,
+    moves,
+    records,
+    days,
+    items,
+    purchases,
+    level,
+  ): BalancesInput => ({
     startDate,
     moves,
     records,
     arrivedOn: new Map(
       days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
     ),
+    purchases: level === 'track' ? purchases : [],
     kinds: Object.fromEntries(
       items.flatMap((item) =>
         item.kind === 'goal' || item.kind === 'bill' || item.kind === 'envelope'

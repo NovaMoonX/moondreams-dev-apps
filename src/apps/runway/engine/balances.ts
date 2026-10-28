@@ -1,4 +1,10 @@
-import type { Cents, DateOnly, OpenMove, OpenRecord } from '@apps/runway/types';
+import type {
+  Cents,
+  DateOnly,
+  OpenMove,
+  OpenPurchase,
+  OpenRecord,
+} from '@apps/runway/types';
 
 import { getEffectiveSplits } from './correct';
 import { collectPaid, collectStarted } from './progress';
@@ -11,6 +17,8 @@ export interface BalancesInput {
   arrivedOn: ReadonlyMap<string, DateOnly>;
   /** Which plan items are goals and which are bills, by item id. */
   kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope'>>;
+  /** What was spent, only while tracking is on; a purchase dated before the starting point is not counted. */
+  purchases?: readonly OpenPurchase[];
 }
 
 export interface Balances {
@@ -20,16 +28,19 @@ export interface Balances {
   hasMoney: boolean;
   /** The starting money, plus what arrived since, less the bills paid. */
   moneyOnHandCents: Cents;
-  /** Money that has a job, by item: its starting amount plus what confirmed days gave it, less a paid bill's set-aside. */
+  /** Money that has a job, by item: its starting amount plus what confirmed days gave it, less a paid bill's set-aside and, at Track, what was spent from it; below zero when an envelope is over. */
   assignedByItem: Record<string, Cents>;
   assignedToBillsCents: Cents;
   assignedToGoalsCents: Cents;
+  /** What envelopes still hold; an envelope that is over holds nothing, and its overspend has already left the money on hand. */
   assignedToEnvelopesCents: Cents;
   /** Money on hand less everything assigned; below zero when more is assigned than is held. */
   freeToSpendCents: Cents;
   startMoneyCents: Cents;
   arrivedCents: Cents;
   paidCents: Cents;
+  /** What was spent since the starting point, less refunds. */
+  spentCents: Cents;
 }
 
 /**
@@ -83,26 +94,58 @@ export function deriveBalances(input: BalancesInput): Balances {
     ]),
   );
 
+  const counted =
+    startDate === null
+      ? []
+      : (input.purchases ?? []).filter(
+          (purchase) => purchase.date >= startDate,
+        );
+  const spentCents = counted.reduce(
+    (sum, purchase) => sum + purchase.amountCents,
+    0,
+  );
+  const spentByItem = counted
+    .flatMap((purchase) => purchase.lines)
+    .reduce<Record<string, Cents>>(
+      (acc, line) =>
+        line.envelopeId === null
+          ? acc
+          : {
+              ...acc,
+              [line.envelopeId]: (acc[line.envelopeId] ?? 0) + line.cents,
+            },
+      {},
+    );
+
   const itemIds = new Set([
     ...Object.keys(given),
     ...Object.keys(started.byItem),
+    ...Object.keys(spentByItem),
   ]);
   const assignedByItem = Object.fromEntries(
     [...itemIds].map((id) => [
       id,
-      (started.byItem[id] ?? 0) + (given[id] ?? 0) - (consumed[id] ?? 0),
+      (started.byItem[id] ?? 0) +
+        (given[id] ?? 0) -
+        (consumed[id] ?? 0) -
+        (spentByItem[id] ?? 0),
     ]),
   );
   const sumKind = (kind: 'goal' | 'bill' | 'envelope') =>
     Object.entries(assignedByItem)
       .filter(([id]) => input.kinds[id] === kind)
-      .reduce((sum, [, cents]) => sum + cents, 0);
+      .reduce(
+        (sum, [, cents]) =>
+          sum + (kind === 'envelope' ? Math.max(0, cents) : cents),
+        0,
+      );
   const assignedToBillsCents = sumKind('bill');
   const assignedToGoalsCents = sumKind('goal');
   const assignedToEnvelopesCents = sumKind('envelope');
 
   const startMoneyCents = started.money ?? 0;
-  const moneyOnHandCents = startMoneyCents + arrivedCents - paidCents;
+  const moneyOnHandCents =
+    startMoneyCents + arrivedCents - paidCents - spentCents;
   const result: Balances = {
     isStarted: startDate !== null,
     hasMoney: started.money !== null,
@@ -119,6 +162,7 @@ export function deriveBalances(input: BalancesInput): Balances {
     startMoneyCents,
     arrivedCents,
     paidCents,
+    spentCents,
   };
   return result;
 }
@@ -160,6 +204,9 @@ export function deriveBalancesBefore(
     ),
     records: input.records.filter(
       (record) => (input.arrivedOn.get(record.dayId) ?? 0) < day,
+    ),
+    purchases: (input.purchases ?? []).filter(
+      (purchase) => purchase.date < day,
     ),
   });
   return result;

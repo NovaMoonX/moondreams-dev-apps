@@ -20,6 +20,7 @@ import {
   startRecordsListener,
 } from '@apps/runway/store/listeners/dayListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
+import { startPurchasesListener } from '@apps/runway/store/listeners/purchaseListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
 import { endItem } from '@apps/runway/store/actions/itemActions';
 import {
@@ -35,6 +36,7 @@ import {
   setKeyStatus,
   setMoves,
   setPlan,
+  setPurchases,
   setRecords,
   setVersions,
 } from '@apps/runway/store/runwaySlice';
@@ -110,6 +112,13 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           encryption,
           todayAsUtcDate() - RECENT_DAYS_WINDOW * DAY_MS,
           (moves) => dispatch(setMoves(moves)),
+          fail,
+        ),
+        startPurchasesListener(
+          uid,
+          encryption,
+          todayAsUtcDate() - RECENT_DAYS_WINDOW * DAY_MS,
+          (purchases) => dispatch(setPurchases(purchases)),
           fail,
         ),
       ];

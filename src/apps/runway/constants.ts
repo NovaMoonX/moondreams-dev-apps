@@ -24,6 +24,7 @@ export const PLAN_SECTION_LABELS: Record<
 export const RUNWAY_TABS = [
   'home',
   'days',
+  'spend',
   'plan',
 ] as const satisfies readonly RunwayTab[];
 
@@ -32,6 +33,7 @@ export const DEFAULT_RUNWAY_TAB: RunwayTab = 'home';
 export const RUNWAY_TAB_LABELS: Record<RunwayTab, string> = {
   home: 'Home',
   days: 'Days',
+  spend: 'Spend',
   plan: 'Plan',
 };
 
@@ -257,6 +259,19 @@ export const DAY_RECORD_KINDS = [
 ] as const;
 /** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding and a `trackingChange` (tracking turned on or off). */
 export const MOVE_KINDS = ['billPaid', 'start', 'trackingChange'] as const;
+/** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
+export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
+/** How a purchase line got its envelope: the person chose it, or it is Free to spend. */
+export const PURCHASE_LINE_VIAS = ['chosen', 'free'] as const;
+/** Envelopes one split can name; the sealed lines are not checked by rules, so the device caps them. */
+export const MAX_PURCHASE_LINES = 12;
+/** The amount a purchase can be, in cents. */
+export const MAX_PURCHASE_CENTS = 99_999_999;
+/** Purchases the Spend tab draws before "Show more". */
+export const SPEND_PAGE_SIZE = 30;
+/** Rows before the Spend tab offers a search. */
+export const SPEND_SEARCH_THRESHOLD = 8;
+
 /** What a `start` move holds the starting amount of. */
 export const START_HOLDINGS = ['money', 'goal', 'bill', 'envelope'] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
@@ -602,6 +617,51 @@ export const HOME_WORDS = {
   noIncome:
     'Add an income source to see what your next income day does with the money.',
   getStarted: 'Get started',
+} as const;
+
+export const SPEND_WORDS = {
+  title: 'Purchases',
+  newPurchase: 'New purchase',
+  envelopeAdd: 'Add purchase',
+  sheetTitle: 'Purchase',
+  empty:
+    'Nothing spent yet. Add what you spend and each envelope shows what is left.',
+  loading: 'Getting your purchases.',
+  search: 'Search purchases',
+  noMatch: 'No purchase matches that.',
+  windowNote: 'Showing the last six months.',
+  all: 'All',
+  amount: 'Amount',
+  refundAmount: 'Amount refunded',
+  envelope: 'Envelope',
+  day: 'Day',
+  where: 'Where',
+  wherePlaceholder: 'Safeway',
+  note: 'Note',
+  notePlaceholder: 'Birthday dinner',
+  addWhere: 'Add where',
+  addNote: 'Add a note',
+  removeWhere: 'Remove where',
+  removeNote: 'Remove note',
+  markRefund: 'This is a refund',
+  unmarkRefund: 'Not a refund',
+  split: 'Split between envelopes',
+  unsplit: 'Not split',
+  splitLabel: 'Split',
+  splitIntro: 'Pick the envelopes it comes from, then say how much each takes.',
+  splitEvenly: 'Split evenly',
+  splitDone: 'Done',
+  refundOf: 'Refund of',
+  noOriginal: 'Not tied to a purchase',
+  pickOriginal: 'Which purchase is it for?',
+  returnsTo: 'Returns to',
+  freeToSpend: 'Free to spend',
+  add: 'Add',
+  needsAmount: 'Enter the amount.',
+  needsEnvelope: 'Pick the envelope.',
+  needsDay: 'Pick a day you were tracking, not one ahead.',
+  needsShares: 'Say how much each envelope takes.',
+  offline: 'This needs a connection. Nothing was saved.',
 } as const;
 
 export const START_WORDS = {
