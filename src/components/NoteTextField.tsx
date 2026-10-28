@@ -4,6 +4,7 @@ import { Textarea } from '@moondreamsdev/dreamer-ui/components';
 
 import Field from '@/components/forms/Field';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
@@ -34,7 +35,7 @@ function NoteTextField({
 
   // A drawer takes focus itself while it slides in, so the text box is focused once that settles.
   useEffect(() => {
-    if (!shouldFocus) {
+    if (!shouldFocus || !canFocusFieldOnOpen()) {
       return;
     }
     const timer = window.setTimeout(

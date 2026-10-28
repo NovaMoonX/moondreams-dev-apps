@@ -1,6 +1,12 @@
-import { Input } from '@moondreamsdev/dreamer-ui/components';
+import { useState } from 'react';
+
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+
+import FormSheet from '@/components/FormSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 
 import { PillGroup } from '@/components/PillGroup';
+import SummaryRow from '@/components/SummaryRow';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
@@ -31,7 +37,7 @@ const STRETCH_OPTIONS = [
 
 const hasDayOnly = (kind: ItemKind) => kind === 'envelope' || kind === 'goal';
 
-/** When a change starts and how long it lasts. Earlier days keep what they had; only choices that mean something here are drawn. */
+/** When a change starts and how long it lasts: always one summary row, whose choices open in their own sheet (on an income day's own screen with that day's choices first), so the form's rows never move. Earlier days keep what they had; only choices that mean something here are drawn. */
 function FromWhenPicker({
   value,
   onChange,
@@ -42,29 +48,37 @@ function FromWhenPicker({
   isDisabled = false,
 }: FromWhenPickerProps) {
   const preset = days.find((day) => day.dayKey === presetDayKey) ?? null;
-  const options: { value: FromWhenChoice; label: string }[] = [
-    { value: 'now', label: CHANGE_WORDS.fromNow },
-    ...(preset && preset.on > today
-      ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
-      : []),
-    { value: 'date', label: CHANGE_WORDS.fromDate },
+  const dayFirst: { value: FromWhenChoice; label: string }[] = [
     ...(hasDayOnly(kind) && (preset || days.length > 0)
       ? [{ value: 'dayOnly' as const, label: CHANGE_WORDS.dayOnly }]
       : []),
+    ...(preset && preset.on > today
+      ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
+      : []),
+  ];
+  const rest: { value: FromWhenChoice; label: string }[] = [
+    { value: 'now', label: CHANGE_WORDS.fromNow },
+    { value: 'date', label: CHANGE_WORDS.fromDate },
     ...(kind !== 'source'
       ? [{ value: 'stretch' as const, label: CHANGE_WORDS.stretch }]
       : []),
   ];
+  const options =
+    preset !== null
+      ? [...dayFirst, ...rest]
+      : [rest[0], ...dayFirst, ...rest.slice(1)];
+  const [isOpen, setIsOpen] = useState(false);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
     label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
 
-  return (
-    <div className='space-y-2'>
-      <p className='text-muted-foreground text-xs'>
-        {CHANGE_WORDS.fromHeading}
-      </p>
+  const chosen =
+    options.find((option) => option.value === value.choice)?.label ??
+    CHANGE_WORDS.fromNow;
+
+  const controls = (
+    <div className='space-y-4'>
       <PillGroup
         label={CHANGE_WORDS.fromHeading}
         options={options}
@@ -153,6 +167,34 @@ function FromWhenPicker({
         </div>
       )}
     </div>
+  );
+
+  return (
+    <>
+      <SummaryRow
+        label={CHANGE_WORDS.fromHeading}
+        ariaLabel={`${CHANGE_WORDS.fromHeading}: ${chosen}. Change`}
+        onClick={isDisabled ? undefined : () => setIsOpen(true)}
+      >
+        {chosen}
+      </SummaryRow>
+      {isOpen && (
+        <FormSheet
+          isOpen
+          onClose={() => setIsOpen(false)}
+          title={CHANGE_WORDS.fromHeading}
+        >
+          <div className='pb-4'>{controls}</div>
+          <ModalFooterActions
+            rightActions={
+              <Button type='button' onClick={() => setIsOpen(false)}>
+                Done
+              </Button>
+            }
+          />
+        </FormSheet>
+      )}
+    </>
   );
 }
 

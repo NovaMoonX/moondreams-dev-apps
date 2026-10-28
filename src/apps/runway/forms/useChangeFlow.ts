@@ -1,18 +1,29 @@
 import { useRef, useState } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
-import { CHANGE_WORDS } from '@apps/runway/constants';
+import { useStore } from 'react-redux';
+
+import { useAppSelector, type RootState } from '@/store';
+import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { saveDayOverride } from '@apps/runway/store/actions/dayActions';
+import {
+  carryDayOverrides,
+  saveDayOverride,
+} from '@apps/runway/store/actions/dayActions';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
-import type {
-  PreviewChange,
-  PreviewVersion,
+import {
+  previewOverrideCarry,
+  type PreviewChange,
+  type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
-import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectComingDays,
+  selectSettledKey,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeChange,
   isSamePayload,
@@ -23,7 +34,7 @@ import {
   INITIAL_FROM_WHEN,
   type ChangeSpan,
 } from '@apps/runway/utils/fromWhen';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import type { EnvelopeSealed, GoalSealed, ItemKind } from '@apps/runway/types';
 
 interface UseChangeFlowArgs {
@@ -96,6 +107,8 @@ export function useChangeFlow({
   onDone,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
+  const { addToast } = useToast();
+  const store = useStore<RootState>();
   const today = todayAsUtcDate();
   const days = useAppSelector((state) => selectComingDays(state, today));
   const [from, setFrom] = useState(INITIAL_FROM_WHEN);
@@ -163,6 +176,20 @@ export function useChangeFlow({
           { itemId, summary, note: reason },
         );
       } else {
+        const state = store.getState();
+        const carry =
+          changeJson === null
+            ? null
+            : previewOverrideCarry(
+                {
+                  items: state.runway.items,
+                  versions: state.runway.versions,
+                  openDays: state.runway.days,
+                  today,
+                  settledKey: selectSettledKey(state),
+                },
+                JSON.parse(changeJson) as PreviewChange,
+              );
         await changeItem(user.uid, encryption, {
           itemId,
           kind,
@@ -172,6 +199,36 @@ export function useChangeFlow({
           effectiveFrom: span.effectiveFrom,
           effectiveUntil: span.effectiveUntil,
         });
+        if (carry !== null && carry.carried.length > 0) {
+          const moves = carry.carried.map(({ from, to }) => ({
+            fromId: from.id,
+            fromOn: from.expectedOn,
+            to: {
+              payLineId: to.payLineId,
+              sourceId: to.sourceId,
+              expectedOn: to.on,
+            },
+          }));
+          const tellFailed = (failedOn: number[]) => {
+            if (failedOn.length === 0) return;
+            const dates = failedOn.map(formatDateShortUTC);
+            const named =
+              dates.length <= 3
+                ? dates.join(', ').replace(/, ([^,]*)$/, ' and $1')
+                : `${dates.slice(0, 2).join(', ')} and ${dates.length - 2} more`;
+            addToast({
+              title: CARRY_WORDS.failedTitle(failedOn.length),
+              description: CARRY_WORDS.failedBody(named),
+              type: 'error',
+            });
+          };
+          void carryDayOverrides(user.uid, encryption, moves)
+            .then(({ failedOn }) => tellFailed(failedOn))
+            .catch((carryError: unknown) => {
+              console.error('Moving day choices failed', carryError);
+              tellFailed(moves.map((move) => move.fromOn));
+            });
+        }
       }
       onDone();
     } catch (saveError) {

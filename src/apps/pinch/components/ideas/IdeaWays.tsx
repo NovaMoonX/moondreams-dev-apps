@@ -34,6 +34,7 @@ import {
   type IdeaDraft,
 } from '@apps/pinch/store/actions/ideaActions';
 import { selectIdeas } from '@apps/pinch/store/selectors';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import {
   clipIdeaTitle,
   findIdeaByUrl,
@@ -207,6 +208,7 @@ export function IdeaLinkWay({
   );
 
   useEffect(() => {
+    if (!canFocusFieldOnOpen()) return;
     const timer = window.setTimeout(
       () => bodyRef.current?.querySelector('input')?.focus(),
       50,
@@ -557,6 +559,7 @@ export function IdeaTextWay({
   });
 
   useEffect(() => {
+    if (!canFocusFieldOnOpen()) return;
     const timer = window.setTimeout(
       () => bodyRef.current?.querySelector('input')?.focus(),
       50,

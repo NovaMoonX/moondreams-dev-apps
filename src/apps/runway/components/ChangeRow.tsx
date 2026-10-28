@@ -1,7 +1,9 @@
 import { FileText } from 'lucide-react';
 
+import InlineNotice from '@/components/InlineNotice';
 import ActionChips from '@/components/ActionChips';
 import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { CHANGE_KIND_LABELS } from '@apps/runway/constants';
 import type { OpenChange } from '@apps/runway/types';
 
@@ -27,11 +29,13 @@ function ChangeRow({ change, confirmedDayKey, onOpenRecord }: ChangeRowProps) {
         </span>
       </div>
       {change.isUnreadable ? (
-        <p className='text-muted-foreground text-sm'>
+        <InlineNotice tone='info'>
           This entry could not be opened on this device.
-        </p>
+        </InlineNotice>
       ) : (
-        <p className='text-sm break-words'>{change.summary}</p>
+        <p className='text-sm break-words'>
+          <MaskedText>{change.summary}</MaskedText>
+        </p>
       )}
       {change.effectiveFrom !== null && (
         <p className='text-muted-foreground text-sm'>

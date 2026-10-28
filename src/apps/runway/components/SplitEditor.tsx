@@ -1,11 +1,16 @@
+import { useState } from 'react';
+
 import { MultiPillGroup } from '@/components/PillGroup';
 import BackLink from '@/components/BackLink';
-import MoneyInput from '@/components/MoneyInput';
 import RevealChip from '@/components/RevealChip';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
+import {
+  LineAmountList,
+  LineAmountView,
+} from '@apps/runway/components/LineAmounts';
 import { SPEND_WORDS } from '@apps/runway/constants';
 import { getLineEffect } from '@apps/runway/engine/purchases';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 
 export interface SplitEnvelope {
   id: string;
@@ -53,6 +58,23 @@ function SplitEditor({
       : `${formatCents(-rest)} more than ${formatCents(totalCents)}.`;
   };
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = chosen.find((envelope) => envelope.id === editingId) ?? null;
+
+  if (editing) {
+    return (
+      <LineAmountView
+        name={editing.name}
+        value={shares[editing.id] ?? ''}
+        onChange={(text) => onShareChange(editing.id, text)}
+        onBack={() => setEditingId(null)}
+        plannedCents={null}
+        isDisabled={isSaving}
+        hasOwnFooter
+      />
+    );
+  }
+
   return (
     <div className='space-y-3'>
       <BackLink onBack={onBack} />
@@ -73,42 +95,28 @@ function SplitEditor({
         )}
         {getRestLine() && (
           <p className='text-muted-foreground text-sm' role='status'>
-            {getRestLine()}
+            <MaskedText>{getRestLine() ?? ''}</MaskedText>
           </p>
         )}
       </div>
       {chosen.length > 0 && (
-        <ul className='border-border divide-border divide-y rounded-2xl border'>
-          {chosen.map((envelope) => {
+        <LineAmountList
+          onOpen={setEditingId}
+          items={chosen.map((envelope) => {
             const cents = parseMoneyToCents(shares[envelope.id] ?? '');
             const over =
               cents === null
                 ? 0
                 : getLineEffect(envelope.leftCents, cents).overCents;
-            return (
-              <li key={envelope.id} className='space-y-2 p-3'>
-                <div className='flex items-start gap-3'>
-                  <ItemBadge name={envelope.name} emoji={envelope.emoji} />
-                  <p className='line-clamp-2 min-w-0 flex-1 pt-2 font-medium break-words'>
-                    {envelope.name}
-                  </p>
-                </div>
-                <MoneyInput
-                  variant='outline'
-                  ariaLabel={`${envelope.name} amount`}
-                  value={shares[envelope.id] ?? ''}
-                  onChange={(text) => onShareChange(envelope.id, text)}
-                  disabled={isSaving}
-                />
-                {over > 0 && (
-                  <p className='text-muted-foreground text-xs'>
-                    {formatCents(over)} over
-                  </p>
-                )}
-              </li>
-            );
+            return {
+              id: envelope.id,
+              name: envelope.name,
+              emoji: envelope.emoji,
+              cents,
+              detail: over > 0 ? `${formatCents(over)} over` : null,
+            };
           })}
-        </ul>
+        />
       )}
     </div>
   );

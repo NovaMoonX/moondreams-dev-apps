@@ -1,3 +1,11 @@
+/** "12345.67" as money reads, "12,345.67"; anything that isn't plain digits is left as typed. */
+export const groupDigits = (value: string) => {
+  const match = /^(\d+)(\.\d*)?$/.exec(value);
+  if (!match) return value;
+  const result = `${match[1].replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${match[2] ?? ''}`;
+  return result;
+};
+
 const AMOUNT_PATTERN = /^\d*\.?\d*$/;
 
 /** A typed dollar amount settled to two decimals ("25" → "25.00"); anything that isn't a plain amount is left as typed. */
@@ -55,6 +63,15 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 
 export function formatCents(cents: number): string {
   const result = currencyFormatter.format(cents / 100);
+  return result;
+}
+
+/** "$600" for a whole amount and "$87.50" otherwise, for a figure inside a short line of text. */
+export function formatCentsShort(cents: number): string {
+  const result =
+    cents % 100 === 0
+      ? currencyFormatter.format(cents / 100).replace(/\.00$/, '')
+      : currencyFormatter.format(cents / 100);
   return result;
 }
 

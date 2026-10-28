@@ -1,15 +1,16 @@
 import { useState, type CSSProperties } from 'react';
 import { Receipt } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import EmptyCard from '@/components/EmptyCard';
+import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
+import FloatingAction from '@/components/FloatingAction';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import BillRow from '@apps/runway/components/BillRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
@@ -21,11 +22,9 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { BillSealed } from '@apps/runway/types';
 
-const SEARCH_THRESHOLD = 8;
 const ROWS_PER_CHUNK = 12;
-const ESTIMATED_ROW_HEIGHT = 190;
+const ESTIMATED_ROW_HEIGHT = 69;
 
 function BillsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -40,22 +39,20 @@ function BillsScreen() {
   const stance = useAppSelector(selectStance);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<{
-    itemId: string;
-    payload: BillSealed;
-  } | null>(null);
 
-  const hasSearch = bills.length >= SEARCH_THRESHOLD;
+  const hasSearch = bills.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = bills
-    .filter(({ version }) =>
-      version.payload.name.toLowerCase().includes(needle),
-    )
     .map(({ item, version }) => {
       const payment =
         (payments[item.id] ?? []).find((entry) => entry.dueOn >= today) ?? null;
       return { item, payload: version.payload, payment };
-    });
+    })
+    .filter(({ payload, payment }) =>
+      `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
+        .toLowerCase()
+        .includes(needle),
+    );
 
   const getBody = () => {
     if (!isLoaded) {
@@ -113,18 +110,7 @@ function BillsScreen() {
                         bill={payload}
                         payment={payment}
                         planStance={stance}
-                        footer={
-                          <ItemChangeControls
-                            kind='bill'
-                            itemId={item.id}
-                            current={payload}
-                            today={today}
-                            name={payload.name}
-                            onChange={() =>
-                              setEditing({ itemId: item.id, payload })
-                            }
-                          />
-                        }
+                        today={today}
                       />
                     ))}
                   </ul>
@@ -139,34 +125,20 @@ function BillsScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Bills'
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            + Add bill
-          </Button>
-        }
-      />
+      <SectionHeader title='Bills' />
       {getBody()}
+      {isLoaded && <StoppedHoldingList kind='bill' today={today} />}
+      <FloatingAction
+        label='Add a bill'
+        icon={<Receipt className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {formKey !== null && (
         <BillForm
           key={formKey}
           isOpen
           title='Bill'
           onClose={() => setFormKey(null)}
-        />
-      )}
-      {editing !== null && (
-        <BillForm
-          key={editing.itemId}
-          isOpen
-          title='Bill'
-          editing={editing}
-          onClose={() => setEditing(null)}
         />
       )}
     </div>

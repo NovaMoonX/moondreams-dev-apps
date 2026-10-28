@@ -31,15 +31,18 @@ export function describeEnvelopes(
 
 export const isRefund = (purchase: OpenPurchase) => purchase.amountCents < 0;
 
-/** What a row calls a purchase: where, else the note, else the envelope it came from. */
+/** What a row calls a purchase: where, else the note, else the envelope it came from. While amounts are hidden a refund is named like any purchase, so the words never give its sign away. */
 export function getPurchaseTitle(
   purchase: OpenPurchase,
   nameOf: (envelopeId: string) => string,
+  isHidden = false,
 ): string {
   const named = purchase.merchant?.trim() || purchase.note?.trim();
   if (named) return named;
   const where = describeEnvelopes(purchase.lines, nameOf);
-  return isRefund(purchase) ? `Refund to ${where}` : where || 'Purchase';
+  return isRefund(purchase) && !isHidden
+    ? `Refund to ${where}`
+    : where || 'Purchase';
 }
 
 interface PurchaseFields {

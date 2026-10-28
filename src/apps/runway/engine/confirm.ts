@@ -38,6 +38,23 @@ export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
   return result;
 }
 
+/** Bill lines due before the next income day (any bill when no next day is known): a shortfall reaches them last. */
+export function getProtectedLineIds(
+  draft: Draft,
+  nextDayOn: number | null,
+): Set<string> {
+  const result = new Set(
+    draft.lines
+      .filter(
+        (line) =>
+          line.bill !== null &&
+          (nextDayOn === null || line.bill.dueOn < nextDayOn),
+      )
+      .map((line) => line.lineId),
+  );
+  return result;
+}
+
 /** Lines whose pairing is still waiting for the person's choice. */
 export function countUnresolvedHolds(draft: Draft): number {
   const result = draft.lines.filter(

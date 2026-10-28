@@ -1,21 +1,15 @@
-import type { ReactNode } from 'react';
+import { useState } from 'react';
 
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-
-import BillPaidChip from '@apps/runway/components/BillPaidChip';
-import { formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
-import PriorityBadge from '@apps/runway/components/PriorityBadge';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import ItemRow from '@apps/runway/components/ItemRow';
+import ItemSheet from '@apps/runway/components/ItemSheet';
+import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import RangeNote from '@apps/runway/components/RangeNote';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
-import {
-  describeBillFunding,
-  describeBillProgress,
-  describeBillRepeat,
-} from '@apps/runway/utils/billText';
+import { describeBillRepeat } from '@apps/runway/utils/billText';
+import { describeRange } from '@apps/runway/utils/rangeText';
 
 interface BillRowProps {
   billId: string;
@@ -23,74 +17,79 @@ interface BillRowProps {
   /** The next payment and what each income day sets aside for it; null once the bill has no payment left. */
   payment: BillPayment | null;
   planStance: Stance;
-  /** The row's change door. */
-  footer?: ReactNode;
+  today: number;
 }
 
-/** A bill in the plan: its name and amount, when it is next due, and how that payment is funded. */
-function BillRow({ billId, bill, payment, planStance, footer }: BillRowProps) {
-  const stance = effectiveStance(planStance, bill.stanceOverride);
-  const { schedule } = bill.timing;
-  const repeats =
-    schedule.kind === 'once'
-      ? ''
-      : ` · ${describeBillRepeat(schedule.kind).toLowerCase()}`;
-  const dueText = payment
-    ? `Next due ${formatDateUTC(payment.dueOn)}${repeats}`
-    : 'No payment left';
+const getDueLine = (payment: BillPayment | null) => {
+  if (!payment) return 'No payment left';
+  const date = formatDateShortUTC(payment.dueOn);
+  return payment.paid ? `Paid · due ${date}` : `Due ${date}`;
+};
 
-  const progressText = payment ? describeBillProgress(payment) : null;
-  const isSettled =
-    payment !== null &&
-    (payment.paid !== null || payment.fundedCents >= payment.totalCents);
-  const statusLine =
-    progressText ??
-    (payment && !isSettled
-      ? describeBillFunding(payment, bill.fundedBy)
-      : null);
+/** Where the next payment stands, short: "$1,075 of $1,250 set aside". */
+const getProgress = (payment: BillPayment | null) => {
+  if (!payment) return null;
+  const { paid, fundedCents, totalCents } = payment;
+  if (paid) {
+    return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateShortUTC(paid.paidOn)}`;
+  }
+  if (fundedCents <= 0) return 'Nothing set aside yet';
+  if (fundedCents >= totalCents) return 'Set aside in full';
+  return `${formatCentsShort(fundedCents)} of ${formatCentsShort(totalCents)} set aside`;
+};
+
+/** A bill in the plan: its name, when it is next due and its amount; it opens the bill's sheet. */
+function BillRow({ billId, bill, payment, planStance, today }: BillRowProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const stance = effectiveStance(planStance, bill.stanceOverride);
+  const amount = formatCents(pick(stance, bill.amount, 'expense'));
+  const dueLine = getDueLine(payment);
+  const { schedule } = bill.timing;
+  const repeat =
+    schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);
+  const fact = [
+    PRIORITY_LABELS[bill.priority],
+    repeat,
+    payment ? `due ${formatDateShortUTC(payment.dueOn)}` : 'No payment left',
+    getProgress(payment),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const rangeText = describeRange(
+    bill.amount,
+    stance,
+    'expense',
+    Boolean(bill.stanceOverride),
+  );
 
   return (
-    <li className='flex items-start gap-3 p-3'>
-      <ItemBadge name={bill.name} emoji={bill.emoji} />
-      <div className='min-h-10 min-w-0 flex-1'>
-        <div className='flex min-h-10 items-start justify-between gap-2'>
-          <p className='line-clamp-2 min-w-0 pt-2 font-medium break-words'>
-            {bill.name}
-          </p>
-          <p className='shrink-0 pt-2 font-semibold whitespace-nowrap tabular-nums'>
-            {formatCents(pick(stance, bill.amount, 'expense'))}
-          </p>
-        </div>
-        <RangeNote
-          range={bill.amount}
-          stance={stance}
-          side='expense'
-          isOwnStance={Boolean(bill.stanceOverride)}
+    <>
+      <ItemRow
+        name={bill.name}
+        emoji={bill.emoji}
+        detail={dueLine}
+        figure={amount}
+        ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}
+        onOpen={() => setIsOpen(true)}
+      />
+      {isOpen && (
+        <ItemSheet
+          itemId={billId}
+          kind='bill'
+          today={today}
+          figureLabel={payment ? 'Next payment' : 'Each payment'}
+          figure={amount}
+          fact={fact}
+          help={rangeText}
+          quickChange={{
+            label: ITEM_SHEET_R2_WORDS.changeAmount,
+            step: 'amount',
+          }}
+          payment={payment}
+          onClose={() => setIsOpen(false)}
         />
-        <p className='text-muted-foreground text-sm'>{dueText}</p>
-        {statusLine && (
-          <p
-            className={join(
-              'text-sm',
-              progressText ? 'font-medium' : 'text-muted-foreground',
-            )}
-          >
-            {statusLine}
-          </p>
-        )}
-        <div className='flex flex-wrap items-center gap-2 pt-1'>
-          <PriorityBadge priority={bill.priority} />
-          {payment && (
-            <BillPaidChip
-              billId={billId}
-              billName={bill.name}
-              payment={payment}
-            />
-          )}
-        </div>
-        {footer && <div className='pt-2'>{footer}</div>}
-      </div>
-    </li>
+      )}
+    </>
   );
 }
 

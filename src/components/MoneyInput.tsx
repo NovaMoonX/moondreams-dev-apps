@@ -1,6 +1,13 @@
+import { useRef } from 'react';
+
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import {
+  cleanAmountText,
+  isAmountText,
+  useAmountTyping,
+} from '@/hooks/useAmountTyping';
 import { toTwoDecimalAmount } from '@/utils/moneyUtils';
 
 interface MoneyInputProps {
@@ -11,9 +18,13 @@ interface MoneyInputProps {
   errorMessage?: string;
   ariaLabel?: string;
   className?: string;
+  /** Sizes the whole field (its border and $) where a row places it. */
+  wrapperClassName?: string;
   autoFocus?: boolean;
   /** `outline` leaves the fill clear so it matches an outline `Input` beside it in a modal or drawer. */
   variant?: 'solid' | 'outline';
+  /** Off unless the amount can be below zero. */
+  allowNegative?: boolean;
 }
 
 /** A dollar amount typed as text: a number input's spinner and float parsing are wrong for money. It settles to two decimals when the field loses focus or Enter is pressed. */
@@ -25,9 +36,13 @@ function MoneyInput({
   errorMessage,
   ariaLabel,
   className,
+  wrapperClassName,
   autoFocus,
   variant = 'solid',
+  allowNegative = false,
 }: MoneyInputProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useAmountTyping(inputRef, { allowNegative });
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
     if (settled !== value) {
@@ -36,7 +51,7 @@ function MoneyInput({
   };
 
   return (
-    <div className='space-y-1'>
+    <div className={join('space-y-1', wrapperClassName)}>
       <div
         className={join(
           'border-border flex items-center rounded-full border pl-4 focus-within:border-current/60',
@@ -49,6 +64,7 @@ function MoneyInput({
           $
         </span>
         <Input
+          ref={inputRef}
           type='text'
           inputMode='decimal'
           variant='base'
@@ -63,7 +79,14 @@ function MoneyInput({
           autoFocus={autoFocus}
           aria-label={ariaLabel}
           aria-invalid={errorMessage ? true : undefined}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(event) => {
+            const typed = event.target.value;
+            onChange(
+              isAmountText(typed, { allowNegative })
+                ? typed
+                : (cleanAmountText(typed, { allowNegative }) ?? value),
+            );
+          }}
           onBlur={settle}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {

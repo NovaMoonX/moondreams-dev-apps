@@ -1,14 +1,11 @@
-import { ChevronRight } from 'lucide-react';
-
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-
-import { formatCents } from '@/utils/moneyUtils';
+import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
-import RangeNote from '@apps/runway/components/RangeNote';
+import ItemRow from '@apps/runway/components/ItemRow';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
-import { DAY_STATUS_LABELS } from '@apps/runway/constants';
+import { DAY_STATUS_LABELS, NEEDS_LOOK_WORDS } from '@apps/runway/constants';
 import {
   selectEffectiveSplit,
   selectStance,
@@ -32,20 +29,28 @@ const getStatusLabel = (day: ListedDay) => {
 
 interface IncomeDayCardProps {
   day: ListedDay;
-  /** A line the lookahead has for this day, such as the item that runs short. */
-  note?: string;
+  /** What the plan leaves short on this day, in order; they become one warning line in the detail's place. */
+  shorts?: { name: string; shortBy: number }[];
   /** False under a "Confirmed" heading, which already says it. */
   isConfirmedShown?: boolean;
-  onOpen: () => void;
+  /** Words that lead the detail line ("Next income day"). */
+  lead?: string;
+  /** False where the figure is the person's own answer and nothing can show it. */
+  isPrivate?: boolean;
+  /** Left out, the row is only information. */
+  onOpen?: () => void;
 }
 
-/** One coming income day: the date, where it comes from and the take-home amount; it opens that day's draft. */
+/** One income day as a row: the date, where it comes from, one line and the take-home amount; it opens that day. */
 function IncomeDayCard({
   day,
-  note,
+  shorts = [],
   isConfirmedShown = true,
+  lead,
+  isPrivate = true,
   onOpen,
 }: IncomeDayCardProps) {
+  const { isHidden } = useValuesHidden();
   const stance = effectiveStance(
     useAppSelector(selectStance),
     day.stanceOverride,
@@ -54,23 +59,54 @@ function IncomeDayCard({
     day.status === 'confirmed' ? selectEffectiveSplit(state, day.dayKey) : null,
   );
   const cents = record?.arrivedCents ?? pick(stance, day.amount, 'income');
+  const isRanged =
+    day.status !== 'confirmed' && day.amount.lowCents !== day.amount.highCents;
   const statusLabel =
     day.status === 'confirmed' && !isConfirmedShown
       ? null
       : getStatusLabel(day);
   const title = day.sourceName ?? day.payLineName;
-  const detail = day.sourceName ? day.payLineName : null;
+  const plain = [
+    lead ?? weekdayFormatter.format(day.on),
+    day.sourceName ? day.payLineName : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const [firstShort] = shorts;
+  const shortFigure = firstShort ? formatCentsShort(firstShort.shortBy) : '';
+  const note = firstShort
+    ? shorts.length === 1
+      ? `${firstShort.name} ${shortFigure} short`
+      : `${shorts.length} short, ${firstShort.name} ${shortFigure}`
+    : undefined;
+  const warningLine = !firstShort ? undefined : isHidden ? (
+    NEEDS_LOOK_WORDS.short
+  ) : shorts.length === 1 ? (
+    <>
+      {firstShort.name}{' '}
+      {!isHidden && <SensitiveValue>{`${shortFigure} `}</SensitiveValue>}
+      short
+    </>
+  ) : (
+    <>
+      {shorts.length} short
+      {!isHidden && (
+        <span className='max-[359px]:hidden'>
+          {' · '}
+          {firstShort.name} <SensitiveValue>{shortFigure}</SensitiveValue>
+        </span>
+      )}
+    </>
+  );
+  const detail = note ?? statusLabel ?? plain;
+  const amount = formatCents(cents);
 
   return (
-    <li className='border-border bg-card rounded-2xl border'>
-      <Button
-        variant='tertiary'
-        className='h-auto w-full items-start justify-start gap-3 rounded-2xl p-3 text-left font-normal whitespace-normal'
-        aria-label={`${formatDateUTC(day.on)}, ${[title, detail, statusLabel, note].filter(Boolean).join(', ')}, ${formatCents(cents)}${day.status === 'confirmed' || day.amount.lowCents === day.amount.highCents ? '' : ' planned'}. Open this day`}
-        onClick={onOpen}
-      >
+    <ItemRow
+      name={title}
+      leading={
         <span
-          className='border-border bg-background flex size-11 shrink-0 flex-col items-center justify-center rounded-xl border text-center'
+          className='border-border bg-background flex size-10 shrink-0 flex-col items-center justify-center rounded-xl border text-center'
           aria-hidden='true'
         >
           <span className='text-muted-foreground text-[10px] leading-3 font-semibold uppercase'>
@@ -80,51 +116,15 @@ function IncomeDayCard({
             {new Date(day.on).getUTCDate()}
           </span>
         </span>
-        <span className='block min-h-11 min-w-0 flex-1'>
-          <span className='line-clamp-2 font-medium break-words'>{title}</span>
-          <span className='text-muted-foreground block text-sm'>
-            {weekdayFormatter.format(day.on)}
-            {detail && <span className='max-sm:hidden'> · </span>}
-            {detail && <span className='max-sm:block'>{detail}</span>}
-          </span>
-          {statusLabel && (
-            <span
-              className={join(
-                'mt-1 inline-flex h-6 items-center rounded-full border px-2.5 text-xs font-medium',
-                day.status === 'confirmed'
-                  ? 'border-primary/40 bg-primary/15 text-foreground'
-                  : 'border-border bg-muted/50 text-muted-foreground',
-              )}
-            >
-              {statusLabel}
-            </span>
-          )}
-          {note && (
-            <span className='text-muted-foreground block text-xs break-words'>
-              {note}
-            </span>
-          )}
-          {day.status !== 'confirmed' && (
-            <RangeNote
-              range={day.amount}
-              stance={stance}
-              side='income'
-              isOwnStance={Boolean(day.stanceOverride)}
-              className='text-xs'
-            />
-          )}
-        </span>
-        <span className='flex h-11 shrink-0 items-center gap-1'>
-          <span className='font-semibold whitespace-nowrap tabular-nums'>
-            {formatCents(cents)}
-          </span>
-          <ChevronRight
-            className='text-muted-foreground h-4 w-4'
-            aria-hidden='true'
-          />
-        </span>
-      </Button>
-    </li>
+      }
+      detail={warningLine ? undefined : detail}
+      warningLine={warningLine}
+      figure={amount}
+      hiddenAriaLabel={`${formatDateUTC(day.on)}, ${title}. Amount hidden.${onOpen ? ' Open this day' : ''}`}
+      ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}.${onOpen ? ' Open this day' : ''}`}
+      isPrivate={isPrivate}
+      onOpen={onOpen}
+    />
   );
 }
 

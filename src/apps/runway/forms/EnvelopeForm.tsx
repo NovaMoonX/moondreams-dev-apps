@@ -1,29 +1,24 @@
-import { useMemo, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { useState } from 'react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import EmojiField from '@/components/EmojiField';
+import SuggestionChips from '@/components/SuggestionChips';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
-import AmountField, { type AmountMode } from '@/components/AmountField';
 import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
-import RevealChip from '@/components/RevealChip';
+import { PillGroup } from '@/components/PillGroup';
+import QuestionFlow from '@/components/QuestionFlow';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
-import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
-  FUNDING_CADENCE_LABELS,
-  FUNDING_CADENCES,
-  MAX_CHOSEN_DAYS,
+  ENVELOPE_QUICK_PICKS,
+  FORM_FLOW_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
@@ -32,31 +27,35 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createEnvelope } from '@apps/runway/store/actions/itemActions';
+import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
-import { changeField } from '@apps/runway/forms/changeField';
+import BackLink from '@/components/BackLink';
+import QuickChange from '@apps/runway/components/QuickChange';
+import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { toFundingInput } from '@apps/runway/utils/fundingInput';
+import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
+import {
+  buildFundingRule,
+  buildFundingSteps,
+  getFundingBlocker,
+  INITIAL_FUNDING_FORM,
+  toFundingForm,
+  type FundingFormData,
+} from '@apps/runway/forms/fundingFlow';
 import {
   selectComingDays,
   selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type {
-  FundingAmount,
-  FundingRule,
-  EnvelopeSealed,
-  Priority,
-} from '@apps/runway/types';
+import type { EnvelopeSealed, Priority } from '@apps/runway/types';
+import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 
-type Cadence = (typeof FUNDING_CADENCES)[number];
-
-interface EnvelopeFormData {
+interface EnvelopeFormData extends FundingFormData {
   name: string;
   priority: Priority | null;
-  amount: string;
-  cadence: Cadence;
-  dayKeys: string[];
   /** Null until the person adds one. */
   emoji: string | null;
 }
@@ -64,41 +63,25 @@ interface EnvelopeFormData {
 interface EnvelopeFormProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Where Cancel and Discard go, when that is not where a save goes (back to the sheet the form came from). */
+  onCancel?: () => void;
   title: string;
   /** The envelope to change; its saved values start the form and a save adds a version from a date. */
   editing?: { itemId: string; payload: EnvelopeSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** A question to open first when changing an envelope ("amount"); every answer starts folded otherwise. */
+  openStep?: EnvelopeStepId | null;
+  /** Hands the built envelope over instead of writing it, for a person who has no plan yet. */
+  draft?: DraftSink<EnvelopeSealed>;
 }
 
-const { custom } = FormFactories;
-
-const AMOUNT_MODES = [
-  { value: 'exact', label: 'Exact amount' },
-  { value: 'percent', label: "% of the day's money" },
-  { value: 'rest', label: 'The rest' },
-] as const;
-
-const getFundingAmount = (
-  mode: AmountMode,
-  text: string,
-): FundingAmount | null => {
-  if (mode === 'rest') return { kind: 'rest' };
-  if (mode === 'percent') {
-    const bps = parsePercentToBps(text);
-    return bps === null ? null : { kind: 'percent', bps, of: 'dayMoney' };
-  }
-  const cents = parseMoneyToCents(text);
-  return cents === null || cents <= 0 ? null : { kind: 'exact', cents };
-};
+export type EnvelopeStepId =
+  'name' | 'often' | 'amount' | 'cadence' | 'priority' | 'emoji';
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
   label: PRIORITY_LABELS[value],
-}));
-const cadenceOptions = FUNDING_CADENCES.map((value) => ({
-  value,
-  label: FUNDING_CADENCE_LABELS[value],
 }));
 
 const EMPTY_ENVELOPE: EnvelopeSealed = {
@@ -112,260 +95,153 @@ const EMPTY_ENVELOPE: EnvelopeSealed = {
   },
 };
 
-const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => {
-  const { amount, cadence, dayKeys } = toFundingInput(payload.funding);
-  return {
-    name: payload.name,
-    priority: payload.priority,
-    amount,
-    cadence,
-    dayKeys,
-    emoji: payload.emoji,
-  };
-};
+const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => ({
+  ...toFundingForm(payload.funding),
+  name: payload.name,
+  priority: payload.priority,
+  emoji: payload.emoji,
+});
 
 const INITIAL_DATA: EnvelopeFormData = {
+  ...INITIAL_FUNDING_FORM,
   name: '',
   priority: 'should',
-  amount: '',
-  cadence: 'everyIncomeDay',
-  dayKeys: [],
   emoji: null,
 };
 
-const getBlocker = (
-  data: EnvelopeFormData,
-  amount: FundingAmount | null,
-  mode: AmountMode,
-  hasDays: boolean,
-) => {
+const getBlocker = (data: EnvelopeFormData, hasDays: boolean) => {
   if (data.name.trim() === '') return 'Name the envelope.';
   if (data.priority === null) return 'Pick how much it matters.';
-  if (amount === null)
-    return mode === 'percent'
-      ? 'Enter a whole or half percent, up to 100.'
-      : 'Enter how much it gets each time.';
-  if (data.cadence !== 'everyIncomeDay' && !hasDays)
-    return 'Add an income source first, so there are days to count.';
-  if (data.cadence === 'chosen' && data.dayKeys.length === 0)
-    return 'Pick at least one day.';
-  return null;
+  return getFundingBlocker(data, hasDays);
 };
 
 function EnvelopeForm({
   isOpen,
   onClose,
+  onCancel,
   title,
   editing,
   presetDayKey,
+  openStep = null,
+  draft,
 }: EnvelopeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
-  const [initialData] = useState<EnvelopeFormData>(() =>
-    editing ? getEditingData(editing.payload) : INITIAL_DATA,
+  const [formData, setFormData] = useState<EnvelopeFormData>(() =>
+    editing
+      ? getEditingData(editing.payload)
+      : draft?.initial
+        ? getEditingData(draft.initial)
+        : INITIAL_DATA,
   );
-  const [formData, setFormData] = useState<EnvelopeFormData>(initialData);
+  const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const set = (patch: Partial<EnvelopeFormData>) =>
+    setFormData((current) => ({ ...current, ...patch }));
 
-  const [amountMode, setAmountMode] = useState<AmountMode>(
-    editing ? toFundingInput(editing.payload.funding).mode : 'exact',
-  );
-  const amount = getFundingAmount(amountMode, formData.amount);
-  const blocker = getBlocker(
-    formData,
-    amount,
-    amountMode,
-    comingDays.length > 0,
-  );
+  const hasDays = comingDays.length > 0 || !!draft;
+  const blocker = getBlocker(formData, hasDays);
 
-  const dayOptions = comingDays.map((day) => ({
-    value: day.dayKey,
-    label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
-  }));
-
-  const fields = useMemo(() => {
-    const result = [
-      custom({
-        name: 'name',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>Name</p>
-            <Input
-              variant='outline'
-              aria-label='Name'
-              placeholder='Groceries'
-              maxLength={MAX_NAME_LENGTH}
-              value={props.value as string}
-              onChange={(event) => props.onValueChange(event.target.value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'priority',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>How much it matters</p>
-            <PillGroup
-              label='How much it matters'
-              options={priorityOptions}
-              value={props.value as Priority | null}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      custom({
-        name: 'amount',
-        label: '',
-        renderComponent: (props) => (
-          <AmountField
-            label='Each time'
-            hint='What it gets on each income day it is funded.'
-            mode={amountMode}
-            modes={AMOUNT_MODES}
-            onModeChange={(mode) => {
-              setAmountMode(mode);
-              props.onValueChange('');
-            }}
-            percentOfLabel="of the day's money"
-            restHint='Whatever is left of the day after the lines above it.'
-            value={props.value as string}
-            onChange={(value) => props.onValueChange(value)}
+  const fundingSteps = buildFundingSteps({
+    data: formData,
+    set,
+    comingDays,
+    allowNone: false,
+    isDraft: !!draft,
+    draftSources: draft?.sources,
+    getAmountTitle: (unit) => `How much does it get ${unit}?`,
+  });
+  const steps: QuestionStep[] = [
+    {
+      id: 'name',
+      title: FORM_FLOW_WORDS.nameTitle,
+      summaryLabel: FORM_FLOW_WORDS.name,
+      summaryValue: formData.name.trim(),
+      isAnswered: formData.name.trim() !== '',
+      render: () => (
+        <div className='space-y-4'>
+          <Input
+            variant='outline'
+            aria-label={FORM_FLOW_WORDS.name}
+            placeholder='Groceries'
+            maxLength={MAX_NAME_LENGTH}
+            value={formData.name}
+            onChange={(event) => set({ name: event.target.value })}
           />
-        ),
-      }),
-      custom({
-        name: 'cadence',
-        label: '',
-        renderComponent: (props) => (
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-xs'>Funded</p>
-            <PillGroup
-              label='Funded'
-              options={cadenceOptions}
-              value={props.value as Cadence}
-              onChange={(value) => props.onValueChange(value)}
-            />
-          </div>
-        ),
-      }),
-      ...(formData.cadence === 'chosen' && dayOptions.length > 0
-        ? [
-            custom({
-              name: 'dayKeys',
-              label: '',
-              renderComponent: (props) => (
-                <div className='space-y-2'>
-                  <p className='text-muted-foreground text-xs'>
-                    Which income days
-                  </p>
-                  <MultiPillGroup
-                    label='Which income days'
-                    options={dayOptions}
-                    values={props.value as string[]}
-                    onChange={(values) =>
-                      props.onValueChange(values.slice(0, MAX_CHOSEN_DAYS))
-                    }
-                  />
-                </div>
-              ),
-            }),
-          ]
-        : []),
-      custom({
-        name: 'emoji',
-        label: '',
-        renderComponent: (props) => {
-          const emoji = props.value as string | null;
-          if (emoji === null) {
-            return (
-              <div>
-                <RevealChip
-                  icon={<Plus className='h-4 w-4' />}
-                  onClick={() => props.onValueChange('')}
-                >
-                  Add emoji
-                </RevealChip>
-              </div>
-            );
-          }
-          return (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>Emoji</p>
-              <div className='flex items-center gap-2'>
-                <div className='w-24 shrink-0'>
-                  <Input
-                    variant='outline'
-                    aria-label='Emoji'
-                    placeholder='🛒'
-                    maxLength={MAX_EMOJI_LENGTH}
-                    value={emoji}
-                    onChange={(event) =>
-                      props.onValueChange(event.target.value)
-                    }
-                  />
-                </div>
-                <RevealChip
-                  icon={<X className='h-4 w-4' />}
-                  onClick={() => props.onValueChange(null)}
-                >
-                  Remove emoji
-                </RevealChip>
-              </div>
-            </div>
-          );
-        },
-      }),
-    ];
-    return result;
-  }, [amountMode, formData.cadence, dayOptions]);
-
-  const buildFunding = (data: EnvelopeFormData, amount: FundingAmount) => {
-    const saved = editing?.payload.funding.cadence;
-    if (data.cadence === 'every2' || data.cadence === 'every3') {
-      const n = data.cadence === 'every2' ? 2 : 3;
-      const funding: FundingRule = {
-        amount,
-        cadence: {
-          kind: 'everyNth',
-          n,
-          anchorDayKey:
-            saved?.kind === 'everyNth' && saved.n === n
-              ? saved.anchorDayKey
-              : (comingDays[0]?.dayKey ?? ''),
-        },
-      };
-      return funding;
-    }
-    if (data.cadence === 'chosen') {
-      const chosen = new Set(data.dayKeys);
-      const funding: FundingRule = {
-        amount,
-        cadence: {
-          kind: 'chosen',
-          dayKeys: comingDays
-            .filter((day) => chosen.has(day.dayKey))
-            .map((day) => day.dayKey),
-        },
-      };
-      return funding;
-    }
-    const funding: FundingRule = {
-      amount,
-      cadence: { kind: 'everyIncomeDay' },
-    };
-    return funding;
-  };
+          <SuggestionChips
+            label={FORM_FLOW_WORDS.commonEnvelopes}
+            suggestions={ENVELOPE_QUICK_PICKS.map(
+              (pick) => `${pick.emoji} ${pick.name}`,
+            )}
+            onPick={(label) => {
+              const found = ENVELOPE_QUICK_PICKS.find(
+                (pick) => `${pick.emoji} ${pick.name}` === label,
+              );
+              if (found) set({ name: found.name, emoji: found.emoji });
+            }}
+          />
+        </div>
+      ),
+    },
+    ...fundingSteps,
+    {
+      id: 'priority',
+      title: FORM_FLOW_WORDS.priorityTitle,
+      summaryLabel: FORM_FLOW_WORDS.priority,
+      summaryValue:
+        formData.priority === null ? '' : PRIORITY_LABELS[formData.priority],
+      isAnswered: formData.priority !== null,
+      isPreAnswered: true,
+      render: ({ moveOn }) => (
+        <PillGroup
+          label={FORM_FLOW_WORDS.priority}
+          options={priorityOptions}
+          value={formData.priority}
+          onChange={(priority) => {
+            set({ priority });
+            moveOn();
+          }}
+        />
+      ),
+    },
+    {
+      id: 'emoji',
+      title: FORM_FLOW_WORDS.emojiTitle,
+      summaryLabel: FORM_FLOW_WORDS.emoji,
+      summaryValue: formData.emoji?.trim() || FORM_FLOW_WORDS.noEmoji,
+      isAnswered: true,
+      isPreAnswered: true,
+      render: () => (
+        <EmojiField
+          value={formData.emoji ?? ''}
+          onChange={(emoji) => set({ emoji })}
+          ariaLabel={FORM_FLOW_WORDS.emoji}
+          placeholder='🛒'
+          maxLength={MAX_EMOJI_LENGTH}
+        />
+      ),
+    },
+  ];
+  const [isAll, setIsAll] = useState(false);
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const maskNote = (note: string | null | undefined) =>
+    note ? mask(note) : null;
+  const questions = useQuestionFlow({
+    steps: maskSummaries(steps, isHidden),
+    startFolded: editing !== undefined || !!draft?.initial,
+  });
 
   const buildEnvelope = (data: EnvelopeFormData): EnvelopeSealed | null => {
-    const amount = getFundingAmount(amountMode, data.amount);
-    if (data.priority === null || amount === null) return null;
+    const funding = buildFundingRule(data, {
+      comingDays,
+      saved: editing?.payload.funding,
+      today,
+    });
+    if (data.priority === null || funding === null) return null;
 
     const tier = envelopes.filter(
       (envelope) => envelope.version.payload.priority === data.priority,
@@ -382,7 +258,7 @@ function EnvelopeForm({
       emoji: data.emoji?.trim() || null,
       priority: data.priority,
       orderIndex,
-      funding: buildFunding(data, amount),
+      funding,
     };
     return result;
   };
@@ -397,10 +273,32 @@ function EnvelopeForm({
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) ||
+    flow.note.trim() !== '' ||
+    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const requestClose = useDiscardGuard({
+    isDirty,
+    onClose: onCancel ?? onClose,
+    isBusy: isSaving || flow.isSaving,
+    title: editing
+      ? FORM_FLOW_WORDS.discardChange
+      : FORM_FLOW_WORDS.discardNew('envelope'),
+  });
+  const quickStep = steps.find((step) => step.id === openStep) ?? null;
+  const isQuick = !!editing && openStep !== null && !isAll;
+  const isAsking = !questions.hasReviewed;
+  const shownBlocker = editing ? editBlocker : blocker;
 
-  const handleSubmit = async (data: EnvelopeFormData) => {
-    const envelope = buildEnvelope(data);
-    if (!user || !envelope) return;
+  const handleSubmit = async () => {
+    const envelope = buildEnvelope(formData);
+    if (!envelope) return;
+    if (draft) {
+      draft.onSave(envelope);
+      onClose();
+      return;
+    }
+    if (!user) return;
 
     setError(null);
     setIsSaving(true);
@@ -429,55 +327,77 @@ function EnvelopeForm({
     kind: 'envelope' as const,
     candidate,
   };
-  const formFields = editing ? [...fields, changeField] : fields;
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={title}
+      actions={<ValuesEyeButton />}
+    >
       <ChangeSteps
         isReason={flow.step === 'reason'}
-        reason={<ChangeReason flow={flow} onClose={onClose} />}
+        reason={<ChangeReason flow={flow} onClose={requestClose} />}
       >
         <ChangeFlowContext value={flowValue}>
-          <Form
-            id='runway-envelope'
-            form={formFields}
-            initialData={initialData}
-            columns={1}
-            onDataChange={(data) => setFormData(data as EnvelopeFormData)}
-            onSubmit={(data) => {
-              if (editing) {
-                flow.setStep('reason');
-                return;
+          <div className='space-y-5'>
+            {isQuick && quickStep ? (
+              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+            ) : (
+              <>
+                {openStep !== null && editing && (
+                  <BackLink onBack={() => setIsAll(false)} />
+                )}
+                <QuestionFlow flow={questions} />
+              </>
+            )}
+            {editing && questions.hasReviewed && <ChangeSection />}
+            <ModalFooterActions
+              note={
+                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
               }
-              void handleSubmit(data as EnvelopeFormData);
-            }}
-            submitButton={
-              <ModalFooterActions
-                note={error ?? (editing ? editBlocker : blocker)}
-                cancelAction={
+              cancelAction={
+                <Button
+                  type='button'
+                  variant='secondary'
+                  onClick={requestClose}
+                  disabled={isSaving}
+                >
+                  Cancel
+                </Button>
+              }
+              rightActions={
+                isAsking ? (
                   <Button
                     type='button'
-                    variant='secondary'
-                    onClick={onClose}
-                    disabled={isSaving}
+                    disabled={!questions.open?.isAnswered}
+                    onClick={questions.advance}
                   >
-                    Cancel
+                    {FORM_FLOW_WORDS.next}
                   </Button>
-                }
-                rightActions={
+                ) : (
                   <Button
-                    type='submit'
+                    type='button'
                     loading={isSaving}
-                    disabled={
-                      isSaving || (editing ? editBlocker : blocker) !== null
-                    }
+                    disabled={isSaving || shownBlocker !== null}
+                    onClick={() => {
+                      if (editing) {
+                        flow.setStep('reason');
+                        return;
+                      }
+                      void handleSubmit();
+                    }}
                   >
-                    {editing ? CHANGE_WORDS.review : 'Add'}
+                    {editing
+                      ? CHANGE_WORDS.review
+                      : draft?.initial
+                        ? 'Save'
+                        : 'Add'}
                   </Button>
-                }
-              />
-            }
-          />
+                )
+              }
+            />
+          </div>
         </ChangeFlowContext>
       </ChangeSteps>
     </FormSheet>

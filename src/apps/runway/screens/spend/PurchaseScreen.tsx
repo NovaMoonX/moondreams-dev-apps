@@ -1,20 +1,25 @@
 import { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { Pencil, ReceiptText, Trash2, Undo2 } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import DeleteIconButton from '@/components/DeleteIconButton';
-import Subview from '@/components/Subview';
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
+import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { maskFigures } from '@apps/runway/utils/maskText';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { SPEND_WORDS } from '@apps/runway/constants';
+import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
 import type { OpenPurchase } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import SheetHead from '@apps/runway/components/SheetHead';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import {
@@ -23,6 +28,7 @@ import {
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
+  describeEnvelopes,
   describePurchaseRemoval,
   getPurchaseTitle,
   isRefund,
@@ -47,14 +53,19 @@ const getRemovalEffect = (
 
 interface PurchaseScreenProps {
   purchaseId: string;
+  /** Opens a related purchase; the Spend list uses the address. */
+  onOpen?: (purchaseId: string) => void;
   onClose: () => void;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
-function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
+function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
-  const { openPurchase } = useRunwayUrlState();
+  const { isHidden } = useValuesHidden();
+  const mask = (text: string) => (isHidden ? maskFigures(text) : text);
+  const { openPurchase: openPurchaseInUrl } = useRunwayUrlState();
+  const openPurchase = onOpen ?? openPurchaseInUrl;
   const { addToast } = useToast();
   const purchases = useAppSelector(selectSpendPurchases);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
@@ -72,16 +83,16 @@ function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
 
   if (purchase === null) {
     return (
-      <Subview title={SPEND_WORDS.detailTitle} onClose={onClose}>
-        <p className='text-muted-foreground text-sm'>
+      <FormSheet isOpen onClose={onClose} title={SPEND_WORDS.detailTitle}>
+        <p className='text-muted-foreground pb-4 text-sm'>
           {isLoaded ? SPEND_WORDS.notFound : 'Getting your plan.'}
         </p>
-      </Subview>
+      </FormSheet>
     );
   }
 
   const refund = isRefund(purchase);
-  const title = getPurchaseTitle(purchase, nameOf);
+  const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
     ? (purchases.find((entry) => entry.id === purchase.refundOfId) ?? null)
@@ -91,30 +102,19 @@ function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
     (sum, entry) => sum - entry.amountCents,
     0,
   );
-  const rows = [
-    { name: 'Day', value: formatDateUTC(purchase.date), onOpen: null },
+  const envelopes = describeEnvelopes(purchase.lines, nameOf);
+  const fact = [
+    formatDateShortUTC(purchase.date),
+    refund && !isHidden ? `refund to ${envelopes}` : envelopes,
+  ].join(' · ');
+  const extraText = [
     purchase.merchant?.trim() && purchase.merchant.trim() !== title
-      ? { name: SPEND_WORDS.where, value: purchase.merchant, onOpen: null }
+      ? purchase.merchant.trim()
       : null,
     purchase.note?.trim() && purchase.note.trim() !== title
-      ? { name: SPEND_WORDS.note, value: purchase.note, onOpen: null }
+      ? purchase.note.trim()
       : null,
-    original
-      ? {
-          name: SPEND_WORDS.refundOf,
-          value: getPurchaseTitle(original, nameOf),
-          onOpen: () => openPurchase(original.id),
-        }
-      : null,
-    refundedCents > 0
-      ? {
-          name: 'Refunded so far',
-          value: formatCents(refundedCents),
-          onOpen:
-            refunds.length === 1 ? () => openPurchase(refunds[0].id) : null,
-        }
-      : null,
-  ].filter((row) => row !== null);
+  ].filter((text): text is string => Boolean(text));
 
   const remove = async () => {
     if (!user || isBusy) return;
@@ -126,16 +126,18 @@ function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
     const where = names.join(', ').replace(/, ([^,]*)$/, ' and $1');
     const isConfirmed = await confirm({
       title: SPEND_WORDS.removeTitle,
-      message: [
-        `${title}, ${amount} on ${formatDateUTC(purchase.date)}.`,
-        getRemovalEffect(names.length, where, amount, refund),
-        refunds.length > 0
-          ? `Its ${refunds.length === 1 ? 'refund stays' : `${refunds.length} refunds stay`}, and still return${refunds.length === 1 ? 's' : ''} money.`
-          : null,
-        'It stays in the change log.',
-      ]
-        .filter(Boolean)
-        .join(' '),
+      message: mask(
+        [
+          `${title}, ${amount} on ${formatDateUTC(purchase.date)}.`,
+          getRemovalEffect(names.length, where, amount, refund),
+          refunds.length > 0
+            ? `Its ${refunds.length === 1 ? 'refund stays' : `${refunds.length} refunds stay`}, and still return${refunds.length === 1 ? 's' : ''} money.`
+            : null,
+          'It stays in the change log.',
+        ]
+          .filter(Boolean)
+          .join(' '),
+      ),
       confirmText: SPEND_WORDS.removeConfirm,
       destructive: true,
     });
@@ -163,97 +165,115 @@ function PurchaseScreen({ purchaseId, onClose }: PurchaseScreenProps) {
     }
   };
 
+  if (editTarget !== null) {
+    return (
+      <PurchaseForm
+        key={editTarget.key}
+        isOpen
+        editing={editTarget.purchase}
+        onClose={() => setEditTarget(null)}
+        onCancel={() => setEditTarget(null)}
+      />
+    );
+  }
+
   return (
-    <Subview
-      title={SPEND_WORDS.detailTitle}
-      onClose={onClose}
-      headerAction={
-        <DeleteIconButton
-          label={SPEND_WORDS.removeLabel}
-          disabled={isBusy}
-          onClick={() => {
-            void remove();
-          }}
-        />
-      }
-    >
-      <div className='space-y-4'>
-        <div className='border-border bg-accent rounded-2xl border p-4'>
-          <p className='line-clamp-2 font-medium break-words'>{title}</p>
-          <p className='text-3xl font-semibold tracking-tight tabular-nums'>
-            {refund ? `+${amount}` : amount}
-          </p>
-        </div>
-        <dl className='border-border bg-card divide-border divide-y rounded-2xl border'>
-          {rows.map(({ name, value, onOpen }) => (
-            <div
-              key={name}
-              className='flex items-start justify-between gap-3 p-3'
-            >
-              <dt className='text-muted-foreground shrink-0'>{name}</dt>
-              <dd className='min-w-0 text-right break-words'>
-                {onOpen ? (
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    className='text-foreground! -my-3 h-auto min-h-11 max-w-full items-start justify-end gap-1 px-0! py-3 text-right font-normal whitespace-normal'
-                    onClick={onOpen}
-                  >
-                    <span className='min-w-0 break-words'>{value}</span>
-                    <ChevronRight
-                      className='text-muted-foreground mt-1 h-4 w-4 shrink-0'
-                      aria-hidden='true'
-                    />
-                  </Button>
-                ) : (
-                  value
-                )}
-              </dd>
-            </div>
-          ))}
-          {purchase.lines.map((line, index) => (
-            <div
-              key={`${line.envelopeId ?? 'free'}-${index}`}
-              className='flex items-start justify-between gap-3 p-3'
-            >
-              <dt className='text-muted-foreground min-w-0 break-words'>
-                {line.envelopeId === null
-                  ? SPEND_WORDS.freeToSpend
-                  : nameOf(line.envelopeId)}
-              </dt>
-              <dd className='font-medium whitespace-nowrap tabular-nums'>
-                {formatCents(Math.abs(line.cents))}
-              </dd>
-            </div>
-          ))}
-        </dl>
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        <Button
-          variant='secondary'
-          disabled={isBusy}
-          onClick={() =>
-            setEditTarget((current) => ({
-              key: (current?.key ?? 0) + 1,
-              purchase,
-            }))
-          }
-        >
-          {SPEND_WORDS.edit}
-        </Button>
-        {editTarget !== null && (
-          <PurchaseForm
-            key={editTarget.key}
-            isOpen
-            editing={editTarget.purchase}
-            onClose={() => setEditTarget(null)}
+    <>
+      <FormSheet
+        isOpen
+        isDrawerWhenShort
+        onClose={onClose}
+        title={title}
+        actions={<ValuesEyeButton />}
+      >
+        <div className='space-y-4 pb-4'>
+          <SheetHead
+            label={SPEND_WORDS.detailTitle}
+            figure={refund ? `+${amount}` : amount}
+            fact={fact}
           />
-        )}
-      </div>
-    </Subview>
+          {(extraText.length > 0 || purchase.lines.length > 1) && (
+            <dl className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
+              {extraText.map((text) => (
+                <div key={text} className='p-3 break-words'>
+                  <dt className='sr-only'>{SPEND_WORDS.note}</dt>
+                  <dd>{text}</dd>
+                </div>
+              ))}
+              {purchase.lines.length > 1 &&
+                purchase.lines.map((line, index) => (
+                  <div
+                    key={`${line.envelopeId ?? 'free'}-${index}`}
+                    className='flex items-start justify-between gap-3 p-3'
+                  >
+                    <dt className='text-muted-foreground min-w-0 break-words'>
+                      {line.envelopeId === null
+                        ? SPEND_WORDS.freeToSpend
+                        : nameOf(line.envelopeId)}
+                    </dt>
+                    <dd className='font-medium whitespace-nowrap tabular-nums'>
+                      {mask(formatCents(Math.abs(line.cents)))}
+                    </dd>
+                  </div>
+                ))}
+            </dl>
+          )}
+          <ActionGroup isRoomy>
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<Pencil />}
+              label={SPEND_WORDS.edit}
+              isDisabled={isBusy}
+              onClick={() => {
+                keepEntryFor('purchase');
+                setEditTarget((current) => ({
+                  key: (current?.key ?? 0) + 1,
+                  purchase,
+                }));
+              }}
+            />
+            {original && !isHidden && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<ReceiptText />}
+                label={`${SPEND_WORDS.refundOf} ${getPurchaseTitle(original, nameOf)}`}
+                onClick={() => openPurchase(original.id)}
+              />
+            )}
+            {refundedCents > 0 && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron={refunds.length === 1}
+                icon={<Undo2 />}
+                label={`Refunded so far ${mask(formatCents(refundedCents))}`}
+                onClick={() => {
+                  if (refunds.length === 1) openPurchase(refunds[0].id);
+                }}
+                isDisabled={refunds.length !== 1}
+              />
+            )}
+          </ActionGroup>
+          {error && (
+            <p className='text-destructive text-sm' role='alert'>
+              {error}
+            </p>
+          )}
+          <ActionRow
+            isRoomy
+            isDestructive
+            icon={<Trash2 />}
+            label={SPEND_WORDS.removeLabel}
+            isDisabled={isBusy}
+            onClick={() => void remove()}
+          />
+        </div>
+      </FormSheet>
+    </>
   );
 }
 

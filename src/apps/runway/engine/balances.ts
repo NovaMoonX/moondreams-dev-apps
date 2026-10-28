@@ -13,7 +13,14 @@ import {
   type ClosingState,
 } from './closings';
 import { getEffectiveSplits } from './correct';
-import { collectPaid, collectStarted } from './progress';
+import { START_DAY_KEY } from '@apps/runway/constants';
+
+import {
+  collectFunded,
+  collectPaid,
+  collectStarted,
+  settlePaid,
+} from './progress';
 
 export interface BalancesInput {
   startDate: DateOnly | null;
@@ -21,8 +28,14 @@ export interface BalancesInput {
   records: readonly OpenRecord[];
   /** The day each confirmed day's money arrived, by day id; a split of a day that arrived before the start is not counted. */
   arrivedOn: ReadonlyMap<string, DateOnly>;
+  /** Each day's scheduled date, by day id, which places what it set aside for a bill against that bill's payments; `arrivedOn` stands in when it is left out. */
+  expectedOn?: ReadonlyMap<string, DateOnly>;
   /** Which plan items are goals and which are bills, by item id. */
   kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope'>>;
+  /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to spend from then. */
+  releasedFrom?: Readonly<Record<string, DateOnly>>;
+  /** The day the figures are for, which `releasedFrom` is read against; every release counts when it is left out. */
+  asOf?: DateOnly;
   /** What was spent, only while tracking is on; a purchase dated before the starting point is not counted. */
   purchases?: readonly OpenPurchase[];
   /** What the ledger before the records, moves and purchases above summed to, counted from the same starting day; its spending is left out by the caller when spending is not counted. */
@@ -79,13 +92,36 @@ export function deriveBalances(input: BalancesInput): Balances {
       }, {}),
   );
 
+  const funded = collectFunded(
+    input.records.filter(
+      (record) =>
+        startDate !== null &&
+        (input.arrivedOn.get(record.dayId) ?? 0) >= startDate,
+    ),
+    input.expectedOn ?? input.arrivedOn,
+  );
   const paidByBill = Object.entries(
     joinPaid(base, collectPaid(input.moves)),
   ).map(([billId, payments]) => {
     const counted =
       startDate === null
         ? []
-        : payments.filter((payment) => payment.paidOn >= startDate);
+        : settlePaid(
+            [
+              ...(started.byItem[billId] === undefined
+                ? []
+                : [
+                    {
+                      dayKey: START_DAY_KEY,
+                      on: startDate,
+                      cents: started.byItem[billId],
+                    },
+                  ]),
+              ...(base?.billFunded[billId] ?? []),
+              ...(funded[billId] ?? []),
+            ],
+            payments.filter((payment) => payment.paidOn >= startDate),
+          );
     return {
       billId,
       amountCents: counted.reduce((sum, p) => sum + p.amountCents, 0),
@@ -135,9 +171,12 @@ export function deriveBalances(input: BalancesInput): Balances {
         (spentByItem[id] ?? 0),
     ]),
   );
+  const isReleased = (id: string) =>
+    Object.hasOwn(input.releasedFrom ?? {}, id) &&
+    (input.releasedFrom?.[id] ?? 0) <= (input.asOf ?? Infinity);
   const sumKind = (kind: 'goal' | 'bill' | 'envelope') =>
     Object.entries(assignedByItem)
-      .filter(([id]) => input.kinds[id] === kind)
+      .filter(([id]) => input.kinds[id] === kind && !isReleased(id))
       .reduce(
         (sum, [, cents]) =>
           sum + (kind === 'envelope' ? Math.max(0, cents) : cents),
@@ -201,6 +240,7 @@ export function deriveBalancesBefore(
   );
   const result = deriveBalances({
     ...input,
+    asOf: Math.min(day - 1, input.asOf ?? Infinity),
     closing: input.closing ? closingBefore(input.closing, day) : null,
     moves: input.moves.filter(
       (move) =>

@@ -1,21 +1,27 @@
 import { useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import AmountHero from '@/components/AmountHero';
+import FoldedDateField from '@/components/FoldedDateField';
 import FormSheet from '@/components/FormSheet';
 import MoneyInput from '@/components/MoneyInput';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
+import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
+  FORM_FLOW_WORDS,
   START_AMOUNTS_WORDS,
+  RUNWAY_SEARCH_THRESHOLD,
   START_ROWS_PREVIEW,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -29,6 +35,8 @@ import {
   selectBills,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import SensitiveValue from '@/components/SensitiveValue';
 
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
@@ -37,6 +45,8 @@ const isOfflineFailure = (error: unknown) =>
 interface StartingAmountsSheetProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Drawn as the page's own content, for a screen that is already a full page, instead of a sheet over it. */
+  isInline?: boolean;
   /** Called once the amounts are saved. */
   onSaved?: () => void;
 }
@@ -56,13 +66,27 @@ interface AmountListProps {
 /** One-line rows that each open their own amount, capped so fifty of them stay a short list. */
 export function AmountList({ label, rows, values, onChange }: AmountListProps) {
   const [isAll, setIsAll] = useState(false);
-  const shown = isAll ? rows : rows.slice(0, START_ROWS_PREVIEW);
+  const [query, setQuery] = useState('');
+  const text = query.trim().toLowerCase();
+  const matches =
+    text === ''
+      ? rows
+      : rows.filter((row) => row.name.toLowerCase().includes(text));
+  const shown =
+    isAll || text !== '' ? matches : matches.slice(0, START_ROWS_PREVIEW);
   const hiddenCount = rows.length - START_ROWS_PREVIEW;
 
   if (rows.length === 0) return null;
   return (
     <div className='space-y-2'>
       <SectionDivider label={label} />
+      {rows.length >= RUNWAY_SEARCH_THRESHOLD && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder={`Search ${label.toLowerCase()}`}
+        />
+      )}
       <div className='space-y-2'>
         {shown.map((row) => {
           const cents = parseMoneyToCents(values[row.id] ?? '');
@@ -71,6 +95,11 @@ export function AmountList({ label, rows, values, onChange }: AmountListProps) {
               key={row.id}
               label={row.name}
               summary={cents === null ? '' : formatCents(cents)}
+              summaryNode={
+                cents === null ? undefined : (
+                  <SensitiveValue>{formatCents(cents)}</SensitiveValue>
+                )
+              }
               placeholder='Add an amount'
               title={row.name}
               isFramed
@@ -87,7 +116,10 @@ export function AmountList({ label, rows, values, onChange }: AmountListProps) {
           );
         })}
       </div>
-      {hiddenCount > 0 && (
+      {text !== '' && matches.length === 0 && (
+        <p className='text-muted-foreground text-sm'>Nothing matches that.</p>
+      )}
+      {text === '' && hiddenCount > 0 && (
         <ShowMoreButton
           isOpen={isAll}
           onClick={() => setIsAll((open) => !open)}
@@ -103,6 +135,7 @@ export function AmountList({ label, rows, values, onChange }: AmountListProps) {
 function StartingAmountsSheet({
   isOpen,
   onClose,
+  isInline = false,
   onSaved,
 }: StartingAmountsSheetProps) {
   const { user } = useAuth();
@@ -122,8 +155,27 @@ function StartingAmountsSheet({
       Object.entries(started.byItem).map(([id, cents]) => [id, toText(cents)]),
     ),
   );
+  const askedGoals = goals.filter(
+    ({ item, version }) =>
+      started.byItem[item.id] === undefined &&
+      (version.payload.startingCents ?? null) === null,
+  );
+  const carriedGoals = goals.flatMap(({ item, version }) =>
+    started.byItem[item.id] === undefined &&
+    (version.payload.startingCents ?? 0) > 0
+      ? [{ id: item.id, cents: version.payload.startingCents ?? 0 }]
+      : [],
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const snapshot = JSON.stringify({ date, money, amounts });
+  const [startSnapshot] = useState(snapshot);
+  const requestClose = useDiscardGuard({
+    isDirty: snapshot !== startSnapshot,
+    onClose,
+    isBusy: isSaving,
+    title: FORM_FLOW_WORDS.discardChange,
+  });
 
   const startDate = fromDateInputValue(date) ?? null;
   const getHoldings = (): StartHoldingInput[] => {
@@ -146,7 +198,12 @@ function StartingAmountsSheet({
         : [
             { holding: 'money' as const, refId: null, amountCents: moneyCents },
           ]),
-      ...goals.flatMap(({ item }) => toHolding('goal', item.id)),
+      ...askedGoals.flatMap(({ item }) => toHolding('goal', item.id)),
+      ...carriedGoals.map(({ id, cents }) => ({
+        holding: 'goal' as const,
+        refId: id,
+        amountCents: cents,
+      })),
       ...bills.flatMap(({ item }) => toHolding('bill', item.id)),
     ];
   };
@@ -180,81 +237,83 @@ function StartingAmountsSheet({
     }
   };
 
+  const content = (
+    <div className='grid gap-4'>
+      <AmountHero
+        label={FORM_FLOW_WORDS.moneyOnHand}
+        value={money}
+        onChange={setMoney}
+        hint='What you have to plan with.'
+      />
+      <FoldedDateField
+        label={FORM_FLOW_WORDS.asOf}
+        value={date}
+        onChange={setDate}
+        todayValue={toDateInputValue(today)}
+        max={toDateInputValue(today)}
+      />
+      <AmountList
+        label='What each goal holds'
+        rows={askedGoals.map(({ item, version }) => ({
+          id: item.id,
+          name: version.payload.name,
+        }))}
+        values={amounts}
+        onChange={(id, value) =>
+          setAmounts((current) => ({ ...current, [id]: value }))
+        }
+      />
+      <AmountList
+        label='Already set aside for bills'
+        rows={bills.map(({ item, version }) => ({
+          id: item.id,
+          name: version.payload.name,
+        }))}
+        values={amounts}
+        onChange={(id, value) =>
+          setAmounts((current) => ({ ...current, [id]: value }))
+        }
+      />
+      {error && (
+        <p className='text-destructive text-sm' role='alert'>
+          {error}
+        </p>
+      )}
+      <ModalFooterActions
+        note={note}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={requestClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || note !== null}
+            onClick={() => void save()}
+          >
+            Save
+          </Button>
+        }
+      />
+    </div>
+  );
+
+  if (isInline) return content;
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title='Where things stand'>
-      <div className='grid gap-4'>
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>As of</p>
-          <Input
-            type='date'
-            variant='outline'
-            aria-label='As of'
-            max={toDateInputValue(today)}
-            value={date}
-            onChange={(event) => setDate(event.target.value)}
-          />
-        </div>
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>Money on hand</p>
-          <MoneyInput
-            variant='outline'
-            ariaLabel='Money on hand'
-            value={money}
-            onChange={setMoney}
-            placeholder='What you have to plan with'
-          />
-        </div>
-        <AmountList
-          label='What each goal holds'
-          rows={goals.map(({ item, version }) => ({
-            id: item.id,
-            name: version.payload.name,
-          }))}
-          values={amounts}
-          onChange={(id, value) =>
-            setAmounts((current) => ({ ...current, [id]: value }))
-          }
-        />
-        <AmountList
-          label='Already set aside for bills'
-          rows={bills.map(({ item, version }) => ({
-            id: item.id,
-            name: version.payload.name,
-          }))}
-          values={amounts}
-          onChange={(id, value) =>
-            setAmounts((current) => ({ ...current, [id]: value }))
-          }
-        />
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        <ModalFooterActions
-          note={note}
-          cancelAction={
-            <Button
-              type='button'
-              variant='secondary'
-              onClick={onClose}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-          }
-          rightActions={
-            <Button
-              type='button'
-              loading={isSaving}
-              disabled={isSaving || note !== null}
-              onClick={() => void save()}
-            >
-              Save
-            </Button>
-          }
-        />
-      </div>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title='Where things stand'
+      actions={<ValuesEyeButton />}
+    >
+      {content}
     </FormSheet>
   );
 }

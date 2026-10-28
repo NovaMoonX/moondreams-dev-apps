@@ -1,6 +1,7 @@
 import type {
   BILL_DRAFT_CADENCES,
   DRAFT_TIE_KEYS,
+  CALENDAR_PERIODS,
   FUNDING_CADENCES,
   PAIRING_DRAFT_CADENCES,
 } from '@apps/runway/constants';
@@ -21,6 +22,7 @@ import { allocate, percentOf, percentShares } from './money';
 import {
   countFundedDays,
   fundedInWindow,
+  getHeldForPayment,
   NO_PROGRESS,
   sumFunded,
   type BillProgressInput,
@@ -28,10 +30,13 @@ import {
 } from './progress';
 import { planGoalContributions } from './pace';
 import { effectiveStance, pick } from './stance';
-import { occurrences, selectFundedDays } from './schedule';
+import { getCalendarCents } from './calendar';
+import { occurrences, selectRuleDays } from './schedule';
+import { matchMovedDates } from './moved';
 
 export type DraftCadence =
   | (typeof FUNDING_CADENCES)[number]
+  | (typeof CALENDAR_PERIODS)[number]
   | (typeof BILL_DRAFT_CADENCES)[number]
   | (typeof PAIRING_DRAFT_CADENCES)[number];
 export type DraftTieKey = (typeof DRAFT_TIE_KEYS)[number];
@@ -49,6 +54,14 @@ export interface DraftDayInput {
     payLine: readonly Pairing[];
     source: readonly Pairing[];
   };
+}
+
+/** An income day a rule counts over. */
+export interface DraftIncomeDay {
+  dayKey: string;
+  on: number;
+  moneyCents?: Cents;
+  sourceId?: string | null;
 }
 
 export interface DraftEnvelopeInput {
@@ -139,6 +152,7 @@ export const compareDemands = (a: Demand, b: Demand) =>
   compareText(a.itemId, b.itemId);
 
 const cadenceCode = (cadence: FundingRule['cadence']): DraftCadence => {
+  if (cadence.kind === 'calendar') return cadence.period;
   if (cadence.kind === 'everyNth') return cadence.n === 2 ? 'every2' : 'every3';
   return cadence.kind === 'chosen' ? 'chosen' : 'everyIncomeDay';
 };
@@ -146,6 +160,7 @@ const cadenceCode = (cadence: FundingRule['cadence']): DraftCadence => {
 /** An exact amount, or a percentage of the day's money rounded down; a `rest` demand is sized when the pool is walked. */
 const getDemandCents = (funding: FundingRule, moneyCents: Cents) => {
   const { amount } = funding;
+  if (funding.cadence.kind === 'none') return 0;
   if (amount.kind === 'exact') return amount.cents;
   const result =
     amount.kind === 'percent' ? percentOf(moneyCents, amount.bps) : 0;
@@ -192,13 +207,14 @@ function sharePercentDemands(
 /** What each planned day owes: an envelope or goal asks for its amount on every day its cadence selects, counted over the plan-wide income days (a goal stops at its target), and a bill asks for its share of each payment. */
 export function buildDemands(
   days: readonly DraftDayInput[],
-  incomeDays: readonly { dayKey: string; on: number }[],
+  incomeDays: readonly DraftIncomeDay[],
   envelopes: readonly DraftEnvelopeInput[],
   bills: readonly DraftBillInput[] = [],
   horizon = 0,
   goals: readonly DraftGoalInput[] = [],
   dayMoney: ReadonlyMap<string, Cents> = new Map(),
   stance: Stance = 'conservative',
+  priorDays: readonly DraftIncomeDay[] = [],
 ): Demand[] {
   const planned = new Set(days.map((day) => day.dayKey));
   const moneyOf = (day: { dayKey: string; moneyCents?: Cents }) =>
@@ -207,8 +223,10 @@ export function buildDemands(
     .sort(compareDays)
     .map((day) => ({ ...day, moneyCents: moneyOf(day) }));
 
-  const envelopeDemands = envelopes.flatMap((envelope) =>
-    selectFundedDays(envelope.funding.cadence, chronological)
+  const envelopeDemands = envelopes.flatMap((envelope) => {
+    const funded = selectRuleDays(envelope.funding, chronological);
+    const calendar = getCalendarCents(envelope.funding, funded, priorDays);
+    return funded
       .filter((day) => planned.has(day.dayKey))
       .map((day): Demand => ({
         dayKey: day.dayKey,
@@ -217,15 +235,17 @@ export function buildDemands(
         dueBeforeNext: false,
         orderIndex: envelope.orderIndex,
         createdAt: envelope.createdAt,
-        cents: getDemandCents(envelope.funding, moneyOf(day)),
+        cents: calendar
+          ? (calendar.get(day.dayKey) ?? 0)
+          : getDemandCents(envelope.funding, moneyOf(day)),
         cadence: cadenceCode(envelope.funding.cadence),
         bill: null,
         ask: getAsk(envelope.funding),
         capCents: null,
-      })),
-  );
+      }));
+  });
   const goalDemands = goals.flatMap((goal) =>
-    planGoalContributions(goal, chronological)
+    planGoalContributions(goal, chronological, priorDays)
       .filter(({ day }) => planned.has(day.dayKey))
       .map(({ day, cents }): Demand => ({
         dayKey: day.dayKey,
@@ -301,6 +321,8 @@ export interface BillPayment {
   fundedCents: Cents;
   /** Confirmed days that set money aside for it. */
   fundedDays: number;
+  /** What marking it paid today would use from what the bill holds, money set aside after its due date included; `fundedCents` when no day is given. */
+  heldNowCents: Cents;
   /** The mark that paid it, or null while it is unpaid; a paid payment asks nothing more. */
   paid: PaidPayment | null;
 }
@@ -315,8 +337,24 @@ export function planBillPayments(
   chronological: readonly IncomeDayRef[],
   horizon: number,
   stance: Stance = 'conservative',
-  options: { firstDayOn?: number } = {},
+  options: {
+    firstDayOn?: number;
+    today?: DateOnly;
+    startDate?: DateOnly | null;
+  } = {},
 ): BillPayment[] {
+  const getHeldNow = (
+    dueOn: DateOnly,
+    fundedCents: Cents,
+    paid: PaidPayment | null,
+  ) =>
+    options.today === undefined || paid !== null
+      ? fundedCents
+      : getHeldForPayment(
+          progress,
+          { dueOn, amountCents, paidOn: options.today },
+          options.startDate ?? null,
+        );
   const progress = bill.progress ?? NO_PROGRESS;
   const billStance = effectiveStance(stance, bill.stanceOverride);
   const amountCents = pick(billStance, bill.amount, 'expense');
@@ -334,11 +372,20 @@ export function planBillPayments(
     bill.schedule.anchor ?? 0,
     horizon,
   );
+  const moved = matchMovedDates(
+    progress.paid.map((entry) => entry.dueOn),
+    dues,
+  );
+  const paidByDue = new Map(
+    [...progress.paid]
+      .reverse()
+      .map((entry) => [moved.get(entry.dueOn) ?? entry.dueOn, entry]),
+  );
   if (bill.fundedBy.kind === 'chosen') {
     const chosen = new Set(bill.fundedBy.dayKeys);
     const days = chronological.filter((day) => chosen.has(day.dayKey));
     return dues.slice(0, 1).map((dueOn) => {
-      const paid = progress.paid.find((entry) => entry.dueOn === dueOn) ?? null;
+      const paid = paidByDue.get(dueOn) ?? null;
       const fundedCents = sumFunded(progress.funded);
       const shares = allocate(
         paid ? 0 : Math.max(0, amountCents - fundedCents),
@@ -354,14 +401,12 @@ export function planBillPayments(
           : days.map((day, index) => ({ day, cents: shares[index] })),
         fundedCents,
         fundedDays: countFundedDays(progress.funded),
+        heldNowCents: getHeldNow(dueOn, fundedCents, paid),
         paid,
       };
     });
   }
   const ordered = isInDayOrder(chronological);
-  const paidByDue = new Map(
-    [...progress.paid].reverse().map((entry) => [entry.dueOn, entry]),
-  );
   const first = getFirstNeeded(dues, options.firstDayOn);
   const result = dues.slice(first).map((dueOn, offset): BillPayment => {
     const index = first + offset;
@@ -391,6 +436,7 @@ export function planBillPayments(
           })),
       fundedCents,
       fundedDays: countFundedDays(confirmed),
+      heldNowCents: getHeldNow(dueOn, fundedCents, paid),
       paid,
     };
   });

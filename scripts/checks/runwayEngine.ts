@@ -37,13 +37,30 @@ import {
   type ClosingEntries,
   type ClosingState,
 } from '../../src/apps/runway/engine/closings.ts';
+import {
+  getPeriodIndex,
+  getPeriodStart,
+  spreadCalendarAmount,
+} from '../../src/apps/runway/engine/calendar.ts';
+import { describeFunding } from '../../src/apps/runway/utils/fundingText.ts';
+import type { OpenDay, Pairing } from '../../src/apps/runway/types.ts';
+import type { DraftDayInput } from '../../src/apps/runway/engine/demands.ts';
+import type { ComingDay } from '../../src/apps/runway/engine/comingDays.ts';
+import {
+  matchMovedDates,
+  planOverrideCarry,
+} from '../../src/apps/runway/engine/moved.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
   describePurchaseRemoval,
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
-import { describeHoldsChange } from '../../src/apps/runway/utils/lookaheadText.ts';
+import {
+  describeHoldsChange,
+  isSameLookahead,
+  sortProblems,
+} from '../../src/apps/runway/utils/lookaheadText.ts';
 import type { Lookahead } from '../../src/apps/runway/engine/lookahead.ts';
 import {
   getLineEffect,
@@ -57,9 +74,11 @@ import {
   toChosenLines,
 } from '../../src/apps/runway/engine/purchases.ts';
 import type {
+  FundingRule,
   OpenMove,
   OpenPurchase,
   OpenRecord,
+  RecordLine,
 } from '../../src/apps/runway/types.ts';
 import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
 import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
@@ -82,6 +101,9 @@ import { describeLineReason } from '../../src/apps/runway/utils/draftText.ts';
 import {
   capEnding,
   findReachedEnding,
+  getHeldReleaseDay,
+  getLaterReleaseDay,
+  readHeldReleasedOn,
 } from '../../src/apps/runway/engine/endings.ts';
 import {
   findReturning,
@@ -94,8 +116,12 @@ import {
 } from '../../src/apps/runway/engine/comingDays.ts';
 import {
   buildCorrection,
+  getCorrectionCover,
+  getCorrectionGap,
   getCorrectionId,
+  getDayCover,
   getEffectiveSplit,
+  getFreeForCorrection,
   getEffectiveSplits,
   getRecordChain,
   keepTicks,
@@ -110,7 +136,9 @@ import {
 import {
   applyLineEdits,
   getLineDifferences,
+  getCoverable,
   getRemainder,
+  isWithinCover,
   sumLines,
   suggestShortfall,
 } from '../../src/apps/runway/engine/differences.ts';
@@ -152,6 +180,7 @@ import {
   getPaidMoveId,
   getUndoMoveId,
 } from '../../src/apps/runway/engine/progress.ts';
+import { getHeldForPayment } from '../../src/apps/runway/engine/progress.ts';
 import {
   getPace,
   planGoalContributions,
@@ -1805,7 +1834,7 @@ const version = (
 
   // Words and legacy shapes.
   assert.equal(describeAmount(percent(1_250), 'Main job'), '12.5% of Main job');
-  assert.equal(describeAmount(percent(1_000)), "10% of the day's money");
+  assert.equal(describeAmount(percent(1_000)), '10% of each pay');
   assert.equal(describeAmount(rest), 'the rest');
   assert.deepEqual(
     normalizeFunding({
@@ -3937,7 +3966,7 @@ const version = (
     };
     assert.ok(
       describeLineReason(fromMain, { main: 'Main job' }).includes(
-        'funded from Main job',
+        'paid from Main job',
       ),
       'a line names the source that pays it',
     );
@@ -3957,7 +3986,7 @@ const version = (
         { main: 'Main job' },
         'Vacation fund',
         'side',
-      ).includes('funded from Main job'),
+      ).includes('paid from Main job'),
       'a line paid by another source still names it',
     );
   }
@@ -4769,6 +4798,74 @@ const version = (
     'a short Want bill due after the next income day is not yet a gap',
   );
 
+  // Every short line on an income day is its own problem, soonest first, ties by priority, and the count agrees with the list.
+  const shortLine = (
+    itemId: string,
+    tier: 'must' | 'should' | 'want',
+    shortBy: number,
+  ) =>
+    ({
+      lineId: itemId,
+      dayKey: 'x',
+      itemId,
+      tier,
+      bill: { dueOn: today + DAY_MS, totalCents: 1_000, ranged: null },
+      cents: 0,
+      shortBy,
+    }) as never;
+  const shortNames = {
+    rent: { name: 'Rent' },
+    groc: { name: 'Groceries' },
+    gas: { name: 'Gas' },
+  };
+  const shortsOn = (lines: ReturnType<typeof shortLine>[]) =>
+    run([day(today), day(today + 7 * DAY_MS)], {
+      draftOf: (entry) => ({
+        draft: emptyDraft(entry.on === today ? lines : []),
+        names: shortNames,
+      }),
+    });
+  const one = shortsOn([shortLine('groc', 'must', 4_000)]);
+  assert.deepEqual(
+    one.problems.map((problem) => problem.kind === 'short' && problem.name),
+    ['Groceries'],
+    'one short line is one problem',
+  );
+  const two = shortsOn([
+    shortLine('groc', 'should', 4_000),
+    shortLine('rent', 'must', 3_000),
+  ]);
+  assert.deepEqual(
+    two.problems.map((problem) => problem.kind === 'short' && problem.name),
+    ['Rent', 'Groceries'],
+    'two short lines on one day are two problems, the higher priority first',
+  );
+  const three = shortsOn([
+    shortLine('gas', 'must', 1_000),
+    shortLine('groc', 'must', 4_000),
+    shortLine('rent', 'should', 3_000),
+  ]);
+  assert.deepEqual(
+    three.problems.map((problem) => problem.kind === 'short' && problem.name),
+    ['Gas', 'Groceries', 'Rent'],
+    'three short lines are three problems, ties by priority then name',
+  );
+  assert.equal(
+    three.problems.length,
+    3,
+    'the summary count and the list are the same number',
+  );
+  assert.equal(
+    three.holdsThrough,
+    null,
+    'a plan short on its first day holds through nothing',
+  );
+  assert.equal(
+    Object.keys(three.shortByDay).length,
+    1,
+    'a day with three short lines has one first line',
+  );
+
   // A change that starts in two months shows early, and leaves every earlier draft alone.
   const planItems: PlanItemDoc[] = [
     item('pay', 1, { kind: 'payLine', parentId: 'src' }),
@@ -5082,6 +5179,49 @@ const version = (
   assert.ok(timings[2] < 1_500, `50-envelope lookahead median ${timings[2]}ms`);
   console.log(
     `runway engine: 50-envelope lookahead over ${buildComingDays(manyItems, manyVersions, today).length} days median ${timings[2].toFixed(0)} ms, worst ${timings[4].toFixed(0)} ms`,
+  );
+
+  const calendarVersions: OpenVersion[] = [
+    ...baseVersions.filter((entry) => entry.kind !== 'envelope'),
+    ...Array.from(
+      { length: 50 },
+      (_, i): OpenVersion =>
+        ({
+          id: `vc${i}`,
+          itemId: `e${i}`,
+          kind: 'envelope',
+          createdAt: i + 2,
+          effectiveFrom: today,
+          effectiveUntil: null,
+          changeId: 'c',
+          payload: {
+            name: `Envelope ${i}`,
+            emoji: null,
+            priority: 'must',
+            orderIndex: i,
+            funding: {
+              amount: { kind: 'exact', cents: 20_000 + i },
+              cadence: {
+                kind: 'calendar',
+                period: i < 25 ? 'monthly' : 'weekly',
+                startsOn: today - 3 * DAY_MS,
+              },
+            },
+          },
+        }) as unknown as OpenVersion,
+    ),
+  ];
+  const calendarTimings = Array.from({ length: 5 }, () => {
+    const started = performance.now();
+    lookaheadOf(manyItems, calendarVersions);
+    return performance.now() - started;
+  }).sort((a, b) => a - b);
+  assert.ok(
+    calendarTimings[2] < Math.max(250, timings[2] * 4),
+    `25 monthly and 25 weekly calendar envelopes: lookahead median ${calendarTimings[2]}ms against ${timings[2]}ms for every-income-day rules`,
+  );
+  console.log(
+    `runway engine: 25 monthly and 25 weekly calendar envelopes, lookahead over ${buildComingDays(manyItems, calendarVersions, today).length} days median ${calendarTimings[2].toFixed(0)} ms, worst ${calendarTimings[4].toFixed(0)} ms (every-income-day rules ${timings[2].toFixed(0)} ms)`,
   );
 
   const fiveYearsAgo = today - 1_826 * DAY_MS;
@@ -6678,17 +6818,44 @@ const version = (
       name,
       shortBy,
       isBill: true,
+      tier: 'must',
     }) as const;
   const day = utc(2026, 10, 29);
+  const rentShort = short(utc(2026, 10, 30), 'Rent', 22000);
+  assert.equal(
+    isSameLookahead(
+      look(day, [rentShort]),
+      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+    ),
+    false,
+    'a change that makes a second item short is not the same plan',
+  );
+  const twoShorts = sortProblems([
+    short(utc(2026, 11, 2), 'Car', 5000),
+    rentShort,
+    short(utc(2026, 10, 30), 'Gas', 100),
+  ]);
+  assert.deepEqual(
+    twoShorts.map((problem) => problem.name),
+    ['Gas', 'Rent', 'Car'],
+    'problems sort by date, then name, the one order everywhere',
+  );
+  assert.ok(
+    describeHoldsChange(
+      look(day, [rentShort]),
+      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+    )?.includes('1 more item needs a look'),
+    'the sentence counts the other problems',
+  );
   const text = describeHoldsChange(
     look(day, [short(utc(2026, 10, 30), 'Rent', 22000)]),
     look(day, [short(utc(2026, 10, 30), 'Car', 5000)]),
   );
   assert.ok(
-    text?.startsWith('Your plan still holds through') &&
-      text.includes('With this change') &&
+    text?.startsWith('With this change') &&
+      !text.includes('holds through') &&
       !text.includes('instead of'),
-    'a change that leaves the same last day but a new first problem never says the plan holds through a day instead of that day',
+    'a change that leaves the same last day but a new first problem says only the problem, never that the plan holds through a day',
   );
   assert.ok(
     describeHoldsChange(look(day), look(utc(2026, 11, 12)))?.includes(
@@ -6696,6 +6863,1610 @@ const version = (
     ),
     'a later last day reads as a move',
   );
+}
+
+// Calendar funding: a period's amount is shared out over the income days that fall in it.
+{
+  type Period = Parameters<typeof spreadCalendarAmount>[0]['period'];
+  type Pay = { dayKey: string; on: number; sourceId?: string | null };
+  const spread = (
+    period: Period,
+    cents: number,
+    days: Pay[],
+    options: { startsOn?: number | null; prior?: Pay[] } = {},
+  ) => [
+    ...spreadCalendarAmount(
+      { period, cents, startsOn: options.startsOn ?? null },
+      days,
+      options.prior ?? [],
+    ).entries(),
+  ];
+  const pay = (key: string, on: number): Pay => ({ dayKey: key, on });
+
+  assert.deepEqual(
+    spread('monthly', 60_000, [
+      pay('a', utc(2026, 6, 5)),
+      pay('b', utc(2026, 6, 19)),
+    ]),
+    [
+      ['a', 30_000],
+      ['b', 30_000],
+    ],
+    'a monthly amount over two paydays asks half of each',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_000, [
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+      pay('c', utc(2026, 1, 30)),
+    ]),
+    [
+      ['a', 20_000],
+      ['b', 20_000],
+      ['c', 20_000],
+    ],
+    'three paydays in a month split it three ways',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_001, [
+      pay('c', utc(2026, 1, 30)),
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+    ]).sort(),
+    [
+      ['a', 20_001],
+      ['b', 20_000],
+      ['c', 20_000],
+    ],
+    'the odd cent goes to the lowest id, whatever order the days arrive in',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_000, [
+      pay('a', utc(2026, 1, 15)),
+      pay('b', utc(2026, 3, 10)),
+    ]),
+    [
+      ['a', 60_000],
+      ['b', 120_000],
+    ],
+    'a month with no payday passes its amount to the next payday',
+  );
+  assert.deepEqual(
+    spread('weekly', 10_000, [
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+      pay('c', utc(2026, 1, 30)),
+    ]),
+    [
+      ['a', 10_000],
+      ['b', 20_000],
+      ['c', 20_000],
+    ],
+    'a weekly amount over a biweekly payday asks two weeks of it each time after the first',
+  );
+  assert.deepEqual(
+    spread('every2Weeks', 50_000, [
+      pay('a', utc(2026, 1, 2)),
+      pay('b', utc(2026, 1, 16)),
+      pay('c', utc(2026, 1, 30)),
+    ]),
+    [
+      ['a', 50_000],
+      ['b', 50_000],
+      ['c', 50_000],
+    ],
+    'a two-week amount over a biweekly payday asks the whole amount each time',
+  );
+  assert.deepEqual(
+    spread('yearly', 120_000, [
+      pay('a', utc(2026, 6, 5)),
+      pay('b', utc(2026, 12, 4)),
+      pay('c', utc(2027, 1, 1)),
+    ]),
+    [
+      ['a', 60_000],
+      ['b', 60_000],
+      ['c', 120_000],
+    ],
+    'a yearly amount is shared over the paydays of its calendar year',
+  );
+  assert.deepEqual(
+    spread('twiceMonthly', 30_000, [
+      pay('a', utc(2026, 6, 15)),
+      pay('b', utc(2026, 6, 16)),
+      pay('c', utc(2026, 6, 30)),
+    ]),
+    [
+      ['a', 30_000],
+      ['b', 15_000],
+      ['c', 15_000],
+    ],
+    'twice a month splits at the 15th and the 16th',
+  );
+  assert.deepEqual(
+    spread(
+      'monthly',
+      60_000,
+      [
+        pay('a', utc(2026, 6, 5)),
+        pay('b', utc(2026, 6, 19)),
+        pay('c', utc(2026, 7, 3)),
+        pay('d', utc(2026, 7, 17)),
+      ],
+      { startsOn: utc(2026, 6, 10) },
+    ),
+    [
+      ['b', 60_000],
+      ['c', 30_000],
+      ['d', 30_000],
+    ],
+    'a rule that starts mid-period asks its whole amount of the days left and leaves earlier days alone',
+  );
+  assert.deepEqual(
+    spread('monthly', 60_000, [pay('b', utc(2026, 6, 19))], {
+      prior: [pay('a', utc(2026, 6, 5))],
+    }),
+    [['b', 30_000]],
+    'an earlier payday of the period takes its share first',
+  );
+
+  const zone = process.env.TZ;
+  process.env.TZ = 'America/Los_Angeles';
+  const march1 = utc(2026, 3, 1);
+  assert.notEqual(
+    getPeriodIndex('monthly', march1),
+    getPeriodIndex('monthly', march1 - DAY_MS),
+    'a date-only first of the month is in its own month west of UTC',
+  );
+  assert.equal(getPeriodStart('monthly', utc(2026, 3, 20)), march1);
+  assert.equal(getPeriodIndex('yearly', utc(2027, 1, 1)), 2027);
+  assert.equal(getPeriodStart('weekly', utc(2026, 1, 2)), utc(2025, 12, 29));
+  assert.equal(
+    getPeriodIndex('twiceMonthly', utc(2026, 6, 15)) + 1,
+    getPeriodIndex('twiceMonthly', utc(2026, 6, 16)),
+    'the 15th and the 16th are different halves west of UTC',
+  );
+  if (zone === undefined) delete process.env.TZ;
+  else process.env.TZ = zone;
+
+  const calendarRule = (
+    cents: number,
+    period: Period = 'monthly',
+    sourceId?: string,
+  ): FundingRule => ({
+    amount: { kind: 'exact', cents },
+    cadence: { kind: 'calendar', period, startsOn: null },
+    ...(sourceId === undefined ? {} : { sourceId }),
+  });
+  const pays = [
+    { dayKey: 'k1', on: utc(2026, 6, 5), sourceId: 'src-a' },
+    { dayKey: 'k2', on: utc(2026, 6, 19), sourceId: 'src-b' },
+  ];
+  const plannedDays = pays.map((p) => ({
+    ...p,
+    amount: { lowCents: 100_000, highCents: 100_000 },
+  }));
+  const envelopeOf = (funding: FundingRule) => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must' as const,
+    orderIndex: 1,
+    funding,
+  });
+  assert.deepEqual(
+    buildDemands(plannedDays, pays, [envelopeOf(calendarRule(60_000))]).map(
+      (d) => [d.dayKey, d.cents, d.cadence, d.ask.kind],
+    ),
+    [
+      ['k1', 30_000, 'monthly', 'exact'],
+      ['k2', 30_000, 'monthly', 'exact'],
+    ],
+    'a monthly envelope asks its share on each payday and says which cadence it is',
+  );
+  assert.deepEqual(
+    buildDemands(plannedDays, pays, [
+      envelopeOf(calendarRule(60_000, 'monthly', 'src-a')),
+    ]).map((d) => [d.dayKey, d.cents]),
+    [['k1', 60_000]],
+    "a rule that names a source counts only that source's pays",
+  );
+  assert.deepEqual(
+    buildDemands(plannedDays, pays, [
+      envelopeOf({
+        amount: { kind: 'exact', cents: 5_000 },
+        cadence: { kind: 'everyIncomeDay' },
+      }),
+    ]).map((d) => [d.dayKey, d.cents, d.cadence]),
+    [
+      ['k1', 5_000, 'everyIncomeDay'],
+      ['k2', 5_000, 'everyIncomeDay'],
+    ],
+    'a rule written before calendar cadences asks per income day as it did',
+  );
+
+  const goalDays = [
+    { dayKey: 'k1', on: utc(2026, 6, 5), moneyCents: 100_000 },
+    { dayKey: 'k2', on: utc(2026, 6, 19), moneyCents: 100_000 },
+    { dayKey: 'k3', on: utc(2026, 7, 3), moneyCents: 100_000 },
+  ];
+  assert.deepEqual(
+    planGoalContributions(
+      { targetCents: 70_000, heldCents: 0, funding: calendarRule(60_000) },
+      goalDays,
+    ).map((part) => [part.day.dayKey, part.cents]),
+    [
+      ['k1', 30_000],
+      ['k2', 30_000],
+      ['k3', 10_000],
+    ],
+    'a calendar goal stops at its target',
+  );
+  const idle = {
+    targetCents: 70_000,
+    targetDate: utc(2026, 8, 1),
+    heldCents: 0,
+    funding: {
+      amount: { kind: 'exact', cents: 0 },
+      cadence: { kind: 'none' },
+    } as FundingRule,
+  };
+  assert.deepEqual(
+    planGoalContributions(idle, goalDays),
+    [],
+    'a goal that is not being added to asks nothing',
+  );
+  const idlePace = getPace(idle, goalDays);
+  assert.equal(idlePace.state, null, 'it has no pace state');
+  assert.equal(idlePace.reachedOn, null, 'and never reaches its target');
+  assert.deepEqual(
+    buildDemands(goalDays, goalDays, [], [], 0, [
+      { ...idle, itemId: 'g', createdAt: 1, priority: 'should', orderIndex: 1 },
+    ]),
+    [],
+    'and the draft has no line for it',
+  );
+  const calendarPace = getPace(
+    { ...idle, funding: calendarRule(60_000) },
+    goalDays.slice(1),
+    [goalDays[0]],
+  );
+  assert.equal(
+    calendarPace.plannedByDateCents,
+    70_000,
+    'a calendar goal counts an earlier payday of the period when it works out the pace',
+  );
+  const lateStart: FundingRule = {
+    amount: { kind: 'exact', cents: 60_000 },
+    cadence: {
+      kind: 'calendar',
+      period: 'monthly',
+      startsOn: utc(2026, 11, 10),
+    },
+  };
+  const novDays = [
+    { dayKey: 'n1', on: utc(2026, 11, 1), moneyCents: 100_000 },
+    { dayKey: 'n2', on: utc(2026, 11, 20), moneyCents: 100_000 },
+  ];
+  assert.deepEqual(
+    buildDemands(novDays, novDays, [envelopeOf(lateStart)]).map((d) => [
+      d.dayKey,
+      d.cents,
+    ]),
+    [
+      ['n1', 0],
+      ['n2', 60_000],
+    ],
+    'an income day before a calendar rule starts asks nothing, not the full amount',
+  );
+  assert.deepEqual(
+    planGoalContributions(
+      { targetCents: 90_000, heldCents: 0, funding: lateStart },
+      novDays,
+    ).map((part) => [part.day.dayKey, part.cents]),
+    [['n2', 60_000]],
+    'and a goal on that rule adds nothing on it',
+  );
+  const farDays = [
+    { dayKey: 'f0', on: utc(2026, 1, 5) },
+    { dayKey: 'f1', on: utc(2026, 1, 5) + 1_500 * 7 * DAY_MS },
+  ];
+  const farSpread = spreadCalendarAmount(
+    { period: 'weekly', startsOn: null, cents: 10_000 },
+    farDays,
+  );
+  assert.deepEqual(
+    farDays.map((day) => farSpread.get(day.dayKey)),
+    [10_000, 15_000_000],
+    'a span of 1,500 periods is walked to its last day, not cut at 1,200, and the empty periods pass their amounts on',
+  );
+  assert.equal(describeFunding(calendarRule(60_000)), '$600.00 a month');
+  assert.equal(describeFunding(idle.funding), 'no contribution');
+  assert.equal(
+    describeFunding({
+      amount: { kind: 'exact', cents: 5_000 },
+      cadence: { kind: 'everyIncomeDay' },
+    }),
+    '$50.00 every income day',
+    'a legacy rule reads as it did',
+  );
+}
+
+// B1 (round 7): a correction, a schedule move and a pairing to an item that went away.
+{
+  const start = Date.UTC(2026, 0, 1);
+  const on = (days: number) => start + days * DAY_MS;
+  const kinds = { rent: 'bill' } as const;
+  const startMoney: OpenMove = {
+    id: 'start_money',
+    kind: 'start',
+    date: start,
+    refId: null,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: 0, holding: 'money' },
+  };
+  const rentLine = (dayId: string, cents: number) => ({
+    lineId: dayId + ':rent',
+    itemId: 'rent',
+    name: 'Rent',
+    emoji: null,
+    tier: 'must' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const confirmedDay = (dayId: string, arrived: number, rent: number) =>
+    ({
+      id: dayId + '_confirmed',
+      dayId,
+      createdAt: 2,
+      kind: 'confirmed',
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative',
+        arrivedCents: arrived,
+        expectedCents: arrived,
+        freeToSpendCents: arrived - rent,
+        differences: [],
+        lines: [rentLine(dayId, rent)],
+      },
+    }) satisfies OpenRecord;
+  const corrected = (dayId: string, arrived: number, rent: number) =>
+    ({
+      id: dayId + '_confirmed_corrected',
+      dayId,
+      createdAt: 9,
+      kind: 'correction',
+      supersedesId: dayId + '_confirmed',
+      payload: {
+        ...buildCorrection({
+          base: toSplit(confirmedDay(dayId, arrived, 100_000)),
+          arrivedCents: arrived,
+          edits: { [dayId + ':rent']: rent },
+          note: null,
+        }),
+      },
+    }) satisfies OpenRecord;
+  const paidMove = (
+    id: string,
+    dueOn: number,
+    paidOn: number,
+    fromFreeCents: number,
+  ): OpenMove => ({
+    id,
+    kind: 'billPaid',
+    date: dueOn,
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: { amountCents: 100_000, paidOn, fromFreeCents },
+  });
+  const days = new Map([
+    ['d1', on(1)],
+    ['d2', on(10)],
+  ]);
+  const balancesOf = (records: OpenRecord[], moves: OpenMove[]) =>
+    deriveBalances({
+      startDate: start,
+      moves: [startMoney, ...moves],
+      records,
+      arrivedOn: days,
+      expectedOn: days,
+      kinds,
+    });
+  const paid1 = paidMove('paid_rent_1', on(5), on(2), 0);
+  const before = balancesOf([confirmedDay('d1', 150_000, 100_000)], [paid1]);
+  assert.equal(
+    before.freeToSpendCents,
+    50_000,
+    'B1: paying the rent leaves the day’s leftover',
+  );
+  const records = [
+    confirmedDay('d1', 150_000, 100_000),
+    corrected('d1', 150_000, 60_000),
+  ];
+  const after = balancesOf(records, [paid1]);
+  assert.equal(
+    after.assignedToBillsCents,
+    0,
+    'B1: lowering the rent line of a paid payment never leaves the bill holding less than nothing',
+  );
+  assert.equal(
+    after.freeToSpendCents,
+    50_000,
+    'B1: the cut paid part of the rent from Free to spend, so Free to spend is what the money left after the payment, not up by the cut',
+  );
+  assert.equal(
+    after.freeToSpendCents,
+    after.moneyOnHandCents - after.assignedToBillsCents,
+    'B1: and Free to spend is still money on hand less what is held',
+  );
+  const progress = deriveBillProgress(
+    records,
+    days,
+    [startMoney, paid1],
+    start,
+    null,
+  );
+  assert.deepEqual(
+    progress.rent.paid.map((payment) => payment.fromFreeCents),
+    [40_000],
+    'B1: the paid mark says the $400 the correction took off came from Free to spend',
+  );
+  const twoDays = [...records, confirmedDay('d2', 150_000, 50_000)];
+  assert.equal(
+    balancesOf(twoDays, [paid1]).assignedToBillsCents,
+    50_000,
+    'B1: what a later day sets aside for the next payment stays held, not used to cover the earlier cut',
+  );
+  const paid2 = paidMove('paid_rent_2', on(35), on(30), 50_000);
+  assert.equal(
+    balancesOf(twoDays, [paid1, paid2]).assignedToBillsCents,
+    0,
+    'B1: and the next payment uses it up',
+  );
+  assert.equal(
+    balancesOf(
+      [confirmedDay('d1', 150_000, 100_000), corrected('d1', 150_000, 120_000)],
+      [paid1],
+    ).assignedToBillsCents,
+    20_000,
+    'B1: raising the line of a paid payment holds the extra for the bill',
+  );
+  const closed = buildClosing('2026-01', null, {
+    startDate: start,
+    days: [{ id: 'd1', expectedOn: on(1), arrivedOn: on(1) }],
+    records,
+    moves: [paid1],
+    purchases: [],
+    billIds: new Set(['rent']),
+  });
+  const fromClosing = deriveBalances({
+    startDate: start,
+    moves: [startMoney],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closed,
+  });
+  assert.deepEqual(
+    [fromClosing.freeToSpendCents, fromClosing.assignedToBillsCents],
+    [after.freeToSpendCents, after.assignedToBillsCents],
+    'B1: a closing over the corrected day and the payment gives the same figures as the ledger',
+  );
+}
+
+// B1 (round 7): a moved schedule keeps what was paid and what the person chose for a day.
+{
+  const monthlyOn = (anchor: number): Schedule => ({
+    kind: 'monthly',
+    anchor,
+    monthDays: [new Date(anchor).getUTCDate()],
+  });
+  const incomeDays = Array.from({ length: 6 }, (_, index) => ({
+    dayKey: 'pay_' + index,
+    on: utc(2026, 10, 25) + index * 14 * DAY_MS,
+  }));
+  const paidNov1 = {
+    moveId: 'paid_rent_20261101',
+    dueOn: utc(2026, 11, 1),
+    amountCents: 100_000,
+    paidOn: utc(2026, 10, 28),
+    fromFreeCents: 0,
+  };
+  const paidOct1 = {
+    moveId: 'paid_rent_20261001',
+    dueOn: utc(2026, 10, 1),
+    amountCents: 100_000,
+    paidOn: utc(2026, 10, 1),
+    fromFreeCents: 0,
+  };
+  const rentOn = (anchor: number): DraftBillInput => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amount: { lowCents: 100_000, highCents: 100_000 },
+    stanceOverride: null,
+    schedule: monthlyOn(anchor),
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: { funded: [], paid: [paidOct1, paidNov1] },
+  });
+  const paidDues = (anchor: number) =>
+    planBillPayments(rentOn(anchor), incomeDays, utc(2027, 2, 1))
+      .filter((payment) => payment.paid !== null)
+      .map((payment) => [toDayStamp(payment.dueOn), payment.paid?.moveId]);
+  assert.deepEqual(
+    paidDues(utc(2026, 10, 1)),
+    [
+      ['20261001', 'paid_rent_20261001'],
+      ['20261101', 'paid_rent_20261101'],
+    ],
+    'B1: a paid payment reads paid on its own due date',
+  );
+  assert.deepEqual(
+    paidDues(utc(2026, 10, 5)),
+    [
+      ['20261005', 'paid_rent_20261001'],
+      ['20261105', 'paid_rent_20261101'],
+    ],
+    'B1: moving the due date from the 1st to the 5th keeps each paid mark on its payment',
+  );
+  assert.deepEqual(
+    paidDues(utc(2026, 10, 28)),
+    [['20261028', 'paid_rent_20261101']],
+    'B1: moving it to the 28th takes the Nov 1 mark to Oct 28, the payment it became, and never marks a payment nobody paid',
+  );
+  assert.deepEqual(
+    [
+      ...matchMovedDates(
+        [utc(2026, 1, 1), utc(2026, 2, 1)],
+        [utc(2026, 5, 1), utc(2026, 6, 1)],
+      ),
+    ],
+    [],
+    'B1: a date far from every new one moves nowhere',
+  );
+  assert.deepEqual(
+    [...matchMovedDates([utc(2026, 11, 20)], [utc(2026, 11, 22)])],
+    [[utc(2026, 11, 20), utc(2026, 11, 22)]],
+    'B1: a one-time date moved two days follows to its new date',
+  );
+  assert.deepEqual(
+    [...matchMovedDates([utc(2026, 9, 1)], [utc(2026, 11, 22)])],
+    [],
+    'B1: but not from months away',
+  );
+
+  const comingOf = (dates: number[]): ComingDay[] =>
+    dates.map((on) => ({
+      dayKey: toDayKey('job', on),
+      payLineId: 'job',
+      sourceId: 'src',
+      on,
+      sourceName: 'Job',
+      payLineName: 'Job',
+      amount: { lowCents: 100_000, highCents: 100_000 },
+      stanceOverride: null,
+    }));
+  const biweeklyFrom = (first: number) =>
+    Array.from({ length: 4 }, (_, index) => first + index * 14 * DAY_MS);
+  const before = comingOf(biweeklyFrom(utc(2026, 11, 6)));
+  const after = comingOf(biweeklyFrom(utc(2026, 11, 7)));
+  const ownDay = (
+    on: number,
+    status: OpenDay['status'] = 'draft',
+  ): OpenDay => ({
+    id: toDayKey('job', on),
+    payLineId: 'job',
+    sourceId: 'src',
+    expectedOn: on,
+    arrivedOn: null,
+    confirmedAt: null,
+    status,
+    doneLineIds: [],
+    override: {
+      pairings: null,
+      holdResolutions: { rent: 'leaveShort' },
+      payloads: {},
+    },
+  });
+  const carry = planOverrideCarry([ownDay(utc(2026, 11, 20))], before, after);
+  assert.deepEqual(
+    carry.carried.map((entry) => [entry.from.id, entry.to.dayKey]),
+    [[toDayKey('job', utc(2026, 11, 20)), toDayKey('job', utc(2026, 11, 21))]],
+    'B1: a day the person changed moves its choices with it when its payday moves a day',
+  );
+  assert.deepEqual(carry.stranded, [], 'B1: and nothing is left behind');
+  const monthlyAfter = comingOf([utc(2026, 12, 15)]);
+  const lost = planOverrideCarry(
+    [ownDay(utc(2026, 11, 20))],
+    before,
+    monthlyAfter,
+  );
+  assert.deepEqual(
+    lost.stranded.map((day) => day.id),
+    [toDayKey('job', utc(2026, 11, 20))],
+    'B1: a day with no new date near it is listed as left behind, not dropped without a word',
+  );
+  assert.deepEqual(
+    planOverrideCarry([ownDay(utc(2026, 11, 20))], before, before),
+    { carried: [], stranded: [] },
+    'B1: a change that keeps the dates moves nothing',
+  );
+}
+
+// B1 (round 7): a pairing never sends a target more than it still needs.
+{
+  const on = utc(2026, 11, 6);
+  const payday = (pairings: DraftDayInput['pairings']): DraftDayInput => ({
+    dayKey: 'job_20261106',
+    sourceId: 'src',
+    on,
+    amount: { lowCents: 200_000, highCents: 200_000 },
+    pairings,
+  });
+  const goal = (heldCents: number): DraftGoalInput => ({
+    itemId: 'trip',
+    createdAt: 1,
+    priority: 'should',
+    orderIndex: 1,
+    funding: { amount: { kind: 'exact', cents: 0 }, cadence: { kind: 'none' } },
+    targetCents: 100_000,
+    heldCents,
+  });
+  const rent = (paid: boolean): DraftBillInput => ({
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amount: { lowCents: 120_000, highCents: 120_000 },
+    stanceOverride: null,
+    schedule: { kind: 'monthly', anchor: utc(2026, 11, 15), monthDays: [15] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: {
+      funded: [{ dayKey: 'old', on: utc(2026, 10, 25), cents: 30_000 }],
+      paid: paid
+        ? [
+            {
+              moveId: 'paid_rent_20261115',
+              dueOn: utc(2026, 11, 15),
+              amountCents: 120_000,
+              paidOn: utc(2026, 11, 1),
+              fromFreeCents: 90_000,
+            },
+          ]
+        : [],
+    },
+  });
+  const draftWith = (
+    pairing: Pairing,
+    goals: DraftGoalInput[],
+    bills: DraftBillInput[],
+  ) =>
+    buildDraft({
+      days: [payday({ day: null, payLine: [pairing], source: [] })],
+      plan: {
+        envelopes: [],
+        bills,
+        goals,
+        horizon: utc(2027, 6, 1),
+        incomeDays: [{ dayKey: 'job_20261106', on, moneyCents: 200_000 }],
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const toTrip: Pairing = {
+    targetItemId: 'trip',
+    amount: { kind: 'exact', cents: 50_000 },
+    topUpFromAnySource: false,
+  };
+  const lineOf = (draft: ReturnType<typeof buildDraft>, itemId: string) =>
+    draft.lines.find((line) => line.itemId === itemId)?.cents ?? 0;
+  const nearly = draftWith(toTrip, [goal(80_000)], []);
+  assert.equal(
+    lineOf(nearly, 'trip'),
+    20_000,
+    'B1: a $500 pairing to a goal $200 from its target sends $200',
+  );
+  assert.equal(
+    nearly.freeToSpend.cents,
+    180_000,
+    'B1: and the rest of the pay stays with the day',
+  );
+  assert.equal(
+    lineOf(draftWith(toTrip, [goal(100_000)], []), 'trip'),
+    0,
+    'B1: a goal at its target gets nothing from a pairing',
+  );
+  const toRent: Pairing = {
+    targetItemId: 'rent',
+    amount: { kind: 'exact', cents: 150_000 },
+    topUpFromAnySource: false,
+  };
+  assert.equal(
+    lineOf(draftWith(toRent, [], [rent(false)]), 'rent'),
+    90_000,
+    'B1: a pairing to a bill sends what its next payment still needs, not more',
+  );
+  assert.equal(
+    lineOf(draftWith(toRent, [], [rent(true)]), 'rent'),
+    0,
+    'B1: a pairing to a bill already marked paid sends nothing',
+  );
+  assert.equal(
+    lineOf(
+      draftWith({ ...toTrip, amount: { kind: 'rest' } }, [goal(80_000)], []),
+      'trip',
+    ),
+    20_000,
+    'B1: a pairing that takes the rest stops at what the goal needs',
+  );
+}
+
+// B1 (round 7): money held for an item that stopped for good is Free to spend again.
+{
+  const start = utc(2026, 1, 1);
+  const startOf = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: 'money' | 'goal' | 'bill',
+  ): OpenMove => ({
+    id,
+    kind: 'start',
+    date: start,
+    refId,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: cents, holding },
+  });
+  const input = {
+    startDate: start,
+    moves: [
+      startOf('m', null, 100_000, 'money'),
+      startOf('g', 'trip', 30_000, 'goal'),
+      startOf('b', 'rent', 20_000, 'bill'),
+    ],
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds: { trip: 'goal', rent: 'bill' } as const,
+  };
+  assert.equal(
+    deriveBalances(input).freeToSpendCents,
+    50_000,
+    'B1: a goal and a bill hold their money',
+  );
+  const archived = deriveBalances({
+    ...input,
+    releasedFrom: { trip: utc(2026, 3, 1) },
+    asOf: utc(2026, 3, 1),
+  });
+  assert.deepEqual(
+    [
+      archived.freeToSpendCents,
+      archived.assignedToGoalsCents,
+      archived.assignedByItem.trip,
+    ],
+    [80_000, 0, 30_000],
+    'B1: from the day a goal is archived its $300 is Free to spend, and the goal still shows what it held',
+  );
+  assert.equal(
+    deriveBalances({
+      ...input,
+      releasedFrom: { rent: utc(2026, 3, 2) },
+      asOf: utc(2026, 3, 1),
+    }).freeToSpendCents,
+    50_000,
+    'B1: a bill that ends after today still holds its money until the day after its last day',
+  );
+  assert.equal(
+    deriveBalancesBefore(
+      {
+        ...input,
+        releasedFrom: { trip: utc(2026, 3, 1) },
+        asOf: utc(2026, 4, 1),
+      },
+      utc(2026, 2, 1),
+    ).freeToSpendCents,
+    50_000,
+    'B1: a figure as of a day before the archive still counts the goal as holding it',
+  );
+}
+
+console.log('runway engine: ok');
+
+// Round 7, package G8: money that arrives short. Cover from Free to spend, then what gets less.
+{
+  const base: RecordLine = {
+    lineId: '',
+    itemId: '',
+    name: '',
+    emoji: null,
+    tier: 'must',
+    demandCents: 0,
+    cents: 0,
+    shortBy: 0,
+    paidBy: [],
+  };
+  const line = (
+    lineId: string,
+    tier: RecordLine['tier'],
+    cents: number,
+  ): RecordLine => ({ ...base, lineId, itemId: lineId, tier, cents });
+  const lines = [
+    line('a', 'must', 30_000),
+    line('b', 'want', 10_000),
+    line('c', 'should', 15_000),
+    line('d', 'want', 5_000),
+    line('e', 'want', 8_000),
+  ];
+  const dueBill = new Set(['e']);
+  assert.deepEqual(
+    suggestShortfall(lines, 12_000, dueBill),
+    { d: 0, b: 3_000 },
+    'Wants go first, the later one before the earlier, and a bill due before the next income day is left alone',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 25_000, dueBill),
+    { d: 0, b: 0, c: 5_000 },
+    'Shoulds once the Wants are used up, still never a Must or a due bill',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 40_000, dueBill),
+    { d: 0, b: 0, c: 0, a: 20_000 },
+    'a Must only once no Want or Should is left, and the due bill still after it',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 68_000, dueBill),
+    { d: 0, b: 0, c: 0, a: 0, e: 0 },
+    'a due bill only when nothing else is left',
+  );
+  assert.deepEqual(
+    suggestShortfall(lines, 12_000),
+    { e: 0, d: 1_000 },
+    'without a due bill the same item is an ordinary Want',
+  );
+  [1, 999, 12_345, 33_333, 59_999, 68_000].forEach((need) => {
+    const edits = suggestShortfall(lines, need, dueBill);
+    const taken = Object.entries(edits).reduce(
+      (sum, [id, cents]) =>
+        sum + (lines.find((l) => l.lineId === id)!.cents - cents),
+      0,
+    );
+    assert.equal(taken, need, `the cuts add up to the gap, ${need} cents`);
+    assert.ok(Object.values(edits).every((cents) => cents >= 0));
+  });
+
+  assert.equal(getCoverable(20_000, 50_000), 20_000, 'an exact cover');
+  assert.equal(getCoverable(20_000, 5_000), 5_000, 'a partial cover');
+  assert.equal(getCoverable(20_000, 0), 0);
+  assert.equal(getCoverable(20_000, -3_000), 0, 'over-assigned covers none');
+  assert.equal(getCoverable(20_000, null), 0, 'unknown covers none');
+  assert.equal(getCoverable(0, 50_000), 0);
+  assert.ok(isWithinCover(-10_000, 10_000));
+  assert.ok(!isWithinCover(-10_001, 10_000), 'never past what was covered');
+  assert.ok(isWithinCover(0, 0));
+  assert.ok(!isWithinCover(-1, 0), 'nothing covered, nothing below zero');
+
+  // A covered day keeps its items and leaves less than nothing; Free to spend drops by exactly that.
+  const start = 10 * DAY_MS;
+  const startMoney = (cents: number): OpenMove => ({
+    id: 'start-money',
+    kind: 'start',
+    date: start,
+    refId: null,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: cents, holding: 'money' },
+  });
+  const kinds = { a: 'envelope', b: 'goal', c: 'envelope' } as const;
+  const coveredDay = (
+    arrivedCents: number,
+    cents: Record<string, number>,
+  ): OpenRecord => {
+    const confirmedLines = Object.entries(cents).map(([id, amount]) =>
+      line(id, 'should', amount),
+    );
+    return {
+      id: 'g8_confirmed',
+      dayId: 'g8',
+      createdAt: 5,
+      kind: 'confirmed',
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative',
+        arrivedCents,
+        expectedCents: 50_000,
+        freeToSpendCents: getRemainder(arrivedCents, confirmedLines),
+        differences: [],
+        lines: confirmedLines,
+      },
+    };
+  };
+  const arrivedOn = new Map([['g8', start + DAY_MS]]);
+  const balancesOf = (money: number, records: OpenRecord[]) =>
+    deriveBalances({
+      startDate: start,
+      moves: [startMoney(money)],
+      records,
+      arrivedOn,
+      kinds,
+    }).freeToSpendCents;
+
+  const exact = coveredDay(40_000, { a: 30_000, b: 10_000, c: 10_000 });
+  assert.equal(exact.payload.freeToSpendCents, -10_000);
+  assert.equal(balancesOf(25_000, []), 25_000);
+  assert.equal(
+    balancesOf(25_000, [exact]),
+    15_000,
+    'an exact cover takes the gap, and only the gap, from Free to spend',
+  );
+
+  const gap = 10_000;
+  const freeBefore = 6_000;
+  const cover = getCoverable(gap, freeBefore);
+  const planned = [line('a', 'must', 30_000), line('c', 'want', 20_000)];
+  const cuts = suggestShortfall(planned, gap - cover);
+  assert.deepEqual(cuts, { c: 16_000 });
+  const partial = coveredDay(40_000, { a: 30_000, c: cuts.c });
+  assert.equal(partial.payload.freeToSpendCents, -cover);
+  assert.ok(isWithinCover(partial.payload.freeToSpendCents, cover));
+  assert.equal(
+    balancesOf(freeBefore, [partial]),
+    0,
+    'a partial cover uses all of Free to spend and the cuts take the rest',
+  );
+
+  // A closing rebuilt after a covered day matches a full replay.
+  const entries: ClosingEntries = {
+    startDate: start,
+    days: [{ id: 'g8', expectedOn: start + DAY_MS, arrivedOn: start + DAY_MS }],
+    records: [exact],
+    moves: [startMoney(25_000)],
+    purchases: [],
+    billIds: new Set(),
+  };
+  const month = toMonthKey(start);
+  const closed = buildClosing(month, null, entries);
+  const fromClosing = deriveBalances({
+    startDate: start,
+    moves: [startMoney(25_000)],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closed,
+  });
+  const replayed = deriveBalances({
+    startDate: start,
+    moves: [startMoney(25_000)],
+    records: [exact],
+    arrivedOn,
+    kinds,
+  });
+  assert.deepEqual(
+    fromClosing,
+    replayed,
+    'a closing over a covered day equals the replay',
+  );
+  assert.deepEqual(
+    decodeClosing(month, encodeClosing(closed)),
+    closed,
+    'and reads back sealed',
+  );
+}
+
+// F1 (round 7 review): a payment paid after its due date draws on money set aside up to the day it was paid.
+{
+  const jan = (day: number) => Date.UTC(2026, 0, day);
+  const kinds = { rent: 'bill' } as const;
+  const startOn = jan(10);
+  const startMove = (refId: string | null, amountCents: number): OpenMove => ({
+    id: 'start_' + (refId ?? 'money'),
+    kind: 'start',
+    date: startOn,
+    refId,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: {
+      amountCents,
+      holding: refId === null ? 'money' : 'bill',
+    },
+  });
+  const paidMove = (
+    dueOn: number,
+    paidOn: number,
+    fromFreeCents: number,
+  ): OpenMove => ({
+    id: 'paid_rent_' + dueOn,
+    kind: 'billPaid',
+    date: dueOn,
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: { amountCents: 20_000, paidOn, fromFreeCents },
+  });
+  const starts = [startMove(null, 100_000), startMove('rent', 20_000)];
+  const heldA = getHeldForPayment(
+    deriveBillProgress([], new Map(), starts, startOn, null).rent,
+    { dueOn: jan(5), amountCents: 20_000, paidOn: jan(12) },
+    startOn,
+  );
+  assert.equal(
+    heldA,
+    20_000,
+    'F1 A: marking a payment due before the start uses what the bill held at the start',
+  );
+  const movesA = [...starts, paidMove(jan(5), jan(12), 20_000 - heldA)];
+  const balancesA = deriveBalances({
+    startDate: startOn,
+    moves: movesA,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.deepEqual(
+    [balancesA.freeToSpendCents, balancesA.assignedToBillsCents],
+    [80_000, 0],
+    'F1 A: the rent held at the start pays it once: Free to spend 800, rent holds 0',
+  );
+
+  const rentLine = (cents: number) => ({
+    lineId: 'd20:rent',
+    itemId: 'rent',
+    name: 'Rent',
+    emoji: null,
+    tier: 'must' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const day20 = {
+    id: 'd20_confirmed',
+    dayId: 'd20',
+    createdAt: 2,
+    kind: 'confirmed',
+    payload: {
+      fingerprint: 'x',
+      stance: 'conservative',
+      arrivedCents: 50_000,
+      expectedCents: 50_000,
+      freeToSpendCents: 30_000,
+      differences: [],
+      lines: [rentLine(20_000)],
+    },
+  } satisfies OpenRecord;
+  const startB = jan(1);
+  const moneyB: OpenMove = { ...startMove(null, 0), date: startB };
+  const days = new Map([['d20', jan(20)]]);
+  const movesB = [moneyB, paidMove(jan(15), jan(21), 0)];
+  const balancesB = deriveBalances({
+    startDate: startB,
+    moves: movesB,
+    records: [day20],
+    arrivedOn: days,
+    expectedOn: days,
+    kinds,
+  });
+  assert.deepEqual(
+    [balancesB.freeToSpendCents, balancesB.assignedToBillsCents],
+    [30_000, 0],
+    'F1 B: a day dated after the due date that funded the rent is used by the payment made after it, so nothing phantom is held',
+  );
+  const progressB = deriveBillProgress([day20], days, movesB, startB, null);
+  assert.deepEqual(
+    progressB.rent.paid.map((payment) => payment.fromFreeCents),
+    [0],
+    'F1 B: and the paid mark says nothing came from Free to spend',
+  );
+  const earlyB = deriveBalances({
+    startDate: startB,
+    moves: [moneyB, paidMove(jan(15), jan(14), 0)],
+    records: [day20],
+    arrivedOn: days,
+    expectedOn: days,
+    kinds,
+  });
+  assert.equal(
+    earlyB.assignedToBillsCents,
+    20_000,
+    'F1 B: a payment made before that day leaves the later day held',
+  );
+
+  const closingOf = (
+    startDate: number,
+    dayList: { id: string; expectedOn: number; arrivedOn: number }[],
+    records: OpenRecord[],
+    moves: OpenMove[],
+  ) =>
+    buildClosing('2026-01', null, {
+      startDate,
+      days: dayList,
+      records,
+      moves,
+      purchases: [],
+      billIds: new Set(['rent']),
+    });
+  const closedA = closingOf(startOn, [], [], movesA);
+  const fromClosingA = deriveBalances({
+    startDate: startOn,
+    moves: starts,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closedA,
+  });
+  assert.deepEqual(
+    [fromClosingA.freeToSpendCents, fromClosingA.assignedToBillsCents],
+    [balancesA.freeToSpendCents, balancesA.assignedToBillsCents],
+    'F1 A: a closing over the late payment gives the same figures as the ledger',
+  );
+  const closedB = closingOf(
+    startB,
+    [{ id: 'd20', expectedOn: jan(20), arrivedOn: jan(20) }],
+    [day20],
+    movesB,
+  );
+  const fromClosingB = deriveBalances({
+    startDate: startB,
+    moves: [moneyB],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    closing: closedB,
+  });
+  assert.deepEqual(
+    [fromClosingB.freeToSpendCents, fromClosingB.assignedToBillsCents],
+    [balancesB.freeToSpendCents, balancesB.assignedToBillsCents],
+    'F1 B: a closing over the day and the late payment gives the same figures as the ledger',
+  );
+  assert.deepEqual(
+    deriveBillProgress([], new Map(), [moneyB], startB, closedB).rent.paid.map(
+      (payment) => payment.fromFreeCents,
+    ),
+    progressB.rent.paid.map((payment) => payment.fromFreeCents),
+    'F1 B: and the bill progress from the closing settles the payment the same way',
+  );
+}
+
+// F1 (round 7 review): a pairing's need is counted per payment, so two drafted days can fund two payments of one bill.
+{
+  const rentPairing: Pairing = {
+    targetItemId: 'rent',
+    amount: { kind: 'exact', cents: 150_000 },
+    topUpFromAnySource: false,
+  };
+  const paydayOn = (key: string, on: number): DraftDayInput => ({
+    dayKey: key,
+    sourceId: 'src',
+    on,
+    amount: { lowCents: 200_000, highCents: 200_000 },
+    pairings: { day: null, payLine: [rentPairing], source: [] },
+  });
+  const rentBill: DraftBillInput = {
+    itemId: 'rent',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    amount: { lowCents: 120_000, highCents: 120_000 },
+    stanceOverride: null,
+    schedule: { kind: 'monthly', anchor: utc(2026, 11, 15), monthDays: [15] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: { funded: [], paid: [] },
+  };
+  const draftOver = (days: [string, number][]) =>
+    buildDraft({
+      days: days.map(([key, on]) => paydayOn(key, on)),
+      plan: {
+        envelopes: [],
+        bills: [rentBill],
+        goals: [],
+        horizon: utc(2027, 6, 1),
+        incomeDays: days.map(([dayKey, on]) => ({
+          dayKey,
+          on,
+          moneyCents: 200_000,
+        })),
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const rentOf = (draft: ReturnType<typeof buildDraft>, dayKey: string) =>
+    draft.lines.find((line) => line.lineId === `${dayKey}:rent`)?.cents ?? 0;
+  const twoMonths = draftOver([
+    ['job_a', utc(2026, 11, 6)],
+    ['job_b', utc(2026, 11, 20)],
+  ]);
+  assert.deepEqual(
+    [rentOf(twoMonths, 'job_a'), rentOf(twoMonths, 'job_b')],
+    [120_000, 120_000],
+    'F1: the Nov 6 pairing fills the Nov 15 rent and the Nov 20 pairing the Dec 15 rent, each in full',
+  );
+  const oneMonth = draftOver([
+    ['job_a', utc(2026, 11, 6)],
+    ['job_c', utc(2026, 11, 10)],
+  ]);
+  assert.deepEqual(
+    [rentOf(oneMonth, 'job_a'), rentOf(oneMonth, 'job_c')],
+    [120_000, 0],
+    'F1: two days before the same payment still send it only what it needs, once',
+  );
+}
+
+// Round 7, package G9: a correction that leaves its day short is covered or cut like Confirm.
+{
+  const start = 10 * DAY_MS;
+  const kinds = { a: 'envelope', c: 'envelope' } as const;
+  const startMoney: OpenMove = {
+    id: 'start-money',
+    kind: 'start',
+    date: start,
+    refId: null,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: 25_000, holding: 'money' },
+  };
+  const recordLine = (
+    lineId: string,
+    tier: RecordLine['tier'],
+    cents: number,
+  ): RecordLine => ({
+    lineId,
+    itemId: lineId,
+    name: lineId,
+    emoji: null,
+    tier,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [{ dayId: 'g9', cents }],
+  });
+  const confirmedOf = (arrivedCents: number): OpenRecord => {
+    const lines = [
+      recordLine('a', 'must', 30_000),
+      recordLine('c', 'want', 10_000),
+    ];
+    return {
+      id: 'g9_confirmed',
+      dayId: 'g9',
+      createdAt: 5,
+      kind: 'confirmed',
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative',
+        arrivedCents,
+        expectedCents: 40_000,
+        freeToSpendCents: getRemainder(arrivedCents, lines),
+        differences: [],
+        lines,
+      },
+    };
+  };
+  const correctionOf = (
+    confirmed: OpenRecord,
+    arrivedCents: number,
+    edits: Record<string, number> = {},
+  ): OpenRecord => {
+    const base = toSplit(
+      confirmed as Exclude<OpenRecord, { kind: 'proposed' }>,
+    );
+    return {
+      id: getCorrectionId(confirmed.id),
+      dayId: 'g9',
+      createdAt: 9,
+      kind: 'correction',
+      supersedesId: confirmed.id,
+      payload: buildCorrection({ base, arrivedCents, edits, note: null }),
+    };
+  };
+  const arrivedOn = new Map([['g9', start + DAY_MS]]);
+  const freeOf = (records: OpenRecord[]) =>
+    deriveBalances({
+      startDate: start,
+      moves: [startMoney],
+      records,
+      arrivedOn,
+      kinds,
+    }).freeToSpendCents;
+
+  // Adds cover: $400 confirmed with nothing left, corrected to $300.
+  const even = confirmedOf(40_000);
+  const evenSplit = toSplit(even as Exclude<OpenRecord, { kind: 'proposed' }>);
+  assert.equal(getDayCover(evenSplit), 0);
+  assert.equal(freeOf([even]), 25_000);
+  const lower = correctionOf(even, 30_000);
+  const lowerFree = lower.payload.freeToSpendCents;
+  assert.equal(getCorrectionGap(evenSplit, lowerFree), 10_000);
+  const added = getCoverable(10_000, freeOf([even]));
+  assert.equal(
+    added,
+    10_000,
+    'Free to spend at that moment covers the whole gap',
+  );
+  assert.ok(
+    isWithinCover(lowerFree, getCorrectionCover(evenSplit, added)),
+    'a correction may cover beyond what the confirm covered, once the person chose it',
+  );
+  assert.ok(
+    !isWithinCover(lowerFree, getCorrectionCover(evenSplit, 0)),
+    'nothing chosen, nothing below zero',
+  );
+  assert.equal(
+    freeOf([even, lower]),
+    15_000,
+    'the added cover comes out of Free to spend, and only that',
+  );
+
+  // Removes cover: confirmed $300 with $100 covered, corrected to $450.
+  const covered = confirmedOf(30_000);
+  const coveredSplit = toSplit(
+    covered as Exclude<OpenRecord, { kind: 'proposed' }>,
+  );
+  assert.equal(getDayCover(coveredSplit), 10_000);
+  const raised = correctionOf(covered, 45_000);
+  assert.equal(
+    getCorrectionGap(coveredSplit, raised.payload.freeToSpendCents),
+    0,
+  );
+  assert.ok(
+    isWithinCover(
+      raised.payload.freeToSpendCents,
+      getCorrectionCover(coveredSplit, 0),
+    ),
+  );
+  assert.deepEqual(
+    [freeOf([covered]), freeOf([covered, raised])],
+    [15_000, 30_000],
+    'removing the cover gives it back to Free to spend',
+  );
+
+  // Beyond the cover it had, a correction asks again: $50 more short is covered or cut.
+  const deeper = correctionOf(covered, 25_000);
+  assert.equal(
+    getCorrectionGap(coveredSplit, deeper.payload.freeToSpendCents),
+    5_000,
+    'only what goes beyond the cover the day had is asked',
+  );
+  assert.ok(
+    !isWithinCover(
+      deeper.payload.freeToSpendCents,
+      getCorrectionCover(coveredSplit, 0),
+    ),
+  );
+  assert.deepEqual(
+    suggestShortfall(deeper.payload.lines, 5_000),
+    { c: 5_000 },
+    'what gets less starts with the Want',
+  );
+  const cut = correctionOf(covered, 25_000, { c: 5_000 });
+  assert.ok(
+    isWithinCover(
+      cut.payload.freeToSpendCents,
+      getCorrectionCover(coveredSplit, 0),
+    ),
+    'the cut keeps the day within the cover it had',
+  );
+
+  // A day that left money gives it back first: Free to spend for the cover is what remains after that.
+  const left = confirmedOf(45_000);
+  const leftSplit = toSplit(left as Exclude<OpenRecord, { kind: 'proposed' }>);
+  assert.equal(freeOf([left]), 30_000);
+  const forCover = getFreeForCorrection(freeOf([left]), leftSplit);
+  assert.equal(forCover, 25_000);
+  const short = correctionOf(left, 30_000);
+  const shortGap = getCorrectionGap(leftSplit, short.payload.freeToSpendCents);
+  assert.equal(shortGap, 10_000);
+  assert.equal(
+    freeOf([left, short]),
+    (forCover ?? 0) - getCoverable(shortGap, forCover),
+    'Free to spend after the cover is exactly what the cover card says',
+  );
+  assert.equal(getFreeForCorrection(null, leftSplit), null);
+  assert.equal(getFreeForCorrection(20_000, coveredSplit), 20_000);
+
+  // A closing over each corrected day equals the replay.
+  [
+    [even, lower],
+    [covered, raised],
+    [covered, cut],
+  ].forEach((records, index) => {
+    const closed = buildClosing(toMonthKey(start), null, {
+      startDate: start,
+      days: [
+        { id: 'g9', expectedOn: start + DAY_MS, arrivedOn: start + DAY_MS },
+      ],
+      records,
+      moves: [startMoney],
+      purchases: [],
+      billIds: new Set(),
+    });
+    assert.deepEqual(
+      deriveBalances({
+        startDate: start,
+        moves: [startMoney],
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+        closing: closed,
+      }),
+      deriveBalances({
+        startDate: start,
+        moves: [startMoney],
+        records,
+        arrivedOn,
+        kinds,
+      }),
+      `G9: a closing over corrected day ${index + 1} equals the replay`,
+    );
+  });
+}
+
+// Round 7, package G9: archiving or ending an item that holds money asks; each choice and the closings.
+{
+  const start = utc(2026, 1, 1);
+  const startOf = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: 'money' | 'goal' | 'envelope',
+  ): OpenMove => ({
+    id,
+    kind: 'start',
+    date: start,
+    refId,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: cents, holding },
+  });
+  const moves = [
+    startOf('m', null, 100_000, 'money'),
+    startOf('g', 'trip', 30_000, 'goal'),
+    startOf('e', 'fun', 10_000, 'envelope'),
+  ];
+  const kinds = { trip: 'goal', fun: 'envelope' } as const;
+  const archivedOn = utc(2026, 3, 1);
+  const freeWith = (releasedFrom: Record<string, number>, asOf: number) =>
+    deriveBalances({
+      startDate: start,
+      moves,
+      records: [],
+      arrivedOn: new Map(),
+      kinds,
+      releasedFrom,
+      asOf,
+    }).freeToSpendCents;
+  const toReleased = (id: string, day: number | null) =>
+    day === null ? {} : { [id]: day };
+
+  const freeDay = getHeldReleaseDay('free', archivedOn);
+  assert.equal(
+    freeDay,
+    archivedOn,
+    'G9: "Make it Free to spend" releases from the archive day',
+  );
+  assert.equal(
+    freeWith(toReleased('trip', freeDay), archivedOn),
+    90_000,
+    "G9: the goal's $300 is Free to spend from the archive day",
+  );
+  const keepDay = getHeldReleaseDay('keep', archivedOn);
+  assert.equal(keepDay, null, 'G9: "Keep it held" writes no release day');
+  assert.equal(
+    freeWith(toReleased('trip', keepDay), archivedOn),
+    60_000,
+    'G9: a kept goal still holds its $300, so Free to spend does not move',
+  );
+  const later = utc(2026, 4, 10);
+  const laterDay = getLaterReleaseDay(
+    { archivedAt: archivedOn, endedAt: null },
+    later,
+  );
+  assert.equal(
+    laterDay,
+    later,
+    'G9: releasing a kept, archived item later releases from that day',
+  );
+  assert.deepEqual(
+    [
+      freeWith(toReleased('trip', laterDay), later - DAY_MS),
+      freeWith(toReleased('trip', laterDay), later),
+    ],
+    [60_000, 90_000],
+    'G9: and not a day before',
+  );
+
+  const lastDay = utc(2026, 5, 31);
+  const endFree = getHeldReleaseDay('free', lastDay + DAY_MS);
+  assert.deepEqual(
+    [
+      freeWith(toReleased('fun', endFree), lastDay),
+      freeWith(toReleased('fun', endFree), lastDay + DAY_MS),
+    ],
+    [60_000, 70_000],
+    'G9: an ended envelope made Free to spend holds through its last day and releases the day after',
+  );
+  assert.equal(
+    getLaterReleaseDay({ archivedAt: null, endedAt: lastDay }, utc(2026, 5, 1)),
+    lastDay + DAY_MS,
+    'G9: a kept item whose last day is ahead releases the day after it, never sooner',
+  );
+  assert.equal(
+    getLaterReleaseDay({ archivedAt: null, endedAt: lastDay }, utc(2026, 7, 1)),
+    utc(2026, 7, 1),
+  );
+
+  assert.equal(
+    readHeldReleasedOn({ archivedAt: archivedOn, endedAt: null }),
+    archivedOn,
+    'G9: a header archived before the choice existed reads as released, as round 7 shipped',
+  );
+  assert.equal(
+    readHeldReleasedOn({ archivedAt: null, endedAt: lastDay }),
+    lastDay + DAY_MS,
+  );
+  assert.equal(
+    readHeldReleasedOn({ archivedAt: archivedOn, endedAt: lastDay }),
+    archivedOn,
+    'G9: the earlier of the two',
+  );
+  assert.equal(readHeldReleasedOn({ archivedAt: null, endedAt: null }), null);
+  assert.equal(
+    readHeldReleasedOn({
+      archivedAt: archivedOn,
+      endedAt: null,
+      heldReleasedOn: null,
+    }),
+    null,
+    'G9: a stored null is the person keeping it',
+  );
+  assert.equal(
+    readHeldReleasedOn({
+      archivedAt: archivedOn,
+      endedAt: null,
+      heldReleasedOn: later,
+    }),
+    later,
+  );
+
+  // A closing over the plan gives the same figures with each choice.
+  const closed = buildClosing(toMonthKey(start), null, {
+    startDate: start,
+    days: [],
+    records: [],
+    moves,
+    purchases: [],
+    billIds: new Set(),
+  });
+  [freeDay, keepDay, laterDay].forEach((day, index) => {
+    const releasedFrom = toReleased('trip', day);
+    assert.deepEqual(
+      deriveBalances({
+        startDate: start,
+        moves,
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+        releasedFrom,
+        asOf: later,
+        closing: closed,
+      }),
+      deriveBalances({
+        startDate: start,
+        moves,
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+        releasedFrom,
+        asOf: later,
+      }),
+      `G9: a closing with choice ${index + 1} equals the replay`,
+    );
+  });
 }
 
 console.log('runway engine: ok');

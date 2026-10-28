@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import InlineNotice from '@/components/InlineNotice';
 import { Trash2 } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
@@ -72,19 +73,11 @@ function DeletePlanScreen({ onClose, onDeleted }: DeletePlanScreenProps) {
   };
 
   return (
-    <Subview title={DELETE_PLAN_WORDS.title} onClose={onClose}>
+    <Subview overlay title={DELETE_PLAN_WORDS.title} onClose={onClose}>
       <div className='space-y-4'>
-        <div className='border-border bg-card space-y-3 rounded-2xl border p-4'>
-          <p className='text-sm font-medium text-pretty'>
-            {DELETE_PLAN_WORDS.goes}
-          </p>
-          <p className='text-muted-foreground text-sm text-pretty'>
-            {DELETE_PLAN_WORDS.keys}
-          </p>
-          <p className='text-muted-foreground text-sm text-pretty'>
-            {DELETE_PLAN_WORDS.kept}
-          </p>
-        </div>
+        <InlineNotice tone='warning' title={DELETE_PLAN_WORDS.goes}>
+          {DELETE_PLAN_WORDS.kept}
+        </InlineNotice>
         <div className='space-y-2'>
           <p className='text-muted-foreground block text-xs'>
             {DELETE_PLAN_WORDS.phraseLabel}

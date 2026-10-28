@@ -96,6 +96,7 @@ export const header = (
   createdAt,
   endedAt: null,
   archivedAt: null,
+  heldReleasedOn: null,
 });
 export const version = (
   id: string,
@@ -177,6 +178,11 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     owner.uid,
     encryption,
   );
+  const keptDocuments = await writeSeedKeptEnvelope(
+    context,
+    owner.uid,
+    encryption,
+  );
   const startDocuments = await writeSeedStart(
     context,
     owner.uid,
@@ -215,10 +221,90 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       billDocuments +
       goalDocuments +
       lifecycleDocuments +
+      keptDocuments +
       startDocuments +
       historyDocuments +
       masterKeyIds.length,
   };
+}
+
+const KEPT_ENVELOPE_ID = 'seed-envelope-concert';
+
+/** Concert tickets, funded on the confirmed day eleven days ago and archived since with its $60.00 kept, so Envelopes lists it under "Stopped, still holding money" and its sheet offers "Release what it holds". */
+async function writeSeedKeptEnvelope(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - 40 * DAY_MS;
+  const archivedAt = today - 3 * DAY_MS;
+  const payload: EnvelopeSealed = {
+    name: 'Concert tickets',
+    emoji: '🎫',
+    priority: 'want',
+    orderIndex: 11,
+    funding: {
+      amount: { kind: 'exact', cents: 6_000 },
+      cadence: { kind: 'everyIncomeDay' },
+    },
+  };
+  const [sealed, added, archived] = await Promise.all([
+    sealJson(payload, encryption),
+    sealJson(
+      { summary: 'Added Concert tickets.' } satisfies ChangeSealed,
+      encryption,
+    ),
+    sealJson(
+      {
+        summary: 'Concert tickets: archived.',
+        note: 'Saving it for the next tour',
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  ]);
+  const startsOn = today - 40 * DAY_MS;
+  const batch = context.firestore.batch();
+  batch.set(context.firestore.doc(`${plan}/items/${KEPT_ENVELOPE_ID}`), {
+    ...header(KEPT_ENVELOPE_ID, 'envelope', null, addedAt),
+    archivedAt,
+    heldReleasedOn: null,
+  });
+  batch.set(
+    context.firestore.doc(`${plan}/versions/seed-version-${KEPT_ENVELOPE_ID}`),
+    version(
+      `seed-version-${KEPT_ENVELOPE_ID}`,
+      KEPT_ENVELOPE_ID,
+      'envelope',
+      addedAt,
+      startsOn,
+      `seed-change-${KEPT_ENVELOPE_ID}`,
+      sealed,
+    ),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/changes/seed-change-${KEPT_ENVELOPE_ID}`),
+    change(
+      `seed-change-${KEPT_ENVELOPE_ID}`,
+      addedAt,
+      startsOn,
+      [KEPT_ENVELOPE_ID],
+      added,
+    ),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/changes/seed-change-concert-archived`),
+    change(
+      'seed-change-concert-archived',
+      archivedAt + 10 * 3_600_000,
+      archivedAt,
+      [KEPT_ENVELOPE_ID],
+      archived,
+    ),
+  );
+  await batch.commit();
+  return 4;
 }
 
 /** Items that change for a stretch or stop: Eating out at $40 for the next four income days then back to $80, Meal kit that ends in a month, an old phone plan that ended, a paused goal and an archived envelope. Each has its entries, the ended ones the `ended_` one. */
@@ -367,6 +453,12 @@ async function writeSeedLifecycle(
       ...header(entry.id, entry.kind, null, createdAt),
       endedAt: 'endedAt' in entry ? entry.endedAt : null,
       archivedAt: 'archivedAt' in entry ? entry.archivedAt : null,
+      heldReleasedOn:
+        'archivedAt' in entry
+          ? entry.archivedAt
+          : 'endedAt' in entry
+            ? entry.endedAt + DAY_MS
+            : null,
     });
     batch.set(
       context.firestore.doc(`${plan}/versions/seed-version-${entry.id}`),
@@ -891,6 +983,14 @@ async function writeSeedConfirmedDays(
                 'should',
                 15_000,
               ),
+              seedLine(
+                dayId,
+                KEPT_ENVELOPE_ID,
+                'Concert tickets',
+                '🎫',
+                'want',
+                6_000,
+              ),
             ]
           : []),
         seedLine(
@@ -1094,6 +1194,7 @@ async function writeSeedEnvelopes(
   context: SeedContext,
   uid: string,
   encryption: Parameters<typeof sealJson>[1],
+  hasWeekly = false,
 ) {
   const plan = `apps/runway/plans/${uid}`;
   const today = startOfUtcDay(context.now);
@@ -1192,6 +1293,44 @@ async function writeSeedEnvelopes(
         },
       },
     },
+    {
+      id: 'seed-envelope-phone-internet',
+      payload: {
+        name: 'Phone and internet',
+        emoji: '📶',
+        priority: 'must',
+        orderIndex: 3,
+        funding: {
+          amount: exact(9_500),
+          cadence: {
+            kind: 'calendar',
+            period: 'monthly',
+            startsOn: today - 3 * DAY_MS,
+          },
+        },
+      },
+    },
+    ...(hasWeekly
+      ? [
+          {
+            id: 'seed-envelope-coffee',
+            payload: {
+              name: 'Coffee',
+              emoji: '☕',
+              priority: 'want' as const,
+              orderIndex: 3,
+              funding: {
+                amount: exact(2_000),
+                cadence: {
+                  kind: 'calendar' as const,
+                  period: 'weekly' as const,
+                  startsOn: today - 3 * DAY_MS,
+                },
+              },
+            },
+          },
+        ]
+      : []),
   ];
 
   const sealedChanges = await Promise.all(
@@ -1497,6 +1636,19 @@ async function writeSeedGoals(
         },
       },
     },
+    {
+      id: 'seed-goal-house',
+      payload: {
+        name: 'House down payment',
+        emoji: '🏡',
+        priority: 'want',
+        orderIndex: 2,
+        targetCents: 1_500_000,
+        targetDate: null,
+        funding: { amount: exact(0), cadence: { kind: 'none' } },
+        state: 'active',
+      },
+    },
   ];
 
   const sealedChanges = await Promise.all(
@@ -1623,9 +1775,10 @@ async function seedTrackingPlan(
 
   const documents = [
     await writeSeedIncome(context, owner.uid, encryption),
-    await writeSeedEnvelopes(context, owner.uid, encryption),
+    await writeSeedEnvelopes(context, owner.uid, encryption, true),
     await writeSeedBills(context, owner.uid, encryption),
     await writeSeedGoals(context, owner.uid, encryption),
+    await writeSeedKeptEnvelope(context, owner.uid, encryption),
   ].reduce((sum, count) => sum + count, 0);
   const startBatch = context.firestore.batch();
   const startDocuments = await writeSeedStart(

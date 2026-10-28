@@ -1,7 +1,6 @@
 import { use } from 'react';
 
 import { useAppSelector } from '@/store';
-import { CHANGE_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import FromWhenPicker from '@apps/runway/components/FromWhenPicker';
@@ -14,12 +13,12 @@ function ChangeSection() {
   const value = use(ChangeFlowContext);
   const today = todayAsUtcDate();
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
-  if (!value) return null;
+  if (!value || value.flow.isUnchanged) return null;
   const { flow, kind, itemId } = value;
   const pairedText = describePairedBy(pairedBy[itemId] ?? []);
 
   return (
-    <div className='space-y-4 pt-2'>
+    <div className='space-y-3'>
       <FromWhenPicker
         value={flow.from}
         onChange={flow.setFrom}
@@ -29,15 +28,9 @@ function ChangeSection() {
         presetDayKey={flow.presetDayKey}
       />
       <EffectPreview
+        isCompact
         changeJson={flow.changeJson}
-        emptyText={
-          pairedText
-            ? `${pairedText} Change the pairing under Plan, Income to move an income day.`
-            : undefined
-        }
-        waitingText={
-          flow.isUnchanged ? CHANGE_WORDS.previewUntouched : undefined
-        }
+        emptyText={pairedText ?? undefined}
       />
     </div>
   );

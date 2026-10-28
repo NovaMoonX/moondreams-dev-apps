@@ -7,6 +7,7 @@ import {
   MORE_ENTRIES,
   MORE_ENTRY_HELP,
   MORE_ENTRY_LABELS,
+  PLAN_MORE_LABEL,
 } from '@apps/runway/constants';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
@@ -16,7 +17,7 @@ function MoreScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title='More' />
+      <SectionHeader title={PLAN_MORE_LABEL} />
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {MORE_ENTRIES.map((entry) => (
           <li key={entry}>

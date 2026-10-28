@@ -19,13 +19,14 @@ import type {
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
 
-/** The purchases dated from `from` on; older ones arrive with the history view. A slow open never overwrites a newer snapshot. */
+/** The purchases dated from `from` on (and before `to` when it is given); older ones arrive with the history view. A slow open never overwrites a newer snapshot. */
 export function startPurchasesListener(
   uid: string,
   encryption: RunwayEncryption,
   from: number,
   onChange: (purchases: OpenPurchase[]) => void,
   onError: (error: Error) => void,
+  to: number | null = null,
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const run = { isStopped: false };
@@ -35,6 +36,7 @@ export function startPurchasesListener(
     query(
       collection(db, 'apps', 'runway', 'plans', uid, 'purchases'),
       where('date', '>=', from),
+      ...(to === null ? [] : [where('date', '<', to)]),
     ),
     async (snapshot) => {
       sequence.latest += 1;

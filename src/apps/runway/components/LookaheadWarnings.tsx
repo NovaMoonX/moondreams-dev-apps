@@ -1,92 +1,156 @@
 import { useState } from 'react';
-import { TriangleAlert } from 'lucide-react';
+import { ChevronRight, TriangleAlert } from 'lucide-react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
+import InlineNotice from '@/components/InlineNotice';
+import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
-import { formatCents } from '@/utils/moneyUtils';
+import SensitiveValue from '@/components/SensitiveValue';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
-  LOOKAHEAD_WARNINGS_PREVIEW,
-  MAX_QUIET_HIDDEN,
+  FIX_ROWS_SHOWN,
+  FIX_WORDS,
+  PROBLEM_WORDS,
 } from '@apps/runway/constants';
-import type { Lookahead, StanceCushion } from '@apps/runway/engine/lookahead';
+import {
+  describeGroupShort,
+  groupProblems,
+} from '@apps/runway/utils/lookaheadText';
+import type { Lookahead } from '@apps/runway/engine/lookahead';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ProblemRow from '@apps/runway/components/ProblemRow';
-import { describeProblem } from '@apps/runway/utils/lookaheadText';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 interface LookaheadWarningsProps {
   lookahead: Lookahead;
-  cushion: StanceCushion | null;
 }
 
-const plural = (count: number, word: string) =>
-  `${count} ${word}${count === 1 ? '' : 's'}`;
+/** What stops the plan, as one warning row that counts the rest; it opens "Things to fix", one row per problem, soonest first. The open list lives in the URL, so coming back from a row's day lands on it again. */
+function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
+  const { isFixesOpen, openFixes, closeFixes } = useRunwayUrlState();
+  const { isHidden } = useValuesHidden();
+  const { incomeEndsOn } = lookahead;
+  const [isAllShown, setIsAllShown] = useState(false);
+  const groups = groupProblems(lookahead.problems);
+  const first = groups[0] ?? null;
+  const endsText =
+    incomeEndsOn === null
+      ? null
+      : FIX_WORDS.incomeEnds(formatDateUTC(incomeEndsOn));
 
-/** What stops the plan, one row per problem, then the cushion the stance holds back. */
-function LookaheadWarnings({ lookahead, cushion }: LookaheadWarningsProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const { problems, incomeEndsOn } = lookahead;
-  const rows = [
-    ...problems.map((problem) => ({
-      key: `${problem.kind}:${problem.on}:${'billId' in problem ? problem.billId : problem.itemId}`,
-      problem,
-      text: describeProblem(problem),
-    })),
-    ...(incomeEndsOn === null
-      ? []
-      : [
-          {
-            key: 'incomeEnds',
-            problem: null,
-            text: `Your last income day is ${formatDateUTC(incomeEndsOn)}. Nothing is planned after it.`,
-          },
-        ]),
-  ];
-  const hasFold = rows.length > LOOKAHEAD_WARNINGS_PREVIEW + MAX_QUIET_HIDDEN;
-  const shown =
-    hasFold && !isOpen ? rows.slice(0, LOOKAHEAD_WARNINGS_PREVIEW) : rows;
-  const cushionParts = cushion
-    ? [
-        cushion.sourceCount > 0 && plural(cushion.sourceCount, 'source'),
-        cushion.billCount > 0 && plural(cushion.billCount, 'bill'),
-      ].filter(Boolean)
-    : [];
+  if (!first && !endsText) return null;
+  const label = first
+    ? describeGroupShort(first, isHidden)
+    : { before: endsText ?? '', figure: null, after: '' };
+  const more = groups.length - 1;
+  const moreText = groups.every((group) => group.kind === 'day')
+    ? `${more} more ${more === 1 ? 'day' : 'days'}`
+    : `${more} more`;
+  const isCounted = groups.length > 0;
+  const isLabelPrivate = label.figure !== null;
+  const shown = isAllShown ? groups : groups.slice(0, FIX_ROWS_SHOWN);
 
-  if (rows.length === 0 && !cushion) return null;
-
+  if (isHidden) {
+    return (
+      <>
+        <NeedsALookRow />
+        <DetailSheet
+          isOpen={isFixesOpen}
+          onClose={closeFixes}
+          title={PROBLEM_WORDS.title}
+        >
+          {isFixesOpen && <NeedsALookRow />}
+        </DetailSheet>
+      </>
+    );
+  }
   return (
-    <div className='space-y-2'>
-      {rows.length > 0 && (
-        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          {shown.map((row) => (
-            <li key={row.key}>
-              {row.problem ? (
-                <ProblemRow problem={row.problem} />
-              ) : (
-                <p className='flex items-start gap-3 p-3 text-sm'>
-                  <TriangleAlert
-                    className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
-                    aria-hidden='true'
-                  />
-                  <span className='min-w-0 break-words'>{row.text}</span>
-                </p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {hasFold && (
-        <ShowMoreButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)}>
-          {isOpen
-            ? 'Show fewer'
-            : `Show ${rows.length - LOOKAHEAD_WARNINGS_PREVIEW} more`}
-        </ShowMoreButton>
-      )}
-      {cushion && (
-        <p className='text-muted-foreground text-sm'>
-          Conservative planning is holding back {formatCents(cushion.cents)}
-          {cushionParts.length > 0 && ` across ${cushionParts.join(' and ')}`}.
-        </p>
-      )}
-    </div>
+    <>
+      <Button
+        type='button'
+        variant='tertiary'
+        className='text-foreground! h-auto min-h-11 w-full items-center justify-start gap-3 rounded-2xl border border-(--runway-warning-edge) bg-(--runway-warning-soft) px-3! py-1.5 text-left font-normal whitespace-normal'
+        aria-label={
+          isHidden && isLabelPrivate
+            ? `The plan falls short. Amount hidden${more > 0 ? `, ${more} more` : ''}. See what to fix`
+            : undefined
+        }
+        onClick={openFixes}
+      >
+        <span
+          className='grid size-8 shrink-0 place-items-center rounded-full bg-(--runway-warning-edge)/40 text-(--runway-warning-ink)'
+          aria-hidden='true'
+        >
+          <TriangleAlert className='h-4 w-4' />
+        </span>
+        <span className='min-w-0 flex-1 text-sm font-medium'>
+          {isCounted && (
+            <span className='sm:hidden'>
+              {groups.length === 1
+                ? PROBLEM_WORDS.one
+                : PROBLEM_WORDS.many(groups.length)}
+            </span>
+          )}
+          <span className={join(isCounted && 'max-sm:hidden')}>
+            {label.before}
+            {label.figure !== null && (
+              <SensitiveValue>{label.figure}</SensitiveValue>
+            )}
+            {label.after}
+            {more > 0 && (
+              <span className='text-muted-foreground font-normal whitespace-nowrap'>
+                {' '}
+                · {moreText}
+              </span>
+            )}
+          </span>
+        </span>
+        <ChevronRight
+          className='text-muted-foreground h-4 w-4 shrink-0'
+          aria-hidden='true'
+        />
+      </Button>
+      <DetailSheet
+        isOpen={isFixesOpen}
+        onClose={closeFixes}
+        title={PROBLEM_WORDS.title}
+        actions={<ValuesEyeButton />}
+      >
+        {isFixesOpen && groups.length > 0 && (
+          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+            {shown.map((group) => (
+              <li
+                key={`${group.kind}:${group.on}:${group.kind === 'day' ? group.dayKey : group.problem.kind}`}
+                className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'
+              >
+                <ProblemRow group={group} />
+              </li>
+            ))}
+            {groups.length > FIX_ROWS_SHOWN && (
+              <li className='px-3 py-1'>
+                <ShowMoreButton
+                  isOpen={isAllShown}
+                  onClick={() => setIsAllShown((current) => !current)}
+                >
+                  {isAllShown
+                    ? 'Show fewer'
+                    : `Show ${groups.length - FIX_ROWS_SHOWN} more`}
+                </ShowMoreButton>
+              </li>
+            )}
+          </ul>
+        )}
+        {isFixesOpen && endsText !== null && (
+          <InlineNotice tone='info' className='mt-3'>
+            {endsText}
+          </InlineNotice>
+        )}
+      </DetailSheet>
+    </>
   );
 }
 

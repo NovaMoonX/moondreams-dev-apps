@@ -7,11 +7,11 @@ import EmptyCard from '@/components/EmptyCard';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
 import { CONFIRM_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoNotArrived } from '@apps/runway/store/actions/dayActions';
 import type { ListedDay } from '@apps/runway/store/selectors/runwaySelectors';
+import { formatDayTitle } from '@apps/runway/utils/dayTitle';
 
 interface NotArrivedViewProps {
   day: ListedDay;
@@ -46,14 +46,11 @@ function NotArrivedView({ day, onClose }: NotArrivedViewProps) {
   };
 
   return (
-    <Subview title='Income day' onClose={onClose}>
+    <Subview title={formatDayTitle(day.on)} onClose={onClose}>
       <div className='space-y-4'>
         <div>
           <p className='line-clamp-2 text-lg font-medium break-words'>
             {title}
-          </p>
-          <p className='text-muted-foreground text-sm'>
-            {formatDateUTC(day.on)}
           </p>
         </div>
         <EmptyCard icon={<CalendarX className='h-5 w-5' />}>

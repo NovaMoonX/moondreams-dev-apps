@@ -44,7 +44,7 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
     return [
       ...base,
       diff(
-        'Funds',
+        'Paid first',
         sourceBefore.pairings ?? [],
         sourceAfter.pairings ?? [],
         pairingCount,
@@ -76,7 +76,7 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
         (value) => value ?? 'follows the plan',
       ),
       diff(
-        'Funds',
+        'Paid first',
         lineBefore.pairings ?? [],
         lineAfter.pairings ?? [],
         pairingCount,

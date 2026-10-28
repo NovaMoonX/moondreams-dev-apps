@@ -16,9 +16,14 @@ import {
 } from '@/components/summaryGroup';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import {
+  canFocusFieldOnOpen,
+  focusFieldQuietly,
+  runWhenDrawerSettled,
+} from '@/utils/focusUtils';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
-const PHONE_FOCUS_DELAY_MS = 350;
+const DRAWER_FOCUS_DELAY_MS = 500;
 const DESKTOP_FOCUS_DELAY_MS = 30;
 const SHORT_SCREEN_MAX_HEIGHT = 599;
 
@@ -38,19 +43,22 @@ function EditorBody({
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!shouldFocus) {
+    if (!shouldFocus || !canFocusFieldOnOpen()) {
       return;
     }
-    const timer = window.setTimeout(() => {
-      const field = bodyRef.current?.querySelector<
-        HTMLInputElement | HTMLTextAreaElement
-      >('input, textarea');
-      field?.focus();
-      if (field && field.selectionStart !== null) {
-        field.setSelectionRange(field.value.length, field.value.length);
-      }
-    }, focusDelay);
-    return () => window.clearTimeout(timer);
+    return runWhenDrawerSettled(
+      bodyRef.current,
+      () => {
+        const field = bodyRef.current?.querySelector<
+          HTMLInputElement | HTMLTextAreaElement
+        >('input, textarea');
+        focusFieldQuietly(field ?? null);
+        if (field && field.selectionStart !== null) {
+          field.setSelectionRange(field.value.length, field.value.length);
+        }
+      },
+      focusDelay,
+    );
   }, [focusDelay, shouldFocus]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -72,6 +80,8 @@ interface SummaryEditorProps {
   label: string;
   /** What the field holds; empty shows `placeholder` instead. */
   summary: string;
+  /** The summary drawn as nodes in place of its words (a figure kept private); `summary` still decides whether it is empty. */
+  summaryNode?: ReactNode;
   placeholder: string;
   /** Why what is stored can't be used, shown under the summary so a closed editor never hides it. */
   problem?: string | null;
@@ -99,6 +109,7 @@ interface SummaryEditorProps {
 function SummaryEditor({
   label,
   summary,
+  summaryNode,
   placeholder,
   problem = null,
   title,
@@ -172,7 +183,7 @@ function SummaryEditor({
             isEmpty && 'text-muted-foreground',
           )}
         >
-          {isEmpty ? placeholder : summary}
+          {isEmpty ? placeholder : (summaryNode ?? summary)}
         </span>
         {problem && (
           <span className='text-destructive block text-xs font-normal'>
@@ -213,7 +224,7 @@ function SummaryEditor({
           >
             <div className='pb-4'>
               <EditorBody
-                focusDelay={PHONE_FOCUS_DELAY_MS}
+                focusDelay={DRAWER_FOCUS_DELAY_MS}
                 shouldFocus={shouldFocus}
                 onDone={close}
               >

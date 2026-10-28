@@ -1,4 +1,5 @@
 import {
+  parseAsBoolean,
   parseAsInteger,
   parseAsString,
   parseAsStringLiteral,
@@ -10,6 +11,8 @@ import {
   CHANGE_LOG_SPANS,
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
+  DEFAULT_SPEND_PERIOD,
+  SPEND_PERIODS,
   MAX_CHANGE_LOG_PAGE,
   DEFAULT_RUNWAY_TAB,
   MORE_ENTRIES,
@@ -18,6 +21,7 @@ import {
   RUNWAY_VIEWS,
   SETTINGS_VIEWS,
 } from '@apps/runway/constants';
+import { isMonthKey } from '@apps/runway/engine/closings';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
 /** Runway's open tab and income day, kept in the URL so a reload and a return from another app land on the same tab. */
@@ -81,10 +85,48 @@ export function useRunwayUrlState() {
     'checkEnvelope',
     parseAsString,
   );
-  const openCheckAmount = (envelopeId: string | null) => {
+  const [requestedCheckFrom, setRequestedCheckFrom] = useQueryState(
+    'checkFrom',
+    parseAsBoolean,
+  );
+  const openCheckAmount = (
+    envelopeId: string | null,
+    isFromFreeToSpend = false,
+  ) => {
     setRequestedCheckEnvelope(envelopeId, { history: 'replace' });
+    setRequestedCheckFrom(isFromFreeToSpend ? true : null, {
+      history: 'replace',
+    });
     setRequestedView('checkAmount', { history: 'replace' });
   };
+
+  const closeCheckAmount = () => {
+    setRequestedCheckEnvelope(null, { history: 'replace' });
+    setRequestedCheckFrom(null, { history: 'replace' });
+    setRequestedView('freeToSpend', { history: 'replace' });
+  };
+
+  const [requestedFixes, setRequestedFixes] = useQueryState(
+    'fixes',
+    parseAsBoolean,
+  );
+  const openFixes = () => setRequestedFixes(true, { history: 'replace' });
+  const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
+
+  const [requestedPeriod, setRequestedPeriod] = useQueryState(
+    'period',
+    parseAsString,
+  );
+  const spendPeriod =
+    requestedPeriod !== null &&
+    (isMonthKey(requestedPeriod) ||
+      (SPEND_PERIODS as readonly string[]).includes(requestedPeriod))
+      ? requestedPeriod
+      : DEFAULT_SPEND_PERIOD;
+  const showSpendPeriod = (period: string) =>
+    setRequestedPeriod(period === DEFAULT_SPEND_PERIOD ? null : period, {
+      history: 'replace',
+    });
 
   const logSpan = requestedSpan ?? DEFAULT_CHANGE_LOG_SPAN;
   const logPage = Math.min(
@@ -107,13 +149,15 @@ export function useRunwayUrlState() {
   const activeTab: RunwayTab = requestedTab ?? DEFAULT_RUNWAY_TAB;
   // nuqs writes the URL without telling the router, so the entry Home leaves by carries its own marker
   // and Back from any other tab pops to it; only leaving Home adds an entry.
-  const markTabStep = () =>
-    window.history.replaceState(
-      { ...window.history.state, runwayTabStep: true },
-      '',
-    );
+  const markTabStep = () => {
+    const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
+    void backLayerKey;
+    void backLayerSeq;
+    window.history.replaceState({ ...entry, runwayTabStep: true }, '');
+  };
   const showTab = (tab: RunwayTab) => {
     if (tab === activeTab) return;
+    if (requestedFixes !== null) closeFixes();
     if (tab === DEFAULT_RUNWAY_TAB) {
       if (window.history.state?.runwayTabStep) {
         navigate(-1);
@@ -165,6 +209,19 @@ export function useRunwayUrlState() {
   const closeView = () => {
     setRequestedView(null, { history: 'replace' });
     setRequestedCheckEnvelope(null, { history: 'replace' });
+    setRequestedCheckFrom(null, { history: 'replace' });
+  };
+
+  /** Leaves the open full-page view for a tab in one update, so the first frame after the tap is that tab; the view's own history entry takes the plain address first, so stepping back off it lands on the screen it opened from. */
+  const leaveViewForTab = (tab: RunwayTab, section?: PlanSection) => {
+    const address = new URL(window.location.href);
+    ['view', 'checkEnvelope', 'checkFrom'].forEach((key) =>
+      address.searchParams.delete(key),
+    );
+    window.history.replaceState(window.history.state, '', address);
+    closeView();
+    if (section) showPlanSection(section);
+    showTab(tab);
   };
 
   return {
@@ -172,12 +229,15 @@ export function useRunwayUrlState() {
     view: requestedView,
     openView,
     closeView,
+    leaveViewForTab,
     showTab,
     showSpend,
     spendEnvelope: requestedSpendEnvelope,
     purchaseId: requestedPurchase,
     checkEnvelope: requestedCheckEnvelope,
+    isCheckFromFreeToSpend: requestedCheckFrom === true,
     openCheckAmount,
+    closeCheckAmount,
     openPurchase,
     closePurchase,
     showSpendEnvelope,
@@ -192,6 +252,11 @@ export function useRunwayUrlState() {
     moreEntry: requestedMore,
     openMoreEntry,
     closeMoreEntry,
+    isFixesOpen: requestedFixes === true,
+    openFixes,
+    closeFixes,
+    spendPeriod,
+    showSpendPeriod,
     logSpan,
     logPage,
     logItem: requestedItem,

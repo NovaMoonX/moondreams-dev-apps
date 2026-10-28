@@ -1,24 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
+import FoldedDateField from '@/components/FoldedDateField';
+import InlineNotice from '@/components/InlineNotice';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import MoneyInput from '@/components/MoneyInput';
 import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
+import SensitiveValue from '@/components/SensitiveValue';
 import SummaryRow from '@/components/SummaryRow';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { store, useAppSelector } from '@/store';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -26,21 +28,33 @@ import {
   formatCents,
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
-import PriorityBadge from '@apps/runway/components/PriorityBadge';
+import { ActionSection } from '@apps/runway/components/ActionSection';
 import {
+  BlockerDoor,
+  CoverCard,
+  CutsSection,
+} from '@apps/runway/components/ShortfallJourney';
+import { LineAmountEditList } from '@apps/runway/components/LineAmounts';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import {
+  CONFIRM_COVER_WORDS,
+  CONFIRM_FLOW_WORDS,
   CONFIRM_WORDS,
   DRAFT_WORDS,
+  FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
+  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
+import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import {
   countUnresolvedHolds,
+  getProtectedLineIds,
   toRecordLines,
 } from '@apps/runway/engine/confirm';
 import {
   applyLineEdits,
+  getCoverable,
   getRemainder,
-  sumLines,
   suggestShortfall,
 } from '@apps/runway/engine/differences';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -49,12 +63,12 @@ import {
   confirmDay,
   DayChangedElsewhere,
 } from '@apps/runway/store/actions/dayActions';
-import type { DraftView } from '@apps/runway/store/selectors/runwaySelectors';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectComingDays,
+  type DraftView,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, Stance } from '@apps/runway/types';
-
-const { custom } = FormFactories;
-
-const LINE_SEARCH_THRESHOLD = 8;
 
 interface ConfirmFormData {
   amount: string;
@@ -67,6 +81,8 @@ interface ConfirmSheetProps {
   stance: Stance;
   onClose: () => void;
 }
+
+type Blocker = { text: string; door: 'cover' | 'cuts' | null };
 
 const toInputs = (
   edits: Record<string, Cents>,
@@ -84,13 +100,19 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-/** Asks the amount that arrived and the day it did, and confirms the day. Needs a connection: the day and its two records are written together. */
+/** Asks the amount that arrived and the day it did, and confirms the day. When less arrives it offers to cover the difference from Free to spend and proposes what gets less; nothing moves without a tap. Needs a connection: the day and its two records are written together. */
 function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
   const isMounted = useRef(true);
+  const coverId = useId();
+  const cutsId = useId();
   const { day, draft } = view;
   const today = todayAsUtcDate();
+  const balances = useAppSelector(selectBalances);
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const initialData: ConfirmFormData = {
     amount: centsToInputValue(draft.moneyCents),
     arrivedOn: toDateInputValue(today),
@@ -102,6 +124,10 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const [lineSearch, setLineSearch] = useState('');
   const [lineInputs, setLineInputs] = useState<Record<string, string>>({});
   const [lineNotes, setLineNotes] = useState<Record<string, string>>({});
+  const [coverChoice, setCoverChoice] = useState<Cents>(0);
+  const [undoInputs, setUndoInputs] = useState<Record<string, string> | null>(
+    null,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,6 +139,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   }, []);
 
   const arrivedCents = parseMoneyToCents(formData.amount);
+  const hasAmount = arrivedCents !== null && arrivedCents > 0;
   const arrivedOn = fromDateInputValue(formData.arrivedOn) ?? null;
   const difference =
     arrivedCents === null ? 0 : arrivedCents - draft.moneyCents;
@@ -130,6 +157,9 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const changedCount = adjusted.filter(
     (line, index) => line.cents !== lines[index].cents,
   ).length;
+  const loweredCount = adjusted.filter(
+    (line, index) => line.cents < lines[index].cents,
+  ).length;
   const searchText = lineSearch.trim().toLowerCase();
   const visibleLines = adjusted
     .map((line, index) => ({ line, index }))
@@ -141,62 +171,72 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           .toLowerCase()
           .includes(searchText),
     );
-  const remainder =
-    arrivedCents === null ? 0 : getRemainder(arrivedCents, adjusted);
+  const remainder = hasAmount ? getRemainder(arrivedCents, adjusted) : 0;
+  const gap = Math.max(0, -remainder);
+  const figure = getFreeToSpendFigure(balances);
+  const freeCents = figure.kind === 'amount' ? figure.cents : null;
+  const coverable = getCoverable(gap, freeCents);
+  const isCoverGone = coverChoice > (freeCents ?? 0);
+  const cover = isCoverGone ? 0 : Math.min(coverChoice, gap);
+  const rest = gap - cover;
+  const isOfferingCover = rest > 0 && coverable > cover;
+  const isNoticeShown = hasAmount && difference < 0;
+  const nextDayOn = comingDays.find((coming) => coming.on > day.on)?.on ?? null;
+  const suggestion =
+    rest > 0
+      ? suggestShortfall(adjusted, rest, getProtectedLineIds(draft, nextDayOn))
+      : {};
+  const suggested = Object.entries(suggestion).map(([lineId, cents]) => {
+    const index = adjusted.findIndex((line) => line.lineId === lineId);
+    return { line: lines[index], from: adjusted[index].cents, to: cents };
+  });
 
-  const getBlocker = () => {
-    if (countUnresolvedHolds(draft) > 0) return CONFIRM_WORDS.holds;
-    if (arrivedCents === null || arrivedCents <= 0)
-      return CONFIRM_WORDS.needsAmount;
-    if (arrivedOn === null || arrivedOn > today) return CONFIRM_WORDS.needsDate;
-    if (hasBadLine) return CONFIRM_WORDS.needsLineAmount;
-    if (remainder < 0)
-      return `The lines take ${formatCents(-remainder)} more than arrived. Lower a line or raise the amount.`;
+  const getBlocker = (): Blocker | null => {
+    if (countUnresolvedHolds(draft) > 0)
+      return { text: CONFIRM_WORDS.holds, door: null };
+    if (!hasAmount) return { text: CONFIRM_WORDS.needsAmount, door: null };
+    if (arrivedOn === null || arrivedOn > today)
+      return { text: CONFIRM_WORDS.needsDate, door: null };
+    if (hasBadLine) return { text: CONFIRM_WORDS.needsLineAmount, door: null };
+    if (isOfferingCover)
+      return {
+        text: isNoticeShown
+          ? CONFIRM_COVER_WORDS.needsCover
+          : mask(CONFIRM_FLOW_WORDS.needsCover(formatCents(gap))),
+        door: 'cover',
+      };
+    if (rest > 0)
+      return {
+        text: isNoticeShown
+          ? CONFIRM_COVER_WORDS.needsCuts
+          : mask(CONFIRM_FLOW_WORDS.needsCuts(formatCents(rest))),
+        door: 'cuts',
+      };
     return null;
   };
   const blocker = getBlocker();
 
-  const getEffect = () => {
-    if (arrivedCents === null || arrivedCents <= 0) return null;
-    const free = `${DRAFT_WORDS.dayLeft}: ${formatCents(Math.max(0, remainder))}.`;
-    if (difference === 0)
-      return changedCount > 0
-        ? `${CONFIRM_WORDS.sameAsExpected} ${free}`
-        : CONFIRM_WORDS.sameAsExpected;
-    if (difference > 0) {
-      const lead = `${formatCents(difference)} more than expected.`;
-      return changedCount > 0
-        ? `${lead} ${free}`
-        : `${lead} ${CONFIRM_WORDS.extraTo} ${free}`;
-    }
-    const lead = `${formatCents(-difference)} less than expected.`;
-    if (changedCount > 0) return `${lead} ${free}`;
-    return remainder < 0
-      ? `${lead} That is more than the ${formatCents(draft.freeToSpend.cents)} left from this day, so a line has to get less.`
-      : `${lead} ${CONFIRM_WORDS.shortFrom} ${free}`;
+  const applyCuts = () => {
+    setUndoInputs(lineInputs);
+    setLineInputs((current) => ({
+      ...current,
+      ...toInputs(suggestion, lines),
+    }));
   };
-  const effect = getEffect();
 
-  const getDoorLabel = () => {
-    if (difference > 0)
-      return `Choose where the ${formatCents(difference)} goes`;
-    if (difference < 0)
-      return `Choose where the ${formatCents(-difference)} comes from`;
-    return CONFIRM_WORDS.adjustLines;
+  const undoCuts = () => {
+    setLineInputs(undoInputs ?? {});
+    setUndoInputs(null);
   };
 
   const openLines = () => {
-    if (arrivedCents !== null && Object.keys(lineInputs).length === 0) {
-      const need = sumLines(lines) - arrivedCents;
-      if (need > 0)
-        setLineInputs(toInputs(suggestShortfall(lines, need), lines));
-    }
+    if (
+      Object.keys(lineInputs).length === 0 &&
+      suggested.length > 0 &&
+      !isOfferingCover
+    )
+      applyCuts();
     setIsChoosing(true);
-  };
-
-  const applyLowestFirst = () => {
-    const need = arrivedCents === null ? 0 : sumLines(lines) - arrivedCents;
-    setLineInputs(toInputs(suggestShortfall(lines, need), lines));
   };
 
   const setLineInput = (lineId: string, text: string) =>
@@ -210,6 +250,15 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       arrivedOn === null
     )
       return;
+    const currentFree = getFreeToSpendFigure(selectBalances(store.getState()));
+    if (
+      cover > 0 &&
+      cover > (currentFree.kind === 'amount' ? currentFree.cents : 0)
+    ) {
+      setCoverChoice(0);
+      setError(CONFIRM_COVER_WORDS.coverGone);
+      return;
+    }
     setError(null);
     setIsSaving(true);
     try {
@@ -235,6 +284,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
             text.trim() === '' ? null : text.trim(),
           ]),
         ),
+        coverCents: cover,
       });
       onClose();
     } catch (confirmError) {
@@ -258,113 +308,248 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
     }
   };
 
-  const fields = [
-    custom({
-      name: 'amount',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>
-            {CONFIRM_WORDS.amount}
-          </p>
-          <MoneyInput
-            variant='outline'
-            ariaLabel={CONFIRM_WORDS.amount}
-            value={props.value as string}
-            onChange={props.onValueChange}
-            disabled={isSaving}
-          />
-          {effect && <p className='text-muted-foreground text-xs'>{effect}</p>}
-          {arrivedCents !== null && arrivedCents > 0 && (
-            <SummaryRow
-              label='Lines'
-              onClick={openLines}
-              detail={
-                changedCount > 0
-                  ? `${changedCount} ${changedCount === 1 ? 'line' : 'lines'} changed`
-                  : undefined
-              }
-            >
-              {getDoorLabel()}
-            </SummaryRow>
-          )}
-        </div>
-      ),
-    }),
-    custom({
-      name: 'arrivedOn',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>{CONFIRM_WORDS.date}</p>
-          <Input
-            type='date'
-            variant='outline'
-            aria-label={CONFIRM_WORDS.date}
-            max={toDateInputValue(today)}
-            value={props.value as string}
-            disabled={isSaving}
-            onChange={(event) => props.onValueChange(event.target.value)}
-          />
-        </div>
-      ),
-    }),
-    custom({
-      name: 'note',
-      label: '',
-      renderComponent: (props) => {
-        if (difference === 0) return null;
-        if (!isNoting && (props.value as string) === '') {
-          return (
-            <div>
-              <RevealChip
-                icon={<Plus className='h-4 w-4' />}
-                onClick={() => setIsNoting(true)}
-              >
-                {CONFIRM_WORDS.note}
-              </RevealChip>
-            </div>
-          );
-        }
-        return (
+  const requestClose = useDiscardGuard({
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(initialData) ||
+      Object.keys(lineInputs).length > 0 ||
+      Object.keys(lineNotes).length > 0 ||
+      coverChoice > 0,
+    onClose,
+    isBusy: isSaving,
+  });
+
+  const setField = (patch: Partial<ConfirmFormData>) =>
+    setFormData((current) => ({ ...current, ...patch }));
+
+  const setAmount = (amount: string) => {
+    setField({ amount });
+    setCoverChoice(0);
+    setUndoInputs(null);
+  };
+
+  const goToFix = (door: Blocker['door']) => {
+    const target = document.getElementById(door === 'cover' ? coverId : cutsId);
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target?.focus({ preventScroll: true });
+  };
+
+  const getFooterNote = () => {
+    if (error) return error;
+    if (blocker === null) return null;
+    if (blocker.door === null) return blocker.text;
+    return (
+      <BlockerDoor
+        text={blocker.text}
+        isDoor={!isChoosing}
+        onOpen={() => goToFix(blocker.door)}
+      />
+    );
+  };
+  const footerNote = getFooterNote();
+
+  const getLessBody = () => {
+    if (gap === 0) return CONFIRM_FLOW_WORDS.lessFromLeft;
+    if (gap === Math.abs(difference) && changedCount === 0)
+      return CONFIRM_FLOW_WORDS.lessNothingLeft;
+    return CONFIRM_FLOW_WORDS.lessGap(formatCents(gap));
+  };
+
+  const getNotice = () => {
+    if (!hasAmount || difference === 0) return null;
+    const amount = formatCents(Math.abs(difference));
+    if (difference > 0) {
+      return (
+        <InlineNotice
+          tone='success'
+          title={
+            <MaskedText>{CONFIRM_FLOW_WORDS.moreTitle(amount)}</MaskedText>
+          }
+        >
+          {CONFIRM_FLOW_WORDS.moreBody}
+        </InlineNotice>
+      );
+    }
+    return (
+      <InlineNotice
+        tone='warning'
+        title={<MaskedText>{CONFIRM_FLOW_WORDS.lessTitle(amount)}</MaskedText>}
+      >
+        <MaskedText>{getLessBody()}</MaskedText>
+      </InlineNotice>
+    );
+  };
+
+  const cutsSection = (
+    <CutsSection
+      id={cutsId}
+      suggested={suggested.map(({ line, from, to }) => ({
+        lineId: line.lineId,
+        name: line.name === '' ? 'Bill' : line.name,
+        emoji: line.emoji,
+        fromCents: from,
+        toCents: to,
+      }))}
+      usedCount={undoInputs === null ? null : loweredCount}
+      isCovered={cover > 0}
+      isOfferingCover={isOfferingCover}
+      isDisabled={isSaving}
+      onApply={applyCuts}
+      onUndo={undoCuts}
+    />
+  );
+  const hasCuts = undoInputs !== null || suggested.length > 0;
+
+  const formBody = (
+    <div className='space-y-5'>
+      <div className='space-y-3'>
+        <AmountHero
+          label={CONFIRM_WORDS.amount}
+          value={formData.amount}
+          onChange={setAmount}
+          disabled={isSaving}
+        />
+        {getNotice()}
+      </div>
+      {hasAmount && gap > 0 && (
+        <ActionSection caption={CONFIRM_FLOW_WORDS.coverCaption}>
+          <div className='border-border rounded-2xl border p-3'>
+            <CoverCard
+              id={coverId}
+              gapCents={gap}
+              coverableCents={coverable}
+              coverCents={cover}
+              freeCents={freeCents ?? 0}
+              freeAfterCents={(freeCents ?? 0) - cover}
+              isHidden={isHidden}
+              isDisabled={isSaving}
+              onCover={() => setCoverChoice(coverable)}
+              onUndo={() => setCoverChoice(0)}
+            />
+          </div>
+        </ActionSection>
+      )}
+      {hasAmount && hasCuts && (
+        <ActionSection caption={CONFIRM_FLOW_WORDS.suggestCaption}>
+          {cutsSection}
+        </ActionSection>
+      )}
+      {hasAmount && (
+        <SummaryRow
+          label={CONFIRM_FLOW_WORDS.eachItem}
+          ariaLabel={`${CONFIRM_FLOW_WORDS.eachItem}, ${changedCount > 0 ? FORM_FLOW_WORDS.linesChanged(changedCount) : FORM_FLOW_WORDS.linesAsPlanned}, change`}
+          onClick={openLines}
+        >
+          {changedCount > 0
+            ? FORM_FLOW_WORDS.linesChanged(changedCount)
+            : FORM_FLOW_WORDS.linesAsPlanned}
+        </SummaryRow>
+      )}
+      <FoldedDateField
+        label={FORM_FLOW_WORDS.arrivedOn}
+        value={formData.arrivedOn}
+        onChange={(arrivedOn) => setField({ arrivedOn })}
+        todayValue={toDateInputValue(today)}
+        max={toDateInputValue(today)}
+        disabled={isSaving}
+      />
+      {difference !== 0 &&
+        (!isNoting && formData.note === '' ? (
+          <div>
+            <RevealChip onClick={() => setIsNoting(true)}>
+              {CONFIRM_WORDS.note}
+            </RevealChip>
+          </div>
+        ) : (
           <div className='space-y-1.5'>
             <p className='text-muted-foreground text-xs'>Note</p>
             <Input
               variant='outline'
               aria-label='Note on the difference'
+              autoFocus={isNoting}
               maxLength={MAX_NOTE_LENGTH}
               placeholder={CONFIRM_WORDS.notePlaceholder}
-              value={props.value as string}
+              value={formData.note}
               disabled={isSaving}
-              onChange={(event) => props.onValueChange(event.target.value)}
+              onChange={(event) => setField({ note: event.target.value })}
             />
           </div>
-        );
-      },
-    }),
-  ];
+        ))}
+      <ModalFooterActions
+        note={footerNote}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={requestClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || blocker !== null}
+            onClick={() => void handleConfirm()}
+          >
+            {CONFIRM_WORDS.confirm}
+          </Button>
+        }
+      />
+    </div>
+  );
 
   return (
-    <FormSheet isOpen onClose={onClose} title={CONFIRM_WORDS.sheetTitle}>
+    <FormSheet
+      isOpen
+      onClose={requestClose}
+      title={CONFIRM_WORDS.sheetTitle}
+      actions={<ValuesEyeButton />}
+    >
       {isChoosing && (
         <div className='space-y-3'>
           <div className='space-y-3'>
             <BackLink onBack={() => setIsChoosing(false)} />
             <div className='space-y-1'>
-              <p className='text-muted-foreground text-sm'>
+              <InlineNotice tone='info'>
                 {CONFIRM_WORDS.adjustIntro}
-              </p>
-              <p className='text-sm font-medium'>
-                {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
-                <span className='text-muted-foreground font-normal'>
-                  {' '}
-                  of {arrivedCents === null ? '' : formatCents(arrivedCents)}
-                </span>
-              </p>
+              </InlineNotice>
+              <div
+                className='flex flex-wrap items-baseline justify-between gap-x-3 pt-1'
+                role='status'
+              >
+                <p className='text-muted-foreground text-sm whitespace-nowrap'>
+                  {DRAFT_WORDS.dayLeft}
+                </p>
+                <p className='text-right whitespace-nowrap'>
+                  <span
+                    className={join(
+                      'text-xl font-semibold tabular-nums',
+                      remainder + cover < 0 &&
+                        !isHidden &&
+                        'text-(--runway-warning-ink)',
+                    )}
+                  >
+                    <SensitiveValue>
+                      {formatCents(remainder + cover)}
+                    </SensitiveValue>
+                  </span>
+                  {arrivedCents !== null && (
+                    <span className='text-muted-foreground text-sm'>
+                      {' '}
+                      of{' '}
+                      <SensitiveValue>
+                        {formatCents(arrivedCents)}
+                      </SensitiveValue>
+                    </span>
+                  )}
+                </p>
+              </div>
             </div>
             <div className='flex flex-wrap gap-2'>
-              {remainder < 0 && (
-                <RevealChip onClick={applyLowestFirst}>
+              {suggested.length > 0 && (
+                <RevealChip onClick={applyCuts}>
                   {CONFIRM_WORDS.lowestFirst}
                 </RevealChip>
               )}
@@ -373,81 +558,51 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
                   onClick={() => {
                     setLineInputs({});
                     setLineNotes({});
+                    setUndoInputs(null);
                   }}
                 >
                   {CONFIRM_WORDS.resetLines}
                 </RevealChip>
               )}
             </div>
-            {adjusted.length >= LINE_SEARCH_THRESHOLD && (
+            {adjusted.length >= RUNWAY_SEARCH_THRESHOLD && (
               <SearchInput
                 value={lineSearch}
                 onChange={setLineSearch}
-                placeholder='Find a line'
+                placeholder={CONFIRM_FLOW_WORDS.findItem}
               />
             )}
             {visibleLines.length === 0 && (
               <p className='text-muted-foreground text-sm'>
-                No line matches that.
+                {CONFIRM_FLOW_WORDS.noItemMatch}
               </p>
             )}
           </div>
-          <ul className='border-border divide-border max-h-[max(9rem,calc(92dvh-29rem))] divide-y overflow-y-auto rounded-2xl border [@media(max-height:499px)]:max-h-none'>
-            {visibleLines.map(({ line, index }) => {
+          <LineAmountEditList
+            className='max-h-[max(9rem,calc(92dvh-29rem))] [@media(max-height:499px)]:max-h-none'
+            notePlaceholder={CONFIRM_WORDS.lineNotePlaceholder}
+            isDisabled={isSaving}
+            onChange={setLineInput}
+            onNote={(lineId, text) =>
+              setLineNotes((current) => ({ ...current, [lineId]: text }))
+            }
+            items={visibleLines.map(({ line, index }) => {
               const original = lines[index];
-              const isChanged = line.cents !== original.cents;
-              const name = original.name === '' ? 'Bill' : original.name;
-              return (
-                <li key={line.lineId} className='space-y-2 p-3'>
-                  <div className='flex flex-wrap items-start gap-x-3 gap-y-2'>
-                    <ItemBadge name={name} emoji={original.emoji} />
-                    <div className='min-w-24 flex-1 space-y-1'>
-                      <p className='line-clamp-2 font-medium break-words'>
-                        {name}
-                      </p>
-                      <PriorityBadge priority={original.tier} />
-                    </div>
-                    <div className='w-28 max-[339px]:w-full'>
-                      <MoneyInput
-                        variant='outline'
-                        ariaLabel={`${name} amount`}
-                        value={
-                          Object.hasOwn(lineInputs, line.lineId)
-                            ? lineInputs[line.lineId]
-                            : centsToInputValue(original.cents)
-                        }
-                        onChange={(text) => setLineInput(line.lineId, text)}
-                        disabled={isSaving}
-                      />
-                    </div>
-                  </div>
-                  {isChanged && (
-                    <div className='space-y-1.5'>
-                      <p className='text-muted-foreground text-xs'>
-                        {CONFIRM_WORDS.planned} {formatCents(original.cents)}
-                      </p>
-                      <Input
-                        variant='outline'
-                        aria-label={`Note on ${name}`}
-                        maxLength={MAX_NOTE_LENGTH}
-                        placeholder={CONFIRM_WORDS.lineNotePlaceholder}
-                        value={lineNotes[line.lineId] ?? ''}
-                        disabled={isSaving}
-                        onChange={(event) =>
-                          setLineNotes((current) => ({
-                            ...current,
-                            [line.lineId]: event.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  )}
-                </li>
-              );
+              return {
+                id: line.lineId,
+                name: original.name === '' ? 'Bill' : original.name,
+                emoji: original.emoji,
+                value: Object.hasOwn(lineInputs, line.lineId)
+                  ? lineInputs[line.lineId]
+                  : centsToInputValue(original.cents),
+                plannedCents: original.cents,
+                isChanged: line.cents !== original.cents,
+                note: lineNotes[line.lineId] ?? '',
+              };
             })}
-          </ul>
+          />
           <ModalFooterActions
-            note={error ?? blocker}
+            note={footerNote}
             rightActions={
               <Button type='button' onClick={() => setIsChoosing(false)}>
                 {CONFIRM_WORDS.adjustedDone}
@@ -456,42 +611,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           />
         </div>
       )}
-      <div className={join(isChoosing && 'hidden')}>
-        <Form
-          id='runway-confirm-day'
-          form={fields}
-          initialData={initialData}
-          columns={1}
-          onDataChange={(data) => setFormData(data as ConfirmFormData)}
-          onSubmit={() => {
-            void handleConfirm();
-          }}
-          submitButton={
-            <ModalFooterActions
-              note={error ?? blocker}
-              cancelAction={
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={onClose}
-                  disabled={isSaving}
-                >
-                  Cancel
-                </Button>
-              }
-              rightActions={
-                <Button
-                  type='submit'
-                  loading={isSaving}
-                  disabled={isSaving || blocker !== null}
-                >
-                  {CONFIRM_WORDS.confirm}
-                </Button>
-              }
-            />
-          }
-        />
-      </div>
+      <div className={join(isChoosing && 'hidden')}>{formBody}</div>
     </FormSheet>
   );
 }

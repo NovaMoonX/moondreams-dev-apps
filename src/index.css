@@ -438,3 +438,11 @@ button[class*='transition-all'] {
     animation: none;
   }
 }
+
+/* An empty date input draws its own "mm/dd/yyyy" segments; they stay hidden until a date is picked or the field has focus. `data-empty` comes from `lib/app/emptyDateInputs`. */
+input[type="date"][data-empty]:not(:focus) {
+  color: transparent;
+}
+input[type="date"][data-empty]:not(:focus)::-webkit-datetime-edit {
+  opacity: 0;
+}

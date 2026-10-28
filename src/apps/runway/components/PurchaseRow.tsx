@@ -1,10 +1,14 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import ItemRow from '@apps/runway/components/ItemRow';
 import type { OpenPurchase } from '@apps/runway/types';
-import { describeEnvelopes, isRefund } from '@apps/runway/utils/purchaseText';
+import {
+  describeEnvelopes,
+  getPurchaseTitle,
+  isRefund,
+} from '@apps/runway/utils/purchaseText';
 
 interface PurchaseRowProps {
   purchase: OpenPurchase;
@@ -12,43 +16,49 @@ interface PurchaseRowProps {
   onOpen: () => void;
 }
 
-/** One purchase in a list: where it was, the day, the envelopes it came out of and the amount. A refund reads as money coming back. */
-function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
+/** One purchase in a list: where it was, the day and the envelopes it came out of, and the amount. A refund reads as money coming back. */
+function PurchaseRow({
+  purchase,
+  looks,
+  onOpen,
+}: PurchaseRowProps) {
+  const { isHidden } = useValuesHidden();
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
   const refund = isRefund(purchase);
   const named = purchase.merchant?.trim() || purchase.note?.trim() || null;
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
+  const firstName = purchase.lines[0]
+    ? purchase.lines[0].envelopeId === null
+      ? 'Free to spend'
+      : nameOf(purchase.lines[0].envelopeId)
+    : '';
+  const shortEnvelopes =
+    purchase.lines.length > 1
+      ? `${firstName} and ${purchase.lines.length - 1} more`
+      : envelopes;
   const first = purchase.lines[0]?.envelopeId ?? null;
   const lead = first === null ? null : (looks.get(first) ?? null);
-  const date = formatDateUTC(purchase.date);
-  const title =
-    named ?? (refund ? `Refund to ${envelopes}` : envelopes || 'Purchase');
+  const date = formatDateShortUTC(purchase.date);
+  const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const detail = named
-    ? `${date}, ${refund ? 'refund to ' : ''}${envelopes}`
+    ? `${date} · ${refund && !isHidden ? 'refund to ' : ''}${shortEnvelopes}`
     : date;
+  const amount = refund
+    ? `+${formatCents(-purchase.amountCents)}`
+    : formatCents(purchase.amountCents);
 
   return (
-    <li>
-      <Button
-        type='button'
-        variant='tertiary'
-        className='text-foreground! h-auto w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
-        aria-label={`${title}, ${date}. Open`}
-        onClick={onOpen}
-      >
+    <ItemRow
+      name={title}
+      leading={
         <ItemBadge name={lead?.name ?? title} emoji={lead?.emoji ?? null} />
-        <div className='min-h-10 min-w-0 flex-1'>
-          <p className='line-clamp-2 font-medium break-words'>{title}</p>
-          <p className='text-muted-foreground text-sm break-words'>{detail}</p>
-        </div>
-        <p className='shrink-0 pt-2 font-semibold whitespace-nowrap tabular-nums'>
-          {refund
-            ? `+${formatCents(-purchase.amountCents)}`
-            : formatCents(purchase.amountCents)}
-        </p>
-      </Button>
-    </li>
+      }
+      detail={detail}
+      figure={amount}
+      ariaLabel={`${title}, ${amount}, ${detail}. Open`}
+      onOpen={onOpen}
+    />
   );
 }
 

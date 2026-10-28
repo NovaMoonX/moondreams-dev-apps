@@ -44,7 +44,7 @@ All components are imported from `@moondreamsdev/dreamer-ui/components`.
 
 ### Feedback Components
 
-- **Callout**: Versatile component for displaying alerts, warnings, and informational messages.
+- **Callout**: Not used in this repo (lint refuses it): its text colours are fixed for dark mode. Use `@/components/InlineNotice`.
 - **Error Boundary**: React error boundary component that catches JavaScript errors and displays fallback UI.
 - **Help Icon**: Help icon component that combines InfoCircled icon with tooltip for contextual assistance.
 - **Skeleton**: Loading placeholders that mimic the structure of your content.

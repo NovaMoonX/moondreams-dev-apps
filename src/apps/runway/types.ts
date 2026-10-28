@@ -1,6 +1,7 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
 import type {
+  CALENDAR_PERIODS,
   CHANGE_KINDS,
   DAY_RECORD_KINDS,
   ITEM_KINDS,
@@ -268,11 +269,16 @@ export interface OpenDay {
 }
 
 export interface FundingRule {
+  /** A calendar cadence reads it as the amount for one period; the others as the amount for one income day. */
   amount: FundingAmount;
   cadence:
     | { kind: 'everyIncomeDay' }
     | { kind: 'everyNth'; n: 2 | 3; anchorDayKey: string }
-    | { kind: 'chosen'; dayKeys: string[] };
+    | { kind: 'chosen'; dayKeys: string[] }
+    | { kind: 'calendar'; period: CalendarPeriod; startsOn: DateOnly | null }
+    | { kind: 'none' };
+  /** The income source whose pay the rule counts; a rule written before it existed counts every source. */
+  sourceId?: string | null;
 }
 
 export interface EnvelopeSealed {
@@ -312,6 +318,8 @@ export interface GoalSealed {
   targetCents: Cents;
   targetDate: DateOnly | null;
   funding: FundingRule;
+  /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
   /** Paused stops new money and keeps the balance; a version written before it existed has none and reads as active. */
   state: GoalState;
 }
@@ -323,6 +331,8 @@ export interface PlanItemDoc {
   createdAt: number;
   endedAt: DateOnly | null;
   archivedAt: number | null;
+  /** From this day what the item holds is Free to spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
+  heldReleasedOn: DateOnly | null;
 }
 
 export interface PlanVersionDoc {
@@ -498,3 +508,6 @@ export interface ClosingDoc {
   createdAt: number;
   sealed: Sealed;
 }
+
+// Round 4: funding on the calendar.
+export type CalendarPeriod = (typeof CALENDAR_PERIODS)[number];

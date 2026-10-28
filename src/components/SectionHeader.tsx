@@ -14,9 +14,17 @@ interface SectionHeaderProps {
   /** Controls in the subtitle's place, for a header whose row is better spent on them than on a sentence. */
   lead?: ReactNode;
   action?: ReactNode;
+  /** A help icon on the title's line, for a caveat about the whole section. */
+  help?: ReactNode;
 }
 
-function SectionHeader({ title, subtitle, lead, action }: SectionHeaderProps) {
+function SectionHeader({
+  title,
+  subtitle,
+  lead,
+  action,
+  help,
+}: SectionHeaderProps) {
   const subviewTitle = useContext(SubviewTitleContext);
 
   // A subview's header already shows this title, so only the subtitle and the action remain.
@@ -40,9 +48,10 @@ function SectionHeader({ title, subtitle, lead, action }: SectionHeaderProps) {
   return (
     <div className='flex items-start justify-between gap-3'>
       <div className='min-w-0'>
-        <h2 className='flex h-10 items-center text-xl font-semibold'>
-          {title}
-        </h2>
+        <div className='flex h-10 items-center gap-1'>
+          <h2 className='text-xl font-semibold'>{title}</h2>
+          {help}
+        </div>
         {subtitle && (
           <p className='text-muted-foreground -mt-1 text-sm text-balance'>
             {subtitle}

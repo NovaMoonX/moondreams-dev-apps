@@ -1,33 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Search } from 'lucide-react';
 
-import {
-  Button,
-  Form,
-  FormFactories,
-  Input,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import MoneyInput from '@/components/MoneyInput';
 import { PillGroup } from '@/components/PillGroup';
+import QuestionFlow from '@/components/QuestionFlow';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
+import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
+import ItemBadge from '@apps/runway/components/ItemBadge';
 import SplitEditor from '@apps/runway/components/SplitEditor';
+import { isTooLong } from '@apps/runway/utils/rangeInput';
 import {
+  FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
+  RUNWAY_SEARCH_THRESHOLD,
   MAX_NAME_LENGTH,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -58,11 +60,17 @@ import {
   describePurchaseEdit,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
-
-const { custom } = FormFactories;
+import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import SensitiveValue from '@/components/SensitiveValue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 
 const ORIGIN_PAGE = 20;
-const ORIGIN_SEARCH_THRESHOLD = 8;
+const MOST_USED_SHOWN = 5;
+const RECENT_PURCHASES = 60;
 const FREE_VALUE = 'free';
 
 interface PurchaseFormData {
@@ -74,6 +82,8 @@ interface PurchaseFormData {
 interface PurchaseFormProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Where Cancel and Discard go, when that is not where a save goes (back to the sheet the form came from). */
+  onCancel?: () => void;
   /** The envelope the form opened from; it starts chosen. */
   presetEnvelopeId?: string | null;
   /** The purchase being changed; the form then saves over it instead of adding. */
@@ -88,6 +98,7 @@ const isOfflineFailure = (error: unknown) =>
 function PurchaseForm({
   isOpen,
   onClose,
+  onCancel,
   presetEnvelopeId = null,
   editing,
 }: PurchaseFormProps) {
@@ -115,7 +126,10 @@ function PurchaseForm({
   const startsSplit =
     editing !== undefined && editing.amountCents > 0 && editingLines.length > 1;
   const [formData, setFormData] = useState<PurchaseFormData>(initialData);
-  const [view, setView] = useState<'form' | 'split' | 'original'>('form');
+  const [view, setView] = useState<'form' | 'split' | 'original' | 'envelopes'>(
+    'form',
+  );
+  const [envelopeSearch, setEnvelopeSearch] = useState('');
   const [isRefund, setIsRefund] = useState(
     editing !== undefined && editing.amountCents < 0,
   );
@@ -152,6 +166,7 @@ function PurchaseForm({
       : FREE_VALUE,
   );
   const [originQuery, setOriginQuery] = useState('');
+  const [revealed, setRevealed] = useState<'merchant' | 'note' | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -314,18 +329,32 @@ function PurchaseForm({
   };
   const blocker = getBlocker();
 
+  const snapshot = JSON.stringify({
+    formData,
+    envelopeId,
+    isRefund,
+    splitIds,
+    shares,
+    originalId,
+    returnTo,
+  });
+  const [startSnapshot] = useState(snapshot);
   const isCounted =
     date !== null && countedFrom !== null && date >= countedFrom;
   const effect =
     lines === null || !isCounted ? null : getPurchaseEffect(lines, leftById);
   const getEffectLine = () => {
     if (effect === null || lines === null) return null;
+    const freeChange =
+      effect.freeDropCents < 0
+        ? `Free to spend goes up by ${formatCents(-effect.freeDropCents)}.`
+        : `Free to spend drops by ${formatCents(effect.freeDropCents)}.`;
     if (effect.over.length === 1) {
       const [only] = effect.over;
-      return `${nameOf(only.envelopeId)} would be ${formatCents(only.overCents)} over. Free to spend drops by ${formatCents(effect.freeDropCents)}.`;
+      return `${nameOf(only.envelopeId)} would be ${formatCents(only.overCents)} over. ${freeChange}`;
     }
     if (effect.over.length > 1) {
-      return `${effect.over.length} envelopes would be over. Free to spend drops by ${formatCents(effect.freeDropCents)}.`;
+      return `${effect.over.length} envelopes would be over. ${freeChange}`;
     }
     if (effect.freeDropCents < 0) {
       return `Free to spend goes up by ${formatCents(-effect.freeDropCents)}.`;
@@ -336,7 +365,11 @@ function PurchaseForm({
     }
     return null;
   };
-  const effectLine = getEffectLine();
+  const { isHidden } = useValuesHidden();
+  const effectLine =
+    editing !== undefined && snapshot === startSnapshot
+      ? null
+      : getEffectLine();
 
   const startSplit = () => {
     const first = envelopeId !== null ? [envelopeId] : [];
@@ -457,48 +490,127 @@ function PurchaseForm({
         .includes(originQuery.trim().toLowerCase()),
   );
 
-  const envelopePills = options.map((option) => ({
+  const usage = purchases
+    .slice(0, RECENT_PURCHASES)
+    .flatMap((purchase) => purchase.lines)
+    .reduce<Record<string, number>>(
+      (acc, line) =>
+        line.envelopeId === null
+          ? acc
+          : { ...acc, [line.envelopeId]: (acc[line.envelopeId] ?? 0) + 1 },
+      {},
+    );
+  const ranked = liveOptions
+    .map((option, index) => ({ option, index }))
+    .sort(
+      (a, b) =>
+        (usage[b.option.id] ?? 0) - (usage[a.option.id] ?? 0) ||
+        a.index - b.index,
+    )
+    .map(({ option }) => option);
+  const hasMore = options.length > MOST_USED_SHOWN + 1;
+  const shownOptions = hasMore
+    ? [
+        ...ranked.slice(0, MOST_USED_SHOWN),
+        ...options.filter(
+          (option) =>
+            option.id === envelopeId &&
+            !ranked.slice(0, MOST_USED_SHOWN).includes(option),
+        ),
+      ]
+    : options;
+  const envelopePills = shownOptions.map((option) => ({
     value: option.id,
     label: option.name,
     emoji: option.emoji ?? undefined,
   }));
+  const allPills = options.map((option) => ({
+    value: option.id,
+    label: option.name,
+    emoji: option.emoji ?? undefined,
+  }));
+  const envelopeQuery = envelopeSearch.trim().toLowerCase();
+  const foundOptions = options.filter((option) =>
+    option.name.toLowerCase().includes(envelopeQuery),
+  );
 
-  const fields = [
-    custom({
-      name: 'amount',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-3'>
-          <div className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>
-              {isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount}
-            </p>
-            <MoneyInput
-              variant='outline'
-              ariaLabel={
-                isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount
-              }
-              value={props.value as string}
-              onChange={props.onValueChange}
-              disabled={isSaving}
-            />
-            {!editing && (
-              <div>
-                <RevealChip
-                  icon={
-                    isRefund ? (
-                      <X className='h-4 w-4' />
-                    ) : (
-                      <Plus className='h-4 w-4' />
-                    )
-                  }
-                  onClick={toggleRefund}
-                >
-                  {isRefund ? SPEND_WORDS.unmarkRefund : SPEND_WORDS.markRefund}
-                </RevealChip>
-              </div>
-            )}
-          </div>
+  const setExtras = (patch: Partial<PurchaseFormData['extras']>) =>
+    setFormData((current) => ({
+      ...current,
+      extras: { ...current.extras, ...patch },
+    }));
+  const { extras } = formData;
+
+  const isOverHidden = isHidden && (effect?.over.length ?? 0) > 0;
+  const effectNote = isOverHidden ? (
+    <NeedsALookRow />
+  ) : (
+    effectLine && (
+      <p className='text-muted-foreground text-sm' role='status'>
+        <MaskedText>{effectLine}</MaskedText>
+      </p>
+    )
+  );
+  const getEnvelopeSummary = () => {
+    if (lines === null) return '';
+    if (isRefund) return `Back to ${describeEnvelopes(lines, nameOf)}`;
+    return describeEnvelopes(lines, nameOf);
+  };
+  const todayValue = toDateInputValue(today);
+
+  const steps: QuestionStep[] = [
+    {
+      id: 'amount',
+      title: isRefund
+        ? FORM_FLOW_WORDS.refundAmountTitle
+        : FORM_FLOW_WORDS.purchaseAmountTitle,
+      summaryLabel: isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount,
+      summaryValue: amount === null ? '' : formatCents(amount),
+      isAnswered: amount !== null,
+      blocker:
+        formData.amount.trim() === ''
+          ? null
+          : (parsed !== null && parsed > 0) || isTooLong(formData.amount)
+            ? FORM_FLOW_WORDS.overLimit
+            : FORM_FLOW_WORDS.badAmount,
+      render: () => (
+        <AmountHero
+          label={isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount}
+          value={formData.amount}
+          onChange={(next) =>
+            setFormData((current) => ({ ...current, amount: next }))
+          }
+          disabled={isSaving}
+          ways={
+            editing
+              ? []
+              : [
+                  {
+                    label: isRefund
+                      ? FORM_FLOW_WORDS.notRefundLink
+                      : FORM_FLOW_WORDS.refundLink,
+                    onClick: toggleRefund,
+                  },
+                ]
+          }
+        />
+      ),
+    },
+    {
+      id: 'envelope',
+      title: isRefund
+        ? FORM_FLOW_WORDS.refundForTitle
+        : FORM_FLOW_WORDS.purchaseForTitle,
+      summaryLabel: isRefund ? SPEND_WORDS.returnsTo : SPEND_WORDS.envelope,
+      summaryValue: getEnvelopeSummary(),
+      isAnswered: lines !== null,
+      blocker: isSplit && !isRefund ? SPEND_WORDS.needsShares : null,
+      isPreAnswered:
+        !isRefund &&
+        presetEnvelopeId !== null &&
+        envelopeId === presetEnvelopeId,
+      render: ({ moveOn }) => (
+        <div className='space-y-4'>
           {isRefund && (
             <SummaryRow
               label={SPEND_WORDS.refundOf}
@@ -523,32 +635,45 @@ function PurchaseForm({
                 label={SPEND_WORDS.returnsTo}
                 options={[
                   { value: FREE_VALUE, label: SPEND_WORDS.freeToSpend },
-                  ...envelopePills,
+                  ...allPills,
                 ]}
                 value={returnTo}
-                onChange={setReturnTo}
+                onChange={(id) => {
+                  setReturnTo(id);
+                  if (amount !== null) moveOn();
+                }}
               />
             </div>
           )}
           {!isRefund && !isSplit && (
             <div className='space-y-2'>
-              <p className='text-muted-foreground text-xs'>
-                {SPEND_WORDS.envelope}
-              </p>
               <PillGroup
                 label={SPEND_WORDS.envelope}
                 options={envelopePills}
                 value={envelopeId}
-                onChange={setEnvelopeId}
+                onChange={(id) => {
+                  setEnvelopeId(id);
+                  if (amount !== null) moveOn();
+                }}
               />
-              {amount !== null && options.length >= 2 && (
-                <div>
-                  <RevealChip
-                    icon={<Plus className='h-4 w-4' />}
-                    onClick={startSplit}
-                  >
-                    {SPEND_WORDS.split}
-                  </RevealChip>
+              {(hasMore || (amount !== null && options.length >= 2)) && (
+                <div className='flex flex-wrap gap-2'>
+                  {hasMore && (
+                    <RevealChip
+                      icon={<Search className='h-4 w-4' />}
+                      onClick={() => {
+                        setEnvelopeSearch('');
+                        setView('envelopes');
+                      }}
+                    >
+                      {FORM_FLOW_WORDS.more}
+                    </RevealChip>
+                  )}
+                  {amount !== null && options.length >= 2 && (
+                    <RevealChip onClick={startSplit}>
+                      {SPEND_WORDS.split}
+                    </RevealChip>
+                  )}
                 </div>
               )}
             </div>
@@ -559,129 +684,178 @@ function PurchaseForm({
                 label={SPEND_WORDS.splitLabel}
                 onClick={() => setView('split')}
               >
-                {splitIds.length === 0
-                  ? 'Pick the envelopes'
-                  : splitIds
+                {splitIds.length === 0 ? (
+                  'Pick the envelopes'
+                ) : (
+                  <MaskedText>
+                    {splitIds
                       .map(
                         (id) =>
                           `${nameOf(id)} ${formatCents(parseMoneyToCents(shares[id] ?? '') ?? 0)}`,
                       )
                       .join(', ')}
+                  </MaskedText>
+                )}
               </SummaryRow>
               <div>
-                <RevealChip
-                  icon={<X className='h-4 w-4' />}
-                  onClick={stopSplit}
-                >
+                <RevealChip onClick={stopSplit}>
                   {SPEND_WORDS.unsplit}
                 </RevealChip>
               </div>
             </div>
           )}
-          {effectLine && (
-            <p className='text-muted-foreground text-xs' role='status'>
-              {effectLine}
-            </p>
-          )}
+          {effectNote}
         </div>
       ),
-    }),
-    custom({
-      name: 'date',
-      label: '',
-      renderComponent: (props) => (
-        <div className='space-y-1.5'>
-          <p className='text-muted-foreground text-xs'>{SPEND_WORDS.day}</p>
-          <Input
-            type='date'
-            variant='outline'
-            aria-label={SPEND_WORDS.day}
-            max={toDateInputValue(today)}
-            value={props.value as string}
-            disabled={isSaving}
-            onChange={(event) => props.onValueChange(event.target.value)}
-          />
-        </div>
+    },
+    {
+      id: 'day',
+      title: FORM_FLOW_WORDS.dayTitle,
+      summaryLabel: SPEND_WORDS.day,
+      summaryValue:
+        formData.date === todayValue
+          ? 'Today'
+          : date === null
+            ? ''
+            : formatDateUTC(date),
+      isAnswered: date !== null && date <= today,
+      isPreAnswered: true,
+      render: () => (
+        <Input
+          type='date'
+          variant='outline'
+          aria-label={SPEND_WORDS.day}
+          max={todayValue}
+          value={formData.date}
+          disabled={isSaving}
+          onChange={(event) =>
+            setFormData((current) => ({
+              ...current,
+              date: event.target.value,
+            }))
+          }
+        />
       ),
-    }),
-    custom({
-      name: 'extras',
-      label: '',
-      renderComponent: (props) => {
-        const extras = props.value as PurchaseFormData['extras'];
-        const set = (patch: Partial<PurchaseFormData['extras']>) =>
-          props.onValueChange({ ...extras, ...patch });
-        return (
-          <div className='space-y-3'>
-            {extras.merchant !== null && (
-              <div className='space-y-1.5'>
-                <p className='text-muted-foreground text-xs'>
-                  {SPEND_WORDS.where}
-                </p>
-                <Input
-                  variant='outline'
-                  aria-label={SPEND_WORDS.where}
-                  maxLength={MAX_NAME_LENGTH}
-                  placeholder={SPEND_WORDS.wherePlaceholder}
-                  value={extras.merchant}
-                  disabled={isSaving}
-                  onChange={(event) => set({ merchant: event.target.value })}
-                />
-              </div>
-            )}
-            {extras.note !== null && (
-              <div className='space-y-1.5'>
-                <p className='text-muted-foreground text-xs'>
-                  {SPEND_WORDS.note}
-                </p>
-                <Input
-                  variant='outline'
-                  aria-label={SPEND_WORDS.note}
-                  maxLength={MAX_NOTE_LENGTH}
-                  placeholder={SPEND_WORDS.notePlaceholder}
-                  value={extras.note}
-                  disabled={isSaving}
-                  onChange={(event) => set({ note: event.target.value })}
-                />
-              </div>
-            )}
-            <div className='flex flex-wrap gap-2'>
-              <RevealChip
-                icon={
-                  extras.merchant === null ? (
-                    <Plus className='h-4 w-4' />
-                  ) : (
-                    <X className='h-4 w-4' />
-                  )
-                }
-                onClick={() =>
-                  set({ merchant: extras.merchant === null ? '' : null })
-                }
-              >
-                {extras.merchant === null
-                  ? SPEND_WORDS.addWhere
-                  : SPEND_WORDS.removeWhere}
-              </RevealChip>
-              <RevealChip
-                icon={
-                  extras.note === null ? (
-                    <Plus className='h-4 w-4' />
-                  ) : (
-                    <X className='h-4 w-4' />
-                  )
-                }
-                onClick={() => set({ note: extras.note === null ? '' : null })}
-              >
-                {extras.note === null
-                  ? SPEND_WORDS.addNote
-                  : SPEND_WORDS.removeNote}
-              </RevealChip>
-            </div>
-          </div>
-        );
-      },
-    }),
+    },
   ];
+  const mask = useMaskedText();
+  const maskNote = (note: string | null | undefined) =>
+    note ? mask(note) : null;
+  const questions = useQuestionFlow({
+    steps: maskSummaries(steps, isHidden),
+    startFolded: editing !== undefined,
+  });
+  const isAsking = !questions.hasReviewed;
+  const requestClose = useDiscardGuard({
+    isDirty: snapshot !== startSnapshot,
+    onClose: onCancel ?? onClose,
+    isBusy: isSaving,
+    title: editing
+      ? FORM_FLOW_WORDS.discardChange
+      : FORM_FLOW_WORDS.discardNew('purchase'),
+  });
+
+  const formBody = (
+    <div className='space-y-5'>
+      <QuestionFlow flow={questions} />
+      {questions.hasReviewed && (
+        <div className='space-y-3'>
+          {effectNote}
+          {extras.merchant !== null && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                {SPEND_WORDS.where}
+              </p>
+              <Input
+                variant='outline'
+                aria-label={SPEND_WORDS.where}
+                autoFocus={revealed === 'merchant'}
+                maxLength={MAX_NAME_LENGTH}
+                placeholder={SPEND_WORDS.wherePlaceholder}
+                value={extras.merchant}
+                disabled={isSaving}
+                onChange={(event) =>
+                  setExtras({ merchant: event.target.value })
+                }
+              />
+            </div>
+          )}
+          {extras.note !== null && (
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                {SPEND_WORDS.note}
+              </p>
+              <Input
+                variant='outline'
+                aria-label={SPEND_WORDS.note}
+                autoFocus={revealed === 'note'}
+                maxLength={MAX_NOTE_LENGTH}
+                placeholder={SPEND_WORDS.notePlaceholder}
+                value={extras.note}
+                disabled={isSaving}
+                onChange={(event) => setExtras({ note: event.target.value })}
+              />
+            </div>
+          )}
+          <div className='flex flex-wrap gap-2'>
+            <RevealChip
+              onClick={() => {
+                setRevealed(extras.merchant === null ? 'merchant' : null);
+                setExtras({ merchant: extras.merchant === null ? '' : null });
+              }}
+            >
+              {extras.merchant === null
+                ? FORM_FLOW_WORDS.addPlace
+                : FORM_FLOW_WORDS.removePlace}
+            </RevealChip>
+            <RevealChip
+              onClick={() => {
+                setRevealed(extras.note === null ? 'note' : null);
+                setExtras({ note: extras.note === null ? '' : null });
+              }}
+            >
+              {extras.note === null
+                ? SPEND_WORDS.addNote
+                : SPEND_WORDS.removeNote}
+            </RevealChip>
+          </div>
+        </div>
+      )}
+      <ModalFooterActions
+        note={error ?? maskNote(isAsking ? questions.blocker : blocker)}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={requestClose}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          isAsking ? (
+            <Button
+              type='button'
+              disabled={!questions.open?.isAnswered}
+              onClick={questions.advance}
+            >
+              {FORM_FLOW_WORDS.next}
+            </Button>
+          ) : (
+            <Button
+              type='button'
+              loading={isSaving}
+              disabled={isSaving || blocker !== null}
+              onClick={() => void handleSave()}
+            >
+              {editing ? SPEND_WORDS.save : SPEND_WORDS.add}
+            </Button>
+          )
+        }
+      />
+    </div>
+  );
 
   const getSplitBlocker = () => {
     if (splitIds.length < 2) return SPEND_WORDS.needsTwo;
@@ -696,7 +870,12 @@ function PurchaseForm({
   const splitBlocker = getSplitBlocker();
 
   return (
-    <FormSheet isOpen={isOpen} onClose={onClose} title={SPEND_WORDS.sheetTitle}>
+    <FormSheet
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={SPEND_WORDS.sheetTitle}
+      actions={<ValuesEyeButton />}
+    >
       {view === 'split' && amount !== null && (
         <div className='space-y-3'>
           <SplitEditor
@@ -748,7 +927,7 @@ function PurchaseForm({
           >
             {SPEND_WORDS.noOriginal}
           </Button>
-          {others.length >= ORIGIN_SEARCH_THRESHOLD && (
+          {others.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
               value={originQuery}
               onChange={setOriginQuery}
@@ -781,7 +960,9 @@ function PurchaseForm({
                     </span>
                   </span>
                   <span className='shrink-0 font-semibold whitespace-nowrap tabular-nums'>
-                    {formatCents(purchase.amountCents)}
+                    <SensitiveValue>
+                      {formatCents(purchase.amountCents)}
+                    </SensitiveValue>
                   </span>
                 </Button>
               </li>
@@ -789,42 +970,55 @@ function PurchaseForm({
           </ul>
         </div>
       )}
-      <div className={join(view !== 'form' && 'hidden')}>
-        <Form
-          id='runway-purchase'
-          form={fields}
-          initialData={initialData}
-          columns={1}
-          onDataChange={(data) => setFormData(data as PurchaseFormData)}
-          onSubmit={() => {
-            void handleSave();
-          }}
-          submitButton={
-            <ModalFooterActions
-              note={error ?? blocker}
-              cancelAction={
+      {view === 'envelopes' && (
+        <div className='space-y-3'>
+          <BackLink onBack={() => setView('form')} />
+          <p className='text-lg font-semibold'>{FORM_FLOW_WORDS.moreTitle}</p>
+          {options.length >= RUNWAY_SEARCH_THRESHOLD && (
+            <SearchInput
+              value={envelopeSearch}
+              onChange={setEnvelopeSearch}
+              placeholder={FORM_FLOW_WORDS.findEnvelope}
+            />
+          )}
+          {foundOptions.length === 0 && (
+            <p className='text-muted-foreground text-sm'>
+              {FORM_FLOW_WORDS.noEnvelopeMatch}
+            </p>
+          )}
+          <ul className='border-border divide-border max-h-[max(9rem,calc(92dvh-22rem))] divide-y overflow-y-auto rounded-2xl border [@media(max-height:499px)]:max-h-none'>
+            {foundOptions.map((option) => (
+              <li key={option.id}>
                 <Button
                   type='button'
-                  variant='secondary'
-                  onClick={onClose}
-                  disabled={isSaving}
+                  variant='tertiary'
+                  aria-pressed={option.id === envelopeId}
+                  className='text-foreground! h-auto min-h-12 w-full items-center justify-between gap-3 px-3! py-2 text-left font-normal whitespace-normal'
+                  onClick={() => {
+                    setEnvelopeId(option.id);
+                    setView('form');
+                    if (amount !== null && questions.open?.id === 'envelope')
+                      questions.moveOnFrom('envelope');
+                  }}
                 >
-                  Cancel
+                  <span className='flex w-full min-w-0 items-center gap-3'>
+                    <ItemBadge name={option.name} emoji={option.emoji} />
+                    <span className='line-clamp-2 min-w-0 flex-1 text-left font-medium break-words'>
+                      {option.name}
+                    </span>
+                    <span className='text-muted-foreground shrink-0 text-sm whitespace-nowrap tabular-nums'>
+                      <SensitiveValue>
+                        {formatCents(option.leftCents)}
+                      </SensitiveValue>
+                    </span>
+                  </span>
                 </Button>
-              }
-              rightActions={
-                <Button
-                  type='submit'
-                  loading={isSaving}
-                  disabled={isSaving || blocker !== null}
-                >
-                  {editing ? SPEND_WORDS.save : SPEND_WORDS.add}
-                </Button>
-              }
-            />
-          }
-        />
-      </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <div className={join(view !== 'form' && 'hidden')}>{formBody}</div>
     </FormSheet>
   );
 }

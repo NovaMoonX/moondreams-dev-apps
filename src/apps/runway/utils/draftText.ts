@@ -27,7 +27,7 @@ export function describeLineAsk(
   return result;
 }
 
-/** Words a line's structured reason: "Every income day, funded from Northwind Studio". */
+/** Words a line's structured reason: "Every income day, paid from Northwind Studio". */
 export function describeLineReason(
   line: DraftLine,
   sourceNames: Record<string, string>,
@@ -59,7 +59,14 @@ export function describeLineReason(
     ? ''
     : `, ${DRAFT_WORDS.fundedFrom} ${joinNames(names)}`;
   if (line.ask.kind === 'percent') {
-    return `${ask}, ${cadence.toLowerCase()}`;
+    const share =
+      isFromDaySource || line.sourceId === daySourceId
+        ? describeAmount(
+            { kind: 'percent', bps: line.ask.bps, of: line.ask.of },
+            'pay',
+          )
+        : ask;
+    return `${share} · ${cadence.toLowerCase()}`;
   }
   const result = `${ask ? `${ask}, ${cadence.toLowerCase()}` : cadence}${funded}`;
   return result;

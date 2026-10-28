@@ -15,7 +15,7 @@ Most budgets start from a month and a bank balance. Money actually arrives in pi
 1. **Add your income.** Each source of money has one or more kinds of pay under it, each with its own schedule, amount and ending.
 2. **Add what goes out.** Bills that repeat, bills that happen once, bills that end, and spending with no date.
 3. **Make envelopes and goals.** Spending categories and savings targets, each with an amount or percentage, a timing rule and a priority: Must, Should or Want.
-4. **Say where things stand.** The money you have now and what is already set aside, all optional and in any order.
+4. **Say where things stand.** The money you have now and what is already set aside, all optional and in any order. You can start before signing in; your answers stay on this device for 7 days until you do.
 5. **Draft and confirm each income day.** Every coming income day has a draft with a reason on each line. When the money is in, you enter what arrived, adjust, and confirm.
 6. **Look ahead.** Plan upcoming income days now and see how far the plan holds.
 7. **Try a what-if.** Change a scratch copy of the plan and see every upcoming income day before deciding.
@@ -27,13 +27,13 @@ Most budgets start from a month and a bank balance. Money actually arrives in pi
 
 ### Levels, In Detail
 
-Runway is one app with three levels. Nothing from a level shows until you use it.
+Runway is one app with three levels. Nothing from a level shows until you use it. Plan and Track are built; Link is in Next Steps.
 
 | Level | What you do | What it needs | What you get |
 |---|---|---|---|
 | **Plan** | Income, bills, envelopes, goals, lookahead, changes and history (priorities view and what-ifs come later) | Nothing | A draft for every income day, what each envelope is assigned, Free to spend, how far ahead the plan holds |
 | **Track** | Add purchases by hand, import a CSV, attach notes, links and receipts, group purchases, check a balance | What you type or import | Envelopes that go down as you spend ("left"), check an amount, card reserves, a record of what each purchase was for |
-| **Link** | Link accounts | A link to your accounts | Purchases that arrive on their own, "safe to spend" backed by real cash |
+| **Link** *(not built yet)* | Link accounts | A link to your accounts | Purchases that arrive on their own, "safe to spend" backed by real cash |
 
 A person who only plans never sees a purchase, a bank screen or an import button. Notes, receipts and groups never change a balance. Anything that moves money, such as assigning a purchase to an envelope or splitting it, belongs to Track and Link.
 
@@ -65,13 +65,13 @@ Tracking is one switch for the whole plan: off is Plan, on is Track. Linking is 
 
 ### Income, In Detail
 
-- **A source is who pays you; a pay line is one kind of pay from them.** Rover can have Regular pay (every two weeks, $18 an hour for 20 to 32 hours), Commission (monthly, $0 to $400) and a Holiday bonus (one time). Most sources have one pay line. Each pay line has its own schedule, amount and ending, and a source can have a start date and an end date, which is how a seasonal job or a contract is described.
+- **A source is who pays you; a pay line is one kind of pay from them.** Rover can have Regular pay (every two weeks, $18 an hour for 20 to 32 hours), Commission (monthly, $0 to $400) and a Holiday bonus (one time). Most sources have one pay line. Each pay line has its own schedule, amount and ending. A source with its own start and end date (a seasonal job, a contract) is not built yet: as built, a source cannot be ended or archived, and an income stops by ending each of its pay lines.
 - **Schedules:** weekly, every two weeks, twice a month on chosen dates, monthly, one time (a bonus, a refund, a gift), or irregular. An irregular pay line has no expected days: you add each one when it arrives, and you can give a rough monthly amount for lookahead to use. With a low end of $0, a conservative plan counts on none of it.
 - **Pay changes over time.** A new schedule or amount ("Rover moves to weekly pay", "a 4% raise on Jan 1") is a change to the plan from a date on, and the earlier schedule stays in history.
 - **Any one income day can differ.** An income day is one occurrence of a pay line. It can be given its own amount or hours without touching the pay line.
 - **An amount is exact, a range, or a rate and hours.** Pay with a fixed amount is exact. Tips and commissions are ranges. Hourly pay is a rate and the hours you expect, which can be a range ("20 to 32 hours"). Taxes and deductions apply to hourly pay the same way as to any other.
 - **Money counts once it has arrived.** A coming income day is expected until it arrives. When it does, you confirm the actual amount (or it arrives by import or link), the draft adjusts, and Runway shows the difference from what was expected. Lookahead plans against expected income and marks it as expected.
-- **A source or a pay line can fund particular things.** Choose the envelopes, bills and goals it pays for and, for each, an amount, a percentage or "the rest". Rover can fund Groceries ($100) and Spending money (the rest). A pairing can be set on the source, on one pay line, or on a single income day ("this check pays the Dec 1 rent and the Travel goal"). The narrower one wins: a pairing on a pay line replaces the source's for that line, and one on an income day replaces both for that day. The pairing shows both ways: on the source ("Funds: Groceries, Spending money") and on the envelope ("Paid by: Rover").
+- **A source or a pay line can pay particular things first.** Every income pays for everything in the plan; "Pay these first" points one at specific envelopes, bills and goals, which come out of that pay before anything else, each with an amount, a percentage or "the rest". Rover can pay Groceries ($100) and Spending money (the rest) first. A pairing can be set on the source, on one pay line, or on a single income day ("this check pays the Dec 1 rent and the Travel goal"). The narrower one wins: a pairing on a pay line replaces the source's for that line, and one on an income day replaces both for that day. The pairing shows both ways: on the source ("Funds: Groceries, Spending money") and on the envelope ("Paid by: Rover").
 - **Tied money comes only from its source.** If a source falls short on a day (a light week), the draft shows the shortfall and offers a top-up from another source in one tap. A pairing can also be set ahead of time to top up from any source.
 - **Whatever no pairing claims pools together.** Each source's money goes first where you pointed it, and the draft assigns the rest. What is left from every source joins one shared pool, Free to spend, which remembers how much came from each source. A person who does not care sees one number; a person who does can view it by source and assign a particular source's money. Envelopes do not remember: once money is in an envelope, it is just that envelope's money.
 - **When income stops.** When a source or pay line ends, lookahead shows the gap. A bill due after the last income day it could be funded from is flagged ("Rent on Sep 1 has no income before it is due").
@@ -82,11 +82,11 @@ An income day has a draft while it is coming, and is confirmed when the money is
 
 - **Every coming income day has a draft.** The draft is Runway's proposed split, built from the plan's rules, priorities, endings, your earlier changes and anything you have overridden for that day. It keeps itself current: change the plan and every coming draft changes with it, while your overrides for a day stay. Every line says why it is there ("Rent: due Dec 1, Must, paid from Main job"). The same plan always produces the same draft.
 - **Confirming is one step.** When the money is in, open the day, enter the amount that arrived (it starts as the expected one), look the draft over, and confirm. That records that the money arrived and that you accept the split, and the envelopes fill. With linked accounts, Runway offers the amount for you.
-- **Money can arrive early or late.** Confirm the day whenever the money is in, on whatever date. The actual date is recorded, and the schedule does not shift.
-- **Planned and confirmed are both kept.** When you open a day to confirm, Runway keeps the draft as it stood, then keeps the split you confirm. It records everything that differs: the amount that arrived against what was expected, each line you changed, and where extra money went or where a shortfall came from. Any difference can carry a note ("overtime", "a bonus from the quarter"). Later, the day shows what was planned, what happened, and why.
+- **Money can arrive early or late.** Confirm the day whenever the money is in, with the date it arrived (today or earlier). The actual date is recorded, and the schedule does not shift. A day not confirmed stays on the list for 14 days after its date, then leaves it and its money is not counted.
+- **Planned and confirmed are both kept.** When you confirm a day, Runway keeps the draft as it stood at that moment beside the split you confirm (opening a day stores nothing). It records everything that differs: the amount that arrived against what was expected, each item you gave a different amount, and where extra money went or where a shortfall came from. Any difference can carry a note ("overtime", "a bonus from the quarter"). Later, the day shows what was planned, what happened, and why.
 - **Plan several income days together.** Two jobs that pay on Wednesday and Friday can be planned in one sitting. Pick consecutive income days in lookahead, or set Runway to plan together any income days that land within a number of days of each other. The draft shows one list, and each line says which day's money pays for it. Each income day is still confirmed and recorded on its own, with its own amount and date, so nothing underneath changes.
 - **Then there is something to do with the real money.** A short checklist: pay the bills this day funded and, once accounts are named, move money to the accounts that hold your goals. Ticking an item marks it done; with linked accounts Runway ticks it when a matching transaction appears. A day with every item ticked shows as done.
-- **Changing a confirmed day is a correction.** It shows what the change does to the envelopes and bills before it applies, and the original stays viewable.
+- **Changing a confirmed day is a correction.** It shows what the change does to the envelopes and bills before it applies, and the original stays viewable. It is offered while the day is in the recent window (see Limits and Windows).
 - **Money that does not arrive.** Mark the day as not arrived. Its draft goes away, and lookahead and the bills react.
 - **Those are all the states.** "Money arrived" is part of confirming, and "acted on" is a checklist, not a phase of its own.
 
@@ -95,7 +95,7 @@ An income day has a draft while it is coming, and is confirmed when the money is
 - **Every bill, envelope and goal has a priority:** **Must**, **Should** or **Want**. New items start as Should. Groceries and the car note are Musts, a streaming subscription and a trip a year away are Wants.
 - **Order inside a tier is yours to arrange.** Within a tier, things due before the next income day come first, then your order.
 - **Drafts fund in priority order.** When money covers everything, the order changes nothing. When it does not, Wants go unfunded first, then Shoulds, and a Must is the last to be cut. Runway says exactly what went unfunded and why, and a bill funded in part shows its progress.
-- **Proposals follow priority too.** When Runway proposes a shift (Cover it, Put it to work, an overspent envelope with no spill-over chain), it takes from the lowest tier with room and sends extra money to the highest-priority thing that is behind. A Must is touched only if you pick it.
+- **Proposals follow priority too.** When Runway proposes a shift (Cover it, Put it to work, an overspent envelope with no spill-over chain), it takes from the lowest tier with room and sends extra money to the highest-priority thing that is behind. A Must is touched only if you pick it. Confirming less than planned is the one place a proposal reaches Musts, and only once the Wants and Shoulds have nothing left to give (see Confirming Money).
 - **Proposals wait for a tap.** The one exception is a spill-over chain you set up yourself, which applies on its own when a purchase goes over.
 - **The Priorities view.** One list of everything money goes to, grouped by tier. Move an item to another tier or reorder it within its tier. A line marks where the next income day's money runs out ("Everything above the line is funded").
 - **Ties are said, not hidden.** If two items rank the same and money covers only one, the draft says which one it chose and why.
@@ -128,7 +128,7 @@ This applies to pay lines, bills, envelope and goal funding, and deductions. An 
 - **A percentage says of what.** Either of the income day's money, or of what is left when its turn comes in priority order. "Put 40% of what is left after bills into Savings" is a goal ranked after the bills, set to 40% of what is left.
 - **Where ranges apply.** Income and money out can be exact or a range. Envelope and goal amounts are your decisions, so they are never ranges.
 - **The planning stance decides which end counts.** One setting for the whole plan, with three positions: **Conservative** (the low end of income and the high end of expenses), **Middle**, and **Optimistic** (the high end of income and the low end of expenses). Conservative is the default. Any single source or bill can use a different stance than the plan.
-- **Actuals replace estimates.** When income arrives or a bill is paid, the real amount replaces the range and the difference is shown. Extra income joins Free to spend, and a bill that cost less than planned returns the difference. A bill that costs more than its range is flagged, with "Cover it" to find the money.
+- **Actuals replace estimates.** When income arrives, the real amount replaces the range and the difference is shown, and extra income joins Free to spend. *Not built yet:* a bill's actual amount. Marking a bill paid records the payment's planned amount, paid today, so a bill that cost less does not return the difference, and one that cost more is not flagged ("Cover it" is in Next Steps).
 - **A range is always labeled.** A figure built on one says so ("Planned at the low end: $620 of $620 to $780").
 - **The cushion is visible.** Because the stance applies to every range at once, a conservative plan holds money back on purpose. Lookahead says how much ("Conservative planning is holding back $240 across 3 sources and 2 bills").
 
@@ -148,9 +148,8 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### Envelopes, In Detail
 
 - **An envelope sets its own timing.** Each envelope has an amount and a funding rule:
-  - every income day
-  - every other, or every third
-  - once a month, taken from the month's first income day, its last, or split across all of them (so a month with three of them does not quietly change what you set aside)
+  - on the calendar: weekly, every 2 weeks, twice a month, monthly or yearly, as an amount for that period (a $600 monthly envelope asks $300 of each of two paydays and $200 of each of three, and a month with no payday carries over to the next)
+  - from a paycheck: each pay of one source or of all of them, every other, or every third, as an amount, a percentage of the pay or whatever is left of it
   - only the days you choose, such as one a few months away
 
   Any single income day can override the rule: add to an envelope, skip it, or change the amount, in the draft or in lookahead.
@@ -176,7 +175,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 - **Every envelope has its own number, and the level decides what it means.** On Plan it reads "assigned": what the envelope was given. On Track it reads "left": what it was given, less the purchases you have added. On Link it reads "safe to spend", because real cash backs it. At a mall you look at Clothing, at a pet store Pets, at a restaurant Dining. Each number is that envelope's money only.
 - **There is no single total to spend.** One big number that mixes every envelope invites spending money meant for something else on another day. The overall figure is **Free to spend**: money that no envelope, bill, goal or reserve has claimed.
-- **An overspent envelope draws on Free to spend.** A purchase is never blocked. If it takes an envelope below zero, the envelope shows the amount it is over ("−$18, over") and Free to spend drops by the same amount, because that cash is gone and Free to spend is the only money no one has claimed. If Free to spend goes below zero, the Over-assigned line shows, meaning other envelopes are short. Nothing moves on its own: "Cover it" proposes where the money could come from, lowest priority first. If the envelope is still over at the next income day, that day's draft applies its refill to the overspend first and says so on the line.
+- **An overspent envelope draws on Free to spend.** A purchase is never blocked. If it takes an envelope below zero, the envelope shows the amount it is over ("−$18, over") and Free to spend drops by the same amount, because that cash is gone and Free to spend is the only money no one has claimed. If Free to spend goes below zero, the Over-assigned line shows, meaning other envelopes are short. Nothing moves on its own: "Cover it" proposes where the money could come from, lowest priority first (Next Steps; until then, Check an amount lists where it could come from). If the envelope is still over at the next income day, that day's draft applies its refill to the overspend first and says so on the line *(not built yet: as built, a refill is the envelope's usual amount, and the overspend has already come out of Free to spend)*.
 - **The home screen stays short.** It shows Free to spend and the envelopes you use most, each with its own number. The rest are one tap or a search away.
 - **Check an amount** *(Track and Link)*. Pick an envelope and type an amount. If it fits, Runway says what is left after. If it does not, Runway says by how much and lists where the money could come from, by spill-over chain or by priority, naming what it would take.
 - **Check your balance** *(Track)*. Name the accounts that hold your money and type what one holds now. Runway adds up the envelopes and goals kept in it and shows the difference ("Your envelopes and goals add up to $4,210; you typed $4,060. $150 difference"). It never changes anything on its own; the difference is yours to resolve.
@@ -185,7 +184,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### Goals, In Detail
 
 - **A goal is an envelope that keeps its money.** It does not spill into other envelopes. It has a target, an optional date, and a priority, and reaching the target ends it.
-- **States.** A goal is active, paused, completed or archived. Pausing "Vacation fund" to focus on "Car repair" stops new money going in and keeps the balance and history.
+- **States.** A goal is active, paused, completed or archived. Pausing "Vacation fund" to focus on "Car repair" stops new money going in and keeps the balance and history. Archiving a goal, envelope or bill, or reaching the end of one, keeps its history, and the money it held has no job any more, so it counts as Free to spend from then; the archive and end views say how much before you confirm.
 - **Pace.** For a goal with a date, Runway says what each income day needs to put in ("$110 each time gets you to $1,800 by June") and whether you are on track, in words.
 - **Where a goal is held.** A goal can sit in a real savings account, or be a slice of money inside a checking account. Until the account is linked, you keep the number. Once it is, Runway compares what your goals add up to against the account's balance and says the difference in one line ("Your savings account has $120 more than your goals add up to"). It never moves money or changes a goal on its own.
 - **Interest.** A goal in an account that earns interest grows by it on its own (see Rates and Scheduled Increases).
@@ -218,7 +217,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### History, In Detail
 
 - **Change log.** Every change to the plan: when it was made, what it was, from what to what, which income days it covers, and your note. The starting point, moves between levels and applied what-ifs are in it too. Filter it by an item ("Vacation fund") or by dates.
-- **Each confirmed income day is kept as planned and as confirmed.** The draft as it stood when you opened the day, the income that arrived and its date, every amount you confirmed, the differences with their notes, and any corrections after. Beside it, what happened in each envelope: assigned, spent, left.
+- **Each confirmed income day is kept as planned and as confirmed.** The draft as it stood when you confirmed the day, the income that arrived and its date, every amount you confirmed, the differences with their notes, and any corrections after (a correction is kept with its day, not in the change log). Beside it, what happened in each envelope: assigned, spent, left.
 - **Plan as of a date.** Open the plan as it stood on any past date, read-only: income sources, bills, envelope timing, priorities and goals. Answers "how was I handling my money three months ago?"
 - **Ending is not erasing.** Ending a bill, envelope or goal keeps its history. Deleting your whole plan removes everything.
 
@@ -268,6 +267,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### Privacy and Security, In Detail
 
 - **A plan belongs to one person.** Income, bills and goals are visible to that person's account only. There is no shared household.
+- **Amounts stay hidden until you show them.** Every figure is masked on this device until you tap the eye, forms included: a folded answer, a notice and a footer reason are masked too, and only the field you are typing in shows its value. While hidden, a warning about the plan names neither an amount nor an item; one row says "Something needs a look" and shows amounts when you tap it.
 - **View-only access may come later,** so a person can let someone else look at their plan without changing it.
 - **Sensitive details are encrypted.** Names of sources, bills, goals, envelopes and accounts, amounts, balances, notes, merchant names and receipt images are stored as ciphertext. Dates and item types, which Runway needs to sort and filter and which identify nothing on their own, are not. Which fields identify someone alone or together is settled field by field in the technical design.
 - **Everything is encrypted in transit,** and the platform encrypts stored data.
@@ -289,19 +289,91 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - **Phone first.** Every screen is built for a thumb.
 - **Useful before it is connected.** The first session ends with a plan for your next income day, with no sign-up beyond an account.
 
+## How Runway Works
+
+What the app does today, as a person using it sees it. Where this differs from the descriptions above, this section is what is built now; the technical side of each change is under "Cascades" in `TECHNICAL.md`.
+
+### Free to Spend
+
+Free to spend is the money nobody has claimed. Home shows it, and tapping it shows the sum, one line each:
+
+| | Line | What it counts |
+|---|---|---|
+| | **Money on hand** | what you started with, plus the money from every income day you confirmed since, less every bill payment you marked paid, less (Track only) what you spent |
+| − | **Held for bills** | for each bill, what it started with plus what confirmed days set aside for it, less what its paid payments used |
+| − | **Held for goals** | for each goal, what it started with plus what confirmed days gave it |
+| − | **Set aside in envelopes** (Plan) or **Left in envelopes** (Track) | each envelope's figure, with an overspent envelope counted as $0 |
+| = | **Free to spend** | |
+
+- **Until you say what you have, it reads "Not set yet"**, never $0. Below zero it reads "Over-assigned $X": more is held than you have. Nothing is blocked either way.
+- **Plan and Track count differently.** At Plan nothing you spend is recorded, so envelopes only fill and money on hand is a planning figure, not your bank balance. At Track every purchase since tracking started lowers money on hand and its envelope. Moving up to Track starts the count again from the day you pick, with what each envelope holds then, so purchases before it are never counted. Link, where real balances would back the figure, is not built yet.
+- **An overspent envelope lowers Free to spend by exactly the overspend.** The purchase took the money from what you have, and the envelope counts as $0 rather than less than nothing, so the difference comes out of Free to spend. Nothing refills the envelope on its own yet.
+- **A bill paid before it was fully set aside** takes the missing part from Free to spend; marking it from the bill's sheet says how much first.
+- **Money an item no longer needs goes where you choose.** Archiving or ending a bill, envelope or goal that holds money asks what to do with it, with nothing chosen for you: "Make it Free to spend" (from the archive day, or the day after its last day) or "Keep it held". A kept item is listed under "Stopped, still holding money" at the end of its Plan view, and its sheet offers "Release what it holds" (with an Undo) whenever you are ready. Moving the money straight to another envelope or goal is not offered yet: no move records it. An item archived or ended before this choice existed reads as released, as it did then. A paused goal keeps its money.
+- **What one income day leaves is not called Free to spend.** On an income day the figure is "Left from this day": the money that arrived less what each item got. It joins Free to spend once the day is confirmed. The lookahead never adds to Free to spend, and a coming day's plan never draws on it; only confirming does, when you choose to cover a shortfall.
+
+### Limits and Windows
+
+| What | The limit | Why | What you see |
+|---|---|---|---|
+| Confirming an income day | until 14 days after its date | money that lands late can still be confirmed | the day is tagged "Waiting to be confirmed"; after 14 days it leaves the list and its money is not counted |
+| "Did not arrive" | can be put back for 14 days | | "Put this day back" disappears after that |
+| The day money arrived | today or earlier | | the date picker stops at today |
+| Correcting a confirmed day | only days in the recent window | older months are summed once and kept | Days lists confirmed days from the 1st of the month after the newest closed month (or the past 180 days on a newer plan); older ones are counted but not listed |
+| A month closes | 15 days after it ends | stays clear of the 14 days a late day can be confirmed | nothing, unless something dated in it changes: then "Updating your history" shows until it is summed again |
+| Changing the plan | from today, a date after today (up to about ten years), one coming income day or a stretch | a change never reaches back | Next is off with a sentence in the footer |
+| Ending or archiving | a last day of today or later; archiving is from today | | the date picker stops at today |
+| "Change what you started with" | until the first income day after the start is confirmed, and at most 14 days after you first entered it | it is a correction, not a new plan | after that: "To fix a balance later, correct the income day or the bill payment it came from." |
+| Adding a purchase | today or earlier, on a day you were tracking, and not before tracking last started | an earlier stretch has another starting point, so it would never count | "Tracking started again on Oct 1, and an earlier day is not counted. Pick that day or a later one." |
+| Spend's list | This month, Last month, Past 30 or 90 days, or any month back to the plan's start (up to 120 months) | older months are read when you pick them | the period chip beside "Purchases" |
+| Lookahead | 12 months | | a goal's date past it is refused; a gap of more than 45 days to the horizon reads as income ending |
+| Search | from 5 rows in every list | people look a bill or goal up by name | a search field above the list |
+
+### Confirming Money
+
+- **As planned.** Open the income day and tap "Confirm money arrived". The amount starts at what was expected and the day at today; confirm. Each item gets what the plan gave it, what is left from the day joins Free to spend, the day leaves the coming days, and later days ask less of any bill or goal it paid toward. Confirming needs a connection; offline, the sheet stays open and says nothing was saved. It is off while an item paid first by a source is waiting for your choice ("choose before confirming").
+- **Less than planned.** A warning under the amount says how much less. If what was left from the day covers it, the items stay as planned and "Left from this day" shrinks. If not, the sheet says what Free to spend is and offers "Cover it from Free to spend" (or "Use Free to spend for part" when it holds less than the gap). Beside it, "What gets less" already shows the other route, cuts by priority for the whole difference, so either is one tap. While amounts are hidden the sheet says only that Free to spend can cover some or all of it, and what was covered stays masked. One tap covers it, says what Free to spend will be, and has an Undo. If Free to spend drops below what was chosen before you confirm, the choice is cleared and you choose again. The day then confirms with every item as planned and "Left from this day" below zero by exactly what was covered, so Free to spend drops by that amount and nothing else; the confirmed day says "Covered from Free to spend". Whatever Free to spend does not cover, or all of it when you would rather not cover it, "What gets less" proposes cuts by priority: Wants, then Shoulds, then Musts, and a bill due before the next income day only when nothing else is left. "Use these" applies them with an Undo, or you change each item yourself. Nothing is covered or cut until you tap, and Confirm stays off, with the reason in the footer, until the items fit the money.
+- **More than planned.** A success notice says how much more. The extra is left from this day and adds to Free to spend, unless you give an item more before confirming.
+- **What is kept.** The plan as it stood and what you confirmed are both kept, with the amount that differed and each item that got a different amount, each with an optional note. Nothing is stored for a day before you confirm it.
+- **Correcting later.** "Correct this day" on a confirmed day changes the amount that arrived (above $0) or what any item got (down to $0). It cannot change the date, add an item, or turn the day into "did not arrive", and when it leaves the day short beyond what the day already covered it asks as Confirm does: a warning, an offer to cover the rest from Free to spend in one tap (capped by what Free to spend holds once the day gives back what it left, checked again before saving) with an Undo, and "What gets less" by priority. Nothing is covered or cut without a tap. The original stays viewable beside every correction. Bills the correction changes are unticked on the checklist. If a correction lowers what a bill got after that bill was marked paid, the payment keeps its amount and the part the bill no longer held comes out of Free to spend. Corrections show on the day, not in the change log.
+
+### Editing the Past
+
+| Thing | What you can change | What is refused |
+|---|---|---|
+| A purchase | the amount, envelopes, day, place and note, or remove it | a day before tracking last started, unless it already had that day; an envelope archived since |
+| A confirmed day | the amounts, by a correction | the date; anything once the day is older than the recent window |
+| A bill payment | mark paid, or take the mark back | the amount: a mark records the payment's planned amount, paid today |
+| Income, bills, envelopes, goals | a new version from today or later | any change dated before today |
+| What you started with | while the correction window is open | after it, a balance is fixed by correcting the day or payment it came from |
+| A day's own choices | while the day is still coming | once it is confirmed |
+
+Kept forever: every version of every item, every change in the change log, every bill-paid mark and its undo, and a confirmed day's records with every correction. Nothing is refused for being in a closed month; the change is summed again, and "Updating your history" shows while that happens.
+
+### Changing Your Plan
+
+Every change says from when and shows, before it saves, which coming income days it moves. Confirmed days keep what they had; only days still coming follow the plan.
+
+- **Income.** A new amount or schedule from a date reshapes every coming day from then. Lowering pay so a Must no longer fits leaves it "$X short" on that day; the plan then holds only to the day before, and Home and Days show "the plan leaves Rent short" as a door to that day. A Should or Want that goes short is listed under "Not fully funded" and is not counted as a problem, unless it is a bill due before the next income day. A bill due after the last income day says it has no income day before it is due. If a new schedule moves your paydays, what you changed for a day (its own amounts or what pays first) moves to the nearest new date, and the preview says so; a day with no new date near it says its choices stop applying. A source cannot be ended or archived, only its pay lines.
+- **Bills.** A new amount or due date changes what coming days set aside. What is already set aside stays and counts toward the payment whose window it falls in. A payment marked paid keeps its mark when its date moves (to the nearest new date, up to half a month away for a one-time bill), and keeps the amount it was marked with. A bill past due and not marked paid is a problem until you mark it.
+- **Envelopes.** A new amount or timing changes coming days only. Overspending at Track is shown ("−$18.00 over") and never blocked, and Free to spend drops by the overspend.
+- **Goals.** A new target or contribution changes coming days; a goal at its target asks for nothing more. Pausing stops new money and keeps the balance.
+- **Pay these first.** A source or pay line that pays an item first gives it no more than the item still needs (a goal's target, a bill's payment), and gives an archived, ended or paused item nothing, saying so in "Pay these first". Pausing, ending or archiving an item that a source pays first says which sources stop paying it.
+- **Ending and archiving.** Either keeps all history. The item leaves the coming days from the day after its last day (end) or from today (archive), and what it held becomes Free to spend from then. There is no un-archive.
+
 ## The Build Plan
 
-**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "+ Expected" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Spend and Days list the months since the newest monthly closing, so older purchases and income days count in every figure but cannot be opened until a history window is built.
+**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Days lists confirmed income days only from the months since the newest monthly closing, so an older day counts in every figure but cannot be opened or corrected until a history window is built. Spend reaches further: its "Older months" period lists and edits purchases back to the month the plan started. The rest of what is built, and its limits, is under "How Runway Works" above.
 
 ### Core MVP
 
 - [x] Add income sources with one or more pay lines, each with a schedule, an exact or range amount, and an ending by date or number of times, including one-time income
 - [x] Income entered as the amount that lands in the account (take-home), with room to add a gross breakdown later
 - [x] Amounts that are exact, a percentage of the income day's money, or the rest (envelopes and goals; bills stay exact or a range)
-- [x] Point a source, a pay line or one income day at the envelopes, bills and goals it funds
+- [x] Point a source, a pay line or one income day at the envelopes, bills and goals it pays first
 - [x] Planning stance (conservative by default), with an override per source or bill
 - [x] Add bills: one time, repeating, or repeating until an ending, exact or a range, funded from the income days you choose, and marked paid, including ahead of time
-- [x] Add envelopes funded every income day, every other, or on chosen days
+- [x] Add envelopes funded on the calendar (weekly to yearly) or from each paycheck, every other, or on chosen days
 - [x] Add, pause, complete and archive savings goals, with a pace line
 - [x] A priority (Must, Should, Want) on every bill, envelope and goal, used to order drafts and flag what is unfunded
 - [x] A draft for every coming income day, each line saying why, confirmed when the money is in with the amount that arrived and its date, every amount adjustable, with a way to mark a day as not arrived
@@ -333,7 +405,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [ ] Cover it: choose what gives when a new bill leaves a day short, lowest priority first
 - [ ] Put it to work: where new income or a raise would go
 - [ ] Notes, links, receipts and expense groups on purchases at the Track level, with receipt photos kept for one year and a keep-or-download offer
-- [ ] Monthly envelope funding, taken from the first income day, the last, or split
+- [x] Monthly envelope funding, split across the month's income days
 - [ ] Move leftover envelope money to another envelope or a goal
 - [ ] Open the plan as of a past date
 - [ ] Group bills and expected expenses (Subscriptions, Housing, Car), with a monthly total and a starting priority per group

@@ -106,6 +106,13 @@ html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.sh
   overflow-y: auto;
 }
 
+/* On a screen tall enough for a form to fit, the card does not clip, so an open Select's list can run past its edge. */
+@media (min-height: 700px) {
+  html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
+    overflow: visible;
+  }
+}
+
 /* A scroller's padding insets what sticks to its bottom, so the pinned footer is pulled down over it. */
 html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl .form-footer {
   bottom: -1.5rem;
@@ -118,4 +125,23 @@ html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.sh
   html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill] {
     padding-inline: 0.375rem;
   }
+}
+
+/* The four views drop their emoji below 360px so they stay on one line. */
+@media (max-width: 359px) {
+  html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill-emoji] {
+    display: none;
+  }
+}
+
+/* A warning: the warning hue for the tint and edge, a deeper amber for ink so an icon reads on the tint in light and dark. */
+html.runway-theme {
+  --runway-warning-soft: color-mix(in oklab, var(--color-warning) 16%, var(--color-background));
+  --runway-warning-edge: color-mix(in oklab, var(--color-warning) 50%, var(--color-border));
+  --runway-warning-ink: oklch(0.46 0.1 65);
+}
+
+html.runway-theme.dark {
+  --runway-warning-soft: color-mix(in oklab, var(--color-warning) 14%, var(--color-background));
+  --runway-warning-ink: var(--color-amber-300);
 }

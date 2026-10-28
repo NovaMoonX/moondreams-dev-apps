@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { Target } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import EmptyCard from '@/components/EmptyCard';
+import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
+import FloatingAction from '@/components/FloatingAction';
+import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
@@ -16,6 +18,7 @@ import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import GoalForm from '@apps/runway/forms/GoalForm';
 import {
+  getPriorDays,
   selectComingDays,
   selectHeldByItem,
   selectGoals,
@@ -24,9 +27,6 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { GoalSealed } from '@apps/runway/types';
-
-const SEARCH_THRESHOLD = 8;
 
 function GoalsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -40,21 +40,28 @@ function GoalsScreen() {
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const stance = useAppSelector(selectStance);
   const heldByItem = useAppSelector(selectHeldByItem);
+  const items = useAppSelector((state) => state.runway.items);
+  const versions = useAppSelector((state) => state.runway.versions);
+  const priorDays = getPriorDays(
+    items,
+    versions,
+    today,
+    comingDays,
+    goals.map(({ version }) => version.payload.funding),
+  );
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<{
-    itemId: string;
-    payload: GoalSealed;
-  } | null>(null);
 
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
   );
-  const hasSearch = goals.length >= SEARCH_THRESHOLD;
+  const hasSearch = goals.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const visible = goals
     .filter(({ version }) =>
-      version.payload.name.toLowerCase().includes(needle),
+      `${version.payload.name} ${version.payload.targetDate === null ? '' : formatDateShortUTC(version.payload.targetDate)}`
+        .toLowerCase()
+        .includes(needle),
     )
     .map(({ item, version }) => ({
       item,
@@ -69,6 +76,7 @@ function GoalsScreen() {
             'income',
           ),
         })),
+        priorDays,
       ),
     }));
 
@@ -96,7 +104,6 @@ function GoalsScreen() {
             placeholder='Search goals'
           />
         )}
-        {hasRangedIncome && <RangeBasisNote stance={stance} side='income' />}
         {visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No goal matches that.</p>
         ) : (
@@ -104,19 +111,11 @@ function GoalsScreen() {
             {visible.map(({ item, payload, pace }) => (
               <GoalRow
                 key={item.id}
+                goalId={item.id}
                 goal={payload}
                 pace={pace}
                 heldCents={heldByItem[item.id] ?? 0}
-                footer={
-                  <ItemChangeControls
-                    kind='goal'
-                    itemId={item.id}
-                    current={payload}
-                    today={today}
-                    name={payload.name}
-                    onChange={() => setEditing({ itemId: item.id, payload })}
-                  />
-                }
+                today={today}
               />
             ))}
           </ul>
@@ -129,32 +128,29 @@ function GoalsScreen() {
     <div className='space-y-4'>
       <SectionHeader
         title='Goals'
-        action={
-          <Button
-            variant='secondary'
-            size='sm'
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            + New goal
-          </Button>
+        help={
+          isLoaded &&
+          goals.length > 0 &&
+          hasRangedIncome && (
+            <HelpTip title='Ranges of pay'>
+              <RangeBasisNote stance={stance} side='income' />
+            </HelpTip>
+          )
         }
       />
       {getBody()}
+      {isLoaded && <StoppedHoldingList kind='goal' today={today} />}
+      <FloatingAction
+        label='Add a goal'
+        icon={<Target className='h-5 w-5' aria-hidden='true' />}
+        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+      />
       {formKey !== null && (
         <GoalForm
           key={formKey}
           isOpen
           title='Goal'
           onClose={() => setFormKey(null)}
-        />
-      )}
-      {editing !== null && (
-        <GoalForm
-          key={editing.itemId}
-          isOpen
-          title='Goal'
-          editing={editing}
-          onClose={() => setEditing(null)}
         />
       )}
     </div>

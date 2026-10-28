@@ -7,6 +7,7 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import Subview from '@/components/Subview';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -17,6 +18,7 @@ import {
   CHANGE_LOG_SPAN_LABELS,
   MAX_CHANGE_LOG_PAGE,
   MAX_WINDOW_CHANGES,
+  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
@@ -157,7 +159,11 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
 
   return (
     <>
-      <Subview title='Change log' onClose={onClose}>
+      <Subview
+        title='Change log'
+        onClose={onClose}
+        headerAction={<ValuesEyeButton />}
+      >
         <div className='space-y-4'>
           <PillGroup
             label='Window'
@@ -213,7 +219,7 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
               ]}
             />
           </div>
-          {isLoaded && changes.length >= 8 && (
+          {isLoaded && changes.length >= RUNWAY_SEARCH_THRESHOLD && (
             <div className='space-y-1'>
               <SearchInput
                 value={search}

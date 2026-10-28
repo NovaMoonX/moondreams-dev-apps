@@ -201,11 +201,11 @@ A person adds an income source and a pay line (take-home, an exact amount, weekl
 2. `createIncome` is one `writeBatch` of the item header, its first version (`effectiveFrom` = the start date, `changeId`) and a `ChangeDoc` whose sealed summary says what was added. Items and versions are created and never updated; changes are append-only.
 3. Sealed payloads carry only the fields this issue reads. A field a later issue needs (`pairings`, `steps`, `stanceOverride`, `hourly`) is added by that issue; readers default a missing one.
 4. `AmountField` is built in `src/components` with an exact mode and a prop for the money label; later issues add the other modes.
-5. Plan > Income lists sources with their pay lines and "+ Add income"; the form asks for the name, the amount, how often and when it ends as visible pill questions, with the first date. Days lists the coming income days, three first and the rest behind "Show N more", each as an `IncomeDayCard` with no chevron yet.
+5. Plan > Income lists sources with their pay lines and "Add income"; the form asks for the name, the amount, how often and when it ends as visible pill questions, with the first date. Days lists the coming income days, three first and the rest behind "Show N more", each as an `IncomeDayCard` with no chevron yet.
 6. Rules for `items`, `versions` and `changes`: required keys with explicit nulls, immutable `kind`, `itemId`, `effectiveFrom` and `changeId`, `endedAt` writable once, and `update`/`delete` denied on `versions` and `changes`. Seed a source with two pay lines, one ending after a count and one once.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ Add income" on Plan > Income and "+ Expected" on Days with Income chosen.
+- [ ] **Create:** "Add income" on Plan > Income and "Add expected money" on Days with Income chosen.
 - [ ] **Read:** the Income list, and the coming days on Days.
 - [ ] **Update / Delete:** deferred to Issues 18 and 19 (changing, ending and archiving apply to every kind of item, so they are built once).
 
@@ -239,13 +239,13 @@ A person adds an envelope with a name, an optional emoji, a priority (Must, Shou
 
 ### Possible Approach
 1. `createEnvelope` follows `createIncome`: header, first version and change in one batch. `orderIndex` is a fractional rank inside the priority tier, so reordering later writes one version.
-2. `EnvelopeForm` is a `FormSheet`: name, priority pills (a detail the path depends on, so visible), the amount (`AmountField` exact) and "funded" pills (every income day, every other, every third, chosen days). Emoji is a chip under "+ Add X".
+2. `EnvelopeForm` is a `FormSheet`: name, priority pills (a detail the path depends on, so visible), the amount (`AmountField` exact) and "funded" pills (every income day, every other, every third, chosen days). Emoji is a chip under "Add X".
 3. The cadence selector in `schedule.ts` answers, for an envelope and an income-day list, which days it funds: `everyNth` counts from `anchorDayKey` in the plan-wide chronological income-day list; `chosen` is a list of day keys picked from the coming days.
 4. List at 5 and 50: a `SearchInput` from 8 rows, rows with the badge, name, priority and funding line ("$50 every income day").
 5. Seed five envelopes covering all three cadences and priorities.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ New" in the Envelopes pill of Plan.
+- [ ] **Create:** "New" in the Envelopes pill of Plan.
 - [ ] **Read:** the Envelopes pill; the funding line on each row.
 - [ ] **Update / Delete:** deferred to Issues 18 and 19.
 
@@ -278,7 +278,7 @@ Open a coming income day and see exactly what its money does: every envelope fun
 
 ### Possible Approach
 1. `buildDraft({ days, plan, stance, state, overrides })` with the ordered steps from the TDD: day money (exact amounts only, so the stance is not yet read), demands for envelopes whose cadence selects the day, sort by tier, `dueBeforeNext`, `orderIndex`, `createdAt`, `itemId`, walk the pool first-in-first-out, record `shortBy`, a reason code and `tieBrokenBy`, and Free to spend.
-2. Lines have stable ids `${dayKey}:${itemId}` and a structured `reason` the screen words ("Dining: Should, funded from Main job"). Wording lives in `constants.ts`.
+2. Lines have stable ids `${dayKey}:${itemId}` and a structured `reason` the screen words ("Dining: Should, paid from Main job"). Wording lives in `constants.ts`.
 3. `selectDraft` is a memoized `createSelector` keyed on the plan fingerprint (a hash of the resolved versions). Keep the draft free of `Date.now()`; the clock is passed in.
 4. The Income day screen shows the headline, the lines in sort order with `PriorityBadge`, "Not funded" lines with their reasons, and Free to spend. Rows on Days open it.
 5. Add the properties to the check: shuffling inputs changes nothing; line cents plus Free to spend equal the day's money; no line is negative; dropping a lower-priority demand never reduces a higher one; the same inputs give identical JSON.
@@ -305,7 +305,7 @@ Open a coming income day and see exactly what its money does: every envelope fun
 - `src/apps/runway/store/actions/itemActions.ts` (`createBill`)
 - `src/apps/runway/engine/demands.ts` (bill demands: chosen days and suggested), `draft.ts`
 - `src/apps/runway/screens/plan/BillsScreen.tsx`, `forms/BillForm.tsx`, `components/BillRow.tsx`
-- `src/apps/runway/screens/days/ExpectedScreen.tsx` (Expense choice, reached from "+ Expected")
+- `src/apps/runway/screens/days/ExpectedScreen.tsx` (Expense choice, reached from "Add expected money")
 - `scripts/seeds/runway.ts`
 - `scripts/checks/runwayEngine.ts`
 
@@ -321,7 +321,7 @@ A person adds a bill (exact amount) due once or repeating, ending never, on a da
 4. Seed a monthly bill, a one-time bill, a bill chosen across 3 days and a bill ending after 6 payments.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ Add" on Plan > Bills and "+ Expected" on Days with Expense chosen.
+- [ ] **Create:** "Add a bill" on Plan > Bills and "Add expected money" on Days with Expense chosen.
 - [ ] **Read:** the Bills pill, and the bill's funding lines on each draft.
 - [ ] **Update / Delete:** deferred to Issues 18 and 19. **Paid and progress:** Issue 15.
 
@@ -359,7 +359,7 @@ A person adds a savings goal with a target, an optional date and a priority, fun
 4. Seed an active goal with a date, one without, and one at its target.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create:** "+ New" on the Goals pill.
+- [ ] **Create:** "New" on the Goals pill.
 - [ ] **Read:** the Goals pill and the draft lines.
 - [ ] **Update / Delete:** pause, complete and archive in Issue 19; editing in Issue 18.
 
@@ -1454,7 +1454,7 @@ Bills and expected expenses can be grouped (Subscriptions, Housing, Car). A grou
 A pay line can have no schedule. Income days are created when money arrives; lookahead uses a rough monthly range so the headline stays honest.
 
 ### Possible Approach
-1. An irregular pay line generates no occurrences; "+ Income arrived" creates a day on the date. Lookahead adds a labelled expectation per month, at the stance's end of the range.
+1. An irregular pay line generates no occurrences; "Income arrived" creates a day on the date. Lookahead adds a labelled expectation per month, at the stance's end of the range.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read:** an irregular pay line and its arrivals.
@@ -1654,7 +1654,7 @@ A purchase can carry a note and a link, and belong to a named expense group ("Ch
 Receipt photos are sealed on the device and stored as opaque bytes. A photo expires after a year unless kept; in the last 30 days the purchase offers to keep or download it. A kept photo stays until the person removes it.
 
 ### Possible Approach
-1. Add `encryptBytes`/`decryptBytes` to the shared security lib, exported from `@lib/security` (propose the instructions note in the PR).
+1. Add `encryptBytes`/`decryptBytes` to the shared security lib, exported from `@lib/security`, and note them in `.github/copilot-instructions.md` beside the sealed-payload rule in the same PR.
 2. `expireRunwayReceipts` (daily) uses the collection-group query on `expiresAt`, deletes the object then the document, and never deletes `expiresAt == null`.
 
 ### CRUD & Entry-Point Requirements
@@ -1666,6 +1666,7 @@ Receipt photos are sealed on the device and stored as opaque bytes. A photo expi
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
 - [ ] `encryptBytes` and `decryptBytes` have a round-trip check.
+- [ ] `.github/copilot-instructions.md` names `encryptBytes`/`decryptBytes` in `@lib/security` as the way to seal bytes (the owner's item 5, held until these exist).
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
@@ -2253,6 +2254,41 @@ A maintainer can retire a master key id by re-wrapping every data key and grant 
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
 
+### Issue 77: History window and a production cold-start check
+
+**Prerequisites:** Issue 28
+**Target PR Size:** ~400 lines
+**Files:**
+- `src/apps/runway/store/listeners/` (the second listener tier, keyed on `(from, to)`)
+- `src/apps/runway/hooks/useRunwaySync.ts`, `store/runwaySlice.ts`
+- `src/apps/runway/screens/days/`, `screens/spend/SpendScreen.tsx`, `utils/spendPeriod.ts`
+- `scripts/seeds/runwayScale.ts`
+
+**Context:** Read the TDD's "Tier 2: the history window" and `TECHNICAL.md` "What reaches back, and what does not". Since Issue 28, Days and Spend list only what happened since the newest closing. Older purchases and income days count in every figure but can't be opened. Spend's period control (This month, Last month, Past 30 and 90 days) already loads a fixed period on demand, which is a small version of this window.
+
+### Description
+A person can open any older month in Days and Spend, find a purchase or an income day from it, and open, edit or correct it like a recent one. A plan's first screen stays fast on a production build.
+
+### Possible Approach
+1. Turn Spend's period read into the general window: a month picker back to the plan's start, read by `(from, to)` only while the view is open, one window at a time.
+2. Give Days the same window, so an income day older than the newest closing opens its record and its Correct a day.
+3. Search covers the window in view and says which window that is.
+4. An edit inside a closed month marks its closing stale through `markLedgerWrite`, as every other write does.
+5. Measure on `seed:runway-scale` (Morgan) with a production build (`npm run build` and `vite preview`) and with the dev build at 4× CPU.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Read:** a month older than the newest closing opens in Days and in Spend.
+- [ ] **Update:** an older purchase can be edited and an older income day corrected, and the closing is rebuilt.
+
+### Success Criteria
+- [ ] Cold start on the scale plan reaches the first useful screen within 1.5 s on a production build, and within 3.5 s on the dev build at 4× CPU (Issue 28 measured only the dev build).
+- [ ] Changing the history window takes under 300 ms on the scale plan.
+- [ ] Spend's "Earlier purchases are counted in your figures but not listed" note, the Days limit and the README's "Where it stands" line are removed or updated to match what shipped.
+- [ ] `npm run check:runway-engine` passes; a rebuild after an old edit matches a full replay (equivalence case).
+- [ ] The PR carries one `minor` label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] `UX.md` and `TECHNICAL.md` match what shipped.
+
+
 ## Beyond
 
 ### Issue 68: Describe a coming expense or income in words
@@ -2386,7 +2422,7 @@ Someone else can see a plan read-only. This changes the key model (a plan key pe
 **Prerequisites:** Core MVP complete
 **Target PR Size:** Its own app
 **Files:**
-- a new app, planned with `plan-mini-app`
+- a new app, planned with `plan-mdd-app`
 
 **Context:** Read the README's Beyond list.
 
@@ -2431,3 +2467,33 @@ A second trusted person is Owner on the Google Cloud project and billing account
 - [ ] Both people receive billing and budget alerts.
 - [ ] The drill is repeated after each rotation and after either person changes.
 - [ ] Moving to Cloud KMS is not part of this issue.
+
+### Issue 76: Start from a budget you already have
+
+**Tier:** Next Steps (added after the roadmap was numbered; the owner asked for it in round 13).
+**Prerequisites:** Issue 17 (Starting out), and the round-13 Starting out changes (calendar cadence, goals with a current amount)
+**Target PR Size:** ~550 lines (split the reader callable from the review step if it runs over)
+**Files:**
+- `functions/src/apps/runway/readRunwayBudget.ts`, `functions/src/index.ts`, `functions/README.md`
+- `src/apps/runway/queries/budgetReadQueries.ts`
+- `src/apps/runway/screens/start/` (a "Start from your budget" way in, and the review step)
+
+**Context:** Read Pinch's reading flow (`CLAUDE.md` Product: "A document fills the form; it doesn't create records", "Every AI entry point says what happens") and the TDD's sealed-document rules.
+
+### Description
+Someone who already keeps a budget in a spreadsheet, a CSV, a notes file or a message can start from it: an AI reads the file or pasted text into proposed income, bills, envelopes and goals, and the person reviews each one in Starting out before anything is saved.
+
+### Possible Approach
+1. Starting out offers "Start from your budget" beside "Start fresh" as one `MethodPicker` (a file, or pasted text), saying before anything is sent that an AI reads it and that it isn't kept.
+2. The callable returns a structured answer (every field required and nullable; amounts in cents; cadence as one of the calendar cadences or per pay) and never saves; the file is not stored.
+3. The review step lists the proposals by kind with their amounts, each editable and removable, with what could not be read named; Save writes them through the same actions as Starting out, sealed.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** the proposals become real items only on Save. **Read / Update / Delete:** each proposal before saving.
+
+### Success Criteria
+- [ ] A CSV, a pasted list and a notes-style text each produce proposals a person can review; nothing is written before Save (emulator).
+- [ ] A value the source doesn't give stays empty and is named, never invented.
+- [ ] The callable checks `request.auth`, logs no content, and is in `functions/README.md`.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
+- [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.

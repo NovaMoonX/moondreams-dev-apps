@@ -9,6 +9,7 @@ import {
   CHANGE_WORDS,
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
+import { ActionTitle } from '@apps/runway/components/ActionSection';
 import type { ChangeFlow } from '@apps/runway/forms/useChangeFlow';
 
 interface ChangeReasonProps {
@@ -25,13 +26,13 @@ function ChangeReason({ flow, onClose }: ChangeReasonProps) {
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => flow.setStep('form')} />
       <div className='space-y-1'>
-        <p className='text-sm font-medium'>{CHANGE_WORDS.whyHeading}</p>
+        <ActionTitle>{CHANGE_WORDS.whyHeading}</ActionTitle>
         <p className='text-muted-foreground text-sm break-words'>
           {summaryText}
         </p>
       </div>
       <SuggestionChips
-        label={CHANGE_WORDS.whyHint}
+        label={CHANGE_WORDS.whyHeading}
         suggestions={CHANGE_REASON_CHIPS}
         isDisabled={isSaving}
         onPick={setNote}
@@ -42,7 +43,7 @@ function ChangeReason({ flow, onClose }: ChangeReasonProps) {
         onChange={setNote}
         placeholder={CHANGE_WORDS.whyPlaceholder}
         maxLength={MAX_NOTE_LENGTH}
-        rows={3}
+        rows={2}
       />
       <ModalFooterActions
         note={error}

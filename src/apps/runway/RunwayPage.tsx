@@ -8,15 +8,17 @@ import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
-import AuthRequiredState from '@/ui/AuthRequiredState';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
 import Loading from '@/ui/Loading';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
-import CheckAmountScreen from '@apps/runway/screens/home/CheckAmountScreen';
-import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
+import DraftHandoff from '@apps/runway/screens/start/DraftHandoff';
+import SignedOutLanding from '@apps/runway/screens/start/SignedOutLanding';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
+import { useStartDraft } from '@apps/runway/utils/startDraft';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
@@ -33,6 +35,7 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectIsDaysLoaded,
   selectListedDays,
+  selectSpendPurchases,
   selectIsPlanItemsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
@@ -58,6 +61,12 @@ interface RunwayTabsProps {
 
 /** A tab opens where it was left (the top on a first visit), and tapping the open tab again goes to its top. */
 function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
+  const hasItems = useAppSelector((state) => state.runway.items.length > 0);
+  const hasPurchases = useAppSelector(
+    (state) => selectSpendPurchases(state).length > 0,
+  );
+  const hasFigures = activeTab === 'spend' ? hasPurchases : hasItems;
+
   useLayoutEffect(() => {
     const target = tabScrolls.get(activeTab) ?? 0;
     const state = { isRestoring: true, frame: 0, id: 0 };
@@ -101,9 +110,12 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
   return (
     <div className='page pb-28'>
       <div className='mx-auto max-w-4xl space-y-4 py-6'>
-        <h1 className='text-2xl font-semibold'>
-          {RUNWAY_TAB_LABELS[activeTab]}
-        </h1>
+        <div className='flex h-10 items-center justify-between gap-3'>
+          <h1 className='text-2xl font-semibold'>
+            {RUNWAY_TAB_LABELS[activeTab]}
+          </h1>
+          {hasFigures && <ValuesEyeButton />}
+        </div>
         {getScreen(activeTab)}
       </div>
       <RunwayBottomNav value={activeTab} onChange={handleChange} />
@@ -111,7 +123,7 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
   );
 }
 
-function RunwayPage() {
+function RunwayContent() {
   const { user, loading } = useAuth();
   const {
     activeTab: requestedTab,
@@ -121,12 +133,10 @@ function RunwayPage() {
     moreEntry,
     closeMoreEntry,
     view,
+    openView,
     closeView,
     settingsView,
     closeSettingsView,
-    purchaseId,
-    closePurchase,
-    checkEnvelope,
   } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
@@ -144,6 +154,7 @@ function RunwayPage() {
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
   const [attempt, setAttempt] = useState(0);
+  const startDraft = useStartDraft();
 
   useRunwayTheme();
   useEffect(() => () => tabScrolls.clear(), []);
@@ -165,12 +176,20 @@ function RunwayPage() {
   }
 
   if (!user) {
-    return <AuthRequiredState message='Please sign in to use Runway.' />;
+    if (view === 'start') {
+      return (
+        <div>
+          <StartingOutScreen />
+        </div>
+      );
+    }
+    return <SignedOutLanding onStart={() => openView('start')} />;
   }
 
   if (isDeletingPlan && keyStatus === 'ready') {
     return (
       <div>
+        <SettingsScreen onClose={closeMoreEntry} />
         <DeletePlanScreen
           onClose={closeSettingsView}
           onDeleted={() => {
@@ -249,31 +268,8 @@ function RunwayPage() {
     );
   }
 
-  if (openDayKey !== null && (hasOpenDay || !isItemsLoaded)) {
-    return (
-      <div>
-        <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
-      </div>
-    );
-  }
-
-  if (purchaseId !== null && level === 'track') {
-    return (
-      <div>
-        <PurchaseScreen purchaseId={purchaseId} onClose={closePurchase} />
-      </div>
-    );
-  }
-
-  if (view === 'checkAmount' && level === 'track') {
-    return (
-      <div>
-        <CheckAmountScreen
-          presetEnvelopeId={checkEnvelope}
-          onClose={closeView}
-        />
-      </div>
-    );
+  if (startDraft !== null) {
+    return <DraftHandoff draft={startDraft} />;
   }
 
   if (view === 'start') {
@@ -284,7 +280,7 @@ function RunwayPage() {
     );
   }
 
-  if (view === 'freeToSpend') {
+  if (view === 'freeToSpend' || (view === 'checkAmount' && level === 'track')) {
     return (
       <div>
         <FreeToSpendScreen onClose={closeView} />
@@ -300,23 +296,35 @@ function RunwayPage() {
     );
   }
 
-  if (moreEntry === 'settings' && settingsView === 'tracking') {
-    return (
-      <div>
-        <TrackingScreen onClose={closeSettingsView} />
-      </div>
-    );
-  }
-
   if (moreEntry === 'settings') {
     return (
       <div>
         <SettingsScreen onClose={closeMoreEntry} />
+        {settingsView === 'tracking' && (
+          <TrackingScreen onClose={closeSettingsView} />
+        )}
+      </div>
+    );
+  }
+
+  // Screens opened from an income day sit above it, so the day is checked last.
+  if (openDayKey !== null && (hasOpenDay || !isItemsLoaded)) {
+    return (
+      <div>
+        <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
       </div>
     );
   }
 
   return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
+}
+
+function RunwayPage() {
+  return (
+    <ValuesHiddenProvider scopeId='runway'>
+      <RunwayContent />
+    </ValuesHiddenProvider>
+  );
 }
 
 export default RunwayPage;
