@@ -42,16 +42,20 @@ import {
   toChosenLines,
 } from '@apps/runway/engine/purchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { addPurchase } from '@apps/runway/store/actions/purchaseActions';
+import {
+  addPurchase,
+  editPurchase,
+} from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectEnvelopes,
   selectItemLooks,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { PurchaseLine } from '@apps/runway/types';
+import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import {
   describeEnvelopes,
+  describePurchaseEdit,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
 
@@ -72,17 +76,20 @@ interface PurchaseFormProps {
   onClose: () => void;
   /** The envelope the form opened from; it starts chosen. */
   presetEnvelopeId?: string | null;
+  /** The purchase being changed; the form then saves over it instead of adding. */
+  editing?: OpenPurchase;
 }
 
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-/** Adds what was spent: an amount, the envelope it came out of (or several), the day, and a refund when money came back. Needs a connection, since the plan is read fresh as it saves. */
+/** Adds what was spent, or changes a purchase already added: an amount, the envelope it came out of (or several), the day, and a refund when money came back. Needs a connection, since the plan is read fresh as it saves. */
 function PurchaseForm({
   isOpen,
   onClose,
   presetEnvelopeId = null,
+  editing,
 }: PurchaseFormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -97,19 +104,53 @@ function PurchaseForm({
   );
 
   const [initialData] = useState<PurchaseFormData>(() => ({
-    amount: '',
-    date: toDateInputValue(todayAsUtcDate()),
-    extras: { merchant: null, note: null },
+    amount: editing ? (Math.abs(editing.amountCents) / 100).toFixed(2) : '',
+    date: toDateInputValue(editing ? editing.date : todayAsUtcDate()),
+    extras: {
+      merchant: editing?.merchant ?? null,
+      note: editing?.note ?? null,
+    },
   }));
+  const editingLines = editing?.lines ?? [];
+  const startsSplit =
+    editing !== undefined && editing.amountCents > 0 && editingLines.length > 1;
   const [formData, setFormData] = useState<PurchaseFormData>(initialData);
   const [view, setView] = useState<'form' | 'split' | 'original'>('form');
-  const [isRefund, setIsRefund] = useState(false);
-  const [isSplit, setIsSplit] = useState(false);
-  const [envelopeId, setEnvelopeId] = useState<string | null>(presetEnvelopeId);
-  const [splitIds, setSplitIds] = useState<string[]>([]);
-  const [shares, setShares] = useState<Record<string, string>>({});
-  const [originalId, setOriginalId] = useState<string | null>(null);
-  const [returnTo, setReturnTo] = useState<string>(FREE_VALUE);
+  const [isRefund, setIsRefund] = useState(
+    editing !== undefined && editing.amountCents < 0,
+  );
+  const [isSplit, setIsSplit] = useState(startsSplit);
+  const [envelopeId, setEnvelopeId] = useState<string | null>(
+    editing && !startsSplit && editing.amountCents > 0
+      ? (editingLines[0]?.envelopeId ?? null)
+      : presetEnvelopeId,
+  );
+  const [splitIds, setSplitIds] = useState<string[]>(() =>
+    startsSplit
+      ? editingLines.flatMap((line) =>
+          line.envelopeId === null ? [] : [line.envelopeId],
+        )
+      : [],
+  );
+  const [shares, setShares] = useState<Record<string, string>>(() =>
+    startsSplit
+      ? Object.fromEntries(
+          editingLines.flatMap((line) =>
+            line.envelopeId === null
+              ? []
+              : [[line.envelopeId, (line.cents / 100).toFixed(2)]],
+          ),
+        )
+      : {},
+  );
+  const [originalId, setOriginalId] = useState<string | null>(
+    editing?.refundOfId ?? null,
+  );
+  const [returnTo, setReturnTo] = useState<string>(
+    editing && editing.amountCents < 0
+      ? (editingLines[0]?.envelopeId ?? FREE_VALUE)
+      : FREE_VALUE,
+  );
   const [originQuery, setOriginQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -121,12 +162,45 @@ function PurchaseForm({
     };
   }, []);
 
-  const options = envelopes.map(({ item, version }) => ({
+  const countedFrom = getCountedFrom(periods);
+  const isEditingCounted =
+    editing !== undefined &&
+    countedFrom !== null &&
+    editing.date >= countedFrom;
+  const ownCents = (id: string) =>
+    !isEditingCounted
+      ? 0
+      : editingLines.reduce(
+          (sum, line) => (line.envelopeId === id ? sum + line.cents : sum),
+          0,
+        );
+  const liveOptions = envelopes.map(({ item, version }) => ({
     id: item.id,
     name: version.payload.name,
     emoji: version.payload.emoji,
-    leftCents: balances.assignedByItem[item.id] ?? 0,
+    leftCents: (balances.assignedByItem[item.id] ?? 0) + ownCents(item.id),
   }));
+  const keptOptions = [
+    ...new Set(
+      editingLines.flatMap((line) =>
+        line.envelopeId === null ? [] : [line.envelopeId],
+      ),
+    ),
+  ]
+    .filter((id) => !liveOptions.some((option) => option.id === id))
+    .map((id) => ({
+      id,
+      name: looks.get(id)?.name ?? 'An envelope',
+      emoji: looks.get(id)?.emoji ?? null,
+      leftCents: ownCents(id),
+    }));
+  const options = [...liveOptions, ...keptOptions];
+  const others = purchases.filter((purchase) => purchase.id !== editing?.id);
+  const refundedCents = editing
+    ? others
+        .filter((purchase) => purchase.refundOfId === editing.id)
+        .reduce((sum, purchase) => sum - purchase.amountCents, 0)
+    : 0;
   const liveIds = new Set(options.map((option) => option.id));
   const leftById = Object.fromEntries(
     options.map((option) => [option.id, option.leftCents]),
@@ -142,9 +216,20 @@ function PurchaseForm({
   const original =
     originalId === null
       ? null
-      : (purchases.find((purchase) => purchase.id === originalId) ?? null);
+      : (others.find((purchase) => purchase.id === originalId) ?? null);
   const refundable =
-    original === null ? null : getRefundableCents(original, purchases);
+    original === null ? null : getRefundableCents(original, others);
+  const refundedBy = others
+    .filter((purchase) => editing && purchase.refundOfId === editing.id)
+    .flatMap((purchase) => purchase.lines)
+    .reduce<Record<string, number>>((acc, line) => {
+      const key = line.envelopeId ?? FREE_VALUE;
+      return { ...acc, [key]: (acc[key] ?? 0) - line.cents };
+    }, {});
+  const centsAt = (set: readonly PurchaseLine[], key: string) =>
+    set
+      .filter((line) => (line.envelopeId ?? FREE_VALUE) === key)
+      .reduce((sum, line) => sum + line.cents, 0);
   const returnsToOriginal =
     isRefund &&
     original !== null &&
@@ -154,12 +239,19 @@ function PurchaseForm({
   const getLines = (): PurchaseLine[] | null => {
     if (amount === null) return null;
     if (isRefund) {
+      const keepsStored =
+        editing !== undefined &&
+        amount === -editing.amountCents &&
+        originalId === editing.refundOfId &&
+        (returnsToOriginal ||
+          returnTo === (editingLines[0]?.envelopeId ?? FREE_VALUE));
+      if (keepsStored) return editingLines;
       if (original !== null && returnsToOriginal) {
         const result = getRefundLines(
           amount,
           original,
           (id) => liveIds.has(id),
-          purchases,
+          others,
         );
         return result.kind === 'lines' ? result.lines : null;
       }
@@ -196,23 +288,36 @@ function PurchaseForm({
         ? 'That purchase has been refunded in full.'
         : `Only ${formatCents(refundable)} of that purchase can still be refunded.`;
     }
+    if (!isRefund && refundedCents > amount) return SPEND_WORDS.belowRefunds;
     if (lines === null) {
       if (isSplit && !isRefund) return SPEND_WORDS.needsShares;
       return SPEND_WORDS.needsEnvelope;
+    }
+    const shortKey = isRefund
+      ? undefined
+      : Object.keys(refundedBy).find(
+          (key) =>
+            centsAt(lines, key) <
+            Math.min(refundedBy[key], centsAt(editingLines, key)),
+        );
+    if (shortKey !== undefined) {
+      return `${shortKey === FREE_VALUE ? SPEND_WORDS.freeToSpend : nameOf(shortKey)} already got back more than that from refunds.`;
     }
     if (date === null || date > today) return SPEND_WORDS.needsDay;
     if (!isInTrackingPeriods(periods, date)) {
       return `Tracking was not on for ${formatDateUTC(date)}.`;
     }
-    const countedFrom = getCountedFrom(periods);
-    if (countedFrom !== null && date < countedFrom) {
+    if (countedFrom !== null && date < countedFrom && date !== editing?.date) {
       return `Tracking started again on ${formatDateUTC(countedFrom)}. Pick that day or later.`;
     }
     return null;
   };
   const blocker = getBlocker();
 
-  const effect = lines === null ? null : getPurchaseEffect(lines, leftById);
+  const isCounted =
+    date !== null && countedFrom !== null && date >= countedFrom;
+  const effect =
+    lines === null || !isCounted ? null : getPurchaseEffect(lines, leftById);
   const getEffectLine = () => {
     if (effect === null || lines === null) return null;
     if (effect.over.length === 1) {
@@ -273,7 +378,7 @@ function PurchaseForm({
     );
   };
 
-  const handleAdd = async () => {
+  const handleSave = async () => {
     if (!user || blocker !== null || lines === null || amount === null) return;
     if (date === null) return;
     setError(null);
@@ -282,14 +387,39 @@ function PurchaseForm({
       const encryption = await getRunwayEncryption(user.uid);
       const merchant = formData.extras.merchant?.trim() || null;
       const note = formData.extras.note?.trim() || null;
-      await addPurchase(user.uid, encryption, {
+      const input = {
         date,
         amountCents: isRefund ? -amount : amount,
         merchant,
         note,
         lines,
         refundOfId: isRefund ? originalId : null,
-      });
+      };
+      if (editing) {
+        const isUnchanged =
+          input.date === editing.date &&
+          input.amountCents === editing.amountCents &&
+          input.merchant === (editing.merchant?.trim() || null) &&
+          input.note === (editing.note?.trim() || null) &&
+          input.refundOfId === editing.refundOfId &&
+          JSON.stringify(input.lines) === JSON.stringify(editing.lines);
+        if (!isUnchanged) {
+          await editPurchase(
+            user.uid,
+            encryption,
+            editing,
+            input,
+            describePurchaseEdit(editing, input, nameOf),
+          );
+          addToast({
+            title: isRefund ? 'Refund saved' : 'Purchase saved',
+            type: 'success',
+          });
+        }
+        onClose();
+        return;
+      }
+      await addPurchase(user.uid, encryption, input);
       addToast({
         title: isRefund ? 'Refund added' : 'Purchase added',
         description: [
@@ -316,10 +446,10 @@ function PurchaseForm({
     }
   };
 
-  const candidates = purchases.filter(
+  const candidates = others.filter(
     (purchase) =>
       purchase.amountCents > 0 &&
-      getRefundableCents(purchase, purchases) > 0 &&
+      getRefundableCents(purchase, others) > 0 &&
       getPurchaseTitle(purchase, nameOf)
         .toLowerCase()
         .includes(originQuery.trim().toLowerCase()),
@@ -350,20 +480,22 @@ function PurchaseForm({
               onChange={props.onValueChange}
               disabled={isSaving}
             />
-            <div>
-              <RevealChip
-                icon={
-                  isRefund ? (
-                    <X className='h-4 w-4' />
-                  ) : (
-                    <Plus className='h-4 w-4' />
-                  )
-                }
-                onClick={toggleRefund}
-              >
-                {isRefund ? SPEND_WORDS.unmarkRefund : SPEND_WORDS.markRefund}
-              </RevealChip>
-            </div>
+            {!editing && (
+              <div>
+                <RevealChip
+                  icon={
+                    isRefund ? (
+                      <X className='h-4 w-4' />
+                    ) : (
+                      <Plus className='h-4 w-4' />
+                    )
+                  }
+                  onClick={toggleRefund}
+                >
+                  {isRefund ? SPEND_WORDS.unmarkRefund : SPEND_WORDS.markRefund}
+                </RevealChip>
+              </div>
+            )}
           </div>
           {isRefund && (
             <SummaryRow
@@ -611,7 +743,7 @@ function PurchaseForm({
           >
             {SPEND_WORDS.noOriginal}
           </Button>
-          {purchases.length >= ORIGIN_SEARCH_THRESHOLD && (
+          {others.length >= ORIGIN_SEARCH_THRESHOLD && (
             <SearchInput
               value={originQuery}
               onChange={setOriginQuery}
@@ -660,7 +792,7 @@ function PurchaseForm({
           columns={1}
           onDataChange={(data) => setFormData(data as PurchaseFormData)}
           onSubmit={() => {
-            void handleAdd();
+            void handleSave();
           }}
           submitButton={
             <ModalFooterActions
@@ -681,7 +813,7 @@ function PurchaseForm({
                   loading={isSaving}
                   disabled={isSaving || blocker !== null}
                 >
-                  {SPEND_WORDS.add}
+                  {editing ? SPEND_WORDS.save : SPEND_WORDS.add}
                 </Button>
               }
             />

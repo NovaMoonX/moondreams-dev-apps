@@ -7,9 +7,14 @@ import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
+import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
-import { HOME_ENVELOPE_TILES, HOME_WORDS } from '@apps/runway/constants';
+import {
+  CHECK_WORDS,
+  HOME_ENVELOPE_TILES,
+  HOME_WORDS,
+} from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
@@ -51,7 +56,8 @@ function HomeScreen() {
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
-  const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
+  const { openView, openDay, showTab, showPlanSection, openCheckAmount } =
+    useRunwayUrlState();
 
   if (!isLoaded) {
     return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
@@ -134,6 +140,16 @@ function HomeScreen() {
               />
             ))}
           </ul>
+          <LevelGate level='track'>
+            <Button
+              variant='secondary'
+              size='sm'
+              className='h-10'
+              onClick={() => openCheckAmount(null)}
+            >
+              {CHECK_WORDS.open}
+            </Button>
+          </LevelGate>
           {envelopes.length > shown.length && (
             <Button
               variant='tertiary'

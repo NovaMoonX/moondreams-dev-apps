@@ -17,7 +17,7 @@ import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import { SPEND_WORDS } from '@apps/runway/constants';
+import { CHECK_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   selectEnvelopes,
@@ -35,7 +35,7 @@ function EnvelopesScreen() {
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [purchaseFor, setPurchaseFor] = useState<string | null>(null);
-  const { showSpend } = useRunwayUrlState();
+  const { showSpend, openCheckAmount } = useRunwayUrlState();
   const [editing, setEditing] = useState<{
     itemId: string;
     payload: EnvelopeSealed;
@@ -125,6 +125,17 @@ function EnvelopesScreen() {
                             onClick={() => showSpend(item.id)}
                           >
                             Purchases
+                          </Button>
+                          <Button
+                            type='button'
+                            variant='secondary'
+                            size='sm'
+                            rounded='full'
+                            className={ITEM_CHIP_CLASS}
+                            aria-label={`${CHECK_WORDS.open} against ${version.payload.name}`}
+                            onClick={() => openCheckAmount(item.id)}
+                          >
+                            {CHECK_WORDS.open}
                           </Button>
                         </LevelGate>
                       }

@@ -48,7 +48,8 @@ function SpendScreen() {
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const purchases = useAppSelector(selectSpendPurchases);
   const looks = useAppSelector(selectItemLooks);
-  const { spendEnvelope, showSpendEnvelope } = useRunwayUrlState();
+  const { spendEnvelope, showSpendEnvelope, openPurchase } =
+    useRunwayUrlState();
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -138,6 +139,7 @@ function SpendScreen() {
                     key={purchase.id}
                     purchase={purchase}
                     looks={looks}
+                    onOpen={() => openPurchase(purchase.id)}
                   />
                 ))}
               </ul>

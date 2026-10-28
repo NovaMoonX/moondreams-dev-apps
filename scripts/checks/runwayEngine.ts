@@ -11,6 +11,12 @@ import {
   deriveBalances,
   deriveBalancesBefore,
 } from '../../src/apps/runway/engine/balances.ts';
+import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
+import {
+  describePurchaseEdit,
+  describePurchaseRemoval,
+} from '../../src/apps/runway/utils/purchaseText.ts';
+import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
   getLineEffect,
   getPurchaseEffect,
@@ -5443,6 +5449,93 @@ const version = (
   assert.equal(isInTrackingPeriods(periods, day(10)), false);
   assert.equal(isInTrackingPeriods(periods, day(40)), true);
   assert.equal(isInTrackingPeriods([], day(1)), false);
+}
+
+{
+  const envelopes = [
+    { id: 'dining', priority: 'should' as const, leftCents: 3_000 },
+    { id: 'fun', priority: 'want' as const, leftCents: 1_000 },
+    { id: 'gifts', priority: 'want' as const, leftCents: 500 },
+    { id: 'rent', priority: 'must' as const, leftCents: 90_000 },
+    { id: 'empty', priority: 'want' as const, leftCents: 0 },
+    { id: 'over', priority: 'want' as const, leftCents: -400 },
+  ];
+  assert.deepEqual(checkAmount('dining', 1_200, envelopes), {
+    kind: 'fits',
+    leftAfterCents: 1_800,
+  });
+  assert.deepEqual(checkAmount('dining', 3_000, envelopes), {
+    kind: 'fits',
+    leftAfterCents: 0,
+  });
+  assert.deepEqual(
+    checkAmount('dining', 4_200, envelopes),
+    {
+      kind: 'over',
+      overCents: 1_200,
+      sources: [
+        { envelopeId: 'fun', takeCents: 1_000, leftAfterCents: 0 },
+        { envelopeId: 'gifts', takeCents: 200, leftAfterCents: 300 },
+      ],
+      uncoveredCents: 0,
+    },
+    'lowest priority first, in list order, taking only what covers it',
+  );
+  const big = checkAmount('dining', 200_000, envelopes);
+  assert.equal(big.kind, 'over');
+  if (big.kind === 'over') {
+    assert.deepEqual(
+      big.sources.map((source) => source.envelopeId),
+      ['fun', 'gifts', 'rent'],
+      'an empty or over envelope is never a source, a Must comes last',
+    );
+    assert.equal(
+      big.sources.reduce((sum, source) => sum + source.takeCents, 0) +
+        big.uncoveredCents,
+      big.overCents,
+      'what the sources give and what is left over add up to the overage',
+    );
+  }
+  const alreadyOver = checkAmount('over', 100, envelopes);
+  assert.equal(alreadyOver.kind === 'over' && alreadyOver.overCents, 500);
+  const words = describeAmountCheck(
+    checkAmount('dining', 4_200, envelopes),
+    'Dining',
+    (id) => id,
+  );
+  assert.equal(words.headline, 'Dining would be $12.00 over.');
+  assert.equal(words.sources[0], 'fun could give $10.00, leaving $0.00.');
+
+  const dayMs = 86_400_000;
+  const before = {
+    id: 'p',
+    date: dayMs,
+    source: 'manual' as const,
+    needsHome: false,
+    createdAt: 1,
+    updatedAt: 1,
+    amountCents: 4_000,
+    merchant: 'Safeway',
+    note: null,
+    refundOfId: null,
+    lines: [{ envelopeId: 'dining', cents: 4_000, via: 'chosen' as const }],
+  };
+  assert.equal(
+    describePurchaseEdit(
+      before,
+      {
+        ...before,
+        amountCents: 5_500,
+        lines: [{ envelopeId: 'dining', cents: 5_500, via: 'chosen' }],
+      },
+      (id) => id,
+    ),
+    'Purchase changed: Safeway, amount $40.00 to $55.00.',
+  );
+  assert.match(
+    describePurchaseRemoval(before, (id) => id),
+    /^Purchase removed: Safeway, \$40\.00 on /,
+  );
 }
 
 console.log('runway engine: ok');
