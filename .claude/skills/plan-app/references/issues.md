@@ -87,17 +87,17 @@ Once the roadmap is approved and committed as `src/apps/<id>/ISSUES.md`, run the
 
 ```bash
 npm run issues:create:dry-run -- <app-id>   # parse and preview; needs no gh
-npm run issues:create -- <app-id>
+npm run issues:create -- <app-id> --app-name "<App name>"   # before the app is in APP_REGISTRY
 npm run issues:create -- <app-id> --file <draft>.md   # a planning draft not yet in src/apps
 ```
 
 For each `### Issue N: Title` it:
-- titles the GitHub issue **`<App name> N: Title`** (the app's `name` in `APP_REGISTRY`, e.g. `Runway 3: Income sources`), so the roadmap number stays visible and never clashes across apps;
+- titles the GitHub issue **`<App name> N: Title`** (the app's `name` in `APP_REGISTRY`, or `--app-name "<App name>"` while the app isn't registered yet, which is every new app's first run), e.g. `Runway 3: Income sources`, so the roadmap number stays visible and never clashes across apps;
 - labels it with its tier (the `## MVP` / `## Next Steps` / `## Beyond` heading it sits under, verbatim), creating the label the first time;
-- adds it to project board 3 with **Status = Ready** and the board's **Apps** field set to the app's name (the option is created through the API when missing);
-- once every issue exists, edits each body so every `Issue N` mention becomes the real `#123`, so later docs, PRs and status comments use the real numbers.
+- adds it to project board 3 with the board's **Apps** field set to the app's name and, for a new issue, **Status = Ready** (the board's Apps field needs an option of that exact name; add it once in the board's field settings, and the script stops and says so when it is missing);
+- once every issue exists, replaces every `Issue N` still in a body (as it stands on GitHub) with the real `#123`, so later docs, PRs and status comments use the real numbers.
 
-It is safe to re-run: an issue whose title already exists is not created again, but its label, board fields and links are re-applied. In a cloud session without `gh`, create the issues with the GitHub MCP `issue_write` using the same title format, then ask the owner to run `npm run issues:create -- <app-id>` once locally, which attaches them to the board.
+It is safe to re-run: an issue found by its prefixed or its bare title is not created again; it keeps its board Status and any edits to its body, and only gets its tier label, Apps field and links. In a cloud session without `gh`, create the issues with the GitHub MCP `issue_write` using the same title format, then ask the owner to run `npm run issues:create -- <app-id>` (with `--app-name` if the app isn't registered yet) once locally, which attaches them to the board.
 
 ---
 

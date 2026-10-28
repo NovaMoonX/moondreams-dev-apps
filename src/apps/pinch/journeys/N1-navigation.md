@@ -413,7 +413,7 @@ Considered and rejected:
 6. **A drawer is a hub, not a dead end.** What it opens returns to it when closed without finishing the journey, and every record it names opens in place. → `CLAUDE.md` Design & UX ("Never stack an overlay on an overlay" gains its other half).
 7. **An entry point needs a moment.** A feature has one home; each extra door names the journey that needs it in context, and a PR adding a door lists the feature's doors with that journey for each. Two doors one "‹ Back" apart serve the same moment, so one goes. → the reviewer agents in `.claude/agents/` (product checklist).
 8. **A display choice lives on the screens it changes.** No app setting sits in one tab's header when it changes others; it's in the View options of every screen it affects. → `CLAUDE.md` Product.
-9. **Review the back gesture as a phone user.** For every new drawer, sheet or swap view: open it over a tab and over a subview, press back once, and list what is open and which tab shows. → review-agents.md (design checklist).
+9. **Review the back gesture as a phone user.** For every new drawer, sheet or swap view: open it over a tab and over a subview, press back once, and list what is open and which tab shows. → `.claude/agents/design-reviewer.md`.
 
 ## 8. Open questions for the owner
 

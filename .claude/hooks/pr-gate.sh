@@ -16,7 +16,12 @@ git rev-parse --is-inside-work-tree >/dev/null 2>&1 || exit 0
 [[ -n "$(git remote 2>/dev/null)" ]] || exit 0
 
 default_branch=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
-default_branch=${default_branch:-main}
+if [[ -z "$default_branch" ]]; then
+  for candidate in main master; do
+    git rev-parse -q --verify "origin/$candidate" >/dev/null 2>&1 && default_branch=$candidate && break
+  done
+fi
+[[ -n "$default_branch" ]] || exit 0
 current_branch=$(git branch --show-current 2>/dev/null)
 if [[ -z "$current_branch" || "$current_branch" == "$default_branch" ]]; then
   exit 0
@@ -35,24 +40,26 @@ git_dir=$(git rev-parse --git-dir 2>/dev/null)
 marker_file="$git_dir/.pr-gate-last-sha"
 last_sha=$(cat "$marker_file" 2>/dev/null || true)
 [[ "$head_sha" == "$last_sha" ]] && exit 0
-echo "$head_sha" > "$marker_file"
 
 base=$(git merge-base "origin/$default_branch" HEAD 2>/dev/null || echo "")
 [[ -n "$base" ]] || exit 0
+echo "$head_sha" > "$marker_file"
 
 # The delta since the last pass, or the whole PR on the first one.
 since="$base"
 if [[ -n "$last_sha" ]] && git merge-base --is-ancestor "$last_sha" HEAD 2>/dev/null; then
   since="$last_sha"
 fi
-delta_files=$(git diff --name-only "$since" HEAD)
+# Only the PR's own files count: a merge of the default branch brings in
+# changes that are not this PR's to review.
 pr_files=$(git diff --name-only "$base" HEAD)
-pr_lines=$(git diff --shortstat "$base" HEAD | awk '{print $4 + $6}')
+delta_files=$(comm -12 <(git diff --name-only "$since" HEAD | sort) <(echo "$pr_files" | sort))
+pr_lines=$(git diff --shortstat "$base" HEAD -- . ':(exclude)package-lock.json' ':(exclude)functions/package-lock.json' | awk '{print $4 + $6}')
 pr_lines=${pr_lines:-0}
 
 has() { echo "$1" | grep -qE "$2"; }
-code_re='\.(ts|tsx|js|mjs|css)$'
-ui_re='^src/.*\.(tsx|css)$'
+code_re='\.(ts|tsx|js|mjs|cjs|css|json|sh|py|html)$'
+ui_re='^(src/.*\.(tsx|css)|src/apps/[^/]+/constants\.ts|src/.*copy.*\.ts|index\.html)$'
 risky_re='^(firestore\.rules|storage\.rules|database\.rules\.json|firestore\.indexes\.json|functions/|cloudflare-worker\.js|src/(components|ui|hooks)/|src/index\.css)'
 rules_re='^(firestore\.rules|storage\.rules|database\.rules\.json|firestore\.indexes\.json)'
 

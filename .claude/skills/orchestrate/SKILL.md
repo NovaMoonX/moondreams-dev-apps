@@ -18,6 +18,8 @@ You are the one who knows everything: the request, the plan, the conventions, wh
 | Review | sized, below | |
 | Planning a new app | `plan-app` | |
 
+**An agent added in this session** (a new `.claude/agents/*.md`) can't be spawned by name until the next session; until then spawn `general-purpose` with `model` from that file's frontmatter and a prompt that starts "Read `.claude/agents/<name>.md` and follow it as your instructions", then the brief.
+
 **Do it yourself** when it is a few tool calls, when the change needs this conversation's context to get right, or when writing the brief would take as long as the change. Each agent starts a fresh context (the system prompt, `CLAUDE.md`, the files it reads), so a one-step task costs more delegated than done; delegation pays on a long loop. Model choice: an agent's frontmatter decides; pass `model` only when the owner asked for one. You plan on the session's model unless the owner says otherwise.
 
 ## Briefing an agent
@@ -26,11 +28,15 @@ Every brief has: the goal in one line; the files to touch (and not to touch); wh
 
 1. Read every diff an agent returns (`git diff` in its worktree) before it lands. You own each line; an agent's "done" is a claim.
 2. Bring it into the branch, run `validator`, fix or send back what fails.
-3. Commit in coherent steps. Agents never commit or push.
+3. Commit in coherent steps. Agents never commit or push (the one exception is `stack-pr-reviewer`, which commits its fix and syncs the stack it was handed).
 
 ## Several issues in order
 
 When the owner assigns a list of issues, work them in order, one PR each (stacked when one builds on the last), and for each: plan it from the issue's checklists, build it through the table above, validate, size and run the review, fix, push, and refresh that PR's **status comment** before starting the next. The owner opens any PR and reads where it stands without scrolling the conversation.
+
+## Improving as you go
+
+Every task feeds `docs/conventions/pipeline.md` "The pipeline improves itself": change a step when you are confident, propose it to the owner when you are not, log both, and end an orchestrated run with its short retro.
 
 ## Sizing the review
 
@@ -67,6 +73,9 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 | <App> 3: … (#123) | #456 | ✅ merged |
 | <App> 4: … (#124) | this PR | 🔨 in review |
 | <App> 5: … (#125) | – | ⏭ next |
+
+**Pipeline proposals** (only when there are any; `docs/conventions/pipeline.md` "The pipeline improves itself")
+- <a change to a skill, hook, agent or convention you aren't sure the owner wants: the change, the evidence, the cost either way>
 
 **Since last update:** <what changed: pushed fixes, review results, decisions>
 **Last verified:** <sha> · CI <green/red> · review <S/M/L, who> · <date>

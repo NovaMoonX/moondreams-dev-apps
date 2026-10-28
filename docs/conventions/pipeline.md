@@ -20,15 +20,31 @@ idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate
 | Review | `orchestrate` "Sizing the review" + `.claude/agents/` | Copilot, then the agents for the size | haiku validator, sonnet reviewers, opus `lead-reviewer` for L | docs-only diffs (validator only) |
 | Status | `orchestrate` "The PR status comment" | the session, after each push and review | session | never on a PR you drive |
 | Take over someone else's PR | `.claude/skills/finish-feature-pr/SKILL.md` | the session, when asked | session | not run by any hook |
+| Improving the pipeline | `docs/conventions/pipeline.md` "The pipeline improves itself", `pipeline-log.md` | the session, every task | session | never |
 | Hint to orchestrate | `.claude/hooks/orchestrate-hint.sh` (UserPromptSubmit) | the hook | none | prompts that aren't in plan mode and name fewer than two issues |
 
 ## Why it is shaped this way
 
-- **The session model holds the context; agents hold a brief.** Opus (or whatever the owner picked) plans, decides, briefs and reads every diff; Sonnet builds and reviews from a written brief; Haiku runs checks whose output is pass or fail. An agent never commits or pushes.
+- **The session model holds the context; agents hold a brief.** Opus (or whatever the owner picked) plans, decides, briefs and reads every diff; Sonnet builds and reviews from a written brief; Haiku runs checks whose output is pass or fail. An agent never commits or pushes, except `stack-pr-reviewer`, whose job is to commit its fix and merge it up a stack it was handed.
 - **A hook decides in bash, not in tokens.** `pr-gate.sh` reads the diff since the last gated HEAD and the PR's size and names only the parts that push needs, so a typo fix doesn't buy a full review and a rules change can't skip its regression rows.
 - **Review cost follows risk.** Lines changed are a floor; rules, functions, public pages and shared components raise a PR to L whatever its size, where shards run in parallel and one Opus reviewer verifies them.
 - **One status comment per PR** is the owner's view of a PR during a long run of issues: what blocks the merge, what is optional, what is next, and where it sits in the plan.
 
+## The pipeline improves itself
+
+Every part of the pipeline is open to change, not only the review agents: the skills, both hooks, every agent file, the conventions files, the issue script, the PR body's shape and the status comment. Whoever is running it (you, the session model) watches for the signals below in every task, and acts on each one in the same turn as the work that showed it.
+
+**Signals.** The owner corrects a choice or rejects a finding; the owner finds a problem a step passed; a hook fires when it shouldn't or stays quiet when it should; an agent's brief comes back wrong or it reaches past its scope; a step costs more than it catches (a review that found nothing on a kind of change it always finds nothing on); a manual step is done twice; a skill's instruction contradicts another's; an agent can't do its job with its tools; something added mid-session can't be used yet (a new agent file loads only on a new session).
+
+**For each signal, decide:**
+1. **Name the class, not the instance**, and the one owner file that should change (the table above). A fix that would touch two owners means one of them is the owner and the other points at it.
+2. **Confident** (the owner said so, or the evidence is plain and the change is small and reversible): make the change in the PR you are on, as an audit of the section it lands in (merge, sharpen, delete; never only append), and tell the owner in one line what changed and why. "The owner said so" includes a correction about one case that plainly applies to its whole class.
+3. **Not confident, but worth it** (it changes cost or behaviour the owner may not want, it rests on one instance, or it trades one good against another): don't change it. Put it to the owner as a **pipeline proposal**: one line with the change, the evidence, and what doing it or not costs. Proposals go in the PR's status comment under "Pipeline proposals" and in your final message, and are applied only when the owner says yes. A proposal the owner declines is logged so it isn't raised again without new evidence.
+4. **Not worth it** (a one-off, or a fix that costs more than it prevents): leave it, and say nothing.
+5. **Log it** in `pipeline-log.md`: one row per change or proposal, newest first. Before changing a step, read its rows: three corrections of one agent or hook mean its design is wrong, not its wording, and that is a proposal to redesign it.
+
+**A retro ends every orchestrated run** (a multi-issue run, a new app, a size L PR): in your final message, three lines at most on what cost the most, what a review missed or flagged as noise, and which briefs came back; each line becomes a change or a proposal by the rules above, or is dropped.
+
 ## Changing the pipeline
 
-A change to any step updates its owner file and this table in the same PR. Before adding a step, ask what it costs per push and which failure it catches that no step already does; before adding a check to a skill, put it in the agent that owns that kind of check instead (`agents.md`).
+A change to any step updates its owner file and this table in the same PR. Before adding a step, ask what it costs per push and which failure it catches that no step already does; before adding a check to a skill, put it in the agent that owns that kind of check instead (`agents.md`, whose procedure is this section applied to an agent's checks).

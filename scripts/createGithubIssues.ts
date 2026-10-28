@@ -2,16 +2,18 @@
  * Creates an app's roadmap issues from its ISSUES.md and puts them on the
  * project board, so planning ends in real issues with one command.
  *
- *   npm run issues:create -- <app-id> [--file <path>] [--yes]
+ *   npm run issues:create -- <app-id> [--app-name <name>] [--file <path>] [--yes]
  *   npm run issues:create:dry-run -- <app-id> [--file <path>]
  *
  * ISSUES.md holds `### Issue N: Title` sections under `## <Tier>` headings
  * (MVP, Next Steps, Beyond). Each issue is created as `<App name> N: Title`,
- * labelled with its tier and added to the board with Status and Apps set; once
- * all exist, every `Issue N` in the new bodies becomes the real `#123`.
- * Re-running is safe: an existing title is reused and its label and board
- * fields are applied again; its body, which may have been edited on GitHub, is
- * left alone. The board's Apps field needs an option named after the app. Needs `gh` signed in with the `project` and
+ * labelled with its tier and added to the board with Apps set and, when new,
+ * Status set; once all exist, every `Issue N` left in a body (as it stands on
+ * GitHub) becomes the real `#123`. Re-running is safe: an issue found by its
+ * prefixed or bare title is reused, keeps its board Status and its edited
+ * body, and only gets its label, Apps and links. The app's name comes from
+ * APP_REGISTRY, or `--app-name` before the app is registered; the board's Apps
+ * field needs an option of that name. Needs `gh` signed in with the `project` and
  * `read:project` scopes; the dry run needs nothing.
  */
 import { execFileSync } from 'node:child_process';
@@ -46,7 +48,9 @@ const readArgs = () => {
   const appId = args.find((arg) => !arg.startsWith('--')) ?? null;
   const fileIndex = args.indexOf('--file');
   const file = fileIndex >= 0 ? (args[fileIndex + 1] ?? null) : null;
-  const result = { appId, file, skipConfirm: args.includes('--yes') };
+  const nameIndex = args.indexOf('--app-name');
+  const appName = nameIndex >= 0 ? (args[nameIndex + 1] ?? null) : null;
+  const result = { appId, file, appName, skipConfirm: args.includes('--yes') };
   return result;
 };
 
@@ -183,14 +187,19 @@ const findAppsOption = (fields: ProjectField[], appName: string) => {
 };
 
 const run = async () => {
-  const { appId, file, skipConfirm } = readArgs();
+  const { appId, file, appName: givenName, skipConfirm } = readArgs();
   if (!appId)
-    fail('Usage: npm run issues:create -- <app-id> [--file <path>] [--yes]');
+    fail(
+      'Usage: npm run issues:create -- <app-id> [--app-name <name>] [--file <path>] [--yes]',
+    );
 
   const app = APP_REGISTRY.find((entry) => entry.id === appId);
   const appName =
+    givenName ??
     app?.name ??
-    fail(`No app "${appId}" in APP_REGISTRY (src/lib/app/app.registry.ts).`);
+    fail(
+      `No app "${appId}" in APP_REGISTRY yet. Pass --app-name "<App name>" (the name people will see).`,
+    );
   const issuesFile = file ?? `src/apps/${appId}/ISSUES.md`;
   if (!existsSync(issuesFile)) fail(`No roadmap at ${issuesFile}.`);
 
@@ -273,7 +282,7 @@ const run = async () => {
     ]).split('\n'),
   );
   const existingByTitle = new Map(
-    ghJson<{ title: string; number: number; url: string }[]>([
+    ghJson<{ title: string; number: number; url: string; body: string }[]>([
       'issue',
       'list',
       '--repo',
@@ -283,14 +292,15 @@ const run = async () => {
       '--limit',
       '1000',
       '--json',
-      'title,number,url',
+      'title,number,url,body',
     ]).map((issue) => [issue.title, issue] as const),
   );
 
   const created = issues.map((issue) => {
     const title = toGithubTitle(appName, issue);
     if (issue.tier) ensureLabel(repo, issue.tier, labels);
-    const existing = existingByTitle.get(title);
+    const existing =
+      existingByTitle.get(title) ?? existingByTitle.get(issue.title);
     if (existing) {
       console.log(`Exists: #${existing.number} ${title}`);
       if (issue.tier)
@@ -307,6 +317,7 @@ const run = async () => {
         issue,
         number: existing.number,
         url: existing.url,
+        body: existing.body,
         isNew: false,
       };
     }
@@ -325,10 +336,10 @@ const run = async () => {
     );
     const number = Number(url.split('/').pop());
     console.log(`Created: #${number} ${title}`);
-    return { issue, number, url, isNew: true };
+    return { issue, number, url, body: issue.body, isNew: true };
   });
 
-  created.forEach(({ url }) => {
+  created.forEach(({ url, isNew }) => {
     const itemId = gh([
       'project',
       'item-add',
@@ -342,18 +353,19 @@ const run = async () => {
       '--jq',
       '.id',
     ]);
-    gh([
-      'project',
-      'item-edit',
-      '--id',
-      itemId,
-      '--project-id',
-      projectId,
-      '--field-id',
-      statusField.id,
-      '--single-select-option-id',
-      statusOption.id,
-    ]);
+    if (isNew)
+      gh([
+        'project',
+        'item-edit',
+        '--id',
+        itemId,
+        '--project-id',
+        projectId,
+        '--field-id',
+        statusField.id,
+        '--single-select-option-id',
+        statusOption.id,
+      ]);
     gh([
       'project',
       'item-edit',
@@ -371,9 +383,9 @@ const run = async () => {
   const numbersByRoadmap = new Map(
     created.map(({ issue, number }) => [issue.number, number] as const),
   );
-  const relinked = created.filter(({ issue, number, isNew }) => {
-    const linked = linkIssueMentions(issue.body, numbersByRoadmap);
-    if (!isNew || linked === issue.body) return false;
+  const relinked = created.filter(({ number, body }) => {
+    const linked = linkIssueMentions(body, numbersByRoadmap);
+    if (linked === body) return false;
     gh(['issue', 'edit', String(number), '--repo', repo, '--body', linked]);
     return true;
   });

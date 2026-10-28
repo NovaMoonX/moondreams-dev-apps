@@ -7,7 +7,7 @@ description: The standard way every PR in this repo ends, run automatically with
 
 Every piece of work in this repo ends with a **draft PR**, opened automatically as soon as the work is pushed (if the branch has none; never ready for review, and without asking), and every PR ends the same way below, and nobody has to ask for it. It runs whenever a push changes behaviour, and only the parts that push needs: the Stop hook (`.claude/hooks/pr-gate.sh`) lists them from the files the push changed and the PR's size, and a follow-up push redoes only the parts whose area it touched (**incremental**: the screenshots of changed screens, the regression rows of touched areas, a review of the delta).
 
-**Skip it** only for a PR that changes no app behaviour or UI (docs, CI config, skills): say so in the PR body in one line.
+**Skip it** only for a PR that changes no app behaviour or UI (docs, CI config, skills): say so in the PR body in one line. Its draft PR and status comment still happen, as the Stop hook says.
 
 **What triggers each part (decide from the diff, not from cost).** Screenshots: any visible change (a new or changed section, row, control, copy or colour). Review agents: a visible change, a new or changed callable, rule, index, write path or third-party contract, or anything non-obvious in the logic; a pure docs or config diff needs neither. Cost, length of the session and "the change is small" are never reasons to skip a part whose trigger is met; if the diff meets a trigger, do the part, and if you judge it does not, say which trigger you checked in the PR body.
 

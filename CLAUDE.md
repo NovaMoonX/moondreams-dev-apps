@@ -2,7 +2,7 @@
 
 Coding practices, styles, and norms for this repo. Every rule here and in the files it points to applies to new code and to any PR you review or finish.
 
-**Large or multi-issue work runs through the `orchestrate` skill, without being asked:** a task that spans more than one issue, will likely change about 1,000 lines or more, or was planned in plan mode. You (the session model) plan, brief, integrate and verify; cheaper agents in `.claude/agents/` build, check and review. The whole pipeline, from planning to merge, is `docs/conventions/pipeline.md`.
+**Large or multi-issue work runs through the `orchestrate` skill, without being asked:** a task that spans more than one issue, will likely change about 1,000 lines or more, or was planned in plan mode. You (the session model) plan, brief, integrate and verify; cheaper agents in `.claude/agents/` build, check and review. The whole pipeline, from planning to merge, is `docs/conventions/pipeline.md`, and it **improves itself**: when a correction, a miss, noise or a wasted step shows a skill, hook, agent, convention or script should change, change it when you are confident and propose it to the owner when you are not (`pipeline.md` "The pipeline improves itself").
 
 The shared rules (imports/aliases, Firestore data contracts, listeners, TanStack Query, invite/join pattern, React state, class names, Dreamer UI usage) live in `.github/copilot-instructions.md` and apply in full:
 
@@ -25,6 +25,7 @@ The rest of the conventions live in `docs/conventions/`, one file per topic, so 
 | Sharing, exports, copies, public pages, pushes, previews | `security-privacy.md` |
 | Checking your work (typecheck, browser, timezones, docs) | `validation.md` |
 | Review agents, hooks, skills, the PR flow | `pipeline.md`, `agents.md` |
+| Reviewing as an agent | technical: `state-data.md`, `firestore-rules.md`, `cloud-functions.md`, `security-privacy.md`, `validation.md`; product: `product.md`, `design-ux.md`; design: `design-ux.md`, `forms-crud.md`, `app-look.md` |
 
 Lasting rules taught by a review or the owner go into the narrowest of these files (fold them in, never append); this file keeps only what every task needs.
 

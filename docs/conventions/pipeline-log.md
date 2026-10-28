@@ -1,0 +1,10 @@
+# Pipeline log
+
+One row per change to the pipeline or proposal about it, newest first (`pipeline.md` "The pipeline improves itself"). Keep each row to one line; the PR holds the detail.
+
+| Date | Signal | Change or proposal | Owner file | Outcome |
+|---|---|---|---|---|
+| 2026-10-28 | Agent files added mid-session weren't spawnable until a reload | Fallback written into orchestrate: `general-purpose` with the agent file as its instructions and the frontmatter's model | `orchestrate/SKILL.md` | changed |
+| 2026-10-28 | Review of #523: pr-gate counted main's files after a merge, wrote its marker before resolving the base, and missed `.json`/`.sh` as code | Delta intersected with the PR's files, marker written after the base resolves, wider patterns, lockfile left out of the size | `.claude/hooks/pr-gate.sh` | changed |
+| 2026-10-28 | Review of #523: a re-run of the issue script reset Status on every issue, and a new app couldn't create issues before it was registered | Status set only on new issues, `--app-name`, bare-title match for existing issues | `scripts/createGithubIssues.ts` | changed |
+| 2026-10-28 | Stop hook ran finish-feature-pr and a full wrap-up on every push | Replaced with pr-gate, which names only what the push needs; finish-feature-pr made manual-only | `.claude/hooks/pr-gate.sh` | changed |

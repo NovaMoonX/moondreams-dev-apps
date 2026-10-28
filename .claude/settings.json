@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/orchestrate-hint.sh",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/orchestrate-hint.sh\"",
             "timeout": 5
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/pr-gate.sh",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-gate.sh\"",
             "timeout": 15
           }
         ]
