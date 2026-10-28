@@ -359,7 +359,10 @@ function toTicketAmounts(showtime: AmcShowtime): { prices: TicketPrices; taxes: 
   const toCents = (value: number | undefined) => (typeof value === 'number' && value >= 0 ? Math.round(value * 100) : null);
   const kinds: TicketPriceKind[] = ['ADULT', 'SENIOR', 'CHILD'];
   const prices = Object.fromEntries(kinds.map((kind) => [kind, toCents(entryOf(kind)?.price)])) as TicketPrices;
-  const taxes = Object.fromEntries(kinds.map((kind) => [kind, toCents(entryOf(kind)?.tax)])) as TicketPrices;
+  // A listed tax of 0 is read as not computed, so the member's learned rate still applies.
+  const taxes = Object.fromEntries(
+    kinds.map((kind) => [kind, (entryOf(kind)?.tax ?? 0) > 0 ? toCents(entryOf(kind)?.tax) : null]),
+  ) as TicketPrices;
   return { prices, taxes };
 }
 

@@ -299,7 +299,7 @@ export function AddFlow({
     key: string,
     snapshot: MovieSnapshot,
   ) => {
-    const { created } = await dispatch(
+    const { created, restored } = await dispatch(
       addWatchlistItem({
         uid,
         movieKey: key,
@@ -312,7 +312,11 @@ export function AddFlow({
       }),
     ).unwrap();
     addToast({
-      title: created ? 'Added to your watchlist' : 'Already on your watchlist',
+      title: restored
+        ? 'Back on your watchlist'
+        : created
+          ? 'Added to your watchlist'
+          : 'Already on your watchlist',
       description: snapshot.title,
     });
   };
@@ -406,7 +410,7 @@ export function AddFlow({
       }));
 
     try {
-      const { created } = await dispatch(
+      const { created, restored } = await dispatch(
         addWatchlistItem({
           uid: user.uid,
           movieKey: result.movieKey,
@@ -415,7 +419,9 @@ export function AddFlow({
           preferredFormat: null,
         }),
       ).unwrap();
-      if (!created) {
+      if (restored) {
+        addToast({ title: 'Back on your watchlist', description: result.title });
+      } else if (!created) {
         addToast({
           title: 'Already on your watchlist',
           description: result.title,

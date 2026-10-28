@@ -34,7 +34,7 @@ interface AddWatchlistItemInput {
 
 /** Resolves `created: false` when the movie was already on the list; its priority is left alone. An archived movie comes back instead. */
 export const addWatchlistItem = createAsyncThunk<
-  { created: boolean },
+  { created: boolean; restored: boolean },
   AddWatchlistItemInput,
   { rejectValue: string }
 >(
@@ -46,11 +46,11 @@ export const addWatchlistItem = createAsyncThunk<
     const itemRef = getItemRef(uid, movieKey);
 
     try {
-      const created = await runTransaction(db, async (transaction) => {
+      const outcome = await runTransaction(db, async (transaction) => {
         const snapshot = await transaction.get(itemRef);
         if (snapshot.exists()) {
           if (snapshot.get('archivedAt') == null) {
-            return false;
+            return { created: false, restored: false };
           }
           // Adding a movie that was archived brings it back as it was.
           transaction.update(itemRef, {
@@ -58,7 +58,7 @@ export const addWatchlistItem = createAsyncThunk<
             archiveReason: null,
             lastEditedAt: Date.now(),
           });
-          return true;
+          return { created: false, restored: true };
         }
 
         const now = Date.now();
@@ -79,10 +79,10 @@ export const addWatchlistItem = createAsyncThunk<
           lastEditedAt: now,
         };
         transaction.set(itemRef, item);
-        return true;
+        return { created: true, restored: false };
       });
 
-      return { created };
+      return outcome;
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to add this movie to your watchlist.'),

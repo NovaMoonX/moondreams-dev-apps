@@ -18,6 +18,18 @@ export function toPurchasePlan(option: ShowtimeOption): PurchasePlan {
   };
 }
 
+function getTaxFromPlan(draft: TicketDraft, taxCents: number | null) {
+  if (taxCents !== null)
+    return {
+      tax: centsToInputValue(taxCents),
+      isTaxEdited: true,
+      isTaxFromAmc: true,
+    };
+  return draft.isTaxFromAmc
+    ? { tax: '', isTaxEdited: false, isTaxFromAmc: false }
+    : {};
+}
+
 /** The ticket form's start for a picked showing: its format and AMC's prices; the fee and tax are still the member's to enter. */
 export function applyPurchaseToDraft(
   draft: TicketDraft,
@@ -27,10 +39,7 @@ export function applyPurchaseToDraft(
   const taxCents = plan.taxCents ?? null;
   return {
     ...draft,
-    // AMC's own tax for the showing is exact, so it replaces the rate learned from past tickets.
-    ...(taxCents === null
-      ? {}
-      : { tax: centsToInputValue(taxCents), isTaxEdited: true }),
+    ...getTaxFromPlan(draft, taxCents),
     format: plan.format,
     price: centsToInputValue(plan.priceCents),
     standardPrice:

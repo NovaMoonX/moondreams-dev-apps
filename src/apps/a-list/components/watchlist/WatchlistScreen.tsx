@@ -199,7 +199,11 @@ function WatchlistScreen() {
         title: 'Nothing archived',
         body: 'Movies you set aside, with the reason, show up here.',
       };
-    if (rows.length === 0 && archivedRows.length > 0)
+    if (
+      rows.length === 0 &&
+      archivedRows.length > 0 &&
+      !filters.includes('archived')
+    )
       return {
         emoji: '🗄️',
         title: 'Your watchlist is clear',

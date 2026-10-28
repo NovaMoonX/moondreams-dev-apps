@@ -25,7 +25,7 @@ export const showtimeQueryKeys = {
   find: (search: ShowtimeSearch) =>
     [
       ...showtimeQueryKeys.all,
-      'v2',
+      'v3',
       search.theatreId,
       search.date,
       normalizeString(search.title),
