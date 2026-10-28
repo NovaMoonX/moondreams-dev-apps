@@ -53,6 +53,7 @@ Plan  (pills: Income · Bills · Envelopes · Goals; a pill is drawn once its sc
  └─ More
      ├─ Change log → Planned and confirmed
      ├─ Settings → Tracking and linking → Where is your money now?
+     │   └─ Delete your plan (typed phrase, destructive confirm, back to first run)
      ├─ Priorities          later
      ├─ What if             later
      ├─ Accounts            later

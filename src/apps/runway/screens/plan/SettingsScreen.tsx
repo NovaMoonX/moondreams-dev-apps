@@ -11,6 +11,7 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
+  DELETE_PLAN_WORDS,
   STANCE_HELP,
   STANCE_LABELS,
   STANCES,
@@ -109,6 +110,25 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
           A pay line or bill with a range can plan at its own end instead. You
           choose that where you add it.
         </p>
+        <Button
+          type='button'
+          variant='tertiary'
+          className='border-border bg-card h-auto min-h-14 w-full items-start justify-between gap-3 rounded-2xl border p-3 text-left font-normal whitespace-normal'
+          onClick={() => openSettingsView('delete')}
+        >
+          <span className='min-w-0 flex-1'>
+            <span className='text-destructive block font-medium'>
+              {DELETE_PLAN_WORDS.rowLabel}
+            </span>
+            <span className='text-muted-foreground block text-sm'>
+              {DELETE_PLAN_WORDS.rowHelp}
+            </span>
+          </span>
+          <ChevronRight
+            className='text-muted-foreground mt-1 h-4 w-4 shrink-0'
+            aria-hidden='true'
+          />
+        </Button>
       </div>
     </Subview>
   );

@@ -33,6 +33,7 @@ Server-side code for the mini-apps. Every function:
 | `copyPinchShareCover` | callable | Pinch | `{ shareId, index, recipeId }` → `{ coverPath }`: copies a shared recipe's cover onto the signed-in visitor's own new recipe, or `{ coverPath: null }` when there is nothing to copy |
 | `getRunwayKey` | callable | Runway | `{}` → `{ appId: 'runway', keyId, keyVersion, key }`: the caller's plan data key (64 hex characters), over TLS. Creates the key and stores it wrapped under the current master key only when the plan has none; never when unwrapping fails (it answers `failed-precondition` and logs `runway.keys.unwrapFailed` with the master key id). Re-wraps a key stored under an older master key id |
 | `verifyRunwayKeys` | scheduled (daily, 06:17 UTC) | Runway | Reads `RUNWAY_MASTER_KEYS` and, for every id, opens that id's canary at `apps/runway/keyChecks/{masterKeyId}`. Writes one log entry per run: `runway.keys.ok` (INFO) or `runway.keys.failed` (ERROR, with the ids and reasons). Logs ids and reasons only, never a key, a wrapped key or a canary |
+| `deleteRunwayPlan` | callable | Runway | `{ phrase }` → `{ deleted, receipts }`: removes the caller's plan (every document below `apps/runway/plans/{uid}`, children first, the plan document last), the wrapped data key under `apps/runway/server/{uid}` and receipt objects under `apps/runway/receipts/{uid}/`. Needs the phrase `delete my plan` and a sign-in from the last five minutes; the uid is the caller's; a plan already gone answers `deleted: 0`. No new secret |
 | `sendScheduledReminders` | schedule, every minute | shared | Sends due push reminders from `reminders` through FCM, and deletes finished ones after two weeks |
 | `sendEatSoonDigest` | schedule, every 30 minutes | Pinch | Sends each person who turned it on one push a day, in their own hour, naming the dishes in their fridge and freezer and, if they also turned that on, the ingredients in their pantry that are past their date or due soon |
 
@@ -144,6 +145,13 @@ gcloud secrets add-iam-policy-binding <SECRET_NAME> --project=moondreams-dev-app
   6. **The daily check:** the scheduler runs `verifyRunwayKeys`; run it by hand from the Cloud Scheduler console ("Force run"), or locally against the emulators with `npm run check:runway-keys` (fake keyrings, every refusal and failure). Read it with the log filter `jsonPayload.event="runway.keys.ok"` or `"runway.keys.failed"`.
   7. **What each `reason` means:** `missing-canary` (an id in the keyring has no canary: a publish stopped half way, or the document was deleted; the key is untested until it is restored), `unwrap-failed` (the canary does not open under that id's key: the keyring holds a different key or the canary was altered; treat as a lost key), `missing-id` (a canary exists for an id the keyring no longer has: an id was dropped, restore it from escrow now), `keyring-invalid` (the latest version is malformed, its `current` is not in `keys` or a key is not 32 bytes), `secret-unreadable` (the version could not be read, for example it is disabled or destroyed: re-enable it within the delay), `check-error` (the canaries could not be read). If the function does not run at all, for example because the latest version is disabled so the instance cannot start, no entry is written; the missing-heartbeat alert in Issue 26 is what catches that.
   8. **Not done here:** the alert policies, the audit alert and the deny policy are created and proven in Issue 26. Until then the log events exist but nothing notifies anyone.
+
+### Runway: `deleteRunwayPlan`
+
+- **Secrets:** none.
+- **Flow:** checks the phrase and `auth_time`, lists and deletes each plan collection recursively in chunks, then the plan document, the `server/{uid}` tree and the receipt prefix; logs `runway.plan.deleted` (documents, receipts) or `runway.plan.deleteFailed` (an error code, never a message, path or id).
+- **Later issues extend it:** link revocation and any link or grant documents, and receipt documents, are added by the issues that create them. The `apps/runway/usage/{uid}` record is left alone.
+- **Emulator check:** deleting the seeded Alex plan removed 160 documents and left nothing under either path.
 
 ### `getFirebaseUsage`
 

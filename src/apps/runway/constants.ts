@@ -61,7 +61,7 @@ export const MORE_ENTRIES = ['settings', 'changeLog'] as const;
 export const RUNWAY_VIEWS = ['start', 'freeToSpend'] as const;
 
 /** The screens Settings opens, kept in the URL as `settingsView`. */
-export const SETTINGS_VIEWS = ['tracking'] as const;
+export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
 
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
   { settings: 'Settings', changeLog: 'Change log' };
@@ -622,4 +622,23 @@ export const START_WORDS = {
   standHelp:
     'Say what you have on hand and what is already set aside, so the first numbers start true.',
   doneAsk: 'Your next income day is ready',
+} as const;
+
+export const DELETE_PLAN_PHRASE = 'delete my plan';
+
+export const DELETE_PLAN_WORDS = {
+  rowLabel: 'Delete your plan',
+  rowHelp: 'Remove everything and start over.',
+  title: 'Delete your plan',
+  goes: "Your plan, every change, every day and every purchase. This can't be undone.",
+  keys: 'The key that opens your plan is deleted too, so nothing that was saved can be read again.',
+  kept: 'Your account stays. You can start a new plan afterwards.',
+  phraseLabel: `Type "${DELETE_PLAN_PHRASE}" to confirm`,
+  confirmTitle: 'Delete your plan for good?',
+  confirmMessage:
+    'This removes your plan, every change, every day and every purchase, and the key that opens them. There is no undo.',
+  confirmText: 'Delete everything',
+  offline:
+    "You're offline. Connect to the internet to delete your plan; nothing has been removed.",
+  partial: 'Your plan was not fully deleted. Run the delete again to finish.',
 } as const;
