@@ -65,10 +65,11 @@ ui_re='^(src/.*\.(tsx|css)|src/apps/[^/]+/constants\.ts|src/.*copy.*\.ts|index\.
 risky_re='^(firestore\.rules|storage\.rules|database\.rules\.json|firestore\.indexes\.json|functions/|cloudflare-worker\.js|src/(components|ui|hooks)/|src/index\.css)'
 rules_re='^(firestore\.rules|storage\.rules|database\.rules\.json|firestore\.indexes\.json)'
 
+pr_code_files=$(echo "$pr_files" | grep -v '\.md$' || true)
 size="S"
-if [[ "$pr_lines" -gt 1500 ]] || has "$pr_files" "$risky_re"; then
+if [[ "$pr_lines" -gt 1500 ]] || has "$pr_code_files" "$risky_re"; then
   size="L"
-elif [[ "$pr_lines" -gt 300 ]] || has "$pr_files" "$ui_re"; then
+elif [[ "$pr_lines" -gt 300 ]] || has "$pr_code_files" "$ui_re"; then
   size="M"
 fi
 
