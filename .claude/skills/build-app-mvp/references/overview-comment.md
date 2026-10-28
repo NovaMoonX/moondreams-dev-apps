@@ -44,16 +44,14 @@ Every merge to `main` is a production deploy, and the app is visible from its fi
 Nothing to run for a new callable: the deploy opens it to the browser (README's "New Cloud Functions & Cloud Run invoker access"). Only if the browser still shows a CORS error, `npm run fb:invoker -- <function>`.
 
 ### 5. Project board
-Run from the `moondreams-dev-apps` root, as two separate code blocks: a dry run, then the real run.
+Only when the issues were created without `gh` (the cloud sandbox): run from the `moondreams-dev-apps` root, as two separate code blocks, a dry run and then the real run. Re-running reuses the existing issues and only attaches them to board 3 with Status Ready and Apps set.
 ```bash
-../_gists/create-github-issues/init.sh src/apps/<id>/ISSUES.md \
-  --app-name "<App Name>" --project-number 3 --project-status-value Ready --dry-run
+npm run issues:create:dry-run -- <id>
 ```
 ```bash
-../_gists/create-github-issues/init.sh src/apps/<id>/ISSUES.md \
-  --app-name "<App Name>" --project-number 3 --project-status-value Ready
+npm run issues:create -- <id>
 ```
-Warn that `npm run issues:create -- <id>` needs `public/manifest-<id>.json`, which does not exist, so the script is called directly with `--app-name`; the script has no `--label` flag, so say which label the issues already carry.
+Say whether the board's Apps field already has a "<App Name>" option; if not, the owner adds it once in the board's field settings first.
 
 ### 6. Brand assets
 Include the light and dark icon SVG sources inline in fenced `svg` blocks. Say that the logo and banner in the repo are placeholders built from them, and that the user creates the final assets.
@@ -68,7 +66,7 @@ For example, the live third-party API and paraphrased brand copy, each with exac
 - the privacy and rules model;
 - money and date representations;
 - what the polish review found and fixed, and what it deferred;
-- the `CLAUDE.md` rules added or changed (Design & UX / Product), one line each;
+- the convention rules added or changed (`docs/conventions/`, agents in `.claude/agents/`), one line each;
 - which PRs were Copilot-reviewed and which were subagent-reviewed;
 - tiers that aren't built yet.
 

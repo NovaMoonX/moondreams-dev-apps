@@ -1,6 +1,6 @@
 ---
 name: finish-feature-pr
-description: Take an in-progress feature PR in this repo (usually a Copilot-authored coding-agent PR) the rest of the way to mergeable — resolve conflicts with main, correct entry points and CRUD/UX gaps, sync Firestore/Storage rules with the data model, add seed data, and validate. Use when the user says "finish PR #NNN", "get this PR ready to merge", or points at a stale/incomplete PR link.
+description: Take over an in-progress feature PR someone else started (usually a Copilot-authored coding-agent PR) and bring it the rest of the way to mergeable — resolve conflicts with main, correct entry points and CRUD/UX gaps, sync Firestore/Storage rules with the data model, add seed data, and validate. Use when the user says "finish PR #NNN", "get this PR ready to merge", or points at a stale/incomplete PR link. Not for PRs you built yourself in this session: those are already held to these checks by orchestrate, the validator agent and pr-wrap-up, and the Stop hook (`pr-gate.sh`) no longer runs this skill.
 ---
 
 # Finish a feature PR
@@ -11,14 +11,9 @@ features bolted onto the wrong UI location, missing seed data, and rules that
 don't match the final data model. This skill is the checklist for taking one
 of those branches to an actually-mergeable state — not just "compiles."
 
-Run every step below. Don't skip validation because the diff "looks right." Coding standards live in `CLAUDE.md` at the repo root — read it first.
+Run every step below. Don't skip validation because the diff "looks right." Coding standards live in `CLAUDE.md` at the repo root and the `docs/conventions/` files its "Read before you touch" table names — read them first.
 
-This skill is also triggered automatically once a feature branch is pushed
-and has a clean working tree, via a Stop hook
-(`.claude/hooks/finish-feature-pr-stop.sh`, registered in
-`.claude/settings.json`) that fires once per new HEAD commit. When entering
-this way, do steps 0a/0b below before anything else, then continue with the
-rest of step 0.
+This skill runs only when asked. The checks every PR gets (draft PR, validation, screenshots, sized review, status comment) are driven by the Stop hook `.claude/hooks/pr-gate.sh`, which names only what each push needs; see `docs/conventions/pipeline.md`.
 
 ## 0. Orient
 
@@ -103,22 +98,24 @@ section vs cat-scoped tab, `catId` → `catIds`, migrating collections), follow
 
 ## 3. Audit against CLAUDE.md
 
-`CLAUDE.md` (repo root) is the single source of truth for coding style and
-norms, and it imports `.github/copilot-instructions.md`. Read it before this
-step and audit the whole diff against it — don't rely on memory of the rules.
-This checklist names the sections to walk; the rules themselves live there:
+`CLAUDE.md` (repo root, importing `.github/copilot-instructions.md`) and
+`docs/conventions/` are the source of truth for style and norms. Start with
+the `validator` agent over the diff (it runs the typecheck, eslint and every
+grep below and reports only failures), then read the diff against the rules
+for what a grep misses. This checklist names the sections to walk; the rules
+themselves live there:
 
 - **Code style** — functions over loose `let`/`for` accumulators, comment
   audit (do it on every file touched this session, including your own edits,
   and re-check right before wrap-up), no IIFEs, no setState-in-effect, Dreamer
   UI components, `AppToggle`, toggle-vs-checkbox.
-- **Forms and CRUD conventions** — noun titles, submit disabling,
+- **Forms and CRUD conventions** (`docs/conventions/forms-crud.md`) — noun titles, submit disabling,
   reveal links vs asked journey details, `key` on form containers, confirm
   dialogs, delete icon placement, modal vs drawer vs subview (measure every
   form on a phone; none may be a long modal),
   requester-side cancel on pending-request features, single-declaration
   option lists.
-- **State, data, and performance** — listeners in `store/listeners/`,
+- **State, data, and performance** (`docs/conventions/state-data.md`) — listeners in `store/listeners/`,
   TanStack Query, `persist: true` audit, `shallowEqual`, transactions for
   read-modify-write. Grep the diff for `onSnapshot(`, `fetch(`,
   `httpsCallable(`, `getDoc`/`getDocs`, `persist: true`, `useAppSelector(`,
@@ -145,8 +142,8 @@ see "State, data, and performance".
 
 ## 5. Validate
 
-Follow "Validation" in `CLAUDE.md`: `npx tsc -b --force` and `npx eslint .`,
-update the mini-app seed, prove backwards compatibility against legacy-shaped
+Follow `docs/conventions/validation.md`: `npx tsc -b --force` and `npx eslint .`,
+update the app seed, prove backwards compatibility against legacy-shaped
 documents, drive the feature end-to-end in a real browser
 against the emulators, re-drive every pre-existing feature that touches a
 changed file (seed whatever state that needs), and verify rule denials and
@@ -155,7 +152,7 @@ dev server and emulators running and finish with `npm run seed:reset`.
 
 ## 6. Wrap up
 
-- **Then run `pr-wrap-up`** (`.claude/skills/pr-wrap-up/SKILL.md`): the PR's screenshots (phone first, before and after for changes), the `## Regression check` section (security rules first) and the review. A push that changes how anything looks means the screenshots are re-taken in this same pass, and one that touches rules or a shared component re-runs its regression row.
+- **Then run `pr-wrap-up`** (`.claude/skills/pr-wrap-up/SKILL.md`) and write the PR's status comment (orchestrate "The PR status comment"): the PR's screenshots (phone first, before and after for changes), the `## Regression check` section (security rules first) and the review. A push that changes how anything looks means the screenshots are re-taken in this same pass, and one that touches rules or a shared component re-runs its regression row.
 
 - **Re-sync with main immediately before this step, every time** —
   `git fetch origin main && git merge origin/main` again, exactly like
