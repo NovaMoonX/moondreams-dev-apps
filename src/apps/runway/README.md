@@ -294,7 +294,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 ### Core MVP
 
 - [ ] Add income sources with one or more pay lines, each with a schedule, an exact or range amount, and an ending by date or number of times, including one-time income
-- [ ] Income entered as the amount that lands in the account (take-home), with room to add a gross breakdown later
+- [x] Income entered as the amount that lands in the account (take-home), with room to add a gross breakdown later
 - [ ] Amounts that are exact, a percentage of the income day's money, or the rest
 - [ ] Point a source, a pay line or one income day at the envelopes, bills and goals it funds
 - [ ] Planning stance (conservative by default), with an override per source or bill
