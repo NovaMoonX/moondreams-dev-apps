@@ -7,6 +7,7 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
+import { getEffectiveSplits } from './correct';
 import type { Draft } from './draft';
 import {
   applyLineEdits,
@@ -109,19 +110,20 @@ export function buildRecords(input: BuildRecordsInput): {
   return { proposed, confirmed };
 }
 
-/** What each plan item has been given by confirmed days, from the records read so far. */
+/** What each plan item has been given by confirmed days, from the records read so far; a corrected day counts its latest correction, never the original. */
 export function sumConfirmedByItem(
   records: readonly OpenRecord[],
 ): Record<string, Cents> {
-  const result = records.reduce<Record<string, Cents>>((acc, record) => {
-    if (record.kind !== 'confirmed') return acc;
-    return record.payload.lines.reduce(
-      (sums, line) => ({
-        ...sums,
-        [line.itemId]: (sums[line.itemId] ?? 0) + line.cents,
-      }),
-      acc,
-    );
-  }, {});
+  const result = getEffectiveSplits(records).reduce<Record<string, Cents>>(
+    (acc, split) =>
+      split.lines.reduce(
+        (sums, line) => ({
+          ...sums,
+          [line.itemId]: (sums[line.itemId] ?? 0) + line.cents,
+        }),
+        acc,
+      ),
+    {},
+  );
   return result;
 }

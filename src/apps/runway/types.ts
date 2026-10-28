@@ -139,6 +139,8 @@ export interface DayRecordDoc {
   kind: DayRecordKind;
   createdAt: number;
   sealed: Sealed;
+  /** The record a correction replaces; null on the proposed and confirmed records. */
+  supersedesId: string | null;
 }
 
 /** One funded line of a day, with the names it had when the day was confirmed. */
@@ -192,6 +194,27 @@ export interface ConfirmedSealed {
   differences: RecordDifference[];
 }
 
+/** A line a correction changed, with what it was and what it became. */
+export interface CorrectionChange {
+  lineId: string;
+  itemId: string;
+  name: string;
+  emoji: string | null;
+  beforeCents: Cents;
+  afterCents: Cents;
+}
+
+/** The split a correction puts in place of the one it replaces, with what changed and why. */
+export interface CorrectionSealed {
+  stance: Stance;
+  arrivedCents: Cents;
+  freeToSpendCents: Cents;
+  lines: RecordLine[];
+  before: { arrivedCents: Cents; freeToSpendCents: Cents };
+  changes: CorrectionChange[];
+  note: string | null;
+}
+
 interface OpenRecordBase {
   id: string;
   dayId: string;
@@ -200,7 +223,12 @@ interface OpenRecordBase {
 
 export type OpenRecord =
   | (OpenRecordBase & { kind: 'proposed'; payload: ProposedSealed })
-  | (OpenRecordBase & { kind: 'confirmed'; payload: ConfirmedSealed });
+  | (OpenRecordBase & { kind: 'confirmed'; payload: ConfirmedSealed })
+  | (OpenRecordBase & {
+      kind: 'correction';
+      supersedesId: string;
+      payload: CorrectionSealed;
+    });
 
 export interface OpenDay {
   id: string;

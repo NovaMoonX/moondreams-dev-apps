@@ -10,7 +10,7 @@ import RangeNote from '@apps/runway/components/RangeNote';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { DAY_STATUS_LABELS } from '@apps/runway/constants';
 import {
-  selectConfirmedRecord,
+  selectEffectiveSplit,
   selectStance,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -43,11 +43,11 @@ function IncomeDayCard({ day, onOpen }: IncomeDayCardProps) {
   );
   const record = useAppSelector((state) =>
     day.status === 'confirmed'
-      ? selectConfirmedRecord(state, day.dayKey)
+      ? selectEffectiveSplit(state, day.dayKey)
       : null,
   );
   const cents =
-    record?.payload.arrivedCents ?? pick(stance, day.amount, 'income');
+    record?.arrivedCents ?? pick(stance, day.amount, 'income');
   const statusLabel = getStatusLabel(day);
   const title = day.sourceName ?? day.payLineName;
   const detail = day.sourceName ? day.payLineName : null;

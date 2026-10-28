@@ -7,6 +7,11 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { sumConfirmedByItem } from '@apps/runway/engine/confirm';
+import {
+  getRecordChain,
+  toSplit,
+  type EffectiveSplit,
+} from '@apps/runway/engine/correct';
 import { buildDraft, type Draft } from '@apps/runway/engine/draft';
 import {
   collectFunded,
@@ -263,6 +268,38 @@ export const selectConfirmedRecord = (state: RootState, dayId: string) => {
   );
   return result ?? null;
 };
+
+const selectChainsByDay = createSelector([selectRecords], (records) => {
+  const byDay = records.reduce<Map<string, OpenRecord[]>>((acc, record) => {
+    acc.set(record.dayId, [...(acc.get(record.dayId) ?? []), record]);
+    return acc;
+  }, new Map());
+  const result = new Map(
+    [...byDay].map(([dayId, group]) => [dayId, getRecordChain(group)]),
+  );
+  return result;
+});
+
+const NO_CHAIN: ReturnType<typeof getRecordChain> = [];
+
+/** A day's confirmed record followed by each correction, oldest first; the last is the split the day stands on. */
+export const selectRecordChain = (state: RootState, dayId: string) =>
+  selectChainsByDay(state).get(dayId) ?? NO_CHAIN;
+
+const selectSplitsByDay = createSelector([selectChainsByDay], (chains) => {
+  const result = new Map(
+    [...chains].flatMap(([dayId, chain]) =>
+      chain.length === 0 ? [] : [[dayId, toSplit(chain[chain.length - 1])]],
+    ),
+  );
+  return result;
+});
+
+/** The split a day stands on now: the latest correction no later one supersedes, else the confirmed record. */
+export const selectEffectiveSplit = (
+  state: RootState,
+  dayId: string,
+): EffectiveSplit | null => selectSplitsByDay(state).get(dayId) ?? null;
 
 export const selectOpenDay = (
   state: RootState,

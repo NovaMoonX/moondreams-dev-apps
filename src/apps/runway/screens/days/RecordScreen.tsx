@@ -1,17 +1,24 @@
 import { useState } from 'react';
 import { FileText } from 'lucide-react';
 
+import BeforeAfterRow from '@/components/BeforeAfterRow';
 import EmptyCard from '@/components/EmptyCard';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import RecordLineRow from '@apps/runway/components/RecordLineRow';
-import { CONFIRM_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
+import {
+  CONFIRM_WORDS,
+  CORRECT_WORDS,
+  DRAFT_WORDS,
+} from '@apps/runway/constants';
 import {
   selectConfirmedRecord,
+  selectEffectiveSplit,
+  selectRecordChain,
   selectIsRecordsReady,
   selectOpenDay,
   selectProposedRecord,
@@ -87,6 +94,14 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
   );
   const confirmed = useAppSelector((state) =>
     selectConfirmedRecord(state, dayKey),
+  );
+
+  const chain = useAppSelector((state) => selectRecordChain(state, dayKey));
+  const current = useAppSelector((state) =>
+    selectEffectiveSplit(state, dayKey),
+  );
+  const corrections = chain.flatMap((record) =>
+    record.kind === 'correction' ? [record] : [],
   );
 
   const getBody = () => {
@@ -190,6 +205,68 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
           <p className='text-muted-foreground text-sm'>
             {CONFIRM_WORDS.unchanged}
           </p>
+        )}
+        {corrections.length > 0 && (
+          <div className='space-y-2'>
+            <SectionDivider label={CORRECT_WORDS.history} />
+            {corrections.map((correction, index) => (
+              <div key={correction.id} className='space-y-2'>
+                <p className='text-sm'>
+                  <span className='font-medium'>
+                    {formatDateTime(correction.createdAt)}
+                  </span>
+                  {index === corrections.length - 1 && (
+                    <span className='text-muted-foreground'>
+                      {' '}
+                      · {CORRECT_WORDS.currentTag}
+                    </span>
+                  )}
+                </p>
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  <BeforeAfterRow
+                    title={DRAFT_WORDS.freeToSpend}
+                    before={formatCents(
+                      correction.payload.before.freeToSpendCents,
+                    )}
+                    after={formatCents(correction.payload.freeToSpendCents)}
+                    beforeLabel={CORRECT_WORDS.before}
+                    afterLabel={CORRECT_WORDS.corrected}
+                    detail={
+                      correction.payload.note ? (
+                        <p className='text-sm break-words'>
+                          {correction.payload.note}
+                        </p>
+                      ) : undefined
+                    }
+                  />
+                  {correction.payload.changes.map((change) => (
+                    <BeforeAfterRow
+                      key={change.lineId}
+                      title={
+                        change.name === ''
+                          ? DRAFT_WORDS.billFallback
+                          : change.name
+                      }
+                      before={formatCents(change.beforeCents)}
+                      after={formatCents(change.afterCents)}
+                      beforeLabel={CORRECT_WORDS.before}
+                      afterLabel={CORRECT_WORDS.corrected}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+        {corrections.length > 0 && current && (
+          <div className='space-y-2'>
+            <SectionDivider label={CORRECT_WORDS.current} />
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {current.lines.map((line) => (
+                <RecordLineRow key={line.lineId} line={line} />
+              ))}
+            </ul>
+          </div>
         )}
       </div>
     );
