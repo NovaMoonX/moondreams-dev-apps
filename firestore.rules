@@ -251,6 +251,14 @@ service cloud.firestore {
       allow read, write: if isUser(uid);
     }
 
+    // --- App: runway ---
+
+    // A plan is private to one person and nests under their uid. The server-only paths
+    // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
+    match /apps/runway/plans/{uid} {
+      allow read, create, update: if isUser(uid);
+    }
+
     // --- App: waypoint ---
 
     match /apps/waypoint/inviteCodes/{inviteCode} {
