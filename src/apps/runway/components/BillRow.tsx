@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import BillPaidChip from '@apps/runway/components/BillPaidChip';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -19,10 +21,12 @@ interface BillRowProps {
   /** The next payment and what each income day sets aside for it; null once the bill has no payment left. */
   payment: BillPayment | null;
   planStance: Stance;
+  /** The row's change door. */
+  footer?: ReactNode;
 }
 
 /** A bill in the plan: its name and amount, when it is next due, and how that payment is funded. */
-function BillRow({ billId, bill, payment, planStance }: BillRowProps) {
+function BillRow({ billId, bill, payment, planStance, footer }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const { schedule } = bill.timing;
   const repeats =
@@ -73,6 +77,7 @@ function BillRow({ billId, bill, payment, planStance }: BillRowProps) {
             />
           )}
         </div>
+        {footer && <div className='pt-2'>{footer}</div>}
       </div>
     </li>
   );

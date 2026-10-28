@@ -1,4 +1,4 @@
-import { parseMoneyToCents } from '@/utils/moneyUtils';
+import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import { STANCE_FOLLOW_PLAN } from '@apps/runway/constants';
 import type { MoneyRange, Stance } from '@apps/runway/types';
 
@@ -32,3 +32,18 @@ export const getStanceOverride = (draft: AmountDraft): Stance | null =>
   draft.mode === 'range' && draft.stance !== STANCE_FOLLOW_PLAN
     ? draft.stance
     : null;
+
+/** The draft a form starts on when it edits an amount that is already saved. */
+export function toAmountDraft(
+  range: MoneyRange,
+  stanceOverride: Stance | null,
+): AmountDraft {
+  const isExact = range.lowCents === range.highCents;
+  const result: AmountDraft = {
+    mode: isExact ? 'exact' : 'range',
+    low: centsToInputValue(range.lowCents),
+    high: isExact ? '' : centsToInputValue(range.highCents),
+    stance: stanceOverride ?? STANCE_FOLLOW_PLAN,
+  };
+  return result;
+}

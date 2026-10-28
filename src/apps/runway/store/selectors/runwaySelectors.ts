@@ -47,6 +47,7 @@ import type {
   PayLineVersion,
   PlanItemDoc,
   SourceVersion,
+  Stance,
 } from '@apps/runway/types';
 
 const selectItems = (state: RootState) => state.runway.items;
@@ -108,7 +109,7 @@ export const selectResolvedPlan = createSelector(
   },
 );
 
-const selectSettledKey = (state: RootState) =>
+export const selectSettledKey = (state: RootState) =>
   state.runway.days
     .filter((day) => day.status !== 'draft')
     .map((day) => day.id)
@@ -474,6 +475,172 @@ const selectToday = (_state: RootState, _dayKey: string, today: number) =>
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 
+export function computeDraftView(
+  items: RootState['runway']['items'],
+  versions: RootState['runway']['versions'],
+  stance: Stance,
+  openDays: RootState['runway']['days'],
+  dayKey: string,
+  today: number,
+  heldByItem: Record<string, number>,
+  settledKey: string,
+  billProgress: Record<string, BillProgressInput>,
+): DraftView | null {
+  const settled = toSet(settledKey);
+  const coming = buildComingDays(items, versions, today).filter(
+    (entry) => !settled.has(entry.dayKey),
+  );
+  const day =
+    coming.find((entry) => entry.dayKey === dayKey) ??
+    buildOverdueDays(items, versions, today, settled).find(
+      (entry) => entry.dayKey === dayKey,
+    );
+  if (!day) return null;
+  const days = coming.some((entry) => entry.dayKey === dayKey)
+    ? coming
+    : [day, ...coming];
+
+  const resolved = resolve(
+    items.filter((item) => item.kind === 'envelope'),
+    versions.filter(isEnvelope),
+    day.on,
+  );
+  const resolvedBills = resolve(
+    items.filter((item) => item.kind === 'bill'),
+    versions.filter(isBill),
+    day.on,
+  );
+  const resolvedGoals = resolve(
+    items.filter((item) => item.kind === 'goal'),
+    versions.filter(isGoal),
+    day.on,
+  );
+  const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
+  const override =
+    openDays.find((entry) => entry.id === dayKey)?.override ?? null;
+  const payLinePairings =
+    resolveCurrentOrNext(versions.filter(isPayLine), day.payLineId, day.on)
+      ?.payload.pairings ?? [];
+  const sourcePairings =
+    day.sourceId === null
+      ? []
+      : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
+          ?.payload.pairings ?? []);
+  const key = hashText(
+    JSON.stringify([
+      override,
+      payLinePairings,
+      sourcePairings,
+      stance,
+      dayKey,
+      days.map((entry) => [entry.dayKey, entry.amount, entry.stanceOverride]),
+      resolved.map(({ version }) => version.id),
+      resolvedBills.map(({ version }) => version.id),
+      resolvedGoals.map(({ version }) => version.id),
+      resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+      resolvedBills.map(({ item }) => billProgress[item.id] ?? null),
+      horizon,
+    ]),
+  );
+  const draftCache = draftCaches.get(versions) ?? new Map<string, DraftView>();
+  draftCaches.set(versions, draftCache);
+  const cached = draftCache.get(key);
+  if (cached) return cached;
+
+  const envelopes = resolved.map(({ item, version }) => ({
+    itemId: item.id,
+    createdAt: item.createdAt,
+    priority: version.payload.priority,
+    orderIndex: version.payload.orderIndex,
+    funding: version.payload.funding,
+  }));
+  const bills = resolvedBills.map(({ item, version }) => ({
+    itemId: item.id,
+    createdAt: item.createdAt,
+    priority: version.payload.priority,
+    orderIndex: version.payload.orderIndex,
+    amount: version.payload.amount,
+    stanceOverride: version.payload.stanceOverride ?? null,
+    schedule: version.payload.timing.schedule,
+    ending: version.payload.ending,
+    fundedBy: version.payload.fundedBy,
+    progress: billProgress[item.id] ?? NO_PROGRESS,
+  }));
+  const goals = resolvedGoals.map(({ item, version }) => ({
+    itemId: item.id,
+    createdAt: item.createdAt,
+    priority: version.payload.priority,
+    orderIndex: version.payload.orderIndex,
+    funding: version.payload.funding,
+    targetCents: version.payload.targetCents,
+    heldCents: heldByItem[item.id] ?? 0,
+  }));
+  const draft = buildDraft({
+    days: [
+      {
+        ...day,
+        pairings: {
+          day: override?.pairings ?? null,
+          payLine: payLinePairings,
+          source: sourcePairings,
+        },
+      },
+    ],
+    plan: {
+      envelopes,
+      bills,
+      goals,
+      horizon,
+      incomeDays: days.map((entry) => ({
+        dayKey: entry.dayKey,
+        on: entry.on,
+        amount: entry.amount,
+        stanceOverride: entry.stanceOverride,
+      })),
+    },
+    stance,
+    overrides: {
+      dayCents: {},
+      holdResolutions: Object.fromEntries(
+        Object.entries(override?.holdResolutions ?? {}).map(
+          ([itemId, choice]) => [`${dayKey}:${itemId}`, choice],
+        ),
+      ),
+    },
+  });
+  const sourceNames = days.reduce<Record<string, string>>(
+    (acc, entry) =>
+      entry.sourceId !== null && entry.sourceName !== null
+        ? { ...acc, [entry.sourceId]: entry.sourceName }
+        : acc,
+    {},
+  );
+  const result: DraftView = {
+    day,
+    override,
+    inheritedPairings:
+      payLinePairings.length > 0 ? payLinePairings : sourcePairings,
+    draft,
+    fingerprint: key,
+    overrideFingerprint: hashOverride({
+      pairings: override?.pairings ?? null,
+      holdResolutions: override?.holdResolutions ?? {},
+    }),
+    items: Object.fromEntries(
+      [...resolved, ...resolvedBills, ...resolvedGoals].map(
+        ({ item, version }) => [
+          item.id,
+          { name: version.payload.name, emoji: version.payload.emoji },
+        ],
+      ),
+    ),
+    sourceNames,
+  };
+  if (draftCache.size >= MAX_CACHED_DRAFTS) draftCache.clear();
+  draftCache.set(key, result);
+  return result;
+}
+
 /**
  * The draft for one coming income day, computed from the plan and never stored. Drafts are kept by a
  * hash of the resolved versions and held against the versions array itself, so an unrelated change
@@ -491,172 +658,7 @@ export const selectDraft = createSelector(
     selectSettledKey,
     selectBillProgress,
   ],
-  (
-    items,
-    versions,
-    stance,
-    openDays,
-    dayKey,
-    today,
-    heldByItem,
-    settledKey,
-    billProgress,
-  ): DraftView | null => {
-    const settled = toSet(settledKey);
-    const coming = buildComingDays(items, versions, today).filter(
-      (entry) => !settled.has(entry.dayKey),
-    );
-    const day =
-      coming.find((entry) => entry.dayKey === dayKey) ??
-      buildOverdueDays(items, versions, today, settled).find(
-        (entry) => entry.dayKey === dayKey,
-      );
-    if (!day) return null;
-    const days = coming.some((entry) => entry.dayKey === dayKey)
-      ? coming
-      : [day, ...coming];
-
-    const resolved = resolve(
-      items.filter((item) => item.kind === 'envelope'),
-      versions.filter(isEnvelope),
-      day.on,
-    );
-    const resolvedBills = resolve(
-      items.filter((item) => item.kind === 'bill'),
-      versions.filter(isBill),
-      day.on,
-    );
-    const resolvedGoals = resolve(
-      items.filter((item) => item.kind === 'goal'),
-      versions.filter(isGoal),
-      day.on,
-    );
-    const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
-    const override =
-      openDays.find((entry) => entry.id === dayKey)?.override ?? null;
-    const payLinePairings =
-      resolveCurrentOrNext(versions.filter(isPayLine), day.payLineId, day.on)
-        ?.payload.pairings ?? [];
-    const sourcePairings =
-      day.sourceId === null
-        ? []
-        : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
-            ?.payload.pairings ?? []);
-    const key = hashText(
-      JSON.stringify([
-        override,
-        payLinePairings,
-        sourcePairings,
-        stance,
-        dayKey,
-        days.map((entry) => [entry.dayKey, entry.amount, entry.stanceOverride]),
-        resolved.map(({ version }) => version.id),
-        resolvedBills.map(({ version }) => version.id),
-        resolvedGoals.map(({ version }) => version.id),
-        resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
-        resolvedBills.map(({ item }) => billProgress[item.id] ?? null),
-        horizon,
-      ]),
-    );
-    const draftCache =
-      draftCaches.get(versions) ?? new Map<string, DraftView>();
-    draftCaches.set(versions, draftCache);
-    const cached = draftCache.get(key);
-    if (cached) return cached;
-
-    const envelopes = resolved.map(({ item, version }) => ({
-      itemId: item.id,
-      createdAt: item.createdAt,
-      priority: version.payload.priority,
-      orderIndex: version.payload.orderIndex,
-      funding: version.payload.funding,
-    }));
-    const bills = resolvedBills.map(({ item, version }) => ({
-      itemId: item.id,
-      createdAt: item.createdAt,
-      priority: version.payload.priority,
-      orderIndex: version.payload.orderIndex,
-      amount: version.payload.amount,
-      stanceOverride: version.payload.stanceOverride ?? null,
-      schedule: version.payload.timing.schedule,
-      ending: version.payload.ending,
-      fundedBy: version.payload.fundedBy,
-      progress: billProgress[item.id] ?? NO_PROGRESS,
-    }));
-    const goals = resolvedGoals.map(({ item, version }) => ({
-      itemId: item.id,
-      createdAt: item.createdAt,
-      priority: version.payload.priority,
-      orderIndex: version.payload.orderIndex,
-      funding: version.payload.funding,
-      targetCents: version.payload.targetCents,
-      heldCents: heldByItem[item.id] ?? 0,
-    }));
-    const draft = buildDraft({
-      days: [
-        {
-          ...day,
-          pairings: {
-            day: override?.pairings ?? null,
-            payLine: payLinePairings,
-            source: sourcePairings,
-          },
-        },
-      ],
-      plan: {
-        envelopes,
-        bills,
-        goals,
-        horizon,
-        incomeDays: days.map((entry) => ({
-          dayKey: entry.dayKey,
-          on: entry.on,
-          amount: entry.amount,
-          stanceOverride: entry.stanceOverride,
-        })),
-      },
-      stance,
-      overrides: {
-        dayCents: {},
-        holdResolutions: Object.fromEntries(
-          Object.entries(override?.holdResolutions ?? {}).map(
-            ([itemId, choice]) => [`${dayKey}:${itemId}`, choice],
-          ),
-        ),
-      },
-    });
-    const sourceNames = days.reduce<Record<string, string>>(
-      (acc, entry) =>
-        entry.sourceId !== null && entry.sourceName !== null
-          ? { ...acc, [entry.sourceId]: entry.sourceName }
-          : acc,
-      {},
-    );
-    const result: DraftView = {
-      day,
-      override,
-      inheritedPairings:
-        payLinePairings.length > 0 ? payLinePairings : sourcePairings,
-      draft,
-      fingerprint: key,
-      overrideFingerprint: hashOverride({
-        pairings: override?.pairings ?? null,
-        holdResolutions: override?.holdResolutions ?? {},
-      }),
-      items: Object.fromEntries(
-        [...resolved, ...resolvedBills, ...resolvedGoals].map(
-          ({ item, version }) => [
-            item.id,
-            { name: version.payload.name, emoji: version.payload.emoji },
-          ],
-        ),
-      ),
-      sourceNames,
-    };
-    if (draftCache.size >= MAX_CACHED_DRAFTS) draftCache.clear();
-    draftCache.set(key, result);
-    return result;
-  },
+  computeDraftView,
 );
 
 /** Every bill's payments with what has been set aside and what is paid, keyed by bill id; the bills screen and the checklist read the same plan. */

@@ -8,6 +8,7 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -16,6 +17,7 @@ import {
   selectEnvelopes,
   selectIsPlanItemsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { EnvelopeSealed } from '@apps/runway/types';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 
 const SEARCH_THRESHOLD = 8;
@@ -26,6 +28,10 @@ function EnvelopesScreen() {
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<{
+    itemId: string;
+    payload: EnvelopeSealed;
+  } | null>(null);
 
   const hasSearch = envelopes.length >= SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -75,6 +81,20 @@ function EnvelopesScreen() {
                   <p className='text-muted-foreground text-sm first-letter:uppercase'>
                     {describeFunding(version.payload.funding)}
                   </p>
+                  <div className='pt-2'>
+                    <ItemChangeControls
+                      itemId={item.id}
+                      current={version.payload}
+                      today={today}
+                      name={version.payload.name}
+                      onChange={() =>
+                        setEditing({
+                          itemId: item.id,
+                          payload: version.payload,
+                        })
+                      }
+                    />
+                  </div>
                 </div>
                 <div className='flex h-10 items-center'>
                   <PriorityBadge priority={version.payload.priority} />
@@ -108,6 +128,15 @@ function EnvelopesScreen() {
           isOpen
           title='Envelope'
           onClose={() => setFormKey(null)}
+        />
+      )}
+      {editing !== null && (
+        <EnvelopeForm
+          key={editing.itemId}
+          isOpen
+          title='Envelope'
+          editing={editing}
+          onClose={() => setEditing(null)}
         />
       )}
     </div>

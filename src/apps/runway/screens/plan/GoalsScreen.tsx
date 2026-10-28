@@ -8,6 +8,7 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import ItemChangeControls from '@apps/runway/components/ItemChangeControls';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
@@ -21,6 +22,7 @@ import {
   selectIsPlanItemsLoaded,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { GoalSealed } from '@apps/runway/types';
 
 const SEARCH_THRESHOLD = 8;
 
@@ -33,6 +35,10 @@ function GoalsScreen() {
   const heldByItem = useAppSelector(selectHeldByItem);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<{
+    itemId: string;
+    payload: GoalSealed;
+  } | null>(null);
 
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
@@ -89,7 +95,20 @@ function GoalsScreen() {
         ) : (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {visible.map(({ item, payload, pace }) => (
-              <GoalRow key={item.id} goal={payload} pace={pace} />
+              <GoalRow
+                key={item.id}
+                goal={payload}
+                pace={pace}
+                footer={
+                  <ItemChangeControls
+                    itemId={item.id}
+                    current={payload}
+                    today={today}
+                    name={payload.name}
+                    onChange={() => setEditing({ itemId: item.id, payload })}
+                  />
+                }
+              />
             ))}
           </ul>
         )}
@@ -118,6 +137,15 @@ function GoalsScreen() {
           isOpen
           title='Goal'
           onClose={() => setFormKey(null)}
+        />
+      )}
+      {editing !== null && (
+        <GoalForm
+          key={editing.itemId}
+          isOpen
+          title='Goal'
+          editing={editing}
+          onClose={() => setEditing(null)}
         />
       )}
     </div>

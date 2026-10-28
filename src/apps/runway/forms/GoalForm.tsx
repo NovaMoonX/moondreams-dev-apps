@@ -18,8 +18,13 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
-import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
+  centsToInputValue,
+  parseMoneyToCents,
+  parsePercentToBps,
+} from '@/utils/moneyUtils';
+import {
+  CHANGE_WORDS,
   ENVELOPE_ORDER_STEP,
   FUNDING_CADENCE_LABELS,
   FUNDING_CADENCES,
@@ -33,11 +38,22 @@ import {
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createGoal } from '@apps/runway/store/actions/itemActions';
+import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import ChangeReason from '@apps/runway/components/ChangeReason';
+import { changeField } from '@apps/runway/forms/changeField';
+import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
+import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
+import { toFundingInput } from '@apps/runway/utils/fundingInput';
 import {
   selectComingDays,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { FundingAmount, FundingRule, Priority } from '@apps/runway/types';
+import type {
+  FundingAmount,
+  FundingRule,
+  GoalSealed,
+  Priority,
+} from '@apps/runway/types';
 
 type Cadence = (typeof FUNDING_CADENCES)[number];
 
@@ -58,6 +74,8 @@ interface GoalFormProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  /** The goal to change; its saved values start the form and a save adds a version from a date. */
+  editing?: { itemId: string; payload: GoalSealed };
 }
 
 const { custom } = FormFactories;
@@ -89,6 +107,34 @@ const cadenceOptions = FUNDING_CADENCES.map((value) => ({
   value,
   label: FUNDING_CADENCE_LABELS[value],
 }));
+
+const EMPTY_GOAL: GoalSealed = {
+  name: '',
+  emoji: null,
+  priority: 'should',
+  orderIndex: 0,
+  targetCents: 0,
+  targetDate: null,
+  funding: {
+    amount: { kind: 'exact', cents: 0 },
+    cadence: { kind: 'everyIncomeDay' },
+  },
+};
+
+const getEditingData = (payload: GoalSealed): GoalFormData => {
+  const { amount, cadence, dayKeys } = toFundingInput(payload.funding);
+  return {
+    name: payload.name,
+    priority: payload.priority,
+    target: centsToInputValue(payload.targetCents),
+    date:
+      payload.targetDate === null ? null : toDateInputValue(payload.targetDate),
+    amount,
+    cadence,
+    dayKeys,
+    emoji: payload.emoji,
+  };
+};
 
 const INITIAL_DATA: GoalFormData = {
   name: '',
@@ -132,16 +178,21 @@ const getBlocker = (
   return null;
 };
 
-function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
+function GoalForm({ isOpen, onClose, title, editing }: GoalFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
-  const [formData, setFormData] = useState<GoalFormData>(INITIAL_DATA);
+  const [initialData] = useState<GoalFormData>(() =>
+    editing ? getEditingData(editing.payload) : INITIAL_DATA,
+  );
+  const [formData, setFormData] = useState<GoalFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const [amountMode, setAmountMode] = useState<AmountMode>('exact');
+  const [amountMode, setAmountMode] = useState<AmountMode>(
+    editing ? toFundingInput(editing.payload.funding).mode : 'exact',
+  );
   const amount = getFundingAmount(amountMode, formData.amount);
   const targetCents = parseMoneyToCents(formData.target);
   const blocker = getBlocker(
@@ -358,14 +409,18 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
   }, [amountMode, formData.cadence, dayOptions, today]);
 
   const buildFunding = (data: GoalFormData, amount: FundingAmount) => {
-    const anchorDayKey = comingDays[0]?.dayKey ?? '';
+    const saved = editing?.payload.funding.cadence;
     if (data.cadence === 'every2' || data.cadence === 'every3') {
+      const n = data.cadence === 'every2' ? 2 : 3;
       const funding: FundingRule = {
         amount,
         cadence: {
           kind: 'everyNth',
-          n: data.cadence === 'every2' ? 2 : 3,
-          anchorDayKey,
+          n,
+          anchorDayKey:
+            saved?.kind === 'everyNth' && saved.n === n
+              ? saved.anchorDayKey
+              : (comingDays[0]?.dayKey ?? ''),
         },
       };
       return funding;
@@ -390,36 +445,52 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
     return funding;
   };
 
-  const handleSubmit = async (data: GoalFormData) => {
+  const buildGoal = (data: GoalFormData): GoalSealed | null => {
     const amount = getFundingAmount(amountMode, data.amount);
     const target = parseMoneyToCents(data.target);
-    if (!user || data.priority === null || amount === null || target === null)
-      return;
+    if (data.priority === null || amount === null || target === null)
+      return null;
 
     const tier = goals.filter(
       (goal) => goal.version.payload.priority === data.priority,
     );
     const orderIndex =
-      Math.max(0, ...tier.map((goal) => goal.version.payload.orderIndex)) +
-      ENVELOPE_ORDER_STEP;
+      editing && editing.payload.priority === data.priority
+        ? editing.payload.orderIndex
+        : Math.max(0, ...tier.map((goal) => goal.version.payload.orderIndex)) +
+          ENVELOPE_ORDER_STEP;
+    const result: GoalSealed = {
+      name: data.name.trim(),
+      emoji: data.emoji?.trim() || null,
+      priority: data.priority,
+      orderIndex,
+      targetCents: target,
+      targetDate:
+        data.date === null ? null : (fromDateInputValue(data.date) ?? null),
+      funding: buildFunding(data, amount),
+    };
+    return result;
+  };
+
+  const candidate = blocker === null ? buildGoal(formData) : null;
+  const flow = useChangeFlow({
+    itemId: editing?.itemId ?? '',
+    kind: 'goal',
+    current: editing?.payload ?? EMPTY_GOAL,
+    candidate,
+    onDone: onClose,
+  });
+  const editBlocker = flow.getBlocker(blocker);
+
+  const handleSubmit = async (data: GoalFormData) => {
+    const goal = buildGoal(data);
+    if (!user || !goal) return;
 
     setError(null);
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await createGoal(user.uid, encryption, {
-        startDate: today,
-        goal: {
-          name: data.name.trim(),
-          emoji: data.emoji?.trim() || null,
-          priority: data.priority,
-          orderIndex,
-          targetCents: target,
-          targetDate:
-            data.date === null ? null : (fromDateInputValue(data.date) ?? null),
-          funding: buildFunding(data, amount),
-        },
-      });
+      await createGoal(user.uid, encryption, { startDate: today, goal });
       onClose();
     } catch (saveError) {
       setError(
@@ -433,42 +504,63 @@ function GoalForm({ isOpen, onClose, title }: GoalFormProps) {
     }
   };
 
+  const flowValue = {
+    flow,
+    itemId: editing?.itemId ?? '',
+    kind: 'goal' as const,
+    candidate,
+  };
+  const formFields = editing ? [...fields, changeField] : fields;
+
   return (
     <FormSheet isOpen={isOpen} onClose={onClose} title={title}>
-      <Form
-        id='runway-goal'
-        form={fields}
-        initialData={INITIAL_DATA}
-        columns={1}
-        onDataChange={(data) => setFormData(data as GoalFormData)}
-        onSubmit={(data) => {
-          void handleSubmit(data as GoalFormData);
-        }}
-        submitButton={
-          <ModalFooterActions
-            note={error ?? blocker}
-            cancelAction={
-              <Button
-                type='button'
-                variant='secondary'
-                onClick={onClose}
-                disabled={isSaving}
-              >
-                Cancel
-              </Button>
-            }
-            rightActions={
-              <Button
-                type='submit'
-                loading={isSaving}
-                disabled={isSaving || blocker !== null}
-              >
-                Add
-              </Button>
+      <ChangeSteps
+        isReason={flow.step === 'reason'}
+        reason={<ChangeReason flow={flow} onClose={onClose} />}
+      >
+        <ChangeFlowContext value={flowValue}>
+          <Form
+            id='runway-goal'
+            form={formFields}
+            initialData={initialData}
+            columns={1}
+            onDataChange={(data) => setFormData(data as GoalFormData)}
+            onSubmit={(data) => {
+              if (editing) {
+                flow.setStep('reason');
+                return;
+              }
+              void handleSubmit(data as GoalFormData);
+            }}
+            submitButton={
+              <ModalFooterActions
+                note={error ?? (editing ? editBlocker : blocker)}
+                cancelAction={
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    onClick={onClose}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                }
+                rightActions={
+                  <Button
+                    type='submit'
+                    loading={isSaving}
+                    disabled={
+                      isSaving || (editing ? editBlocker : blocker) !== null
+                    }
+                  >
+                    {editing ? CHANGE_WORDS.review : 'Add'}
+                  </Button>
+                }
+              />
             }
           />
-        }
-      />
+        </ChangeFlowContext>
+      </ChangeSteps>
     </FormSheet>
   );
 }
