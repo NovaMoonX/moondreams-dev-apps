@@ -326,7 +326,7 @@ Ordered by value. Sizes: S = a label or a line, M = a screen or component, L = a
 7. **A write Firestore can queue offline closes its form at once and says it will sync; Cancel is never disabled waiting for a server.** → `CLAUDE.md` State, data, and performance (complements the queued-write continuation rule).
 8. **A planning screen's first view volunteers at most one summary line and no backlog. Its tiles live one tap behind the line.** → `.claude/rules/pinch.md` (the calendar bullet) and N2's insight budget.
 9. **A nutrition total appears only on a basis a person can compare against** (per serving, per person). A household's summed day isn't shown as a diet figure. → `.claude/rules/pinch.md`.
-10. **Review checklist:** count the labels for each action across its entry points (one act, one verb), open each drawer in every phase (ahead, today, done, past) and list the actions that no longer make sense, and open new calendar surfaces on Taylor at 390 px and 1280. → `.claude/skills/pr-wrap-up/references/review-agents.md` (product and design agents).
+10. **Review checklist:** count the labels for each action across its entry points (one act, one verb), open each drawer in every phase (ahead, today, done, past) and list the actions that no longer make sense, and open new calendar surfaces on Taylor at 390 px and 1280. → the reviewer agents in `.claude/agents/` (product and design agents).
 
 ## 8. Open questions for the owner
 

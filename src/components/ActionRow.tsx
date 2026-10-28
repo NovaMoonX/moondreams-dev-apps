@@ -17,7 +17,7 @@ interface ActionRowProps {
   isGrouped?: boolean;
   /** Red, for the one row that removes something; it goes last, on its own. */
   isDestructive?: boolean;
-  /** For a view or sheet whose whole content is its rows: a 40px icon chip, a body-size title and a 14px subtitle. Compact is for places where space is short. */
+  /** For a view or sheet whose whole content is its rows: a 40px icon chip, a body-size title and a 14px subtitle. Compact (15px title, 13px subtitle) is for places where space is short. */
   isRoomy?: boolean;
   /** The row opens something (a sheet, a view, a screen) rather than acting at once. */
   hasChevron?: boolean;
@@ -50,7 +50,10 @@ function ActionRow({
       {icon}
     </span>
   ) : (
-    <span className='w-5 shrink-0' aria-hidden='true'>
+    <span
+      className='grid w-5 shrink-0 place-items-center [&_svg]:size-4'
+      aria-hidden='true'
+    >
       {icon}
     </span>
   );
@@ -66,7 +69,7 @@ function ActionRow({
         'w-full justify-start gap-3 text-left focus-visible:rounded-xl focus-visible:outline-2 focus-visible:-outline-offset-2',
         isRoomy
           ? 'hover:bg-muted min-h-16 items-start px-3 py-3 font-normal whitespace-normal'
-          : 'h-auto min-h-12 rounded-none py-2',
+          : 'h-auto min-h-11 rounded-none py-1.5',
         isDestructive ? 'text-destructive!' : 'text-foreground!',
         hasTrailing && 'min-w-0 flex-1',
       )}
@@ -80,12 +83,19 @@ function ActionRow({
           isRoomy && 'flex min-h-11 flex-col justify-center',
         )}
       >
-        <span className={join('block', isRoomy && 'font-medium')}>{label}</span>
+        <span
+          className={join(
+            'block',
+            isRoomy ? 'font-medium' : 'text-[15px] leading-5',
+          )}
+        >
+          {label}
+        </span>
         {subtitle && (
           <span
             className={join(
               'text-muted-foreground block font-normal',
-              isRoomy ? 'text-sm' : 'text-xs',
+              isRoomy ? 'text-sm' : 'text-[13px] leading-4',
             )}
           >
             {subtitle}

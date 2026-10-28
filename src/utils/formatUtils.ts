@@ -46,18 +46,55 @@ export function formatDate(timestamp: number) {
   });
 }
 
+const utcDayFormatters = {
+  currentYear: new Intl.DateTimeFormat(undefined, {
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+  otherYear: new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+};
+
 /** Like `formatDate`, but reads UTC fields — for a `fromDateInputValue` timestamp
  * (e.g. a trip's `startDate`/`endDate`), where local fields shift the day for viewers behind UTC. */
 export function formatDateUTC(timestamp: number) {
   const date = new Date(timestamp);
   const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const formatter = isCurrentYear
+    ? utcDayFormatters.currentYear
+    : utcDayFormatters.otherYear;
 
-  return date.toLocaleDateString(undefined, {
-    ...(isCurrentYear ? {} : { year: 'numeric' }),
-    month: 'long',
+  return formatter.format(date);
+}
+
+const utcShortDayFormatters = {
+  currentYear: new Intl.DateTimeFormat(undefined, {
+    month: 'short',
     day: 'numeric',
     timeZone: 'UTC',
-  });
+  }),
+  otherYear: new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }),
+};
+
+/** "Nov 1" (with the year when it isn't this one): `formatDateUTC` with the short month, for a date-only value in a tight line. */
+export function formatDateShortUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const formatter = isCurrentYear
+    ? utcShortDayFormatters.currentYear
+    : utcShortDayFormatters.otherYear;
+  const result = formatter.format(date);
+  return result;
 }
 
 /** "Sep 24" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */

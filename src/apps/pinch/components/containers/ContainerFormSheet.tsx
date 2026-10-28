@@ -30,6 +30,7 @@ import {
 } from '@apps/pinch/store/selectors';
 import { searchByName } from '@apps/pinch/utils/catalogSearch';
 import { getRecipeCare } from '@apps/pinch/utils/recipeCare';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 const { custom } = FormFactories;
 
@@ -90,6 +91,7 @@ function SubjectPicker({ onPick, onBack }: SubjectPickerProps) {
   const trimmed = query.trim();
 
   useEffect(() => {
+    if (!canFocusFieldOnOpen()) return;
     const timer = window.setTimeout(
       () => bodyRef.current?.querySelector('input')?.focus(),
       isPhone ? PHONE_FOCUS_DELAY_MS : DESKTOP_FOCUS_DELAY_MS,

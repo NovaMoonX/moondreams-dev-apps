@@ -29,6 +29,7 @@ import {
 import { getStockParts } from '@apps/pinch/utils/containers';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { MAX_PICK_SUGGESTIONS } from '@apps/pinch/utils/pickerSuggestions';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 const MAX_RESULTS = 8;
 const PHONE_FOCUS_DELAY_MS = 350;
@@ -178,7 +179,7 @@ function ItemSearch({
 
   // A drawer or overlay takes focus itself while it opens, so the field is focused once that settles.
   useEffect(() => {
-    if (!autoFocus) {
+    if (!autoFocus || !canFocusFieldOnOpen()) {
       return;
     }
     const timer = window.setTimeout(

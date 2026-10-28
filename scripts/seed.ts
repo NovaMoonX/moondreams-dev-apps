@@ -9,6 +9,8 @@ import {
 import { seedNineLives } from './seeds/nineLives.ts';
 import { seedPinch } from './seeds/pinch.ts';
 import { seedPinchScale } from './seeds/pinchScale.ts';
+import { seedRunway } from './seeds/runway.ts';
+import { seedRunwayScale } from './seeds/runwayScale.ts';
 import { seedWorthTheWait } from './seeds/worthTheWait.ts';
 import { seedWaypoint } from './seeds/waypoint.ts';
 
@@ -24,13 +26,15 @@ function readScope(args: string[]): SeedScope {
     scope === 'waypoint' ||
     scope === 'a-list' ||
     scope === 'pinch' ||
-    scope === 'pinch-scale'
+    scope === 'pinch-scale' ||
+    scope === 'runway' ||
+    scope === 'runway-scale'
   ) {
     return scope;
   }
 
   throw new Error(
-    'Use --scope all, core, worth-the-wait, nine-lives, waypoint, a-list, pinch, or pinch-scale.',
+    'Use --scope all, core, worth-the-wait, nine-lives, waypoint, a-list, pinch, pinch-scale, runway, or runway-scale.',
   );
 }
 
@@ -54,7 +58,9 @@ async function main() {
     scope === 'waypoint' ||
     scope === 'a-list' ||
     scope === 'pinch' ||
-    scope === 'pinch-scale'
+    scope === 'pinch-scale' ||
+    scope === 'runway' ||
+    scope === 'runway-scale'
   ) {
     results.push(await seedCore(context));
   }
@@ -77,6 +83,14 @@ async function main() {
 
   if (scope === 'all' || scope === 'pinch') {
     results.push(await seedPinch(context));
+  }
+
+  if (scope === 'all' || scope === 'runway') {
+    results.push(await seedRunway(context));
+  }
+
+  if (scope === 'runway-scale') {
+    results.push(await seedRunwayScale(context));
   }
 
   if (scope === 'pinch-scale') {

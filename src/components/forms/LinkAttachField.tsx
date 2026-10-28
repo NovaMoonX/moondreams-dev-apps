@@ -10,6 +10,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import { linkMetadataQueryOptions } from '@/lib/linkMetadata/linkMetadataQueries';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 interface LinkAttachFieldProps {
   url: string;
@@ -190,7 +191,7 @@ function LinkAttachField({
       ) : (
         <Input
           type='url'
-          autoFocus
+          autoFocus={canFocusFieldOnOpen()}
           placeholder={placeholder}
           value={draftUrl}
           onChange={(event) => handleDraftChange(event.target.value)}

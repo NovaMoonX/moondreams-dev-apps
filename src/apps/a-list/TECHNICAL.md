@@ -554,6 +554,8 @@ Neither has a separate collection: chips are pure functions of viewings (and, fo
 
 ## Security Rules Design Criteria
 
+> **Beta-tier rules.** Every app here is a beta app, so `firestore.rules` enforces access (sign-in, ownership, membership, roles, phases, invite flows, immutable ownership fields) and no longer validates field types, lengths, enums, key lists, list caps or timestamp bounds. Where this document says a rule checks one of those, the client's types and caps are what hold it now; the strict rules are in git history at `c784e89` and come back when the app graduates (`GRADUATING.md`).
+
 1. **Everything is owner-only.** Every path under `apps/a-list/memberships/{uid}` allows read and write only when `request.auth.uid == uid`. There is no member-of, admin, or role branch.
 2. **`isAdmin()` and `isDevUser()` get no access to member data.** They already gate the app *catalog* document (`apps/a-list`), as for every other app. Neither is added to these rules: a seeded dev fixture signs in as its own `uid` like anyone else.
 3. **The app document** `apps/a-list` follows the existing four-read-predicate shape (admin/dev, unrestricted-public, uid-allowed, email-allowed) and admin-only writes, and the block goes in alphabetical position, **above** `nine-lives`.

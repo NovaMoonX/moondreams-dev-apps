@@ -1,11 +1,22 @@
 {
   "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/orchestrate-hint.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/finish-feature-pr-stop.sh",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-gate.sh\"",
             "timeout": 15
           }
         ]

@@ -4,6 +4,10 @@ import { useDispatch, useSelector } from 'react-redux';
 import { type AListState, aListReducer } from '@apps/a-list/store';
 import { type NineLivesState, nineLivesReducer } from '@apps/nine-lives/store';
 import { type PinchState, pinchReducer } from '@apps/pinch/store';
+import {
+  runwayReducer,
+  type RunwayState,
+} from '@apps/runway/store/runwaySlice';
 import { type WaypointState, waypointReducer } from '@apps/waypoint/store';
 import { type RemindersState, remindersReducer } from '@store/slices/remindersSlice';
 import { type UserState, userReducer } from '@store/slices/userSlice';
@@ -15,6 +19,7 @@ export interface RootState {
   waypoint: WaypointState;
   aList: AListState;
   pinch: PinchState;
+  runway: RunwayState;
 }
 
 export const store = configureStore({
@@ -25,6 +30,7 @@ export const store = configureStore({
     waypoint: waypointReducer,
     aList: aListReducer,
     pinch: pinchReducer,
+    runway: runwayReducer,
   },
   devTools: true,
 });

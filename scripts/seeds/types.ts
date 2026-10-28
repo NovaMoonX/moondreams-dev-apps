@@ -18,7 +18,9 @@ export type SeedScope =
   | 'waypoint'
   | 'a-list'
   | 'pinch'
-  | 'pinch-scale';
+  | 'pinch-scale'
+  | 'runway'
+  | 'runway-scale';
 
 export interface SeedContext {
   auth: Auth;

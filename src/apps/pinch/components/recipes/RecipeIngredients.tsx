@@ -62,6 +62,7 @@ import {
 } from '@apps/pinch/utils/ingredientMatch';
 import { toTypedIngredientName } from '@apps/pinch/utils/ingredientNames';
 import { takeSuggestionIds } from '@apps/pinch/utils/pickerSuggestions';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 
 const PHONE_FOCUS_DELAY_MS = 350;
 const DESKTOP_FOCUS_DELAY_MS = 30;
@@ -298,10 +299,7 @@ function IngredientEditor({
   const isReadyForAmount = !isUnresolved && !row.isAmountless;
 
   useEffect(() => {
-    if (
-      !isReadyForAmount ||
-      !window.matchMedia('(hover: hover) and (pointer: fine)').matches
-    ) {
+    if (!isReadyForAmount || !canFocusFieldOnOpen()) {
       return;
     }
     const timer = window.setTimeout(() => amountRef.current?.focus(), 250);
@@ -527,6 +525,7 @@ function GroupEditorBody({
   );
 
   useEffect(() => {
+    if (!canFocusFieldOnOpen()) return;
     const timer = window.setTimeout(
       () => bodyRef.current?.querySelector('input')?.focus(),
       focusDelay,

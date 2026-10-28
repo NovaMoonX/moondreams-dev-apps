@@ -280,7 +280,7 @@ flowchart TD
 5. **Advice is shown where it will be used.** A "next time" note appears where the next time starts (choosing, shopping, the stove), near the top, and can be applied in one tap. → `CLAUDE.md` Product.
 6. **At the stove, the amount sits next to the step that uses it**, and scaled amounts read as kitchen measures (fractions, tbsp, whole items), never decimals of a cup or half an egg. → `.claude/rules/pinch.md` (cooking mode).
 7. **A screen with a live process doesn't toast what its own surface already shows**, and no toast ever covers that screen's back control. → `CLAUDE.md` Design & UX (toasts).
-8. **A destructive confirm names everything that goes with the target** (its history, its notes). → review agents' checklist (`.claude/skills/pr-wrap-up/references/review-agents.md`, design and product).
+8. **A destructive confirm names everything that goes with the target** (its history, its notes). → review agents' checklist (the reviewer agents in `.claude/agents/`, design and product).
 9. **Review walk: cook a planned two-recipe dinner end to end.** Plan, shop, cook both, put away, look back on the calendar, and check that every recorded number (servings cooked, servings put away, times cooked) matches what happened. → review agents' checklist (product).
 
 ## 8. Open questions for the owner
