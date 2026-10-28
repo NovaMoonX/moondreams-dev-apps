@@ -8,6 +8,11 @@ import type {
 } from '@apps/runway/types';
 
 import type { Draft } from './draft';
+import {
+  applyLineEdits,
+  getLineDifferences,
+  getRemainder,
+} from './differences';
 
 export interface ItemNames {
   [itemId: string]: { name: string; emoji: string | null };
@@ -40,12 +45,6 @@ export function countUnresolvedHolds(draft: Draft): number {
   return result;
 }
 
-/** The least the money can be and still pay every line the draft funds. */
-export function getLeastArrival(draft: Draft): Cents {
-  const result = draft.moneyCents - draft.freeToSpend.cents;
-  return result;
-}
-
 /** What Free to spend holds once the money that arrived replaces the money expected. */
 export function getFreeAfterArrival(draft: Draft, arrivedCents: Cents): Cents {
   const result = draft.freeToSpend.cents + (arrivedCents - draft.moneyCents);
@@ -58,12 +57,18 @@ export interface BuildRecordsInput {
   stance: Stance;
   fingerprint: string;
   arrivedCents: Cents;
+  /** The note on the amount that differs. */
   note: string | null;
+  /** The amounts the person gave lines in place of the draft's, by line id. */
+  edits?: Readonly<Record<string, Cents>>;
+  /** The notes on changed lines, by line id. */
+  lineNotes?: Readonly<Record<string, string | null>>;
 }
 
 /**
- * The two records a confirmed day keeps. Until lines can be edited at confirmation, the confirmed lines
- * are the proposed ones and only the amount can differ; the difference goes to Free to spend.
+ * The two records a confirmed day keeps. The confirmed lines are the proposed ones with the person's
+ * amounts in place; Free to spend is what the money leaves after them, so everything adds up to the
+ * amount that arrived. The amount and each changed line are recorded as differences.
  */
 export function buildRecords(input: BuildRecordsInput): {
   proposed: ProposedSealed;
@@ -71,6 +76,8 @@ export function buildRecords(input: BuildRecordsInput): {
 } {
   const { draft, arrivedCents } = input;
   const lines = toRecordLines(draft, input.names);
+  const dayId = draft.days[0]?.dayKey ?? '';
+  const confirmedLines = applyLineEdits(lines, input.edits ?? {}, dayId);
   const proposed: ProposedSealed = {
     fingerprint: input.fingerprint,
     stance: input.stance,
@@ -83,19 +90,21 @@ export function buildRecords(input: BuildRecordsInput): {
     stance: input.stance,
     arrivedCents,
     expectedCents: draft.moneyCents,
-    freeToSpendCents: getFreeAfterArrival(draft, arrivedCents),
-    lines,
-    differences:
-      arrivedCents === draft.moneyCents
+    freeToSpendCents: getRemainder(arrivedCents, confirmedLines),
+    lines: confirmedLines,
+    differences: [
+      ...(arrivedCents === draft.moneyCents
         ? []
         : [
             {
-              kind: 'amount',
+              kind: 'amount' as const,
               plannedCents: draft.moneyCents,
               actualCents: arrivedCents,
               note: input.note,
             },
-          ],
+          ]),
+      ...getLineDifferences(lines, confirmedLines, input.lineNotes ?? {}),
+    ],
   };
   return { proposed, confirmed };
 }
