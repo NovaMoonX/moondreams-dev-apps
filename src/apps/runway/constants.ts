@@ -1387,3 +1387,11 @@ export const CORRECT_COVER_WORDS = {
   coverGone:
     'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
 } as const;
+
+/** Runway's Settings, round 7 package G9: its rows grouped under captions. */
+export const SETTINGS_GROUP_WORDS = {
+  planning: 'How the plan works',
+  plan: 'Your plan',
+  rangeNote:
+    'A pay or bill with a range can plan at its own end instead. You choose that where you add it.',
+} as const;

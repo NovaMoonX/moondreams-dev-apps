@@ -226,4 +226,5 @@ Notes on the table:
 - **A goal's balance over time** is a row in its sheet ("Balance over time", only with two or more points): the held amount by date, a dotted path to the target date at the planned contribution, a guide at the target and a marker where the plan reaches it. While amounts are hidden it says "Show amounts to see the chart".
 - **Check an amount** swaps in place inside Free to spend's card, so no frame shows the page between them; Back returns to Free to spend and one more leaves it.
 - **End, Pause and Archive** ask for a reason behind one "Add a reason" chip; End's last day opens in its own editor from "A date". An item's History shows its latest six changes with "Show all".
+- **Settings** is two captioned groups: "How the plan works" (Planning stance and Tracking in one hairline frame) and "Your plan" (Delete your plan, red, alone). The note that a pay or bill with a range can plan at its own end sits in the stance editor, under its choices.
 - **Tracking, Line up and Delete your plan** open over Settings (one Back each), and Delete says what goes and what stays in two sentences.
