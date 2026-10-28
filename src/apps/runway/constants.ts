@@ -1412,3 +1412,18 @@ export const NEEDS_LOOK_WORDS = {
   door: 'Show amounts to see it',
   short: 'Needs a look',
 } as const;
+
+/** Round 7b package F2: removing a Starting out entry that holds money asks where the money goes. */
+export const START_HELD_WORDS = {
+  removeAsk: (name: string) => `Remove ${name}?`,
+  startOverAsk: 'Start over?',
+  removeCaption: (amount: string) => `The ${amount} it holds`,
+  startOverCaption: (amount: string, count: number) =>
+    count === 1
+      ? `One of them holds ${amount}`
+      : `${count} of them hold ${amount}`,
+  keepBody: 'Until you release it from its Plan view.',
+  blocker: 'Choose what happens to the money it holds.',
+  startOverBlocker: 'Choose what happens to the money they hold.',
+  freeBody: 'From today.',
+} as const;

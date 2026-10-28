@@ -33,6 +33,8 @@ import {
   toIncomeRows,
 } from '@apps/runway/screens/start/startRows';
 import { archiveItem } from '@apps/runway/store/actions/itemActions';
+import type { HeldChoice } from '@apps/runway/engine/endings';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBills,
   selectEnvelopes,
@@ -158,17 +160,37 @@ function SavedStart({ uid }: { uid: string }) {
     goal: rows.goal.length,
   };
 
-  const archive = async (itemId: string, name: string) => {
+  const assignedByItem = useAppSelector(
+    (state) => selectBalances(state).assignedByItem,
+  );
+  const getHeldCents = (kind: StartKind, id: string) =>
+    kind === 'income' ? 0 : Math.max(assignedByItem[id] ?? 0, 0);
+
+  const archive = async (
+    itemId: string,
+    name: string,
+    heldChoice: HeldChoice | null = null,
+  ) => {
     const encryption = await getRunwayEncryption(uid);
+    const holds = (assignedByItem[itemId] ?? 0) > 0;
     await archiveItem(
       uid,
       encryption,
-      { itemId, summary: `Removed ${name}.`, note: null, heldChoice: 'free' },
+      {
+        itemId,
+        summary: `Removed ${name}.`,
+        note: null,
+        heldChoice: holds ? (heldChoice ?? 'keep') : 'free',
+      },
       today,
     );
   };
 
-  const remove = async (kind: StartKind, id: string) => {
+  const remove = async (
+    kind: StartKind,
+    id: string,
+    heldChoice: HeldChoice | null,
+  ) => {
     if (kind === 'income') {
       const found = payLines.find(({ line }) => line.item.id === id);
       if (!found) return;
@@ -181,10 +203,10 @@ function SavedStart({ uid }: { uid: string }) {
     const list =
       kind === 'bill' ? bills : kind === 'envelope' ? envelopes : goals;
     const found = list.find(({ item }) => item.id === id);
-    if (found) await archive(id, found.version.payload.name);
+    if (found) await archive(id, found.version.payload.name, heldChoice);
   };
 
-  const startOver = async () => {
+  const startOver = async (heldChoice: HeldChoice | null) => {
     await Promise.all([
       ...payLines.map(({ line, source }) =>
         archive(line.item.id, source.version.payload.name),
@@ -193,7 +215,7 @@ function SavedStart({ uid }: { uid: string }) {
         archive(source.item.id, source.version.payload.name),
       ),
       ...[...bills, ...envelopes, ...goals].map(({ item, version }) =>
-        archive(item.id, version.payload.name),
+        archive(item.id, version.payload.name, heldChoice),
       ),
     ]);
   };
@@ -319,6 +341,7 @@ function SavedStart({ uid }: { uid: string }) {
       remove={remove}
       startOver={startOver}
       startOverMessage={START_WORDS.startOverPlan}
+      getHeldCents={getHeldCents}
     />
   );
 }
