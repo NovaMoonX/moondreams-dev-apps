@@ -43,14 +43,28 @@ const isDryRun =
   (process.env.npm_lifecycle_event ?? '').includes('dry-run') ||
   process.argv.includes('--dry-run');
 
+const VALUE_FLAGS = ['--file', '--app-name'];
+
 const readArgs = () => {
   const args = process.argv.slice(2).filter((arg) => arg !== '--dry-run');
-  const appId = args.find((arg) => !arg.startsWith('--')) ?? null;
-  const fileIndex = args.indexOf('--file');
-  const file = fileIndex >= 0 ? (args[fileIndex + 1] ?? null) : null;
-  const nameIndex = args.indexOf('--app-name');
-  const appName = nameIndex >= 0 ? (args[nameIndex + 1] ?? null) : null;
-  const result = { appId, file, appName, skipConfirm: args.includes('--yes') };
+  const readValue = (flag: string) => {
+    const index = args.indexOf(flag);
+    if (index < 0) return null;
+    const value = args[index + 1] ?? null;
+    if (!value || value.startsWith('--')) fail(`${flag} needs a value.`);
+    return value;
+  };
+  const appId =
+    args.find(
+      (arg, index) =>
+        !arg.startsWith('--') && !VALUE_FLAGS.includes(args[index - 1]),
+    ) ?? null;
+  const result = {
+    appId,
+    file: readValue('--file'),
+    appName: readValue('--app-name'),
+    skipConfirm: args.includes('--yes'),
+  };
   return result;
 };
 
@@ -141,17 +155,35 @@ const toTierLabel = (heading: string) => {
 const toGithubTitle = (appName: string, issue: RoadmapIssue) =>
   `${appName} ${issue.number}: ${issue.title}`;
 
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// "Pinch Issue 3" points at another roadmap, and code shows text as written,
+// so neither is turned into this roadmap's issue number.
+const OTHER_ROADMAP_PREFIX = APP_REGISTRY.flatMap((entry) => [
+  entry.name,
+  entry.id,
+])
+  .map(escapeRegExp)
+  .join('|');
+const ISSUE_MENTION = new RegExp(
+  `(?<!\\b(?:${OTHER_ROADMAP_PREFIX}) )\\bIssue (\\d+)\\b`,
+  'gi',
+);
+
 const linkIssueMentions = (
   body: string,
   numbersByRoadmap: Map<number, number>,
 ) => {
-  const result = body.replace(
-    /\bIssue (\d+)\b/g,
-    (match, roadmapNumber: string) => {
+  const linkProse = (text: string) =>
+    text.replace(ISSUE_MENTION, (match, roadmapNumber: string) => {
       const real = numbersByRoadmap.get(Number(roadmapNumber));
       return real ? `#${real}` : match;
-    },
-  );
+    });
+  const result = body
+    .split(/(```[\s\S]*?```)/)
+    .map((part) => (part.startsWith('```') ? part : linkProse(part)))
+    .join('');
   return result;
 };
 
@@ -281,28 +313,51 @@ const run = async () => {
       '.[].name',
     ]).split('\n'),
   );
-  const existingByTitle = new Map(
-    ghJson<{ title: string; number: number; url: string; body: string }[]>([
-      'issue',
-      'list',
-      '--repo',
-      repo,
-      '--state',
-      'all',
-      '--limit',
-      '1000',
-      '--json',
-      'title,number,url,body',
-    ]).map((issue) => [issue.title, issue] as const),
+  const ISSUE_LIST_LIMIT = 2000;
+  const existingIssues = ghJson<
+    { title: string; number: number; url: string; body: string }[]
+  >([
+    'issue',
+    'list',
+    '--repo',
+    repo,
+    '--state',
+    'all',
+    '--limit',
+    String(ISSUE_LIST_LIMIT),
+    '--json',
+    'title,number,url,body',
+  ]);
+  if (existingIssues.length >= ISSUE_LIST_LIMIT)
+    fail(
+      `The repo has ${ISSUE_LIST_LIMIT}+ issues, so existing ones may be missed and duplicated. Raise ISSUE_LIST_LIMIT first.`,
+    );
+  const issuesByTitle = existingIssues.reduce(
+    (map, issue) =>
+      map.set(issue.title, [...(map.get(issue.title) ?? []), issue]),
+    new Map<string, typeof existingIssues>(),
   );
+  // An issue made before titles carried the app prefix is adopted by its bare
+  // title only when that title is unique, so a common title is never taken
+  // from another app.
+  const findExisting = (title: string, bareTitle: string) => {
+    const prefixed = issuesByTitle.get(title) ?? [];
+    if (prefixed.length > 0) return prefixed[0];
+    const bare = issuesByTitle.get(bareTitle) ?? [];
+    if (bare.length > 1)
+      console.log(
+        `  ${bare.length} issues are titled "${bareTitle}"; adopting none, so a new one is created.`,
+      );
+    const result = bare.length === 1 ? bare[0] : null;
+    return result;
+  };
 
   const created = issues.map((issue) => {
     const title = toGithubTitle(appName, issue);
     if (issue.tier) ensureLabel(repo, issue.tier, labels);
-    const existing =
-      existingByTitle.get(title) ?? existingByTitle.get(issue.title);
+    const existing = findExisting(title, issue.title);
     if (existing) {
-      console.log(`Exists: #${existing.number} ${title}`);
+      console.log(`Exists: #${existing.number} ${existing.title}`);
       if (issue.tier)
         gh([
           'issue',
