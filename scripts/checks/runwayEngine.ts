@@ -1,7 +1,18 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
 
-import { buildComingDays } from '../../src/apps/runway/engine/comingDays.ts';
+import {
+  buildComingDays,
+  describeDay,
+} from '../../src/apps/runway/engine/comingDays.ts';
+import {
+  buildRecords,
+  countUnresolvedHolds,
+  getFreeAfterArrival,
+  getLeastArrival,
+  sumConfirmedByItem,
+} from '../../src/apps/runway/engine/confirm.ts';
+import { hashOverride } from '../../src/apps/runway/engine/fingerprint.ts';
 import {
   DAY_MS,
   addUtcMonths,
@@ -49,8 +60,10 @@ import {
   readStance,
 } from '../../src/apps/runway/engine/stance.ts';
 import type {
+  ConfirmedSealed,
   Ending,
   MoneyRange,
+  OpenRecord,
   OpenVersion,
   PlanItemDoc,
   Schedule,
@@ -2177,6 +2190,316 @@ const version = (
     ]),
     ranged[0],
     'a legacy plan plans conservatively',
+  );
+}
+
+// Confirming a day.
+{
+  const today = utc(2026, 11, 1);
+  const on = today + 3 * DAY_MS;
+  const dayKey = toDayKey('pay', on);
+  const exact = (cents: number) => ({ kind: 'exact' as const, cents });
+  const envelope = (itemId: string, cents: number) => ({
+    itemId,
+    createdAt: 1_000,
+    priority: 'must' as const,
+    orderIndex: 1,
+    funding: {
+      amount: exact(cents),
+      cadence: { kind: 'everyIncomeDay' as const },
+    },
+  });
+  const draft = buildDraft({
+    days: [
+      {
+        dayKey,
+        sourceId: 's1',
+        on,
+        amount: { lowCents: 100_000, highCents: 100_000 },
+      },
+    ],
+    plan: {
+      envelopes: [envelope('rent', 40_000), envelope('food', 20_000)],
+      bills: [],
+      goals: [],
+      horizon: 0,
+      incomeDays: [{ dayKey, on }],
+    },
+    stance: 'conservative',
+    overrides: { dayCents: {} },
+  });
+  const names = {
+    rent: { name: 'Rent', emoji: null },
+    food: { name: 'Food', emoji: '🛒' },
+  };
+  const input = {
+    draft,
+    names,
+    stance: 'conservative' as const,
+    fingerprint: 'f',
+    note: null,
+  };
+
+  assert.equal(draft.freeToSpend.cents, 40_000);
+  assert.equal(
+    getLeastArrival(draft),
+    60_000,
+    'the least is what the lines take',
+  );
+  assert.equal(
+    getFreeAfterArrival(draft, 100_000),
+    40_000,
+    'as expected leaves free to spend alone',
+  );
+  assert.equal(
+    getFreeAfterArrival(draft, 112_500),
+    52_500,
+    'extra goes to free to spend',
+  );
+  assert.equal(
+    getFreeAfterArrival(draft, 70_000),
+    10_000,
+    'a shortfall comes out of free to spend',
+  );
+  assert.equal(
+    getFreeAfterArrival(draft, 60_000),
+    0,
+    'the least arrival leaves nothing free',
+  );
+
+  const same = buildRecords({ ...input, arrivedCents: 100_000 });
+  assert.deepEqual(
+    same.confirmed.differences,
+    [],
+    'as expected records no difference',
+  );
+  assert.deepEqual(
+    same.proposed.lines,
+    same.confirmed.lines,
+    'the confirmed lines are the proposed ones',
+  );
+  assert.deepEqual(
+    same.proposed.lines.map((line) => [
+      line.itemId,
+      line.name,
+      line.cents,
+      line.paidBy,
+    ]),
+    [
+      ['food', 'Food', 20_000, [{ dayId: dayKey, cents: 20_000 }]],
+      ['rent', 'Rent', 40_000, [{ dayId: dayKey, cents: 40_000 }]],
+    ],
+    'a line keeps its name and which day paid for it',
+  );
+  const more = buildRecords({
+    ...input,
+    arrivedCents: 112_500,
+    note: 'Overtime',
+  });
+  assert.deepEqual(
+    more.confirmed.differences,
+    [
+      {
+        kind: 'amount',
+        plannedCents: 100_000,
+        actualCents: 112_500,
+        note: 'Overtime',
+      },
+    ],
+    'a different amount is one difference with its note',
+  );
+  assert.equal(
+    more.proposed.freeToSpendCents,
+    40_000,
+    'the proposed draft is kept as it stood',
+  );
+  assert.equal(more.proposed.expectedCents, 100_000);
+  assert.equal(more.confirmed.freeToSpendCents, 52_500);
+  assert.equal(more.confirmed.arrivedCents, 112_500);
+
+  const held = {
+    ...draft,
+    lines: draft.lines.map((line, index) =>
+      index === 0
+        ? { ...line, pairing: { state: 'held' as const, heldCents: 0 } }
+        : line,
+    ),
+  };
+  assert.equal(countUnresolvedHolds(draft), 0);
+  assert.equal(countUnresolvedHolds(held), 1, 'a held line blocks confirming');
+  assert.equal(
+    countUnresolvedHolds({
+      ...draft,
+      lines: draft.lines.map((line) => ({
+        ...line,
+        pairing: { state: 'leftShort' as const, heldCents: 0 },
+      })),
+    }),
+    0,
+    'a chosen line does not block',
+  );
+
+  // Confirmed lines count toward a goal's held money, from the confirmed record only.
+  const record = (
+    dayId: string,
+    kind: 'proposed' | 'confirmed',
+    lines: { itemId: string; cents: number }[],
+  ): OpenRecord => {
+    const payload = {
+      ...same.confirmed,
+      lines: lines.map((line) => ({ ...same.confirmed.lines[0], ...line })),
+    } as ConfirmedSealed;
+    return {
+      id: `${dayId}_${kind}`,
+      dayId,
+      kind,
+      createdAt: 1,
+      payload,
+    } as OpenRecord;
+  };
+  const records = [
+    record('a', 'proposed', [{ itemId: 'goal', cents: 999 }]),
+    record('a', 'confirmed', [
+      { itemId: 'goal', cents: 15_000 },
+      { itemId: 'food', cents: 20_000 },
+    ]),
+    record('b', 'confirmed', [{ itemId: 'goal', cents: 15_000 }]),
+  ];
+  assert.deepEqual(
+    sumConfirmedByItem(records),
+    { goal: 30_000, food: 20_000 },
+    'held money adds the confirmed records and ignores the proposed ones',
+  );
+  assert.deepEqual(sumConfirmedByItem([]), {});
+
+  const goalDays = [0, 14, 28, 42].map((offset) => {
+    const dayOn = on + offset * DAY_MS;
+    return { dayKey: toDayKey('pay', dayOn), on: dayOn, moneyCents: 100_000 };
+  });
+  const cushion = {
+    targetCents: 60_000,
+    heldCents: 0,
+    funding: {
+      amount: exact(15_000),
+      cadence: { kind: 'everyIncomeDay' as const },
+    },
+  };
+  assert.equal(
+    planGoalContributions(cushion, goalDays).reduce(
+      (sum, part) => sum + part.cents,
+      0,
+    ),
+    60_000,
+    'an unfunded goal asks for its whole target',
+  );
+  assert.deepEqual(
+    planGoalContributions(
+      { ...cushion, heldCents: 30_000 },
+      goalDays.slice(2),
+    ).map((part) => part.cents),
+    [15_000, 15_000],
+    'two confirmed contributions leave two to ask for',
+  );
+  assert.deepEqual(
+    planGoalContributions({ ...cushion, heldCents: 60_000 }, goalDays),
+    [],
+    'a goal confirmed up to its target is not asked for again',
+  );
+  assert.equal(
+    planGoalContributions({ ...cushion, heldCents: 75_000 }, goalDays).length,
+    0,
+    'held above the target asks for nothing',
+  );
+
+  // What the person set for a day is named the same whatever order it was written in.
+  assert.equal(
+    hashOverride({
+      pairings: null,
+      holdResolutions: { a: 'topUp', b: 'leaveShort' },
+    }),
+    hashOverride({
+      pairings: null,
+      holdResolutions: { b: 'leaveShort', a: 'topUp' },
+    }),
+    'hold order does not change the name',
+  );
+  assert.notEqual(
+    hashOverride({ pairings: null, holdResolutions: { a: 'topUp' } }),
+    hashOverride({ pairings: null, holdResolutions: { a: 'leaveShort' } }),
+    'a different choice changes the name',
+  );
+  assert.notEqual(
+    hashOverride({ pairings: null, holdResolutions: {} }),
+    hashOverride({ pairings: [], holdResolutions: {} }),
+    'no set of its own differs from an empty set',
+  );
+
+  // Days that passed without being confirmed are found by looking back from a date.
+  const payLine: PlanItemDoc = {
+    id: 'pay',
+    kind: 'payLine',
+    parentId: null,
+    createdAt: 1,
+    endedAt: null,
+    archivedAt: null,
+  };
+  const payVersion: OpenVersion = {
+    id: 'pay-v1',
+    itemId: 'pay',
+    kind: 'payLine',
+    createdAt: 1,
+    effectiveFrom: today - 100 * DAY_MS,
+    effectiveUntil: null,
+    changeId: 'c1',
+    payload: {
+      name: 'Paycheck',
+      schedule: { kind: 'weekly', anchor: today - 20 * DAY_MS, monthDays: [] },
+      amount: { lowCents: 100_000, highCents: 100_000 },
+      ending: NEVER,
+      stanceOverride: null,
+      pairings: [],
+    },
+  };
+  const ahead = buildComingDays([payLine], [payVersion], today);
+  const lookback = buildComingDays(
+    [payLine],
+    [payVersion],
+    today,
+    today - 14 * DAY_MS,
+  );
+  assert.ok(
+    ahead.every((entry) => entry.on >= today),
+    'coming days start today',
+  );
+  assert.deepEqual(
+    stamps(
+      lookback.filter((entry) => entry.on < today).map((entry) => entry.on),
+    ),
+    stamps([today - 13 * DAY_MS, today - 6 * DAY_MS]),
+    'looking back finds the days that passed inside the window',
+  );
+  assert.deepEqual(
+    lookback.filter((entry) => entry.on >= today),
+    ahead,
+    'looking back changes nothing ahead',
+  );
+  assert.equal(
+    describeDay([payVersion], {
+      payLineId: 'pay',
+      sourceId: null,
+      expectedOn: today - 90 * DAY_MS,
+    })?.payLineName,
+    'Paycheck',
+    'a day that has a document is described from the plan',
+  );
+  assert.equal(
+    describeDay([payVersion], {
+      payLineId: 'gone',
+      sourceId: null,
+      expectedOn: today,
+    }),
+    null,
+    'a day whose pay line is gone is not described',
   );
 }
 

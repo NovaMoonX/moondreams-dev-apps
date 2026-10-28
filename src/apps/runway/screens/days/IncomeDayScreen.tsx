@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Mail } from 'lucide-react';
+import { CalendarX, Mail } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import ActionChips from '@/components/ActionChips';
 import EmptyCard from '@/components/EmptyCard';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
@@ -15,13 +16,17 @@ import RangeNote from '@apps/runway/components/RangeNote';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
 import FundsRow from '@apps/runway/components/FundsRow';
-import { DRAFT_WORDS } from '@apps/runway/constants';
+import { CONFIRM_WORDS, DRAFT_WORDS } from '@apps/runway/constants';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   EMPTY_OVERRIDE,
+  markNotArrived,
   saveDayOverride,
 } from '@apps/runway/store/actions/dayActions';
+import ConfirmedDayView from '@apps/runway/screens/days/ConfirmedDayView';
+import ConfirmSheet from '@apps/runway/screens/days/ConfirmSheet';
+import NotArrivedView from '@apps/runway/screens/days/NotArrivedView';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import { effectiveStance } from '@apps/runway/engine/stance';
@@ -31,6 +36,8 @@ import {
   selectDraft,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
+  selectIsRecordsReady,
+  selectListedDays,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
@@ -40,19 +47,21 @@ interface IncomeDayScreenProps {
 }
 
 /** What one coming income day does with its money, worked out each time and never stored. */
-function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
+function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const { user } = useAuth();
+  const [isConfirming, setIsConfirming] = useState(false);
   const [isEditingFunds, setIsEditingFunds] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const today = todayAsUtcDate(useNow(60_000));
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
-  const isLoaded = isPlanLoaded && isDaysLoaded;
+  const isRecordsReady = useAppSelector(selectIsRecordsReady);
+  const isLoaded = isPlanLoaded && isDaysLoaded && isRecordsReady;
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
 
-  if (!view || !isDaysLoaded) {
+  if (!view || !isDaysLoaded || !isRecordsReady) {
     return (
       <Subview title='Income day' onClose={onClose}>
         <p className='text-muted-foreground text-sm'>
@@ -94,6 +103,25 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
     } catch (saveError) {
       setError(
         getErrorMessage(saveError, 'This did not save. Nothing was changed.'),
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  };
+  const notArrived = async () => {
+    if (!user) return;
+    setError(null);
+    setIsSaving(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      await markNotArrived(user.uid, encryption, {
+        payLineId: day.payLineId,
+        sourceId: day.sourceId,
+        expectedOn: day.on,
+      });
+    } catch (markError) {
+      setError(
+        getErrorMessage(markError, 'This did not save. Nothing was changed.'),
       );
     } finally {
       setIsSaving(false);
@@ -175,6 +203,14 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
             {DRAFT_WORDS.holdsBlock}
           </p>
         )}
+        <Button
+          type='button'
+          className='w-full'
+          disabled={heldLines.length > 0 || isSaving}
+          onClick={() => setIsConfirming(true)}
+        >
+          {CONFIRM_WORDS.action}
+        </Button>
         {error && (
           <p className='text-destructive text-sm' role='alert'>
             {error}
@@ -206,7 +242,26 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
             )}
           </div>
         )}
+        <ActionChips
+          label='More about this day'
+          actions={[
+            {
+              key: 'notArrived',
+              icon: <CalendarX className='h-4 w-4' />,
+              label: CONFIRM_WORDS.markNotArrived,
+              isDisabled: isSaving,
+              onClick: () => void notArrived(),
+            },
+          ]}
+        />
       </div>
+      {isConfirming && (
+        <ConfirmSheet
+          view={view}
+          stance={effectiveStance(planStance, day.stanceOverride)}
+          onClose={() => setIsConfirming(false)}
+        />
+      )}
       {isEditingFunds && (
         <PairingsEditor
           isOpen
@@ -222,6 +277,25 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
       )}
     </Subview>
   );
+}
+
+/** One income day: its draft while it is coming, what was confirmed once it has arrived, or a way to put it back after it did not. */
+function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
+  const today = todayAsUtcDate(useNow(60_000));
+  const listed = useAppSelector((state) => {
+    const { open, confirmed } = selectListedDays(state, today);
+    return (
+      [...open, ...confirmed].find((entry) => entry.dayKey === dayKey) ?? null
+    );
+  });
+
+  if (listed?.status === 'confirmed') {
+    return <ConfirmedDayView day={listed} onClose={onClose} />;
+  }
+  if (listed?.status === 'notArrived') {
+    return <NotArrivedView day={listed} onClose={onClose} />;
+  }
+  return <DraftDay dayKey={dayKey} onClose={onClose} />;
 }
 
 export default IncomeDayScreen;

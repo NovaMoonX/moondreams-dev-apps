@@ -302,8 +302,8 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - [x] Add envelopes funded every income day, every other, or on chosen days
 - [ ] Add, pause, complete and archive savings goals, with a pace line
 - [x] A priority (Must, Should, Want) on every bill, envelope and goal, used to order drafts and flag what is unfunded
-- [ ] A draft for every coming income day, each line saying why, confirmed when the money is in with the amount that arrived and its date, every amount adjustable, with a way to mark a day as not arrived
-- [ ] Keep the draft as proposed beside the confirmed split, record each difference, and allow a note on it
+- [x] A draft for every coming income day, each line saying why, confirmed when the money is in with the amount that arrived and its date, every amount adjustable, with a way to mark a day as not arrived
+- [x] Keep the draft as proposed beside the confirmed split, record each difference, and allow a note on it
 - [ ] After confirming, a checklist of the bills to pay
 - [ ] Fund a bill across several income days, with progress shown
 - [ ] Guided setup: money on hand now, what each goal holds, and what is already set aside for each bill

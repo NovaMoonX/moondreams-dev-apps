@@ -210,6 +210,51 @@ export const MAX_EMOJI_LENGTH = 8;
 /** Why a draft line got the money it did: funded in full, or cut short because the day's money ran out. */
 export const HOLD_CHOICES = ['topUp', 'leaveShort'] as const;
 export const DAY_STATUSES = ['draft', 'confirmed', 'notArrived'] as const;
+/** The records a confirmed day keeps: the draft as proposed and the split that was confirmed. */
+export const DAY_RECORD_KINDS = ['proposed', 'confirmed'] as const;
+/** How far back the Days list and the confirmed-day records are read. */
+export const RECENT_DAYS_WINDOW = 180;
+/** Days an unconfirmed income day stays on the list after its date. */
+export const OVERDUE_DAYS = 14;
+export const MAX_NOTE_LENGTH = 300;
+/** Confirmed and not-arrived days shown before "Show more". */
+export const SETTLED_DAYS_PREVIEW = 3;
+
+/** The tags a day wears on the Days list; a day that is coming wears none. */
+export const DAY_STATUS_LABELS = {
+  confirmed: 'Confirmed',
+  notArrived: 'Did not arrive',
+  overdue: 'Waiting to be confirmed',
+} as const;
+
+export const CONFIRM_WORDS = {
+  action: 'Confirm money arrived',
+  sheetTitle: 'Money arrived',
+  amount: 'Amount that arrived',
+  date: 'Arrived on',
+  note: 'Add a note',
+  notePlaceholder: 'Overtime, a bonus from the quarter',
+  extraTo: 'The extra goes to Free to spend.',
+  shortFrom: 'The shortfall comes out of Free to spend.',
+  sameAsExpected: 'The same as the draft expected.',
+  needsAmount: 'Enter the amount that arrived.',
+  needsDate: 'Pick the date it arrived.',
+  holds: 'Choose for each held line first.',
+  tooLittle: 'The draft needs at least',
+  confirm: 'Confirm',
+  confirmed: 'Confirmed',
+  markNotArrived: 'Did not arrive',
+  undoNotArrived: 'Put this day back',
+  notArrivedLine: 'Marked as not arrived. Its draft is off your plan.',
+  offline:
+    'Confirming needs a connection. Nothing was saved. Try again when you are back online.',
+  planned: 'Planned',
+  arrived: 'Arrived',
+  recordTitle: 'Planned and confirmed',
+  recordDoor: 'Planned and confirmed',
+  unchanged: 'Everything else matched the draft.',
+  missingRecords: 'The record of this day could not be read.',
+} as const;
 export const MAX_PAIRINGS = 20;
 
 /** What happened to a pairing that its own pay could not cover. */
