@@ -1,0 +1,42 @@
+name: PR sync check
+# Marks every open PR that is behind its base or would conflict with it, so a
+# person or an agent sees it without asking. Labels only: nothing is merged here.
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+concurrency:
+  group: pr-sync-check
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check each open PR against its base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create behind-base --color FBCA04 --description "Its base has commits it doesn't have yet" --force >/dev/null
+          gh label create merge-conflict --color B60205 --description "Merging its base would conflict" --force >/dev/null
+          prs=$(gh pr list --state open --limit 100 --json number,headRefName,baseRefName,isCrossRepository \
+            --jq '.[] | select(.isCrossRepository | not) | "\(.number) \(.headRefName):\(.baseRefName)"')
+          [ -z "$prs" ] && exit 0
+          while read -r number pair; do
+            result=$(bash scripts/prSync.sh --json "$pair" || true)
+            state=$(echo "$result" | sed -n 's/.*"state":"\([a-z]*\)".*/\1/p')
+            echo "#$number $pair: ${state:-unknown}"
+            case "$state" in
+              conflict) gh pr edit "$number" --add-label merge-conflict --remove-label behind-base >/dev/null || true ;;
+              behind) gh pr edit "$number" --add-label behind-base --remove-label merge-conflict >/dev/null || true ;;
+              fresh) gh pr edit "$number" --remove-label behind-base --remove-label merge-conflict >/dev/null || true ;;
+            esac
+          done <<< "$prs"

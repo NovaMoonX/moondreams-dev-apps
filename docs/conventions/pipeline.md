@@ -21,6 +21,7 @@ idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate
 | Status | `orchestrate` "The PR status comment" | the session, after each push and review | session | never on a PR you drive |
 | Take over someone else's PR | `.claude/skills/finish-feature-pr/SKILL.md` | the session, when asked | session | not run by any hook |
 | Improving the pipeline | `docs/conventions/pipeline.md` "The pipeline improves itself", `pipeline-log.md` | the session, every task | session | never |
+| Keep PRs current | `scripts/prSync.sh` (`npm run prs:check` / `prs:sync`), `.github/workflows/pr-sync-check.yml` | the Stop hook (current branch), `pr-syncer` during a run, the workflow every push to main and every 6 h | git only; haiku `pr-syncer` to run it | never; conflicts go to the session model |
 | Hint to orchestrate | `.claude/hooks/orchestrate-hint.sh` (UserPromptSubmit) | the hook | none | prompts that aren't in plan mode and name fewer than two issues |
 
 ## Why it is shaped this way

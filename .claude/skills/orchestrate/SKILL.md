@@ -15,6 +15,7 @@ You are the one who knows everything: the request, the plan, the conventions, wh
 | A planned chunk with named files and a clear "done when" (a component, a thunk and its callers, a migration of N call sites, a doc rewrite) | `implementer` (sonnet) | Long edit loops are cheaper on Sonnet; the brief carries what it needs. |
 | Typecheck, eslint, `check:*`, the repo-rule greps | `validator` (haiku) | Mechanical; a long output reduced to failures. |
 | A search across many files when you need only the answer | `Explore` | Keeps file dumps out of your context. |
+| Keeping a run's PRs current with their bases | `pr-syncer` (haiku) over `scripts/prSync.sh` | Git answers it exactly; a model only runs the command. |
 | Review | sized, below | |
 | Planning a new app | `plan-app` | |
 
@@ -33,6 +34,14 @@ Every brief has: the goal in one line; the files to touch (and not to touch); wh
 ## Several issues in order
 
 When the owner assigns a list of issues, work them in order, one PR each (stacked when one builds on the last), and for each: plan it from the issue's checklists, build it through the table above, validate, size and run the review, fix, push, and refresh that PR's **status comment** before starting the next. The owner opens any PR and reads where it stands without scrolling the conversation.
+
+## Keeping several PRs current
+
+Freshness is checked by git, not by reading: `scripts/prSync.sh` says per PR whether its base is fully merged in and whether merging it would conflict (`git merge-tree`, no checkout), and `npm run prs:sync` also merges and pushes each one that merges cleanly.
+- **When you open a stacked PR**, record its base: `git config branch.<head>.prBase <base>`, so the Stop hook checks it against the right branch.
+- **The Stop hook** checks the current branch on every pushed HEAD for free and names a merge only when it is behind or conflicts.
+- **Before starting the next issue of a run, and on each check-in,** spawn `pr-syncer` (haiku) with every open PR of the run as `head:base` pairs, bottom of the stack first. It merges what is clean and reports conflicts, which you resolve yourself (merge, never rebase), validate and push.
+- **Between sessions,** the `PR sync check` workflow (`.github/workflows/pr-sync-check.yml`) runs on every push to main and every six hours, and labels each open PR `behind-base` or `merge-conflict`. A label arriving on a PR you watch is an event: sync or resolve it. Put the PR's freshness in its status comment's "Last verified" line.
 
 ## Improving as you go
 
@@ -78,7 +87,7 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 - <a change to a skill, hook, agent or convention you aren't sure the owner wants: the change, the evidence, the cost either way>
 
 **Since last update:** <what changed: pushed fixes, review results, decisions>
-**Last verified:** <sha> · CI <green/red> · review <S/M/L, who> · <date>
+**Last verified:** <sha> · CI <green/red> · base <up to date / N behind / conflicts> · review <S/M/L, who> · <date>
 ```
 
 "Where this sits" lists the app's planned issues around this one (from `ISSUES.md` and the board: the issue before, this one, the next two, and any open issue this PR blocks or is blocked by), so the owner sees the plan and the progress at once. "Must do" holds only what blocks the merge; an empty one says "Nothing: waiting on your review". Use the GitHub MCP tools (`add_issue_comment`, `update_issue_comment`) or `gh`, and end the comment with the attribution footer.

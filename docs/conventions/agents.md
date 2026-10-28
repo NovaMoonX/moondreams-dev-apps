@@ -10,6 +10,7 @@ The repo's subagents live in `.claude/agents/`, one file each, with their model 
 | `product-reviewer` | sonnet | no | pr-wrap-up, build-app-mvp polish | Drives the app: journeys, phases, doors, numbers, copy, docs. |
 | `design-reviewer` | sonnet | no | pr-wrap-up, build-app-mvp polish | Measures the app: containers, reach, alignment, state, colour. |
 | `lead-reviewer` | opus | no | pr-wrap-up (size L) | Verifies the shard findings and does the cross-shard pass. |
+| `pr-syncer` | haiku | merges and pushes clean syncs | orchestrate | Runs `prs:sync` over a run's PR pairs; reports conflicts, never resolves them. |
 | `stack-pr-reviewer` | sonnet | yes | build-app-mvp | Reviews, fixes and syncs one stacked PR when Copilot didn't review. |
 | `product-planner`, `design-planner`, `tech-planner` | opus | drafts only | plan-app | The three planning tracks, drafted in parallel each round. |
 
