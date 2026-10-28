@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import RevealChip from '@/components/RevealChip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import ReceiptPhotoStep from '@apps/waypoint/components/ReceiptPhotoStep';
@@ -85,13 +86,15 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
   const [title, setTitle] = useState(prefill?.title || reading?.merchant || '');
   const [payerUid, setPayerUid] = useState(currentUserId);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUsdConfirmed, setIsUsdConfirmed] = useState(false);
+  const foreignCurrency = reading?.currency && reading.currency !== 'USD' ? reading.currency : null;
   const isSavingRef = useRef(false);
   const { result, isComplete } = split;
 
   useEffect(() => {
     isDirtyRef.current = split.isDirty;
   }, [isDirtyRef, split.isDirty]);
-  const canSave = isComplete && title.trim() !== '' && !isSubmitting;
+  const canSave = isComplete && title.trim() !== '' && !isSubmitting && (foreignCurrency === null || isUsdConfirmed);
   const unclaimedCount = result.unclaimedLineIds.length;
 
   const getNote = () => {
@@ -101,6 +104,7 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
     if (split.hasNegativeShare) return 'A discount is bigger than what someone ordered.';
     if (unclaimedCount > 0) return `${unclaimedCount} ${unclaimedCount === 1 ? 'item has' : 'items have'} nobody yet.`;
     if (title.trim() === '') return 'Add a title to save it.';
+    if (foreignCurrency !== null && !isUsdConfirmed) return `This bill is in ${foreignCurrency}. Confirm the amounts are in USD first.`;
     return null;
   };
 
@@ -152,10 +156,15 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
 
   return (
     <div className='space-y-6'>
-      {reading?.currency && reading.currency !== 'USD' && (
-        <p className='text-warning text-sm' role='status'>
-          This looks like a {reading.currency} bill. Expenses here are in USD, so check the amounts before you add it.
-        </p>
+      {foreignCurrency !== null && (
+        <div className='space-y-2'>
+          <p className='text-warning text-sm' role='status'>
+            This looks like a {foreignCurrency} bill. Expenses here are in USD, so type the amounts converted, then confirm.
+          </p>
+          <RevealChip onClick={() => setIsUsdConfirmed((current) => !current)}>
+            {isUsdConfirmed ? 'Amounts are in USD ✓' : 'These amounts are in USD'}
+          </RevealChip>
+        </div>
       )}
       <ReceiptSplitEditor split={split} />
       <section className='space-y-4'>

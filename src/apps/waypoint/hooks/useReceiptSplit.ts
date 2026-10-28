@@ -42,10 +42,17 @@ interface ReceiptSplitState {
 const toMoneyText = (cents: number | null) => (cents ? centsToInputValue(cents) : '');
 const toCents = (text: string) => parseMoneyToCents(text) ?? 0;
 
+const toSnapshot = (state: ReceiptSplitState) =>
+  JSON.stringify([
+    state.lines.map((line) => [line.name, line.priceCents]),
+    state.claims,
+    [state.tax, state.fees, state.discount, state.tipChoice, state.customTip, state.tipSplit],
+  ]);
+
 function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
   const lines = (reading?.lines ?? []).map((line) => ({
     id: generateUuid(),
-    name: line.quantity > 1 ? `${line.name} ×${line.quantity}` : line.name,
+    name: line.quantity > 1 ? `${line.quantity}× ${line.name}` : line.name,
     priceCents: line.priceCents,
   }));
   return {
@@ -64,6 +71,7 @@ function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
 /** The state of one bill being split between people: who had which line, the charges on top, the tip, and what each person owes. The host draws the footer and reads `result` when the person is done. */
 export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptPerson[]) {
   const [state, setState] = useState(() => getInitialState(reading));
+  const [baseline] = useState(() => toSnapshot(state));
   const peopleIds = useMemo(() => people.map((person) => person.id), [people]);
   const receiptTipCents = reading?.tipCents ?? 0;
   const tipPercents = useMemo(() => getTipPercents(reading), [reading]);
@@ -128,7 +136,7 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
   const hasUnnamedLine = state.lines.some((line) => line.name.trim() === '');
   const hasUnpricedLine = state.lines.some((line) => line.priceCents <= 0);
   const hasNegativeShare = Object.values(result.totals).some((total) => total.totalCents < 0);
-  const isDirty = Object.values(state.claims).some((uids) => uids.length > 0);
+  const isDirty = reading !== null || toSnapshot(state) !== baseline;
   const isComplete =
     state.lines.length > 0 &&
     result.unclaimedLineIds.length === 0 &&

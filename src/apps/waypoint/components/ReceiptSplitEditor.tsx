@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -24,8 +24,8 @@ interface LineRowProps {
 }
 
 const formatNames = (names: string[]) => {
-  if (names.length <= 2) return names.join(' & ');
-  return `${names.slice(0, 2).join(', ')} & ${names.length - 2} more`;
+  if (names.length <= 3) return names.length === 3 ? `${names[0]}, ${names[1]} & ${names[2]}` : names.join(' & ');
+  return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
 };
 
 function LineRow({ line, holders, split }: LineRowProps) {
@@ -35,10 +35,16 @@ function LineRow({ line, holders, split }: LineRowProps) {
   const [priceText, setPriceText] = useState(line.priceCents ? centsToInputValue(line.priceCents) : '');
   const names = people.filter((person) => holders.includes(person.id)).map((person) => person.name);
   const isEveryone = people.length > 0 && holders.length === people.length;
+  const scrollIntoViewWhenOpen = useCallback(
+    (node: HTMLLIElement | null) => {
+      if (isOpen) node?.scrollIntoView({ block: 'nearest' });
+    },
+    [isOpen],
+  );
   const nextUnclaimedId = state.lines.find((other) => other.id !== line.id && (state.claims[other.id] ?? []).length === 0)?.id;
 
   return (
-    <li>
+    <li ref={scrollIntoViewWhenOpen}>
       <Button
         type='button'
         variant='tertiary'
@@ -71,11 +77,11 @@ function LineRow({ line, holders, split }: LineRowProps) {
               {
                 key: 'everyone',
                 icon: <Users className='h-4 w-4' />,
-                label: isEveryone ? 'Nobody' : 'Everyone',
+                label: isEveryone ? 'Clear' : 'Everyone',
                 description: isEveryone ? 'Clear who had this' : 'Everyone shares this',
                 onClick: () => setLineClaims(line.id, isEveryone ? [] : people.map((person) => person.id)),
               },
-              ...(holders.length > 0 && nextUnclaimedId
+              ...(nextUnclaimedId
                 ? [
                     {
                       key: 'next',
@@ -310,10 +316,11 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
         {mismatch && (
           <p className='text-warning px-1 text-xs' role='status'>
             The receipt says {formatCents(printedTotalCents ?? 0)}, and the items, tax and fees here add up to{' '}
-            {formatCents(billWithoutOwnTip)}. Check for a missing or mistyped item.
+            {formatCents(billWithoutOwnTip)}, {formatCents(Math.abs((printedTotalCents ?? 0) - billWithoutOwnTip))}{' '}
+            {(printedTotalCents ?? 0) > billWithoutOwnTip ? 'short' : 'over'}. Check the items, tax and fees; an item you removed counts too.
           </p>
         )}
-        {leftOut.length > 0 && (
+        {leftOut.length > 0 && unclaimedCount === 0 && (
           <p className='text-muted-foreground px-1 text-xs'>Not in this split: {formatNames(leftOut)}.</p>
         )}
       </section>
