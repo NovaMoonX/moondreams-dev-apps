@@ -37,7 +37,7 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
 
 ## Keeping several PRs current
 
-Freshness is checked by git, not by reading: `scripts/prSync.sh` says per PR whether its base is fully merged in and whether merging it would conflict (`git merge-tree`, no checkout), and `npm run prs:sync` also merges and pushes each one that merges cleanly.
+Freshness is checked by git, not by reading: `scripts/prSync.sh` says per PR whether its base is fully merged in and whether merging it would conflict (`git merge-tree`, no checkout), and `npm run prs:sync -- <head:base>…` also merges and pushes each named branch that merges cleanly (it refuses to merge without explicit pairs, so it never pushes to someone else's branch), after which `git pull --ff-only` brings the merge into a local checkout.
 - **When you open a stacked PR**, record its base: `git config branch.<head>.prBase <base>`, so the Stop hook checks it against the right branch.
 - **The Stop hook** checks the current branch on every pushed HEAD for free and names a merge only when it is behind or conflicts.
 - **Before starting the next issue of a run, and on each check-in,** spawn `pr-syncer` (haiku) with every open PR of the run as `head:base` pairs, bottom of the stack first. It merges what is clean and reports conflicts, which you resolve yourself (merge, never rebase), validate and push.

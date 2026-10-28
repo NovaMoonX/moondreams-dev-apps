@@ -70,10 +70,15 @@ elif [[ "$pr_lines" -gt 300 ]] || has "$pr_files" "$ui_re"; then
   size="M"
 fi
 
-# Freshness against the PR's base: git alone, so it costs nothing. A stacked
-# PR records its base with `git config branch.<head>.prBase <base>`.
+# Freshness against the PR's base, from git with no model; bounded because it
+# fetches over the network. A stacked PR records its base with
+# `git config branch.<head>.prBase <base>`.
 pr_base=$(git config "branch.$current_branch.prBase" 2>/dev/null || echo "$default_branch")
-sync_line=$(bash "$(git rev-parse --show-toplevel)/scripts/prSync.sh" "$current_branch:$pr_base" 2>/dev/null | head -1)
+sync_script="$(git rev-parse --show-toplevel)/scripts/prSync.sh"
+sync_line=""
+if [[ -f "$sync_script" ]]; then
+  sync_line=$(timeout 8 bash "$sync_script" "$current_branch:$pr_base" 2>/dev/null | head -1)
+fi
 
 steps=("Make sure an open pull request exists for '$current_branch'; if none, open it as a DRAFT with its patch/minor label and a 'Resolves #N' line per issue it delivers.")
 if has "$delta_files" "$code_re" || has "$delta_files" "$rules_re" || has "$delta_files" '^functions/'; then
@@ -92,7 +97,7 @@ else
 fi
 case "$sync_line" in
   *CONFLICTS*) steps+=("The branch conflicts with '$pr_base' ($sync_line): merge '$pr_base' in and resolve it yourself (never rebase or force-push), then validate and push.") ;;
-  *behind*) steps+=("The branch is behind '$pr_base': run 'npm run prs:sync -- $current_branch:$pr_base' (merges and pushes), then let this gate run again.") ;;
+  *behind*) steps+=("The branch is behind '$pr_base': run 'npm run prs:sync -- $current_branch:$pr_base' (merges and pushes on origin), then 'git pull --ff-only' so your local branch has the merge, and validate.") ;;
 esac
 steps+=("Rewrite the PR's status comment (orchestrate 'The PR status comment') with what must and should be done, next moves and where the PR sits among the planned issues.")
 
