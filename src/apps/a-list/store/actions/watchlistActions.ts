@@ -163,7 +163,7 @@ export const refreshWatchlistMovie = createAsyncThunk<
 
 /** Moves a movie off the active list with the reason it left; its viewings stay on the calendar. */
 export const archiveWatchlistItem = createAsyncThunk<
-  void,
+  number,
   { uid: string; movieKey: string; reason: string },
   { rejectValue: string }
 >(
@@ -176,6 +176,7 @@ export const archiveWatchlistItem = createAsyncThunk<
         archiveReason: reason.trim().slice(0, MAX_ARCHIVE_REASON_LENGTH),
         lastEditedAt: now,
       });
+      return now;
     } catch (error) {
       return rejectWithValue(
         getErrorMessage(error, 'Unable to archive this movie.'),
@@ -184,20 +185,38 @@ export const archiveWatchlistItem = createAsyncThunk<
   },
 );
 
+/** With `ifArchivedAt`, restores only the archive made at that moment, so an Undo never reverses a newer archive. */
 export const restoreWatchlistItem = createAsyncThunk<
-  void,
-  { uid: string; movieKey: string },
+  { restored: boolean },
+  { uid: string; movieKey: string; ifArchivedAt?: number },
   { rejectValue: string }
->('aList/watchlist/restore', async ({ uid, movieKey }, { rejectWithValue }) => {
-  try {
-    await updateDoc(getItemRef(uid, movieKey), {
-      archivedAt: null,
-      archiveReason: null,
-      lastEditedAt: Date.now(),
-    });
-  } catch (error) {
-    return rejectWithValue(
-      getErrorMessage(error, 'Unable to restore this movie.'),
-    );
-  }
-});
+>(
+  'aList/watchlist/restore',
+  async ({ uid, movieKey, ifArchivedAt }, { rejectWithValue }) => {
+    const itemRef = getItemRef(uid, movieKey);
+    try {
+      const restored = await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(itemRef);
+        if (
+          !snapshot.exists() ||
+          snapshot.get('archivedAt') == null ||
+          (ifArchivedAt !== undefined &&
+            snapshot.get('archivedAt') !== ifArchivedAt)
+        ) {
+          return false;
+        }
+        transaction.update(itemRef, {
+          archivedAt: null,
+          archiveReason: null,
+          lastEditedAt: Date.now(),
+        });
+        return true;
+      });
+      return { restored };
+    } catch (error) {
+      return rejectWithValue(
+        getErrorMessage(error, 'Unable to restore this movie.'),
+      );
+    }
+  },
+);

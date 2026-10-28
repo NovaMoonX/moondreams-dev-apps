@@ -13,6 +13,7 @@ import {
 
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { generateUuid } from '@/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -44,6 +45,8 @@ import {
 import { selectWatchlistRows } from '@apps/a-list/store/selectors';
 import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 
+const UNDO_TOAST_MS = 6000;
+
 type DrawerView = 'details' | 'addToCalendar' | 'edit' | 'archive';
 
 interface WatchlistItemDrawerProps {
@@ -55,7 +58,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
   const { user } = useAuth();
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
-  const { addToast } = useToast();
+  const { addToast, removeToast } = useToast();
   const now = useNow();
   const row = useAppSelector(
     (state) =>
@@ -144,14 +147,51 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
     setIsSaving(true);
     setError(null);
     try {
-      await dispatch(
+      const archivedAt = await dispatch(
         archiveWatchlistItem({
           uid: user.uid,
           movieKey,
           reason: finalReason,
         }),
       ).unwrap();
-      addToast({ title: 'Archived', description: item.movie.title });
+      const toastId = generateUuid();
+      addToast({
+        id: toastId,
+        title: 'Archived',
+        description: item.movie.title,
+        duration: UNDO_TOAST_MS,
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            removeToast(toastId);
+            void dispatch(
+              restoreWatchlistItem({
+                uid: user.uid,
+                movieKey,
+                ifArchivedAt: archivedAt,
+              }),
+            )
+              .unwrap()
+              .then(({ restored }) =>
+                addToast({
+                  title: restored
+                    ? 'Back on your watchlist'
+                    : 'Already changed on another device',
+                  description: item.movie.title,
+                }),
+              )
+              .catch((undoError) =>
+                addToast({
+                  title: getErrorMessage(
+                    undoError,
+                    'Unable to restore this movie.',
+                  ),
+                  type: 'error',
+                }),
+              );
+          },
+        },
+      });
       onClose();
     } catch (archiveError) {
       setError(getErrorMessage(archiveError, 'Unable to archive this movie.'));
