@@ -11,6 +11,7 @@ import {
   CONFIRM_COVER_WORDS,
   CONFIRM_FLOW_WORDS,
   CORRECT_COVER_WORDS,
+  COVER_GROWN_WORDS,
 } from '@apps/runway/constants';
 import type { Cents } from '@apps/runway/types';
 
@@ -49,7 +50,7 @@ export function CoverCard({
   onUndo,
 }: CoverCardProps) {
   if (coverCents > 0) {
-    return (
+    const covered = (
       <div className='flex flex-wrap items-center justify-between gap-2'>
         <p className='min-w-0 flex-1 text-sm' role='status'>
           {CONFIRM_COVER_WORDS.coveredLead}{' '}
@@ -63,6 +64,29 @@ export function CoverCard({
         >
           {CONFIRM_FLOW_WORDS.undo}
         </RevealChip>
+      </div>
+    );
+    if (coverableCents <= coverCents) return covered;
+    return (
+      <div className='space-y-3'>
+        {covered}
+        <p className='text-sm'>
+          {isHidden
+            ? COVER_GROWN_WORDS.grownHidden
+            : COVER_GROWN_WORDS.grown(formatCents(gapCents))}
+        </p>
+        <Button
+          id={id}
+          type='button'
+          variant='secondary'
+          className='w-full'
+          disabled={isDisabled}
+          onClick={onCover}
+        >
+          {isHidden
+            ? COVER_GROWN_WORDS.coverMoreHidden
+            : COVER_GROWN_WORDS.coverMore(formatCents(coverableCents))}
+        </Button>
       </div>
     );
   }
@@ -157,10 +181,10 @@ export function CutsSection({
       {suggested.length > 0 && (
         <div className='space-y-3'>
           <p className='text-muted-foreground text-sm'>
-            {isCovered
-              ? CONFIRM_COVER_WORDS.suggestRest
-              : isOfferingCover
-                ? CONFIRM_COVER_WORDS.suggestInstead
+            {isOfferingCover
+              ? CONFIRM_COVER_WORDS.suggestInstead
+              : isCovered
+                ? CONFIRM_COVER_WORDS.suggestRest
                 : CONFIRM_FLOW_WORDS.suggestIntro}
           </p>
           <ul className='border-border divide-border divide-y rounded-2xl border'>

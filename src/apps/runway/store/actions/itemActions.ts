@@ -493,11 +493,12 @@ export async function archiveItem(
       itemIds: [input.itemId],
       sealed,
     };
+    const releasedOn = readHeldReleasedOn(header);
     transaction.update(headerRef, {
       archivedAt,
       heldReleasedOn:
         input.heldChoice === null
-          ? null
+          ? releasedOn
           : getHeldReleaseDay(input.heldChoice, archivedAt),
     });
     transaction.set(itemPath(uid, 'changes', changeId), entry);

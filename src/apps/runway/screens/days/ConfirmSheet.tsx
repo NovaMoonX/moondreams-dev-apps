@@ -179,7 +179,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const isCoverGone = coverChoice > (freeCents ?? 0);
   const cover = isCoverGone ? 0 : Math.min(coverChoice, gap);
   const rest = gap - cover;
-  const isOfferingCover = rest > 0 && coverable > 0 && cover === 0;
+  const isOfferingCover = rest > 0 && coverable > cover;
   const isNoticeShown = hasAmount && difference < 0;
   const nextDayOn = comingDays.find((coming) => coming.on > day.on)?.on ?? null;
   const suggestion =

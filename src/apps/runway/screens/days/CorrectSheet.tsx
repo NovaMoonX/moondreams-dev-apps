@@ -42,6 +42,7 @@ import {
   CONFIRM_FLOW_WORDS,
   CONFIRM_WORDS,
   CORRECT_COVER_WORDS,
+  CORRECT_HIDDEN_WORDS,
   CORRECT_WORDS,
   DRAFT_WORDS,
   MAX_NOTE_LENGTH,
@@ -157,7 +158,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const isCoverGone = coverChoice > (coverFree ?? 0);
   const cover = isCoverGone ? 0 : Math.min(coverChoice, gap);
   const rest = gap - cover;
-  const isOfferingCover = rest > 0 && coverable > 0 && cover === 0;
+  const isOfferingCover = rest > 0 && coverable > cover;
   const correctedLines = corrected?.lines ?? base.lines;
   const billLineIds = new Set(
     base.lines
@@ -378,9 +379,9 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             <InlineNotice
               tone='warning'
               title={
-                <MaskedText>
-                  {CORRECT_COVER_WORDS.shortTitle(formatCents(gap))}
-                </MaskedText>
+                isHidden
+                  ? CORRECT_HIDDEN_WORDS.shortTitle
+                  : CORRECT_COVER_WORDS.shortTitle(formatCents(gap))
               }
             >
               {heldCover > 0 ? (

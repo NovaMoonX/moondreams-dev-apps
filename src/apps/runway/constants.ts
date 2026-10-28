@@ -1412,3 +1412,38 @@ export const NEEDS_LOOK_WORDS = {
   door: 'Show amounts to see it',
   short: 'Needs a look',
 } as const;
+
+/** Round 7b package F2: removing a Starting out entry that holds money asks where the money goes. */
+export const START_HELD_WORDS = {
+  removeAsk: (name: string) => `Remove ${name}?`,
+  startOverAsk: 'Start over?',
+  removeCaption: (amount: string) => `The ${amount} it holds`,
+  startOverCaption: (amount: string, count: number) =>
+    count === 1
+      ? `One of them holds ${amount}`
+      : `${count} of them hold ${amount}`,
+  keepBody: 'Until you release it from its Plan view.',
+  blocker: 'Choose what happens to the money it holds.',
+  startOverBlocker: 'Choose what happens to the money they hold.',
+  freeBody: 'From today.',
+} as const;
+
+/** Round 7b package F2: a cover already taken, when the difference has since grown. */
+export const COVER_GROWN_WORDS = {
+  grown: (gap: string) => `The difference is now ${gap}.`,
+  grownHidden: 'The difference has grown since you covered it.',
+  coverMore: (amount: string) => `Cover ${amount} instead`,
+  coverMoreHidden: 'Cover the larger difference',
+} as const;
+
+/** Round 7b package F2: a release Undo that finds the item changed since. */
+export const RELEASE_UNDO_WORDS = {
+  notUndone: (name: string) => `${name} was not changed back`,
+  changedSince:
+    'It was changed after the release, maybe on another device, so nothing was undone. Open it again to see where it stands.',
+} as const;
+
+/** Round 7b package F2: a correction's short notice while amounts are hidden. */
+export const CORRECT_HIDDEN_WORDS = {
+  shortTitle: 'Short',
+} as const;

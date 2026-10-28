@@ -20,7 +20,9 @@ import {
   DRAFT_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
+  NEEDS_LOOK_WORDS,
 } from '@apps/runway/constants';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDayTitle } from '@apps/runway/utils/dayTitle';
 import CorrectSheet from '@apps/runway/screens/days/CorrectSheet';
 import ChecklistScreen from '@apps/runway/screens/days/ChecklistScreen';
@@ -38,6 +40,7 @@ interface ConfirmedDayViewProps {
 
 /** A confirmed day: what arrived, where it went, and a door to what was planned against it. */
 function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
+  const { isHidden } = useValuesHidden();
   const [isRecordOpen, setIsRecordOpen] = useState(false);
   const isReady = useAppSelector(selectIsRecordsReady);
   const [isCorrecting, setIsCorrecting] = useState(false);
@@ -90,7 +93,11 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
             </div>
             {unfunded.length > 0 && (
               <div className='space-y-2'>
-                <SectionDivider label={DRAFT_WORDS.notFunded} />
+                <SectionDivider
+                  label={
+                    isHidden ? NEEDS_LOOK_WORDS.short : DRAFT_WORDS.notFunded
+                  }
+                />
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {unfunded.map((line) => (
                     <RecordLineRow key={line.lineId} line={line} />

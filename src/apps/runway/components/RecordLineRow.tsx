@@ -1,12 +1,14 @@
 import BeforeAfterRow from '@/components/BeforeAfterRow';
 import { formatCents } from '@/utils/moneyUtils';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import {
   CONFIRM_WORDS,
   CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
+  NEEDS_LOOK_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { RecordLine } from '@apps/runway/types';
@@ -22,12 +24,15 @@ interface RecordLineRowProps {
 /** One line of a confirmed day, as it was kept with the name it had then. */
 function RecordLineRow({ line, plannedCents, note }: RecordLineRowProps) {
   const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const name = line.name === '' ? DRAFT_WORDS.billFallback : line.name;
   const isChanged = plannedCents !== undefined && plannedCents !== line.cents;
   const shortText =
-    line.shortBy > 0
-      ? mask(CHECKLIST_R3_WORDS.short(formatCents(line.shortBy)))
-      : null;
+    line.shortBy <= 0
+      ? null
+      : isHidden
+        ? NEEDS_LOOK_WORDS.short
+        : CHECKLIST_R3_WORDS.short(formatCents(line.shortBy));
 
   if (isChanged) {
     return (
@@ -53,12 +58,8 @@ function RecordLineRow({ line, plannedCents, note }: RecordLineRowProps) {
     <ItemRow
       name={name}
       emoji={line.emoji}
-      detail={
-        line.shortBy > 0
-          ? CHECKLIST_R3_WORDS.short(formatCents(line.shortBy))
-          : PRIORITY_LABELS[line.tier]
-      }
-      isDetailStrong={line.shortBy > 0}
+      detail={shortText ?? PRIORITY_LABELS[line.tier]}
+      isDetailStrong={shortText !== null && !isHidden}
       figure={formatCents(line.cents)}
       ariaLabel={`${name}: ${formatCents(line.cents)}${shortText ? `, ${shortText.toLowerCase()}` : ''}`}
     />

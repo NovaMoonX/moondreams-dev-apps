@@ -19,7 +19,11 @@ import DetailSheet from '@/components/DetailSheet';
 import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
-import { START_WORDS } from '@apps/runway/constants';
+import { START_HELD_WORDS, START_WORDS } from '@apps/runway/constants';
+import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
+import type { HeldChoice } from '@apps/runway/engine/endings';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { formatCents } from '@/utils/moneyUtils';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
 import {
   describeCounts,
@@ -119,8 +123,15 @@ interface StartFlowProps {
   doneContent: (finish: (then?: () => void) => void) => ReactNode;
   /** Replaces the final Done button, for the step that asks for a sign-in. */
   doneAction?: ReactNode;
-  remove: (kind: StartKind, id: string) => Promise<void>;
-  startOver: () => Promise<void>;
+  /** What a removed entry's choice is for the money it holds; null when it holds none. */
+  remove: (
+    kind: StartKind,
+    id: string,
+    heldChoice: HeldChoice | null,
+  ) => Promise<void>;
+  startOver: (heldChoice: HeldChoice | null) => Promise<void>;
+  /** The money an entry holds, in cents; entries on this device hold none. */
+  getHeldCents?: (kind: StartKind, id: string) => number;
   startOverMessage: (parts: string) => string;
   /** On the title line, such as the eye that shows or hides private figures. */
   headerAction?: ReactNode;
@@ -144,6 +155,7 @@ function StartFlow({
   startOver,
   startOverMessage,
   headerAction,
+  getHeldCents,
 }: StartFlowProps) {
   const { closeView } = useRunwayUrlState();
   const { confirm } = useActionModal();
@@ -165,6 +177,19 @@ function StartFlow({
   } | null>(null);
   const [isEnvelopeHelpOpen, setIsEnvelopeHelpOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [heldAsk, setHeldAsk] = useState<
+    | { kind: 'remove'; name: string; entry: { kind: StartKind; id: string } }
+    | { kind: 'startOver' }
+    | null
+  >(null);
+  const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
+  const [isHeldSaving, setIsHeldSaving] = useState(false);
+  const holdings = KIND_ORDER.flatMap((kind) =>
+    rows[kind]
+      .map((row) => getHeldCents?.(kind, row.id) ?? 0)
+      .filter((cents) => cents > 0),
+  );
+  const heldTotal = holdings.reduce((sum, cents) => sum + cents, 0);
   const index = steps.indexOf(step);
 
   const openForm = (name: StartFormName, entryId: string | null = null) =>
@@ -196,8 +221,40 @@ function StartFlow({
       ? null
       : (rows[selected.kind].find((row) => row.id === selected.id) ?? null);
 
+  const askHeld = (ask: NonNullable<typeof heldAsk>) => {
+    setHeldChoice(null);
+    setError(null);
+    setHeldAsk(ask);
+  };
+
+  const runHeld = async () => {
+    if (!heldAsk || heldChoice === null || isHeldSaving) return;
+    setIsHeldSaving(true);
+    setError(null);
+    try {
+      if (heldAsk.kind === 'remove') {
+        await remove(heldAsk.entry.kind, heldAsk.entry.id, heldChoice);
+      } else {
+        await startOver(heldChoice);
+        setIsAsking(false);
+        setStep(steps[0]);
+      }
+      setHeldAsk(null);
+    } catch {
+      setError(START_WORDS.removeFailed);
+    } finally {
+      setIsHeldSaving(false);
+    }
+  };
+
   const handleRemove = async () => {
     if (!selected || !selectedRow) return;
+    const held = getHeldCents?.(selected.kind, selected.id) ?? 0;
+    if (held > 0) {
+      setSelected(null);
+      askHeld({ kind: 'remove', name: selectedRow.name, entry: selected });
+      return;
+    }
     const isConfirmed = await confirm({
       title: START_WORDS.removeTitle(selectedRow.name),
       message: START_WORDS.removeMessage,
@@ -207,7 +264,7 @@ function StartFlow({
     if (!isConfirmed) return;
     setError(null);
     try {
-      await remove(selected.kind, selected.id);
+      await remove(selected.kind, selected.id, null);
       setSelected(null);
     } catch {
       setError(START_WORDS.removeFailed);
@@ -215,6 +272,10 @@ function StartFlow({
   };
 
   const handleStartOver = async () => {
+    if (heldTotal > 0) {
+      askHeld({ kind: 'startOver' });
+      return;
+    }
     const parts = describeCounts(counts);
     const isConfirmed = await confirm({
       title: START_WORDS.startOverTitle,
@@ -225,7 +286,7 @@ function StartFlow({
     if (!isConfirmed) return;
     setError(null);
     try {
-      await startOver();
+      await startOver(null);
       setIsAsking(false);
       setStep(steps[0]);
     } catch {
@@ -425,6 +486,81 @@ function StartFlow({
             {error}
           </p>
         )}
+      </DetailSheet>
+      <DetailSheet
+        isOpen={heldAsk !== null}
+        onClose={() => {
+          if (!isHeldSaving) setHeldAsk(null);
+        }}
+        title={
+          heldAsk?.kind === 'remove'
+            ? START_HELD_WORDS.removeAsk(heldAsk.name)
+            : START_HELD_WORDS.startOverAsk
+        }
+        actions={<ValuesEyeButton />}
+        footer={
+          <div className='p-4'>
+            <ModalFooterActions
+              note={
+                heldChoice === null
+                  ? heldAsk?.kind === 'startOver'
+                    ? START_HELD_WORDS.startOverBlocker
+                    : START_HELD_WORDS.blocker
+                  : null
+              }
+              cancelAction={
+                <Button
+                  type='button'
+                  variant='secondary'
+                  disabled={isHeldSaving}
+                  onClick={() => setHeldAsk(null)}
+                >
+                  Cancel
+                </Button>
+              }
+              rightActions={
+                <Button
+                  type='button'
+                  variant='destructive'
+                  disabled={heldChoice === null || isHeldSaving}
+                  onClick={() => void runHeld()}
+                >
+                  {heldAsk?.kind === 'startOver'
+                    ? START_WORDS.startOverConfirm
+                    : START_WORDS.rowActionsRemove}
+                </Button>
+              }
+            />
+          </div>
+        }
+      >
+        <div className='space-y-2'>
+          <p className='text-muted-foreground text-xs'>
+            <MaskedText>
+              {heldAsk?.kind === 'remove'
+                ? START_HELD_WORDS.removeCaption(
+                    formatCents(
+                      getHeldCents?.(heldAsk.entry.kind, heldAsk.entry.id) ?? 0,
+                    ),
+                  )
+                : START_HELD_WORDS.startOverCaption(
+                    formatCents(heldTotal),
+                    holdings.length,
+                  )}
+            </MaskedText>
+          </p>
+          <HeldChoiceList
+            value={heldChoice}
+            onChange={setHeldChoice}
+            freeBody={START_HELD_WORDS.freeBody}
+            keepBody={START_HELD_WORDS.keepBody}
+          />
+          {error && (
+            <p className='text-destructive pt-1 text-sm' role='alert'>
+              {error}
+            </p>
+          )}
+        </div>
       </DetailSheet>
       <DetailSheet
         isOpen={isEnvelopeHelpOpen}
