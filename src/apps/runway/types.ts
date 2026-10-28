@@ -120,6 +120,17 @@ export interface BillSealed {
   fundedBy: BillFundedBy;
 }
 
+export interface GoalSealed {
+  name: string;
+  emoji: string | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  targetCents: Cents;
+  targetDate: DateOnly | null;
+  funding: FundingRule;
+}
+
 export interface PlanItemDoc {
   id: string;
   kind: ItemKind;
@@ -166,9 +177,11 @@ export type OpenVersion =
   | (OpenVersionBase & { kind: 'source'; payload: SourceSealed })
   | (OpenVersionBase & { kind: 'payLine'; payload: PayLineSealed })
   | (OpenVersionBase & { kind: 'envelope'; payload: EnvelopeSealed })
-  | (OpenVersionBase & { kind: 'bill'; payload: BillSealed });
+  | (OpenVersionBase & { kind: 'bill'; payload: BillSealed })
+  | (OpenVersionBase & { kind: 'goal'; payload: GoalSealed });
 
 export type PayLineVersion = Extract<OpenVersion, { kind: 'payLine' }>;
 export type SourceVersion = Extract<OpenVersion, { kind: 'source' }>;
 export type EnvelopeVersion = Extract<OpenVersion, { kind: 'envelope' }>;
 export type BillVersion = Extract<OpenVersion, { kind: 'bill' }>;
+export type GoalVersion = Extract<OpenVersion, { kind: 'goal' }>;

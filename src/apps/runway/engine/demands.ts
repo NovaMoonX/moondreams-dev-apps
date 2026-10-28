@@ -15,6 +15,7 @@ import type {
 } from '@apps/runway/types';
 
 import { allocate } from './money';
+import { planGoalContributions } from './pace';
 import { occurrences, selectFundedDays } from './schedule';
 
 export type DraftCadence =
@@ -36,6 +37,12 @@ export interface DraftEnvelopeInput {
   funding: FundingRule;
 }
 
+export interface DraftGoalInput extends DraftEnvelopeInput {
+  targetCents: Cents;
+  /** What the goal holds before any planned day. */
+  heldCents: Cents;
+}
+
 export interface DraftBillInput {
   itemId: string;
   createdAt: number;
@@ -53,7 +60,7 @@ export interface BillShare {
   totalCents: Cents;
 }
 
-/** What one day owes one envelope or bill before the money is walked. */
+/** What one day owes one envelope, goal or bill before the money is walked. */
 export interface Demand {
   dayKey: string;
   itemId: string;
@@ -94,13 +101,14 @@ const cadenceCode = (cadence: FundingRule['cadence']): DraftCadence => {
   return cadence.kind === 'chosen' ? 'chosen' : 'everyIncomeDay';
 };
 
-/** What each planned day owes: an envelope asks for its amount on every day its cadence selects, counted over the plan-wide income days, and a bill asks for its share of each payment. */
+/** What each planned day owes: an envelope or goal asks for its amount on every day its cadence selects, counted over the plan-wide income days (a goal stops at its target), and a bill asks for its share of each payment. */
 export function buildDemands(
   days: readonly DraftDayInput[],
   incomeDays: readonly { dayKey: string; on: number }[],
   envelopes: readonly DraftEnvelopeInput[],
   bills: readonly DraftBillInput[] = [],
   horizon = 0,
+  goals: readonly DraftGoalInput[] = [],
 ): Demand[] {
   const planned = new Set(days.map((day) => day.dayKey));
   const chronological = [...incomeDays].sort(compareDays);
@@ -120,8 +128,24 @@ export function buildDemands(
         bill: null,
       })),
   );
+  const goalDemands = goals.flatMap((goal) =>
+    planGoalContributions(goal, chronological)
+      .filter(({ day }) => planned.has(day.dayKey))
+      .map(({ day, cents }): Demand => ({
+        dayKey: day.dayKey,
+        itemId: goal.itemId,
+        tier: goal.priority,
+        dueBeforeNext: false,
+        orderIndex: goal.orderIndex,
+        createdAt: goal.createdAt,
+        cents,
+        cadence: cadenceCode(goal.funding.cadence),
+        bill: null,
+      })),
+  );
   const result = [
     ...envelopeDemands,
+    ...goalDemands,
     ...buildBillDemands(planned, chronological, bills, horizon),
   ];
   return result;

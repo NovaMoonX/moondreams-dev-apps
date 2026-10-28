@@ -19,6 +19,7 @@ import type {
   ChangeSealed,
   BillSealed,
   EnvelopeSealed,
+  GoalSealed,
   PayLineSealed,
   SourceSealed,
 } from '../../src/apps/runway/types.ts';
@@ -132,6 +133,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     encryption,
   );
   const billDocuments = await writeSeedBills(context, owner.uid, encryption);
+  const goalDocuments = await writeSeedGoals(context, owner.uid, encryption);
   const masterKeyIds = Object.keys(keyring.keys);
   masterKeyIds.forEach((masterKeyId) =>
     batch.set(
@@ -148,6 +150,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       incomeDocuments +
       envelopeDocuments +
       billDocuments +
+      goalDocuments +
       masterKeyIds.length,
   };
 }
@@ -580,4 +583,101 @@ async function writeSeedBills(
   });
   await batch.commit();
   return bills.length * 3;
+}
+
+/** Three goals: one with a date that lands exactly on pace, one with no date, and one the plan fills on the first income day. */
+async function writeSeedGoals(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - 10 * DAY_MS;
+  const firstPayday = today + 3 * DAY_MS;
+  const paydayKey = (index: number) =>
+    toDayKey('seed-income-paycheck', firstPayday + index * 14 * DAY_MS);
+  const exact = (cents: number) => ({ kind: 'exact' as const, cents });
+
+  const goals: { id: string; payload: GoalSealed }[] = [
+    {
+      id: 'seed-goal-vacation',
+      payload: {
+        name: 'Vacation fund',
+        emoji: '🏖️',
+        priority: 'want',
+        orderIndex: 1,
+        targetCents: 180_000,
+        targetDate: today + 50 * DAY_MS,
+        funding: { amount: exact(30_000), cadence: { kind: 'everyIncomeDay' } },
+      },
+    },
+    {
+      id: 'seed-goal-cushion',
+      payload: {
+        name: 'Emergency cushion',
+        emoji: null,
+        priority: 'should',
+        orderIndex: 1,
+        targetCents: 60_000,
+        targetDate: null,
+        funding: {
+          amount: exact(15_000),
+          cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
+        },
+      },
+    },
+    {
+      id: 'seed-goal-phone',
+      payload: {
+        name: 'New phone',
+        emoji: '📱',
+        priority: 'should',
+        orderIndex: 2,
+        targetCents: 20_000,
+        targetDate: today + 30 * DAY_MS,
+        funding: { amount: exact(20_000), cadence: { kind: 'everyIncomeDay' } },
+      },
+    },
+  ];
+
+  const sealedChanges = await Promise.all(
+    goals.map(({ payload }) =>
+      sealJson(
+        { summary: `Added ${payload.name}.` } satisfies ChangeSealed,
+        encryption,
+      ),
+    ),
+  );
+  const sealedGoals = await Promise.all(
+    goals.map(({ payload }) => sealJson(payload, encryption)),
+  );
+
+  const batch = context.firestore.batch();
+  goals.forEach(({ id }, index) => {
+    const createdAt = addedAt + index * 1000;
+    const changeId = `seed-change-${id}`;
+    batch.set(
+      context.firestore.doc(`${plan}/items/${id}`),
+      header(id, 'goal', null, createdAt),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${id}`),
+      version(
+        `seed-version-${id}`,
+        id,
+        'goal',
+        createdAt,
+        today,
+        changeId,
+        sealedGoals[index],
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, createdAt, today, [id], sealedChanges[index]),
+    );
+  });
+  await batch.commit();
+  return goals.length * 3;
 }

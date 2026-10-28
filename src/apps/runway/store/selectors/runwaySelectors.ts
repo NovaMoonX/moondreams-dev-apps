@@ -13,6 +13,7 @@ import { addUtcMonths } from '@apps/runway/engine/dates';
 import type {
   BillVersion,
   EnvelopeVersion,
+  GoalVersion,
   OpenVersion,
   PayLineVersion,
   PlanItemDoc,
@@ -143,10 +144,41 @@ export const selectBills = createSelector(
   },
 );
 
+export interface ResolvedGoal {
+  item: PlanItemDoc;
+  version: GoalVersion;
+}
+
+const isGoal = (version: OpenVersion): version is GoalVersion =>
+  version.kind === 'goal';
+
+/** The goals in the plan on a date, in plan order: Must before Should before Want, then rank, then creation. */
+export const selectGoals = createSelector(
+  [selectItems, selectVersions, selectOn],
+  (items, versions, on): ResolvedGoal[] => {
+    const goalVersions = versions.filter(isGoal);
+    const result = items
+      .filter((item) => item.kind === 'goal' && item.archivedAt === null)
+      .flatMap((item) => {
+        const version = resolveCurrentOrNext(goalVersions, item.id, on);
+        return version ? [{ item, version }] : [];
+      })
+      .sort(
+        (a, b) =>
+          PRIORITIES.indexOf(a.version.payload.priority) -
+            PRIORITIES.indexOf(b.version.payload.priority) ||
+          a.version.payload.orderIndex - b.version.payload.orderIndex ||
+          a.item.createdAt - b.item.createdAt ||
+          a.item.id.localeCompare(b.item.id),
+      );
+    return result;
+  },
+);
+
 export interface DraftView {
   day: ComingDay;
   draft: Draft;
-  /** Names and emoji of the envelopes and bills a draft can name, by item id. */
+  /** Names and emoji of the envelopes, goals and bills a draft can name, by item id. */
   items: Record<string, { name: string; emoji: string | null }>;
   sourceNames: Record<string, string>;
 }
@@ -182,6 +214,11 @@ export const selectDraft = createSelector(
       versions.filter(isBill),
       day.on,
     );
+    const resolvedGoals = resolve(
+      items.filter((item) => item.kind === 'goal'),
+      versions.filter(isGoal),
+      day.on,
+    );
     const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
     const key = hashText(
       JSON.stringify([
@@ -190,6 +227,7 @@ export const selectDraft = createSelector(
         days.map((entry) => [entry.dayKey, entry.amount]),
         resolved.map(({ version }) => version.id),
         resolvedBills.map(({ version }) => version.id),
+        resolvedGoals.map(({ version }) => version.id),
         horizon,
       ]),
     );
@@ -216,9 +254,18 @@ export const selectDraft = createSelector(
       ending: version.payload.ending,
       fundedBy: version.payload.fundedBy,
     }));
+    const goals = resolvedGoals.map(({ item, version }) => ({
+      itemId: item.id,
+      createdAt: item.createdAt,
+      priority: version.payload.priority,
+      orderIndex: version.payload.orderIndex,
+      funding: version.payload.funding,
+      targetCents: version.payload.targetCents,
+      heldCents: 0,
+    }));
     const draft = buildDraft({
       days: [day],
-      plan: { envelopes, bills, horizon, incomeDays: days },
+      plan: { envelopes, bills, goals, horizon, incomeDays: days },
       stance,
       overrides: { dayCents: {} },
     });
@@ -233,10 +280,12 @@ export const selectDraft = createSelector(
       day,
       draft,
       items: Object.fromEntries(
-        [...resolved, ...resolvedBills].map(({ item, version }) => [
-          item.id,
-          { name: version.payload.name, emoji: version.payload.emoji },
-        ]),
+        [...resolved, ...resolvedBills, ...resolvedGoals].map(
+          ({ item, version }) => [
+            item.id,
+            { name: version.payload.name, emoji: version.payload.emoji },
+          ],
+        ),
       ),
       sourceNames,
     };

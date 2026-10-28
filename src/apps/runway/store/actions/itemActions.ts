@@ -13,6 +13,7 @@ import type {
   ChangeDoc,
   ChangeSealed,
   EnvelopeSealed,
+  GoalSealed,
   Ending,
   PayLineSealed,
   PlanItemDoc,
@@ -255,4 +256,69 @@ export async function createBill(
   await batch.commit();
 
   return { billId };
+}
+
+export interface CreateGoalInput {
+  goal: GoalSealed;
+  /** The first day this goal is in the plan. */
+  startDate: number;
+}
+
+/**
+ * Adds a goal as a header, a first version and one change entry in a single batch. Items and
+ * versions are created and never updated; nothing is written to `days`.
+ */
+export async function createGoal(
+  uid: string,
+  encryption: RunwayEncryption,
+  { goal, startDate }: CreateGoalInput,
+): Promise<{ goalId: string }> {
+  const now = Date.now();
+  const goalId = generateUuid();
+  const changeId = generateUuid();
+  const dateText =
+    goal.targetDate === null ? '' : ` by ${formatDateUTC(goal.targetDate)}`;
+  const changePayload: ChangeSealed = {
+    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding)}.`,
+  };
+
+  const [goalSealed, changeSealed] = await Promise.all([
+    sealJson(goal, encryption),
+    sealJson(changePayload, encryption),
+  ]);
+
+  const header: PlanItemDoc = {
+    id: goalId,
+    kind: 'goal',
+    parentId: null,
+    createdAt: now,
+    endedAt: null,
+    archivedAt: null,
+  };
+  const version: PlanVersionDoc = {
+    id: generateUuid(),
+    itemId: goalId,
+    kind: 'goal',
+    createdAt: now,
+    effectiveFrom: startDate,
+    effectiveUntil: null,
+    changeId,
+    sealed: goalSealed,
+  };
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: startDate,
+    itemIds: [goalId],
+    sealed: changeSealed,
+  };
+
+  const batch = writeBatch(db);
+  batch.set(itemPath(uid, 'items', goalId), header);
+  batch.set(itemPath(uid, 'versions', version.id), version);
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
+
+  return { goalId };
 }
