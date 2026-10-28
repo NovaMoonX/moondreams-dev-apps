@@ -1370,3 +1370,20 @@ export const COMPACT_MOVE_WORDS = {
     `${count} income days change, starting ${first}.`,
   carriedWithIt: 'What you changed for that day goes with it.',
 } as const;
+
+// Round 7, package G9: a correction that leaves its day short offers the same cover and cuts as Confirm.
+export const CORRECT_COVER_WORDS = {
+  coverNoneHidden:
+    'Free\u00a0to\u00a0spend has nothing to cover the difference, so some items get less this time.',
+  shortTitle: (amount: string) => `${amount} short`,
+  shortBody: 'The items on this day would get more than arrived.',
+  shortBeyondCover: (covered: string) =>
+    `That is beyond the ${covered} this day already covers from Free\u00a0to\u00a0spend.`,
+  needsCuts: 'Give some items less this time to correct the day.',
+  freeRow: 'Free\u00a0to\u00a0spend',
+  now: 'Now',
+  freeLead:
+    'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
+  coverGone:
+    'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
+} as const;

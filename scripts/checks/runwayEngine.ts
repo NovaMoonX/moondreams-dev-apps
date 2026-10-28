@@ -113,8 +113,12 @@ import {
 } from '../../src/apps/runway/engine/comingDays.ts';
 import {
   buildCorrection,
+  getCorrectionCover,
+  getCorrectionGap,
   getCorrectionId,
+  getDayCover,
   getEffectiveSplit,
+  getFreeForCorrection,
   getEffectiveSplits,
   getRecordChain,
   keepTicks,
@@ -8089,6 +8093,214 @@ console.log('runway engine: ok');
     [120_000, 0],
     'F1: two days before the same payment still send it only what it needs, once',
   );
+}
+
+// Round 7, package G9: a correction that leaves its day short is covered or cut like Confirm.
+{
+  const start = 10 * DAY_MS;
+  const kinds = { a: 'envelope', c: 'envelope' } as const;
+  const startMoney: OpenMove = {
+    id: 'start-money',
+    kind: 'start',
+    date: start,
+    refId: null,
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: { amountCents: 25_000, holding: 'money' },
+  };
+  const recordLine = (
+    lineId: string,
+    tier: RecordLine['tier'],
+    cents: number,
+  ): RecordLine => ({
+    lineId,
+    itemId: lineId,
+    name: lineId,
+    emoji: null,
+    tier,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [{ dayId: 'g9', cents }],
+  });
+  const confirmedOf = (arrivedCents: number): OpenRecord => {
+    const lines = [
+      recordLine('a', 'must', 30_000),
+      recordLine('c', 'want', 10_000),
+    ];
+    return {
+      id: 'g9_confirmed',
+      dayId: 'g9',
+      createdAt: 5,
+      kind: 'confirmed',
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative',
+        arrivedCents,
+        expectedCents: 40_000,
+        freeToSpendCents: getRemainder(arrivedCents, lines),
+        differences: [],
+        lines,
+      },
+    };
+  };
+  const correctionOf = (
+    confirmed: OpenRecord,
+    arrivedCents: number,
+    edits: Record<string, number> = {},
+  ): OpenRecord => {
+    const base = toSplit(
+      confirmed as Exclude<OpenRecord, { kind: 'proposed' }>,
+    );
+    return {
+      id: getCorrectionId(confirmed.id),
+      dayId: 'g9',
+      createdAt: 9,
+      kind: 'correction',
+      supersedesId: confirmed.id,
+      payload: buildCorrection({ base, arrivedCents, edits, note: null }),
+    };
+  };
+  const arrivedOn = new Map([['g9', start + DAY_MS]]);
+  const freeOf = (records: OpenRecord[]) =>
+    deriveBalances({
+      startDate: start,
+      moves: [startMoney],
+      records,
+      arrivedOn,
+      kinds,
+    }).freeToSpendCents;
+
+  // Adds cover: $400 confirmed with nothing left, corrected to $300.
+  const even = confirmedOf(40_000);
+  const evenSplit = toSplit(even as Exclude<OpenRecord, { kind: 'proposed' }>);
+  assert.equal(getDayCover(evenSplit), 0);
+  assert.equal(freeOf([even]), 25_000);
+  const lower = correctionOf(even, 30_000);
+  const lowerFree = lower.payload.freeToSpendCents;
+  assert.equal(getCorrectionGap(evenSplit, lowerFree), 10_000);
+  const added = getCoverable(10_000, freeOf([even]));
+  assert.equal(
+    added,
+    10_000,
+    'Free to spend at that moment covers the whole gap',
+  );
+  assert.ok(
+    isWithinCover(lowerFree, getCorrectionCover(evenSplit, added)),
+    'a correction may cover beyond what the confirm covered, once the person chose it',
+  );
+  assert.ok(
+    !isWithinCover(lowerFree, getCorrectionCover(evenSplit, 0)),
+    'nothing chosen, nothing below zero',
+  );
+  assert.equal(
+    freeOf([even, lower]),
+    15_000,
+    'the added cover comes out of Free to spend, and only that',
+  );
+
+  // Removes cover: confirmed $300 with $100 covered, corrected to $450.
+  const covered = confirmedOf(30_000);
+  const coveredSplit = toSplit(
+    covered as Exclude<OpenRecord, { kind: 'proposed' }>,
+  );
+  assert.equal(getDayCover(coveredSplit), 10_000);
+  const raised = correctionOf(covered, 45_000);
+  assert.equal(
+    getCorrectionGap(coveredSplit, raised.payload.freeToSpendCents),
+    0,
+  );
+  assert.ok(
+    isWithinCover(
+      raised.payload.freeToSpendCents,
+      getCorrectionCover(coveredSplit, 0),
+    ),
+  );
+  assert.deepEqual(
+    [freeOf([covered]), freeOf([covered, raised])],
+    [15_000, 30_000],
+    'removing the cover gives it back to Free to spend',
+  );
+
+  // Beyond the cover it had, a correction asks again: $50 more short is covered or cut.
+  const deeper = correctionOf(covered, 25_000);
+  assert.equal(
+    getCorrectionGap(coveredSplit, deeper.payload.freeToSpendCents),
+    5_000,
+    'only what goes beyond the cover the day had is asked',
+  );
+  assert.ok(
+    !isWithinCover(
+      deeper.payload.freeToSpendCents,
+      getCorrectionCover(coveredSplit, 0),
+    ),
+  );
+  assert.deepEqual(
+    suggestShortfall(deeper.payload.lines, 5_000),
+    { c: 5_000 },
+    'what gets less starts with the Want',
+  );
+  const cut = correctionOf(covered, 25_000, { c: 5_000 });
+  assert.ok(
+    isWithinCover(
+      cut.payload.freeToSpendCents,
+      getCorrectionCover(coveredSplit, 0),
+    ),
+    'the cut keeps the day within the cover it had',
+  );
+
+  // A day that left money gives it back first: Free to spend for the cover is what remains after that.
+  const left = confirmedOf(45_000);
+  const leftSplit = toSplit(left as Exclude<OpenRecord, { kind: 'proposed' }>);
+  assert.equal(freeOf([left]), 30_000);
+  const forCover = getFreeForCorrection(freeOf([left]), leftSplit);
+  assert.equal(forCover, 25_000);
+  const short = correctionOf(left, 30_000);
+  const shortGap = getCorrectionGap(leftSplit, short.payload.freeToSpendCents);
+  assert.equal(shortGap, 10_000);
+  assert.equal(
+    freeOf([left, short]),
+    (forCover ?? 0) - getCoverable(shortGap, forCover),
+    'Free to spend after the cover is exactly what the cover card says',
+  );
+  assert.equal(getFreeForCorrection(null, leftSplit), null);
+  assert.equal(getFreeForCorrection(20_000, coveredSplit), 20_000);
+
+  // A closing over each corrected day equals the replay.
+  [
+    [even, lower],
+    [covered, raised],
+    [covered, cut],
+  ].forEach((records, index) => {
+    const closed = buildClosing(toMonthKey(start), null, {
+      startDate: start,
+      days: [
+        { id: 'g9', expectedOn: start + DAY_MS, arrivedOn: start + DAY_MS },
+      ],
+      records,
+      moves: [startMoney],
+      purchases: [],
+      billIds: new Set(),
+    });
+    assert.deepEqual(
+      deriveBalances({
+        startDate: start,
+        moves: [startMoney],
+        records: [],
+        arrivedOn: new Map(),
+        kinds,
+        closing: closed,
+      }),
+      deriveBalances({
+        startDate: start,
+        moves: [startMoney],
+        records,
+        arrivedOn,
+        kinds,
+      }),
+      `G9: a closing over corrected day ${index + 1} equals the replay`,
+    );
+  });
 }
 
 console.log('runway engine: ok');

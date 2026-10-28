@@ -136,6 +136,40 @@ export function buildCorrection(input: CorrectionInput): CorrectionSealed {
   return result;
 }
 
+/** What a day's split already covers from Free to spend: how far below nothing it leaves the day, which the person chose when it was confirmed or corrected. */
+export function getDayCover(split: { freeToSpendCents: Cents }): Cents {
+  const result = Math.max(0, -split.freeToSpendCents);
+  return result;
+}
+
+/** How far a correction leaves its day short beyond the cover it already had: the gap the person is asked to cover from Free to spend or take from the items. */
+export function getCorrectionGap(
+  base: { freeToSpendCents: Cents },
+  correctedFreeCents: Cents,
+): Cents {
+  const result = Math.max(0, -correctedFreeCents - getDayCover(base));
+  return result;
+}
+
+/** What Free to spend can give a correction's cover: Free to spend now, less what the day left that the correction takes back. Null when Free to spend is unknown. */
+export function getFreeForCorrection(
+  freeCents: Cents | null,
+  base: { freeToSpendCents: Cents },
+): Cents | null {
+  if (freeCents === null) return null;
+  const result = freeCents - Math.max(0, base.freeToSpendCents);
+  return result;
+}
+
+/** The most a corrected day may leave below nothing: the cover it had plus what the person chose to add from Free to spend now. */
+export function getCorrectionCover(
+  base: { freeToSpendCents: Cents },
+  addedCoverCents: Cents,
+): Cents {
+  const result = getDayCover(base) + Math.max(0, addedCoverCents);
+  return result;
+}
+
 /** The id a correction of a record gets. A second correction of the same record is the same id, so it cannot be written twice. */
 export const getCorrectionId = (supersedesId: string) =>
   `${supersedesId}_corrected`;

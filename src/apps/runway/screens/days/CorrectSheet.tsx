@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -14,7 +14,9 @@ import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { useAppSelector } from '@/store';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   centsToInputValue,
@@ -27,8 +29,18 @@ import {
   LineAmountView,
 } from '@apps/runway/components/LineAmounts';
 import {
+  BlockerDoor,
+  CoverCard,
+  CutsSection,
+} from '@apps/runway/components/ShortfallJourney';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  CONFIRM_COVER_WORDS,
   CONFIRM_FLOW_WORDS,
   CONFIRM_WORDS,
+  CORRECT_COVER_WORDS,
   CORRECT_WORDS,
   DRAFT_WORDS,
   MAX_NOTE_LENGTH,
@@ -36,9 +48,16 @@ import {
 } from '@apps/runway/constants';
 import {
   buildCorrection,
+  getCorrectionGap,
+  getDayCover,
+  getFreeForCorrection,
   type EffectiveSplit,
 } from '@apps/runway/engine/correct';
-import { getRemainder } from '@apps/runway/engine/differences';
+import {
+  getCoverable,
+  getRemainder,
+  suggestShortfall,
+} from '@apps/runway/engine/differences';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   correctDay,
@@ -56,15 +75,22 @@ interface CorrectSheetProps {
   onClose: () => void;
 }
 
+type Blocker = { text: string; door: 'cover' | 'cuts' | null };
+
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-/** Corrects a confirmed day in two steps: the amounts, then what the change does to the envelopes, goals and bills before it is written. Needs a connection. */
+/** Corrects a confirmed day in two steps: the amounts, then what the change does to the envelopes, goals and bills before it is written. A correction that leaves the day short beyond its cover offers the same cover and cuts as Confirm; nothing moves without a tap. Needs a connection. */
 function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isMounted = useRef(true);
+  const coverId = useId();
+  const cutsId = useId();
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const balances = useAppSelector(selectBalances);
   const items = useAppSelector((state) => state.runway.items);
   const held = useAppSelector(selectHeldByItem);
   const openDay = useAppSelector((state) => selectOpenDay(state, dayKey));
@@ -75,6 +101,10 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const editingLine =
     base.lines.find((line) => line.lineId === editingLineId) ?? null;
+  const [coverChoice, setCoverChoice] = useState<Cents>(0);
+  const [undoInputs, setUndoInputs] = useState<Record<string, string> | null>(
+    null,
+  );
   const [note, setNote] = useState('');
   const [isNoting, setIsNoting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -97,6 +127,8 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
       cents === null ? [] : [[lineId, cents] as const],
     ),
   ) as Record<string, Cents>;
+  const kindOf = (itemId: string) =>
+    items.find((item) => item.id === itemId)?.kind ?? null;
   const corrected =
     arrivedCents === null
       ? null
@@ -115,18 +147,95 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
     corrected !== null &&
     (changes.length > 0 || corrected.arrivedCents !== base.arrivedCents);
 
-  const getBlocker = () => {
-    if (arrivedCents === null || arrivedCents <= 0)
-      return CONFIRM_WORDS.needsAmount;
-    if (hasBadLine) return CONFIRM_WORDS.needsLineAmount;
-    if (remainder < Math.min(0, base.freeToSpendCents))
-      return CONFIRM_FLOW_WORDS.correctTooMuch(
-        formatCents(Math.min(0, base.freeToSpendCents) - remainder),
-      );
-    if (!isChanged) return CORRECT_WORDS.nothingChanged;
+  const hasAmount = arrivedCents !== null && arrivedCents > 0;
+  const heldCover = getDayCover(base);
+  const gap = hasAmount ? getCorrectionGap(base, remainder) : 0;
+  const figure = getFreeToSpendFigure(balances);
+  const freeCents = figure.kind === 'amount' ? figure.cents : null;
+  const coverFree = getFreeForCorrection(freeCents, base);
+  const coverable = getCoverable(gap, coverFree);
+  const isCoverGone = coverChoice > (coverFree ?? 0);
+  const cover = isCoverGone ? 0 : Math.min(coverChoice, gap);
+  const rest = gap - cover;
+  const isOfferingCover = rest > 0 && coverable > 0 && cover === 0;
+  const correctedLines = corrected?.lines ?? base.lines;
+  const billLineIds = new Set(
+    base.lines
+      .filter((line) => kindOf(line.itemId) === 'bill')
+      .map((line) => line.lineId),
+  );
+  const suggestion =
+    rest > 0 ? suggestShortfall(correctedLines, rest, billLineIds) : {};
+  const suggested = Object.entries(suggestion).map(([lineId, cents]) => {
+    const line = correctedLines.find((entry) => entry.lineId === lineId);
+    return {
+      lineId,
+      name:
+        line === undefined || line.name === ''
+          ? DRAFT_WORDS.billFallback
+          : line.name,
+      emoji: line?.emoji ?? null,
+      fromCents: line?.cents ?? 0,
+      toCents: cents,
+    };
+  });
+  const loweredCount = correctedLines.filter((line) => {
+    const was = base.lines.find((entry) => entry.lineId === line.lineId);
+    return was !== undefined && line.cents < was.cents;
+  }).length;
+
+  const getBlocker = (): Blocker | null => {
+    if (!hasAmount) return { text: CONFIRM_WORDS.needsAmount, door: null };
+    if (hasBadLine) return { text: CONFIRM_WORDS.needsLineAmount, door: null };
+    if (isOfferingCover)
+      return { text: CONFIRM_COVER_WORDS.needsCover, door: 'cover' };
+    if (rest > 0) return { text: CORRECT_COVER_WORDS.needsCuts, door: 'cuts' };
+    if (!isChanged) return { text: CORRECT_WORDS.nothingChanged, door: null };
     return null;
   };
   const blocker = getBlocker();
+
+  const applyCuts = () => {
+    setUndoInputs(lineInputs);
+    setLineInputs((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        Object.entries(suggestion).map(([lineId, cents]) => [
+          lineId,
+          centsToInputValue(cents),
+        ]),
+      ),
+    }));
+  };
+
+  const undoCuts = () => {
+    setLineInputs(undoInputs ?? {});
+    setUndoInputs(null);
+  };
+
+  const changeAmount = (text: string) => {
+    setAmount(text);
+    setCoverChoice(0);
+    setUndoInputs(null);
+  };
+
+  const goToFix = (door: Blocker['door']) => {
+    const target = document.getElementById(door === 'cover' ? coverId : cutsId);
+    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target?.focus({ preventScroll: true });
+  };
+
+  const getFooterNote = (isDoor: boolean) => {
+    if (blocker === null) return null;
+    if (blocker.door === null) return blocker.text;
+    return (
+      <BlockerDoor
+        text={blocker.text}
+        isDoor={isDoor}
+        onOpen={() => goToFix(blocker.door)}
+      />
+    );
+  };
 
   const searchText = search.trim().toLowerCase();
   const visibleLines = base.lines.filter(
@@ -137,9 +246,6 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
         .toLowerCase()
         .includes(searchText),
   );
-
-  const kindOf = (itemId: string) =>
-    items.find((item) => item.id === itemId)?.kind ?? null;
 
   const getEffectText = (change: CorrectionChange) => {
     const delta = change.afterCents - change.beforeCents;
@@ -160,7 +266,8 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
     isDirty:
       amount !== centsToInputValue(base.arrivedCents) ||
       Object.keys(lineInputs).length > 0 ||
-      note.trim() !== '',
+      note.trim() !== '' ||
+      coverChoice > 0,
     onClose,
     isBusy: isSaving,
   });
@@ -170,6 +277,17 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
 
   const handleSave = async () => {
     if (!user || blocker !== null || arrivedCents === null) return;
+    const currentFree = getFreeToSpendFigure(selectBalances(store.getState()));
+    const nowForCover = getFreeForCorrection(
+      currentFree.kind === 'amount' ? currentFree.cents : null,
+      base,
+    );
+    if (cover > 0 && cover > (nowForCover ?? 0)) {
+      setCoverChoice(0);
+      setError(CORRECT_COVER_WORDS.coverGone);
+      setStep('edit');
+      return;
+    }
     setError(null);
     setIsSaving(true);
     try {
@@ -180,6 +298,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
         arrivedCents,
         edits,
         note: note.trim() === '' ? null : note.trim(),
+        addedCoverCents: cover,
       });
       onClose();
     } catch (saveError) {
@@ -204,7 +323,12 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   };
 
   return (
-    <FormSheet isOpen onClose={requestClose} title={CORRECT_WORDS.sheetTitle}>
+    <FormSheet
+      isOpen
+      onClose={requestClose}
+      title={CORRECT_WORDS.sheetTitle}
+      actions={<ValuesEyeButton />}
+    >
       {step === 'edit' && editingLine ? (
         <LineAmountView
           name={
@@ -225,15 +349,17 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
           }
           onBack={() => setEditingLineId(null)}
           plannedCents={editingLine.cents}
-          footerNote={blocker}
+          footerNote={blocker?.text ?? null}
         />
       ) : step === 'edit' ? (
         <div className='space-y-4'>
-          <InlineNotice tone='info'>{CORRECT_WORDS.intro}</InlineNotice>
+          {gap === 0 && (
+            <InlineNotice tone='info'>{CORRECT_WORDS.intro}</InlineNotice>
+          )}
           <AmountHero
             label={CONFIRM_WORDS.amount}
             value={amount}
-            onChange={setAmount}
+            onChange={changeAmount}
             suffix={
               <p className='font-medium'>
                 {DRAFT_WORDS.dayLeft} {formatCents(remainder)}
@@ -244,6 +370,57 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
               </p>
             }
           />
+          {gap > 0 && (
+            <InlineNotice
+              tone='warning'
+              title={CORRECT_COVER_WORDS.shortTitle(mask(formatCents(gap)))}
+            >
+              {heldCover > 0
+                ? mask(
+                    CORRECT_COVER_WORDS.shortBeyondCover(
+                      formatCents(heldCover),
+                    ),
+                  )
+                : CORRECT_COVER_WORDS.shortBody}
+            </InlineNotice>
+          )}
+          {gap > 0 && (
+            <ActionSection caption={CONFIRM_FLOW_WORDS.coverCaption}>
+              <div className='border-border rounded-2xl border p-3'>
+                <CoverCard
+                  id={coverId}
+                  gapCents={gap}
+                  coverableCents={coverable}
+                  coverCents={cover}
+                  freeCents={coverFree ?? 0}
+                  freeAfterCents={(coverFree ?? 0) - cover}
+                  freeLead={
+                    base.freeToSpendCents > 0
+                      ? CORRECT_COVER_WORDS.freeLead
+                      : undefined
+                  }
+                  isHidden={isHidden}
+                  isDisabled={isSaving}
+                  onCover={() => setCoverChoice(coverable)}
+                  onUndo={() => setCoverChoice(0)}
+                />
+              </div>
+            </ActionSection>
+          )}
+          {(undoInputs !== null || suggested.length > 0) && (
+            <ActionSection caption={CONFIRM_FLOW_WORDS.suggestCaption}>
+              <CutsSection
+                id={cutsId}
+                suggested={suggested}
+                usedCount={undoInputs === null ? null : loweredCount}
+                isCovered={cover > 0}
+                isOfferingCover={isOfferingCover}
+                isDisabled={isSaving}
+                onApply={applyCuts}
+                onUndo={undoCuts}
+              />
+            </ActionSection>
+          )}
           {base.lines.length >= RUNWAY_SEARCH_THRESHOLD && (
             <SearchInput
               value={search}
@@ -274,7 +451,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             }))}
           />
           <ModalFooterActions
-            note={blocker}
+            note={error ?? getFooterNote(true)}
             cancelAction={
               <Button type='button' variant='secondary' onClick={requestClose}>
                 Cancel
@@ -303,6 +480,19 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                     before={formatCents(base.arrivedCents)}
                     after={formatCents(corrected.arrivedCents)}
                     beforeLabel={CORRECT_WORDS.confirmed}
+                    afterLabel={CORRECT_WORDS.corrected}
+                  />
+                )}
+                {cover > 0 && (
+                  <BeforeAfterRow
+                    title={CORRECT_COVER_WORDS.freeRow}
+                    before={formatCents(freeCents ?? 0)}
+                    after={formatCents(
+                      (freeCents ?? 0) +
+                        corrected.freeToSpendCents -
+                        base.freeToSpendCents,
+                    )}
+                    beforeLabel={CORRECT_COVER_WORDS.now}
                     afterLabel={CORRECT_WORDS.corrected}
                   />
                 )}
