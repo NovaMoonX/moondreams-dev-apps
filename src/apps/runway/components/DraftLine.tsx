@@ -4,6 +4,7 @@ import PriorityBadge from '@apps/runway/components/PriorityBadge';
 import { DRAFT_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import {
+  describeBillShare,
   describeLineReason,
   describeTieBreak,
 } from '@apps/runway/utils/draftText';
@@ -19,6 +20,7 @@ interface DraftLineProps {
 function DraftLine({ line, name, emoji, sourceNames }: DraftLineProps) {
   const reason = describeLineReason(line, sourceNames);
   const tieNote = describeTieBreak(line);
+  const billShare = describeBillShare(line);
   const isShort = line.shortBy > 0;
   const shortText = isShort
     ? `${DRAFT_WORDS.shortBy} ${formatCents(line.shortBy)}`
@@ -27,7 +29,7 @@ function DraftLine({ line, name, emoji, sourceNames }: DraftLineProps) {
   return (
     <li
       className='flex items-start gap-3 p-3'
-      aria-label={`${name}: ${PRIORITY_LABELS[line.tier]}, ${formatCents(line.cents)}. ${reason}${shortText ? `. ${shortText}` : ''}`}
+      aria-label={`${name}: ${PRIORITY_LABELS[line.tier]}, ${formatCents(line.cents)}. ${billShare ? `${billShare}. ` : ''}${reason}${shortText ? `. ${shortText}` : ''}`}
     >
       <ItemBadge name={name} emoji={emoji} />
       <div className='min-h-10 min-w-0 flex-1'>
@@ -47,6 +49,9 @@ function DraftLine({ line, name, emoji, sourceNames }: DraftLineProps) {
         <div className='pb-1 sm:hidden'>
           <PriorityBadge priority={line.tier} />
         </div>
+        {billShare && (
+          <p className='text-muted-foreground text-sm'>{billShare}</p>
+        )}
         <p className='text-muted-foreground text-sm'>{reason}</p>
         {shortText && (
           <p className='text-foreground text-sm font-medium'>{shortText}</p>

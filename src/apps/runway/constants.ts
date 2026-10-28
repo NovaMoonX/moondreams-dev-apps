@@ -1,13 +1,13 @@
 import type { RunwayTab } from '@apps/runway/types';
 
-export const PLAN_SECTIONS = ['income', 'envelopes'] as const;
+export const PLAN_SECTIONS = ['income', 'bills', 'envelopes'] as const;
 
 export const DEFAULT_PLAN_SECTION = 'income' as const;
 
 export const PLAN_SECTION_LABELS: Record<
   (typeof PLAN_SECTIONS)[number],
   string
-> = { income: 'Income', envelopes: 'Envelopes' };
+> = { income: 'Income', bills: 'Bills', envelopes: 'Envelopes' };
 
 export const RUNWAY_TABS = [
   'home',
@@ -123,6 +123,42 @@ export const FUNDING_CADENCE_LABELS: Record<
 };
 
 export const ENVELOPE_ORDER_STEP = 1;
+
+/** What "+ Expected" can add. */
+export const EXPECTED_KINDS = ['income', 'expense'] as const;
+
+export const EXPECTED_KIND_LABELS: Record<
+  (typeof EXPECTED_KINDS)[number],
+  string
+> = { income: 'Income', expense: 'Expense' };
+
+/** The ways a bill can repeat that the bill form offers. */
+export const BILL_FREQUENCIES = [
+  'once',
+  'weekly',
+  'everyOtherWeek',
+  'monthly',
+] as const satisfies readonly (typeof SCHEDULE_KINDS)[number][];
+
+export const BILL_FREQUENCY_LABELS: Record<
+  (typeof BILL_FREQUENCIES)[number],
+  string
+> = {
+  once: 'Once',
+  weekly: 'Weekly',
+  everyOtherWeek: 'Every other week',
+  monthly: 'Monthly',
+};
+
+export const BILL_FUNDINGS = ['suggested', 'chosen'] as const;
+
+export const BILL_FUNDING_LABELS: Record<
+  (typeof BILL_FUNDINGS)[number],
+  string
+> = { suggested: 'Spread over income days', chosen: 'Days I choose' };
+
+/** How a draft line for a bill was decided, beside the envelope cadences. */
+export const BILL_DRAFT_CADENCES = ['billSuggested', 'billChosen'] as const;
 export const MAX_CHOSEN_DAYS = 60;
 export const MAX_EMOJI_LENGTH = 8;
 
@@ -133,9 +169,11 @@ export const DRAFT_REASON_CODES = ['funded', 'poolExhausted'] as const;
 export const DRAFT_TIE_KEYS = ['createdAt', 'itemId'] as const;
 
 export const DRAFT_CADENCE_WORDS: Record<
-  (typeof FUNDING_CADENCES)[number],
+  (typeof FUNDING_CADENCES)[number] | (typeof BILL_DRAFT_CADENCES)[number],
   string
 > = {
+  billSuggested: 'Spread over your income days',
+  billChosen: 'A day you chose',
   everyIncomeDay: 'Every income day',
   every2: 'Every other income day',
   every3: 'Every third income day',
@@ -157,5 +195,8 @@ export const DRAFT_WORDS = {
   tieItemId:
     'Same priority, order and date added as another envelope, so a fixed order decides',
   unnamedSource: 'this income',
+  dueOn: 'Due',
+  setAsideOf: 'of',
+  billFallback: 'Bill',
   and: 'and',
 } as const;

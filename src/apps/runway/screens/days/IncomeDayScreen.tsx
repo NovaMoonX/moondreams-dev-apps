@@ -37,15 +37,18 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
     );
   }
 
-  const { day, draft, envelopes, sourceNames } = view;
+  const { day, draft, items, sourceNames } = view;
   const funded = draft.lines.filter((line) => line.shortBy === 0);
   const unfunded = draft.lines.filter((line) => line.shortBy > 0);
   const title = day.sourceName ?? day.payLineName;
 
   const renderLine = (line: (typeof draft.lines)[number]) => {
-    const envelope = Object.hasOwn(envelopes, line.itemId)
-      ? envelopes[line.itemId]
-      : { name: 'Envelope', emoji: null };
+    const envelope = Object.hasOwn(items, line.itemId)
+      ? items[line.itemId]
+      : {
+          name: line.bill ? DRAFT_WORDS.billFallback : 'Envelope',
+          emoji: null,
+        };
     return (
       <DraftLine
         key={line.lineId}
@@ -78,8 +81,8 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
         />
         {draft.lines.length === 0 ? (
           <EmptyCard icon={<Mail className='h-5 w-5' />}>
-            Nothing is set to be funded from this day. Add an envelope in Plan
-            and it will show here.
+            Nothing is set to be funded from this day. Add an envelope or a bill
+            in Plan and it will show here.
           </EmptyCard>
         ) : (
           <div className='space-y-4'>
