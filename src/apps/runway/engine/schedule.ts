@@ -39,7 +39,10 @@ const monthlyDates = (schedule: Schedule, anchor: number, to: number) => {
   return result;
 };
 
-const candidateDates = (schedule: Schedule, to: number) => {
+const MAX_CACHED_SCHEDULES = 512;
+const candidateCache = new Map<string, readonly number[]>();
+
+const generateCandidates = (schedule: Schedule, to: number) => {
   const anchor = schedule.anchor;
   if (anchor === null) return [];
   if (schedule.kind === 'once') return anchor <= to ? [anchor] : [];
@@ -49,6 +52,17 @@ const candidateDates = (schedule: Schedule, to: number) => {
     return monthlyDates(schedule, anchor, to);
   }
   return [];
+};
+
+/** A schedule's dates up to `to`, kept by what names them: a lookahead asks the same bills for the same dates once per income day. */
+const candidateDates = (schedule: Schedule, to: number): readonly number[] => {
+  const key = `${schedule.kind}|${schedule.anchor}|${String(schedule.monthDays)}|${to}`;
+  const cached = candidateCache.get(key);
+  if (cached) return cached;
+  const result = generateCandidates(schedule, to);
+  if (candidateCache.size >= MAX_CACHED_SCHEDULES) candidateCache.clear();
+  candidateCache.set(key, result);
+  return result;
 };
 
 /**

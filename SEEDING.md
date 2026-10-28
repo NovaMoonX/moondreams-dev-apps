@@ -138,11 +138,12 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run seed:pinch`                             | Upsert core data and Pinch kitchen fixtures.                                                     |
 | `npm run seed:runway`                            | Upsert core data, Alex's Runway plan (Plan) and Jamie's (Track), income and wrapped keys.        |
 | `npm run seed:pinch-scale`                       | Upsert core data and Taylor's oversized "Big Kitchen (scale test)" for Pinch performance checks.   |
+| `npm run seed:runway-scale`                      | Upsert core data and Morgan's "Five-year plan (scale test)" for Runway performance checks.         |
 | `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
 | `npm run emulators:seed`                         | Start emulators, seed all fixtures, and exit.                                                    |
 | `npm run emulators:seed:reset`                   | Start emulators, clear all fixtures, reseed, and exit.                                           |
 
-Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, `pinch-scale`, `runway`, or `all` to select a scope (`pinch-scale` is opt-in; `all` and `seed:reset` leave it out).
+Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, `pinch-scale`, `runway`, `runway-scale`, or `all` to select a scope (`pinch-scale` and `runway-scale` are opt-in; `all` and `seed:reset` leave them out).
 Normal runs are idempotent upserts and retain records created manually during local
 development. `--reset` is the explicit destructive local reset.
 
@@ -157,6 +158,7 @@ Auth Emulator:
 | Alex    | `alex@example.test`   | `seed-worth-the-wait-one`   | Worth the Wait partner and space creator |
 | Jamie   | `jamie@example.test`  | `seed-worth-the-wait-two`   | Worth the Wait partner                   |
 | Taylor  | `taylor@example.test` | `seed-nine-lives-caretaker` | Nine Lives household creator             |
+| Morgan  | `morgan@example.test` | `seed-runway-scale`         | Runway's five-year plan for scale checks |
 
 When Vite uses the emulator configuration, the header provides local account buttons
 for these identities. This uses email/password so the selected account always owns the
@@ -220,6 +222,8 @@ line in `functions/.secret.local` (git-ignored), for example
 `RUNWAY_MASTER_KEYS='{"current":"m1","keys":{"m1":"<64 hex characters>"}}'`; with no file or line, both the seed
 and the emulator use the built-in development keyring. Restart the emulators and run `npm run seed:reset` after
 changing it, or Alex's plan will not open ("Your plan cannot be opened right now").
+
+`runway-scale` (opt-in; `all` and `seed:reset` leave it out) gives Morgan (`seed-runway-scale`, `morgan@example.test`) a plan at `apps/runway/plans/seed-runway-scale` that has been tracked for five years, to judge Runway's performance: 3 income sources with 3 pay lines (a paycheck every other week, a monthly retainer that pays a range, rent received twice a month), 25 envelopes, 60 monthly bills and 12 goals (103 items), 600 versions (each item's first, then later amount changes) with a change entry each, 311 confirmed days with their proposed and confirmed records (622), 1,449 moves (the starting holdings, the move up to Track and 1,440 bills marked paid: 20 bills over all five years and the rest for the last six months) and 25,000 purchases (about 14 a day: 7% split across two envelopes, 3% taken from Free to spend), all sealed with the key derived as `runway` does and wrapped at `apps/runway/server/seed-runway-scale/keys/data`. It is 28,688 documents on top of the 25 that `core` writes for the five fixture accounts, written with a bulk writer in about a minute; there are no closings yet (the app writes them once Issue 28 builds them). `RUNWAY_SCALE_VERSIONS=2000 npm run seed:runway-scale` writes 2,000 versions instead of 600. The seed runs after `core` only and adds to what is there, so run `npm run seed:reset` afterwards to bring the baseline back.
 
 ## Emulator snapshots
 

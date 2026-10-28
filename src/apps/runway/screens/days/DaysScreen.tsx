@@ -18,10 +18,10 @@ import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import LookaheadWarnings from '@apps/runway/components/LookaheadWarnings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import ExpectedScreen from '@apps/runway/screens/days/ExpectedScreen';
 import {
-  selectLookahead,
   selectRangeSides,
   selectStanceCushion,
 } from '@apps/runway/store/selectors/lookaheadSelectors';
@@ -44,10 +44,9 @@ function DaysScreen() {
   const isLedgerReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
-  const lookahead = useAppSelector((state) =>
-    isLoaded && isLedgerReady && allDays.length > 0
-      ? selectLookahead(state, today)
-      : null,
+  const lookahead = useDeferredLookahead(
+    today,
+    isLoaded && isLedgerReady && allDays.length > 0,
   );
   const cushion = useAppSelector((state) => selectStanceCushion(state, today));
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));

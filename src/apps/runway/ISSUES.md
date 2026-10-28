@@ -1091,7 +1091,7 @@ Cold start reads a month of entries, no matter how old the plan is. A closing st
 ### Success Criteria
 - [ ] Balances equal the no-closing result for every month of the scale plan (check case).
 - [ ] Editing a purchase from three months ago marks the later closings stale and the next load rebuilds them correctly (emulator).
-- [ ] Cold start on the scale plan is within 1.5 s.
+- [ ] Cold start on the scale plan, on the dev build with the CPU throttled 4x, is within 3.5 s (Issue 27 measured 3 s with the items and a month loaded; the 1.5 s first written needs a production build).
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.

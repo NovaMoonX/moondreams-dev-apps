@@ -8,7 +8,7 @@ import {
 
 import { db } from '@lib/firebase/config';
 
-import { openJson } from '@apps/runway/security';
+import { createSealedReader, type SealedReader } from '@apps/runway/security';
 import type {
   OpenPurchase,
   PurchaseDoc,
@@ -21,9 +21,9 @@ const toError = (error: unknown) =>
 
 async function openPurchase(
   entry: PurchaseDoc,
-  encryption: RunwayEncryption,
+  read: SealedReader,
 ): Promise<OpenPurchase> {
-  const payload = await openJson<PurchaseSealed>(entry.sealed, encryption);
+  const payload = await read<PurchaseSealed>(entry.sealed);
   const result: OpenPurchase = {
     id: entry.id,
     date: entry.date,
@@ -50,6 +50,7 @@ export function startPurchasesListener(
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const run = { isStopped: false };
+  const read = createSealedReader(encryption);
 
   const stop = onSnapshot(
     query(
@@ -64,7 +65,7 @@ export function startPurchasesListener(
           snapshot.docs.map((entry) =>
             openPurchase(
               { ...(entry.data() as PurchaseDoc), id: entry.id },
-              encryption,
+              read,
             ),
           ),
         );

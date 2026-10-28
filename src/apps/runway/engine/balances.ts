@@ -61,17 +61,12 @@ export function deriveBalances(input: BalancesInput): Balances {
     0,
   );
 
-  const given = splits.reduce<Record<string, Cents>>(
-    (acc, split) =>
-      split.lines.reduce(
-        (sums, line) => ({
-          ...sums,
-          [line.itemId]: (sums[line.itemId] ?? 0) + line.cents,
-        }),
-        acc,
-      ),
-    {},
-  );
+  const given = splits
+    .flatMap((split) => split.lines)
+    .reduce<Record<string, Cents>>((sums, line) => {
+      sums[line.itemId] = (sums[line.itemId] ?? 0) + line.cents;
+      return sums;
+    }, {});
 
   const paidByBill = Object.entries(collectPaid(input.moves)).map(
     ([billId, payments]) => {
@@ -106,16 +101,12 @@ export function deriveBalances(input: BalancesInput): Balances {
   );
   const spentByItem = counted
     .flatMap((purchase) => purchase.lines)
-    .reduce<Record<string, Cents>>(
-      (acc, line) =>
-        line.envelopeId === null
-          ? acc
-          : {
-              ...acc,
-              [line.envelopeId]: (acc[line.envelopeId] ?? 0) + line.cents,
-            },
-      {},
-    );
+    .reduce<Record<string, Cents>>((sums, line) => {
+      if (line.envelopeId !== null) {
+        sums[line.envelopeId] = (sums[line.envelopeId] ?? 0) + line.cents;
+      }
+      return sums;
+    }, {});
 
   const itemIds = new Set([
     ...Object.keys(given),

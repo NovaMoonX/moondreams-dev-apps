@@ -25,6 +25,7 @@
     "seed:a-list": "npm run seed -- --scope a-list",
     "seed:pinch": "npm run seed -- --scope pinch",
     "seed:runway": "npm run seed -- --scope runway",
+    "seed:runway-scale": "npm run seed -- --scope runway-scale",
     "seed:pinch-scale": "npm run seed -- --scope pinch-scale",
     "seed:worth-the-wait": "npm run seed -- --scope worth-the-wait",
     "seed:reset": "npm run seed -- --scope all --reset",

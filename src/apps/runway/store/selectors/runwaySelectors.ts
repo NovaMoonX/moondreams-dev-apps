@@ -73,7 +73,7 @@ export const selectItemNames = createSelector([selectVersions], (versions) => {
     const seen = acc.get(version.itemId);
     return seen && seen.createdAt >= version.createdAt
       ? acc
-      : new Map(acc).set(version.itemId, version);
+      : acc.set(version.itemId, version);
   }, new Map());
   const result = [...newest.values()]
     .map((version) => ({ id: version.itemId, name: version.payload.name }))
@@ -500,6 +500,18 @@ const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
 const selectToday = (_state: RootState, _dayKey: string, today: number) =>
   today;
 
+const progressHashes = new WeakMap<object, string>();
+
+/** Names what a bill's confirmed days and payments say, once per progress object: a draft's key then reads a short name for each bill, not the lists behind it. */
+const hashProgress = (progress: BillProgressInput | undefined) => {
+  if (!progress) return '';
+  const known = progressHashes.get(progress);
+  if (known !== undefined) return known;
+  const result = hashText(JSON.stringify(progress));
+  progressHashes.set(progress, result);
+  return result;
+};
+
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 
@@ -598,7 +610,7 @@ export function computeDraftView(
           [...returning].sort(),
           resolvedBills.map(({ item }) => [
             item.endedAt,
-            billProgress[item.id] ?? null,
+            hashProgress(billProgress[item.id]),
           ]),
           horizon,
         ]),

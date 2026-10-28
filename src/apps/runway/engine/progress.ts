@@ -72,14 +72,14 @@ export function collectPaid(
     if (move.kind !== 'billPaid' || move.reversesMoveId || !move.refId)
       return acc;
     if (reversed.has(move.id)) return acc;
-    const paid: PaidPayment = {
+    (acc[move.refId] ??= []).push({
       moveId: move.id,
       dueOn: move.date,
       amountCents: move.payload.amountCents,
       paidOn: move.payload.paidOn,
       fromFreeCents: move.payload.fromFreeCents,
-    };
-    return { ...acc, [move.refId]: [...(acc[move.refId] ?? []), paid] };
+    });
+    return acc;
   }, {});
   return result;
 }
@@ -103,22 +103,20 @@ export function collectFunded(
   records: readonly OpenRecord[],
   onByDay: ReadonlyMap<string, DateOnly>,
 ): Record<string, FundedDay[]> {
-  const result = getEffectiveSplits(records).reduce<
-    Record<string, FundedDay[]>
-  >((acc, split) => {
-    const on = onByDay.get(split.dayId);
-    if (on === undefined) return acc;
-    return split.lines.reduce(
-      (sums, line) => ({
-        ...sums,
-        [line.itemId]: [
-          ...(sums[line.itemId] ?? []),
-          { dayKey: split.dayId, on, cents: line.cents },
-        ],
-      }),
-      acc,
-    );
-  }, {});
+  const result = getEffectiveSplits(records)
+    .flatMap((split) => {
+      const on = onByDay.get(split.dayId);
+      return on === undefined
+        ? []
+        : split.lines.map((line) => ({
+            itemId: line.itemId,
+            entry: { dayKey: split.dayId, on, cents: line.cents },
+          }));
+    })
+    .reduce<Record<string, FundedDay[]>>((sums, { itemId, entry }) => {
+      (sums[itemId] ??= []).push(entry);
+      return sums;
+    }, {});
   return result;
 }
 

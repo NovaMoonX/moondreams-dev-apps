@@ -19,7 +19,8 @@ export type SeedScope =
   | 'a-list'
   | 'pinch'
   | 'pinch-scale'
-  | 'runway';
+  | 'runway'
+  | 'runway-scale';
 
 export interface SeedContext {
   auth: Auth;

@@ -56,7 +56,7 @@ import {
 const SECRET_FILE = new URL('../../functions/.secret.local', import.meta.url);
 
 /** The emulator's keyring: `RUNWAY_MASTER_KEYS` in functions/.secret.local, else the built-in development one. */
-function readEmulatorKeyring() {
+export function readEmulatorKeyring() {
   try {
     const line = readFileSync(SECRET_FILE, 'utf8')
       .split('\n')
@@ -72,7 +72,7 @@ function readEmulatorKeyring() {
   }
 }
 
-const header = (
+export const header = (
   id: string,
   kind: string,
   parentId: string | null,
@@ -85,7 +85,7 @@ const header = (
   endedAt: null,
   archivedAt: null,
 });
-const version = (
+export const version = (
   id: string,
   itemId: string,
   kind: string,
@@ -103,7 +103,7 @@ const version = (
   changeId,
   sealed,
 });
-const change = (
+export const change = (
   id: string,
   createdAt: number,
   effectiveFrom: number,
@@ -777,7 +777,7 @@ async function writeSeedIncome(
   return 12 + pastDays;
 }
 
-const seedLine = (
+export const seedLine = (
   dayId: string,
   itemId: string,
   name: string,
