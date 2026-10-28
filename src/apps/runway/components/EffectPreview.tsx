@@ -1,20 +1,25 @@
 import { useDeferredValue, useMemo, useState } from 'react';
+import { useStore } from 'react-redux';
 
 import BeforeAfterRow from '@/components/BeforeAfterRow';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
-import { useAppSelector } from '@/store';
+import { useAppSelector, type RootState } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { CHANGE_WORDS, PREVIEW_SHOWN } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { describeHoldsChange } from '@apps/runway/utils/lookaheadText';
 import {
   previewChange,
+  previewLookahead,
   type PreviewChange,
   type PreviewDay,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectBillProgress,
+  selectIsMovesLoaded,
+  selectIsRecordsReady,
   selectHeldByItem,
   selectSettledKey,
   selectStance,
@@ -49,6 +54,10 @@ function EffectPreview({ changeJson, emptyText }: EffectPreviewProps) {
   const heldByItem = useAppSelector(selectHeldByItem);
   const settledKey = useAppSelector(selectSettledKey);
   const billProgress = useAppSelector(selectBillProgress);
+  const store = useStore<RootState>();
+  const isLedgerReady = useAppSelector(
+    (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
+  );
   const [isOpen, setIsOpen] = useState(false);
   const settledJson = useDeferredValue(changeJson);
   const settledVirtual = useMemo<PreviewChange | null>(
@@ -84,6 +93,18 @@ function EffectPreview({ changeJson, emptyText }: EffectPreviewProps) {
     settledKey,
     billProgress,
   ]);
+
+  const holdsText = useMemo(() => {
+    if (settledVirtual === null || !isLedgerReady) return null;
+    const { before, after } = previewLookahead(
+      store.getState(),
+      today,
+      settledVirtual,
+    );
+    return describeHoldsChange(before, after);
+    // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settledVirtual, isLedgerReady, today, items, versions, openDays]);
 
   const getBody = () => {
     if (virtual === null || days === null) {
@@ -149,6 +170,7 @@ function EffectPreview({ changeJson, emptyText }: EffectPreviewProps) {
     <section aria-label={CHANGE_WORDS.previewHeading} className='space-y-2'>
       <SectionDivider label={CHANGE_WORDS.previewHeading} />
       {getBody()}
+      {holdsText && <p className='text-sm'>{holdsText}</p>}
     </section>
   );
 }

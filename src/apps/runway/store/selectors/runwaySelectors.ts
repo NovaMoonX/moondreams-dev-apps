@@ -502,6 +502,13 @@ const selectToday = (_state: RootState, _dayKey: string, today: number) =>
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 
+export interface DraftViewOptions {
+  /** The coming days when the caller already has them, so a walk over many days builds them once. */
+  coming?: readonly ComingDay[];
+  /** False for a draft that is used once and not kept, such as one step of a lookahead. */
+  isCached?: boolean;
+}
+
 export function computeDraftView(
   items: RootState['runway']['items'],
   versions: RootState['runway']['versions'],
@@ -512,11 +519,14 @@ export function computeDraftView(
   heldByItem: Record<string, number>,
   settledKey: string,
   billProgress: Record<string, BillProgressInput>,
+  options: DraftViewOptions = {},
 ): DraftView | null {
   const settled = toSet(settledKey);
-  const coming = buildComingDays(items, versions, today).filter(
-    (entry) => !settled.has(entry.dayKey),
-  );
+  const coming =
+    options.coming ??
+    buildComingDays(items, versions, today).filter(
+      (entry) => !settled.has(entry.dayKey),
+    );
   const day =
     coming.find((entry) => entry.dayKey === dayKey) ??
     buildOverdueDays(items, versions, today, settled).find(
@@ -565,29 +575,36 @@ export function computeDraftView(
       ? []
       : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
           ?.payload.pairings ?? []);
-  const key = hashText(
-    JSON.stringify([
-      override,
-      payLinePairings,
-      sourcePairings,
-      stance,
-      dayKey,
-      days.map((entry) => [entry.dayKey, entry.amount, entry.stanceOverride]),
-      resolved.map(({ version }) => version.id),
-      resolvedBills.map(({ version }) => version.id),
-      resolvedGoals.map(({ version }) => version.id),
-      resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
-      [...returning].sort(),
-      resolvedBills.map(({ item }) => [
-        item.endedAt,
-        billProgress[item.id] ?? null,
-      ]),
-      horizon,
-    ]),
-  );
+  const isCached = options.isCached ?? true;
+  const key = !isCached
+    ? ''
+    : hashText(
+        JSON.stringify([
+          override,
+          payLinePairings,
+          sourcePairings,
+          stance,
+          dayKey,
+          days.map((entry) => [
+            entry.dayKey,
+            entry.amount,
+            entry.stanceOverride,
+          ]),
+          resolved.map(({ version }) => version.id),
+          resolvedBills.map(({ version }) => version.id),
+          resolvedGoals.map(({ version }) => version.id),
+          resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+          [...returning].sort(),
+          resolvedBills.map(({ item }) => [
+            item.endedAt,
+            billProgress[item.id] ?? null,
+          ]),
+          horizon,
+        ]),
+      );
   const draftCache = draftCaches.get(versions) ?? new Map<string, DraftView>();
-  draftCaches.set(versions, draftCache);
-  const cached = draftCache.get(key);
+  if (isCached) draftCaches.set(versions, draftCache);
+  const cached = isCached ? draftCache.get(key) : undefined;
   if (cached) return cached;
 
   const payloadOf = <P extends EnvelopeSealed | GoalSealed>(
@@ -692,6 +709,7 @@ export function computeDraftView(
     ),
     sourceNames,
   };
+  if (!isCached) return result;
   if (draftCache.size >= MAX_CACHED_DRAFTS) draftCache.clear();
   draftCache.set(key, result);
   return result;

@@ -1,7 +1,13 @@
 import { formatCents } from '@/utils/moneyUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
 import { DRAFT_WORDS, HOME_WORDS } from '@apps/runway/constants';
-import type { BillCoverage } from '@apps/runway/engine/coverage';
+import { useAppSelector } from '@/store';
+import { RangeBasisNote } from '@apps/runway/components/RangeNote';
+import type { Lookahead } from '@apps/runway/engine/lookahead';
+import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  describeHoldsThrough,
+  describeProblem,
+} from '@apps/runway/utils/lookaheadText';
 
 interface CoverageHeadlineProps {
   freeCents: number;
@@ -28,37 +34,42 @@ function CoverageHeadline({ freeCents, moneyCents }: CoverageHeadlineProps) {
   );
 }
 
-interface BillCoverageLineProps {
-  coverage: BillCoverage;
-  /** The name of the bill the first gap is for. */
-  gapName: string | null;
+interface HoldsThroughLineProps {
+  lookahead: Lookahead;
+  /** Which sides of the plan have a range in them, so the line says which end it plans at. */
+  rangeSides: { income: boolean; expense: boolean };
+  /** True on Home, which names only the first problem; Days lists them all. */
+  isFirstProblemShown?: boolean;
 }
 
-/** How far bills are set aside. A bill with no income day left to set it aside is said as a gap in the plan, never as missing money. */
-export function BillCoverageLine({ coverage, gapName }: BillCoverageLineProps) {
-  if (coverage.kind === 'noBills') {
+/** How far the plan holds. A gap is said as a gap in the plan, never as missing money. */
+export function HoldsThroughLine({
+  lookahead,
+  rangeSides,
+  isFirstProblemShown = false,
+}: HoldsThroughLineProps) {
+  const stance = useAppSelector(selectStance);
+  if (!lookahead.hasBills) {
     return (
       <p className='text-muted-foreground text-sm'>{HOME_WORDS.noBills}</p>
     );
   }
-  if (coverage.kind === 'covered') {
-    return (
-      <p className='text-sm font-medium'>
-        Every bill is covered through {formatDateUTC(coverage.through)}
-      </p>
-    );
-  }
+  const headline = describeHoldsThrough(lookahead);
+  const first = lookahead.problems[0] ?? null;
   return (
     <div className='space-y-0.5'>
-      {coverage.through !== null && (
-        <p className='text-sm font-medium'>
-          Every bill is covered through {formatDateUTC(coverage.through)}
+      {headline && <p className='text-sm font-medium'>{headline}</p>}
+      {isFirstProblemShown && first && (
+        <p className='text-muted-foreground text-sm'>
+          {describeProblem(first)}
         </p>
       )}
-      <p className='text-muted-foreground text-sm'>
-        {gapName ?? 'A bill'}, due {formatDateUTC(coverage.dueOn)}, has no
-        income day before it to set it aside.
-      </p>
+      {rangeSides.income && (
+        <RangeBasisNote stance={stance} side='income' className='text-xs' />
+      )}
+      {rangeSides.expense && (
+        <RangeBasisNote stance={stance} side='expense' className='text-xs' />
+      )}
     </div>
   );
 }

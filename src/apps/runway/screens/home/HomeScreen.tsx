@@ -6,18 +6,18 @@ import EmptyCard from '@/components/EmptyCard';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { BillCoverageLine } from '@apps/runway/components/CoverageHeadline';
+import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { HOME_ENVELOPE_TILES, HOME_WORDS } from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
-  selectBalances,
-  selectBillCoverage,
-} from '@apps/runway/store/selectors/balanceSelectors';
+  selectLookahead,
+  selectRangeSides,
+} from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
-  selectBills,
   selectEnvelopes,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
@@ -45,8 +45,10 @@ function HomeScreen() {
     ),
   );
   const balances = useAppSelector(selectBalances);
-  const coverage = useAppSelector((state) => selectBillCoverage(state, today));
-  const bills = useAppSelector((state) => selectBills(state, today));
+  const lookahead = useAppSelector((state) =>
+    isLedgerReady ? selectLookahead(state, today) : null,
+  );
+  const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
@@ -75,11 +77,6 @@ function HomeScreen() {
   }
 
   const free = describeFreeToSpend(getFreeToSpendFigure(balances));
-  const gapName =
-    coverage.kind === 'gap'
-      ? (bills.find(({ item }) => item.id === coverage.billId)?.version.payload
-          .name ?? null)
-      : null;
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
   const shown = envelopes.slice(0, HOME_ENVELOPE_TILES);
 
@@ -105,7 +102,13 @@ function HomeScreen() {
             aria-hidden='true'
           />
         </Button>
-        <BillCoverageLine coverage={coverage} gapName={gapName} />
+        {lookahead && (
+          <HoldsThroughLine
+            lookahead={lookahead}
+            rangeSides={rangeSides}
+            isFirstProblemShown
+          />
+        )}
       </div>
       {nextDay && (
         <div className='space-y-2'>

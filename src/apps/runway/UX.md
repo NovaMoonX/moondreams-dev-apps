@@ -126,7 +126,7 @@ Existing repo components are used as they are. A new component whose props name 
 | `IncomeDayCard` | Home, Days | Date, source, amount, status | New, in the app |
 | `DraftLine` | Income day, Record | Name, amount, reason | New, in the app |
 | `PriorityBadge` | Plan lists, Income day | Must, Should, Want as a soft tint | New, in the app |
-| `CoverageHeadline` | Home, Days | "Every bill is covered through Dec 18" and warning rows | New, in the app |
+| `HoldsThroughLine`, `LookaheadWarnings` (in `CoverageHeadline.tsx` and its own file) | Home, Days | "Your plan holds through Dec 18", the first problem on Home and every warning row (a Must or a bill that runs short, a bill with no income before it is due, a bill past due and not marked paid, income that ends) on Days, then the stance cushion | New, in the app |
 | `LevelGate` | Home, Plan, Spend | Draws its children only at the level that needs them | New, in the app |
 | `BeforeAfterRow` | Record, What if | A line with two values, changed ones highlighted | New, in `src/components` |
 
