@@ -68,6 +68,7 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     description:
       'An income-first budget planner for money that does not arrive or leave on a tidy schedule: draft where each income day should go, look ahead to see how far the plan holds, and change it when life changes.',
     createdAt: '2026-10-23',
+    resumeParams: ['tab'],
   },
 ];
 
