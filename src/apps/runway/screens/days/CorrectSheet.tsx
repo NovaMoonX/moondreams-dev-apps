@@ -157,7 +157,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const isCoverGone = coverChoice > (coverFree ?? 0);
   const cover = isCoverGone ? 0 : Math.min(coverChoice, gap);
   const rest = gap - cover;
-  const isOfferingCover = rest > 0 && coverable > 0 && cover === 0;
+  const isOfferingCover = rest > 0 && coverable > cover;
   const correctedLines = corrected?.lines ?? base.lines;
   const billLineIds = new Set(
     base.lines

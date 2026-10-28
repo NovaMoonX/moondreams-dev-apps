@@ -800,6 +800,8 @@ Three things hold for every row. **Nothing derived is stored:** a draft (`select
 
 What the device refuses for being old: a change dated before today (`utils/fromWhen.ts` `getChangeSpan`), an end date before today (the `ItemSheet` date field's `min`), a purchase before the open tracking stretch (`purchaseActions.ts` `checkDayAndEnvelopes`), confirming a day more than `OVERDUE_DAYS` (14) past its date (it is not listed), correcting a day before the recent window (it is not listed), and "Change what you started with" after its window (`canChangeStart`, shown or hidden only; nothing refuses the write). Nothing is refused for falling in a closed month: the write marks `dirtyFrom` and the closings are rebuilt.
 
+A cover from Free to spend, in Confirm and in Correct alike, is checked against Free to spend as this device's store has it just before the write (`handleConfirm`, `handleSave`), not inside the transaction: a purchase saved on another device in between can leave Free to spend below zero, which then reads "Over-assigned". When the difference grows after a cover is taken (an item raised), `CoverCard` keeps the cover and its Undo and offers covering the larger difference ("Cover $X instead") as the footer's door, before any cuts.
+
 ---
 
 ## Security Rules Design Criteria

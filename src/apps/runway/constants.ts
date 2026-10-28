@@ -1427,3 +1427,11 @@ export const START_HELD_WORDS = {
   startOverBlocker: 'Choose what happens to the money they hold.',
   freeBody: 'From today.',
 } as const;
+
+/** Round 7b package F2: a cover already taken, when the difference has since grown. */
+export const COVER_GROWN_WORDS = {
+  grown: (gap: string) => `The difference is now ${gap}.`,
+  grownHidden: 'The difference has grown since you covered it.',
+  coverMore: (amount: string) => `Cover ${amount} instead`,
+  coverMoreHidden: 'Cover the larger difference',
+} as const;
