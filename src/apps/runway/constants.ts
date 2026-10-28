@@ -1,6 +1,12 @@
 import type { RunwayTab } from '@apps/runway/types';
 
-export const PLAN_SECTIONS = ['income', 'bills', 'envelopes', 'goals'] as const;
+export const PLAN_SECTIONS = [
+  'income',
+  'bills',
+  'envelopes',
+  'goals',
+  'more',
+] as const;
 
 export const DEFAULT_PLAN_SECTION = 'income' as const;
 
@@ -12,6 +18,7 @@ export const PLAN_SECTION_LABELS: Record<
   bills: 'Bills',
   envelopes: 'Envelopes',
   goals: 'Goals',
+  more: 'More',
 };
 
 export const RUNWAY_TABS = [
@@ -29,6 +36,39 @@ export const RUNWAY_TAB_LABELS: Record<RunwayTab, string> = {
 };
 
 export const STANCES = ['conservative', 'middle', 'optimistic'] as const;
+
+export const DEFAULT_STANCE = 'conservative' as const;
+
+export const STANCE_LABELS: Record<(typeof STANCES)[number], string> = {
+  conservative: 'Conservative',
+  middle: 'Middle',
+  optimistic: 'Optimistic',
+};
+
+export const STANCE_HELP: Record<(typeof STANCES)[number], string> = {
+  conservative: 'Plans pay at its low end and bills at their high end.',
+  middle: 'Plans pay and bills halfway between their ends.',
+  optimistic: 'Plans pay at its high end and bills at their low end.',
+};
+
+/** Who a stance applies to: the whole plan, or one pay line or bill that sets its own. */
+export const STANCE_FOLLOW_PLAN = 'plan' as const;
+
+/** Entries on Plan > More; one appears when the screen it opens exists. */
+export const MORE_ENTRIES = ['settings'] as const;
+
+export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
+  { settings: 'Settings' };
+
+export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
+  settings: 'How the plan reads a range of pay or a bill.',
+};
+
+export const RANGE_END_WORDS = {
+  low: 'the low end',
+  middle: 'the middle',
+  high: 'the high end',
+} as const;
 
 export const SEALED_SCHEMA_VERSION = 1;
 

@@ -14,6 +14,7 @@ import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
+import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -28,7 +29,14 @@ import { useRunwaySync } from '@apps/runway/useRunwaySync';
 
 function RunwayPage() {
   const { user, loading } = useAuth();
-  const { activeTab, showTab, openDayKey, closeDay } = useRunwayUrlState();
+  const {
+    activeTab,
+    showTab,
+    openDayKey,
+    closeDay,
+    moreEntry,
+    closeMoreEntry,
+  } = useRunwayUrlState();
   const today = todayAsUtcDate(useNow(60_000));
   const isItemsLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const hasOpenDay = useAppSelector(
@@ -94,6 +102,14 @@ function RunwayPage() {
     return (
       <div className='page'>
         <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
+      </div>
+    );
+  }
+
+  if (moreEntry === 'settings') {
+    return (
+      <div className='page'>
+        <SettingsScreen onClose={closeMoreEntry} />
       </div>
     );
   }

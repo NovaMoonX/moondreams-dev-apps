@@ -9,6 +9,8 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import RangeNote from '@apps/runway/components/RangeNote';
+import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import FundsRow from '@apps/runway/components/FundsRow';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import { useAuth } from '@/hooks/useAuth';
@@ -23,6 +25,7 @@ import {
   selectGoals,
   selectIsPlanItemsLoaded,
   selectResolvedPlan,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   Pairing,
@@ -73,6 +76,7 @@ interface EditingFunds {
 function IncomeScreen() {
   const { user } = useAuth();
   const today = todayAsUtcDate(useNow(60_000));
+  const stance = useAppSelector(selectStance);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
@@ -141,9 +145,27 @@ function IncomeScreen() {
                           {version.payload.name}
                         </p>
                         <p className='shrink-0 font-semibold whitespace-nowrap tabular-nums'>
-                          {formatCents(version.payload.amount.lowCents)}
+                          {formatCents(
+                            pick(
+                              effectiveStance(
+                                stance,
+                                version.payload.stanceOverride,
+                              ),
+                              version.payload.amount,
+                              'income',
+                            ),
+                          )}
                         </p>
                       </div>
+                      <RangeNote
+                        range={version.payload.amount}
+                        stance={effectiveStance(
+                          stance,
+                          version.payload.stanceOverride,
+                        )}
+                        side='income'
+                        isOwnStance={Boolean(version.payload.stanceOverride)}
+                      />
                       <p className='text-muted-foreground text-sm'>
                         {describeTiming(version.payload)}
                       </p>

@@ -43,8 +43,14 @@ import {
   occurrences,
   selectFundedDays,
 } from '../../src/apps/runway/engine/schedule.ts';
+import {
+  effectiveStance,
+  pick,
+  readStance,
+} from '../../src/apps/runway/engine/stance.ts';
 import type {
   Ending,
+  MoneyRange,
   OpenVersion,
   PlanItemDoc,
   Schedule,
@@ -1022,7 +1028,7 @@ const version = (
     createdAt: 1,
     priority: 'must',
     orderIndex: 1,
-    amountCents: 150_000,
+    amount: { lowCents: 150_000, highCents: 150_000 },
     ending: NEVER,
     fundedBy: { kind: 'suggested' },
     ...over,
@@ -1059,7 +1065,7 @@ const version = (
     day(utc(2027, 1, 7), 'c'),
   ];
   const rent = makeBill({
-    amountCents: 150_001,
+    amount: { lowCents: 150_001, highCents: 150_001 },
     schedule: once(utc(2027, 1, 1)),
   });
   assert.deepEqual(
@@ -1096,7 +1102,7 @@ const version = (
     day(utc(2026, 11, 6) + index * 14 * DAY_MS, String(index)),
   );
   const monthlyRent = makeBill({
-    amountCents: 100_000,
+    amount: { lowCents: 100_000, highCents: 100_000 },
     schedule: monthly(utc(2026, 12, 1)),
   });
   const payments = planBillPayments(monthlyRent, biweekly, horizon);
@@ -1126,7 +1132,10 @@ const version = (
 
   // Shares re-divide what is left, so they never pass the bill and always sum to it.
   const uneven = planBillPayments(
-    makeBill({ amountCents: 10, schedule: once(utc(2027, 1, 1)) }),
+    makeBill({
+      amount: { lowCents: 10, highCents: 10 },
+      schedule: once(utc(2027, 1, 1)),
+    }),
     [...incomes, day(utc(2026, 12, 15), 'd')],
     horizon,
   );
@@ -1174,7 +1183,7 @@ const version = (
 
   // Chosen days split the amount with allocate, ignoring days that have passed.
   const chosen = makeBill({
-    amountCents: 100,
+    amount: { lowCents: 100, highCents: 100 },
     schedule: once(utc(2027, 1, 1)),
     fundedBy: { kind: 'chosen', dayKeys: ['pay_c', 'pay_a', 'pay_b', 'gone'] },
   });
@@ -2002,6 +2011,173 @@ const version = (
         );
       });
   });
+}
+
+// The planning stance picks the end of every range; an item's own stance replaces the plan's.
+{
+  const exact = (cents: number): MoneyRange => ({
+    lowCents: cents,
+    highCents: cents,
+  });
+  const STANCE_LIST = ['conservative', 'middle', 'optimistic'] as const;
+  const on = utc(2026, 12, 4);
+  const horizon = on + 60 * DAY_MS;
+  const rangeIncome = { lowCents: 100_000, highCents: 160_000 };
+  const rangeBill = { lowCents: 30_000, highCents: 42_000 };
+  const dayOf = (
+    id: string,
+    amount: MoneyRange,
+    stanceOverride: (typeof STANCE_LIST)[number] | null = null,
+  ) => ({
+    dayKey: toDayKey(id, on),
+    sourceId: 'src',
+    on,
+    amount,
+    stanceOverride,
+  });
+  const billOf = (
+    itemId: string,
+    amount: MoneyRange,
+    stanceOverride: (typeof STANCE_LIST)[number] | null = null,
+  ): DraftBillInput => ({
+    itemId,
+    createdAt: 1,
+    priority: 'should',
+    orderIndex: 1,
+    amount,
+    stanceOverride,
+    schedule: { kind: 'once', anchor: on + 3 * DAY_MS, monthDays: [] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+  });
+  const tenPercent: DraftInput['plan']['envelopes'][number] = {
+    itemId: 'tithe',
+    createdAt: 1,
+    priority: 'must',
+    orderIndex: 1,
+    funding: {
+      amount: { kind: 'percent', bps: 1_000, of: 'dayMoney' },
+      cadence: { kind: 'everyIncomeDay' },
+    },
+  };
+  const draftAt = (
+    stance: (typeof STANCE_LIST)[number],
+    day: ReturnType<typeof dayOf>,
+    bills: DraftBillInput[],
+  ) =>
+    buildDraft({
+      days: [day],
+      plan: {
+        envelopes: [tenPercent],
+        bills,
+        goals: [],
+        horizon,
+        incomeDays: [
+          {
+            dayKey: day.dayKey,
+            on,
+            amount: day.amount,
+            stanceOverride: day.stanceOverride,
+          },
+        ],
+      },
+      stance,
+      overrides: { dayCents: {} },
+    });
+  const billTotal = (draft: ReturnType<typeof draftAt>) =>
+    draft.lines.find((entry) => entry.itemId === 'rent')?.bill?.totalCents;
+
+  assert.equal(pick('conservative', rangeIncome, 'income'), 100_000);
+  assert.equal(pick('optimistic', rangeIncome, 'income'), 160_000);
+  assert.equal(pick('conservative', rangeBill, 'expense'), 42_000);
+  assert.equal(pick('optimistic', rangeBill, 'expense'), 30_000);
+  assert.equal(
+    pick('middle', { lowCents: 1, highCents: 2 }, 'income'),
+    1,
+    'the middle rounds down to whole cents',
+  );
+
+  const ranged = STANCE_LIST.map((stance) =>
+    draftAt(stance, dayOf('pay', rangeIncome), [billOf('rent', rangeBill)]),
+  );
+  assert.deepEqual(
+    ranged.map((draft) => draft.moneyCents),
+    [100_000, 130_000, 160_000],
+    'day money is low, middle, high under conservative, middle, optimistic',
+  );
+  assert.deepEqual(
+    ranged.map(billTotal),
+    [42_000, 36_000, 30_000],
+    'a bill is planned at the opposite end',
+  );
+  assert.deepEqual(
+    ranged.map(
+      (draft) => draft.lines.find((entry) => entry.itemId === 'tithe')?.cents,
+    ),
+    [10_000, 13_000, 16_000],
+    'a share of the day follows the picked day money',
+  );
+  assert.equal(
+    new Set(ranged.map((draft) => JSON.stringify(draft))).size,
+    3,
+    'switching the stance changes every draft that uses a range',
+  );
+
+  const flat = STANCE_LIST.map((stance) =>
+    draftAt(stance, dayOf('pay', exact(120_000)), [
+      billOf('rent', exact(36_000)),
+    ]),
+  );
+  assert.deepEqual(
+    flat[1],
+    flat[0],
+    'a draft with no range ignores the stance (middle)',
+  );
+  assert.deepEqual(
+    flat[2],
+    flat[0],
+    'a draft with no range ignores the stance (optimistic)',
+  );
+
+  const overridden = draftAt(
+    'conservative',
+    dayOf('pay', rangeIncome, 'optimistic'),
+    [billOf('rent', rangeBill, 'optimistic')],
+  );
+  assert.equal(
+    overridden.moneyCents,
+    160_000,
+    'a pay line plans at its own end',
+  );
+  assert.equal(billTotal(overridden), 30_000, 'a bill plans at its own end');
+  assert.equal(
+    overridden.lines.find((entry) => entry.itemId === 'rent')?.bill?.ranged
+      ?.stance,
+    'optimistic',
+    'the line names the stance that picked its total',
+  );
+  assert.deepEqual(
+    draftAt('conservative', dayOf('pay', rangeIncome, null), [
+      billOf('rent', rangeBill, null),
+    ]),
+    ranged[0],
+    'no override follows the plan',
+  );
+
+  assert.deepEqual(
+    [undefined, null, '', 'bogus', 'Conservative'].map(readStance),
+    Array.from({ length: 5 }, () => 'conservative'),
+    'a missing or unknown stance reads as conservative',
+  );
+  assert.equal(effectiveStance('middle', undefined), 'middle');
+  assert.equal(effectiveStance('middle', 'optimistic'), 'optimistic');
+  assert.deepEqual(
+    draftAt(readStance('bogus'), dayOf('pay', rangeIncome), [
+      billOf('rent', rangeBill),
+    ]),
+    ranged[0],
+    'a legacy plan plans conservatively',
+  );
 }
 
 console.log('runway engine: ok');

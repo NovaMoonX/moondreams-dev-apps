@@ -176,6 +176,7 @@ async function writeSeedIncome(
     schedule: { kind: 'everyOtherWeek', anchor: firstPayday, monthDays: [] },
     amount: { lowCents: 214_000, highCents: 214_000 },
     ending: { onDate: null, afterCount: 6 },
+    stanceOverride: null,
     pairings: [
       {
         targetItemId: 'seed-envelope-groceries',
@@ -189,6 +190,7 @@ async function writeSeedIncome(
     schedule: { kind: 'once', anchor: bonusDay, monthDays: [] },
     amount: { lowCents: 90_000, highCents: 90_000 },
     ending: { onDate: null, afterCount: null },
+    stanceOverride: null,
     pairings: [
       {
         targetItemId: 'seed-envelope-savings',
@@ -205,8 +207,9 @@ async function writeSeedIncome(
   const freelance: PayLineSealed = {
     name: 'Freelance payment',
     schedule: { kind: 'once', anchor: freelanceDay, monthDays: [] },
-    amount: { lowCents: 12_000, highCents: 12_000 },
+    amount: { lowCents: 12_000, highCents: 18_000 },
     ending: { onDate: null, afterCount: null },
+    stanceOverride: null,
     pairings: [
       {
         targetItemId: 'seed-bill-rent',
@@ -218,7 +221,10 @@ async function writeSeedIncome(
   const summaries: ChangeSealed[] = [
     { summary: 'Added Paycheck from Northwind Studio, $2,140.00.' },
     { summary: 'Added Spring bonus from Northwind Studio, $900.00.' },
-    { summary: 'Added Freelance payment from Northwind Studio, $120.00.' },
+    {
+      summary:
+        'Added Freelance payment from Northwind Studio, $120.00 to $180.00.',
+    },
   ];
 
   const [
@@ -549,6 +555,7 @@ async function writeSeedBills(
         },
         ending: never,
         fundedBy: { kind: 'suggested' },
+        stanceOverride: null,
       },
     },
     {
@@ -569,6 +576,7 @@ async function writeSeedBills(
         },
         ending: never,
         fundedBy: { kind: 'suggested' },
+        stanceOverride: null,
       },
     },
     {
@@ -578,7 +586,7 @@ async function writeSeedBills(
         emoji: '🦷',
         priority: 'should',
         orderIndex: 1,
-        amount: exact(30_000),
+        amount: { lowCents: 30_000, highCents: 36_000 },
         timing: {
           kind: 'date',
           schedule: {
@@ -592,6 +600,7 @@ async function writeSeedBills(
           kind: 'chosen',
           dayKeys: [paydayKey(0), paydayKey(1), paydayKey(2)],
         },
+        stanceOverride: null,
       },
     },
     {
@@ -601,7 +610,7 @@ async function writeSeedBills(
         emoji: null,
         priority: 'should',
         orderIndex: 2,
-        amount: exact(8_900),
+        amount: { lowCents: 8_900, highCents: 9_900 },
         timing: {
           kind: 'date',
           schedule: {
@@ -612,6 +621,7 @@ async function writeSeedBills(
         },
         ending: { onDate: null, afterCount: 6 },
         fundedBy: { kind: 'suggested' },
+        stanceOverride: 'optimistic',
       },
     },
   ];

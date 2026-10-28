@@ -3,6 +3,7 @@ import { doc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 
 import { DEFAULT_CURRENCY_CODE } from '@apps/runway/constants';
+import { readStance } from '@apps/runway/engine/stance';
 import { openJson } from '@apps/runway/security';
 import type {
   OpenPlan,
@@ -22,7 +23,7 @@ async function openPlan(
     uid: plan.uid,
     createdAt: plan.createdAt,
     updatedAt: plan.updatedAt,
-    stance: plan.stance,
+    stance: readStance(plan.stance),
     keyId: plan.keyId ?? null,
     currencyCode: fields.currencyCode,
   };

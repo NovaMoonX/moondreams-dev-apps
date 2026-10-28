@@ -17,6 +17,7 @@ import {
   selectBills,
   selectComingDays,
   selectIsPlanItemsLoaded,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
 const SEARCH_THRESHOLD = 8;
@@ -26,6 +27,7 @@ function BillsScreen() {
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const bills = useAppSelector((state) => selectBills(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const stance = useAppSelector(selectStance);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
@@ -44,13 +46,15 @@ function BillsScreen() {
           createdAt: item.createdAt,
           priority: payload.priority,
           orderIndex: payload.orderIndex,
-          amountCents: payload.amount.highCents,
+          amount: payload.amount,
+          stanceOverride: payload.stanceOverride ?? null,
           schedule: payload.timing.schedule,
           ending: payload.ending,
           fundedBy: payload.fundedBy,
         },
         comingDays,
         horizon,
+        stance,
       );
       const payment = payments.find((entry) => entry.dueOn >= today) ?? null;
       return { item, payload, payment };
@@ -84,7 +88,12 @@ function BillsScreen() {
         ) : (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {visible.map(({ item, payload, payment }) => (
-              <BillRow key={item.id} bill={payload} payment={payment} />
+              <BillRow
+                key={item.id}
+                bill={payload}
+                payment={payment}
+                planStance={stance}
+              />
             ))}
           </ul>
         )}
