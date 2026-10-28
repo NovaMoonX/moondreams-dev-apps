@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader, LockKeyhole } from 'lucide-react';
+import { History, Loader, LockKeyhole } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -25,7 +25,7 @@ import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { RUNWAY_TAB_LABELS } from '@apps/runway/constants';
+import { HISTORY_WORDS, RUNWAY_TAB_LABELS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import SpendScreen from '@apps/runway/screens/spend/SpendScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -35,6 +35,8 @@ import {
   selectIsPlanItemsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
+import { useClosings } from '@apps/runway/hooks/useClosings';
+import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 
 /** A subview that unmounts steps its own history entry back, which would undo a URL change made first; this waits for that step. */
@@ -87,6 +89,11 @@ function RunwayPage() {
   useRunwayTheme();
   useTrackAppUsage('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
+  const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
+  const { retry: retryHistory } = useClosings(
+    isDeletingPlan ? null : (user?.uid ?? null),
+  );
+  const historyStatus = useAppSelector((state) => selectHistory(state).status);
 
   const tryAgain = () => {
     dispatch(setKeyStatus('loading'));
@@ -101,11 +108,7 @@ function RunwayPage() {
     return <AuthRequiredState message='Please sign in to use Runway.' />;
   }
 
-  if (
-    moreEntry === 'settings' &&
-    settingsView === 'delete' &&
-    keyStatus === 'ready'
-  ) {
+  if (isDeletingPlan && keyStatus === 'ready') {
     return (
       <div className='page'>
         <DeletePlanScreen
@@ -137,6 +140,38 @@ function RunwayPage() {
             Your plan cannot be opened right now. Nothing has been changed or
             lost.
           </EmptyCard>
+        </div>
+      </div>
+    );
+  }
+
+  if (
+    keyStatus === 'ready' &&
+    isPlanLoaded &&
+    (historyStatus === 'building' || historyStatus === 'failed')
+  ) {
+    return (
+      <div className='page'>
+        <div className='mx-auto max-w-4xl py-6'>
+          {historyStatus === 'building' ? (
+            <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
+              <span className='block font-medium'>
+                {HISTORY_WORDS.updating}
+              </span>
+              <span className='block'>{HISTORY_WORDS.updatingBody}</span>
+            </EmptyCard>
+          ) : (
+            <EmptyCard
+              icon={<History className='h-5 w-5' />}
+              action={
+                <Button variant='secondary' size='sm' onClick={retryHistory}>
+                  {HISTORY_WORDS.tryAgain}
+                </Button>
+              }
+            >
+              {HISTORY_WORDS.failed}
+            </EmptyCard>
+          )}
         </div>
       </div>
     );

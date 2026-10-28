@@ -15,6 +15,28 @@ import {
   deriveBalances,
   deriveBalancesBefore,
 } from '../../src/apps/runway/engine/balances.ts';
+import {
+  buildClosings,
+  closing as buildClosing,
+  CLOSED_DAY_KEY,
+  decodeClosing,
+  deriveBillProgress,
+  deriveHeldByItem,
+  encodeClosing,
+  getDirtyFrom,
+  getHistory,
+  getLastClosableMonth,
+  getMonthStart,
+  getNextMonth,
+  getPreviousMonth,
+  getRebuildRange,
+  getValidClosing,
+  listMonths,
+  toMonthKey,
+  withoutSpending,
+  type ClosingEntries,
+  type ClosingState,
+} from '../../src/apps/runway/engine/closings.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -4827,6 +4849,7 @@ const version = (
         settledKey: '',
         billProgress,
         startDate: null,
+        recentFrom: today - 180 * DAY_MS,
         comingDays,
         bills: bills.map(({ item: entry, version: v }: never) => ({
           item: entry,
@@ -5693,6 +5716,885 @@ const version = (
   assert.equal(again, once, 'the same sealed payload is opened once');
   assert.notEqual(again, other, 'a payload sealed again is opened on its own');
   assert.equal(other.name, 'Rent');
+}
+
+{
+  // Closings (Issue 28): a closing plus the ledger since gives the figures of the whole ledger, for every month.
+  const random = makeRandom(28);
+  const startDate = utc(2020, 3, 17);
+  const monthOf = toMonthKey;
+  const billIds = Array.from({ length: 14 }, (_, index) => `bill${index}`);
+  const envelopeIds = Array.from({ length: 6 }, (_, index) => `env${index}`);
+  const goalIds = ['goalA', 'goalB', 'goalC'];
+  const kinds = {
+    ...Object.fromEntries(billIds.map((id) => [id, 'bill' as const])),
+    ...Object.fromEntries(envelopeIds.map((id) => [id, 'envelope' as const])),
+    ...Object.fromEntries(goalIds.map((id) => [id, 'goal' as const])),
+  };
+  const line = (dayId: string, itemId: string, cents: number) => ({
+    lineId: `${dayId}:${itemId}`,
+    itemId,
+    name: itemId,
+    emoji: null,
+    tier: 'should' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const pickCents = (max: number) => 100 + Math.floor(random() * max);
+
+  const payDays = Array.from({ length: 5 * 26 + 4 }, (_, index) => ({
+    id: `pay_${index}`,
+    expectedOn: startDate - 3 * DAY_MS + index * 14 * DAY_MS,
+  })).concat(
+    Array.from({ length: 62 }, (_, index) => ({
+      id: `retainer_${index}`,
+      expectedOn: utc(2020, 3 + index, 5),
+    })),
+  );
+  const makeDay = (day: { id: string; expectedOn: number }, index: number) => {
+    const delay = index % 7 === 0 ? 4 * DAY_MS : 0;
+    return {
+      ...day,
+      arrivedOn: day.expectedOn + delay,
+    };
+  };
+  const days = payDays.map(makeDay);
+  const first = (day: { id: string }) => `${day.id}_confirmed`;
+  const mkRecord = (
+    day: { id: string },
+    kind: 'confirmed' | 'correction',
+    arrivedCents: number,
+    lines: ReturnType<typeof line>[],
+    createdAt: number,
+    supersedesId?: string,
+  ): OpenRecord =>
+    ({
+      id: kind === 'confirmed' ? first(day) : `${supersedesId}_corrected`,
+      dayId: day.id,
+      createdAt,
+      kind,
+      ...(supersedesId ? { supersedesId } : {}),
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative',
+        arrivedCents,
+        expectedCents: arrivedCents,
+        freeToSpendCents: 0,
+        differences: [],
+        lines,
+        before: { arrivedCents, freeToSpendCents: 0 },
+        changes: [],
+        note: null,
+      },
+    }) as unknown as OpenRecord;
+  const records = days.flatMap((day, index) => {
+    const lines = [
+      ...envelopeIds.map((id) => line(day.id, id, pickCents(8_000))),
+      ...goalIds.map((id) => line(day.id, id, pickCents(3_000))),
+      ...billIds
+        .filter((_, billIndex) => (billIndex + index) % 3 === 0)
+        .map((id) => line(day.id, id, pickCents(12_000))),
+    ];
+    const arrived = 200_000 + pickCents(100_000);
+    const confirmed = mkRecord(day, 'confirmed', arrived, lines, index * 10);
+    if (index % 9 !== 0) return [confirmed];
+    const corrected = mkRecord(
+      day,
+      'correction',
+      arrived + 1_000,
+      lines.map((entry, position) =>
+        position % 2 === 0 ? { ...entry, cents: entry.cents + 250 } : entry,
+      ),
+      index * 10 + 1,
+      first(day),
+    );
+    const again =
+      index % 18 === 0
+        ? [
+            mkRecord(
+              day,
+              'correction',
+              arrived - 500,
+              lines.slice(1),
+              index * 10 + 2,
+              corrected.id,
+            ),
+          ]
+        : [];
+    return [confirmed, corrected, ...again];
+  });
+  const mkMove = (
+    id: string,
+    kind: 'billPaid' | 'start',
+    date: number,
+    refId: string | null,
+    reversesMoveId: string | null,
+    payload: object,
+    createdAt: number,
+  ) =>
+    ({
+      id,
+      kind,
+      date,
+      refId,
+      reversesMoveId,
+      createdAt,
+      payload,
+    }) as unknown as OpenMove;
+  const dues = billIds.flatMap((billId, billIndex) =>
+    Array.from({ length: 62 }, (_, month) => ({
+      billId,
+      dueOn: utc(2020, 3 + month, 1 + ((billIndex * 5) % 28)),
+      month,
+    })),
+  );
+  const paidMoves = dues.flatMap(({ billId, dueOn, month }, index) => {
+    if (month % 11 === 5) return [];
+    const paidOn =
+      dueOn + (index % 5 === 0 ? 40 * DAY_MS : -(index % 4) * DAY_MS);
+    const mark = (marks: number) => getPaidMoveId(billId, dueOn, marks);
+    const payload = {
+      amountCents: 5_000 + index,
+      paidOn,
+      fromFreeCents: index % 3 === 0 ? 700 : 0,
+    };
+    const paid = mkMove(
+      mark(0),
+      'billPaid',
+      dueOn,
+      billId,
+      null,
+      payload,
+      index,
+    );
+    if (index % 13 !== 0) return [paid];
+    const undone = mkMove(
+      getUndoMoveId(mark(0)),
+      'billPaid',
+      dueOn,
+      billId,
+      mark(0),
+      payload,
+      index + 1,
+    );
+    const again =
+      index % 26 === 0
+        ? [
+            mkMove(
+              mark(1),
+              'billPaid',
+              dueOn,
+              billId,
+              null,
+              { ...payload, amountCents: 6_100 },
+              index + 2,
+            ),
+          ]
+        : [];
+    return [paid, undone, ...again];
+  });
+  const startMoves = [
+    mkMove(
+      'start_money_1',
+      'start',
+      startDate,
+      null,
+      null,
+      { amountCents: 900_000, holding: 'money' },
+      1,
+    ),
+    mkMove(
+      'start_money_0',
+      'start',
+      startDate,
+      null,
+      null,
+      { amountCents: 100, holding: 'money' },
+      0,
+    ),
+    ...envelopeIds
+      .slice(0, 3)
+      .map((id, index) =>
+        mkMove(
+          `start_${id}`,
+          'start',
+          startDate,
+          id,
+          null,
+          { amountCents: 10_000 * (index + 1), holding: 'envelope' },
+          1,
+        ),
+      ),
+    mkMove(
+      'start_goalA',
+      'start',
+      startDate,
+      'goalA',
+      null,
+      { amountCents: 40_000, holding: 'goal' },
+      1,
+    ),
+    ...billIds
+      .slice(0, 4)
+      .map((id, index) =>
+        mkMove(
+          `start_${id}`,
+          'start',
+          startDate,
+          id,
+          null,
+          { amountCents: 2_000 * (index + 1), holding: 'bill' },
+          1,
+        ),
+      ),
+  ];
+  const moves = [...startMoves, ...paidMoves];
+  const spendDays = Array.from(
+    { length: 1_800 },
+    (_, index) =>
+      startDate - 20 * DAY_MS + Math.floor((index * 1_830) / 1_800) * DAY_MS,
+  );
+  const purchases: OpenPurchase[] = spendDays.map((date, index) => {
+    const isRefund = index % 17 === 0;
+    const cents = pickCents(6_000) * (isRefund ? -1 : 1);
+    const envelopeId = envelopeIds[index % envelopeIds.length];
+    const lines =
+      index % 11 === 0
+        ? [
+            { envelopeId, cents: Math.ceil(cents / 2), via: 'chosen' as const },
+            {
+              envelopeId: null,
+              cents: cents - Math.ceil(cents / 2),
+              via: 'free' as const,
+            },
+          ]
+        : [
+            {
+              envelopeId: index % 23 === 0 ? null : envelopeId,
+              cents,
+              via: 'chosen' as const,
+            },
+          ];
+    return {
+      id: `p${index}`,
+      date,
+      source: 'manual',
+      needsHome: false,
+      createdAt: date,
+      updatedAt: date,
+      amountCents: cents,
+      merchant: null,
+      note: null,
+      lines,
+      refundOfId: null,
+    };
+  });
+
+  const firstMonth = monthOf(startDate);
+  const lastMonth = monthOf(
+    Math.max(...days.map((day) => day.expectedOn), purchases.at(-1)!.date),
+  );
+  const allMonths = listMonths(firstMonth, lastMonth);
+  assert.ok(allMonths.length >= 60, 'the plan spans five years');
+
+  const recordsByDay = records.reduce<Map<string, OpenRecord[]>>(
+    (acc, record) =>
+      acc.set(record.dayId, [...(acc.get(record.dayId) ?? []), record]),
+    new Map(),
+  );
+  const entriesOf = (
+    ledger: { days: typeof days; moves: OpenMove[]; purchases: OpenPurchase[] },
+    inMonth: (month: string) => boolean,
+    start = startDate,
+  ): ClosingEntries => {
+    const monthDays = ledger.days.filter((day) =>
+      inMonth(monthOf(day.expectedOn)),
+    );
+    return {
+      startDate: start,
+      days: monthDays,
+      records: monthDays.flatMap((day) => recordsByDay.get(day.id) ?? []),
+      moves: ledger.moves.filter(
+        (move) => move.kind === 'billPaid' && inMonth(monthOf(move.date)),
+      ),
+      purchases: ledger.purchases.filter((purchase) =>
+        inMonth(monthOf(purchase.date)),
+      ),
+      billIds: new Set(billIds),
+    };
+  };
+  const ledger = { days, moves, purchases };
+  const readMonth =
+    (source: typeof ledger, start = startDate) =>
+    async (month: string) =>
+      entriesOf(source, (candidate) => candidate === month, start);
+  const closings = await buildClosings(allMonths, null, readMonth(ledger));
+  assert.equal(closings.length, allMonths.length);
+
+  const arrivedOn = new Map(days.map((day) => [day.id, day.arrivedOn]));
+  const expectedOn = new Map(days.map((day) => [day.id, day.expectedOn]));
+  const sinceStart = (list: OpenRecord[]) =>
+    list.filter((record) => (arrivedOn.get(record.dayId) ?? 0) >= startDate);
+  const normalizeProgress = (progress: ReturnType<typeof deriveBillProgress>) =>
+    Object.fromEntries(
+      Object.entries(progress)
+        .filter(([id]) => kinds[id as keyof typeof kinds] === 'bill')
+        .map(([id, entry]) => [
+          id,
+          {
+            funded: entry.funded
+              .map(
+                (funded) =>
+                  `${funded.dayKey === 'start' ? 's' : 'd'}:${funded.on}:${funded.cents}`,
+              )
+              .sort(),
+            paid: entry.paid
+              .map(
+                (paid) =>
+                  `${paid.moveId}:${paid.dueOn}:${paid.amountCents}:${paid.paidOn}:${paid.fromFreeCents}`,
+              )
+              .sort(),
+          },
+        ])
+        .filter(
+          ([, entry]) =>
+            (entry as { funded: string[]; paid: string[] }).funded.length +
+              (entry as { funded: string[]; paid: string[] }).paid.length >
+            0,
+        ),
+    );
+  const figuresOf = (
+    base: ClosingState | null,
+    after: string | null,
+    isTracking: boolean,
+  ) => {
+    const isLive = (month: string) => after === null || month > after;
+    const live = entriesOf(ledger, isLive);
+    const liveRecords = live.records;
+    const liveMoves = moves.filter(
+      (move) => move.kind === 'start' || isLive(monthOf(move.date)),
+    );
+    const balances = deriveBalances({
+      startDate,
+      moves: liveMoves,
+      records: liveRecords,
+      arrivedOn,
+      kinds,
+      purchases: isTracking ? live.purchases : [],
+      closing: base === null ? null : isTracking ? base : withoutSpending(base),
+    });
+    const liveSince = sinceStart(liveRecords);
+    return {
+      balances,
+      held: deriveHeldByItem(liveSince, liveMoves, startDate, base),
+      progress: normalizeProgress(
+        deriveBillProgress(liveSince, expectedOn, liveMoves, startDate, base),
+      ),
+    };
+  };
+  const full = {
+    track: figuresOf(null, null, true),
+    plan: figuresOf(null, null, false),
+  };
+  assert.ok(
+    full.track.balances.paidCents > 0 && full.track.balances.spentCents !== 0,
+  );
+  assert.ok(
+    Object.values(full.track.progress).some((entry) => entry.paid.length > 1),
+    'the plan has paid payments to carry',
+  );
+
+  closings.forEach((state, index) => {
+    const month = allMonths[index];
+    assert.deepEqual(
+      decodeClosing(month, encodeClosing(state)),
+      state,
+      `${month}: a sealed closing reads back the same`,
+    );
+    const track = figuresOf(state, month, true);
+    assert.deepEqual(
+      track.balances,
+      full.track.balances,
+      `${month}: balances match the whole ledger`,
+    );
+    assert.deepEqual(
+      track.held,
+      full.track.held,
+      `${month}: goal holdings match`,
+    );
+    assert.deepEqual(
+      track.progress,
+      full.track.progress,
+      `${month}: bill progress matches`,
+    );
+    const plan = figuresOf(state, month, false);
+    assert.deepEqual(
+      plan.balances,
+      full.plan.balances,
+      `${month}: balances match at Plan`,
+    );
+  });
+
+  // A write into an old month is picked up by rebuilding from that month on, on the closing before it.
+  const edited = purchases.map((purchase, index) =>
+    index === 700
+      ? {
+          ...purchase,
+          amountCents: purchase.amountCents + 12_345,
+          lines: [
+            { ...purchase.lines[0], cents: purchase.lines[0].cents + 12_345 },
+          ],
+        }
+      : purchase,
+  );
+  const editedAt = monthOf(purchases[700].date);
+  const changedLedger = { days, moves, purchases: edited };
+  const onlyEdited = (ledgerToBuild: typeof ledger) => ledgerToBuild;
+  const fromScratch = await buildClosings(
+    allMonths,
+    null,
+    readMonth(onlyEdited(changedLedger)),
+  );
+  const editedIndex = allMonths.indexOf(editedAt);
+  assert.deepEqual(
+    closings[editedIndex - 1],
+    fromScratch[editedIndex - 1],
+    'closings before the edited month are untouched',
+  );
+  assert.notDeepEqual(
+    closings[editedIndex],
+    fromScratch[editedIndex],
+    'the edited month changes its closing',
+  );
+  const rebuilt = await buildClosings(
+    allMonths.slice(editedIndex),
+    closings[editedIndex - 1],
+    readMonth(changedLedger),
+  );
+  assert.deepEqual(
+    [...closings.slice(0, editedIndex), ...rebuilt],
+    fromScratch,
+    'a rebuild from the dirty month equals one from the start',
+  );
+  assert.equal(
+    fromScratch.at(-1)!.spentCents - closings.at(-1)!.spentCents,
+    12_345,
+    'the edit reaches every later closing',
+  );
+
+  // A closing counted from one starting day never continues from another.
+  assert.throws(() =>
+    buildClosing(
+      allMonths[1],
+      closings[0],
+      entriesOf(ledger, (m) => m === allMonths[1], startDate + DAY_MS),
+    ),
+  );
+  const movedStart = startDate + 100 * DAY_MS;
+  assert.deepEqual(
+    getValidClosing({
+      startDate: movedStart,
+      dirtyFrom: null,
+      closing: closings[3],
+    }),
+    null,
+    'a closing from another starting day is not used',
+  );
+  assert.equal(
+    getValidClosing({
+      startDate,
+      dirtyFrom: allMonths[3],
+      closing: closings[3],
+    }),
+    null,
+    'a closing from the dirty month on is stale',
+  );
+  assert.equal(
+    getValidClosing({
+      startDate,
+      dirtyFrom: allMonths[3],
+      closing: closings[2],
+    }),
+    closings[2],
+    'one before it still applies',
+  );
+  assert.equal(CLOSED_DAY_KEY, 'closed');
+  assert.ok(
+    JSON.stringify(encodeClosing(closings.at(-1)!)).length < 400_000,
+    'the last closing of five years is far under the 1 MiB document limit',
+  );
+
+  // Months.
+  assert.equal(getNextMonth('2025-12'), '2026-01');
+  assert.equal(getPreviousMonth('2026-01'), '2025-12');
+  assert.deepEqual(listMonths('2025-11', '2026-02'), [
+    '2025-11',
+    '2025-12',
+    '2026-01',
+    '2026-02',
+  ]);
+  assert.deepEqual(listMonths('2026-02', '2026-01'), []);
+  assert.equal(getMonthStart('2026-02'), utc(2026, 2, 1));
+  assert.equal(
+    getLastClosableMonth(utc(2026, 11, 15)),
+    '2026-09',
+    'a month closes 15 days after it ends',
+  );
+  assert.equal(getLastClosableMonth(utc(2026, 11, 16)), '2026-10');
+  assert.equal(
+    getLastClosableMonth(utc(2026, 1, 3)),
+    '2025-11',
+    'across a year',
+  );
+
+  // What a writer marks dirty.
+  const today = utc(2026, 11, 20);
+  assert.deepEqual(
+    getDirtyFrom(null, [utc(2026, 11, 3)], today),
+    { dirtyFrom: null, isTouched: false },
+    'this month is never closed',
+  );
+  assert.deepEqual(getDirtyFrom(null, [utc(2026, 8, 3)], today), {
+    dirtyFrom: '2026-08',
+    isTouched: true,
+  });
+  assert.deepEqual(
+    getDirtyFrom('2026-06', [utc(2026, 8, 3)], today),
+    { dirtyFrom: '2026-06', isTouched: true },
+    'an earlier dirty month stays, and the write still counts as touching',
+  );
+  assert.deepEqual(
+    getDirtyFrom('2026-09', [utc(2026, 8, 3), utc(2026, 5, 1)], today),
+    { dirtyFrom: '2026-05', isTouched: true },
+    'a move between months marks both',
+  );
+  assert.deepEqual(getDirtyFrom(null, [utc(2026, 10, 30)], utc(2026, 11, 13)), {
+    dirtyFrom: null,
+    isTouched: false,
+  });
+  assert.deepEqual(
+    getDirtyFrom(null, [utc(2026, 10, 30)], utc(2026, 11, 14)),
+    { dirtyFrom: '2026-10', isTouched: true },
+    'two days before a month closes, a write already marks it',
+  );
+
+  // When the history is ready, and from where the recent window reads.
+  const nov20 = utc(2026, 11, 20);
+  const sample = (month: string, start = utc(2026, 1, 10)): ClosingState => ({
+    ...closings[0],
+    month,
+    startDate: start,
+  });
+  const ready = getHistory({
+    startDate: utc(2026, 1, 10),
+    dirtyFrom: null,
+    closing: sample('2026-10'),
+    today: nov20,
+    hasFailed: false,
+  });
+  assert.deepEqual(
+    ready.status === 'ready' && ready.from,
+    utc(2026, 11, 1),
+    'the window starts the month after the closing',
+  );
+  const lagging = getHistory({
+    startDate: utc(2026, 1, 10),
+    dirtyFrom: null,
+    closing: sample('2026-09'),
+    today: nov20,
+    hasFailed: false,
+  });
+  assert.equal(
+    lagging.status,
+    'ready',
+    'a closing one month behind is used as it is',
+  );
+  assert.deepEqual(
+    lagging.status === 'ready' && lagging.from,
+    utc(2026, 10, 1),
+  );
+  const behind = getHistory({
+    startDate: utc(2026, 1, 10),
+    dirtyFrom: null,
+    closing: sample('2026-07'),
+    today: nov20,
+    hasFailed: false,
+  });
+  assert.equal(behind.status, 'building', 'two months behind rebuilds');
+  assert.deepEqual(
+    behind.status === 'building' && getRebuildRange(behind.need),
+    { from: '2026-08', to: '2026-10' },
+  );
+  const dirty = getHistory({
+    startDate: utc(2026, 1, 10),
+    dirtyFrom: '2026-05',
+    closing: sample('2026-04'),
+    today: nov20,
+    hasFailed: false,
+  });
+  assert.equal(dirty.status, 'building');
+  assert.deepEqual(dirty.status === 'building' && getRebuildRange(dirty.need), {
+    from: '2026-05',
+    to: '2026-10',
+  });
+  const none = getHistory({
+    startDate: utc(2026, 1, 10),
+    dirtyFrom: null,
+    closing: null,
+    today: nov20,
+    hasFailed: false,
+  });
+  assert.deepEqual(
+    none.status === 'building' && getRebuildRange(none.need),
+    { from: '2026-01', to: '2026-10' },
+    'a plan with no closing builds from its first month',
+  );
+  const young = getHistory({
+    startDate: utc(2026, 11, 2),
+    dirtyFrom: null,
+    closing: null,
+    today: nov20,
+    hasFailed: false,
+  });
+  assert.equal(
+    young.status,
+    'ready',
+    'a plan with nothing closed yet needs no closing',
+  );
+  assert.deepEqual(
+    young.status === 'ready' && young.from,
+    nov20 - 180 * DAY_MS,
+    'and reads the usual 180 days',
+  );
+  assert.equal(
+    getHistory({
+      startDate: null,
+      dirtyFrom: null,
+      closing: null,
+      today: nov20,
+      hasFailed: false,
+    }).status,
+    'ready',
+    'a plan with no starting day needs no closing',
+  );
+  const failedWith = getHistory({
+    startDate: utc(2026, 1, 10),
+    dirtyFrom: '2026-05',
+    closing: sample('2026-04'),
+    today: nov20,
+    hasFailed: true,
+  });
+  assert.equal(
+    failedWith.status,
+    'ready',
+    'a rebuild that failed still reads the newest valid closing',
+  );
+  assert.deepEqual(
+    failedWith.status === 'ready' && failedWith.from,
+    utc(2026, 5, 1),
+  );
+  assert.equal(
+    getHistory({
+      startDate: utc(2026, 1, 10),
+      dirtyFrom: null,
+      closing: null,
+      today: nov20,
+      hasFailed: true,
+    }).status,
+    'failed',
+  );
+  const cleared = getHistory({
+    startDate: utc(2026, 11, 2),
+    dirtyFrom: '2026-06',
+    closing: null,
+    today: nov20,
+    hasFailed: false,
+  });
+  assert.equal(
+    cleared.status,
+    'building',
+    'a dirty plan with nothing to close still clears its mark',
+  );
+  assert.equal(
+    cleared.status === 'building' && getRebuildRange(cleared.need),
+    null,
+  );
+}
+
+{
+  // Closings: money that arrives, and a payment that is made, after the month it belongs to still count once.
+  const startDate = utc(2024, 7, 3);
+  const lineFor = (dayId: string, itemId: string, cents: number) => ({
+    lineId: `${dayId}:${itemId}`,
+    itemId,
+    name: itemId,
+    emoji: null,
+    tier: 'should' as const,
+    demandCents: cents,
+    cents,
+    shortBy: 0,
+    paidBy: [],
+  });
+  const dayRows = [
+    {
+      id: 'before',
+      expectedOn: utc(2024, 6, 30),
+      arrivedOn: utc(2024, 7, 4),
+      cents: 5_000,
+      itemId: 'billA',
+    },
+    {
+      id: 'middle',
+      expectedOn: utc(2024, 7, 15),
+      arrivedOn: utc(2024, 7, 15),
+      cents: 6_000,
+      itemId: 'envA',
+    },
+    {
+      id: 'late',
+      expectedOn: utc(2024, 7, 31),
+      arrivedOn: utc(2024, 8, 2),
+      cents: 7_000,
+      itemId: 'envA',
+    },
+    {
+      id: 'early',
+      expectedOn: utc(2024, 6, 20),
+      arrivedOn: utc(2024, 6, 20),
+      cents: 9_000,
+      itemId: 'envA',
+    },
+  ];
+  const records = dayRows.map(
+    (day) =>
+      ({
+        id: `${day.id}_confirmed`,
+        dayId: day.id,
+        createdAt: 1,
+        kind: 'confirmed',
+        payload: {
+          fingerprint: 'x',
+          stance: 'conservative',
+          arrivedCents: day.cents + 100,
+          expectedCents: day.cents + 100,
+          freeToSpendCents: 100,
+          differences: [],
+          lines: [lineFor(day.id, day.itemId, day.cents)],
+          before: { arrivedCents: day.cents + 100, freeToSpendCents: 100 },
+          changes: [],
+          note: null,
+        },
+      }) as unknown as OpenRecord,
+  );
+  const mk = (
+    id: string,
+    kind: 'start' | 'billPaid',
+    date: number,
+    refId: string | null,
+    payload: object,
+  ) =>
+    ({
+      id,
+      kind,
+      date,
+      refId,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload,
+    }) as unknown as OpenMove;
+  const moves = [
+    mk('start_money', 'start', startDate, null, {
+      amountCents: 100_000,
+      holding: 'money',
+    }),
+    mk(
+      getPaidMoveId('billA', utc(2024, 6, 28), 0),
+      'billPaid',
+      utc(2024, 6, 28),
+      'billA',
+      { amountCents: 3_000, paidOn: utc(2024, 7, 5), fromFreeCents: 0 },
+    ),
+    mk(
+      getPaidMoveId('billA', utc(2024, 7, 28), 0),
+      'billPaid',
+      utc(2024, 7, 28),
+      'billA',
+      { amountCents: 4_000, paidOn: utc(2024, 8, 3), fromFreeCents: 500 },
+    ),
+  ];
+  const kinds = { billA: 'bill', envA: 'envelope' } as const;
+  const monthOf = toMonthKey;
+  const entriesIn = (isIn: (month: string) => boolean): ClosingEntries => {
+    const monthDays = dayRows.filter((day) => isIn(monthOf(day.expectedOn)));
+    return {
+      startDate,
+      days: monthDays,
+      records: records.filter((record) =>
+        monthDays.some((day) => day.id === record.dayId),
+      ),
+      moves: moves.filter(
+        (move) => move.kind === 'billPaid' && isIn(monthOf(move.date)),
+      ),
+      purchases: [],
+      billIds: new Set(['billA']),
+    };
+  };
+  const [july] = await buildClosings(['2024-07'], null, async (month) =>
+    entriesIn((candidate) => candidate === month),
+  );
+  const arrivedOn = new Map(dayRows.map((day) => [day.id, day.arrivedOn]));
+  const wholeInput = {
+    startDate,
+    moves,
+    records,
+    arrivedOn,
+    kinds: { ...kinds },
+    purchases: [],
+  };
+  assert.deepEqual(
+    deriveBalances({
+      ...wholeInput,
+      moves: moves.filter((m) => m.kind === 'start'),
+      records: [],
+      closing: july,
+    }),
+    deriveBalances(wholeInput),
+    'a day expected before the starting month, a late day and both late payments are in the first closing',
+  );
+  assert.equal(
+    july.late.length,
+    1,
+    'only the day that arrived after July is late',
+  );
+  const sameKeys = (balances: ReturnType<typeof deriveBalances>) => ({
+    ...balances,
+    assignedByItem: Object.fromEntries(
+      Object.entries(balances.assignedByItem).filter(
+        ([, cents]) => cents !== 0,
+      ),
+    ),
+  });
+  [utc(2024, 8, 1), utc(2024, 8, 2), utc(2024, 8, 3), utc(2024, 8, 4)].forEach(
+    (day) => {
+      assert.deepEqual(
+        sameKeys(
+          deriveBalancesBefore(
+            {
+              ...wholeInput,
+              moves: moves.filter((m) => m.kind === 'start'),
+              records: [],
+              closing: july,
+            },
+            day,
+          ),
+        ),
+        sameKeys(deriveBalancesBefore(wholeInput, day)),
+        `${new Date(day).toISOString().slice(0, 10)}: the figures as of a day just after the closing leave out what arrived and was paid on or after it`,
+      );
+    },
+  );
 }
 
 console.log('runway engine: ok');

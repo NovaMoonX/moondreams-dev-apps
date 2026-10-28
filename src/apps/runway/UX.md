@@ -103,6 +103,8 @@ Drawn on the canvas, in these groups. Each row names what the picture does not s
 
 **Where this screen set stops.** Envelopes, bills and income days stay in the tens. Purchases and history do not, so Spend and the change log load one date window at a time and search covers the window in view, not all time (encrypted fields cannot be searched on the server).
 
+**Updating your history (Issue 28).** Figures from earlier months are added up once a month and kept as closings, so a plan opens on the months since the newest one, however old it is. The one thing a person sees of it is a card, "Updating your history", drawn in place of every screen while closings are rebuilt: the first open of a plan with months behind it (about a minute at four times slower than a laptop for five years, once), after a purchase, income day or payment in an earlier month was changed, or when two months have passed unopened. It says that nothing is changed or lost and is one card with no button, so no figure from before the change is ever drawn beside it. When it cannot finish (offline), the plan opens on what it has, or says "Your history could not be updated right now" with "Try again" when it has nothing. Spend and Days then list the months since the newest closing, and Spend says so ("Showing purchases from Oct 1. Earlier purchases are counted in your figures but not listed."); "Where is your money now?" asks for a day inside that window.
+
 ---
 
 ## 4. Reusable Components

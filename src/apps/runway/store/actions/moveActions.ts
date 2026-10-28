@@ -4,7 +4,6 @@ import {
   doc,
   runTransaction,
   updateDoc,
-  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -14,6 +13,10 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { MAX_DONE_LINE_IDS } from '@apps/runway/constants';
 import { getPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
+import {
+  getLedgerMark,
+  markLedgerWrite,
+} from '@apps/runway/store/actions/closingActions';
 import type {
   BillPaidSealed,
   ChangeDoc,
@@ -23,6 +26,7 @@ import type {
   Cents,
   DateOnly,
   MoveDoc,
+  PlanDoc,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -41,27 +45,40 @@ export interface MarkBillPaidInput {
   marks: number;
 }
 
+/** How many earlier marks of one payment are looked past when a mark was undone, which the device may not have loaded. */
+const MAX_MARK_PROBES = 12;
+
 /**
- * Records a bill as paid, ahead of its due date or on it. The move's id names the bill and the due
- * date, so a second tap finds it already there and writes nothing.
+ * Records a bill as paid, ahead of its due date or on it. The move's id names the bill, the due date
+ * and which mark it is: a mark is skipped past when it exists and was undone, so a payment from a month
+ * the device has not loaded can be marked again, and a second tap on one that is paid writes nothing.
  */
 export async function markBillPaid(
   uid: string,
   encryption: RunwayEncryption,
   input: MarkBillPaidInput,
 ): Promise<void> {
-  const id = getPaidMoveId(input.billId, input.dueOn, input.marks);
   const payload: BillPaidSealed = {
     amountCents: input.amountCents,
     paidOn: input.paidOn,
     fromFreeCents: Math.max(0, input.amountCents - input.fundedCents),
   };
   const sealed = await sealJson(payload, encryption);
-  const ref = moveRef(uid, id);
+  const ref = doc(db, 'apps', 'runway', 'plans', uid);
   await runTransaction(db, async (transaction) => {
-    const existing = await transaction.get(ref);
-    if (existing.exists()) return;
-    transaction.set(ref, {
+    const plan = await transaction.get(ref);
+    const findOpenMark = async (marks: number): Promise<string | null> => {
+      if (marks >= input.marks + MAX_MARK_PROBES) return null;
+      const id = getPaidMoveId(input.billId, input.dueOn, marks);
+      const existing = await transaction.get(moveRef(uid, id));
+      if (!existing.exists()) return id;
+      const undone = await transaction.get(moveRef(uid, getUndoMoveId(id)));
+      return undone.exists() ? findOpenMark(marks + 1) : null;
+    };
+    const id = await findOpenMark(input.marks);
+    if (id === null) return;
+    markLedgerWrite(transaction, uid, plan.data(), [input.dueOn]);
+    transaction.set(moveRef(uid, id), {
       id,
       kind: 'billPaid',
       date: input.dueOn,
@@ -94,8 +111,12 @@ export async function undoBillPaid(
   );
   const ref = moveRef(uid, id);
   await runTransaction(db, async (transaction) => {
-    const existing = await transaction.get(ref);
+    const [existing, plan] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+    ]);
     if (existing.exists()) return;
+    markLedgerWrite(transaction, uid, plan.data(), [paid.dueOn]);
     transaction.set(ref, {
       id,
       kind: 'billPaid',
@@ -137,7 +158,8 @@ export const getStartMoveId = (refId: string | null, createdAt: number) =>
 
 /**
  * Records where things stand on the starting day: the date, one `start` move per holding and one
- * `start` change, in a single batch. Rerunning it appends newer moves; nothing earlier is edited.
+ * `start` change, in a single transaction that reads the plan, so a changed starting day marks every
+ * closing stale. Rerunning it appends newer moves; nothing earlier is edited.
  */
 export async function recordStart(
   uid: string,
@@ -147,7 +169,6 @@ export async function recordStart(
 ): Promise<void> {
   const now = Date.now();
   const changeId = generateUuid();
-  const batch = writeBatch(db);
   const [changeSealed, ...sealedMoves] = await Promise.all([
     sealJson(
       {
@@ -165,29 +186,38 @@ export async function recordStart(
       ),
     ),
   ]);
-  batch.update(doc(db, 'apps', 'runway', 'plans', uid), {
-    startDate,
-    updatedAt: now,
+  const ref = doc(db, 'apps', 'runway', 'plans', uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const plan = snapshot.data() as Partial<PlanDoc> | undefined;
+    const before = plan?.startDate ?? null;
+    const mark = getLedgerMark(
+      plan,
+      before === startDate ? [] : [before, startDate],
+    );
+    transaction.update(ref, { startDate, updatedAt: now, ...mark });
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'start',
+        createdAt: now,
+        effectiveFrom: startDate,
+        itemIds: [],
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+    holdings.forEach((entry, index) => {
+      const id = getStartMoveId(entry.refId, now);
+      transaction.set(moveRef(uid, id), {
+        id,
+        kind: 'start',
+        date: startDate,
+        refId: entry.refId,
+        reversesMoveId: null,
+        createdAt: now,
+        sealed: sealedMoves[index],
+      } satisfies MoveDoc);
+    });
   });
-  batch.set(doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId), {
-    id: changeId,
-    kind: 'start',
-    createdAt: now,
-    effectiveFrom: startDate,
-    itemIds: [],
-    sealed: changeSealed,
-  } satisfies ChangeDoc);
-  holdings.forEach((entry, index) => {
-    const id = getStartMoveId(entry.refId, now);
-    batch.set(moveRef(uid, id), {
-      id,
-      kind: 'start',
-      date: startDate,
-      refId: entry.refId,
-      reversesMoveId: null,
-      createdAt: now,
-      sealed: sealedMoves[index],
-    } satisfies MoveDoc);
-  });
-  await batch.commit();
 }

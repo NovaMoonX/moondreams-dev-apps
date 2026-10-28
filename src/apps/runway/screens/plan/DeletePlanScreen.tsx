@@ -30,11 +30,7 @@ async function waitUntilGone(getState: () => RootState) {
   const deadline = Date.now() + GONE_WAIT_MS;
   const isGone = () => {
     const { runway } = getState();
-    return (
-      runway.plan === null &&
-      runway.items.length === 0 &&
-      runway.days.length === 0
-    );
+    return runway.plan === null && runway.items.length === 0;
   };
   while (!isGone() && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, GONE_POLL_MS));

@@ -16,7 +16,9 @@ import BillForm from '@apps/runway/forms/BillForm';
 import {
   selectBills,
   selectBillPayments,
+  selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
+  selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillSealed } from '@apps/runway/types';
@@ -27,7 +29,12 @@ const ESTIMATED_ROW_HEIGHT = 190;
 
 function BillsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
-  const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const isLoaded = useAppSelector(
+    (state) =>
+      selectIsPlanItemsLoaded(state) &&
+      selectIsMovesLoaded(state) &&
+      selectIsRecordsReady(state),
+  );
   const bills = useAppSelector((state) => selectBills(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);

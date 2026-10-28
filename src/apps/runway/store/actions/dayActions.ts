@@ -19,6 +19,7 @@ import { toDayKey } from '@apps/runway/engine/dates';
 import type { Draft } from '@apps/runway/engine/draft';
 import { hashOverride } from '@apps/runway/engine/fingerprint';
 import { openJson, sealJson } from '@apps/runway/security';
+import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import type {
   ChangeDoc,
   ChangeSealed,
@@ -192,7 +193,10 @@ export async function confirmDay(
 
   const ref = dayRef(uid, dayId);
   await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const [snapshot, plan] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+    ]);
     const existing = snapshot.exists()
       ? (snapshot.data() as Partial<IncomeDayDoc>)
       : null;
@@ -220,6 +224,7 @@ export async function confirmDay(
       );
     }
     const now = Date.now();
+    markLedgerWrite(transaction, uid, plan.data(), [day.expectedOn]);
     transaction.set(recordRef(uid, dayId, `${dayId}_proposed`), {
       id: `${dayId}_proposed`,
       dayId,
@@ -382,10 +387,11 @@ export async function correctDay(
   const id = getCorrectionId(base.recordId);
   const ref = dayRef(uid, dayId);
   await runTransaction(db, async (transaction) => {
-    const [daySnapshot, replaced, existing] = await Promise.all([
+    const [daySnapshot, replaced, existing, plan] = await Promise.all([
       transaction.get(ref),
       transaction.get(recordRef(uid, dayId, base.recordId)),
       transaction.get(recordRef(uid, dayId, id)),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
     ]);
     const day = daySnapshot.exists()
       ? (daySnapshot.data() as Partial<IncomeDayDoc>)
@@ -396,6 +402,7 @@ export async function correctDay(
     if (existing.exists()) {
       throw new DayChangedElsewhere(CORRECT_WORDS.elsewhere);
     }
+    markLedgerWrite(transaction, uid, plan.data(), [day.expectedOn ?? null]);
     transaction.set(recordRef(uid, dayId, id), {
       id,
       dayId,

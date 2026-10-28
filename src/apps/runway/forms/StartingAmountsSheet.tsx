@@ -14,7 +14,10 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
-import { START_ROWS_PREVIEW } from '@apps/runway/constants';
+import {
+  START_AMOUNTS_WORDS,
+  START_ROWS_PREVIEW,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { collectStarted } from '@apps/runway/engine/progress';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -26,6 +29,10 @@ import {
   selectBills,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
+
+const isOfflineFailure = (error: unknown) =>
+  !navigator.onLine ||
+  /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
 interface StartingAmountsSheetProps {
   isOpen: boolean;
@@ -162,7 +169,12 @@ function StartingAmountsSheet({
       onClose();
     } catch (saveError) {
       setError(
-        getErrorMessage(saveError, 'That did not save. Nothing was changed.'),
+        isOfflineFailure(saveError)
+          ? START_AMOUNTS_WORDS.offline
+          : getErrorMessage(
+              saveError,
+              'That did not save. Nothing was changed.',
+            ),
       );
       setIsSaving(false);
     }

@@ -10,38 +10,12 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { MOVE_KINDS } from '@apps/runway/constants';
-import { createSealedReader, type SealedReader } from '@apps/runway/security';
-import type {
-  BillPaidSealed,
-  MoveDoc,
-  OpenMove,
-  RunwayEncryption,
-  StartSealed,
-  TrackingChangeSealed,
-} from '@apps/runway/types';
+import { createSealedReader } from '@apps/runway/security';
+import { openMove } from '@apps/runway/store/listeners/openLedger';
+import type { MoveDoc, OpenMove, RunwayEncryption } from '@apps/runway/types';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
-
-async function openMove(entry: MoveDoc, read: SealedReader): Promise<OpenMove> {
-  const base = {
-    id: entry.id,
-    date: entry.date,
-    refId: entry.refId ?? null,
-    reversesMoveId: entry.reversesMoveId ?? null,
-    createdAt: entry.createdAt,
-  };
-  if (entry.kind === 'start') {
-    const payload = await read<StartSealed>(entry.sealed);
-    return { ...base, kind: 'start', payload };
-  }
-  if (entry.kind === 'trackingChange') {
-    const payload = await read<TrackingChangeSealed>(entry.sealed);
-    return { ...base, kind: 'trackingChange', payload };
-  }
-  const payload = await read<BillPaidSealed>(entry.sealed);
-  return { ...base, kind: 'billPaid', payload };
-}
 
 const KNOWN_KINDS: readonly string[] = MOVE_KINDS;
 
