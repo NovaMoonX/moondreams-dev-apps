@@ -275,6 +275,8 @@ function EffectPreview({
     days !== null &&
     getMoves(days).isMove &&
     getMoves(days).removed.length === 1;
+  const isCarrySaid =
+    isMoveSaid && movedNotes.some((note) => note.isOneCarried);
 
   const getBody = () => {
     if (virtual === null || days === null) {
@@ -310,7 +312,10 @@ function EffectPreview({
       return (
         <div className='space-y-1'>
           {first === undefined ? (
-            <p className='text-sm'>{describeUnmoved(days)}</p>
+            <p className='text-sm'>
+              {describeUnmoved(days)}
+              {isCarrySaid && ` ${COMPACT_MOVE_WORDS.carriedWithIt}`}
+            </p>
           ) : (
             <p className='text-sm'>
               {count} {formatDateUTC(first.on)}:{' '}
@@ -381,13 +386,13 @@ function EffectPreview({
   return (
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
       {getBody()}
-      {movedNotes.map((note) => (
-        <InlineNotice key={note.text} tone={note.tone}>
-          {note.isOneCarried && isMoveSaid
-            ? COMPACT_MOVE_WORDS.carriedWithIt
-            : note.text}
-        </InlineNotice>
-      ))}
+      {movedNotes
+        .filter((note) => !(note.isOneCarried && isCarrySaid))
+        .map((note) => (
+          <InlineNotice key={note.text} tone={note.tone}>
+            {note.text}
+          </InlineNotice>
+        ))}
       {holdsText &&
         !(isCompact && holdsText.isSame) &&
         holdsText.blocks.map((block) =>

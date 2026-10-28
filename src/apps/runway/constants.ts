@@ -277,7 +277,7 @@ export const TICK_HIT_CLASS =
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 
-/** The most checklist ticks a day keeps; the rules cap the list at the same size. */
+/** The most checklist ticks a day keeps; the device keeps the cap, since the beta rules check no shape. */
 export const MAX_DONE_LINE_IDS = 200;
 /** How far back the recent listeners read while no closing applies (a plan too new to have one, or one that could not be rebuilt). */
 export const RECENT_DAYS_WINDOW = 180;
@@ -592,9 +592,6 @@ export const ENVELOPE_FIGURE_WORDS: Record<(typeof LEVELS)[number], string> = {
   plan: 'assigned',
   track: 'left',
 };
-
-/** Periods of tracking one plan keeps; the rules cap the list at the same size. */
-export const MAX_TRACKING_PERIODS = 50;
 
 export const TRACKING_WORDS = {
   title: 'Tracking',

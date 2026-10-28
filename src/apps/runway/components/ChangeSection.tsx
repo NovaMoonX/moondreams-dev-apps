@@ -18,7 +18,7 @@ function ChangeSection() {
   const pairedText = describePairedBy(pairedBy[itemId] ?? []);
 
   return (
-    <div className='space-y-4 pt-2'>
+    <div className='space-y-3'>
       <FromWhenPicker
         value={flow.from}
         onChange={flow.setFrom}
