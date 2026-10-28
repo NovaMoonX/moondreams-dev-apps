@@ -2,6 +2,7 @@ import type {
   BILL_DRAFT_CADENCES,
   DRAFT_TIE_KEYS,
   FUNDING_CADENCES,
+  PAIRING_DRAFT_CADENCES,
 } from '@apps/runway/constants';
 import type {
   BillFundedBy,
@@ -10,6 +11,7 @@ import type {
   Ending,
   FundingRule,
   MoneyRange,
+  Pairing,
   Priority,
   Schedule,
 } from '@apps/runway/types';
@@ -19,7 +21,9 @@ import { planGoalContributions } from './pace';
 import { occurrences, selectFundedDays } from './schedule';
 
 export type DraftCadence =
-  (typeof FUNDING_CADENCES)[number] | (typeof BILL_DRAFT_CADENCES)[number];
+  | (typeof FUNDING_CADENCES)[number]
+  | (typeof BILL_DRAFT_CADENCES)[number]
+  | (typeof PAIRING_DRAFT_CADENCES)[number];
 export type DraftTieKey = (typeof DRAFT_TIE_KEYS)[number];
 
 export interface DraftDayInput {
@@ -27,6 +31,12 @@ export interface DraftDayInput {
   sourceId: string | null;
   on: DateOnly;
   amount: MoneyRange;
+  /** Pairing sets from the day, its pay line and its source; the narrowest non-empty one applies. */
+  pairings?: {
+    day: readonly Pairing[] | null;
+    payLine: readonly Pairing[];
+    source: readonly Pairing[];
+  };
 }
 
 export interface DraftEnvelopeInput {
@@ -56,7 +66,9 @@ export interface DraftBillInput {
 
 /** How a demand was asked for: money, a share of the day's money, or the rest of it. */
 export type DraftAsk =
-  { kind: 'exact' } | { kind: 'percent'; bps: number } | { kind: 'rest' };
+  | { kind: 'exact' }
+  | { kind: 'percent'; bps: number; of: 'dayMoney' | 'remaining' }
+  | { kind: 'rest' };
 
 /** A bill's demand names the payment it is saving toward. */
 export interface BillShare {
@@ -120,7 +132,7 @@ const getDemandCents = (funding: FundingRule, moneyCents: Cents) => {
 
 const getAsk = (funding: FundingRule): DraftAsk =>
   funding.amount.kind === 'percent'
-    ? { kind: 'percent', bps: funding.amount.bps }
+    ? { kind: 'percent', bps: funding.amount.bps, of: 'dayMoney' }
     : { kind: funding.amount.kind === 'rest' ? 'rest' : 'exact' };
 
 /** Percentage demands on one day, rounded once and shared out so they add to at most the day's money; a goal cut short by its target keeps the cut. */

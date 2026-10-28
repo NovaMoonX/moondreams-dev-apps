@@ -17,6 +17,7 @@ import {
 } from '../../src/apps/runway/engine/demands.ts';
 import {
   buildDraft,
+  pickPairings,
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
 import {
@@ -1689,6 +1690,318 @@ const version = (
     draftOf(mixed),
     'shuffled envelopes give the same draft',
   );
+}
+
+// Pairings: a day's money goes to named targets first; a short one is topped up, held or left short.
+{
+  const on1 = utc(2026, 11, 6);
+  const on2 = on1 + 14 * DAY_MS;
+  const mkDay = (
+    key: string,
+    on: number,
+    cents: number,
+    pairings: NonNullable<Parameters<typeof pickPairings>[0]['pairings']>,
+  ) => ({
+    dayKey: key,
+    sourceId: 'src',
+    on,
+    amount: { lowCents: cents, highCents: cents },
+    pairings,
+  });
+  const none = { day: null, payLine: [], source: [] };
+  const exact = (cents: number) => ({ kind: 'exact', cents }) as const;
+  const env = (
+    itemId: string,
+    priority: 'must' | 'should' | 'want',
+    cents: number,
+    orderIndex = 1,
+  ) => ({
+    itemId,
+    createdAt: 1,
+    priority,
+    orderIndex,
+    funding: {
+      amount: exact(cents),
+      cadence: { kind: 'everyIncomeDay' as const },
+    },
+  });
+  const pair = (
+    targetItemId: string,
+    cents: number,
+    topUpFromAnySource = false,
+  ) => ({ targetItemId, amount: exact(cents), topUpFromAnySource });
+  const envelopes = [
+    env('rent', 'must', 5_000),
+    env('taxes', 'must', 45_000, 2),
+    env('save', 'should', 30_000),
+    env('fun', 'want', 20_000),
+  ];
+  const incomeDays = [
+    { dayKey: 'd1', on: on1, moneyCents: 100_000 },
+    { dayKey: 'd2', on: on2, moneyCents: 50_000 },
+  ];
+  const build = (
+    pairings: ReturnType<typeof pair>[],
+    holdResolutions: Record<string, 'topUp' | 'leaveShort'> = {},
+    list = envelopes,
+  ) =>
+    buildDraft({
+      days: [
+        mkDay('d1', on1, 100_000, { ...none, payLine: pairings }),
+        mkDay('d2', on2, 50_000, none),
+      ],
+      plan: {
+        envelopes: list,
+        bills: [],
+        goals: [],
+        horizon: 0,
+        incomeDays,
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {}, holdResolutions },
+    });
+  const lineOf = (draft: ReturnType<typeof build>, id: string, day = 'd1') =>
+    draft.lines.find((item) => item.lineId === `${day}:${id}`);
+  const total = (draft: ReturnType<typeof build>) =>
+    draft.lines.reduce((sum, item) => sum + item.cents, 0) +
+    draft.heldCents +
+    draft.freeToSpend.cents;
+
+  // A pairing the day's own money covers is one line, and replaces the target's own rule.
+  const covered = build([pair('rent', 40_000)]);
+  assert.equal(lineOf(covered, 'rent')?.cents, 40_000);
+  assert.equal(
+    covered.lines.filter(
+      (item) => item.itemId === 'rent' && item.dayKey === 'd1',
+    ).length,
+    1,
+    'a paired target is never funded twice on its day',
+  );
+  assert.equal(lineOf(covered, 'rent')?.pairing?.state, 'funded');
+  assert.equal(
+    lineOf(covered, 'rent', 'd2')?.cents,
+    5_000,
+    'the other day keeps the target rule',
+  );
+  assert.equal(covered.lines[0].itemId, 'rent', 'pairings come first');
+
+  // Short by $100 with a top-up allowed: funded at the target tier from the pool.
+  const topUp = build([pair('rent', 110_000, true)]);
+  const rentTop = lineOf(topUp, 'rent');
+  assert.equal(rentTop?.cents, 110_000, 'a topped-up pairing is whole');
+  assert.equal(rentTop?.shortBy, 0);
+  assert.equal(rentTop?.pairing?.state, 'autoTopUp');
+  assert.deepEqual(
+    rentTop?.paidBy.map((part) => [part.dayKey, part.cents]),
+    [
+      ['d1', 100_000],
+      ['d2', 10_000],
+    ],
+    'the top-up names the day whose money paid it',
+  );
+  assert.equal(
+    lineOf(topUp, 'taxes')?.cents,
+    35_000,
+    'a Must top-up goes before a Should or Want',
+  );
+  assert.equal(lineOf(topUp, 'save')?.cents, 0);
+  assert.equal(total(topUp), 150_000);
+
+  // A Must or Should that cannot be topped up is held: money reserved, not funded.
+  const held = build([pair('rent', 110_000)]);
+  const rentHeld = lineOf(held, 'rent');
+  assert.equal(rentHeld?.pairing?.state, 'held');
+  assert.equal(rentHeld?.cents, 100_000);
+  assert.equal(rentHeld?.shortBy, 10_000);
+  assert.equal(rentHeld?.pairing?.heldCents, 10_000);
+  assert.equal(held.heldCents, 10_000);
+  assert.equal(
+    total(held),
+    150_000,
+    'lines, held money and free to spend add up',
+  );
+  assert.equal(
+    lineOf(held, 'save', 'd2')?.cents + (lineOf(held, 'fun', 'd2')?.cents ?? 0),
+    0,
+    'envelopes below the hold on its pool get only what the hold left',
+  );
+  const leftShort = build([pair('rent', 110_000)], { 'd1:rent': 'leaveShort' });
+  assert.equal(leftShort.heldCents, 0, 'leaving it short releases the money');
+  assert.equal(lineOf(leftShort, 'rent')?.pairing?.state, 'leftShort');
+  assert.equal(lineOf(leftShort, 'rent')?.shortBy, 10_000);
+  assert.ok(
+    (lineOf(leftShort, 'taxes')?.cents ?? 0) >=
+      (lineOf(held, 'taxes')?.cents ?? 0),
+    'releasing a hold never lowers a line below it',
+  );
+  const chosenTop = build([pair('rent', 110_000)], { 'd1:rent': 'topUp' });
+  assert.equal(lineOf(chosenTop, 'rent')?.cents, 110_000);
+  assert.equal(lineOf(chosenTop, 'rent')?.pairing?.state, 'toppedUp');
+  assert.equal(chosenTop.heldCents, 0);
+
+  // A hold on a Should never starves a Must; it takes only what the Must left.
+  const shouldHeld = build([pair('save', 110_000)]);
+  assert.equal(
+    lineOf(shouldHeld, 'taxes')?.cents,
+    40_000,
+    'a Must takes the whole pool before a Should hold',
+  );
+  assert.equal(lineOf(shouldHeld, 'rent', 'd2')?.cents, 5_000);
+  assert.equal(
+    shouldHeld.heldCents,
+    0,
+    'a Should hold takes only what a Must left of the pool',
+  );
+  assert.equal(lineOf(shouldHeld, 'save')?.pairing?.state, 'held');
+  assert.equal(total(shouldHeld), 150_000);
+
+  // A Want is a plain short line: nothing held, a top-up is offered.
+  const want = build([pair('fun', 110_000)]);
+  assert.equal(lineOf(want, 'fun')?.pairing?.state, 'offered');
+  assert.equal(want.heldCents, 0);
+  assert.equal(lineOf(want, 'fun')?.shortBy, 10_000);
+  assert.deepEqual(
+    want.lines.filter((item) => item.pairing === null),
+    build([pair('fun', 110_000)], { 'd1:fun': 'leaveShort' }).lines.filter(
+      (item) => item.pairing === null,
+    ),
+    'a short Want reserves nothing',
+  );
+  const wantTop = build([pair('fun', 110_000)], { 'd1:fun': 'topUp' });
+  assert.equal(lineOf(wantTop, 'fun')?.pairing?.state, 'toppedUp');
+  assert.equal(
+    lineOf(wantTop, 'fun')?.cents,
+    100_000,
+    'a Want top-up waits behind the Musts and Shoulds',
+  );
+  assert.equal(lineOf(wantTop, 'fun')?.shortBy, 10_000);
+
+  // The narrowest set wins, and `rest` and `remaining` follow the order of the other pairings.
+  const sets = {
+    day: [pair('a', 1)],
+    payLine: [pair('b', 1)],
+    source: [pair('c', 1)],
+  };
+  const pick = (value: typeof sets) =>
+    pickPairings(mkDay('x', on1, 1, value)).map((item) => item.targetItemId);
+  assert.deepEqual(pick(sets), ['a'], 'the day wins');
+  assert.deepEqual(
+    pick({ ...sets, day: null as never }),
+    ['b'],
+    'else the pay line',
+  );
+  assert.deepEqual(
+    pick({ ...sets, day: null as never, payLine: [] }),
+    ['c'],
+    'else the source',
+  );
+  const shares = buildDraft({
+    days: [
+      mkDay('d1', on1, 100_000, {
+        ...none,
+        payLine: [
+          {
+            targetItemId: 'fun',
+            amount: { kind: 'rest' },
+            topUpFromAnySource: false,
+          },
+          pair('rent', 40_000),
+          {
+            targetItemId: 'save',
+            amount: { kind: 'percent', bps: 5_000, of: 'remaining' },
+            topUpFromAnySource: false,
+          },
+        ],
+      }),
+    ],
+    plan: { envelopes, bills: [], goals: [], horizon: 0, incomeDays },
+    stance: 'conservative',
+    overrides: { dayCents: {} },
+  });
+  assert.deepEqual(
+    shares.lines.slice(0, 3).map((item) => [item.itemId, item.cents]),
+    [
+      ['rent', 40_000],
+      ['save', 30_000],
+      ['fun', 30_000],
+    ],
+    '50% of what is left is taken at its turn and the rest takes what remains',
+  );
+
+  // Properties over random pairings.
+  const random = makeRandom(11);
+  const ids = ['rent', 'taxes', 'save', 'fun'];
+  Array.from({ length: 200 }).forEach(() => {
+    const pairings = ids
+      .filter(() => random() < 0.5)
+      .map((id) => pair(id, Math.floor(random() * 160_000), random() < 0.2));
+    const choices = Object.fromEntries(
+      pairings
+        .filter(() => random() < 0.4)
+        .map((item) => [
+          `d1:${item.targetItemId}`,
+          random() < 0.5 ? ('topUp' as const) : ('leaveShort' as const),
+        ]),
+    );
+    const draft = build(pairings, choices);
+    assert.equal(
+      total(draft),
+      150_000,
+      'lines, held money and free to spend equal the day money',
+    );
+    assert.ok(
+      draft.lines.every((item) => item.cents >= 0 && item.shortBy >= 0),
+    );
+    assert.ok(
+      draft.lines.every(
+        (item) =>
+          item.paidBy.reduce((sum, part) => sum + part.cents, 0) === item.cents,
+      ),
+      'paidBy adds to each line',
+    );
+    assert.deepEqual(
+      build(shuffled(pairings, random), choices, shuffled(envelopes, random)),
+      draft,
+      'shuffled input gives the same draft',
+    );
+    const mustLines = (value: typeof draft) =>
+      value.lines
+        .filter((item) => item.tier === 'must' && item.pairing === null)
+        .map((item) => [item.lineId, item.cents]);
+    const shouldHolds = draft.lines.filter(
+      (item) => item.tier === 'should' && item.pairing?.state === 'held',
+    );
+    if (shouldHolds.length > 0) {
+      const withoutShouldHolds = build(pairings, {
+        ...choices,
+        ...Object.fromEntries(
+          shouldHolds.map((item) => [item.lineId, 'leaveShort' as const]),
+        ),
+      });
+      assert.deepEqual(
+        mustLines(draft),
+        mustLines(withoutShouldHolds),
+        'a hold on a Should never changes what a Must gets',
+      );
+    }
+    draft.lines
+      .filter((item) => item.pairing?.state === 'held')
+      .forEach((item) => {
+        const lower = draft.lines.filter(
+          (other) =>
+            other.pairing === null &&
+            (other.tier === 'want' ||
+              (item.tier === 'must' && other.tier === 'should')),
+        );
+        assert.ok(
+          lower.reduce((sum, other) => sum + other.cents, 0) +
+            draft.heldCents +
+            draft.freeToSpend.cents <=
+            150_000,
+          'nothing lower is funded from held money',
+        );
+      });
+  });
 }
 
 console.log('runway engine: ok');

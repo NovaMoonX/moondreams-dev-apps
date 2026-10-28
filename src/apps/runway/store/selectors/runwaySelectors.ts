@@ -12,6 +12,8 @@ import { LOOKAHEAD_MONTHS, PRIORITIES } from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import type {
   BillVersion,
+  DayOverrideSealed,
+  Pairing,
   EnvelopeVersion,
   GoalVersion,
   OpenVersion,
@@ -26,6 +28,9 @@ const selectOn = (_state: RootState, on: number) => on;
 
 export const selectIsPlanItemsLoaded = (state: RootState) =>
   state.runway.isItemsLoaded && state.runway.isVersionsLoaded;
+
+export const selectIsDaysLoaded = (state: RootState) =>
+  state.runway.isDaysLoaded;
 
 export interface ResolvedPayLine {
   item: PlanItemDoc;
@@ -177,6 +182,10 @@ export const selectGoals = createSelector(
 
 export interface DraftView {
   day: ComingDay;
+  /** What the person changed for this day, or null while the day follows the plan. */
+  override: DayOverrideSealed | null;
+  /** The set that applies when the day has none of its own: the pay line's, else the source's. */
+  inheritedPairings: Pairing[];
   draft: Draft;
   /** Names and emoji of the envelopes, goals and bills a draft can name, by item id. */
   items: Record<string, { name: string; emoji: string | null }>;
@@ -185,6 +194,7 @@ export interface DraftView {
 
 const selectStance = (state: RootState) =>
   state.runway.plan?.stance ?? 'conservative';
+const selectDays = (state: RootState) => state.runway.days;
 const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
 const selectToday = (_state: RootState, _dayKey: string, today: number) =>
   today;
@@ -198,8 +208,15 @@ const draftCaches = new WeakMap<object, Map<string, DraftView>>();
  * returns the same object and a sign-out frees every draft with the plan it came from.
  */
 export const selectDraft = createSelector(
-  [selectItems, selectVersions, selectStance, selectDayKey, selectToday],
-  (items, versions, stance, dayKey, today): DraftView | null => {
+  [
+    selectItems,
+    selectVersions,
+    selectStance,
+    selectDays,
+    selectDayKey,
+    selectToday,
+  ],
+  (items, versions, stance, openDays, dayKey, today): DraftView | null => {
     const days = buildComingDays(items, versions, today);
     const day = days.find((entry) => entry.dayKey === dayKey);
     if (!day) return null;
@@ -220,8 +237,21 @@ export const selectDraft = createSelector(
       day.on,
     );
     const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
+    const override =
+      openDays.find((entry) => entry.id === dayKey)?.override ?? null;
+    const payLinePairings =
+      resolveCurrentOrNext(versions.filter(isPayLine), day.payLineId, day.on)
+        ?.payload.pairings ?? [];
+    const sourcePairings =
+      day.sourceId === null
+        ? []
+        : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
+            ?.payload.pairings ?? []);
     const key = hashText(
       JSON.stringify([
+        override,
+        payLinePairings,
+        sourcePairings,
         stance,
         dayKey,
         days.map((entry) => [entry.dayKey, entry.amount]),
@@ -264,7 +294,16 @@ export const selectDraft = createSelector(
       heldCents: 0,
     }));
     const draft = buildDraft({
-      days: [day],
+      days: [
+        {
+          ...day,
+          pairings: {
+            day: override?.pairings ?? null,
+            payLine: payLinePairings,
+            source: sourcePairings,
+          },
+        },
+      ],
       plan: {
         envelopes,
         bills,
@@ -277,7 +316,14 @@ export const selectDraft = createSelector(
         })),
       },
       stance,
-      overrides: { dayCents: {} },
+      overrides: {
+        dayCents: {},
+        holdResolutions: Object.fromEntries(
+          Object.entries(override?.holdResolutions ?? {}).map(
+            ([itemId, choice]) => [`${dayKey}:${itemId}`, choice],
+          ),
+        ),
+      },
     });
     const sourceNames = days.reduce<Record<string, string>>(
       (acc, entry) =>
@@ -288,6 +334,9 @@ export const selectDraft = createSelector(
     );
     const result: DraftView = {
       day,
+      override,
+      inheritedPairings:
+        payLinePairings.length > 0 ? payLinePairings : sourcePairings,
       draft,
       items: Object.fromEntries(
         [...resolved, ...resolvedBills, ...resolvedGoals].map(

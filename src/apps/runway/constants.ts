@@ -168,15 +168,39 @@ export const MAX_CHOSEN_DAYS = 60;
 export const MAX_EMOJI_LENGTH = 8;
 
 /** Why a draft line got the money it did: funded in full, or cut short because the day's money ran out. */
-export const DRAFT_REASON_CODES = ['funded', 'poolExhausted', 'nothingLeft'] as const;
+export const HOLD_CHOICES = ['topUp', 'leaveShort'] as const;
+export const DAY_STATUSES = ['draft', 'confirmed', 'notArrived'] as const;
+export const MAX_PAIRINGS = 20;
+
+/** What happened to a pairing that its own pay could not cover. */
+export const PAIRING_STATES = [
+  'funded',
+  'autoTopUp',
+  'held',
+  'offered',
+  'leftShort',
+  'toppedUp',
+] as const;
+
+/** A draft line funded by a pairing rather than by the target's own rule. */
+export const PAIRING_DRAFT_CADENCES = ['pairing'] as const;
+
+export const DRAFT_REASON_CODES = [
+  'funded',
+  'poolExhausted',
+  'nothingLeft',
+] as const;
 
 /** The key that decided which of two otherwise equal demands went first. */
 export const DRAFT_TIE_KEYS = ['createdAt', 'itemId'] as const;
 
 export const DRAFT_CADENCE_WORDS: Record<
-  (typeof FUNDING_CADENCES)[number] | (typeof BILL_DRAFT_CADENCES)[number],
+  | (typeof FUNDING_CADENCES)[number]
+  | (typeof BILL_DRAFT_CADENCES)[number]
+  | (typeof PAIRING_DRAFT_CADENCES)[number],
   string
 > = {
+  pairing: 'Set aside from this pay',
   billSuggested: 'Spread over your income days',
   billChosen: 'A day you chose',
   everyIncomeDay: 'Every income day',
@@ -207,6 +231,15 @@ export const DRAFT_WORDS = {
   setAsideOf: 'of',
   billFallback: 'Bill',
   and: 'and',
+  topUp: 'Top up',
+  leaveShort: 'Leave it short',
+  leftShort: 'Left short',
+  toppedUp: 'Topped up as far as the money allowed',
+  holdsBlock:
+    'This day cannot be confirmed until you choose for each held line.',
+  useThePlan: 'Use the plan again',
+  fundsHeading: 'Funds',
+  fundsNone: 'Nothing set aside yet',
 } as const;
 
 export const PACE_WORDS = {

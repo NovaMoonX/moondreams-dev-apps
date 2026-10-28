@@ -8,6 +8,7 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   OpenVersion,
+  Pairing,
   PayLineSealed,
   PlanItemDoc,
   PlanVersionDoc,
@@ -15,6 +16,10 @@ import type {
   SourceSealed,
 } from '@apps/runway/types';
 import { normalizeFunding } from '@apps/runway/utils/fundingText';
+
+/** A version written before pairings existed has none. */
+const normalizePairings = (pairings: Pairing[] | undefined): Pairing[] =>
+  pairings ?? [];
 
 const planPath = (uid: string, name: string) =>
   collection(db, 'apps', 'runway', 'plans', uid, name);
@@ -36,12 +41,25 @@ async function openVersion(
     changeId: version.changeId,
   };
   if (version.kind === 'source') {
-    const payload = await openJson<SourceSealed>(version.sealed, encryption);
-    return { ...base, kind: 'source', payload };
+    const payload = await openJson<Partial<SourceSealed> & { name: string }>(
+      version.sealed,
+      encryption,
+    );
+    return {
+      ...base,
+      kind: 'source',
+      payload: { ...payload, pairings: normalizePairings(payload.pairings) },
+    };
   }
   if (version.kind === 'payLine') {
-    const payload = await openJson<PayLineSealed>(version.sealed, encryption);
-    return { ...base, kind: 'payLine', payload };
+    const payload = await openJson<
+      Omit<PayLineSealed, 'pairings'> & { pairings?: Pairing[] }
+    >(version.sealed, encryption);
+    return {
+      ...base,
+      kind: 'payLine',
+      payload: { ...payload, pairings: normalizePairings(payload.pairings) },
+    };
   }
   if (version.kind === 'envelope') {
     const payload = await openJson<EnvelopeSealed>(version.sealed, encryption);
