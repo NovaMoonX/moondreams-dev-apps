@@ -65,6 +65,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 
 const ORIGIN_PAGE = 20;
@@ -364,6 +365,7 @@ function PurchaseForm({
     }
     return null;
   };
+  const { isHidden } = useValuesHidden();
   const effectLine =
     editing !== undefined && snapshot === startSnapshot
       ? null
@@ -539,10 +541,15 @@ function PurchaseForm({
     }));
   const { extras } = formData;
 
-  const effectNote = effectLine && (
-    <p className='text-muted-foreground text-sm' role='status'>
-      <MaskedText>{effectLine}</MaskedText>
-    </p>
+  const isOverHidden = isHidden && (effect?.over.length ?? 0) > 0;
+  const effectNote = isOverHidden ? (
+    <NeedsALookRow />
+  ) : (
+    effectLine && (
+      <p className='text-muted-foreground text-sm' role='status'>
+        <MaskedText>{effectLine}</MaskedText>
+      </p>
+    )
   );
   const getEnvelopeSummary = () => {
     if (lines === null) return '';
@@ -677,14 +684,18 @@ function PurchaseForm({
                 label={SPEND_WORDS.splitLabel}
                 onClick={() => setView('split')}
               >
-                {splitIds.length === 0
-                  ? 'Pick the envelopes'
-                  : splitIds
+                {splitIds.length === 0 ? (
+                  'Pick the envelopes'
+                ) : (
+                  <MaskedText>
+                    {splitIds
                       .map(
                         (id) =>
                           `${nameOf(id)} ${formatCents(parseMoneyToCents(shares[id] ?? '') ?? 0)}`,
                       )
                       .join(', ')}
+                  </MaskedText>
+                )}
               </SummaryRow>
               <div>
                 <RevealChip onClick={stopSplit}>
@@ -727,7 +738,6 @@ function PurchaseForm({
       ),
     },
   ];
-  const { isHidden } = useValuesHidden();
   const mask = useMaskedText();
   const maskNote = (note: string | null | undefined) =>
     note ? mask(note) : null;
