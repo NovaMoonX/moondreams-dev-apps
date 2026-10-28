@@ -67,7 +67,10 @@ function StartingOutScreen() {
   const incomeCount = useAppSelector(
     (state) =>
       state.runway.items.filter(
-        (item) => item.kind === 'payLine' && item.archivedAt === null,
+        (item) =>
+          item.kind === 'payLine' &&
+          item.archivedAt === null &&
+          (item.endedAt === null || item.endedAt >= today),
       ).length,
   );
   const bills = useAppSelector((state) => selectBills(state, today));

@@ -24,10 +24,20 @@ export function hashText(text: string): string {
 export function hashOverride(override: {
   pairings: unknown;
   holdResolutions: Record<string, string>;
+  payloads?: Record<string, unknown>;
 }): string {
   const holds = Object.entries(override.holdResolutions).sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
   );
-  const result = hashText(JSON.stringify([override.pairings, holds]));
+  const payloads = Object.entries(override.payloads ?? {}).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+  const result = hashText(
+    JSON.stringify(
+      payloads.length === 0
+        ? [override.pairings, holds]
+        : [override.pairings, holds, payloads],
+    ),
+  );
   return result;
 }

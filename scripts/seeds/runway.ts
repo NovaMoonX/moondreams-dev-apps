@@ -154,6 +154,11 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   );
   const billDocuments = await writeSeedBills(context, owner.uid, encryption);
   const goalDocuments = await writeSeedGoals(context, owner.uid, encryption);
+  const lifecycleDocuments = await writeSeedLifecycle(
+    context,
+    owner.uid,
+    encryption,
+  );
   const startDocuments = await writeSeedStart(
     context,
     owner.uid,
@@ -177,9 +182,230 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       envelopeDocuments +
       billDocuments +
       goalDocuments +
+      lifecycleDocuments +
       startDocuments +
       masterKeyIds.length,
   };
+}
+
+/** Items that change for a stretch or stop: Eating out at $40 for the next four income days then back to $80, Meal kit that ends in a month, an old phone plan that ended, a paused goal and an archived envelope. Each has its entries, the ended ones the `ended_` one. */
+async function writeSeedLifecycle(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - 9 * DAY_MS;
+  const firstPayday = today + 3 * DAY_MS;
+  const exact = (cents: number) => ({ kind: 'exact' as const, cents });
+  const money = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const daily = {
+    amount: exact(0),
+    cadence: { kind: 'everyIncomeDay' as const },
+  };
+  const funding = (cents: number) => ({ ...daily, amount: exact(cents) });
+  const envelope = (
+    name: string,
+    emoji: string | null,
+    cents: number,
+    orderIndex: number,
+  ): EnvelopeSealed => ({
+    name,
+    emoji,
+    priority: 'want',
+    orderIndex,
+    funding: funding(cents),
+  });
+  const phonePlan: BillSealed = {
+    name: 'Old phone plan',
+    emoji: null,
+    priority: 'should',
+    orderIndex: 9,
+    amount: money(4_500),
+    timing: {
+      kind: 'date',
+      schedule: {
+        kind: 'monthly',
+        anchor: today - 90 * DAY_MS,
+        monthDays: [5],
+      },
+    },
+    ending: { onDate: null, afterCount: null },
+    fundedBy: { kind: 'suggested' },
+    stanceOverride: null,
+  };
+  const pausedGoal: GoalSealed = {
+    name: 'Car repair',
+    emoji: '🚗',
+    priority: 'want',
+    orderIndex: 5,
+    targetCents: 90_000,
+    targetDate: null,
+    funding: funding(10_000),
+    state: 'paused',
+  };
+
+  const stretchEnd = firstPayday + 17 * DAY_MS + DAY_MS;
+  const items = [
+    {
+      id: 'seed-envelope-eating-out',
+      kind: 'envelope',
+      payload: envelope('Eating out', '🍜', 8_000, 8),
+    },
+    {
+      id: 'seed-envelope-meal-kit',
+      kind: 'envelope',
+      payload: envelope('Meal kit', null, 3_500, 9),
+      endedAt: today + 30 * DAY_MS,
+    },
+    {
+      id: 'seed-bill-old-phone',
+      kind: 'bill',
+      payload: phonePlan,
+      endedAt: today - 20 * DAY_MS,
+    },
+    { id: 'seed-goal-car-repair', kind: 'goal', payload: pausedGoal },
+    {
+      id: 'seed-envelope-old-hobby',
+      kind: 'envelope',
+      payload: envelope('Pottery class', '🏺', 2_500, 10),
+      archivedAt: today - 5 * DAY_MS,
+    },
+  ] as const;
+
+  const sealed = await Promise.all(
+    items.map(({ payload }) => sealJson(payload, encryption)),
+  );
+  const addedChanges = await Promise.all(
+    items.map(({ payload }) =>
+      sealJson(
+        { summary: `Added ${payload.name}.` } satisfies ChangeSealed,
+        encryption,
+      ),
+    ),
+  );
+  const stretchPayload = envelope('Eating out', '🍜', 4_000, 8);
+  const [
+    stretchSealed,
+    stretchChange,
+    mealKitEnded,
+    phoneEnded,
+    hobbyArchived,
+  ] = await Promise.all([
+    sealJson(stretchPayload, encryption),
+    sealJson(
+      {
+        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${new Date(today).toISOString().slice(0, 10)} through ${new Date(stretchEnd - DAY_MS).toISOString().slice(0, 10)}, then it goes back.`,
+        note: 'Covering the car registration',
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+    sealJson(
+      {
+        summary: 'Meal kit: ended after its last box.',
+        note: 'Cancelling the subscription',
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+    sealJson(
+      {
+        summary: 'Old phone plan: ended.',
+        note: 'Switched to a cheaper plan',
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+    sealJson(
+      {
+        summary: 'Pottery class: archived.',
+        note: 'Finished the course',
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  ]);
+
+  const batch = context.firestore.batch();
+  items.forEach((entry, index) => {
+    const createdAt = addedAt + index * 1000;
+    const changeId = `seed-change-${entry.id}`;
+    const startsOn =
+      entry.id === 'seed-bill-old-phone' ? today - 90 * DAY_MS : today;
+    batch.set(context.firestore.doc(`${plan}/items/${entry.id}`), {
+      ...header(entry.id, entry.kind, null, createdAt),
+      endedAt: 'endedAt' in entry ? entry.endedAt : null,
+      archivedAt: 'archivedAt' in entry ? entry.archivedAt : null,
+    });
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${entry.id}`),
+      version(
+        `seed-version-${entry.id}`,
+        entry.id,
+        entry.kind,
+        createdAt,
+        startsOn,
+        changeId,
+        sealed[index],
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, createdAt, startsOn, [entry.id], addedChanges[index]),
+    );
+  });
+  const stretchAt = context.now - 2 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/versions/seed-version-eating-out-stretch`),
+    {
+      ...version(
+        'seed-version-eating-out-stretch',
+        'seed-envelope-eating-out',
+        'envelope',
+        stretchAt,
+        today,
+        'seed-change-eating-out-stretch',
+        stretchSealed,
+      ),
+      effectiveUntil: stretchEnd,
+    },
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/changes/seed-change-eating-out-stretch`),
+    change(
+      'seed-change-eating-out-stretch',
+      stretchAt,
+      today,
+      ['seed-envelope-eating-out'],
+      stretchChange,
+    ),
+  );
+  const endedEntry = (itemId: string, on: number, sealedEntry: unknown) => ({
+    id: `ended_${itemId}`,
+    kind: 'ended',
+    createdAt: stretchAt,
+    effectiveFrom: on,
+    itemIds: [itemId],
+    sealed: sealedEntry,
+  });
+  batch.set(
+    context.firestore.doc(`${plan}/changes/ended_seed-envelope-meal-kit`),
+    endedEntry('seed-envelope-meal-kit', today + 30 * DAY_MS, mealKitEnded),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/changes/ended_seed-bill-old-phone`),
+    endedEntry('seed-bill-old-phone', today - 20 * DAY_MS, phoneEnded),
+  );
+  batch.set(
+    context.firestore.doc(`${plan}/changes/seed-change-old-hobby-archived`),
+    change(
+      'seed-change-old-hobby-archived',
+      stretchAt,
+      today - 5 * DAY_MS,
+      ['seed-envelope-old-hobby'],
+      hobbyArchived,
+    ),
+  );
+  await batch.commit();
+  return items.length * 3 + 5;
 }
 
 /** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside. One change and five holdings. */

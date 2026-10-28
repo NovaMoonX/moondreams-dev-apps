@@ -266,7 +266,7 @@ service cloud.firestore {
     }
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
-      allow update: if isUser(uid) && collection in ['days'];
+      allow update: if isUser(uid) && collection in ['items', 'days'];
     }
 
     // --- App: waypoint ---

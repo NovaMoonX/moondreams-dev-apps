@@ -67,6 +67,8 @@ interface EnvelopeFormProps {
   title: string;
   /** The envelope to change; its saved values start the form and a save adds a version from a date. */
   editing?: { itemId: string; payload: EnvelopeSealed };
+  /** The income day whose screen opened the edit; "this income day" then means it. */
+  presetDayKey?: string;
 }
 
 const { custom } = FormFactories;
@@ -150,7 +152,13 @@ const getBlocker = (
   return null;
 };
 
-function EnvelopeForm({ isOpen, onClose, title, editing }: EnvelopeFormProps) {
+function EnvelopeForm({
+  isOpen,
+  onClose,
+  title,
+  editing,
+  presetDayKey,
+}: EnvelopeFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
@@ -385,6 +393,7 @@ function EnvelopeForm({ isOpen, onClose, title, editing }: EnvelopeFormProps) {
     kind: 'envelope',
     current: editing?.payload ?? EMPTY_ENVELOPE,
     candidate,
+    presetDayKey,
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);

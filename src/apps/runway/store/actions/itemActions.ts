@@ -1,4 +1,4 @@
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
@@ -343,6 +343,8 @@ export interface ChangeItemInput {
   summary: string;
   note: string | null;
   effectiveFrom: number;
+  /** The first day the change no longer covers, so the version before it returns; null lasts until superseded. */
+  effectiveUntil?: number | null;
 }
 
 /**
@@ -371,7 +373,7 @@ export async function changeItem(
     kind: input.kind,
     createdAt: now,
     effectiveFrom: input.effectiveFrom,
-    effectiveUntil: null,
+    effectiveUntil: input.effectiveUntil ?? null,
     changeId,
     sealed: versionSealed,
   };
@@ -387,4 +389,118 @@ export async function changeItem(
   batch.set(itemPath(uid, 'versions', version.id), version);
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();
+}
+
+export interface EndItemInput {
+  itemId: string;
+  /** The last day the item counts; it is gone from the day after. */
+  endedOn: number;
+  summary: string;
+  note: string | null;
+}
+
+/**
+ * Ends an item: its header's `endedAt` goes from null to a date once, with the entry that says why,
+ * in one transaction. The entry's id is `ended_${itemId}`, so a second device ending it too, or the
+ * sweep reaching a natural ending, finds the header already ended and writes nothing. Versions are
+ * untouched, so every earlier day still resolves.
+ */
+export async function endItem(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: EndItemInput,
+): Promise<boolean> {
+  const changeId = `ended_${input.itemId}`;
+  const sealed = await sealJson<ChangeSealed>(
+    { summary: input.summary, note: input.note },
+    encryption,
+  );
+  const headerRef = itemPath(uid, 'items', input.itemId);
+  const written = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(headerRef);
+    if (!snapshot.exists()) throw new Error('This item no longer exists.');
+    const header = snapshot.data() as Partial<PlanItemDoc>;
+    if ((header.endedAt ?? null) !== null) return false;
+    const entry: ChangeDoc = {
+      id: changeId,
+      kind: 'ended',
+      createdAt: Date.now(),
+      effectiveFrom: input.endedOn,
+      itemIds: [input.itemId],
+      sealed,
+    };
+    transaction.update(headerRef, { endedAt: input.endedOn });
+    transaction.set(itemPath(uid, 'changes', changeId), entry);
+    return true;
+  });
+  return written;
+}
+
+export interface ArchiveItemInput {
+  itemId: string;
+  summary: string;
+  note: string | null;
+}
+
+/**
+ * Archives an item: `archivedAt` is set once, from today on, so it leaves the lists and the coming
+ * days while every version and every confirmed day stays as it was. Returns false when another
+ * device archived it first.
+ */
+export async function archiveItem(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: ArchiveItemInput,
+  archivedAt: number,
+): Promise<boolean> {
+  const changeId = generateUuid();
+  const sealed = await sealJson<ChangeSealed>(
+    { summary: input.summary, note: input.note },
+    encryption,
+  );
+  const headerRef = itemPath(uid, 'items', input.itemId);
+  const written = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(headerRef);
+    if (!snapshot.exists()) throw new Error('This item no longer exists.');
+    const header = snapshot.data() as Partial<PlanItemDoc>;
+    if ((header.archivedAt ?? null) !== null) return false;
+    const entry: ChangeDoc = {
+      id: changeId,
+      kind: 'planChange',
+      createdAt: Date.now(),
+      effectiveFrom: archivedAt,
+      itemIds: [input.itemId],
+      sealed,
+    };
+    transaction.update(headerRef, { archivedAt });
+    transaction.set(itemPath(uid, 'changes', changeId), entry);
+    return true;
+  });
+  return written;
+}
+
+export interface SetGoalStateInput {
+  itemId: string;
+  /** The goal as it stands now; the new version is this with only `state` changed. */
+  goal: GoalSealed;
+  state: GoalSealed['state'];
+  note: string | null;
+  effectiveFrom: number;
+}
+
+/** Pauses or resumes a goal as a new version: money stops or starts from the date, the balance and history are untouched. */
+export async function setGoalState(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: SetGoalStateInput,
+): Promise<void> {
+  const isPaused = input.state === 'paused';
+  await changeItem(uid, encryption, {
+    itemId: input.itemId,
+    kind: 'goal',
+    payload: { ...input.goal, state: input.state },
+    summary: `${input.goal.name}: ${isPaused ? 'saving paused' : 'saving started again'}, from ${formatDateUTC(input.effectiveFrom)}.`,
+    note: input.note,
+    effectiveFrom: input.effectiveFrom,
+  });
 }

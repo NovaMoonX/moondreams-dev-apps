@@ -86,6 +86,8 @@ interface BillFormProps {
   title: string;
   /** The bill to change; its saved values start the form and a save adds a version from a date. */
   editing?: { itemId: string; payload: BillSealed };
+  /** The income day whose screen opened the edit; "this income day" then means it. */
+  presetDayKey?: string;
 }
 
 const { custom } = FormFactories;
@@ -198,7 +200,13 @@ const getEditingData = (payload: BillSealed): BillFormData => {
   };
 };
 
-function BillForm({ isOpen, onClose, title, editing }: BillFormProps) {
+function BillForm({
+  isOpen,
+  onClose,
+  title,
+  editing,
+  presetDayKey,
+}: BillFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
@@ -547,6 +555,7 @@ function BillForm({ isOpen, onClose, title, editing }: BillFormProps) {
     kind: 'bill',
     current: editing?.payload ?? EMPTY_BILL,
     candidate,
+    presetDayKey,
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);

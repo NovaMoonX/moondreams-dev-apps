@@ -76,6 +76,8 @@ interface GoalFormProps {
   title: string;
   /** The goal to change; its saved values start the form and a save adds a version from a date. */
   editing?: { itemId: string; payload: GoalSealed };
+  /** The income day whose screen opened the edit; "this income day" then means it. */
+  presetDayKey?: string;
 }
 
 const { custom } = FormFactories;
@@ -119,6 +121,7 @@ const EMPTY_GOAL: GoalSealed = {
     amount: { kind: 'exact', cents: 0 },
     cadence: { kind: 'everyIncomeDay' },
   },
+  state: 'active',
 };
 
 const getEditingData = (payload: GoalSealed): GoalFormData => {
@@ -178,7 +181,13 @@ const getBlocker = (
   return null;
 };
 
-function GoalForm({ isOpen, onClose, title, editing }: GoalFormProps) {
+function GoalForm({
+  isOpen,
+  onClose,
+  title,
+  editing,
+  presetDayKey,
+}: GoalFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
@@ -468,6 +477,7 @@ function GoalForm({ isOpen, onClose, title, editing }: GoalFormProps) {
       targetDate:
         data.date === null ? null : (fromDateInputValue(data.date) ?? null),
       funding: buildFunding(data, amount),
+      state: editing?.payload.state ?? 'active',
     };
     return result;
   };
@@ -476,8 +486,11 @@ function GoalForm({ isOpen, onClose, title, editing }: GoalFormProps) {
   const flow = useChangeFlow({
     itemId: editing?.itemId ?? '',
     kind: 'goal',
-    current: editing?.payload ?? EMPTY_GOAL,
+    current: editing
+      ? { ...editing.payload, state: editing.payload.state ?? 'active' }
+      : EMPTY_GOAL,
     candidate,
+    presetDayKey,
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);

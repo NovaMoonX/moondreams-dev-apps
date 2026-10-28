@@ -101,6 +101,7 @@ function GoalsScreen() {
                 pace={pace}
                 footer={
                   <ItemChangeControls
+                    kind='goal'
                     itemId={item.id}
                     current={payload}
                     today={today}
