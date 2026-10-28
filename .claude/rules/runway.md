@@ -5,7 +5,7 @@ paths:
 
 # Runway rules
 
-Applies on top of CLAUDE.md to everything under `src/apps/runway/`. Keep `.github/instructions/runway.instructions.md` identical to this body.
+Applies on top of `CLAUDE.md` and `docs/conventions/` to everything under `src/apps/runway/`. This file is the one copy of these rules; `.github/instructions/runway.instructions.md` only points here.
 
 - **Tone: plain and matter-of-fact, an exception to "Playful by default".** Runway speaks like a calm advisor: it reports what happened and what it affects ("Dining is $18 over. It would take $18 from Everyday spending.") and stays considerate, never curt, cold or blaming. No scoring, streaks, scolding or cheerleading, and no cute emoji: an emoji appears where the person chose one for an envelope, bill or goal, on a quick pick that sets one (a suggested bill or envelope), and as the fixed mark of a Plan view (💵 Income, 🧾 Bills, ✉️ Envelopes, 🎯 Goals, dropped below 360px); never in copy, toasts or warnings. Empty states use a lucide icon in `EmptyCard`, not an emoji.
 - **Don't make me think (or read) too much.** Runway handles more money detail than its screens should show at once, so every screen is judged by how little a person has to read and decide before they can act (TurboTax is the model: one question at a time in large type, a running summary, the figure that matters always the biggest thing). Seven rules follow from it, and a screen that breaks one is a finding:

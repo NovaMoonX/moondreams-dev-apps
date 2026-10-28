@@ -5,7 +5,7 @@ paths:
 
 # A-List Tracker rules
 
-Applies on top of CLAUDE.md to everything under `src/apps/a-list/`. Keep `.github/instructions/a-list.instructions.md` (the source of truth) identical to this body.
+Applies on top of `CLAUDE.md` and `docs/conventions/` to everything under `src/apps/a-list/`. This file is the one copy of these rules; `.github/instructions/a-list.instructions.md` only points here.
 
 - **Theme: AMC and the theater.** Casual, warm and playful, never corporate or masculine. The palette (AMC red primary, theater-gold accent, rose-tinted neutrals) lives in `a-list.css` as tokens on `html.a-list-theme`, switched on by `useAListTheme()` while the app is mounted so portaled modals and drawers match. Change the look there, not per component, and use semantic tokens (`bg-primary`, `bg-secondary`, `bg-accent`) rather than raw colors.
 - **Round everything.** Inputs are `rounded='full'` (also on `FormFactories` fields), buttons that are pills or CTAs are `rounded='full'`, cards and sheets `rounded-2xl`, badges `rounded-full!`. Options a user toggles or picks among are `Pill`s, never radio buttons or tab strips.

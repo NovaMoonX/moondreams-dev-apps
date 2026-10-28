@@ -11,7 +11,7 @@ The user attaches the planning docs for a new app and runs this command. They ex
 
 Work autonomously. Don't ask questions you can answer from the docs, the code or `CLAUDE.md`. Ask only when a decision is genuinely theirs and blocks progress.
 
-Run this as `orchestrate` describes: you plan and verify each PR, `implementer` agents build the planned chunks, `validator` checks them. Read `CLAUDE.md` (it imports `.github/copilot-instructions.md`) and the `docs/conventions/` files its "Read before you touch" table names before writing code. Every rule there applies to every PR, as does every checklist in `.claude/skills/finish-feature-pr/SKILL.md`.
+Run this as `orchestrate` describes: you plan and verify each PR, `implementer` agents build the planned chunks, `validator` checks them. Read `CLAUDE.md` and the `docs/conventions/` files its "Read before you touch" table names before writing code. Every rule there applies to every PR, as does every checklist in `.claude/skills/finish-feature-pr/SKILL.md`.
 
 The app's look is one `<app>.css` on a theme class, built per `docs/conventions/app-look.md` (including "Where a visual rule lives" and "Text color is part of the theme"): tokens, radius and field padding, selected-pill tint, and quiet tappable text. Anything every app should get goes in `src/index.css` once, never copied per app.
 
@@ -89,7 +89,7 @@ For each MVP issue, in order:
    - Update the seed (`scripts/seeds/<id>.ts`, its document count, `SEEDING.md`) when there's new state worth seeding.
 3. **Issue 1 only:**
    - **Register the app:** `APP_REGISTRY`, route, logo and banner placeholders, the home-page tile, and the root README's "Current apps" line.
-   - **Wire the rest from the "New app checklist"** in `.github/copilot-instructions.md`: the `useTrackAppUsage` hook in the app's top-level page and its `findFirstActivityAt` finder in `functions/`, the store slice, rules, seed and docs. A finished MVP has every item on that list.
+   - **Wire the rest from the New app checklist** (`docs/conventions/new-app.md`): the `useTrackAppUsage` hook in the app's top-level page and its `findFirstActivityAt` finder in `functions/`, the store slice, rules, seed and docs. A finished MVP has every item on that list.
    - **Design the logo icon as SVG**, in two versions, saved as temporary files (scratchpad, not committed):
      - `<id>-icon.svg`: light ticket/glyph on a transparent background, for dark backgrounds.
      - `<id>-icon-dark.svg`: the same, filled `#111111`, for light backgrounds.
@@ -161,7 +161,7 @@ Start this once every MVP PR is merged up and reviewed.
    - Fix everything that is a real problem and in MVP scope: alignment, centring, empty space, unclear active state, a confusing path, a missing affordance, copy, an outdated README or PRODUCT.md.
    - Note anything bigger as a follow-up in the overview comment instead of widening scope.
    - Re-validate as in Phase 2, including re-driving each flow you touched.
-6. **Keep the conventions current while you fix.** Both agents' rule candidates feed `docs/conventions/` (design rules in `design-ux.md` or `app-look.md`, product rules in `product.md`, one app's rules in its rules file), folded into the nearest bullet, never appended, per `pr-wrap-up` §6. When the owner says a review agent should have caught something, that agent's file in `.claude/agents/` is amended too (`docs/conventions/agents.md`). Mirror anything shared with Copilot into `.github/copilot-instructions.md`, its source of truth.
+6. **Keep the conventions current while you fix.** Both agents' rule candidates feed `docs/conventions/` (design rules in `design-ux.md` or `app-look.md`, product rules in `product.md`, one app's rules in its rules file), folded into the nearest bullet, never appended, per `pr-wrap-up` §6. When the owner says a review agent should have caught something, that agent's file in `.claude/agents/` is amended too (`docs/conventions/agents.md`).
 7. **Update `src/apps/<id>/PRODUCT.md` and its short `README.md`** to match what was actually built. Also update the root README and `functions/README.md` if they're affected.
 8. **Label the polish PR `patch`**, commit, push, and open the polish PR with the top MVP branch as its base. Run the same Copilot → subagent review loop.
 9. **Post the overview comment on the polish PR**, built from `references/overview-comment.md`. It replaces any per-PR "what's left" notes.

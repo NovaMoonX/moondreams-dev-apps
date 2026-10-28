@@ -22,7 +22,7 @@ You are reviewing one pull request in a stacked series for NovaMoonX/moondreams-
    cd /home/user/moondreams-dev-apps && git fetch origin && git checkout <head> && git reset --hard origin/<head>
    ```
    Confirm `git status` is clean.
-2. Read the review standard: `CLAUDE.md` (it imports `.github/copilot-instructions.md`) and the `docs/conventions/` files its "Read before you touch" table names for the diff. Also read the issue body (`gh api repos/NovaMoonX/moondreams-dev-apps/issues/<n> --jq .body`, or the GitHub MCP `issue_read` where `gh` is missing) and the PR body.
+2. Read the review standard: `CLAUDE.md` and the `docs/conventions/` files its "Read before you touch" table names for the diff. Also read the issue body (`gh api repos/NovaMoonX/moondreams-dev-apps/issues/<n> --jq .body`, or the GitHub MCP `issue_read` where `gh` is missing) and the PR body.
 3. Review ONLY this PR's own changes: `git diff origin/<base>...HEAD`. Use the three-dot form, and ignore changes that came in from base merges.
    - **Feature-specific risks to examine:** <list the risky logic: money math, date-only vs instant, lifecycle transitions, rules, transactions, legacy documents, memoization keyed on `now`, overlay stacking, etc.>
    - **Repo rules:**

@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { APP_REGISTRY } from '../src/lib/app/app.registry.ts';
 
 // Fails the build when a registered app is missing the usage tracking that the admin dashboard
-// depends on. The full list of what a new app needs is the "New mini-app checklist" in
-// .github/copilot-instructions.md.
+// depends on. The full list of what a new app needs is the New app checklist in
+// docs/conventions/new-app.md.
 
 const listFiles = (dir: string): string[] =>
   readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
@@ -229,7 +229,7 @@ problems.push(...contrastProblems);
 
 if (problems.length > 0) {
   console.error(
-    `App wiring is incomplete:\n${problems.map((problem) => `  - ${problem}`).join('\n')}\nSee "New mini-app checklist" in .github/copilot-instructions.md.`,
+    `App wiring is incomplete:\n${problems.map((problem) => `  - ${problem}`).join('\n')}\nSee the New app checklist in docs/conventions/new-app.md.`,
   );
   process.exit(1);
 }

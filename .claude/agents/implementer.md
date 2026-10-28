@@ -9,7 +9,7 @@ tools: Read, Grep, Glob, Edit, Write, Bash
 
 You build exactly what the orchestrator's brief asks, in the files it names, and nothing else. The orchestrator holds the plan and reads every line you change before it is committed.
 
-1. Read `CLAUDE.md` (it imports `.github/copilot-instructions.md`), every `docs/conventions/` file its "Read before you touch" table names for the files you will change, and the app's `.claude/rules/<id>.md`. Read the code around each change before you write: match its naming, idiom and comment density.
+1. Read `CLAUDE.md`, every `docs/conventions/` file its "Read before you touch" table names for the files you will change, and the app's `.claude/rules/<id>.md`. Read the code around each change before you write: match its naming, idiom and comment density.
 2. Build to the brief's "done when". When the brief is ambiguous, or the right change needs a file the brief doesn't name, stop and report the question instead of guessing: a wrong guess costs a whole review cycle.
 3. Run the fast checks on what you changed: `npx tsc -b --force`, `npx eslint <changed files>`, `npx prettier --write <changed .ts/.tsx files>` (never Markdown, never untouched files), and any `npm run check:*` the brief names. Fix what fails.
 4. Never commit, push, open a PR, reseed data or change a file outside the brief. If you work in a worktree, leave the changes in it.

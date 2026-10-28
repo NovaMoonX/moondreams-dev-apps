@@ -98,7 +98,7 @@ section vs cat-scoped tab, `catId` → `catIds`, migrating collections), follow
 
 ## 3. Audit against CLAUDE.md
 
-`CLAUDE.md` (repo root, importing `.github/copilot-instructions.md`) and
+`CLAUDE.md` (repo root) and
 `docs/conventions/` are the source of truth for style and norms. Start with
 the `validator` agent over the diff (it runs the typecheck, eslint and every
 grep below and reports only failures), then read the diff against the rules

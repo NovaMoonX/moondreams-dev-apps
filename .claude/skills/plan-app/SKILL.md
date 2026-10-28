@@ -51,9 +51,9 @@ The design track owns the canvas (see `references/design.md` for its structure a
 ## Finishing
 
 When the owner approves the last round:
-1. Open a docs PR that adds `src/apps/<id>/` with `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md` and `ISSUES.md`, and the app's rules file (`.github/instructions/<id>.instructions.md` with the identical `.claude/rules/<id>.md`) if the plan settles its look.
+1. Open a docs PR that adds `src/apps/<id>/` with `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md` and `ISSUES.md`, and the app's rules file (`.claude/rules/<id>.md`) if the plan settles its look.
 2. Create the issues: `references/issues.md` "Creating the issues" (`npm run issues:create -- <id>`; titles are `<App name> N: Title`, and every `Issue N` becomes the real `#123`).
-3. Propose any repo-wide convention the planning surfaced as a short block for `docs/conventions/` or `.github/copilot-instructions.md`, kept out of the app's docs (the planning keeps those two in sync: something that should hold for every app goes there, this app's schema and screens stay in its `TECHNICAL.md`; an implementation that surfaces one later does the same, per `references/issues.md` "Keep `.github/copilot-instructions.md` current").
+3. Any repo-wide convention the planning surfaced goes into the narrowest `docs/conventions/` file in the docs PR (`docs/conventions/pipeline.md` "The pipeline improves itself" decides one app or shared, and whether to change or propose); this app's schema and screens stay in its `TECHNICAL.md`.
 4. Hand off: the app is ready for `/build-app-mvp`.
 
 For the repo's file layout, list the real tree (`ls`, Glob) when a plan needs it; never plan from a remembered tree.

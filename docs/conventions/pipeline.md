@@ -44,7 +44,7 @@ Every part of the pipeline is open to change, not only the review agents: the sk
    - Does another app already do it, the same way or worse?
 
    Then file it by what the answers say:
-   - **One app's look, words or flow** goes in that app's rules file (`.github/instructions/<app>.instructions.md` and the identical `.claude/rules/<app>.md`) and its `UX.md`.
+   - **One app's look, words or flow** goes in that app's rules file (`.claude/rules/<app>.md`) and its `UX.md`.
    - **A pattern any app would follow** (a component, a layout, a copy or interaction convention) goes in the shared conventions file for its topic, with its line in CLAUDE.md's Pattern index. The apps that already do it differently are listed as follow-ups, or fixed in the PR when the change is small.
    - **Something a second app needs now** moves from the app's rules file to the shared set in that PR, and its app line becomes a pointer (`design-ux.md` "Record the pattern you establish").
    - **An agent's check** stays general (no app's words), and points at the rules files for app detail.
