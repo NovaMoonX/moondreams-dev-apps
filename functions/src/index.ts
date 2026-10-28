@@ -11,6 +11,7 @@ export { getPinchShare } from './apps/pinch/getPinchShare.js';
 export { changePinchShare } from './apps/pinch/changePinchShare.js';
 export { copyPinchShareCover } from './apps/pinch/copyPinchShareCover.js';
 export { getRunwayKey } from './apps/runway/getRunwayKey.js';
+export { verifyRunwayKeys } from './apps/runway/verifyRunwayKeys.js';
 export { deleteTrip } from './apps/waypoint/deleteTrip.js';
 export { rescheduleTripReminders } from './apps/waypoint/rescheduleTripReminders.js';
 export { shiftTripDates } from './apps/waypoint/shiftTripDates.js';
