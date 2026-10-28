@@ -15,6 +15,7 @@ import {
   DRAFT_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
+  NEEDS_LOOK_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
@@ -122,6 +123,8 @@ function DraftLine({
     ? `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatDateShortUTC(line.bill.dueOn)}`
     : null;
   const getDetail = () => {
+    if (isHidden && (state === 'held' || shortText))
+      return { text: NEEDS_LOOK_WORDS.short, isStrong: false };
     if (state === 'held')
       return {
         text:
@@ -230,7 +233,7 @@ function DraftLine({
           today={today}
           figureLabel={ITEM_SHEET_WORDS.fromThisDay}
           figure={amount}
-          fact={`${PRIORITY_LABELS[line.tier]} · ${pairingShort ?? billShareShort ?? reason}`}
+          fact={`${PRIORITY_LABELS[line.tier]} · ${isHidden && (pairingShort || shortText) ? NEEDS_LOOK_WORDS.short : (pairingShort ?? billShareShort ?? reason)}`}
           help={
             helpLines.length > 0 ? (
               <span className='block space-y-2'>

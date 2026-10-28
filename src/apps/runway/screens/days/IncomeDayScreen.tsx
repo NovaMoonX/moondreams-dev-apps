@@ -28,6 +28,7 @@ import {
   DRAFT_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
+  NEEDS_LOOK_WORDS,
 } from '@apps/runway/constants';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -270,7 +271,11 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             {dayLeft}
             {unfunded.length > 0 && (
               <div className='space-y-2'>
-                <SectionDivider label={DRAFT_WORDS.notFunded} />
+                <SectionDivider
+                  label={
+                    isHidden ? NEEDS_LOOK_WORDS.short : DRAFT_WORDS.notFunded
+                  }
+                />
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {unfunded.map(renderLine)}
                 </ul>
