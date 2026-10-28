@@ -45,7 +45,9 @@ const toCents = (text: string) => parseMoneyToCents(text) ?? 0;
 const toSnapshot = (state: ReceiptSplitState) =>
   JSON.stringify([
     state.lines.map((line) => [line.name, line.priceCents]),
-    state.claims,
+    Object.entries(state.claims)
+      .filter(([, uids]) => uids.length > 0)
+      .map(([id, uids]) => [id, [...uids].sort()]),
     [state.tax, state.fees, state.discount, state.tipChoice, state.customTip, state.tipSplit],
   ]);
 

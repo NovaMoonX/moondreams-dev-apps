@@ -24,7 +24,7 @@ interface LineRowProps {
 }
 
 const formatNames = (names: string[]) => {
-  if (names.length <= 3) return names.length === 3 ? `${names[0]}, ${names[1]} & ${names[2]}` : names.join(' & ');
+  if (names.length <= 3) return names.length === 3 ? `${names[0]}, ${names[1]} and ${names[2]}` : names.join(' and ');
   return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
 };
 
