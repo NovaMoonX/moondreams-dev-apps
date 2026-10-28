@@ -60,11 +60,15 @@ export const MORE_ENTRIES = ['settings', 'changeLog'] as const;
 /** The full screens Home opens, kept in the URL as `view`. */
 export const RUNWAY_VIEWS = ['start', 'freeToSpend'] as const;
 
+/** The screens Settings opens, kept in the URL as `settingsView`. */
+export const SETTINGS_VIEWS = ['tracking'] as const;
+
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
   { settings: 'Settings', changeLog: 'Change log' };
 
 export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
-  settings: 'How the plan reads a range of pay or a bill.',
+  settings:
+    'How the plan reads a range of pay or a bill, and whether you track spending.',
   changeLog: 'Every change to the plan, with the reason you gave.',
 };
 
@@ -251,10 +255,10 @@ export const DAY_RECORD_KINDS = [
   'confirmed',
   'correction',
 ] as const;
-/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses) and a `start` holding. */
-export const MOVE_KINDS = ['billPaid', 'start'] as const;
+/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding and a `trackingChange` (tracking turned on or off). */
+export const MOVE_KINDS = ['billPaid', 'start', 'trackingChange'] as const;
 /** What a `start` move holds the starting amount of. */
-export const START_HOLDINGS = ['money', 'goal', 'bill'] as const;
+export const START_HOLDINGS = ['money', 'goal', 'bill', 'envelope'] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
 /** Envelope tiles Home draws before it points at the full list. */
@@ -540,8 +544,52 @@ export const BILL_WORDS = {
   readyToPay: 'Set aside in full',
 } as const;
 
-/** What an envelope's figure is called at each level; only Plan exists so far. */
-export const ENVELOPE_FIGURE_WORD = 'assigned';
+/** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
+export const LEVELS = ['plan', 'track'] as const;
+
+export const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
+  plan: 'Plan',
+  track: 'Track',
+};
+
+/** What an envelope's figure is called at each level. */
+export const ENVELOPE_FIGURE_WORDS: Record<(typeof LEVELS)[number], string> = {
+  plan: 'assigned',
+  track: 'left',
+};
+
+/** Periods of tracking one plan keeps; the rules cap the list at the same size. */
+export const MAX_TRACKING_PERIODS = 50;
+
+export const TRACKING_WORDS = {
+  title: 'Tracking',
+  rowLabel: 'Tracking',
+  choice: 'How much to track',
+  planOption: 'Plan',
+  trackOption: 'Track',
+  planHelp:
+    'You plan where each income day goes. Envelopes show what they are assigned.',
+  trackHelp:
+    'Envelopes show what is left. Until you add what you spend, left is the same as assigned.',
+  history: 'Tracking history',
+  lineUpTitle: 'Where is your money now?',
+  lineUpHelp:
+    'Say what you have and what each envelope, goal and bill holds at the start of the day tracking begins. Money that arrives or is paid from that day on is added to it. The amounts start from the plan; correct what is off.',
+  startsOn: 'Tracking starts',
+  moneyOnHand: 'Money on hand',
+  moneyHint: 'One total for all of it. Named accounts come later.',
+  envelopes: 'What each envelope holds',
+  goals: 'What each goal holds',
+  bills: 'Already set aside for bills',
+  start: 'Start tracking',
+  stopTitle: 'Stop tracking',
+  stopMessage:
+    'Spending screens and "left" figures go away and envelopes show what they are assigned. Everything you entered stays in your history, and you can start again from any later day.',
+  stopConfirm: 'Stop tracking',
+  freshStart:
+    'Starting again begins fresh from this day. Earlier tracking stays in your history.',
+  lineUpTotal: 'Assigned',
+} as const;
 
 export const HOME_WORDS = {
   freeToSpend: 'Free to spend',

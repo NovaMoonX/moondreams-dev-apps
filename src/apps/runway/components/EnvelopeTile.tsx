@@ -1,5 +1,7 @@
 import { formatCents } from '@/utils/moneyUtils';
-import { ENVELOPE_FIGURE_WORD } from '@apps/runway/constants';
+import { useAppSelector } from '@/store';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { getLevelWords } from '@apps/runway/utils/levelText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 
 interface EnvelopeTileProps {
@@ -8,8 +10,9 @@ interface EnvelopeTileProps {
   cents: number;
 }
 
-/** An envelope on Home: its name and what is assigned to it. */
+/** An envelope on Home: its name and its figure, which the level calls assigned or left. */
 function EnvelopeTile({ name, emoji, cents }: EnvelopeTileProps) {
+  const word = getLevelWords(useAppSelector(selectLevel)).envelopeFigure;
   return (
     <li className='flex items-start gap-3 p-3'>
       <ItemBadge name={name} emoji={emoji} />
@@ -20,7 +23,7 @@ function EnvelopeTile({ name, emoji, cents }: EnvelopeTileProps) {
         <p className='pt-0.5 font-semibold whitespace-nowrap tabular-nums'>
           {formatCents(cents)}
         </p>
-        <p className='text-muted-foreground text-xs'>{ENVELOPE_FIGURE_WORD}</p>
+        <p className='text-muted-foreground text-xs'>{word}</p>
       </div>
     </li>
   );

@@ -143,6 +143,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     updatedAt: createdAt,
     stance: 'conservative',
     startDate: startOfUtcDay(context.now) - 45 * DAY_MS,
+    trackingPeriods: [],
     keyId: data.keyId,
     sealed,
   });
@@ -178,10 +179,12 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     ),
   );
   await batch.commit();
+  const trackingDocuments = await seedTrackingPlan(context, keyring);
 
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
+      trackingDocuments +
       2 +
       incomeDocuments +
       envelopeDocuments +
@@ -1516,4 +1519,99 @@ async function writeSeedGoals(
   });
   await batch.commit();
   return goals.length * 3;
+}
+
+/** Jamie's plan is already at Track: income, envelopes, bills and goals like Alex's, a starting point 45 days back that is also the day tracking began, what each envelope held that day, and the two records of the move up. Jamie's `trackingPeriods` has one open period. */
+async function seedTrackingPlan(
+  context: SeedContext,
+  keyring: ReturnType<typeof readKeyring>,
+) {
+  const owner = FIXTURE_USERS.partnerTwo;
+  const data = deriveSeedDataKey(keyring, owner.uid);
+  const createdAt = context.now - 14 * DAY_MS;
+  const startDate = startOfUtcDay(context.now) - 45 * DAY_MS;
+  const encryption = {
+    appId: 'runway' as const,
+    keyId: data.keyId,
+    keyVersion: 1,
+    key: data.key.toString('hex'),
+  };
+  const plan = `apps/runway/plans/${owner.uid}`;
+
+  const batch = context.firestore.batch();
+  batch.set(
+    context.firestore.doc(`apps/runway/server/${owner.uid}/keys/data`),
+    wrapDataKey(keyring, owner.uid, data, createdAt),
+  );
+  batch.set(context.firestore.doc(plan), {
+    uid: owner.uid,
+    createdAt,
+    updatedAt: createdAt,
+    stance: 'conservative',
+    startDate,
+    trackingPeriods: [{ from: startDate, to: null }],
+    keyId: data.keyId,
+    sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
+  });
+  const moveId = `tracking_${new Date(startDate).toISOString().slice(0, 10).replaceAll('-', '')}_${createdAt}`;
+  batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+    id: moveId,
+    kind: 'trackingChange',
+    date: startDate,
+    refId: null,
+    reversesMoveId: null,
+    createdAt,
+    sealed: await sealJson({ direction: 'up' }, encryption),
+  } satisfies MoveDoc);
+  const envelopeStarts = [
+    ['seed-envelope-groceries', 12_000],
+    ['seed-envelope-gas', 4_000],
+  ] as const;
+  await Promise.all(
+    envelopeStarts.map(async ([refId, cents]) => {
+      const id = `start_${refId}_${createdAt}`;
+      batch.set(context.firestore.doc(`${plan}/moves/${id}`), {
+        id,
+        kind: 'start',
+        date: startDate,
+        refId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: await sealJson(
+          { amountCents: cents, holding: 'envelope' } satisfies StartSealed,
+          encryption,
+        ),
+      } satisfies MoveDoc);
+    }),
+  );
+  batch.set(context.firestore.doc(`${plan}/changes/seed-change-level-move`), {
+    id: 'seed-change-level-move',
+    kind: 'levelMove',
+    createdAt,
+    effectiveFrom: startDate,
+    itemIds: [],
+    sealed: await sealJson(
+      {
+        summary: `Started tracking from ${new Date(startDate).toISOString().slice(0, 10)}.`,
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  });
+  await batch.commit();
+
+  const documents = [
+    await writeSeedIncome(context, owner.uid, encryption),
+    await writeSeedEnvelopes(context, owner.uid, encryption),
+    await writeSeedBills(context, owner.uid, encryption),
+    await writeSeedGoals(context, owner.uid, encryption),
+  ].reduce((sum, count) => sum + count, 0);
+  const startBatch = context.firestore.batch();
+  const startDocuments = await writeSeedStart(
+    context,
+    owner.uid,
+    encryption,
+    startBatch,
+  );
+  await startBatch.commit();
+  return 2 + 1 + envelopeStarts.length + 1 + documents + startDocuments;
 }
