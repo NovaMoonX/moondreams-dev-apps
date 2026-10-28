@@ -302,7 +302,10 @@ function ItemSheet({
   const holdsMoney =
     (itemKind === 'envelope' || itemKind === 'goal' || itemKind === 'bill') &&
     heldCents > 0;
-  const isAskingHeld = (view === 'end' || view === 'archive') && holdsMoney;
+  const isReleased =
+    header?.heldReleasedOn != null && header.heldReleasedOn <= today;
+  const isAskingHeld =
+    (view === 'end' || view === 'archive') && holdsMoney && !isReleased;
   const canRelease =
     holdsMoney &&
     header !== null &&
@@ -577,10 +580,8 @@ function ItemSheet({
     return null;
   };
   const blocker = getBlocker();
-  const isStoppable =
-    itemKind !== 'source' &&
-    header?.archivedAt == null &&
-    (endedAt === null || endedAt >= today);
+  const isArchivable = itemKind !== 'source' && header?.archivedAt == null;
+  const isStoppable = isArchivable && (endedAt === null || endedAt >= today);
   const isTrackEnvelope = itemKind === 'envelope' && level === 'track';
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
   const hasBillRow = itemKind === 'bill' && paid.isReady && payment !== null;
@@ -739,13 +740,15 @@ function ItemSheet({
           />
         </ActionGroup>
       )}
-      {isStoppable && (
+      {isArchivable && (
         <ActionGroup
           caption={
-            goal ? ITEM_SHEET_WORDS.stopHeading : ITEM_SHEET_R2_WORDS.stopOnly
+            goal && isStoppable
+              ? ITEM_SHEET_WORDS.stopHeading
+              : ITEM_SHEET_R2_WORDS.stopOnly
           }
         >
-          {goal && !isPaused && (
+          {isStoppable && goal && !isPaused && (
             <ActionRow
               isGrouped
               hasChevron
@@ -755,7 +758,7 @@ function ItemSheet({
               onClick={() => goTo('pause')}
             />
           )}
-          {goal && isPaused && (
+          {isStoppable && goal && isPaused && (
             <ActionRow
               isGrouped
               hasChevron
@@ -765,14 +768,16 @@ function ItemSheet({
               onClick={() => goTo('resume')}
             />
           )}
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<CalendarOff />}
-            label={LIFECYCLE_WORDS.end}
-            subtitle={ITEM_SHEET_R2_WORDS.endSub}
-            onClick={() => goTo('end')}
-          />
+          {isStoppable && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<CalendarOff />}
+              label={LIFECYCLE_WORDS.end}
+              subtitle={ITEM_SHEET_R2_WORDS.endSub}
+              onClick={() => goTo('end')}
+            />
+          )}
           <ActionRow
             isGrouped
             hasChevron

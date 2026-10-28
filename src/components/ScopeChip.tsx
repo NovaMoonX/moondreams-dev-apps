@@ -15,7 +15,7 @@ interface ScopeChipProps {
   children: (close: () => void) => ReactNode;
 }
 
-/** A quiet scope choice over a list: a thin chip with the scope's name and a small chevron, opening its choices in a drawer on a phone and a popover from `sm` up. 28px tall with a 40px hit area. */
+/** A quiet scope choice over a list: a thin chip with its own muted fill and hairline (never `secondary`, which a theme may make see-through), the scope's name and a small chevron, opening its choices in a drawer on a phone and a popover from `sm` up. 28px tall with a 40px hit area. */
 function ScopeChip({ label, title, children }: ScopeChipProps) {
   const [isOpen, setIsOpen] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
@@ -25,12 +25,12 @@ function ScopeChip({ label, title, children }: ScopeChipProps) {
   const trigger = (
     <Button
       type='button'
-      variant='secondary'
+      variant='tertiary'
       size='sm'
       rounded='full'
       aria-label={`${title}: ${label}`}
       aria-expanded={isOpen}
-      className="relative h-7 min-h-0 max-w-full gap-1 px-3 py-0 text-sm font-medium whitespace-nowrap !transition-none after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+      className="bg-muted text-foreground! border-border hover:bg-accent relative h-7 min-h-0 max-w-full gap-1 border px-3 py-0 text-sm font-medium whitespace-nowrap !transition-none after:absolute after:-inset-x-1 after:-inset-y-[7px] after:content-['']"
       onClick={() => setIsOpen((open) => !open)}
     >
       <span className='truncate'>{label}</span>

@@ -42,6 +42,7 @@ import {
   CONFIRM_FLOW_WORDS,
   CONFIRM_WORDS,
   CORRECT_COVER_WORDS,
+  CORRECT_HIDDEN_WORDS,
   CORRECT_WORDS,
   DRAFT_WORDS,
   MAX_NOTE_LENGTH,
@@ -378,9 +379,9 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             <InlineNotice
               tone='warning'
               title={
-                <MaskedText>
-                  {CORRECT_COVER_WORDS.shortTitle(formatCents(gap))}
-                </MaskedText>
+                isHidden
+                  ? CORRECT_HIDDEN_WORDS.shortTitle
+                  : CORRECT_COVER_WORDS.shortTitle(formatCents(gap))
               }
             >
               {heldCover > 0 ? (

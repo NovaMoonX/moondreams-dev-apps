@@ -1442,3 +1442,8 @@ export const RELEASE_UNDO_WORDS = {
   changedSince:
     'It was changed after the release, maybe on another device, so nothing was undone. Open it again to see where it stands.',
 } as const;
+
+/** Round 7b package F2: a correction's short notice while amounts are hidden. */
+export const CORRECT_HIDDEN_WORDS = {
+  shortTitle: 'Short',
+} as const;
