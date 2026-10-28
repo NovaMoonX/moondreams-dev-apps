@@ -55,17 +55,41 @@ export const STANCE_HELP: Record<(typeof STANCES)[number], string> = {
 export const STANCE_FOLLOW_PLAN = 'plan' as const;
 
 /** Entries on Plan > More; one appears when the screen it opens exists. */
-export const MORE_ENTRIES = ['settings'] as const;
+export const MORE_ENTRIES = ['settings', 'changeLog'] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
 export const RUNWAY_VIEWS = ['start', 'freeToSpend'] as const;
 
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
-  { settings: 'Settings' };
+  { settings: 'Settings', changeLog: 'Change log' };
 
 export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
   settings: 'How the plan reads a range of pay or a bill.',
+  changeLog: 'Every change to the plan, with the reason you gave.',
 };
+
+/** Days one window of the change log covers, as the span pills offer them; the URL keeps the value. */
+export const CHANGE_LOG_SPANS = ['30', '90', '365'] as const;
+export const DEFAULT_CHANGE_LOG_SPAN = '90';
+export const CHANGE_LOG_SPAN_LABELS: Record<
+  (typeof CHANGE_LOG_SPANS)[number],
+  string
+> = { '30': '30 days', '90': '3 months', '365': 'A year' };
+/** The newest entries one window reads; a busier window says so and a shorter span shows the rest. */
+export const MAX_WINDOW_CHANGES = 500;
+/** Entries drawn before "Show more". */
+export const CHANGE_LOG_PAGE_SIZE = 30;
+/** How many windows back the log goes. */
+export const MAX_CHANGE_LOG_PAGE = 40;
+export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
+  {
+    planChange: 'Change',
+    start: 'Starting point',
+    levelMove: 'Level',
+    whatIfApplied: 'What-if',
+    ended: 'Ended',
+    correction: 'Correction',
+  };
 
 export const RANGE_END_WORDS = {
   low: 'the low end',

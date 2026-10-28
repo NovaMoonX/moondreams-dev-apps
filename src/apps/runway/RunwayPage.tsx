@@ -16,6 +16,7 @@ import DaysScreen from '@apps/runway/screens/days/DaysScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
+import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
@@ -125,6 +126,14 @@ function RunwayPage() {
     return (
       <div className='page'>
         <FreeToSpendScreen onClose={closeView} />
+      </div>
+    );
+  }
+
+  if (moreEntry === 'changeLog') {
+    return (
+      <div className='page'>
+        <ChangeLogScreen onClose={closeMoreEntry} />
       </div>
     );
   }

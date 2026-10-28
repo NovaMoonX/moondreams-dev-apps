@@ -1,5 +1,11 @@
 import { useEffect } from 'react';
 
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import {
+  getChangeWindow,
+  toChangeWindowKey,
+} from '@apps/runway/utils/changeWindow';
+import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { RECENT_DAYS_WINDOW } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -22,6 +28,8 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
+  setChanges,
+  setChangesFailed,
   setDays,
   setItems,
   setKeyStatus,
@@ -141,6 +149,41 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       stop.current?.();
     };
   }, [uid, keyStatus, confirmedDayIds, dispatch]);
+
+  const { moreEntry, logSpan, logPage, logItem } = useRunwayUrlState();
+  const isChangeLogOpen = moreEntry === 'changeLog';
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !isChangeLogOpen) return;
+
+    const stop: { current: (() => void) | null } = { current: null };
+    const run = { isCurrent: true };
+    const window = getChangeWindow(todayAsUtcDate(), Number(logSpan), logPage);
+    const key = toChangeWindowKey(window, logItem);
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        stop.current = startChangesListener(
+          uid,
+          encryption,
+          { ...window, itemId: logItem },
+          (changes) => dispatch(setChanges({ key, changes })),
+          (error) => {
+            console.error('The change log did not open', error);
+            dispatch(setChangesFailed(key));
+          },
+        );
+      })
+      .catch(() => {
+        if (run.isCurrent) dispatch(setChangesFailed(key));
+      });
+
+    return () => {
+      run.isCurrent = false;
+      stop.current?.();
+    };
+  }, [uid, keyStatus, isChangeLogOpen, logSpan, logPage, logItem, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || !isPlanLoaded || reachedEndings === '')

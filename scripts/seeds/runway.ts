@@ -165,6 +165,11 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     encryption,
     batch,
   );
+  const historyDocuments = await writeSeedHistory(
+    context,
+    owner.uid,
+    encryption,
+  );
   const masterKeyIds = Object.keys(keyring.keys);
   masterKeyIds.forEach((masterKeyId) =>
     batch.set(
@@ -184,6 +189,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       goalDocuments +
       lifecycleDocuments +
       startDocuments +
+      historyDocuments +
       masterKeyIds.length,
   };
 }
@@ -406,6 +412,81 @@ async function writeSeedLifecycle(
   );
   await batch.commit();
   return items.length * 3 + 5;
+}
+
+const HISTORY_ITEMS = [
+  ['seed-envelope-groceries', 'Groceries'],
+  ['seed-envelope-gas', 'Gas'],
+  ['seed-goal-vacation', 'Vacation fund'],
+] as const;
+
+/** Sixty older changes, fifty of them in the 90 days before the recent ones so one window holds 50 entries and paging back finds them, one that was made 45 days ago for a day later confirmed, and one sealed under a key this plan does not have, which the log shows as unreadable. */
+async function writeSeedHistory(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const notes = ['Prices went up', null, 'Covering the car registration'];
+  const entries = Array.from({ length: 60 }, (_, index) => {
+    const [itemId, name] = HISTORY_ITEMS[index % HISTORY_ITEMS.length];
+    const age = index < 50 ? 100 + index * 0.55 : 130 + (index - 50) * 28;
+    const cents = 20_000 + index * 500;
+    return {
+      id: `seed-history-${index}`,
+      itemId,
+      createdAt: today - Math.round(age * DAY_MS),
+      summary: `${name}: Funding $${(cents / 100).toFixed(2)} every income day to $${((cents + 500) / 100).toFixed(2)} every income day, from now on.`,
+      note: notes[index % notes.length],
+    };
+  });
+  const linked = {
+    id: 'seed-history-confirmed-day',
+    itemId: 'seed-envelope-groceries',
+    createdAt: today - 45 * DAY_MS,
+    summary:
+      'Groceries: Funding $150.00 every income day to $160.00 every income day, from now on.',
+    note: 'Before the bonus',
+  };
+  const wrongKey = {
+    ...encryption,
+    key: 'ab'.repeat(32),
+  };
+  const all = [
+    ...entries,
+    linked,
+    {
+      id: 'seed-history-unreadable',
+      itemId: 'seed-envelope-gas',
+      createdAt: today - 60 * DAY_MS,
+      summary: 'Gas: Funding changed.',
+      note: null,
+    },
+  ];
+  const sealedEntries = await Promise.all(
+    all.map((entry) =>
+      sealJson(
+        { summary: entry.summary, note: entry.note } satisfies ChangeSealed,
+        entry.id === 'seed-history-unreadable' ? wrongKey : encryption,
+      ),
+    ),
+  );
+  const batch = context.firestore.batch();
+  all.forEach((entry, index) =>
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${entry.id}`),
+      change(
+        entry.id,
+        entry.createdAt,
+        entry.createdAt,
+        [entry.itemId],
+        sealedEntries[index],
+      ),
+    ),
+  );
+  await batch.commit();
+  return all.length;
 }
 
 /** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside. One change and five holdings. */
