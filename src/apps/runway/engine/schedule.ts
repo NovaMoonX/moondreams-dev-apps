@@ -1,5 +1,5 @@
 import { MAX_OCCURRENCES } from '@apps/runway/constants';
-import type { Ending, Schedule } from '@apps/runway/types';
+import type { Ending, FundingRule, Schedule } from '@apps/runway/types';
 
 import { DAY_MS, daysInUtcMonth } from './dates';
 
@@ -67,5 +67,32 @@ export function occurrences(
     .filter((date) => onDate === null || date <= onDate)
     .slice(0, ending.afterCount ?? MAX_OCCURRENCES)
     .filter((date) => date >= from);
+  return result;
+}
+
+/**
+ * Of the plan-wide income days, the ones a funding cadence selects, counted in chronological order
+ * whatever order they arrive in. Every Nth counts from the anchor day: the anchor and every Nth day
+ * after it. An anchor that is no longer in the list (its day has passed) counts from the first day listed.
+ */
+export function selectFundedDays<D extends { dayKey: string; on: number }>(
+  cadence: FundingRule['cadence'],
+  days: readonly D[],
+): D[] {
+  const ordered = [...days].sort(
+    (a, b) =>
+      a.on - b.on || (a.dayKey < b.dayKey ? -1 : a.dayKey > b.dayKey ? 1 : 0),
+  );
+  if (cadence.kind === 'everyIncomeDay') return ordered;
+  if (cadence.kind === 'chosen') {
+    const chosen = new Set(cadence.dayKeys);
+    return ordered.filter((day) => chosen.has(day.dayKey));
+  }
+  const found = ordered.findIndex((day) => day.dayKey === cadence.anchorDayKey);
+  const anchorIndex = Math.max(found, 0);
+  const result = ordered.filter(
+    (_, index) =>
+      index >= anchorIndex && (index - anchorIndex) % cadence.n === 0,
+  );
   return result;
 }
