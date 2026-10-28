@@ -5,6 +5,7 @@ import { generateUuid } from '@/utils/idUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   getTipFromPercent,
+  itemizeLine,
   splitReceipt,
   sumLinesCents,
   type ReceiptLine,
@@ -37,10 +38,13 @@ interface ReceiptSplitState {
   customTip: string;
   tipSplit: TipSplit;
   openLineId: string | null;
+  editingLineId: string | null;
 }
 
 const toMoneyText = (cents: number | null) => (cents ? centsToInputValue(cents) : '');
 const toCents = (text: string) => parseMoneyToCents(text) ?? 0;
+
+const MAX_ITEMIZED_LINES = 100;
 
 const toSnapshot = (state: ReceiptSplitState) =>
   JSON.stringify([
@@ -52,11 +56,10 @@ const toSnapshot = (state: ReceiptSplitState) =>
   ]);
 
 function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
-  const lines = (reading?.lines ?? []).map((line) => ({
-    id: generateUuid(),
-    name: line.quantity > 1 ? `${line.quantity}× ${line.name}` : line.name,
-    priceCents: line.priceCents,
-  }));
+  const read = reading?.lines ?? [];
+  const itemized = read.flatMap((line) => itemizeLine(line.name, line.quantity, line.priceCents));
+  const entries = itemized.length > MAX_ITEMIZED_LINES ? read.map((line) => ({ name: line.quantity === 1 ? line.name : `${line.quantity}× ${line.name}`, priceCents: line.priceCents })) : itemized;
+  const lines = entries.map((entry) => ({ id: generateUuid(), ...entry }));
   return {
     lines,
     claims: {},
@@ -67,6 +70,7 @@ function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
     customTip: '',
     tipSplit: 'PROPORTIONAL',
     openLineId: lines[0]?.id ?? null,
+    editingLineId: lines[0] && (lines[0].name === '' || lines[0].priceCents === 0) ? lines[0].id : null,
   };
 }
 
@@ -116,12 +120,20 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
       lines: current.lines.map((line) => (line.id === lineId ? { ...line, ...changes } : line)),
     }));
 
+  const openLine = (lineId: string | null) =>
+    setState((current) => ({ ...current, openLineId: lineId, editingLineId: null }));
+
+  const startEditing = (lineId: string) => setState((current) => ({ ...current, openLineId: lineId, editingLineId: lineId }));
+
+  const stopEditing = () => setState((current) => ({ ...current, editingLineId: null }));
+
   const addLine = () => {
     const id = generateUuid();
     setState((current) => ({
       ...current,
       lines: [...current.lines, { id, name: '', priceCents: 0 }],
       openLineId: id,
+      editingLineId: id,
     }));
   };
 
@@ -131,6 +143,7 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
       lines: current.lines.filter((line) => line.id !== lineId),
       claims: Object.fromEntries(Object.entries(current.claims).filter(([id]) => id !== lineId)),
       openLineId: current.openLineId === lineId ? null : current.openLineId,
+      editingLineId: current.editingLineId === lineId ? null : current.editingLineId,
     }));
 
   const itemsCents = sumLinesCents(state.lines);
@@ -167,6 +180,9 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
     patch,
     setLineClaims,
     updateLine,
+    openLine,
+    startEditing,
+    stopEditing,
     addLine,
     removeLine,
   };

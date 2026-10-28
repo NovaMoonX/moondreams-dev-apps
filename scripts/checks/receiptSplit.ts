@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   allocateByWeight,
+  itemizeLine,
   getReceiptTotalCents,
   getTipFromPercent,
   splitReceipt,
@@ -59,6 +60,14 @@ assert.deepEqual(stranger.unclaimedLineIds, ['burger']);
 assert.equal(getTipFromPercent(lines, 0, 20), 1500);
 assert.equal(getTipFromPercent(lines, 500, 20), 1400);
 assert.equal(getTipFromPercent(lines, 99999, 20), 0);
+
+// A quantity is one entry per unit, the price shared to the cent
+assert.deepEqual(itemizeLine('Ramen', 2, 1890), [{ name: 'Ramen (1 of 2)', priceCents: 945 }, { name: 'Ramen (2 of 2)', priceCents: 945 }]);
+assert.deepEqual(itemizeLine('Beer', 3, 1000).map((unit) => unit.priceCents), [334, 333, 333]);
+assert.deepEqual(itemizeLine('Gyoza', 1, 850), [{ name: 'Gyoza', priceCents: 850 }]);
+assert.deepEqual(itemizeLine('Ramen', 0.5, 400), [{ name: '0.5× Ramen', priceCents: 400 }]);
+assert.deepEqual(itemizeLine('Shots', 13, 1300), [{ name: '13× Shots', priceCents: 1300 }]);
+assert.equal(sum(itemizeLine('Wings', 7, 4999).map((unit) => unit.priceCents)), 4999);
 
 // Random bills always add up to the cent
 const random = (n: number) => Math.floor(Math.random() * n);

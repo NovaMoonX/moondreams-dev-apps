@@ -84,7 +84,7 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
   );
   const split = useReceiptSplit(reading, people);
   const [title, setTitle] = useState(prefill?.title || reading?.merchant || '');
-  const [payerUid, setPayerUid] = useState(currentUserId);
+  const [payerUid, setPayerUid] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUsdConfirmed, setIsUsdConfirmed] = useState(false);
   const foreignCurrency = reading?.currency && reading.currency !== 'USD' ? reading.currency : null;
@@ -94,7 +94,7 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
   useEffect(() => {
     isDirtyRef.current = split.isDirty;
   }, [isDirtyRef, split.isDirty]);
-  const canSave = isComplete && title.trim() !== '' && !isSubmitting && (foreignCurrency === null || isUsdConfirmed);
+  const canSave = isComplete && payerUid !== null && title.trim() !== '' && !isSubmitting && (foreignCurrency === null || isUsdConfirmed);
   const unclaimedCount = result.unclaimedLineIds.length;
 
   const getNote = () => {
@@ -103,13 +103,14 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
     if (split.hasUnpricedLine) return 'Give each item a price.';
     if (split.hasNegativeShare) return 'A discount is bigger than what someone ordered.';
     if (unclaimedCount > 0) return `${unclaimedCount} ${unclaimedCount === 1 ? 'item has' : 'items have'} nobody yet.`;
+    if (payerUid === null) return 'Say who paid the bill.';
     if (title.trim() === '') return 'Add a title to save it.';
     if (foreignCurrency !== null && !isUsdConfirmed) return `This bill is in ${foreignCurrency}. Confirm the amounts are in USD first.`;
     return null;
   };
 
   const handleSave = () => {
-    if (isSavingRef.current) {
+    if (isSavingRef.current || payerUid === null) {
       return;
     }
     isSavingRef.current = true;
@@ -168,6 +169,17 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
       )}
       <ReceiptSplitEditor split={split} />
       <section className='space-y-4'>
+        <div className='space-y-2'>
+          <PillGroup
+            label='Who paid the bill?'
+            options={people.map((person) => ({ value: person.id, label: person.name }))}
+            value={payerUid}
+            onChange={setPayerUid}
+          />
+          <p className='text-muted-foreground text-xs'>
+            It&apos;s added as paid by them, and everyone else owes their share.
+          </p>
+        </div>
         <div className='space-y-1.5'>
           <Label>Expense title</Label>
           <Input
@@ -178,15 +190,6 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
             onChange={(event) => setTitle(event.target.value)}
           />
         </div>
-        <PillGroup
-          label='Who paid the bill?'
-          options={people.map((person) => ({ value: person.id, label: person.name }))}
-          value={payerUid}
-          onChange={setPayerUid}
-        />
-        <p className='text-muted-foreground text-xs'>
-          It&apos;s added as paid by them, and everyone else owes their share.
-        </p>
       </section>
       <ModalFooterActions
         note={getNote()}

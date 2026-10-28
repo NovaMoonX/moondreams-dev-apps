@@ -1,10 +1,11 @@
 import { useCallback, useState } from 'react';
 
-import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { Button, DropdownMenuFactories, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowRight, ChevronDown, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { ArrowRight, ChevronDown, Plus, Users } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import MoneyInput from '@/components/MoneyInput';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
@@ -28,11 +29,58 @@ const formatNames = (names: string[]) => {
   return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
 };
 
-function LineRow({ line, holders, split }: LineRowProps) {
-  const { state, people, patch, setLineClaims, updateLine, removeLine } = split;
-  const isOpen = state.openLineId === line.id;
-  const [isEditing, setIsEditing] = useState(line.name === '' || line.priceCents === 0);
+interface LineEditFieldsProps {
+  line: ReceiptLine;
+  onSave: (changes: { name: string; priceCents: number }) => void;
+  onCancel: () => void;
+}
+
+function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
+  const [name, setName] = useState(line.name);
   const [priceText, setPriceText] = useState(line.priceCents ? centsToInputValue(line.priceCents) : '');
+  const canSave = name.trim() !== '';
+
+  return (
+    <div className='space-y-3'>
+      <div className='grid gap-3 sm:grid-cols-2'>
+        <div className='space-y-1.5'>
+          <Label>Item</Label>
+          <Input
+            aria-label='Item name'
+            variant='outline'
+            placeholder='Margherita pizza'
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+        </div>
+        <div className='space-y-1.5'>
+          <Label>Price</Label>
+          <MoneyInput variant='outline' ariaLabel='Item price' placeholder='0.00' value={priceText} onChange={setPriceText} />
+        </div>
+      </div>
+      <div className='flex gap-2'>
+        <Button type='button' variant='secondary' className='flex-1' onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button
+          type='button'
+          className='flex-1'
+          disabled={!canSave}
+          onClick={() => onSave({ name: name.trim(), priceCents: parseMoneyToCents(priceText) ?? 0 })}
+        >
+          Done
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+const { option } = DropdownMenuFactories;
+
+function LineRow({ line, holders, split }: LineRowProps) {
+  const { state, people, setLineClaims, updateLine, removeLine, openLine, startEditing, stopEditing } = split;
+  const isOpen = state.openLineId === line.id;
+  const isEditing = isOpen && state.editingLineId === line.id;
   const names = people.filter((person) => holders.includes(person.id)).map((person) => person.name);
   const isEveryone = people.length > 0 && holders.length === people.length;
   const scrollIntoViewWhenOpen = useCallback(
@@ -50,7 +98,7 @@ function LineRow({ line, holders, split }: LineRowProps) {
         variant='tertiary'
         aria-expanded={isOpen}
         className='h-auto min-h-14 w-full items-start justify-between gap-3 rounded-none px-3! py-2.5 text-left font-normal whitespace-normal'
-        onClick={() => patch({ openLineId: isOpen ? null : line.id })}
+        onClick={() => openLine(isOpen ? null : line.id)}
       >
         <span className='min-w-0 flex-1'>
           <span className='line-clamp-2 text-sm font-medium'>{line.name || 'New item'}</span>
@@ -65,71 +113,61 @@ function LineRow({ line, holders, split }: LineRowProps) {
       </Button>
       {isOpen && (
         <div className='bg-muted/50 space-y-3 px-3 pt-1 pb-3'>
-          <MultiPillGroup
-            label={`Who had ${line.name || 'this item'}`}
-            options={people.map((person) => ({ value: person.id, label: person.name }))}
-            values={holders}
-            onChange={(uids) => setLineClaims(line.id, uids)}
-          />
-          <ActionChips
-            label='Item actions'
-            actions={[
-              {
-                key: 'everyone',
-                icon: <Users className='h-4 w-4' />,
-                label: isEveryone ? 'Clear' : 'Everyone',
-                description: isEveryone ? 'Clear who had this' : 'Everyone shares this',
-                onClick: () => setLineClaims(line.id, isEveryone ? [] : people.map((person) => person.id)),
-              },
-              ...(nextUnclaimedId
-                ? [
+          {isEditing ? (
+            <LineEditFields
+              key={line.id}
+              line={line}
+              onSave={(changes) => {
+                updateLine(line.id, changes);
+                stopEditing();
+              }}
+              onCancel={() => (line.name === '' ? removeLine(line.id) : stopEditing())}
+            />
+          ) : (
+            <>
+              <MultiPillGroup
+                label={`Who had ${line.name || 'this item'}`}
+                options={people.map((person) => ({ value: person.id, label: person.name }))}
+                values={holders}
+                onChange={(uids) => setLineClaims(line.id, uids)}
+              />
+              <div className='flex items-center gap-2'>
+                <ActionChips
+                  className='min-w-0 flex-1'
+                  label='Item actions'
+                  actions={[
                     {
-                      key: 'next',
-                      icon: <ArrowRight className='h-4 w-4' />,
-                      label: 'Next item',
-                      onClick: () => patch({ openLineId: nextUnclaimedId }),
+                      key: 'everyone',
+                      icon: <Users className='h-4 w-4' />,
+                      label: isEveryone ? 'Clear' : 'Everyone',
+                      description: isEveryone ? 'Clear who had this' : 'Everyone shares this',
+                      onClick: () => setLineClaims(line.id, isEveryone ? [] : people.map((person) => person.id)),
                     },
-                  ]
-                : []),
-              ...(isEditing
-                ? []
-                : [{ key: 'edit', icon: <Pencil className='h-4 w-4' />, label: 'Edit item', onClick: () => setIsEditing(true) }]),
-              {
-                key: 'remove',
-                icon: <Trash2 className='h-4 w-4' />,
-                label: 'Remove',
-                description: `Remove ${line.name || 'this item'}`,
-                isDestructive: true,
-                onClick: () => removeLine(line.id),
-              },
-            ]}
-          />
-          {isEditing && (
-            <div className='grid gap-3 sm:grid-cols-2'>
-              <div className='space-y-1.5'>
-                <Label>Item</Label>
-                <Input
-                  aria-label='Item name'
-                  variant='outline'
-                  placeholder='Margherita pizza'
-                  value={line.name}
-                  onChange={(event) => updateLine(line.id, { name: event.target.value })}
+                    ...(nextUnclaimedId
+                      ? [
+                          {
+                            key: 'next',
+                            icon: <ArrowRight className='h-4 w-4' />,
+                            label: 'Next',
+                            description: 'Next item nobody has yet',
+                            onClick: () => openLine(nextUnclaimedId),
+                          },
+                        ]
+                      : []),
+                  ]}
                 />
-              </div>
-              <div className='space-y-1.5'>
-                <Label>Price</Label>
-                <MoneyInput
-                  variant='outline'
-                  ariaLabel='Item price'
-                  placeholder='0.00'
-                  value={priceText}
-                  onChange={(text) => {
-                    setPriceText(text);
-                    updateLine(line.id, { priceCents: parseMoneyToCents(text) ?? 0 });
+                <EllipsisDropdown
+                  variant='tertiary'
+                  className='border-border size-10! shrink-0 border'
+                  ariaLabel={`More for ${line.name || 'this item'}`}
+                  items={[option({ label: 'Edit item', value: 'edit' }), option({ label: 'Remove item', value: 'remove' })]}
+                  onItemSelect={(value) => {
+                    if (value === 'edit') startEditing(line.id);
+                    else removeLine(line.id);
                   }}
                 />
               </div>
-            </div>
+            </>
           )}
         </div>
       )}
@@ -154,7 +192,7 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
   ];
   const tipSplitOptions: { value: TipSplit; label: string; detail: string }[] = [
     { value: 'PROPORTIONAL', label: 'By what they ordered', detail: 'A bigger order tips more.' },
-    { value: 'EVEN', label: 'Evenly', detail: 'Everyone in the split tips the same.' },
+    { value: 'EVEN', label: 'Evenly', detail: 'Everyone on the bill tips the same.' },
   ];
 
   const billWithoutOwnTip = itemsCents + taxCents + split.feesCents - split.discountCents + receiptTipCents;
@@ -262,7 +300,7 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
             </p>
           )}
         </div>
-        {tipCents > 0 && result.participants.length > 1 && (
+        {state.tipChoice !== 'NONE' && (
           <PillGroup
             label='Split the tip'
             options={tipSplitOptions}
@@ -309,19 +347,19 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
               })}
           </ul>
         )}
-        <div className='flex items-center justify-between gap-3 px-1 text-sm'>
+        <div className='flex items-center justify-between gap-3 px-[13px] text-sm'>
           <span className='text-muted-foreground'>Bill total</span>
           <span className='font-semibold whitespace-nowrap'>{formatCents(result.totalCents)}</span>
         </div>
         {mismatch && (
-          <p className='text-warning px-1 text-xs' role='status'>
+          <p className='text-warning px-[13px] text-xs' role='status'>
             The receipt says {formatCents(printedTotalCents ?? 0)}, and the items, tax and fees here add up to{' '}
             {formatCents(billWithoutOwnTip)}, {formatCents(Math.abs((printedTotalCents ?? 0) - billWithoutOwnTip))}{' '}
             {(printedTotalCents ?? 0) > billWithoutOwnTip ? 'short' : 'over'}. Check the items, tax and fees; an item you removed counts too.
           </p>
         )}
         {leftOut.length > 0 && unclaimedCount === 0 && (
-          <p className='text-muted-foreground px-1 text-xs'>Not in this split: {formatNames(leftOut)}.</p>
+          <p className='text-muted-foreground px-[13px] text-xs'>Not in this split: {formatNames(leftOut)}.</p>
         )}
       </section>
     </div>
