@@ -46,6 +46,7 @@ import { selectWatchlistRows } from '@apps/a-list/store/selectors';
 import { getReleaseLabel } from '@apps/a-list/utils/releaseLabel';
 
 const UNDO_TOAST_MS = 6000;
+const undoneToasts = new Set<string>();
 
 type DrawerView = 'details' | 'addToCalendar' | 'edit' | 'archive';
 
@@ -164,6 +165,9 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
           label: 'Undo',
           onClick: () => {
             removeToast(toastId);
+            if (undoneToasts.has(toastId)) return;
+
+            undoneToasts.add(toastId);
             void dispatch(
               restoreWatchlistItem({
                 uid: user.uid,
@@ -186,6 +190,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
                     undoError,
                     'Unable to restore this movie.',
                   ),
+                  description: 'You can still find it under Archived.',
                   type: 'error',
                 }),
               );
@@ -203,11 +208,13 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
     setIsSaving(true);
     setError(null);
     try {
-      await dispatch(
+      const { restored } = await dispatch(
         restoreWatchlistItem({ uid: user.uid, movieKey }),
       ).unwrap();
       addToast({
-        title: 'Back on your watchlist',
+        title: restored
+          ? 'Back on your watchlist'
+          : 'Already changed on another device',
         description: item.movie.title,
       });
       onClose();
