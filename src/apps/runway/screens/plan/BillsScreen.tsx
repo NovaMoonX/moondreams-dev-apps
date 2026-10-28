@@ -9,13 +9,11 @@ import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import BillRow from '@apps/runway/components/BillRow';
-import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
-import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
-import { planBillPayments } from '@apps/runway/engine/demands';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
 import {
   selectBills,
-  selectComingDays,
+  selectBillPayments,
   selectIsPlanItemsLoaded,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -26,38 +24,21 @@ function BillsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const bills = useAppSelector((state) => selectBills(state, today));
-  const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
 
   const hasSearch = bills.length >= SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
-  const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const visible = bills
     .filter(({ version }) =>
       version.payload.name.toLowerCase().includes(needle),
     )
     .map(({ item, version }) => {
-      const { payload } = version;
-      const payments = planBillPayments(
-        {
-          itemId: item.id,
-          createdAt: item.createdAt,
-          priority: payload.priority,
-          orderIndex: payload.orderIndex,
-          amount: payload.amount,
-          stanceOverride: payload.stanceOverride ?? null,
-          schedule: payload.timing.schedule,
-          ending: payload.ending,
-          fundedBy: payload.fundedBy,
-        },
-        comingDays,
-        horizon,
-        stance,
-      );
-      const payment = payments.find((entry) => entry.dueOn >= today) ?? null;
-      return { item, payload, payment };
+      const payment =
+        (payments[item.id] ?? []).find((entry) => entry.dueOn >= today) ?? null;
+      return { item, payload: version.payload, payment };
     });
 
   const getBody = () => {
@@ -90,6 +71,7 @@ function BillsScreen() {
             {visible.map(({ item, payload, payment }) => (
               <BillRow
                 key={item.id}
+                billId={item.id}
                 bill={payload}
                 payment={payment}
                 planStance={stance}

@@ -13,12 +13,14 @@ import {
   startDaysListener,
   startRecordsListener,
 } from '@apps/runway/store/listeners/dayListeners';
+import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
 import { selectConfirmedDayIds } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   setDays,
   setItems,
   setKeyStatus,
+  setMoves,
   setPlan,
   setRecords,
   setVersions,
@@ -79,6 +81,13 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           encryption,
           todayAsUtcDate() - RECENT_DAYS_WINDOW * DAY_MS,
           (days) => dispatch(setDays(days)),
+          fail,
+        ),
+        startMovesListener(
+          uid,
+          encryption,
+          todayAsUtcDate() - RECENT_DAYS_WINDOW * DAY_MS,
+          (moves) => dispatch(setMoves(moves)),
           fail,
         ),
       ];

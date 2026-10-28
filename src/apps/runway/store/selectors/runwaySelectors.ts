@@ -8,6 +8,16 @@ import {
 } from '@apps/runway/engine/comingDays';
 import { sumConfirmedByItem } from '@apps/runway/engine/confirm';
 import { buildDraft, type Draft } from '@apps/runway/engine/draft';
+import {
+  collectFunded,
+  collectPaid,
+  NO_PROGRESS,
+  type BillProgressInput,
+} from '@apps/runway/engine/progress';
+import {
+  planBillPayments,
+  type BillPayment,
+} from '@apps/runway/engine/demands';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { resolve, resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { readStance } from '@apps/runway/engine/stance';
@@ -212,6 +222,32 @@ export const selectConfirmedByItem = createSelector(
   (records) => sumConfirmedByItem(records),
 );
 
+const selectMoves = (state: RootState) => state.runway.moves;
+const selectOpenDays = (state: RootState) => state.runway.days;
+
+/** What confirmed days set aside for each item and which payments were marked paid, from the records and moves read. */
+export const selectBillProgress = createSelector(
+  [selectRecords, selectOpenDays, selectMoves],
+  (records, days, moves): Record<string, BillProgressInput> => {
+    const funded = collectFunded(
+      records,
+      new Map(days.map((day) => [day.id, day.expectedOn])),
+    );
+    const paid = collectPaid(moves);
+    const ids = new Set([...Object.keys(funded), ...Object.keys(paid)]);
+    const result = Object.fromEntries(
+      [...ids].map((id) => [
+        id,
+        { funded: funded[id] ?? [], paid: paid[id] ?? [] },
+      ]),
+    );
+    return result;
+  },
+);
+
+export const selectIsMovesLoaded = (state: RootState) =>
+  state.runway.isMovesLoaded;
+
 export const selectProposedRecord = (state: RootState, dayId: string) => {
   const result = state.runway.records.find(
     (record): record is Extract<OpenRecord, { kind: 'proposed' }> =>
@@ -369,6 +405,7 @@ export const selectDraft = createSelector(
     selectToday,
     selectHeldByItem,
     selectSettledKey,
+    selectBillProgress,
   ],
   (
     items,
@@ -379,6 +416,7 @@ export const selectDraft = createSelector(
     today,
     heldByItem,
     settledKey,
+    billProgress,
   ): DraftView | null => {
     const settled = toSet(settledKey);
     const coming = buildComingDays(items, versions, today).filter(
@@ -432,6 +470,7 @@ export const selectDraft = createSelector(
         resolvedBills.map(({ version }) => version.id),
         resolvedGoals.map(({ version }) => version.id),
         resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+        resolvedBills.map(({ item }) => billProgress[item.id] ?? null),
         horizon,
       ]),
     );
@@ -458,6 +497,7 @@ export const selectDraft = createSelector(
       schedule: version.payload.timing.schedule,
       ending: version.payload.ending,
       fundedBy: version.payload.fundedBy,
+      progress: billProgress[item.id] ?? NO_PROGRESS,
     }));
     const goals = resolvedGoals.map(({ item, version }) => ({
       itemId: item.id,
@@ -531,6 +571,46 @@ export const selectDraft = createSelector(
     };
     if (draftCache.size >= MAX_CACHED_DRAFTS) draftCache.clear();
     draftCache.set(key, result);
+    return result;
+  },
+);
+
+/** Every bill's payments with what has been set aside and what is paid, keyed by bill id; the bills screen and the checklist read the same plan. */
+export const selectBillPayments = createSelector(
+  [selectBills, selectComingDays, selectStance, selectBillProgress, selectOn],
+  (
+    bills,
+    comingDays,
+    stance,
+    progress,
+    today,
+  ): Record<string, BillPayment[]> => {
+    const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
+    const result = Object.fromEntries(
+      bills.map(({ item, version }) => {
+        const { payload } = version;
+        return [
+          item.id,
+          planBillPayments(
+            {
+              itemId: item.id,
+              createdAt: item.createdAt,
+              priority: payload.priority,
+              orderIndex: payload.orderIndex,
+              amount: payload.amount,
+              stanceOverride: payload.stanceOverride ?? null,
+              schedule: payload.timing.schedule,
+              ending: payload.ending,
+              fundedBy: payload.fundedBy,
+              progress: progress[item.id] ?? NO_PROGRESS,
+            },
+            comingDays,
+            horizon,
+            stance,
+          ),
+        ];
+      }),
+    );
     return result;
   },
 );

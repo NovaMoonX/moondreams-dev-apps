@@ -255,8 +255,8 @@ service cloud.firestore {
 
     // A plan is private to one person and nests under their uid. The server-only paths
     // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
-    // Versions, changes and a day's records are append-only: their ids come from their own fields, so
-    // writing the same record twice is refused rather than overwriting it.
+    // Versions, changes, moves and a day's records are append-only: their ids come from their own
+    // fields, so writing the same record twice is refused rather than overwriting it.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read, create: if isUser(uid);
     }

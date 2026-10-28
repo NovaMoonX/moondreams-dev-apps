@@ -5,6 +5,7 @@ import type {
   DAY_RECORD_KINDS,
   ITEM_KINDS,
   MORE_ENTRIES,
+  MOVE_KINDS,
   DAY_STATUSES,
   HOLD_CHOICES,
   PLAN_SECTIONS,
@@ -209,6 +210,7 @@ export interface OpenDay {
   arrivedOn: DateOnly | null;
   confirmedAt: number | null;
   status: DayStatus;
+  doneLineIds: string[];
   override: DayOverrideSealed;
 }
 
@@ -313,3 +315,34 @@ export type SourceVersion = Extract<OpenVersion, { kind: 'source' }>;
 export type EnvelopeVersion = Extract<OpenVersion, { kind: 'envelope' }>;
 export type BillVersion = Extract<OpenVersion, { kind: 'bill' }>;
 export type GoalVersion = Extract<OpenVersion, { kind: 'goal' }>;
+
+export type MoveKind = (typeof MOVE_KINDS)[number];
+
+/** Append-only: a bill marked paid (`reversesMoveId` null) or the undo of one. `date` is the due date of the payment, so a second tap names the same id. */
+export interface MoveDoc {
+  id: string;
+  kind: MoveKind;
+  date: DateOnly;
+  refId: string | null;
+  reversesMoveId: string | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface BillPaidSealed {
+  amountCents: Cents;
+  /** The day the person marked it paid. */
+  paidOn: DateOnly;
+  /** The part that had not been set aside yet, which came out of Free to spend. */
+  fromFreeCents: Cents;
+}
+
+export interface OpenMove {
+  id: string;
+  kind: MoveKind;
+  date: DateOnly;
+  refId: string | null;
+  reversesMoveId: string | null;
+  createdAt: number;
+  payload: BillPaidSealed;
+}

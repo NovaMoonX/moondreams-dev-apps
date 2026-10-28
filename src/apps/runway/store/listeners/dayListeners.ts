@@ -38,6 +38,7 @@ async function openDay(
     arrivedOn: entry.arrivedOn ?? null,
     confirmedAt: entry.confirmedAt ?? null,
     status: entry.status,
+    doneLineIds: entry.doneLineIds ?? [],
     override: {
       pairings: opened?.pairings ?? null,
       holdResolutions: opened?.holdResolutions ?? {},
