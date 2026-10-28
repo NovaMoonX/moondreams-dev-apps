@@ -18,7 +18,9 @@
  * run needs nothing.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { APP_REGISTRY } from '../src/lib/app/app.registry.ts';
 
@@ -226,10 +228,10 @@ const readOptions = (fieldId: string) => {
   return result;
 };
 
-// Every item's current Apps value, by option name, so it can be put back if
-// rewriting the option list gives the options new ids.
+// Every item's current Apps option id, so it can be put back if rewriting the
+// option list gives the options new ids.
 const readAppsValues = (projectId: string) => {
-  const query = `query($project: ID!, $endCursor: String) { node(id: $project) { ... on ProjectV2 { items(first: 100, after: $endCursor) { nodes { id fieldValueByName(name: "${APPS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } } } pageInfo { hasNextPage endCursor } } } } }`;
+  const query = `query($project: ID!, $endCursor: String) { node(id: $project) { ... on ProjectV2 { items(first: 100, after: $endCursor) { nodes { id fieldValueByName(name: "${APPS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { optionId } } } pageInfo { hasNextPage endCursor } } } } }`;
   const lines = gh([
     'api',
     'graphql',
@@ -239,94 +241,143 @@ const readAppsValues = (projectId: string) => {
     '-f',
     `project=${projectId}`,
     '--jq',
-    '.data.node.items.nodes[] | select(.fieldValueByName.name != null) | [.id, .fieldValueByName.name] | @tsv',
+    '.data.node.items.nodes[] | select(.fieldValueByName.optionId != null) | [.id, .fieldValueByName.optionId] | @tsv',
   ]);
   const result = lines
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      const [itemId, name] = line.split('\t');
-      return { itemId, name };
+      const [itemId, optionId] = line.split('\t');
+      return { itemId, optionId };
     });
   return result;
 };
 
-const ensureAppsOption = (
+interface AppsBackup {
+  fieldId: string;
+  projectId: string;
+  before: SelectOption[];
+  values: { itemId: string; optionId: string }[];
+}
+
+const backupPath = (fieldId: string) =>
+  join(tmpdir(), `apps-field-backup-${fieldId}.json`);
+
+// Old ids map to new ones by position: the rewrite sends the old list in
+// order with the new option last, so this holds even for duplicate names.
+const restoreAppsValues = (backup: AppsBackup, after: SelectOption[]) => {
+  const newIdByOld = new Map(
+    backup.before.map((option, index) => [option.id, after[index]?.id]),
+  );
+  const moved = backup.values.filter(
+    ({ optionId }) => newIdByOld.get(optionId) !== optionId,
+  );
+  if (moved.length === 0) return;
+  console.log(
+    `GitHub gave the ${APPS_FIELD} options new ids; putting back ${moved.length} items' values`,
+  );
+  const failed = moved.filter(({ itemId, optionId }) => {
+    try {
+      gh([
+        'project',
+        'item-edit',
+        '--id',
+        itemId,
+        '--project-id',
+        backup.projectId,
+        '--field-id',
+        backup.fieldId,
+        '--single-select-option-id',
+        newIdByOld.get(optionId) ?? '',
+      ]);
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  if (failed.length > 0)
+    fail(
+      `Couldn't put back ${failed.length} ${APPS_FIELD} values. Run this again to retry from the backup at ${backupPath(backup.fieldId)}.`,
+    );
+};
+
+interface AppsPlan {
+  fieldId: string;
+  optionId: string | null;
+  backup: AppsBackup | null;
+  resumed: AppsBackup | null;
+}
+
+const planAppsOption = (
   projectId: string,
   fields: ProjectField[],
   appName: string,
-) => {
+): AppsPlan => {
   const appsField =
     fields.find((field) => field.name === APPS_FIELD) ??
     fail(`No "${APPS_FIELD}" field on project ${PROJECT_NUMBER}.`);
+  const resumed = existsSync(backupPath(appsField.id))
+    ? (JSON.parse(readFileSync(backupPath(appsField.id), 'utf8')) as AppsBackup)
+    : null;
   const existing = appsField.options?.find((entry) => entry.name === appName);
-  if (existing) return { fieldId: appsField.id, optionId: existing.id };
+  if (existing)
+    return {
+      fieldId: appsField.id,
+      optionId: existing.id,
+      backup: null,
+      resumed,
+    };
+  const backup = {
+    fieldId: appsField.id,
+    projectId,
+    before: readOptions(appsField.id),
+    values: readAppsValues(projectId),
+  };
+  const result = { fieldId: appsField.id, optionId: null, backup, resumed };
+  return result;
+};
 
-  // The API can only add an option by rewriting the whole list, and its input
-  // carries no ids, so every item's value is recorded first and restored if
-  // the rewrite changed the ids.
-  const before = readOptions(appsField.id);
-  const values = readAppsValues(projectId);
+// The API adds an option only by rewriting the whole list, without ids, so
+// every item's value is saved to disk first and restored from it, on this
+// run or, when this run is cut short, on the next.
+const applyAppsOption = (plan: AppsPlan, appName: string) => {
+  if (plan.resumed) {
+    console.log(
+      `Finishing an earlier ${APPS_FIELD} change from ${backupPath(plan.fieldId)}`,
+    );
+    restoreAppsValues(plan.resumed, readOptions(plan.fieldId));
+    unlinkSync(backupPath(plan.fieldId));
+  }
+  if (plan.optionId) return { fieldId: plan.fieldId, optionId: plan.optionId };
+  const backup = plan.backup ?? fail(`No plan for the ${APPS_FIELD} option.`);
+  writeFileSync(backupPath(plan.fieldId), JSON.stringify(backup));
   console.log(
-    `Adding "${appName}" to the board's ${APPS_FIELD} field (${values.length} items carry an ${APPS_FIELD} value)`,
+    `Adding "${appName}" to the board's ${APPS_FIELD} field (${backup.values.length} items' values backed up at ${backupPath(plan.fieldId)})`,
   );
   const options = [
-    ...before.map(({ name, color, description }) => ({
+    ...backup.before.map(({ name, color, description }) => ({
       name,
       color,
       description,
     })),
     { name: appName, color: 'GRAY', description: '' },
   ];
-  const mutation = `mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) { updateProjectV2Field(input: { fieldId: $field, singleSelectOptions: $options }) { projectV2Field { ... on ProjectV2SingleSelectField { options { id name color description } } } } }`;
-  const payload = JSON.stringify({
-    query: mutation,
-    variables: { field: appsField.id, options },
-  });
-  const after = JSON.parse(
-    execFileSync('gh', ['api', 'graphql', '--input', '-'], {
-      input: payload,
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'inherit'],
+  const mutation = `mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) { updateProjectV2Field(input: { fieldId: $field, singleSelectOptions: $options }) { projectV2Field { ... on ProjectV2SingleSelectField { id } } } }`;
+  execFileSync('gh', ['api', 'graphql', '--input', '-'], {
+    input: JSON.stringify({
+      query: mutation,
+      variables: { field: plan.fieldId, options },
     }),
-  ).data.updateProjectV2Field.projectV2Field.options as SelectOption[];
-
-  const idByName = new Map(after.map((option) => [option.name, option.id]));
-  const idsChanged = before.some(
-    (option) => idByName.get(option.name) !== option.id,
-  );
-  if (idsChanged) {
-    console.log(
-      `GitHub gave the ${APPS_FIELD} options new ids; putting back ${values.length} items' values`,
-    );
-    const failed = values.filter(({ itemId, name }) => {
-      try {
-        gh([
-          'project',
-          'item-edit',
-          '--id',
-          itemId,
-          '--project-id',
-          projectId,
-          '--field-id',
-          appsField.id,
-          '--single-select-option-id',
-          idByName.get(name) ?? '',
-        ]);
-        return false;
-      } catch {
-        return true;
-      }
-    });
-    if (failed.length > 0)
-      fail(
-        `Couldn't put back ${failed.length} ${APPS_FIELD} values. Set these by hand (item id, app):\n${failed.map(({ itemId, name }) => `  ${itemId}\t${name}`).join('\n')}`,
-      );
-  }
+    encoding: 'utf8',
+    stdio: ['pipe', 'ignore', 'inherit'],
+  });
+  const after = readOptions(plan.fieldId);
+  restoreAppsValues(backup, after);
+  unlinkSync(backupPath(plan.fieldId));
   const optionId =
-    idByName.get(appName) ??
+    after[backup.before.length]?.id ??
     fail(`The new ${APPS_FIELD} option did not come back.`);
-  const result = { fieldId: appsField.id, optionId };
+  const result = { fieldId: plan.fieldId, optionId };
   return result;
 };
 
@@ -373,16 +424,6 @@ const run = async () => {
     '.nameWithOwner',
   ]);
   const owner = repo.split('/')[0];
-  if (
-    !skipConfirm &&
-    !(await confirm(
-      `Create or update these in ${repo} and put them on project ${PROJECT_NUMBER}?`,
-    ))
-  ) {
-    console.log('Stopped.');
-    return;
-  }
-
   const projectId = gh([
     'project',
     'view',
@@ -409,7 +450,20 @@ const run = async () => {
   const statusOption =
     statusField.options?.find((option) => option.name === STATUS_VALUE) ??
     fail(`No "${STATUS_VALUE}" status on the board.`);
-  const apps = ensureAppsOption(projectId, fields, appName);
+  const appsPlan = planAppsOption(projectId, fields, appName);
+  const appsNote = appsPlan.backup
+    ? `, and add "${appName}" to the board's ${APPS_FIELD} field (GitHub rewrites the field to do it; ${appsPlan.backup.values.length} items' ${APPS_FIELD} values are saved first and put back)`
+    : '';
+  if (
+    !skipConfirm &&
+    !(await confirm(
+      `Create or update these in ${repo} and put them on project ${PROJECT_NUMBER}${appsNote}?`,
+    ))
+  ) {
+    console.log('Stopped.');
+    return;
+  }
+  const apps = applyAppsOption(appsPlan, appName);
 
   const labels = new Set(
     gh([
