@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-28 | shared | Re-review of #523: the gate's UI pattern misses user-facing strings in other `.ts` files | Proposal: widen `ui_re` to `src/**/*.ts` that holds copy | `.claude/hooks/pr-gate.sh` | proposed |
 | 2026-10-28 | shared | Re-review of the #523 fixes: flags before the app id broke parsing, a bare title could adopt another app's issue, and relinking rewrote other roadmaps' mentions | Flag values are skipped, a bare title is adopted only when unique, and relinking skips app-prefixed mentions and code blocks; the script stops past 2,000 issues | `scripts/createGithubIssues.ts` | changed |
 | 2026-10-28 | shared | #523 sized L by the gate though ~4,000 of its 4,978 lines were text moved verbatim | Proposal: count verbatim moves as less than new text when sizing | `.claude/hooks/pr-gate.sh` | proposed |
 | 2026-10-28 | shared | CLAUDE.md still imports copilot-instructions.md (59 KB), much of it repeated in the conventions | Proposal: trim copilot-instructions.md to what Copilot needs and point at the conventions | `.github/copilot-instructions.md` | proposed |
