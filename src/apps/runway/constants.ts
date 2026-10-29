@@ -1455,12 +1455,17 @@ export const PRIORITIES_WORDS = {
   noIncome: 'No income is coming, so nothing is being funded yet',
   checking: 'Checking your coming pays',
   shortOn: (day: string) => `The plan leaves items short on ${day}`,
-  cutLine: (day: string, short: string) =>
-    `The ${day} pay runs out here · ${short} short`,
-  cutLineBefore: (day: string, short: string) =>
-    `Before your changes, the ${day} pay runs out here · ${short} short`,
+  cutLine: (day: string) => `The ${day} pay runs out here`,
+  cutLineBefore: (day: string) =>
+    `Before your changes, the ${day} pay runs out here`,
+  shortWord: (short: string) => `${short} short`,
+  shortWordTitle: 'What short means here',
+  shortTip: (short: string) =>
+    `The items below this line ask ${short} more than this pay holds.`,
   dueFirst: (day: string | null) =>
-    `Due before the ${day ?? 'next'} pay, so it goes first`,
+    day === null ? 'Due first' : `Due first · before ${day}`,
+  dueFirstLabel: 'Due first',
+  restLastLabel: 'Goes last',
   restLast: 'Gets what is left, so it goes last',
   fixedHidden: 'Fixed in place',
   searchPlaceholder: 'Search priorities',
@@ -1472,16 +1477,42 @@ export const PRIORITIES_WORDS = {
   moving: (name: string) => `Moving ${name}`,
   cancelMove: 'Cancel move',
   topOf: (tier: string) => `Top of ${tier}`,
+  topOfAfterBills: (tier: string) => `Top of ${tier}, after bills due first`,
   endOf: (tier: string) => `End of ${tier}`,
   above: (name: string) => `Above ${name}`,
   below: (name: string) => `Below ${name}`,
   saveNote: 'Save shows what changes first.',
-  getsLess: (name: string, day: string) => `${name} gets less on ${day}`,
+  gainsMore: (name: string, figure: string | null, when: string) =>
+    figure === null
+      ? `${name} gets more on ${when}`
+      : `${name} gets ${figure} more on ${when}`,
+  getsFigure: (name: string, figure: string | null, when: string) =>
+    figure === null
+      ? `${name} gets less on ${when}`
+      : `${name} gets ${figure} on ${when}`,
+  nextPays: (count: number) =>
+    count === 1 ? 'the next pay' : `the next ${count} pays`,
+  somePays: (count: number) => `${count} of the coming pays`,
+  soonestSame: (day: string) => `The ${day} pay does not change.`,
+  nothingChanges: 'Nothing changes on the coming pays.',
+  nothingChangesNote:
+    'The new order still applies whenever money runs short, so Save keeps it.',
+  placed: (name: string, where: string) => `Moved ${name} ${where}`,
+  placedTop: (tier: string) => `to the top of ${tier}`,
+  placedEnd: (tier: string) => `to the end of ${tier}`,
+  placedAbove: (name: string) => `above ${name}`,
+  othersGetLess: (count: number) =>
+    count === 1 ? 'One more item gets less.' : `${count} more items get less.`,
+  nowBefore: (name: string, other: string) =>
+    `${name} now comes before ${other}`,
+  nowAfter: (name: string, other: string) => `${name} now comes after ${other}`,
+  nowIn: (name: string, tier: string) => `${name} is now in ${tier}`,
+  savedMany: 'Saved the new order',
   cancel: 'Cancel',
   save: 'Save order',
   nothingMoved: 'Move an item to save a new order.',
-  confirmTitle: 'Save the new order?',
-  confirmSave: 'Save the order',
+  confirmTitle: 'Save this order?',
+  confirmSave: 'Save order',
   saveFailed: 'That did not save. Nothing was changed.',
   discardTitle: 'Discard the new order?',
   discardMessage: 'The items go back to where they were.',

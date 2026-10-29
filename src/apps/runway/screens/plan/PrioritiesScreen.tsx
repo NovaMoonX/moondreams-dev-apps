@@ -14,14 +14,18 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import BackLink from '@/components/BackLink';
 import EmptyCard from '@/components/EmptyCard';
+import HelpTip from '@/components/HelpTip';
+import InlineNotice from '@/components/InlineNotice';
 import LazyMount from '@/components/LazyMount';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
+import SensitiveValue from '@/components/SensitiveValue';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
@@ -63,6 +67,7 @@ import { reorderItems } from '@apps/runway/store/actions/itemActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   type PreviewChange,
+  type PreviewDay,
   type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
@@ -82,7 +87,11 @@ import {
 import type { OpenVersion, Priority } from '@apps/runway/types';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
-import { describeReorder } from '@apps/runway/utils/priorityText';
+import {
+  describeReorder,
+  describeSaved,
+  readMove,
+} from '@apps/runway/utils/priorityText';
 
 const PINNED_FOOTER_CLASS =
   'bg-background border-border sticky bottom-0 z-10 -mx-(--subview-pad) border-t px-(--subview-pad) pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]';
@@ -97,6 +106,8 @@ interface EditState {
   working: Tiers;
   moved: string[];
   lifted: string | null;
+  /** The footer line after a placement. */
+  note: string | null;
   step: 'edit' | 'confirm';
 }
 
@@ -136,6 +147,10 @@ const toChunks = (units: readonly Unit[]) =>
     units.slice(index * ROWS_PER_CHUNK, (index + 1) * ROWS_PER_CHUNK),
   );
 
+const TakeNotice = ({ children }: { children: ReactNode }) => (
+  <InlineNotice tone='warning'>{children}</InlineNotice>
+);
+
 interface PrioritiesScreenProps {
   onClose: () => void;
 }
@@ -168,6 +183,8 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const [edit, setEdit] = useState<EditState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const { addToast } = useToast();
   const isSavingRef = useRef(false);
   const cutRef = useRef<HTMLDivElement | null>(null);
   const hasScrolledRef = useRef(false);
@@ -353,7 +370,21 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const summary =
     live === null || !isDirty
       ? ''
-      : describeReorder(assignments, movedIds, live, originalTiers, nameOf);
+      : describeReorder(
+          assignments,
+          movedIds,
+          live,
+          originalTiers,
+          nameOf,
+          Object.fromEntries(
+            order.sections.map((section) => [
+              section.tier,
+              section.items.filter(isMovable).map((item) => item.itemId),
+            ]),
+          ) as Tiers,
+        );
+  const savedText =
+    live === null ? '' : describeSaved(movedIds, live, originalTiers, nameOf);
   const changeJson = isDirty
     ? JSON.stringify({
         kind: 'versions',
@@ -402,6 +433,11 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     return () => cancelAnimationFrame(frame);
   }, [lookahead, order.cutIndex, query]);
 
+  const step = edit?.step;
+  useEffect(() => {
+    if (step === 'confirm') window.scrollTo({ top: 0 });
+  }, [step]);
+
   const startEdit = () => {
     setEdit({
       working: Object.fromEntries(
@@ -412,6 +448,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       ) as Tiers,
       moved: [],
       lifted: null,
+      note: null,
       step: 'edit',
     });
   };
@@ -419,21 +456,45 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const patchEdit = (change: (current: EditState) => EditState) =>
     setEdit((current) => (current === null ? current : change(current)));
 
+  useEffect(() => {
+    if (flashId === null) return;
+    const timer = window.setTimeout(() => setFlashId(null), 1600);
+    return () => window.clearTimeout(timer);
+  }, [flashId]);
+
+  const getPlacedNote = (itemId: string, tier: Priority, list: string[]) => {
+    const index = list.indexOf(itemId);
+    const where =
+      index === 0
+        ? PRIORITIES_WORDS.placedTop(PRIORITY_LABELS[tier])
+        : index === list.length - 1
+          ? PRIORITIES_WORDS.placedEnd(PRIORITY_LABELS[tier])
+          : PRIORITIES_WORDS.placedAbove(nameOf(list[index + 1]));
+    return PRIORITIES_WORDS.placed(nameOf(itemId), where);
+  };
+
+  const flashPlaced = (tier: Priority, itemId: string) => {
+    setFolds((current) => ({ ...current, [tier]: true }));
+    setFlashId(itemId);
+  };
+
+  const dropLift = () => patchEdit((current) => ({ ...current, lifted: null }));
+
   const placeLifted = (tier: Priority, index: number) => {
     if (live === null || lifted === null) return;
     const without = Object.fromEntries(
       PRIORITIES.map((key) => [key, live[key].filter((id) => id !== lifted)]),
     ) as Tiers;
+    const nextList = [
+      ...without[tier].slice(0, index),
+      lifted,
+      ...without[tier].slice(index),
+    ];
+    flashPlaced(tier, lifted);
     patchEdit((current) => ({
       ...current,
-      working: {
-        ...without,
-        [tier]: [
-          ...without[tier].slice(0, index),
-          lifted,
-          ...without[tier].slice(index),
-        ],
-      },
+      working: { ...without, [tier]: nextList },
+      note: getPlacedNote(lifted, tier, nextList),
       moved: current.moved.includes(lifted)
         ? current.moved
         : [...current.moved, lifted],
@@ -466,9 +527,13 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                   ? [...live[crossTo], itemId]
                   : [itemId, ...live[crossTo]],
             };
+    const landedIn =
+      PRIORITIES.find((key) => next[key].includes(itemId)) ?? tier;
+    flashPlaced(landedIn, itemId);
     patchEdit((current) => ({
       ...current,
       working: next,
+      note: getPlacedNote(itemId, landedIn, next[landedIn]),
       moved: current.moved.includes(itemId)
         ? current.moved
         : [...current.moved, itemId],
@@ -491,6 +556,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         summary,
         effectiveFrom: today,
       });
+      addToast({ title: savedText, type: 'success' });
       setEdit(null);
     } catch (saveError) {
       setError(getErrorMessage(saveError, PRIORITIES_WORDS.saveFailed));
@@ -544,6 +610,14 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
           ? withCut(item.itemId, { kind: 'row', item, tierIndex: -1 })
           : [],
       ),
+      ...(fixedFirst.some((item) => isShown(item.itemId))
+        ? slotAt(
+            0,
+            list.length > 0
+              ? PRIORITIES_WORDS.above(nameOf(list[0]))
+              : PRIORITIES_WORDS.topOf(PRIORITY_LABELS[section.tier]),
+          )
+        : []),
       ...shownIndexes.flatMap((index): Unit[] => {
         const item = itemById.get(list[index]);
         return [
@@ -559,7 +633,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         ? []
         : slotAt(
             lastShown + 1,
-            lastShown + 1 >= list.length
+            lastShown + 1 >= list.length && fixedLast.length === 0
               ? PRIORITIES_WORDS.endOf(PRIORITY_LABELS[section.tier])
               : PRIORITIES_WORDS.below(nameOf(list[lastShown])),
           )),
@@ -590,12 +664,12 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   };
 
   const renderSlot = (unit: Extract<Unit, { kind: 'slot' }>) => (
-    <li key={unitKey(unit)} className='px-3 py-0.5'>
+    <li key={unitKey(unit)} className='px-3 py-1'>
       <Button
         type='button'
         variant='tertiary'
         size='stripped'
-        className="text-muted-foreground! relative flex h-5 w-full items-center justify-center rounded-md border border-dashed text-xs before:absolute before:inset-x-0 before:-inset-y-0.5 before:content-['']"
+        className="text-muted-foreground! relative flex h-5 w-full items-center justify-center rounded-md border border-dashed text-xs before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
         onClick={() => placeLifted(unit.tier, unit.gap)}
       >
         <span className='line-clamp-1 block'>{unit.label}</span>
@@ -615,11 +689,16 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     return entry.render({
       isFixed: unit.item.isDueFirst || unit.item.isRest,
       fixedNote: unit.item.isRest ? PRIORITIES_WORDS.restLast : null,
+      fixedLabel: unit.item.isRest
+        ? PRIORITIES_WORDS.restLastLabel
+        : PRIORITIES_WORDS.dueFirstLabel,
+      isFlashed: flashId === id,
       isLifted: lifted === id,
       onLift: () =>
         patchEdit((current) => ({
           ...current,
           lifted: current.lifted === id ? null : id,
+          note: null,
         })),
       onMoveUp:
         unit.tierIndex === 0 && tierRank === 0
@@ -654,7 +733,8 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         </p>
       );
     }
-    if (isHidden) return <NeedsALookRow />;
+    if (isHidden) return edit === null ? <NeedsALookRow /> : null;
+    if (order.cutIndex !== null) return null;
     return (
       <p className='text-muted-foreground text-sm'>
         {PRIORITIES_WORDS.shortOn(
@@ -666,7 +746,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
 
   const getDefaultOpen = (section: PrioritySection) => {
     if (section.items.length === 0) return true;
-    if (order.cutIndex !== null) {
+    if (order.cutIndex !== null && !isHidden) {
       return (
         order.cutIndex >= section.start &&
         order.cutIndex < section.start + section.items.length
@@ -688,13 +768,19 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       ? rowCount > 0
       : (folds[section.tier] ?? getDefaultOpen(section));
     const count = isSearching ? rowCount : section.items.length;
+    const hasLockedFirst = section.items.some(
+      (item) => item.isDueFirst && isShown(item.itemId),
+    );
+    const isSlotInside = isOpen && hasLockedFirst;
     const topSlot =
-      live === null
+      live === null || isSlotInside
         ? []
         : getSlot(
             section.tier,
             0,
-            PRIORITIES_WORDS.topOf(PRIORITY_LABELS[section.tier]),
+            (hasLockedFirst
+              ? PRIORITIES_WORDS.topOfAfterBills
+              : PRIORITIES_WORDS.topOf)(PRIORITY_LABELS[section.tier]),
             live[section.tier].indexOf(lifted ?? ''),
           );
     const rowHeight =
@@ -749,18 +835,31 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                       <SectionDivider
                         className='[&>div]:border-(--runway-warning-edge)'
                         label={
-                          <span className='inline-flex items-center gap-1.5 text-(--runway-warning-ink)'>
-                            <TriangleAlert
-                              className='h-3.5 w-3.5'
-                              aria-hidden='true'
-                            />
-                            {shortOn !== null &&
-                              (edit === null
-                                ? PRIORITIES_WORDS.cutLine
-                                : PRIORITIES_WORDS.cutLineBefore)(
-                                formatDateShortUTC(shortOn),
-                                formatCents(shortCents),
-                              )}
+                          <span className='flex flex-col items-center text-center text-(--runway-warning-ink)'>
+                            <span className='inline-flex items-center gap-1.5'>
+                              <TriangleAlert
+                                className='h-3.5 w-3.5 shrink-0'
+                                aria-hidden='true'
+                              />
+                              {shortOn !== null &&
+                                (edit === null
+                                  ? PRIORITIES_WORDS.cutLine
+                                  : PRIORITIES_WORDS.cutLineBefore)(
+                                  formatDateShortUTC(shortOn),
+                                )}
+                            </span>
+                            <span className='inline-flex items-center gap-1 text-[13px]'>
+                              <SensitiveValue>
+                                {PRIORITIES_WORDS.shortWord(
+                                  formatCents(shortCents),
+                                )}
+                              </SensitiveValue>
+                              <HelpTip title={PRIORITIES_WORDS.shortWordTitle}>
+                                {PRIORITIES_WORDS.shortTip(
+                                  formatCents(shortCents),
+                                )}
+                              </HelpTip>
+                            </span>
                           </span>
                         }
                       />
@@ -808,7 +907,11 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     }
     return (
       <div className='space-y-4'>
-        {getStatus()}
+        {edit === null ? (
+          getStatus()
+        ) : (
+          <div className='[@media(max-height:500px)]:hidden'>{getStatus()}</div>
+        )}
         {hasSearch && (
           <SearchInput
             value={query}
@@ -818,7 +921,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         )}
         {lifted !== null ? (
           <div
-            className='sticky-day-bar bg-background border-border flex items-center justify-between gap-3 border-b py-1.5 [@media(max-height:500px)]:py-0.5'
+            className='sticky-day-bar bg-background border-border top-14! flex items-center justify-between gap-3 border-b py-1.5 [@media(max-height:499px)]:top-12! [@media(max-height:500px)]:py-0.5'
             role='status'
           >
             <span className='block min-w-0 text-sm font-medium'>
@@ -831,16 +934,14 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
               variant='secondary'
               size='sm'
               className="relative shrink-0 whitespace-nowrap before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-              onClick={() =>
-                patchEdit((current) => ({ ...current, lifted: null }))
-              }
+              onClick={dropLift}
             >
               {PRIORITIES_WORDS.cancelMove}
             </Button>
           </div>
         ) : (
           edit !== null && (
-            <p className='text-muted-foreground text-sm'>
+            <p className='text-muted-foreground text-sm [@media(max-height:500px)]:hidden'>
               {PRIORITIES_WORDS.reorderHint}
             </p>
           )
@@ -860,6 +961,31 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     );
   };
 
+  const describeLead = (days: readonly PreviewDay[], isHiddenNow: boolean) => {
+    const reading = readMove(
+      days,
+      movedIds,
+      comingDays.map((day) => day.on),
+      isHiddenNow,
+    );
+    const Take = isHiddenNow ? 'p' : TakeNotice;
+    return (
+      <div className='space-y-2 text-sm'>
+        {reading.gain !== null && <p className='font-medium'>{reading.gain}</p>}
+        {reading.takes !== null && (
+          <Take>
+            {reading.moreTaken > 0
+              ? `${reading.takes}. ${PRIORITIES_WORDS.othersGetLess(reading.moreTaken)}`
+              : reading.takes}
+          </Take>
+        )}
+        {reading.soonestSame !== null && (
+          <p className='text-muted-foreground'>{reading.soonestSame}</p>
+        )}
+      </div>
+    );
+  };
+
   if (edit?.step === 'confirm') {
     return (
       <Subview
@@ -868,7 +994,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         onBack={() => patchEdit((current) => ({ ...current, step: 'edit' }))}
         headerAction={<ValuesEyeButton />}
       >
-        <div className='flex flex-1 flex-col gap-4'>
+        <div className='flex min-h-[calc(100dvh-5rem)] flex-col gap-4 [@media(max-height:499px)]:min-h-[calc(100dvh-3rem)]'>
           <BackLink
             onBack={() =>
               patchEdit((current) => ({ ...current, step: 'edit' }))
@@ -882,9 +1008,10 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
           </div>
           <EffectPreview
             changeJson={changeJson}
-            describeLess={PRIORITIES_WORDS.getsLess}
+            emptyText={`${PRIORITIES_WORDS.nothingChanges} ${PRIORITIES_WORDS.nothingChangesNote}`}
+            describeLead={describeLead}
           />
-          <div className={PINNED_FOOTER_CLASS}>
+          <div className={join(PINNED_FOOTER_CLASS, 'mt-auto')}>
             <ModalFooterActions
               note={error}
               rightActions={
@@ -909,7 +1036,9 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     <Subview
       title={PRIORITIES_WORDS.title}
       onClose={onClose}
-      onBack={edit === null ? onClose : requestExitEdit}
+      onBack={
+        edit === null ? onClose : lifted !== null ? dropLift : requestExitEdit
+      }
       headerAction={
         <span className='flex items-center gap-1'>
           {edit === null && isLoaded && total > 1 && (
@@ -935,9 +1064,10 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             <ModalFooterActions
               note={
                 <span className='[@media(max-height:500px)]:hidden'>
-                  {isDirty
-                    ? PRIORITIES_WORDS.saveNote
-                    : PRIORITIES_WORDS.nothingMoved}
+                  {edit.note ??
+                    (isDirty
+                      ? PRIORITIES_WORDS.saveNote
+                      : PRIORITIES_WORDS.nothingMoved)}
                 </span>
               }
               cancelAction={
@@ -955,7 +1085,11 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                   className='whitespace-nowrap max-sm:px-3'
                   disabled={!isDirty}
                   onClick={() =>
-                    patchEdit((current) => ({ ...current, step: 'confirm' }))
+                    patchEdit((current) => ({
+                      ...current,
+                      lifted: null,
+                      step: 'confirm',
+                    }))
                   }
                 >
                   {PRIORITIES_WORDS.save}

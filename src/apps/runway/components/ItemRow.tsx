@@ -22,6 +22,10 @@ export interface ItemRowReorder {
   isFixed: boolean;
   /** Why the row is fixed, heard and seen on hover; null falls back to the detail. */
   fixedNote: string | null;
+  /** Two words beside the lock that say why the row is fixed. */
+  fixedLabel: string;
+  /** Just placed: the row is highlighted for a moment. */
+  isFlashed: boolean;
   isLifted: boolean;
   onLift: () => void;
   onMoveUp: (() => void) | null;
@@ -154,18 +158,21 @@ function ItemRow({
 
   const compactName = (
     <span className='block min-w-0 flex-1 text-sm font-medium break-words'>
-      <span className='line-clamp-1'>{name}</span>
+      <span className='line-clamp-2'>{name}</span>
     </span>
   );
 
   if (reorder?.isFixed) {
     return (
       <li
-        className='flex min-h-11 items-center gap-2 px-3'
+        className='flex min-h-11 items-center gap-2 px-3 py-1'
         title={shownDetail ?? undefined}
       >
         {badge}
         {compactName}
+        <span className='text-muted-foreground shrink-0 text-xs'>
+          {reorder.fixedLabel}
+        </span>
         <Lock
           className='text-muted-foreground h-4 w-4 shrink-0'
           aria-hidden='true'
@@ -200,13 +207,13 @@ function ItemRow({
       <li
         className={join(
           'flex items-center first:rounded-t-2xl last:rounded-b-2xl',
-          reorder.isLifted && 'bg-accent',
+          (reorder.isLifted || reorder.isFlashed) && 'bg-accent',
         )}
       >
         <Button
           type='button'
           variant='tertiary'
-          className='text-foreground! h-11 min-h-11 min-w-0 flex-1 items-center justify-start gap-2 rounded-none p-0! px-3! text-left font-normal whitespace-normal'
+          className='text-foreground! h-auto min-h-11 min-w-0 flex-1 items-center justify-start gap-2 rounded-none p-0! px-3! py-1! text-left font-normal whitespace-normal'
           aria-pressed={reorder.isLifted}
           aria-label={`${name}. ${reorder.isLifted ? 'Lifted, choose where to place it' : 'Tap to lift'}`}
           onClick={reorder.onLift}
