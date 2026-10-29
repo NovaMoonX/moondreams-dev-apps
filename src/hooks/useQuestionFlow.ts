@@ -14,6 +14,8 @@ export interface QuestionStep {
   summaryValue: ReactNode;
   /** The folded row's value as words, for its accessible name when `summaryValue` is not plain text. */
   summaryText?: string;
+  /** A muted line under its folded row's value. */
+  summaryDetail?: ReactNode;
   isAnswered: boolean;
   /** Why it is not answered yet, when the question alone doesn't say (a day that has passed, an amount over a limit). */
   blocker?: string | null;
@@ -71,10 +73,14 @@ export function useQuestionFlow({
     steps,
     open,
     isReview: open === null,
+    // An answer that pre-answers a later question reaches the steps after `moveOnFrom` ran, so nothing open also means reviewed.
     /** Every answer has been seen once: from here the form's own primary (Add, Save) is offered and reopened answers keep the rest folded around them. */
-    hasReviewed,
+    hasReviewed: hasReviewed || open === null,
     blocker: open !== null && !open.isAnswered ? (open.blocker ?? null) : null,
-    reopen: (id: string) => setOpenId(id),
+    reopen: (id: string) => {
+      if (open === null) setHasReviewed(true);
+      setOpenId(id);
+    },
     /** The question the person reopened, which a reviewed form shows in its own sheet; null while none is. */
     reopenedId: openId,
     /** Closes a reopened question's sheet without moving on from it. */

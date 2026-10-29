@@ -19,6 +19,15 @@ export interface PaidPayment {
   amountCents: Cents;
   paidOn: DateOnly;
   fromFreeCents: Cents;
+  /** The card it was charged to; null when it was paid in cash. */
+  cardId: string | null;
+}
+
+/** A card payment not undone. */
+export interface CardPaid {
+  moveId: string;
+  on: DateOnly;
+  cents: Cents;
 }
 
 /** Everything confirmed records and moves say about one bill. */
@@ -78,6 +87,28 @@ export function collectPaid(
       amountCents: move.payload.amountCents,
       paidOn: move.payload.paidOn,
       fromFreeCents: move.payload.fromFreeCents,
+      cardId: move.payload.cardId ?? null,
+    });
+    return acc;
+  }, {});
+  return result;
+}
+
+/** Each card's payments: the `cardPayment` moves that no later move reverses. */
+export function collectCardPaid(
+  moves: readonly OpenMove[],
+): Record<string, CardPaid[]> {
+  const reversed = new Set(
+    moves.flatMap((move) => (move.reversesMoveId ? [move.reversesMoveId] : [])),
+  );
+  const result = moves.reduce<Record<string, CardPaid[]>>((acc, move) => {
+    if (move.kind !== 'cardPayment' || move.reversesMoveId || !move.refId)
+      return acc;
+    if (reversed.has(move.id)) return acc;
+    (acc[move.refId] ??= []).push({
+      moveId: move.id,
+      on: move.date,
+      cents: move.payload.amountCents,
     });
     return acc;
   }, {});
@@ -137,7 +168,7 @@ export const sumFunded = (funded: readonly FundedDay[]) =>
 /**
  * The payments as the bill's money stands now: a payment uses at most what the bill held by the later
  * of its due date and the day it was paid, after the payments before it, and the rest came from Free to
- * spend, so a correction that lowers a day a paid payment used moves the cut to Free to spend instead of
+ * spend, so a correction that lowers a day a paid payment used moves the cut to Free to Spend instead of
  * leaving the bill below zero, and money set aside after the due date pays a late payment once.
  */
 export function settlePaid(
@@ -171,7 +202,7 @@ export function settlePaid(
   return result;
 }
 
-/** What a payment marked paid on `paidOn` would use from what the bill holds, as `settlePaid` reads it; the rest of `amountCents` comes from Free to spend. */
+/** What a payment marked paid on `paidOn` would use from what the bill holds, as `settlePaid` reads it; the rest of `amountCents` comes from Free to Spend. */
 export function getHeldForPayment(
   progress: BillProgressInput,
   payment: { dueOn: DateOnly; amountCents: Cents; paidOn: DateOnly },
@@ -181,6 +212,7 @@ export function getHeldForPayment(
     ...payment,
     moveId: '',
     fromFreeCents: 0,
+    cardId: null,
   };
   const counted = progress.paid.filter(
     (entry) => startDate === null || entry.paidOn >= startDate,

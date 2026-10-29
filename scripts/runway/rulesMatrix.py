@@ -31,6 +31,7 @@ COLLECTIONS = {
     'purchases': {'update', 'delete'},
     'closings': {'update', 'delete'},
     'moves': set(),
+    'cards': {'update'},
 }
 
 
