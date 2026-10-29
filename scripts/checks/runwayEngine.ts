@@ -106,6 +106,13 @@ import {
   readHeldReleasedOn,
 } from '../../src/apps/runway/engine/endings.ts';
 import {
+  getRankSegments,
+  orderPriorities,
+  placeBetween,
+  planReorder,
+  type PriorityItem,
+} from '../../src/apps/runway/engine/priorities.ts';
+import {
   findReturning,
   getStretchEnd,
 } from '../../src/apps/runway/engine/stretch.ts';
@@ -6807,6 +6814,7 @@ const version = (
     holdsThrough,
     problems,
     shortByDay: {},
+    firstShortDay: null,
     incomeEndsOn: null,
   });
   const short = (on: number, name: string, shortBy: number) =>
@@ -8467,6 +8475,228 @@ console.log('runway engine: ok');
       `G9: a closing with choice ${index + 1} equals the replay`,
     );
   });
+}
+
+{
+  const day = utc(2026, 11, 6);
+  const draftWith = (mustCents: number) =>
+    buildDraft({
+      days: [
+        {
+          dayKey: toDayKey('line-a', day),
+          sourceId: 'src-a',
+          on: day,
+          amount: { lowCents: 100_000, highCents: 100_000 },
+        },
+      ],
+      plan: {
+        envelopes: [
+          ['must', 'must', 1, mustCents],
+          ['a', 'should', 1, 20_000],
+          ['b', 'should', 2, 20_000],
+          ['c', 'want', 1, 20_000],
+        ].map(([itemId, priority, orderIndex, cents]) => ({
+          itemId: itemId as string,
+          createdAt: 1_000,
+          priority: priority as 'must' | 'should' | 'want',
+          orderIndex: orderIndex as number,
+          funding: {
+            amount: { kind: 'exact' as const, cents: cents as number },
+            cadence: { kind: 'everyIncomeDay' as const },
+          },
+        })),
+        bills: [],
+        goals: [],
+        horizon: 0,
+        incomeDays: [{ dayKey: toDayKey('line-a', day), on: day }],
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const item = (
+    itemId: string,
+    tier: 'must' | 'should' | 'want',
+    orderIndex: number,
+    extra: Partial<PriorityItem> = {},
+  ): PriorityItem => ({
+    itemId,
+    kind: 'envelope',
+    tier,
+    orderIndex,
+    createdAt: 1_000,
+    isRest: false,
+    isDueFirst: false,
+    ...extra,
+  });
+  const items = [
+    item('must', 'must', 1),
+    item('a', 'should', 1),
+    item('b', 'should', 2),
+    item('c', 'want', 1),
+  ];
+  const flat = (order: ReturnType<typeof orderPriorities>) =>
+    order.sections.flatMap((section) => section.items.map((i) => i.itemId));
+
+  assert.deepEqual(flat(orderPriorities(items, null)), ['must', 'a', 'b', 'c']);
+  assert.equal(
+    orderPriorities(items, null).cutIndex,
+    null,
+    'no draft, no line',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(30_000)).cutIndex,
+    null,
+    'every pay covers everything: no line',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(50_000)).cutIndex,
+    3,
+    'the line sits above the first item that is short',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(70_000)).cutIndex,
+    2,
+    'a larger Must moves the line up the list',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(40_000)).cutIndex,
+    null,
+    'a smaller Must moves the line away once nothing is short',
+  );
+
+  const due = orderPriorities(
+    [item('late', 'should', 9, { isDueFirst: true }), ...items],
+    null,
+  );
+  assert.deepEqual(
+    due.sections[1].items.map((i) => i.itemId),
+    ['late', 'a', 'b'],
+    'a bill due before the next pay goes first in its tier',
+  );
+  assert.deepEqual(
+    flat(
+      orderPriorities(
+        [item('rest', 'should', 0, { isRest: true }), ...items],
+        null,
+      ),
+    ).slice(1, 4),
+    ['a', 'b', 'rest'],
+    'an item that asks for what is left goes last in its tier',
+  );
+
+  assert.equal(placeBetween(1, 2), 1.5);
+  assert.equal(placeBetween(3, null), 4);
+  assert.equal(placeBetween(null, 3), 2);
+  assert.equal(placeBetween(null, null), 1);
+
+  {
+    const D = 86_400_000;
+    const v = (
+      id: string,
+      createdAt: number,
+      from: number,
+      until: number | null,
+      cents: number,
+    ) => ({
+      id,
+      itemId: 'x',
+      createdAt,
+      effectiveFrom: from,
+      effectiveUntil: until,
+      payload: { cents },
+    });
+    assert.deepEqual(
+      getRankSegments([v('base', 1, 0, null, 80)], 'x', 10 * D),
+      [{ payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: null }],
+      'an item with one version in force is reranked by one version',
+    );
+    assert.deepEqual(
+      getRankSegments(
+        [v('base', 1, 0, null, 80), v('stretch', 2, 5 * D, 20 * D, 40)],
+        'x',
+        10 * D,
+      ),
+      [
+        {
+          payload: { cents: 40 },
+          effectiveFrom: 10 * D,
+          effectiveUntil: 20 * D,
+        },
+        { payload: { cents: 80 }, effectiveFrom: 20 * D, effectiveUntil: null },
+      ],
+      'a stretch in force keeps its amount and its end, and the amount after it comes back',
+    );
+    assert.deepEqual(
+      getRankSegments(
+        [v('base', 1, 0, null, 80), v('ahead', 2, 30 * D, null, 95)],
+        'x',
+        10 * D,
+      ),
+      [
+        {
+          payload: { cents: 80 },
+          effectiveFrom: 10 * D,
+          effectiveUntil: 30 * D,
+        },
+        { payload: { cents: 95 }, effectiveFrom: 30 * D, effectiveUntil: null },
+      ],
+      'a change ahead keeps its date and amount under the new rank',
+    );
+  }
+
+  const order = orderPriorities(items, null);
+  const working = (should: string[], want: string[] = ['c']) => ({
+    must: ['must'],
+    should,
+    want,
+  });
+  assert.deepEqual(
+    planReorder(order.sections, working(['b', 'a']), new Set(['b'])),
+    [{ itemId: 'b', tier: 'should', orderIndex: 0 }],
+    'one move writes one version',
+  );
+  assert.deepEqual(
+    planReorder(order.sections, working(['b'], ['a', 'c']), new Set(['a'])),
+    [{ itemId: 'a', tier: 'want', orderIndex: 0 }],
+    'a move to another tier changes the tier',
+  );
+  assert.deepEqual(
+    planReorder(order.sections, working(['a', 'b']), new Set(['b'])),
+    [],
+    'putting an item back where it was writes nothing',
+  );
+
+  const tied = orderPriorities(
+    [
+      item('x', 'should', 1, { createdAt: 1 }),
+      item('y', 'should', 1, { createdAt: 2 }),
+      item('z', 'should', 2),
+    ],
+    null,
+  );
+  const reranked = planReorder(
+    tied.sections,
+    { must: [], should: ['x', 'z', 'y'], want: [] },
+    new Set(['z']),
+  );
+  const finalIndex = new Map([
+    ['x', 1],
+    ['y', 1],
+    ['z', 2],
+    ...reranked.map((move): [string, number] => [move.itemId, move.orderIndex]),
+  ]);
+  assert.deepEqual(
+    ['x', 'y', 'z'].sort(
+      (p, q) => (finalIndex.get(p) ?? 0) - (finalIndex.get(q) ?? 0),
+    ),
+    ['x', 'z', 'y'],
+    'neighbours that tie are ranked apart so the moved item lands between them',
+  );
+  assert.ok(
+    reranked.some((move) => move.itemId === 'z') &&
+      reranked.every((move) => move.itemId !== 'x'),
+    'the moved item is written and an item whose rank stays is not',
+  );
 }
 
 console.log('runway engine: ok');

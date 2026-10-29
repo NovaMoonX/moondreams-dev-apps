@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import ItemRow from '@apps/runway/components/ItemRow';
+import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
@@ -18,6 +18,9 @@ interface BillRowProps {
   payment: BillPayment | null;
   planStance: Stance;
   today: number;
+  /** Said in the row's one line in place of the due date. */
+  detailOverride?: string | null;
+  reorder?: ItemRowReorder;
 }
 
 const getDueLine = (payment: BillPayment | null) => {
@@ -39,7 +42,15 @@ const getProgress = (payment: BillPayment | null) => {
 };
 
 /** A bill in the plan: its name, when it is next due and its amount; it opens the bill's sheet. */
-function BillRow({ billId, bill, payment, planStance, today }: BillRowProps) {
+function BillRow({
+  billId,
+  bill,
+  payment,
+  planStance,
+  today,
+  detailOverride = null,
+  reorder,
+}: BillRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
@@ -67,10 +78,11 @@ function BillRow({ billId, bill, payment, planStance, today }: BillRowProps) {
       <ItemRow
         name={bill.name}
         emoji={bill.emoji}
-        detail={dueLine}
+        detail={detailOverride ?? dueLine}
         figure={amount}
         ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}
-        onOpen={() => setIsOpen(true)}
+        onOpen={reorder ? undefined : () => setIsOpen(true)}
+        reorder={reorder}
       />
       {isOpen && (
         <ItemSheet

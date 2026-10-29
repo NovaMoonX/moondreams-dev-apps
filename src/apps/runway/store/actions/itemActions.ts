@@ -10,6 +10,7 @@ import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
 import { DAY_MS } from '@apps/runway/engine/dates';
+import type { RankSegment } from '@apps/runway/engine/priorities';
 import {
   getHeldReleaseDay,
   readHeldReleasedOn,
@@ -29,6 +30,7 @@ import type {
   PayLineSealed,
   PlanItemDoc,
   PlanVersionDoc,
+  Priority,
   RunwayEncryption,
   Schedule,
   SourceSealed,
@@ -398,6 +400,73 @@ export async function changeItem(
   };
   const batch = writeBatch(db);
   batch.set(itemPath(uid, 'versions', version.id), version);
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
+}
+
+export interface ReorderItemsInput {
+  moves: {
+    itemId: string;
+    kind: 'bill' | 'envelope' | 'goal';
+    /** The stretches from today on that each keep their own payload; only the tier and rank change. */
+    segments: RankSegment<BillSealed | EnvelopeSealed | GoalSealed>[];
+    priority: Priority;
+    orderIndex: number;
+  }[];
+  summary: string;
+  effectiveFrom: number;
+}
+
+/**
+ * Saves a new funding order as one whole-payload version per stretch of each moved item (one for an
+ * item with one version in force) and one change entry for the whole save, in a single batch. Nothing
+ * already written is touched, and no amount or date changes.
+ */
+export async function reorderItems(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: ReorderItemsInput,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const writes = input.moves.flatMap((move) =>
+    move.segments.map((segment) => ({ move, segment })),
+  );
+  const [changeSealed, ...versionsSealed] = await Promise.all([
+    sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
+    ...writes.map(({ move, segment }) =>
+      sealJson(
+        {
+          ...segment.payload,
+          priority: move.priority,
+          orderIndex: move.orderIndex,
+        },
+        encryption,
+      ),
+    ),
+  ]);
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: input.effectiveFrom,
+    itemIds: input.moves.map((move) => move.itemId),
+    sealed: changeSealed,
+  };
+  const batch = writeBatch(db);
+  writes.forEach(({ move, segment }, index) => {
+    const version: PlanVersionDoc = {
+      id: generateUuid(),
+      itemId: move.itemId,
+      kind: move.kind,
+      createdAt: now,
+      effectiveFrom: segment.effectiveFrom,
+      effectiveUntil: segment.effectiveUntil,
+      changeId,
+      sealed: versionsSealed[index],
+    };
+    batch.set(itemPath(uid, 'versions', version.id), version);
+  });
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();
 }

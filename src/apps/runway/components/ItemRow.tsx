@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import { ChevronRight, TriangleAlert } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  Lock,
+  TriangleAlert,
+} from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -9,6 +15,16 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { TICK_HIT_CLASS } from '@apps/runway/constants';
+
+/** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
+export interface ItemRowReorder {
+  /** Funded first by the engine whatever its rank, so it cannot be lifted. */
+  isFixed: boolean;
+  isLifted: boolean;
+  onLift: () => void;
+  onMoveUp: (() => void) | null;
+  onMoveDown: (() => void) | null;
+}
 
 interface ItemRowProps {
   name: string;
@@ -35,6 +51,8 @@ interface ItemRowProps {
   hiddenAriaLabel?: string;
   /** A row ticked from a checklist: tapping the row ticks it and the chevron opens the sheet. */
   tick?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Replaces the chevron and the sheet with the controls for placing the row. */
+  reorder?: ItemRowReorder;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -53,6 +71,7 @@ function ItemRow({
   ariaLabel: givenAriaLabel,
   hiddenAriaLabel,
   tick,
+  reorder,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const ariaLabel =
@@ -124,6 +143,71 @@ function ItemRow({
   );
   const rowClass =
     'text-foreground! h-auto min-h-16 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal';
+
+  if (reorder?.isFixed) {
+    return (
+      <li className='flex min-h-16 items-start gap-3 p-3'>
+        {badge}
+        {text}
+        <Lock
+          className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+          aria-label='Goes first'
+        />
+      </li>
+    );
+  }
+
+  if (reorder) {
+    const nudge = (
+      label: string,
+      icon: ReactNode,
+      onClick: (() => void) | null,
+    ) => (
+      <Button
+        type='button'
+        variant='tertiary'
+        size='stripped'
+        className="text-muted-foreground! relative grid size-8 shrink-0 place-items-center before:absolute before:-inset-1 before:content-['']"
+        aria-label={label}
+        disabled={onClick === null}
+        onClick={onClick ?? undefined}
+      >
+        {icon}
+      </Button>
+    );
+    return (
+      <li
+        className={join(
+          'flex items-start first:rounded-t-2xl last:rounded-b-2xl',
+          reorder.isLifted && 'bg-accent',
+        )}
+      >
+        <Button
+          type='button'
+          variant='tertiary'
+          className={join(rowClass, 'min-w-0 flex-1')}
+          aria-pressed={reorder.isLifted}
+          aria-label={`${name}. ${reorder.isLifted ? 'Lifted, choose where to place it' : 'Tap to lift'}`}
+          onClick={reorder.onLift}
+        >
+          {badge}
+          {text}
+        </Button>
+        <span className='mt-4 mr-2 flex shrink-0 gap-2'>
+          {nudge(
+            `Move ${name} up`,
+            <ArrowUp className='h-4 w-4' aria-hidden='true' />,
+            reorder.onMoveUp,
+          )}
+          {nudge(
+            `Move ${name} down`,
+            <ArrowDown className='h-4 w-4' aria-hidden='true' />,
+            reorder.onMoveDown,
+          )}
+        </span>
+      </li>
+    );
+  }
 
   if (tick) {
     return (

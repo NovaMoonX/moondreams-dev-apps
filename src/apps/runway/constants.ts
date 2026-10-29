@@ -57,7 +57,7 @@ export const STANCE_HELP: Record<(typeof STANCES)[number], string> = {
 export const STANCE_FOLLOW_PLAN = 'plan' as const;
 
 /** Entries on Plan > More; one appears when the screen it opens exists. */
-export const MORE_ENTRIES = ['settings', 'changeLog'] as const;
+export const MORE_ENTRIES = ['priorities', 'settings', 'changeLog'] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
 export const RUNWAY_VIEWS = ['start', 'freeToSpend', 'checkAmount'] as const;
@@ -66,9 +66,10 @@ export const RUNWAY_VIEWS = ['start', 'freeToSpend', 'checkAmount'] as const;
 export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
 
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
-  { settings: 'Settings', changeLog: 'Change log' };
+  { priorities: 'Priorities', settings: 'Settings', changeLog: 'Change log' };
 
 export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
+  priorities: 'Which items get their money first when it runs short.',
   settings:
     'How the plan reads a range of pay or a bill, and whether you track spending.',
   changeLog: 'Every change to the plan, with the reason you gave.',
@@ -1370,8 +1371,7 @@ export const CORRECT_COVER_WORDS = {
   needsCuts: 'Give some items less this time to correct the day.',
   freeRow: 'Free\u00a0to\u00a0spend',
   now: 'Now',
-  freeLead:
-    'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
+  freeLead: 'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
   coverGone:
     'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
 } as const;
@@ -1446,4 +1446,28 @@ export const RELEASE_UNDO_WORDS = {
 /** Round 7b package F2: a correction's short notice while amounts are hidden. */
 export const CORRECT_HIDDEN_WORDS = {
   shortTitle: 'Short',
+} as const;
+
+/** Priorities: the order bills, envelopes and goals are funded in when money runs short. */
+export const PRIORITIES_WORDS = {
+  title: 'Priorities',
+  allCovered: 'Every coming pay covers everything',
+  shortOn: (day: string) => `The plan leaves items short on ${day}`,
+  cutLine: (day: string) => `${day}'s money runs out here`,
+  cutLineHidden: 'Money runs out here',
+  dueFirst: 'Due before the next pay, so it goes first',
+  searchPlaceholder: 'Search priorities',
+  noMatch: 'Nothing matches that.',
+  empty:
+    'Bills, envelopes and goals you add show up here in the order they are funded.',
+  reorder: 'Reorder',
+  placeHere: 'Place here',
+  cancel: 'Cancel',
+  save: 'Save order',
+  nothingMoved: 'Move an item to save a new order.',
+  confirmTitle: 'Save the new order?',
+  confirmSave: 'Save the order',
+  saveFailed: 'That did not save. Nothing was changed.',
+  discardTitle: 'Discard the new order?',
+  discardMessage: 'The items go back to where they were.',
 } as const;

@@ -7,7 +7,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import ItemRow from '@apps/runway/components/ItemRow';
+import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -29,6 +29,7 @@ interface EnvelopeTileProps {
   today: number;
   /** A tile on Home (the figure large, two to a row) or a row in a list. */
   look?: 'row' | 'tile';
+  reorder?: ItemRowReorder;
 }
 
 const capitalize = (text: string) =>
@@ -42,6 +43,7 @@ function EnvelopeTile({
   pairedNote = null,
   today,
   look = 'row',
+  reorder,
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -111,7 +113,8 @@ function EnvelopeTile({
           detail={rowDetail}
           figure={rowFigure}
           ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
-          onOpen={open}
+          onOpen={reorder ? undefined : open}
+          reorder={reorder}
         />
       )}
       {isOpen && (

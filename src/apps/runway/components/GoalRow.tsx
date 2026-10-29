@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import ItemRow from '@apps/runway/components/ItemRow';
+import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   HOW_OFTEN_WORDS,
@@ -23,6 +23,7 @@ interface GoalRowProps {
   /** What the goal holds now. */
   heldCents: number;
   today: number;
+  reorder?: ItemRowReorder;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -50,7 +51,14 @@ const describePaceShort = (
 };
 
 /** A goal in the plan: its name, what it has saved and its target; it opens the goal's sheet. */
-function GoalRow({ goalId, goal, pace, heldCents, today }: GoalRowProps) {
+function GoalRow({
+  goalId,
+  goal,
+  pace,
+  heldCents,
+  today,
+  reorder,
+}: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const savedCents = Math.min(heldCents, goal.targetCents);
   const progress = `${formatCentsShort(savedCents)} of ${formatCentsShort(goal.targetCents)}`;
@@ -66,7 +74,8 @@ function GoalRow({ goalId, goal, pace, heldCents, today }: GoalRowProps) {
         figure={formatCentsShort(savedCents)}
         figureWord={`of ${formatCentsShort(goal.targetCents)}`}
         ariaLabel={`${goal.name}, ${progress} saved. ${paceLine}. Open`}
-        onOpen={() => setIsOpen(true)}
+        onOpen={reorder ? undefined : () => setIsOpen(true)}
+        reorder={reorder}
       />
       {isOpen && (
         <ItemSheet

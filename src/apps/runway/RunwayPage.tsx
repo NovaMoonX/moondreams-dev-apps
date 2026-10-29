@@ -24,6 +24,7 @@ import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
 import TrackingScreen from '@apps/runway/screens/plan/TrackingScreen';
 import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
+import PrioritiesScreen from '@apps/runway/screens/plan/PrioritiesScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -284,6 +285,14 @@ function RunwayContent() {
     return (
       <div>
         <FreeToSpendScreen onClose={closeView} />
+      </div>
+    );
+  }
+
+  if (moreEntry === 'priorities') {
+    return (
+      <div>
+        <PrioritiesScreen onClose={closeMoreEntry} />
       </div>
     );
   }
