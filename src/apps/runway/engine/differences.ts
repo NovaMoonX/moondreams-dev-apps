@@ -9,7 +9,7 @@ export function sumLines(lines: readonly RecordLine[]): Cents {
   return result;
 }
 
-/** What is left of the money that arrived once the lines have taken theirs. Free to spend is always this remainder, so lines and Free to spend add up to the amount to the cent. */
+/** What is left of the money that arrived once the lines have taken theirs. Free to Spend is always this remainder, so lines and Free to Spend add up to the amount to the cent. */
 export function getRemainder(
   arrivedCents: Cents,
   lines: readonly RecordLine[],
@@ -105,13 +105,13 @@ export function suggestShortfall(
   return edits;
 }
 
-/** How much of a day's gap (what its lines take beyond the money that arrived) Free to spend can cover: all of it, part, or nothing when Free to spend is empty or unknown. */
+/** How much of a day's gap (what its lines take beyond the money that arrived) Free to Spend can cover: all of it, part, or nothing when Free to Spend is empty or unknown. */
 export function getCoverable(gapCents: Cents, freeCents: Cents | null): Cents {
   const result = Math.max(0, Math.min(gapCents, freeCents ?? 0));
   return result;
 }
 
-/** A confirmed day may leave less than nothing only by what the person chose to cover from Free to spend. */
+/** A confirmed day may leave less than nothing only by what the person chose to cover from Free to Spend. */
 export function isWithinCover(
   freeToSpendCents: Cents,
   coverCents: Cents,

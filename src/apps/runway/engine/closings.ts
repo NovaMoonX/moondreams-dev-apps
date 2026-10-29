@@ -19,12 +19,14 @@ import { sumConfirmedByItem } from './confirm';
 import { getEffectiveSplits } from './correct';
 import { DAY_MS } from './dates';
 import {
+  collectCardPaid,
   collectFunded,
   collectPaid,
   collectStarted,
   getPaidMoveId,
   settlePaid,
   type BillProgressInput,
+  type CardPaid,
   type FundedDay,
   type PaidPayment,
 } from './progress';
@@ -52,6 +54,10 @@ export interface ClosingState {
   billPaid: Record<string, PaidPayment[]>;
   /** The splits summed in `arrivedCents` and `given` whose money arrived after this month ended, so a figure as of a day just after it can leave them out. */
   late: LateSplit[];
+  /** What purchases charged to each card; spending, so it is left out with the rest of it at Plan. */
+  chargedByCard: Record<string, Cents>;
+  /** Each card's payments not undone; the ones before the starting day are kept and left out of the sums. */
+  cardPaid: Record<string, CardPaid[]>;
 }
 
 /** One confirmed day's money that arrived after the month it was expected in had closed. */
@@ -191,6 +197,8 @@ export const emptyClosing = (
   billFunded: {},
   billPaid: {},
   late: [],
+  chargedByCard: {},
+  cardPaid: {},
 });
 
 /**
@@ -242,6 +250,7 @@ export function closing(
       }
       return sums;
     }, {});
+  const chargedByCard = sumChargedByCard(purchases);
   const boundary = getMonthStart(getNextMonth(month));
   const late = [
     ...base.late.filter((split) => split.on >= boundary),
@@ -276,15 +285,28 @@ export function closing(
     spentByItem: addCents(base.spentByItem, spentByItem),
     billFunded: joinLists(base.billFunded, funded),
     billPaid: joinLists(base.billPaid, collectPaid(entries.moves)),
+    chargedByCard: addCents(base.chargedByCard, chargedByCard),
+    cardPaid: joinLists(base.cardPaid, collectCardPaid(entries.moves)),
   };
   return result;
 }
+
+/** What purchases charged to each card, by card id; a refund to a card lowers it. */
+export const sumChargedByCard = (purchases: readonly OpenPurchase[]) =>
+  purchases.reduce<Record<string, Cents>>((sums, purchase) => {
+    const cardId = purchase.paidByCardId ?? null;
+    if (cardId !== null) {
+      sums[cardId] = (sums[cardId] ?? 0) + purchase.amountCents;
+    }
+    return sums;
+  }, {});
 
 /** What a closing contributes when spending is not counted (Plan level): everything but the purchases. */
 export const withoutSpending = (state: ClosingState): ClosingState => ({
   ...state,
   spentCents: 0,
   spentByItem: {},
+  chargedByCard: {},
 });
 
 /**
@@ -315,6 +337,12 @@ export function closingBefore(
         list.filter((payment) => payment.paidOn < day),
       ]),
     ),
+    cardPaid: Object.fromEntries(
+      Object.entries(state.cardPaid).map(([id, list]) => [
+        id,
+        list.filter((payment) => payment.on < day),
+      ]),
+    ),
   };
   return result;
 }
@@ -324,6 +352,12 @@ export const joinPaid = (
   base: ClosingState | null,
   live: Readonly<Record<string, PaidPayment[]>>,
 ) => joinLists(base?.billPaid ?? {}, live);
+
+/** The payments of every card from a closing and from the ledger read since, none of them counted twice. */
+export const joinCardPaid = (
+  base: ClosingState | null,
+  live: Readonly<Record<string, CardPaid[]>>,
+) => joinLists(base?.cardPaid ?? {}, live);
 
 export const joinCents = (
   base: Readonly<Record<string, Cents>> | undefined,
@@ -453,12 +487,28 @@ export function encodeClosing(state: ClosingState): ClosingSealed {
     paid: Object.fromEntries(
       Object.entries(state.billPaid).map(([id, list]) => [
         id,
-        list.map((payment): [number, Cents, number, Cents, number | string] => [
-          toDays(payment.dueOn),
-          payment.amountCents,
-          toDays(payment.paidOn),
-          payment.fromFreeCents,
-          getMark(id, payment),
+        list.map(
+          (
+            payment,
+          ): [number, Cents, number, Cents, number | string, string | null] => [
+            toDays(payment.dueOn),
+            payment.amountCents,
+            toDays(payment.paidOn),
+            payment.fromFreeCents,
+            getMark(id, payment),
+            payment.cardId,
+          ],
+        ),
+      ]),
+    ),
+    charged: state.chargedByCard,
+    cardPaid: Object.fromEntries(
+      Object.entries(state.cardPaid).map(([id, list]) => [
+        id,
+        list.map((payment): [number, Cents, string] => [
+          toDays(payment.on),
+          payment.cents,
+          payment.moveId,
         ]),
       ]),
     ),
@@ -499,15 +549,29 @@ export function decodeClosing(
     billPaid: Object.fromEntries(
       Object.entries(sealed.paid).map(([id, list]) => [
         id,
-        list.map(([dueDay, amountCents, paidDay, fromFreeCents, mark]) => ({
-          moveId:
-            typeof mark === 'string'
-              ? mark
-              : getPaidMoveId(id, dueDay * DAY_MS, mark),
-          dueOn: dueDay * DAY_MS,
-          amountCents,
-          paidOn: paidDay * DAY_MS,
-          fromFreeCents,
+        list.map(
+          ([dueDay, amountCents, paidDay, fromFreeCents, mark, cardId]) => ({
+            moveId:
+              typeof mark === 'string'
+                ? mark
+                : getPaidMoveId(id, dueDay * DAY_MS, mark),
+            dueOn: dueDay * DAY_MS,
+            amountCents,
+            paidOn: paidDay * DAY_MS,
+            fromFreeCents,
+            cardId,
+          }),
+        ),
+      ]),
+    ),
+    chargedByCard: sealed.charged,
+    cardPaid: Object.fromEntries(
+      Object.entries(sealed.cardPaid).map(([id, list]) => [
+        id,
+        list.map(([day, cents, moveId]) => ({
+          moveId,
+          on: day * DAY_MS,
+          cents,
         })),
       ]),
     ),

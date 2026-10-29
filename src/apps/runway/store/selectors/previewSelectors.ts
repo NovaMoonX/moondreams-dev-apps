@@ -131,7 +131,7 @@ export interface PreviewDay {
   dayKey: string;
   on: number;
   title: string;
-  /** `changed` moves a day's lines or Free to spend; the others are a day the change adds or takes away. */
+  /** `changed` moves a day's lines or Free to Spend; the others are a day the change adds or takes away. */
   kind: 'changed' | 'added' | 'removed';
   effect: DayEffect;
   /** Names for the lines, by item id. */

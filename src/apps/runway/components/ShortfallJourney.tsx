@@ -19,15 +19,15 @@ interface CoverCardProps {
   id: string;
   /** What the items get beyond the money for them. */
   gapCents: Cents;
-  /** How much of the gap Free to spend can cover now. */
+  /** How much of the gap Free to Spend can cover now. */
   coverableCents: Cents;
   /** What the person chose to cover; 0 until they tap. */
   coverCents: Cents;
-  /** Free to spend now, before the cover. */
+  /** Free to Spend now, before the cover. */
   freeCents: Cents;
-  /** Free to spend once the cover is taken. */
+  /** Free to Spend once the cover is taken. */
   freeAfterCents: Cents;
-  /** The words before the figure, when Free to spend is not the plain figure ("Without this day's leftover, Free to spend is"). */
+  /** The words before the figure, when Free to Spend is not the plain figure ("Without this day's leftover, Free to Spend is"). */
   freeLead?: string;
   isHidden: boolean;
   isDisabled: boolean;
@@ -35,7 +35,7 @@ interface CoverCardProps {
   onUndo: () => void;
 }
 
-/** The offer to cover a day's gap from Free to spend in one tap, and once taken, what it covered with its Undo. */
+/** The offer to cover a day's gap from Free to Spend in one tap, and once taken, what it covered with its Undo. */
 export function CoverCard({
   id,
   gapCents,

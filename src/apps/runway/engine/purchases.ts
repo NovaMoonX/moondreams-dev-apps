@@ -123,11 +123,11 @@ export interface LineEffect {
   /** What the envelope holds after the line; below zero when it is over. */
   afterCents: Cents;
   overCents: Cents;
-  /** How much Free to spend falls by (it rises when negative): an envelope covers a purchase while it has money, and the rest comes out of Free to spend. */
+  /** How much Free to Spend falls by (it rises when negative): an envelope covers a purchase while it has money, and the rest comes out of Free to Spend. */
   freeDropCents: Cents;
 }
 
-/** What taking `cents` (negative for a refund) from an envelope that holds `leftCents` does to it and to Free to spend. */
+/** What taking `cents` (negative for a refund) from an envelope that holds `leftCents` does to it and to Free to Spend. */
 export function getLineEffect(leftCents: Cents, cents: Cents): LineEffect {
   const afterCents = leftCents - cents;
   const covered = Math.max(0, leftCents) - Math.max(0, afterCents);
@@ -145,7 +145,7 @@ export interface PurchaseEffect {
   over: { envelopeId: string; overCents: Cents }[];
 }
 
-/** The effect of a set of lines on the envelopes they name and on Free to spend. */
+/** The effect of a set of lines on the envelopes they name and on Free to Spend. */
 export function getPurchaseEffect(
   lines: readonly PurchaseLine[],
   leftById: Readonly<Record<string, Cents>>,

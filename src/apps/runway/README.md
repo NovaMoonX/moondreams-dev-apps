@@ -18,10 +18,11 @@ Built:
 - [x] Bills, envelopes and goals with priorities and a planning stance
 - [x] Drafts for every income day, confirmed with what arrived, with a change log
 - [x] Guided setup, look-ahead, and a Plan or Track choice
-- [x] Purchases entered by hand, with Left per envelope and Free to spend
+- [x] Purchases entered by hand, with Left per envelope and Free to Spend
 - [x] Savings goals with a pace line, and monthly envelope funding
 - [x] Plan changes from a date or for a stretch, with the effect shown first
 - [x] Priorities: every item in funding order, where a short pay runs out, and a way to reorder
+- [x] Credit cards, each with its own reserve: purchases and bills paid by card, and paying a card off in one step
 
 Next:
 - [ ] Start from gross pay with taxes and deductions
