@@ -4,6 +4,8 @@ Coding practices, styles, and norms for this repo. Every rule here and in the fi
 
 **Large or multi-issue work runs through the `orchestrate` skill, without being asked:** a task that spans more than one issue, will likely change about 1,000 lines or more, or was planned in plan mode. You (the session model) plan, brief, integrate and verify; cheaper agents in `.claude/agents/` build, check and review. The whole pipeline, from planning to merge, is `docs/conventions/pipeline.md`, and it **improves itself**: when a correction, a miss, noise or a wasted step shows a skill, hook, agent, convention or script should change, change it when you are confident and propose it to the owner when you are not (`pipeline.md` "The pipeline improves itself").
 
+**A plan for a follow-up covers only the follow-up.** When the owner answers a review or adds follow-ups (in plan mode or not), the plan lists each answer and what it changes, answers the questions they asked, and names the checks that follow; it never re-outputs the earlier plan or what is already built (owner, Runway cards round 3; the same rule is in `orchestrate` "Iterating on owner feedback").
+
 Per-app rules live in `.claude/rules/<app>.md` (loaded by `paths` when you touch that app; `.github/instructions/<app>.instructions.md` only points there). Read the one for the app you are touching. `.github/copilot-instructions.md` is a pointer to this file and `docs/conventions/`, and keeps no rules of its own.
 
 ## Read before you touch
