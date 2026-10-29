@@ -1,6 +1,9 @@
 import type { Priority } from '@apps/runway/types';
 
+import { ENVELOPE_ORDER_STEP } from '@apps/runway/constants';
+
 import { compareText, TIER_RANK } from './demands';
+import type { Draft } from './draft';
 import { resolveVersion, type Versioned } from './resolve';
 
 export type PriorityKind = 'bill' | 'envelope' | 'goal';
@@ -96,11 +99,55 @@ export interface PriorityAssignment {
   orderIndex: number;
 }
 
+/** Whether the person can place the item: one funded first (a bill due before the next pay) or last (what is left) holds its place whatever its rank. */
+export const isMovable = (item: PriorityItem) =>
+  !item.isDueFirst && !item.isRest;
+
+/**
+ * The reorder working copy against the plan as it is now. `snapshot` is each tier's movable ids as the
+ * person left them; an id that is gone or no longer movable drops out, an unplaced item whose tier changed
+ * elsewhere leaves its old tier, and a movable item the snapshot never saw goes unmoved at the end of its tier.
+ */
+export function reconcileWorking(
+  snapshot: Readonly<Record<Priority, readonly string[]>>,
+  sections: readonly PrioritySection[],
+  moved: ReadonlySet<string>,
+): Record<Priority, string[]> {
+  const live = new Map(
+    sections
+      .flatMap((section) => section.items)
+      .filter(isMovable)
+      .map((item) => [item.itemId, item]),
+  );
+  const kept = Object.fromEntries(
+    TIERS.map((tier) => [
+      tier,
+      snapshot[tier].filter((id) => {
+        const item = live.get(id);
+        return item !== undefined && (moved.has(id) || item.tier === tier);
+      }),
+    ]),
+  ) as Record<Priority, string[]>;
+  const placed = new Set(Object.values(kept).flat());
+  return Object.fromEntries(
+    TIERS.map((tier) => [
+      tier,
+      [
+        ...kept[tier],
+        ...(sections.find((section) => section.tier === tier)?.items ?? [])
+          .filter((item) => isMovable(item) && !placed.has(item.itemId))
+          .map((item) => item.itemId),
+      ],
+    ]),
+  ) as Record<Priority, string[]>;
+}
+
 /**
  * The new tier and rank of every item a reorder changes. `working` is each tier's movable items in
  * the order the person left them, `moved` the ones they placed. A placed item takes the middle of its
- * neighbours' ranks; when its neighbours share one rank, the run that shares it is spread out again
- * with the placed item inside it, so nothing else moves.
+ * neighbours' ranks. When its neighbours share a rank, it keeps that rank if the engine's tie-breaks
+ * already put it between them; otherwise only the smaller side of the tied run is ranked again, the
+ * placed item beside it. An item that was not placed is written only when a tie moves its rank.
  */
 export function planReorder(
   original: readonly PrioritySection[],
@@ -114,62 +161,152 @@ export function planReorder(
   );
   const orig = (id: string) => (byId.get(id) as PriorityItem).orderIndex;
   const assigned = new Map<string, number>();
-  const forced = new Set<string>();
   const valueOf = (id: string) => assigned.get(id) ?? orig(id);
+  const listOf = (tier: Priority) =>
+    working[tier].filter(
+      (id) => byId.has(id) && isMovable(byId.get(id) as PriorityItem),
+    );
 
   TIERS.forEach((tier) => {
-    const list = working[tier];
-    const nextFixed = (from: number) => {
-      const found = list.slice(from).find((id) => !moved.has(id));
-      return found === undefined ? null : orig(found);
+    const list = listOf(tier);
+    const asRanked = (id: string, orderIndex: number): PriorityItem => ({
+      ...(byId.get(id) as PriorityItem),
+      tier,
+      orderIndex,
+    });
+    const firstUnmoved = (from: number) =>
+      list.findIndex((id, at) => at >= from && !moved.has(id));
+    const lastMoved = (from: number): number =>
+      from + 1 < list.length && moved.has(list[from + 1])
+        ? lastMoved(from + 1)
+        : from;
+    const runEnd = (from: number, rank: number): number =>
+      from < list.length && (moved.has(list[from]) || orig(list[from]) === rank)
+        ? runEnd(from + 1, rank)
+        : from;
+    const runStart = (from: number, rank: number): number =>
+      from >= 0 && !moved.has(list[from]) && orig(list[from]) === rank
+        ? runStart(from - 1, rank)
+        : from;
+    const place = (ids: string[], ranks: number[]) =>
+      ids.forEach((id, at) => assigned.set(id, ranks[at]));
+
+    const settleTie = (
+      index: number,
+      prev: number | null,
+      next: number,
+    ): number => {
+      const groupEnd = lastMoved(index);
+      const group = list.slice(index, groupEnd + 1);
+      const chain = [
+        ...(index === 0
+          ? []
+          : [asRanked(list[index - 1], valueOf(list[index - 1]))]),
+        ...group.map((id) => asRanked(id, next)),
+        asRanked(list[groupEnd + 1], next),
+      ];
+      const isOrdered = chain.every(
+        (item, at) => at === 0 || comparePriorityItems(chain[at - 1], item) < 0,
+      );
+      if (prev === next && isOrdered) {
+        place(
+          group,
+          group.map(() => next),
+        );
+        return groupEnd + 1;
+      }
+      const before = prev === next ? runStart(index - 1, next) : index - 1;
+      const left = list.slice(before + 1, index);
+      const afterEnd = runEnd(groupEnd + 1, next);
+      const right = list.slice(groupEnd + 1, afterEnd);
+      if (prev === next && left.length <= right.length) {
+        const ids = [...left, ...group];
+        place(
+          ids,
+          spread(before < 0 ? null : valueOf(list[before]), next, ids.length),
+        );
+        return groupEnd + 1;
+      }
+      const ids = [...group, ...right];
+      place(
+        ids,
+        spread(
+          prev,
+          afterEnd < list.length ? orig(list[afterEnd]) : null,
+          ids.length,
+        ),
+      );
+      return afterEnd;
     };
-    const walk = (index: number) => {
+
+    const walk = (index: number): void => {
       if (index >= list.length) return;
       const id = list[index];
-      if (!moved.has(id)) return walk(index + 1);
+      if (!moved.has(id) || assigned.has(id)) return walk(index + 1);
       const prev = index === 0 ? null : valueOf(list[index - 1]);
-      const next = nextFixed(index + 1);
-      if (prev !== null && next !== null && prev >= next) {
-        const isInRun = (at: number) =>
-          moved.has(list[at]) || orig(list[at]) === next;
-        const reach = (at: number, step: 1 | -1): number =>
-          at + step >= 0 && at + step < list.length && isInRun(at + step)
-            ? reach(at + step, step)
-            : at;
-        const start = reach(index, -1);
-        const end = reach(index, 1);
-        const ranks = spread(
-          start === 0 ? null : valueOf(list[start - 1]),
-          end === list.length - 1 ? null : orig(list[end + 1]),
-          end - start + 1,
-        );
-        list.slice(start, end + 1).forEach((member, offset) => {
-          assigned.set(member, ranks[offset]);
-          if (moved.has(member)) forced.add(member);
-        });
-        return walk(end + 1);
-      }
+      const nextAt = firstUnmoved(index + 1);
+      const next = nextAt < 0 ? null : orig(list[nextAt]);
       const isInPlace =
         byId.get(id)?.tier === tier &&
         (prev === null || orig(id) > prev) &&
         (next === null || orig(id) < next);
-      assigned.set(id, isInPlace ? orig(id) : placeBetween(prev, next));
-      return walk(index + 1);
+      if (isInPlace) {
+        assigned.set(id, orig(id));
+        return walk(index + 1);
+      }
+      const middle = placeBetween(prev, next);
+      const hasRoom =
+        prev === null || next === null || (prev < middle && middle < next);
+      if (hasRoom) {
+        assigned.set(id, middle);
+        return walk(index + 1);
+      }
+      return walk(settleTie(index, prev, next as number));
     };
     walk(0);
   });
 
   return TIERS.flatMap((tier) =>
-    working[tier].flatMap((id) => {
+    listOf(tier).flatMap((id) => {
       const item = byId.get(id) as PriorityItem;
       const orderIndex = valueOf(id);
-      return item.tier === tier &&
-        orderIndex === item.orderIndex &&
-        !forced.has(id)
+      if (moved.has(id)) {
+        return item.tier === tier && orderIndex === item.orderIndex
+          ? []
+          : [{ itemId: id, tier, orderIndex }];
+      }
+      return orderIndex === item.orderIndex
         ? []
-        : [{ itemId: id, tier, orderIndex }];
+        : [{ itemId: id, tier: item.tier, orderIndex }];
     }),
   );
+}
+
+/** The rank after the highest in a tier across every kind of item, since bills, envelopes and goals share one scale. */
+export const getNextTierRank = (
+  items: readonly {
+    version: { payload: { priority: Priority; orderIndex: number } };
+  }[],
+  priority: Priority,
+) =>
+  Math.max(
+    0,
+    ...items
+      .filter(({ version }) => version.payload.priority === priority)
+      .map(({ version }) => version.payload.orderIndex),
+  ) + ENVELOPE_ORDER_STEP;
+
+/** Whether a bill's own line on a short day is due before the next income day after it; null when the bill has no such line that day. */
+export function isDueBeforeNext(
+  draft: Pick<Draft, 'lines'>,
+  itemId: string,
+  nextOn: number,
+): boolean | null {
+  const line = draft.lines.find(
+    (entry) =>
+      entry.itemId === itemId && entry.pairing === null && entry.bill !== null,
+  );
+  return line?.bill ? line.bill.dueOn < nextOn : null;
 }
 
 export interface RankSegment<P> {
@@ -218,4 +355,43 @@ export function getRankSegments<
       ? [{ payload: version.payload, effectiveFrom, effectiveUntil }]
       : [],
   );
+}
+
+export interface PriorityMove<P> {
+  itemId: string;
+  kind: PriorityKind;
+  segments: RankSegment<P>[];
+  priority: Priority;
+  orderIndex: number;
+}
+
+/** What a reorder writes, for the preview and the save alike: every assignment with one segment per stretch its item's version covers from `today`. */
+export function buildMoves<
+  V extends Versioned & { id: string; kind: PriorityKind; payload: unknown },
+>(
+  assignments: readonly PriorityAssignment[],
+  versions: readonly V[],
+  today: number,
+): PriorityMove<V['payload']>[] {
+  return assignments.flatMap((assignment) => {
+    const kind = versions.find(
+      (version) => version.itemId === assignment.itemId,
+    )?.kind;
+    const segments = getRankSegments<V, V['payload']>(
+      versions,
+      assignment.itemId,
+      today,
+    );
+    return kind === undefined || segments.length === 0
+      ? []
+      : [
+          {
+            itemId: assignment.itemId,
+            kind,
+            segments,
+            priority: assignment.tier,
+            orderIndex: assignment.orderIndex,
+          },
+        ];
+  });
 }

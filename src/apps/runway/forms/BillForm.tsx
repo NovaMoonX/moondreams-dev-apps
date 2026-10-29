@@ -25,7 +25,6 @@ import {
   BILL_FUNDINGS,
   CHANGE_WORDS,
   BILL_QUICK_PICKS,
-  ENVELOPE_ORDER_STEP,
   FORM_FLOW_WORDS,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
@@ -37,6 +36,7 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
@@ -63,6 +63,8 @@ import {
 import {
   selectBills,
   selectComingDays,
+  selectGoals,
+  selectEnvelopes,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
@@ -261,6 +263,8 @@ function BillForm({
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const goals = useAppSelector((state) => selectGoals(state, today));
   const [formData, setFormData] = useState<BillFormData>(() =>
     editing || draft?.initial
       ? getEditingData((editing?.payload ?? draft?.initial) as BillSealed)
@@ -588,14 +592,10 @@ function BillForm({
     )
       return null;
 
-    const tier = bills.filter(
-      (bill) => bill.version.payload.priority === data.priority,
-    );
     const orderIndex =
       editing && editing.payload.priority === data.priority
         ? editing.payload.orderIndex
-        : Math.max(0, ...tier.map((bill) => bill.version.payload.orderIndex)) +
-          ENVELOPE_ORDER_STEP;
+        : getNextTierRank([...bills, ...envelopes, ...goals], data.priority);
     const fundedBy: BillFundedBy = isChosen
       ? { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
       : { kind: 'suggested' };

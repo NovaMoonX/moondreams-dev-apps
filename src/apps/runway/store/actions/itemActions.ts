@@ -404,6 +404,9 @@ export async function changeItem(
   await batch.commit();
 }
 
+/** A batch holds 500 writes; the change entry takes one and the rest is left for growth. */
+const MAX_REORDER_WRITES = 450;
+
 export interface ReorderItemsInput {
   moves: {
     itemId: string;
@@ -419,8 +422,8 @@ export interface ReorderItemsInput {
 
 /**
  * Saves a new funding order as one whole-payload version per stretch of each moved item (one for an
- * item with one version in force) and one change entry for the whole save, in a single batch. Nothing
- * already written is touched, and no amount or date changes.
+ * item with one version in force) and one change entry for the whole save, in a single batch of at most
+ * 450 versions. Nothing already written is touched, and no amount or date changes.
  */
 export async function reorderItems(
   uid: string,
@@ -432,6 +435,10 @@ export async function reorderItems(
   const writes = input.moves.flatMap((move) =>
     move.segments.map((segment) => ({ move, segment })),
   );
+  if (writes.length > MAX_REORDER_WRITES)
+    throw new Error(
+      'That moves too many items to save at once. Move fewer and save again.',
+    );
   const [changeSealed, ...versionsSealed] = await Promise.all([
     sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
     ...writes.map(({ move, segment }) =>

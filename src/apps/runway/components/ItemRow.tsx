@@ -14,12 +14,14 @@ import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import { TICK_HIT_CLASS } from '@apps/runway/constants';
+import { PRIORITIES_WORDS, TICK_HIT_CLASS } from '@apps/runway/constants';
 
 /** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
 export interface ItemRowReorder {
-  /** Funded first by the engine whatever its rank, so it cannot be lifted. */
+  /** Funded first or last by the engine whatever its rank, so it cannot be lifted. */
   isFixed: boolean;
+  /** Replaces the row's detail while it is fixed; null keeps the detail. */
+  fixedNote: string | null;
   isLifted: boolean;
   onLift: () => void;
   onMoveUp: (() => void) | null;
@@ -80,7 +82,9 @@ function ItemRow({
       : givenAriaLabel;
   const hide = (node: ReactNode, isOn: boolean) =>
     isOn ? <SensitiveValue>{node}</SensitiveValue> : node;
-  const hasDetail = Boolean(detail) || Boolean(warningLine);
+  const shownDetail =
+    reorder?.isFixed && reorder.fixedNote ? reorder.fixedNote : detail;
+  const hasDetail = Boolean(shownDetail) || Boolean(warningLine);
   const badge = tick
     ? null
     : (leading ?? <ItemBadge name={name} emoji={emoji} />);
@@ -126,7 +130,11 @@ function ItemRow({
             />
           )}
           <span className='line-clamp-2'>
-            {isPrivate && detail ? <MaskedText>{detail}</MaskedText> : detail}
+            {isPrivate && shownDetail ? (
+              <MaskedText>{shownDetail}</MaskedText>
+            ) : (
+              shownDetail
+            )}
           </span>
         </span>
       )}
@@ -151,8 +159,9 @@ function ItemRow({
         {text}
         <Lock
           className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
-          aria-label='Goes first'
+          aria-hidden='true'
         />
+        <span className='sr-only'>{PRIORITIES_WORDS.fixedHidden}</span>
       </li>
     );
   }
@@ -187,7 +196,7 @@ function ItemRow({
           variant='tertiary'
           className={join(rowClass, 'min-w-0 flex-1')}
           aria-pressed={reorder.isLifted}
-          aria-label={`${name}. ${reorder.isLifted ? 'Lifted, choose where to place it' : 'Tap to lift'}`}
+          aria-label={`${name}. ${isPrivate && isHidden ? '' : shownDetail ? `${shownDetail}. ` : ''}${reorder.isLifted ? 'Lifted, choose where to place it' : 'Tap to lift'}`}
           onClick={reorder.onLift}
         >
           {badge}

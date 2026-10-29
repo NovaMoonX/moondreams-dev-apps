@@ -1452,10 +1452,15 @@ export const CORRECT_HIDDEN_WORDS = {
 export const PRIORITIES_WORDS = {
   title: 'Priorities',
   allCovered: 'Every coming pay covers everything',
+  noIncome: 'No income is coming, so nothing is being funded yet',
+  checking: 'Checking your coming pays',
   shortOn: (day: string) => `The plan leaves items short on ${day}`,
   cutLine: (day: string) => `${day}'s money runs out here`,
   cutLineHidden: 'Money runs out here',
-  dueFirst: 'Due before the next pay, so it goes first',
+  dueFirst: (day: string | null) =>
+    `Due before the ${day ?? 'next'} pay, so it goes first`,
+  restLast: 'Gets what is left, so it goes last',
+  fixedHidden: 'Fixed in place',
   searchPlaceholder: 'Search priorities',
   noMatch: 'Nothing matches that.',
   empty:

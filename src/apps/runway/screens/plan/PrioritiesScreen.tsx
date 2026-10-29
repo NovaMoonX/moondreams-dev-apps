@@ -47,9 +47,12 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
 import {
-  getRankSegments,
+  buildMoves,
+  isDueBeforeNext,
+  isMovable,
   orderPriorities,
   planReorder,
+  reconcileWorking,
   type PriorityItem,
   type PrioritySection,
 } from '@apps/runway/engine/priorities';
@@ -75,13 +78,7 @@ import {
   selectPairedBy,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type {
-  BillSealed,
-  EnvelopeSealed,
-  GoalSealed,
-  OpenVersion,
-  Priority,
-} from '@apps/runway/types';
+import type { OpenVersion, Priority } from '@apps/runway/types';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import { describeReorder } from '@apps/runway/utils/priorityText';
@@ -106,8 +103,6 @@ type RankedVersion = Extract<
 
 interface Entry {
   name: string;
-  kind: 'bill' | 'envelope' | 'goal';
-  payload: BillSealed | EnvelopeSealed | GoalSealed;
   render: (reorder: ItemRowReorder | undefined) => ReactNode;
 }
 
@@ -200,25 +195,39 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     );
   }, [goals, heldByItem, comingDays, stance, planItems, versions, today]);
 
-  const dueCutoff =
+  const shortDay = lookahead?.firstShortDay ?? null;
+  const shortNextOn =
+    shortDay === null
+      ? null
+      : (comingDays.find((day) => day.on > shortDay.on)?.on ?? Infinity);
+  const nextPayCutoff =
     comingDays.length === 0 ? null : (comingDays[1]?.on ?? Infinity);
-  const isDueFirst = (billId: string) => {
+  const getDueFirst = (billId: string) => {
+    const fromDay =
+      shortDay === null || shortNextOn === null
+        ? null
+        : isDueBeforeNext(shortDay.draft, billId, shortNextOn);
+    if (fromDay !== null) return { isFirst: fromDay, cutoffOn: shortNextOn };
     const next = (payments[billId] ?? []).find(
       (payment) => payment.paid === null && payment.dueOn >= today,
     );
-    return dueCutoff !== null && next !== undefined && next.dueOn < dueCutoff;
+    return {
+      isFirst:
+        nextPayCutoff !== null &&
+        next !== undefined &&
+        next.dueOn < nextPayCutoff,
+      cutoffOn: nextPayCutoff,
+    };
   };
 
   const entries = new Map<string, Entry>([
     ...bills.map(({ item, version }): [string, Entry] => {
       const payload = version.payload;
-      const dueFirst = isDueFirst(item.id);
+      const dueFirst = getDueFirst(item.id);
       return [
         item.id,
         {
           name: payload.name,
-          kind: 'bill',
-          payload,
           render: (reorder) => (
             <BillRow
               key={item.id}
@@ -231,7 +240,16 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
               }
               planStance={stance}
               today={today}
-              detailOverride={dueFirst ? PRIORITIES_WORDS.dueFirst : null}
+              detailOverride={
+                dueFirst.isFirst
+                  ? PRIORITIES_WORDS.dueFirst(
+                      dueFirst.cutoffOn === null ||
+                        dueFirst.cutoffOn === Infinity
+                        ? null
+                        : formatDateShortUTC(dueFirst.cutoffOn),
+                    )
+                  : null
+              }
               reorder={reorder}
             />
           ),
@@ -242,8 +260,6 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       item.id,
       {
         name: version.payload.name,
-        kind: 'envelope',
-        payload: version.payload,
         render: (reorder) => (
           <EnvelopeTile
             key={item.id}
@@ -261,8 +277,6 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       item.id,
       {
         name: version.payload.name,
-        kind: 'goal',
-        payload: version.payload,
         render: (reorder) => (
           <GoalRow
             key={item.id}
@@ -286,7 +300,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       orderIndex: version.payload.orderIndex,
       createdAt: item.createdAt,
       isRest: false,
-      isDueFirst: isDueFirst(item.id),
+      isDueFirst: getDueFirst(item.id).isFirst,
     })),
     ...[...envelopes, ...goals].map(({ item, version }) => ({
       itemId: item.id,
@@ -298,12 +312,9 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       isDueFirst: false,
     })),
   ];
-  const shortOn = lookahead?.firstShortDay?.on ?? null;
+  const shortOn = shortDay?.on ?? null;
   const total = priorityItems.length;
-  const order = orderPriorities(
-    priorityItems,
-    lookahead?.firstShortDay?.draft ?? null,
-  );
+  const order = orderPriorities(priorityItems, shortDay?.draft ?? null);
   const itemById = new Map(priorityItems.map((item) => [item.itemId, item]));
   const nameOf = (itemId: string) => entries.get(itemId)?.name ?? '';
 
@@ -311,42 +322,50 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const isSearching = needle !== '';
 
-  const assignments =
+  const live =
     edit === null
-      ? []
-      : planReorder(order.sections, edit.working, new Set(edit.moved));
+      ? null
+      : reconcileWorking(edit.working, order.sections, new Set(edit.moved));
+  const liveIds = new Set(Object.values(live ?? {}).flat());
+  const movedIds = new Set(
+    (edit?.moved ?? []).filter((itemId) => liveIds.has(itemId)),
+  );
+  const lifted =
+    edit?.lifted != null && liveIds.has(edit.lifted) ? edit.lifted : null;
+  const assignments =
+    live === null ? [] : planReorder(order.sections, live, movedIds);
   const isDirty = assignments.length > 0;
   const originalTiers = new Map(
     priorityItems.map((item) => [item.itemId, item.tier]),
   );
   const summary =
-    edit === null || !isDirty
+    live === null || !isDirty
       ? ''
-      : describeReorder(
-          assignments,
-          new Set(edit.moved),
-          edit.working,
-          originalTiers,
-          nameOf,
-        );
+      : describeReorder(assignments, movedIds, live, originalTiers, nameOf);
   const changeJson = isDirty
     ? JSON.stringify({
         kind: 'versions',
-        versions: assignments.map((move) => {
-          const entry = entries.get(move.itemId) as Entry;
-          return {
-            itemId: move.itemId,
-            kind: entry.kind,
-            effectiveFrom: today,
-            effectiveUntil: null,
-            changeId: 'what-if',
-            payload: {
-              ...entry.payload,
-              priority: move.tier,
-              orderIndex: move.orderIndex,
-            },
-          } as PreviewVersion;
-        }),
+        versions: buildMoves(
+          assignments,
+          versions as RankedVersion[],
+          today,
+        ).flatMap((move) =>
+          move.segments.map(
+            (segment) =>
+              ({
+                itemId: move.itemId,
+                kind: move.kind,
+                effectiveFrom: segment.effectiveFrom,
+                effectiveUntil: segment.effectiveUntil,
+                changeId: 'what-if',
+                payload: {
+                  ...segment.payload,
+                  priority: move.priority,
+                  orderIndex: move.orderIndex,
+                },
+              }) as PreviewVersion,
+          ),
+        ),
       } satisfies PreviewChange)
     : null;
 
@@ -359,14 +378,17 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   });
 
   useEffect(() => {
-    if (hasScrolledRef.current || order.cutIndex === null) return;
-    const frame = requestAnimationFrame(() => {
-      if (!cutRef.current) return;
+    if (hasScrolledRef.current || lookahead === null) return;
+    if (order.cutIndex === null || window.scrollY > 8 || query.trim() !== '') {
       hasScrolledRef.current = true;
-      cutRef.current.scrollIntoView({ block: 'center' });
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      hasScrolledRef.current = true;
+      cutRef.current?.scrollIntoView({ block: 'center' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [order.cutIndex]);
+  }, [lookahead, order.cutIndex, query]);
 
   const startEdit = () => {
     setQuery('');
@@ -374,9 +396,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       working: Object.fromEntries(
         order.sections.map((section) => [
           section.tier,
-          section.items
-            .filter((item) => !item.isDueFirst)
-            .map((item) => item.itemId),
+          section.items.filter(isMovable).map((item) => item.itemId),
         ]),
       ) as Tiers,
       moved: [],
@@ -388,89 +408,75 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const patchEdit = (change: (current: EditState) => EditState) =>
     setEdit((current) => (current === null ? current : change(current)));
 
-  const placeLifted = (tier: Priority, index: number) =>
-    patchEdit((current) => {
-      const lifted = current.lifted;
-      if (lifted === null) return current;
-      const without = Object.fromEntries(
-        PRIORITIES.map((key) => [
-          key,
-          current.working[key].filter((id) => id !== lifted),
-        ]),
-      ) as Tiers;
-      return {
-        ...current,
-        working: {
-          ...without,
-          [tier]: [
-            ...without[tier].slice(0, index),
-            lifted,
-            ...without[tier].slice(index),
-          ],
-        },
-        moved: current.moved.includes(lifted)
-          ? current.moved
-          : [...current.moved, lifted],
-        lifted: null,
-      };
-    });
+  const placeLifted = (tier: Priority, index: number) => {
+    if (live === null || lifted === null) return;
+    const without = Object.fromEntries(
+      PRIORITIES.map((key) => [key, live[key].filter((id) => id !== lifted)]),
+    ) as Tiers;
+    patchEdit((current) => ({
+      ...current,
+      working: {
+        ...without,
+        [tier]: [
+          ...without[tier].slice(0, index),
+          lifted,
+          ...without[tier].slice(index),
+        ],
+      },
+      moved: current.moved.includes(lifted)
+        ? current.moved
+        : [...current.moved, lifted],
+      lifted: null,
+    }));
+  };
 
-  const nudge = (itemId: string, tier: Priority, direction: -1 | 1) =>
-    patchEdit((current) => {
-      const tierIndex = PRIORITIES.indexOf(tier);
-      const list = current.working[tier];
-      const index = list.indexOf(itemId);
-      const target = index + direction;
-      const crossTo = PRIORITIES[tierIndex + direction] as Priority | undefined;
-      const next: Tiers =
-        target >= 0 && target < list.length
-          ? {
-              ...current.working,
-              [tier]: list.map((id, at) =>
-                at === index ? list[target] : at === target ? itemId : id,
-              ),
-            }
-          : crossTo === undefined
-            ? current.working
-            : {
-                ...current.working,
-                [tier]: list.filter((id) => id !== itemId),
-                [crossTo]:
-                  direction === -1
-                    ? [...current.working[crossTo], itemId]
-                    : [itemId, ...current.working[crossTo]],
-              };
-      return {
-        ...current,
-        working: next,
-        moved: current.moved.includes(itemId)
-          ? current.moved
-          : [...current.moved, itemId],
-      };
-    });
+  const nudge = (itemId: string, tier: Priority, direction: -1 | 1) => {
+    if (live === null) return;
+    const tierIndex = PRIORITIES.indexOf(tier);
+    const list = live[tier];
+    const index = list.indexOf(itemId);
+    const target = index + direction;
+    const crossTo = PRIORITIES[tierIndex + direction] as Priority | undefined;
+    const next: Tiers =
+      target >= 0 && target < list.length
+        ? {
+            ...live,
+            [tier]: list.map((id, at) =>
+              at === index ? list[target] : at === target ? itemId : id,
+            ),
+          }
+        : crossTo === undefined
+          ? live
+          : {
+              ...live,
+              [tier]: list.filter((id) => id !== itemId),
+              [crossTo]:
+                direction === -1
+                  ? [...live[crossTo], itemId]
+                  : [itemId, ...live[crossTo]],
+            };
+    patchEdit((current) => ({
+      ...current,
+      working: next,
+      moved: current.moved.includes(itemId)
+        ? current.moved
+        : [...current.moved, itemId],
+    }));
+  };
 
   const save = async () => {
-    if (isSavingRef.current || !user || edit === null || !isDirty) return;
+    if (isSavingRef.current || !user || live === null || !isDirty) return;
     isSavingRef.current = true;
     setIsSaving(true);
     setError(null);
     try {
       const encryption = await getRunwayEncryption(user.uid);
       await reorderItems(user.uid, encryption, {
-        moves: assignments.map((move) => {
-          const entry = entries.get(move.itemId) as Entry;
-          return {
-            itemId: move.itemId,
-            kind: entry.kind,
-            segments: getRankSegments(
-              store.getState().runway.versions as RankedVersion[],
-              move.itemId,
-              today,
-            ),
-            priority: move.tier,
-            orderIndex: move.orderIndex,
-          };
-        }),
+        moves: buildMoves(
+          assignments,
+          store.getState().runway.versions as RankedVersion[],
+          today,
+        ),
         summary,
         effectiveFrom: today,
       });
@@ -484,18 +490,19 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   };
 
   const getSections = (): PrioritySection[] => {
-    if (edit === null) return order.sections;
+    if (live === null) return order.sections;
     return order.sections.map((section) => ({
       ...section,
       items: [
         ...section.items.filter((item) => item.isDueFirst),
-        ...edit.working[section.tier].flatMap((id) => itemById.get(id) ?? []),
+        ...live[section.tier].flatMap((id) => itemById.get(id) ?? []),
+        ...section.items.filter((item) => item.isRest && !item.isDueFirst),
       ],
     }));
   };
 
   const getUnits = (section: PrioritySection): Unit[] => {
-    if (edit === null) {
+    if (live === null) {
       return section.items.flatMap((item, index): Unit[] => {
         const isMatch =
           !isSearching || nameOf(item.itemId).toLowerCase().includes(needle);
@@ -506,11 +513,14 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
           : [row];
       });
     }
-    const list = edit.working[section.tier];
-    const fixed = section.items.filter((item) => item.isDueFirst);
-    const liftedAt = list.indexOf(edit.lifted ?? '');
+    const list = live[section.tier];
+    const fixedFirst = section.items.filter((item) => item.isDueFirst);
+    const fixedLast = section.items.filter(
+      (item) => item.isRest && !item.isDueFirst,
+    );
+    const liftedAt = list.indexOf(lifted ?? '');
     const slotAt = (gap: number): Unit[] => {
-      if (edit.lifted === null) return [];
+      if (lifted === null) return [];
       if (liftedAt >= 0 && (gap === liftedAt || gap === liftedAt + 1))
         return [];
       return [
@@ -526,16 +536,21 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       ];
     };
     return [
-      ...fixed.map((item): Unit => ({ kind: 'row', item, tierIndex: -1 })),
+      ...fixedFirst.map((item): Unit => ({ kind: 'row', item, tierIndex: -1 })),
       ...list.flatMap((id, index): Unit[] => [
         ...slotAt(index),
-        {
-          kind: 'row',
-          item: itemById.get(id) as PriorityItem,
-          tierIndex: index,
-        },
+        ...(itemById.has(id)
+          ? [
+              {
+                kind: 'row' as const,
+                item: itemById.get(id) as PriorityItem,
+                tierIndex: index,
+              },
+            ]
+          : []),
       ]),
       ...slotAt(list.length),
+      ...fixedLast.map((item): Unit => ({ kind: 'row', item, tierIndex: -1 })),
     ];
   };
 
@@ -559,13 +574,14 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     }
     const entry = entries.get(unit.item.itemId);
     if (!entry) return null;
-    if (edit === null) return entry.render(undefined);
-    const list = edit.working[tier];
+    if (live === null) return entry.render(undefined);
+    const list = live[tier];
     const tierRank = PRIORITIES.indexOf(tier);
     const id = unit.item.itemId;
     return entry.render({
-      isFixed: unit.item.isDueFirst,
-      isLifted: edit.lifted === id,
+      isFixed: unit.item.isDueFirst || unit.item.isRest,
+      fixedNote: unit.item.isRest ? PRIORITIES_WORDS.restLast : null,
+      isLifted: lifted === id,
       onLift: () =>
         patchEdit((current) => ({
           ...current,
@@ -583,7 +599,20 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   };
 
   const getStatus = () => {
-    if (lookahead === null) return null;
+    if (lookahead === null) {
+      return (
+        <p className='text-muted-foreground min-h-5 text-sm'>
+          {PRIORITIES_WORDS.checking}
+        </p>
+      );
+    }
+    if (comingDays.length === 0) {
+      return (
+        <p className='text-muted-foreground text-sm'>
+          {PRIORITIES_WORDS.noIncome}
+        </p>
+      );
+    }
     if (lookahead.firstShortDay === null) {
       return (
         <p className='text-muted-foreground text-sm'>
@@ -677,7 +706,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                   ]
                 : toChunks(segment).map((chunk, chunkIndex) => (
                     <div
-                      key={unitKey(chunk[0])}
+                      key={`${segmentIndex}-${chunkIndex}`}
                       className='defer-offscreen'
                       style={
                         {
@@ -725,9 +754,12 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             placeholder={PRIORITIES_WORDS.searchPlaceholder}
           />
         )}
-        {edit?.lifted != null && (
-          <p className='text-muted-foreground text-sm' role='status'>
-            Tap Place here where {nameOf(edit.lifted)} should go.
+        {lifted !== null && (
+          <p
+            className='text-muted-foreground sticky-day-bar bg-background py-2 text-sm'
+            role='status'
+          >
+            Tap Place here where {nameOf(lifted)} should go.
           </p>
         )}
         {getSections().map(renderSection)}

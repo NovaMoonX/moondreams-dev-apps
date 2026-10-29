@@ -106,10 +106,14 @@ import {
   readHeldReleasedOn,
 } from '../../src/apps/runway/engine/endings.ts';
 import {
+  buildMoves,
+  getNextTierRank,
   getRankSegments,
+  isDueBeforeNext,
   orderPriorities,
   placeBetween,
   planReorder,
+  reconcileWorking,
   type PriorityItem,
 } from '../../src/apps/runway/engine/priorities.ts';
 import {
@@ -8694,9 +8698,230 @@ console.log('runway engine: ok');
   );
   assert.ok(
     reranked.some((move) => move.itemId === 'z') &&
-      reranked.every((move) => move.itemId !== 'x'),
-    'the moved item is written and an item whose rank stays is not',
+      reranked.every((move) => move.itemId !== 'y'),
+    'the moved item is written and only the smaller side of the tie is ranked again',
   );
+
+  // Neighbours that tie, with the moved item already sorting between them, write only the moved item.
+  {
+    const run = orderPriorities(
+      [
+        item('p', 'should', 1, { createdAt: 1 }),
+        item('q', 'should', 1, { createdAt: 2 }),
+        item('r', 'should', 1, { createdAt: 3 }),
+        item('m', 'should', 5, { createdAt: 2 }),
+      ],
+      null,
+    );
+    assert.deepEqual(
+      planReorder(
+        run.sections,
+        { must: [], should: ['p', 'm', 'q', 'r'], want: [] },
+        new Set(['m']),
+      ),
+      [{ itemId: 'm', tier: 'should', orderIndex: 1 }],
+      'a tie the sort already settles keeps the rank and writes nothing else',
+    );
+  }
+
+  // Items that ask for what is left are fixed: never in the working copy, never written.
+  {
+    const withRest = orderPriorities(
+      [
+        item('a2', 'should', 5),
+        item('b2', 'should', 6),
+        item('r1', 'should', 1, { isRest: true }),
+        item('r2', 'should', 2, { isRest: true }),
+      ],
+      null,
+    );
+    assert.deepEqual(
+      withRest.sections[1].items.map((i) => i.itemId),
+      ['a2', 'b2', 'r1', 'r2'],
+      'rest items sit after the movable ones whatever their rank',
+    );
+    assert.deepEqual(
+      planReorder(
+        withRest.sections,
+        { must: [], should: ['b2', 'a2', 'r1', 'r2'], want: [] },
+        new Set(['b2', 'r1']),
+      ),
+      [{ itemId: 'b2', tier: 'should', orderIndex: 4 }],
+      'a rest item is neither placed nor ranked again',
+    );
+    assert.deepEqual(
+      reconcileWorking(
+        { must: [], should: ['gone', 'r1', 'b2', 'a2'], want: [] },
+        withRest.sections,
+        new Set(['b2']),
+      ),
+      { must: [], should: ['b2', 'a2'], want: [] },
+      'a gone or fixed id drops out of the working copy',
+    );
+    const grown = orderPriorities(
+      [...withRest.sections.flatMap((s) => s.items), item('n', 'should', 9)],
+      null,
+    );
+    assert.deepEqual(
+      reconcileWorking(
+        { must: [], should: ['b2', 'a2'], want: [] },
+        grown.sections,
+        new Set(['b2']),
+      ),
+      { must: [], should: ['b2', 'a2', 'n'], want: [] },
+      'a new item goes unmoved at the end of its tier',
+    );
+    assert.deepEqual(
+      reconcileWorking(
+        { must: [], should: ['a2', 'b2'], want: [] },
+        orderPriorities(
+          [
+            item('a2', 'should', 5, { isDueFirst: true }),
+            item('b2', 'should', 6),
+          ],
+          null,
+        ).sections,
+        new Set(),
+      ),
+      { must: [], should: ['b2'], want: [] },
+      'an item whose due-first flips drops out',
+    );
+  }
+
+  // One builder: a stretch is its own move segment, with its own dates.
+  {
+    const D = 86_400_000;
+    const versions = [
+      {
+        id: 'v1',
+        itemId: 'x',
+        kind: 'envelope' as const,
+        createdAt: 1,
+        effectiveFrom: 0,
+        effectiveUntil: null,
+        payload: { cents: 1 },
+      },
+      {
+        id: 'v2',
+        itemId: 'x',
+        kind: 'envelope' as const,
+        createdAt: 2,
+        effectiveFrom: 30 * D,
+        effectiveUntil: null,
+        payload: { cents: 2 },
+      },
+    ];
+    const moves = buildMoves(
+      [{ itemId: 'x', tier: 'want', orderIndex: 3 }],
+      versions,
+      10 * D,
+    );
+    assert.deepEqual(
+      moves[0].segments.map((seg) => [
+        seg.effectiveFrom,
+        seg.effectiveUntil,
+        seg.payload.cents,
+      ]),
+      [
+        [10 * D, 30 * D, 1],
+        [30 * D, null, 2],
+      ],
+      'a change ahead is its own segment',
+    );
+    assert.equal(moves[0].kind, 'envelope');
+    assert.deepEqual(
+      buildMoves(
+        [{ itemId: 'none', tier: 'want', orderIndex: 3 }],
+        versions,
+        0,
+      ),
+      [],
+      'an item with no version writes nothing',
+    );
+    const bill = {
+      version: { payload: { priority: 'must' as const, orderIndex: 4 } },
+    };
+    const goal = {
+      version: { payload: { priority: 'must' as const, orderIndex: 9 } },
+    };
+    assert.equal(
+      getNextTierRank([bill, goal], 'must'),
+      10,
+      'a new item takes the highest rank across every kind',
+    );
+  }
+
+  // A short day that is not the next pay: the list agrees with that day's lines and the cut sits above the first short one.
+  {
+    const pay = (on: number, key: string) => ({
+      dayKey: toDayKey(`line-${key}`, on),
+      sourceId: 'src-a',
+      on,
+      amount: { lowCents: 60_000, highCents: 60_000 },
+    });
+    const payA = pay(utc(2026, 11, 6), 'a');
+    const payB = pay(utc(2026, 11, 20), 'b');
+    const payC = pay(utc(2026, 12, 4), 'c');
+    const bill = (itemId: string, orderIndex: number, dueOn: number) => ({
+      itemId,
+      createdAt: 1_000,
+      priority: 'should' as const,
+      orderIndex,
+      amount: { lowCents: 60_000, highCents: 60_000 },
+      schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
+      ending: { onDate: null, afterCount: null },
+      fundedBy: { kind: 'suggested' as const },
+    });
+    const bills = [
+      bill('late-first', 3, utc(2026, 11, 28)),
+      bill('early', 1, utc(2026, 12, 20)),
+      bill('mid', 2, utc(2026, 12, 25)),
+    ];
+    const shortDraft = buildDraft({
+      days: [payB],
+      plan: {
+        envelopes: [],
+        bills,
+        goals: [],
+        horizon: utc(2027, 3, 1),
+        incomeDays: [payA, payB, payC],
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+    const lineIds = shortDraft.lines
+      .filter((line) => line.pairing === null)
+      .map((line) => line.itemId);
+    const items = bills.map((entry) =>
+      item(entry.itemId, 'should', entry.orderIndex, {
+        kind: 'bill',
+        isDueFirst: isDueBeforeNext(shortDraft, entry.itemId, payC.on) ?? false,
+      }),
+    );
+    const ordered = orderPriorities(items, shortDraft);
+    const flatIds = ordered.sections.flatMap((section) =>
+      section.items.map((i) => i.itemId),
+    );
+    assert.deepEqual(
+      flatIds.filter((id) => lineIds.includes(id)),
+      lineIds,
+      "the list order of items with lines is the short day's line order",
+    );
+    const firstShort = shortDraft.lines.find(
+      (line) => line.pairing === null && line.shortBy > 0,
+    );
+    assert.ok(firstShort, 'the day is short');
+    assert.equal(
+      ordered.cutIndex,
+      flatIds.indexOf(firstShort?.itemId ?? ''),
+      'the cut sits above the first short item',
+    );
+    assert.equal(
+      isDueBeforeNext(shortDraft, 'not-here', payC.on),
+      null,
+      'a bill with no line that day has no answer',
+    );
+  }
 }
 
 console.log('runway engine: ok');
