@@ -9,7 +9,7 @@ export interface CheckEnvelope {
 }
 
 export interface CheckSource {
-  /** Null is Free to spend. */
+  /** Null is Free to Spend. */
   envelopeId: string | null;
   takeCents: Cents;
   leftAfterCents: Cents;
@@ -20,13 +20,13 @@ export type AmountCheck =
   | {
       kind: 'over';
       overCents: Cents;
-      /** Free to spend when it holds money, then other envelopes with room, lowest priority first, with what each would give. */
+      /** Free to Spend when it holds money, then other envelopes with room, lowest priority first, with what each would give. */
       sources: CheckSource[];
-      /** What neither Free to spend nor another envelope could cover. */
+      /** What neither Free to Spend nor another envelope could cover. */
       uncoveredCents: Cents;
     };
 
-/** Whether `cents` fits in an envelope; if not, by how much, and what could cover it: Free to spend when it holds money, then other envelopes (lowest priority first, the list order within a priority). Nothing moves. */
+/** Whether `cents` fits in an envelope; if not, by how much, and what could cover it: Free to Spend when it holds money, then other envelopes (lowest priority first, the list order within a priority). Nothing moves. */
 export function checkAmount(
   envelopeId: string,
   cents: Cents,

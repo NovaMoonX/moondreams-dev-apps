@@ -8,6 +8,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 
+import HelpTip from '@/components/HelpTip';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
@@ -16,6 +17,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import {
+  CARD_WORDS,
   CHECK_WORDS,
   ENVELOPE_SPEND_WORDS,
   FREE_SUM_WORDS,
@@ -44,10 +46,12 @@ interface SumRow {
   name: string;
   value: string;
   section?: PlanSection;
+  /** What the row counts, behind an info icon beside its name. */
+  help?: string;
   isResult?: boolean;
 }
 
-/** Free to spend in detail: the money on hand and what has a job, so the figure can be followed to its parts. */
+/** Free to Spend in detail: the money on hand and what has a job, so the figure can be followed to its parts. */
 function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const balances = useAppSelector(selectBalances);
   const level = useAppSelector(selectLevel);
@@ -66,6 +70,9 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [sheetKey, setSheetKey] = useState<number | null>(null);
+  const hasCards = useAppSelector(
+    (state) => state.runway.cards.length > 0 && selectLevel(state) === 'track',
+  );
   const figure = getFreeToSpendFigure(balances);
   const free = describeFreeToSpend(figure);
   const rows: SumRow[] = [
@@ -73,6 +80,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       sign: '',
       name: FREE_SUM_WORDS.onHand,
       value: formatCents(balances.moneyOnHandCents),
+      help: hasCards ? CARD_WORDS.freeOnHandHelp : undefined,
     },
     {
       sign: '−',
@@ -95,6 +103,17 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       value: formatCents(balances.assignedToEnvelopesCents),
       section: 'envelopes',
     },
+    ...(hasCards
+      ? [
+          {
+            sign: '−',
+            name: CARD_WORDS.freeWaiting,
+            value: formatCents(balances.assignedToCardsCents),
+            section: 'cards' as const,
+            help: CARD_WORDS.freeWaitingHelp,
+          },
+        ]
+      : []),
     {
       sign: '=',
       name: FREE_SUM_WORDS.result,
@@ -193,6 +212,11 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                     )}
                   >
                     {row.name}
+                    {row.help && (
+                      <span className='relative z-10 ml-1 inline-block align-middle'>
+                        <HelpTip title={row.name}>{row.help}</HelpTip>
+                      </span>
+                    )}
                   </span>,
                   <span
                     key='value'
@@ -217,7 +241,19 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 const { section } = row;
                 return (
                   <div key={row.name}>
-                    {section ? (
+                    {section && row.help ? (
+                      <div className={join(rowClass, 'relative')}>
+                        {cells}
+                        <Button
+                          type='button'
+                          variant='tertiary'
+                          size='stripped'
+                          className='absolute inset-0 size-full rounded-none'
+                          aria-label={`${row.name}. See what makes it up`}
+                          onClick={() => openSection(section)}
+                        />
+                      </div>
+                    ) : section ? (
                       <Button
                         type='button'
                         variant='tertiary'

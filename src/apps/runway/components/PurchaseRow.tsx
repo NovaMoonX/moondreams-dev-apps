@@ -18,11 +18,7 @@ interface PurchaseRowProps {
 }
 
 /** One purchase in a list: its label, merchant or envelopes as the name, the day and whichever of those the name left out, and the amount. A refund reads as money coming back. */
-function PurchaseRow({
-  purchase,
-  looks,
-  onOpen,
-}: PurchaseRowProps) {
+function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
@@ -30,7 +26,7 @@ function PurchaseRow({
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
   const firstName = purchase.lines[0]
     ? purchase.lines[0].envelopeId === null
-      ? 'Free to spend'
+      ? 'Free to Spend'
       : nameOf(purchase.lines[0].envelopeId)
     : '';
   const shortEnvelopes =

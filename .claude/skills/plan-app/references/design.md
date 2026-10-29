@@ -52,7 +52,7 @@ Run this against the canvas. Each item is a problem a real review turned up.
 
 **Consistency**
 - [ ] Where two features can cover the same case, state which applies when, and draw each state. Do not show both firing on one board.
-- [ ] A word means one thing everywhere (e.g. "Free to spend", "left", and "safe to spend" are not three names for one number).
+- [ ] A word means one thing everywhere (e.g. "Free to Spend", "left", and "safe to spend" are not three names for one number).
 - [ ] Hidden, not disabled: nothing greyed out for a level or setting that is off.
 - [ ] The same organizing concept uses the same UI pattern everywhere it appears (if "day" groups things, it is day-tabs on every screen that groups by day).
 - [ ] If a dedicated screen already shows something in full, other screens link to it rather than re-rendering a miniature version.

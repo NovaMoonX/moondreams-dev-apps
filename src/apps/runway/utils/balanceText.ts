@@ -2,7 +2,7 @@ import { HOME_WORDS } from '@apps/runway/constants';
 import type { FreeToSpendFigure } from '@apps/runway/engine/balances';
 import { formatCents } from '@/utils/moneyUtils';
 
-/** The Free to spend figure in the words Home's card and its detail both use. */
+/** The Free to Spend figure in the words Home's card and its detail both use. */
 export function describeFreeToSpend(figure: FreeToSpendFigure) {
   if (figure.kind === 'unknown') {
     return { label: HOME_WORDS.freeToSpend, value: HOME_WORDS.notSet };

@@ -31,13 +31,18 @@ import {
   selectClosingBase,
   selectRecentFrom,
 } from '@apps/runway/store/selectors/historySelectors';
-import { selectBalanceInputs } from '@apps/runway/store/selectors/balanceSelectors';
 import {
+  selectBalanceInputs,
+  selectTrackBalanceInputs,
+} from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectAllCards,
   selectBills,
   selectEnvelopes,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
+import { getCardName } from '@apps/runway/utils/cardText';
 
 interface LineUpScreenProps {
   onClose: () => void;
@@ -53,6 +58,8 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
   const plan = useAppSelector((state) => state.runway.plan);
   const { confirm } = useActionModal();
   const balanceInputs = useAppSelector(selectBalanceInputs);
+  const trackInputs = useAppSelector(selectTrackBalanceInputs);
+  const cards = useAppSelector(selectAllCards);
   const moves = useAppSelector((state) => state.runway.moves);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
@@ -68,13 +75,30 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
 
   const startDate = fromDateInputValue(date) ?? null;
   const asOf = deriveBalancesBefore(balanceInputs, startDate ?? today);
+  // What a card owes is only counted while tracking, so it is read as tracking would have it, whatever the level now.
+  const owedByCard = deriveBalancesBefore(
+    trackInputs,
+    startDate ?? today,
+  ).reserveByCard;
+  const shownCards = cards.filter(
+    (card) => card.archivedAt === null || (owedByCard[card.id] ?? 0) > 0,
+  );
   const money =
-    moneyEdit ?? (asOf.hasMoney ? toText(asOf.moneyOnHandCents) : '');
+    moneyEdit ??
+    (asOf.hasMoney
+      ? toText(asOf.moneyOnHandCents + asOf.uncountedCardCashCents)
+      : '');
   const amounts: Record<string, string> = {
     ...Object.fromEntries(
       Object.entries(asOf.assignedByItem).map(([id, cents]) => [
         id,
         toText(cents),
+      ]),
+    ),
+    ...Object.fromEntries(
+      shownCards.map((card) => [
+        card.id,
+        toText(Math.max(0, owedByCard[card.id] ?? 0)),
       ]),
     ),
     ...edits,
@@ -97,6 +121,11 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
       holding: 'bill' as const,
       id: item.id,
       name: version.payload.name,
+    })),
+    ...shownCards.map((card) => ({
+      holding: 'card' as const,
+      id: card.id,
+      name: getCardName(card, cards),
     })),
   ];
   const moneyCents = parseMoneyToCents(money);
@@ -243,6 +272,12 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
         <AmountList
           label={TRACKING_WORDS.bills}
           rows={pick('bill')}
+          values={amounts}
+          onChange={setAmount}
+        />
+        <AmountList
+          label={TRACKING_WORDS.cards}
+          rows={pick('card')}
           values={amounts}
           onChange={setAmount}
         />

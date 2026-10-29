@@ -63,7 +63,7 @@ export function countUnresolvedHolds(draft: Draft): number {
   return result;
 }
 
-/** What Free to spend holds once the money that arrived replaces the money expected. */
+/** What Free to Spend holds once the money that arrived replaces the money expected. */
 export function getFreeAfterArrival(draft: Draft, arrivedCents: Cents): Cents {
   const result = draft.freeToSpend.cents + (arrivedCents - draft.moneyCents);
   return result;
@@ -85,7 +85,7 @@ export interface BuildRecordsInput {
 
 /**
  * The two records a confirmed day keeps. The confirmed lines are the proposed ones with the person's
- * amounts in place; Free to spend is what the money leaves after them, so everything adds up to the
+ * amounts in place; Free to Spend is what the money leaves after them, so everything adds up to the
  * amount that arrived. The amount and each changed line are recorded as differences.
  */
 export function buildRecords(input: BuildRecordsInput): {
