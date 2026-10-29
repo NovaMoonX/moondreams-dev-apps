@@ -73,10 +73,10 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
               {row.amount && (
                 <span
                   className={join(
-                    'max-w-[40%] min-w-0 shrink text-right break-words tabular-nums',
+                    'text-right tabular-nums',
                     row.isAmountMuted
-                      ? 'text-muted-foreground text-sm'
-                      : 'text-base font-semibold',
+                      ? 'text-muted-foreground max-w-[40%] min-w-0 shrink text-sm'
+                      : 'shrink-0 text-base font-semibold whitespace-nowrap',
                   )}
                 >
                   <MaskedText>{row.amount}</MaskedText>
