@@ -42,6 +42,8 @@ The plan is for the owner, and its job is to lighten their mental load (owner: "
 
 Leave out the files, selectors, data paths, verification steps, docs to update and review sizing. They are yours to get right, and they belong in the PR's How it works and evidence blocks. Keep paragraphs and nested bullets out of the plan.
 
+**Back in plan mode with nothing new to plan.** A restarted session can come back in plan mode after the owner approved the plan and switched to Auto, though nobody switched it. When nothing new needs a decision, the plan is one line ("Nothing new: PR #N is built and waiting on you."), never a repeat of what was already agreed (owner: "there's nothing new for me to look at").
+
 **Iterating on owner feedback.** When the owner answers a review or adds follow-ups (in plan mode or not), the plan covers only that message: each answer and what it changes, and the questions they asked. Never re-output the earlier plan or what is already built (owner: "the plan should be focused on my last message").
 
 ## Several issues in order
