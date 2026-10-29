@@ -347,6 +347,7 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
         </div>
         {state.tipChoice !== 'NONE' && (
           <div className='space-y-1'>
+            <Label>Split the tip</Label>
             <PillGroup
               label='Split the tip'
               isThin
