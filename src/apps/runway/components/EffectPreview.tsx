@@ -52,7 +52,11 @@ interface EffectPreviewProps {
   /** One summary line with a door to each day, for a form whose subject is the change itself. */
   isCompact?: boolean;
   /** What the change does, said first and in place of the plan-level notices: the form's own reading of the days it moves. */
-  describeLead?: (days: readonly PreviewDay[], isHidden: boolean) => ReactNode;
+  describeLead?: (
+    days: readonly PreviewDay[],
+    isHidden: boolean,
+    shortfalls: readonly ReactNode[],
+  ) => ReactNode;
   /** Items whose rows lead every day's card, so a reorder shows the gain beside the losses. */
   pinnedItemIds?: ReadonlySet<string>;
 }
@@ -419,12 +423,41 @@ function EffectPreview({
     );
   };
 
+  const isLeadShown =
+    describeLead !== undefined && days !== null && days.length > 0;
+  const shownBlocks =
+    holdsText && !(isCompact && holdsText.isSame)
+      ? holdsText.blocks.filter(
+          (block) => describeLead === undefined || block.tone === 'warning',
+        )
+      : [];
+  const renderFigure = (block: (typeof shownBlocks)[number]) =>
+    block.figure === null ? (
+      block.text
+    ) : (
+      <>
+        {block.text.slice(0, block.text.indexOf(block.figure))}
+        <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
+          {block.figure}
+        </strong>
+        {block.text.slice(
+          block.text.indexOf(block.figure) + block.figure.length,
+        )}
+      </>
+    );
+  const isLeadFirst = isLeadShown && !isHidden;
+  const leadShortfalls = isLeadFirst
+    ? shownBlocks.map((block) => (
+        <span key={block.text}>{renderFigure(block)}</span>
+      ))
+    : [];
+
   return (
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
-      {describeLead !== undefined &&
-        days !== null &&
-        days.length > 0 &&
-        describeLead(days, isHidden)}
+      {isLeadShown &&
+        isHidden &&
+        shownBlocks.map((block) => <NeedsALookRow key={block.text} />)}
+      {isLeadShown && describeLead(days, isHidden, leadShortfalls)}
       {getBody()}
       {movedNotes
         .filter((note) => !(note.isOneCarried && isCarrySaid))
@@ -433,33 +466,16 @@ function EffectPreview({
             {note.text}
           </InlineNotice>
         ))}
-      {holdsText &&
-        !(isCompact && holdsText.isSame) &&
-        holdsText.blocks
-          .filter(
-            (block) => describeLead === undefined || block.tone === 'warning',
-          )
-          .map((block) =>
-            isHidden && block.tone === 'warning' ? (
-              <NeedsALookRow key={block.text} />
-            ) : (
-              <InlineNotice key={block.text} tone={block.tone}>
-                {block.figure === null ? (
-                  block.text
-                ) : (
-                  <>
-                    {block.text.slice(0, block.text.indexOf(block.figure))}
-                    <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
-                      {block.figure}
-                    </strong>
-                    {block.text.slice(
-                      block.text.indexOf(block.figure) + block.figure.length,
-                    )}
-                  </>
-                )}
-              </InlineNotice>
-            ),
-          )}
+      {!isLeadShown &&
+        shownBlocks.map((block) =>
+          isHidden && block.tone === 'warning' ? (
+            <NeedsALookRow key={block.text} />
+          ) : (
+            <InlineNotice key={block.text} tone={block.tone}>
+              {renderFigure(block)}
+            </InlineNotice>
+          ),
+        )}
     </ActionSection>
   );
 }

@@ -665,16 +665,16 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   };
 
   const renderSlot = (unit: Extract<Unit, { kind: 'slot' }>) => (
-    <li key={unitKey(unit)} className='px-3 py-1'>
+    <li key={unitKey(unit)} className='scroll-mt-28 px-3 py-1'>
       <Button
         type='button'
         variant='tertiary'
         size='stripped'
         aria-label={unit.label}
-        className="text-muted-foreground! relative flex h-5 w-full items-center justify-center rounded-md border border-dashed text-xs before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+        className="text-muted-foreground! relative flex h-auto min-h-5 w-full items-center justify-center rounded-md border border-dashed px-2 py-0.5 text-center text-xs before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
         onClick={() => placeLifted(unit.tier, unit.gap)}
       >
-        <span className='min-w-0 truncate'>{unit.label}</span>
+        <span className='min-w-0'>{unit.label}</span>
       </Button>
     </li>
   );
@@ -970,7 +970,11 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     );
   };
 
-  const describeLead = (days: readonly PreviewDay[], isHiddenNow: boolean) => {
+  const describeLead = (
+    days: readonly PreviewDay[],
+    isHiddenNow: boolean,
+    shortfalls: readonly ReactNode[],
+  ) => {
     const reading = readMove(
       days,
       movedIds,
@@ -978,16 +982,27 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       isHiddenNow,
     );
     const Take = isHiddenNow ? 'p' : TakeNotice;
+    const getTakesText = (r: typeof reading) =>
+      r.moreTaken > 0
+        ? `${r.takes}. ${PRIORITIES_WORDS.othersGetLess(r.moreTaken)}`
+        : r.takes;
     return (
       <div className='space-y-2 text-sm'>
-        {reading.gain !== null && <p className='font-medium'>{reading.gain}</p>}
-        {reading.takes !== null && (
-          <Take>
-            {reading.moreTaken > 0
-              ? `${reading.takes}. ${PRIORITIES_WORDS.othersGetLess(reading.moreTaken)}`
-              : reading.takes}
-          </Take>
+        {shortfalls.length > 0 ? (
+          <TakeNotice>
+            {shortfalls.map((shortfall, at) => (
+              <span key={at} className='block'>
+                {shortfall}
+              </span>
+            ))}
+            {reading.takes !== null && (
+              <span className='mt-1 block'>{getTakesText(reading)}</span>
+            )}
+          </TakeNotice>
+        ) : (
+          reading.takes !== null && <Take>{getTakesText(reading)}</Take>
         )}
+        {reading.gain !== null && <p className='font-medium'>{reading.gain}</p>}
         {reading.soonestSame !== null && (
           <p className='text-muted-foreground'>{reading.soonestSame}</p>
         )}
