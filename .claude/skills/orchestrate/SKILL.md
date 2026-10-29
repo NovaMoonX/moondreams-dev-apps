@@ -71,7 +71,7 @@ A docs-only or comment-only change needs no review agents; `validator` is enough
 
 ## The PR status comment
 
-Each PR you drive has one comment that starts with `<!-- pr-status -->`, which you rewrite in place (never a new comment) after every push, review round and decision. `owner-inbox.yml` rebuilds the pinned "📥 Owner inbox" issue from these comments, grouped by the `session` marker, so the shape below is a contract: an owner decision is an unchecked `- [ ]` line ending `(who: owner)` (the inbox counts those as 🚩), notes go under **Good to know** and images under **New screenshots** (`scripts/ownerInbox/inbox.ts` parses them; `check:owner-inbox`). The PR body's first line under the `Resolves` lines links to it: `📋 Status: <one line>`. Its shape:
+Each PR you drive has one comment that starts with `<!-- pr-status -->`, which you rewrite in place (never a new comment) after every push, review round and decision. `owner-inbox.yml` rebuilds the pinned "📥 Owner inbox" issue from these comments, grouped by the `session` marker, so the shape below is a contract: an owner decision is an unchecked `- [ ]` line carrying `(who: owner)` (the inbox counts those as 🚩), written as a question a person can answer from the inbox alone, with each option's screenshot on a line indented under it (the inbox shows them beside the question; owner: "I'd like to see the question and then the screen that's in question"), notes go under **Good to know** and images under **New screenshots** (`scripts/ownerInbox/inbox.ts` parses them; `check:owner-inbox`). The PR body's first line under the `Resolves` lines links to it: `📋 Status: <one line>`. Its shape:
 
 ```markdown
 <!-- pr-status -->
@@ -84,6 +84,9 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 
 **Should do**
 - [ ] <optional findings carried, a follow-up worth doing in this PR>
+- [ ] <a decision, asked as a question with its options: "History's header: A, B or C?"> (who: owner)
+  - A, <what it is>: <screenshot URL>
+  - B, <what it is>: <screenshot URL>
 
 **Next moves**
 - <what you would do next, or suggest the owner does: a decision to make, a device to try it on, the next issue>

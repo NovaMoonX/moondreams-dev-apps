@@ -41,7 +41,7 @@ assert.equal(parsed.sessionUrl, 'https://claude.ai/code/session_s1');
 assert.equal(parsed.sessionTitle, 'Runway cards');
 assert.equal(parsed.state, 'ready when you are');
 assert.deepEqual(
-  parsed.ownerItems,
+  parsed.ownerItems.map((item) => item.text),
   ['Merge #1 first.', 'Decide where Back sits, see the screenshots'],
   'only unchecked owner items, without their (who:) tag, text after it kept',
 );
@@ -54,6 +54,42 @@ const legacy = parseStatus(
 );
 assert.equal(legacy.sessionUrl, null, 'a status with no session marker');
 assert.deepEqual(legacy.ownerItems, []);
+const asked = parseStatus(
+  `**Should do**
+- [ ] Keep the quiet card line, or make it a box? (who: owner)
+  - Now: https://x.test/a.png
+  - Box: https://x.test/b.png
+- [ ] A plain step. (who: owner)
+- https://x.test/not-mine.png
+`,
+  '',
+);
+assert.deepEqual(
+  asked.ownerItems.map((item) => item.images),
+  [['https://x.test/a.png', 'https://x.test/b.png'], []],
+  'a question carries the screenshots indented under it, and only those',
+);
+assert.match(
+  buildInbox(
+    [
+      {
+        number: 9,
+        title: 'T',
+        url: 'https://github.com/o/r/pull/9',
+        head: 'h',
+        base: 'main',
+        isDraft: true,
+        labels: [],
+        ci: 'green',
+        bodySessionUrl: null,
+        status: { ...asked, sessionUrl: 'https://claude.ai/code/session_q' },
+      },
+    ],
+    '2026-10-29T17:00:00Z',
+  ),
+  /make it a box\?\n {2}<br><a href="https:\/\/x.test\/a.png"><img src="https:\/\/x.test\/a.png" width="160">/,
+  'the screenshots sit right under the question in the inbox',
+);
 
 const pr = (
   number: number,
@@ -195,7 +231,7 @@ assert.equal(
   'only a Claude session link is a session',
 );
 assert.equal(
-  unsafe.ownerItems[0],
+  unsafe.ownerItems[0].text,
   'Ask @\u200bsomeone about &lt;details&gt;',
   'no HTML and no mention that pings on every rebuild',
 );
@@ -206,7 +242,7 @@ assert.deepEqual(
 - [ ] Not mine (who: you; the owner decides later)
 `,
     '',
-  ).ownerItems,
+  ).ownerItems.map((item) => item.text),
   ['Mine'],
   'owner must be one of the names after who:',
 );

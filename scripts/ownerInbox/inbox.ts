@@ -42,12 +42,21 @@ export function summarizeCi(runs: readonly CheckRun[]): CiState {
   return latest.some((run) => run.status !== 'completed') ? 'running' : 'green';
 }
 
+export interface OwnerItem {
+  /** The question or step, in the person's words. */
+  text: string;
+  /** Screenshots on the lines indented under it, so the question and the screen it is about sit together. */
+  images: string[];
+}
+
+const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;
+
 export interface PrStatus {
   sessionUrl: string | null;
   sessionTitle: string | null;
   /** The word after "Status ·" in the heading: ready to merge, blocked, in progress. */
   state: string | null;
-  ownerItems: string[];
+  ownerItems: OwnerItem[];
   goodToKnow: string[];
   screenshots: string[];
   updatedAt: string;
@@ -120,15 +129,25 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     : null;
   const heading = lines(body).find((line) => /^##\s+📋\s*Status/.test(line));
   const state = toPlain(heading?.split('·')[1]?.trim() ?? '') || null;
-  const ownerItems = lines(body)
-    .filter((line) => isOpenBox(line) && isForOwner(line))
-    .map(bullet);
+  const all = lines(body);
+  const ownerItems = all.flatMap((line, index): OwnerItem[] => {
+    if (!isOpenBox(line) || !isForOwner(line)) return [];
+    const depth = line.search(/\S/);
+    const after = all.slice(index + 1);
+    const end = after.findIndex(
+      (next) => next.trim() === '' || next.search(/\S/) <= depth,
+    );
+    const nested = end === -1 ? after : after.slice(0, end);
+    return [
+      { text: bullet(line), images: nested.join(' ').match(IMAGE_URL) ?? [] },
+    ];
+  });
   const goodToKnow = section(body, 'Good to know')
     .filter((line) => /^\s*[-*]\s+/.test(line))
     .map(bullet);
   const screenshots = section(body, 'New screenshots')
     .join(' ')
-    .match(/https:\/\/[^\s)"'<>`]+/g);
+    .match(IMAGE_URL);
   return {
     sessionUrl,
     sessionTitle,
@@ -269,9 +288,19 @@ const stackTree = (session: Session, all: readonly InboxPr[]): string[] => {
 
 const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
   const needs = session.prs.flatMap((pr) =>
-    (pr.status?.ownerItems ?? []).map(
-      (item) => `- [#${pr.number}](${pr.url}) ${item}`,
-    ),
+    (pr.status?.ownerItems ?? []).flatMap((item) => [
+      `- [#${pr.number}](${pr.url}) ${item.text}`,
+      ...(item.images.length > 0
+        ? [
+            `  <br>${item.images
+              .slice(0, MAX_SHOTS)
+              .map(
+                (src) => `<a href="${src}"><img src="${src}" width="160"></a>`,
+              )
+              .join(' ')}`,
+          ]
+        : []),
+    ]),
   );
   const allShots = session.prs.flatMap((pr) =>
     (pr.status?.screenshots ?? []).map(
