@@ -3,7 +3,7 @@
 How work moves from an idea to a merged PR, who does each step, on which model, and when a step is skipped. Each step has one owner file; everything else points at it.
 
 ```
-idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate ─▶ pr-wrap-up ─▶ status comment ─▶ owner merges
+idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate ─▶ pr-wrap-up ─▶ status comment ─▶ owner merges (or hands the merges over: orchestrate "Merging a run's PRs")
          (3 planners         (implementer,          (Stop hook:  (screenshots,
           in parallel)        validator)             what this    regression,
                                                      push needs)  sized review)

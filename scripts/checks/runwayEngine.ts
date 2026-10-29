@@ -126,6 +126,11 @@ import {
 } from '../../src/apps/runway/engine/priorities.ts';
 import { getVersionStretches } from '../../src/apps/runway/engine/resolve.ts';
 import {
+  getDayKeyMonth,
+  getHistoryRange,
+  listHistoryMonths,
+} from '../../src/apps/runway/utils/historyWindow.ts';
+import {
   findReturning,
   getStretchEnd,
 } from '../../src/apps/runway/engine/stretch.ts';
@@ -6481,6 +6486,32 @@ const version = (
     '2026-02',
   ]);
   assert.deepEqual(listMonths('2026-02', '2026-01'), []);
+  assert.deepEqual(
+    getHistoryRange('2026-05', utc(2026, 7, 1)),
+    {
+      from: utc(2026, 5, 1),
+      to: utc(2026, 6, 1),
+      key: `${utc(2026, 5, 1)}:${utc(2026, 6, 1)}`,
+    },
+    'an earlier month is read whole',
+  );
+  assert.equal(
+    getHistoryRange('2026-06', utc(2026, 6, 10)).to,
+    utc(2026, 6, 10),
+    'the month the recent window starts in stops where it begins',
+  );
+  assert.deepEqual(
+    listHistoryMonths(utc(2026, 3, 20), utc(2026, 6, 10)),
+    ['2026-06', '2026-05', '2026-04', '2026-03'],
+    'every month from the start to the recent window, newest first',
+  );
+  assert.deepEqual(listHistoryMonths(null, utc(2026, 6, 10)), []);
+  assert.equal(
+    getDayKeyMonth('seed-income-paycheck_20260920'),
+    '2026-09',
+    'a link to an older day names the month to read',
+  );
+  assert.equal(getDayKeyMonth('not-a-day'), null);
   assert.equal(getMonthStart('2026-02'), utc(2026, 2, 1));
   assert.equal(
     getLastClosableMonth(utc(2026, 11, 15)),
