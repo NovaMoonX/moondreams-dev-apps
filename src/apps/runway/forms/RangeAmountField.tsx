@@ -94,22 +94,36 @@ function RangeAmountField({
       );
     }
     return (
-      <span className='inline-flex items-center gap-1'>
-        {`The plan uses ${RANGE_END_WORDS[getRangeEnd(stance, side)]}.`}
-        <HelpTip title={FORM_FLOW_WORDS.endHelpTitle}>
-          {FORM_FLOW_WORDS.endHelp(RANGE_END_WORDS[getRangeEnd(stance, side)])}
-        </HelpTip>
+      <span>
+        {`The plan uses `}
+        <span className='whitespace-nowrap'>
+          {`${RANGE_END_WORDS[getRangeEnd(stance, side)]}.`}
+          <span className='ml-1 inline-flex align-middle'>
+            <HelpTip title={FORM_FLOW_WORDS.endHelpTitle}>
+              {FORM_FLOW_WORDS.endHelp(
+                RANGE_END_WORDS[getRangeEnd(stance, side)],
+              )}
+            </HelpTip>
+          </span>
+        </span>
       </span>
     );
   };
 
   const stancePills = (
     <div className='space-y-1.5'>
-      <p className='text-muted-foreground flex items-center gap-1 text-xs'>
-        {FORM_FLOW_WORDS.endQuestion}
-        <HelpTip title={FORM_FLOW_WORDS.endHelpTitle}>
-          {FORM_FLOW_WORDS.endHelp(RANGE_END_WORDS[getRangeEnd(stance, side)])}
-        </HelpTip>
+      <p className='text-muted-foreground text-xs'>
+        {FORM_FLOW_WORDS.endQuestion.split(' ').slice(0, -1).join(' ')}{' '}
+        <span className='whitespace-nowrap'>
+          {FORM_FLOW_WORDS.endQuestion.split(' ').slice(-1)}
+          <span className='ml-1 inline-flex align-middle'>
+            <HelpTip title={FORM_FLOW_WORDS.endHelpTitle}>
+              {FORM_FLOW_WORDS.endHelp(
+                RANGE_END_WORDS[getRangeEnd(stance, side)],
+              )}
+            </HelpTip>
+          </span>
+        </span>
       </p>
       <PillGroup
         label={FORM_FLOW_WORDS.endQuestion}

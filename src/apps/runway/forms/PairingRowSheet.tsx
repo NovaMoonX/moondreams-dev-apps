@@ -175,12 +175,17 @@ function PairingRowSheet({
     if (view === 'topUp') {
       return (
         <div className='space-y-4'>
-          <h3 className='flex items-center gap-1 text-2xl font-semibold'>
-            If the money runs short?
-            <HelpTip title='Running short'>
-              Held means a Must or Should waits until you choose what to do.
-              Topping up takes the difference from the rest of the pay.
-            </HelpTip>
+          <h3 className='text-2xl font-semibold'>
+            If the money{' '}
+            <span className='whitespace-nowrap'>
+              runs short?
+              <span className='ml-1 inline-flex align-middle'>
+                <HelpTip title='Running short'>
+                  Held means a Must or Should waits until you choose what to do.
+                  Topping up takes the difference from the rest of the pay.
+                </HelpTip>
+              </span>
+            </span>
           </h3>
           <PillGroup
             label='If the money runs short'
@@ -232,7 +237,10 @@ function PairingRowSheet({
         note={view === 'main' && problem ? problem : null}
         leftActions={
           isNew ? undefined : (
-            <DeleteIconButton onClick={onRemove} label='Stop paying this first' />
+            <DeleteIconButton
+              onClick={onRemove}
+              label='Stop paying this first'
+            />
           )
         }
         rightActions={

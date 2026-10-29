@@ -304,6 +304,13 @@ export const DAY_STATUS_LABELS = {
   overdue: 'Waiting to be confirmed',
 } as const;
 
+/** A confirmed day is a record of what happened, so a line that got less than planned reads as a past fact. */
+export const RECORD_WORDS = {
+  short: (amount: string) => `Was ${amount} short`,
+  shortHidden: 'Got less than planned',
+  shortHeading: 'Got less than planned',
+} as const;
+
 export const CONFIRM_WORDS = {
   hiddenAmountDiffered:
     'The amount that arrived differed from what was expected.',
@@ -1127,8 +1134,11 @@ export const DAYS_WORDS = {
   failedMonth: 'These income days did not load. Nothing was changed.',
   emptyMonth: 'No income was confirmed in this month.',
   noMatch: 'No income day matches that.',
-  readOnlyNote:
-    'A finished month stays as it was. Correct a recent pay to fix a balance.',
+  readOnlyNote: (boundary: string | null) =>
+    boundary === null
+      ? "Pays in earlier months can't be changed. To fix a balance, correct a recent pay."
+      : `Pays before ${boundary} can't be changed. To fix a balance, correct a pay from ${boundary} on.`,
+  goToRecent: 'Go to recent days',
 } as const;
 
 export const PLAN_VIEW_EMOJI = {

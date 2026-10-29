@@ -51,7 +51,10 @@ export function HoldsThroughLine({ lookahead, help }: HoldsThroughLineProps) {
     );
   }
   if (lookahead.holdsThrough === null) return null;
-  const headline = `${ITEM_SHEET_R2_WORDS.holdsThrough} ${formatDateShortUTC(lookahead.holdsThrough).replace(/ /g, '\u00a0')}`;
+  const date = formatDateShortUTC(lookahead.holdsThrough).replace(
+    / /g,
+    '\u00a0',
+  );
   const isClear = lookahead.problems.length === 0;
   return (
     <div className='flex min-h-10 items-center gap-1'>
@@ -61,8 +64,15 @@ export function HoldsThroughLine({ lookahead, help }: HoldsThroughLineProps) {
           aria-hidden='true'
         />
       )}
-      <p className='text-sm font-medium'>{headline}</p>
-      {help}
+      <p className='text-sm font-medium text-balance'>
+        {ITEM_SHEET_R2_WORDS.holdsThrough}{' '}
+        <span className='whitespace-nowrap'>
+          {date}
+          {help && (
+            <span className='ml-1 inline-flex align-middle'>{help}</span>
+          )}
+        </span>
+      </p>
     </div>
   );
 }

@@ -6,10 +6,9 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import {
   CONFIRM_WORDS,
-  CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
-  NEEDS_LOOK_WORDS,
   PRIORITY_LABELS,
+  RECORD_WORDS,
 } from '@apps/runway/constants';
 import type { RecordLine } from '@apps/runway/types';
 
@@ -31,8 +30,8 @@ function RecordLineRow({ line, plannedCents, note }: RecordLineRowProps) {
     line.shortBy <= 0
       ? null
       : isHidden
-        ? NEEDS_LOOK_WORDS.short
-        : CHECKLIST_R3_WORDS.short(formatCents(line.shortBy));
+        ? RECORD_WORDS.shortHidden
+        : RECORD_WORDS.short(formatCents(line.shortBy));
 
   if (isChanged) {
     return (
