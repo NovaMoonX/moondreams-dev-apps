@@ -13,7 +13,11 @@ import { CARD_WORDS } from '@apps/runway/constants';
 import CardForm from '@apps/runway/forms/CardForm';
 import PayCardSheet from '@apps/runway/forms/PayCardSheet';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectAllCards,
+  selectIsMovesLoaded,
+  selectIsRecordsReady,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName } from '@apps/runway/utils/cardText';
 
 type Open = { cardId: string; view: 'menu' | 'pay' | 'change' };
@@ -21,6 +25,9 @@ type Open = { cardId: string; view: 'menu' | 'pay' | 'change' };
 function CardsScreen() {
   const allCards = useAppSelector(selectAllCards);
   const balances = useAppSelector(selectBalances);
+  const isLedgerReady = useAppSelector(
+    (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
+  );
   const [formKey, setFormKey] = useState<number | null>(null);
   const [open, setOpen] = useState<Open | null>(null);
 
@@ -34,7 +41,11 @@ function CardsScreen() {
   return (
     <div className='space-y-4'>
       <SectionHeader title={CARD_WORDS.sectionTitle} />
-      {cards.length === 0 ? (
+      {!isLedgerReady ? (
+        <p className='text-muted-foreground text-sm' role='status'>
+          {CARD_WORDS.loading}
+        </p>
+      ) : cards.length === 0 ? (
         <EmptyCard icon={<CreditCard className='h-5 w-5' />}>
           {CARD_WORDS.emptyTitle}
         </EmptyCard>
@@ -47,7 +58,9 @@ function CardsScreen() {
               <ItemRow
                 key={card.id}
                 name={name}
-                leading={<ItemBadge name={card.issuer} emoji={null} />}
+                leading={
+                  <ItemBadge name={card.name ?? card.issuer} emoji={null} />
+                }
                 detail={
                   reserveCents > 0
                     ? CARD_WORDS.waiting

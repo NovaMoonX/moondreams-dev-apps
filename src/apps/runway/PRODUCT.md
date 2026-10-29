@@ -246,6 +246,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 ### Credit Cards, In Detail
 
+- **Cards are part of tracking.** Like purchases, cards appear once you track spending; at Plan they are hidden, not disabled, and a bill marked paid reads as paid in cash. Starting to track again carries what each card owes forward on "Where is your money now?", where each card's amount can be corrected.
 - **Each card is its own.** A card is named by who issues it (Chase, Capital One) and, when it has one, its own name ("Capital One Venture X"). Each keeps its own reserve: what was charged to it and not yet paid, shown as "Waiting to be paid". Plan > Cards lists them.
 - **A card purchase moves money, not the account.** The amount comes out of its envelope as any purchase does, and moves into that card's reserve, while the cash stays where it is. "Paid by" on the purchase form picks the card, starting from the one used last.
 - **A bill can be paid by a card.** A bill says which card it is usually charged to. Marking it paid moves its amount into that card's reserve instead of out of your cash.

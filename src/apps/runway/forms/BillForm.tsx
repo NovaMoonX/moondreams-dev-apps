@@ -62,6 +62,7 @@ import {
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 import { getCardName } from '@apps/runway/utils/cardText';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAllCards,
   selectBills,
@@ -272,6 +273,7 @@ function BillForm({
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const allCards = useAppSelector(selectAllCards);
+  const isTracking = useAppSelector(selectLevel) === 'track';
   const [formData, setFormData] = useState<BillFormData>(() =>
     editing || draft?.initial
       ? getEditingData((editing?.payload ?? draft?.initial) as BillSealed)
@@ -562,7 +564,7 @@ function BillForm({
         />
       ),
     },
-    ...(cardOptions.length > 0
+    ...(isTracking && cardOptions.length > 0
       ? [
           {
             id: 'paidBy',

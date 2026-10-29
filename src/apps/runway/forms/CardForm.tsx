@@ -113,7 +113,13 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
         ? ''
         : resolveIssuer(formData.otherIssuer)
       : (formData.issuerPick ?? '');
-  const name = formData.name.trim();
+  const typedName = formData.name.trim();
+  // People type the card's full name ("Capital One Venture X"); the issuer is already its first word.
+  const name =
+    issuer !== '' &&
+    typedName.toLowerCase().startsWith(`${issuer.toLowerCase()} `)
+      ? typedName.slice(issuer.length).trim()
+      : typedName;
   const hasName = name !== '';
   const owedText = formData.owed.trim();
   const owedCents = owedText === '' ? 0 : parseMoneyToCents(formData.owed);

@@ -17,6 +17,7 @@ import {
   BILL_WORDS,
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
+  CARD_WORDS,
   ITEM_SHEET_R2_WORDS,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
@@ -36,8 +37,9 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { RecordLine } from '@apps/runway/types';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
-import { getBillCardId } from '@apps/runway/utils/cardText';
+import { getBillCardId, getBillCardName } from '@apps/runway/utils/cardText';
 
 interface ChecklistBillRowProps {
   line: RecordLine;
@@ -87,10 +89,22 @@ function ChecklistBillRow({
     const isWritten = next ? await paid.mark() : await paid.undo();
     setPending(null);
     if (!isWritten) return;
+    const state = store.getState();
+    const cardName =
+      selectLevel(state) === 'track'
+        ? getBillCardName(
+            state.runway.versions,
+            state.runway.cards,
+            line.itemId,
+            payment.dueOn,
+          )
+        : null;
     addToast({
-      title: next
-        ? ITEM_SHEET_R2_WORDS.markedPaid(line.name)
-        : ITEM_SHEET_R2_WORDS.unmarkedPaid(line.name),
+      title: !next
+        ? ITEM_SHEET_R2_WORDS.unmarkedPaid(line.name)
+        : cardName === null
+          ? ITEM_SHEET_R2_WORDS.markedPaid(line.name)
+          : CARD_WORDS.markedPaidWith(line.name, cardName),
       type: 'success',
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,

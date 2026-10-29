@@ -41,6 +41,8 @@ export interface BalancesInput {
   asOf?: DateOnly;
   /** What was spent, only while tracking is on; a purchase dated before the starting point is not counted. */
   purchases?: readonly OpenPurchase[];
+  /** Cards are part of tracking: while it is off they are left out entirely, a bill charged to one reads as paid in cash, and nothing waits on a card. Counted when left out. */
+  isCountingCards?: boolean;
   /** What the ledger before the records, moves and purchases above summed to, counted from the same starting day; its spending is left out by the caller when spending is not counted. */
   closing?: ClosingState | null;
 }
@@ -197,7 +199,8 @@ export function deriveBalances(input: BalancesInput): Balances {
   const assignedToGoalsCents = sumKind('goal');
   const assignedToEnvelopesCents = sumKind('envelope');
 
-  const charged = joinCents(
+  const isCountingCards = input.isCountingCards ?? true;
+  const allCharged = joinCents(
     joinCents(base?.chargedByCard, sumChargedByCard(counted)),
     paidByBill
       .flatMap((bill) => bill.charged)
@@ -207,18 +210,20 @@ export function deriveBalances(input: BalancesInput): Balances {
         return sums;
       }, {}),
   );
-  const cardPaid = Object.fromEntries(
-    Object.entries(
-      joinCardPaid(base, collectCardPaid(input.moves)),
-    ).map(([id, list]) => [
-      id,
-      list
-        .filter((payment) => startDate !== null && payment.on >= startDate)
-        .reduce((sum, payment) => sum + payment.cents, 0),
-    ]),
+  const charged = isCountingCards ? allCharged : {};
+  const allCardPaid = Object.fromEntries(
+    Object.entries(joinCardPaid(base, collectCardPaid(input.moves))).map(
+      ([id, list]) => [
+        id,
+        list
+          .filter((payment) => startDate !== null && payment.on >= startDate)
+          .reduce((sum, payment) => sum + payment.cents, 0),
+      ],
+    ),
   );
+  const cardPaid = isCountingCards ? allCardPaid : {};
   const cardIds = new Set([
-    ...Object.keys(started.byItem).filter(isCard),
+    ...(isCountingCards ? Object.keys(started.byItem).filter(isCard) : []),
     ...Object.keys(charged),
     ...Object.keys(cardPaid),
   ]);

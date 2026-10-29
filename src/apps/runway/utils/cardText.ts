@@ -58,3 +58,15 @@ export function getBillCardId(
     ? (version.payload.paidByCardId ?? null)
     : null;
 }
+
+/** What the card a bill is charged to on a due date is called, or null when it is paid in cash. */
+export function getBillCardName(
+  versions: readonly OpenVersion[],
+  cards: readonly OpenCard[],
+  billId: string,
+  dueOn: number,
+): string | null {
+  const cardId = getBillCardId(versions, billId, dueOn);
+  const card = cards.find((entry) => entry.id === cardId);
+  return card ? getCardName(card, cards) : null;
+}

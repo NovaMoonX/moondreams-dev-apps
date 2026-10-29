@@ -626,6 +626,7 @@ export const TRACKING_WORDS = {
   envelopes: 'What each envelope holds',
   goals: 'What each goal holds',
   bills: 'Already set aside for bills',
+  cards: 'What each card owes',
   start: 'Start tracking',
   stopTitle: 'Stop tracking',
   stopMessage:
@@ -1536,5 +1537,12 @@ export const CARD_WORDS = {
   cashOrDebit: 'Cash or debit',
   willWait: (name: string, amount: string) =>
     `${name} will wait for ${amount}.`,
+  willWaitMore: (name: string, amount: string) =>
+    `${name} will wait for ${amount} more.`,
+  willWaitLess: (name: string, amount: string) =>
+    `${name} will wait for ${amount} less.`,
+  loading: 'Getting what each card waits for.',
+  markedPaidWith: (bill: string, card: string) =>
+    `Marked ${bill} paid with ${card}`,
   freeWaiting: 'Waiting on cards',
 } as const;

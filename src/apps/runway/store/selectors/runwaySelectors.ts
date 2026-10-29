@@ -351,8 +351,9 @@ export const selectBillProgress = createSelector(
     ),
 );
 
-/** The ledger the balances are summed from is read: the moves and the purchases of the window that follows the closing. */
-export const selectIsMovesLoaded = selectIsWindowLoaded;
+/** The ledger the balances are summed from is read: the moves and the purchases of the window that follows the closing, and the cards that say which starting amounts are debts. */
+export const selectIsMovesLoaded = (state: RootState) =>
+  selectIsWindowLoaded(state) && state.runway.isCardsLoaded;
 
 export const selectProposedRecord = (state: RootState, dayId: string) => {
   const result = state.runway.records.find(

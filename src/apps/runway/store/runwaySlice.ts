@@ -30,6 +30,8 @@ export interface RunwayState {
   moves: OpenMove[];
   /** Every card, archived ones too. */
   cards: OpenCard[];
+  /** The cards have been read once, so a card's figures are not mistaken for none. */
+  isCardsLoaded: boolean;
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
   /** Where the recent window began when the days, moves and purchases were read; they are the ledger since the closing only while it matches `selectHistory`. */
@@ -68,6 +70,7 @@ const initialState: RunwayState = {
   records: [],
   moves: [],
   cards: [],
+  isCardsLoaded: false,
   purchases: [],
   daysFrom: null,
   movesFrom: null,
@@ -132,6 +135,7 @@ export const runwaySlice = createSlice({
     },
     setCards: (state, action: PayloadAction<OpenCard[]>) => {
       state.cards = action.payload;
+      state.isCardsLoaded = true;
     },
     setMoves: (
       state,

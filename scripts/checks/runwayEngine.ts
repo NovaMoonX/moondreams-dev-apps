@@ -7925,14 +7925,27 @@ const version = (
     deriveBalances({ ...base, ...ledger }),
     'cards: a closing equals the replay',
   );
-  assert.equal(
+  const atPlan = (moves: OpenMove[]) =>
     deriveBalances({
       ...base,
-      moves: starts,
+      moves,
       closing: withoutSpending(closed),
-    }).reserveByCard.venture,
-    -4_000,
-    'at Plan the card purchases are left out with the rest of the spending',
+      isCountingCards: false,
+    });
+  assert.deepEqual(
+    atPlan(starts).reserveByCard,
+    {},
+    'cards are part of tracking: at Plan nothing waits on one',
+  );
+  assert.equal(
+    atPlan([...starts, payoff]).freeToSpendCents,
+    atPlan(starts).freeToSpendCents,
+    'a card payment does not move Free to spend at Plan either',
+  );
+  assert.equal(
+    deriveBalances({ ...base, isCountingCards: false }).freeToSpendCents,
+    100_000 - 10_000 - 8_000,
+    'at Plan what a card owed at the start is left out',
   );
 }
 

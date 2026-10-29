@@ -612,16 +612,25 @@ function PurchaseForm({
     }));
   const { extras } = formData;
 
-  const isCardChanged =
-    editing === undefined || cardId !== (editing.paidByCardId ?? null);
-  const cardLine =
-    cardId !== null &&
-    !isRefund &&
-    amount !== null &&
-    isCounted &&
-    isCardChanged
-      ? CARD_WORDS.willWait(nameOfCard(cardId), formatCents(amount))
-      : null;
+  const getCardLine = () => {
+    if (cardId === null || isRefund || amount === null || !isCounted) {
+      return null;
+    }
+    const savedCents =
+      isEditingCounted && editing?.paidByCardId === cardId
+        ? editing.amountCents
+        : 0;
+    const name = nameOfCard(cardId);
+    if (savedCents === 0) return CARD_WORDS.willWait(name, formatCents(amount));
+    if (amount > savedCents) {
+      return CARD_WORDS.willWaitMore(name, formatCents(amount - savedCents));
+    }
+    if (amount < savedCents) {
+      return CARD_WORDS.willWaitLess(name, formatCents(savedCents - amount));
+    }
+    return null;
+  };
+  const cardLine = getCardLine();
   const effectNote = (preview || cardLine) && (
     <PurchaseEffectNotice
       changes={preview?.changes ?? []}

@@ -67,7 +67,9 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [sheetKey, setSheetKey] = useState<number | null>(null);
-  const hasCards = useAppSelector((state) => state.runway.cards.length > 0);
+  const hasCards = useAppSelector(
+    (state) => state.runway.cards.length > 0 && selectLevel(state) === 'track',
+  );
   const figure = getFreeToSpendFigure(balances);
   const free = describeFreeToSpend(figure);
   const rows: SumRow[] = [
