@@ -43,6 +43,7 @@ import { createBill } from '@apps/runway/store/actions/itemActions';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
@@ -369,15 +370,22 @@ function BillForm({
       isAnswered: parseAmountDraft(formData.amount) !== null,
       blocker: getAmountDraftProblem(formData.amount),
       render: () => (
-        <RangeAmountField
-          isHero
-          label={FORM_FLOW_WORDS.amount}
-          hint=''
-          side='expense'
-          planStance={planStance}
-          value={formData.amount}
-          onChange={(amount) => set({ amount })}
-        />
+        <div className='space-y-2'>
+          <RangeAmountField
+            isHero
+            label={FORM_FLOW_WORDS.amount}
+            hint=''
+            side='expense'
+            planStance={planStance}
+            value={formData.amount}
+            onChange={(amount) => set({ amount })}
+          />
+          {draft?.repeatNote && (
+            <p className='text-muted-foreground text-sm text-pretty'>
+              <MaskedText>{draft.repeatNote}</MaskedText>
+            </p>
+          )}
+        </div>
       ),
     },
     {
@@ -433,7 +441,7 @@ function BillForm({
           />
           {draft?.repeatNote && (
             <p className='text-muted-foreground text-sm text-pretty'>
-              {draft.repeatNote}
+              <MaskedText>{draft.repeatNote}</MaskedText>
             </p>
           )}
         </div>

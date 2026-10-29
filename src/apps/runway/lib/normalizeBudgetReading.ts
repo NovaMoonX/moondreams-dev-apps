@@ -1,5 +1,4 @@
 import { formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
 import { createOptionMatcher, toDisplayCase } from '@/utils/optionMatchUtils';
 import {
   BILL_FREQUENCIES,
@@ -16,22 +15,28 @@ export type BudgetIncomeKind = (typeof INCOME_FREQUENCIES)[number];
 export type BudgetBillRepeat = (typeof BILL_FREQUENCIES)[number];
 export type BudgetEnvelopePeriod = (typeof CALENDAR_PERIODS)[number] | 'perPay';
 
-interface BudgetItem {
+/** What one document said about an item, kept when another document said something different. */
+export interface BudgetVersion<V> {
+  sourceFile: string;
+  values: V;
+}
+
+interface BudgetItem<V> {
   name: string;
   /** The document the item was first read in. */
   sourceFile: string;
-  /** What the person should know about it: the same item read differently in another document. */
-  notes: string[];
+  /** Empty, or what each document said when they disagree: the person picks one. */
+  versions: BudgetVersion<V>[];
 }
 
-export interface BudgetIncome extends BudgetItem {
+export interface IncomeValues {
   amountCents: number | null;
   scheduleKind: BudgetIncomeKind | null;
   nextOn: number | null;
   monthDays: number[];
 }
 
-export interface BudgetBill extends BudgetItem {
+export interface BillValues {
   /** The amount, or the low end of a written range. */
   amountCents: number | null;
   /** The top of a written range; null for an exact amount. */
@@ -39,20 +44,30 @@ export interface BudgetBill extends BudgetItem {
   dueOn: number | null;
   dayOfMonth: number | null;
   repeats: BudgetBillRepeat | null;
-  /** The cadence the document wrote when Runway has no repeat for it ("yearly"); the amount is left out then, since it was for that cadence. */
+  /** The cadence the document wrote when Runway has no repeat for it ("yearly"); the amount is kept apart then, since it was for that cadence. */
   writtenCadence: string | null;
+  /** The amount the document wrote for that cadence. */
+  writtenCents: number | null;
+  /** How many months that cadence spans; null when it is not a whole number of them. */
+  writtenMonths: number | null;
 }
 
-export interface BudgetEnvelope extends BudgetItem {
+export interface EnvelopeValues {
   amountCents: number | null;
   period: BudgetEnvelopePeriod | null;
 }
 
-export interface BudgetGoal extends BudgetItem {
+export interface GoalValues {
   targetCents: number | null;
   currentCents: number | null;
   targetDate: number | null;
 }
+
+export interface BudgetIncome extends BudgetItem<IncomeValues>, IncomeValues {}
+export interface BudgetBill extends BudgetItem<BillValues>, BillValues {}
+export interface BudgetEnvelope
+  extends BudgetItem<EnvelopeValues>, EnvelopeValues {}
+export interface BudgetGoal extends BudgetItem<GoalValues>, GoalValues {}
 
 export interface BudgetNotRead {
   file: string;
@@ -165,10 +180,10 @@ const toSourceFile = (raw: unknown, fileNames: readonly string[]) => {
 
 type ToFile = (raw: unknown) => string;
 
-const toBase = (raw: Raw, toFile: ToFile): BudgetItem => ({
+const toBase = (raw: Raw, toFile: ToFile) => ({
   name: toName(raw.name),
   sourceFile: toFile(raw.sourceFile),
-  notes: [],
+  versions: [],
 });
 
 const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => ({
@@ -196,6 +211,30 @@ const OTHER_CADENCE =
 const getOtherCadence = (raw: Raw) => {
   const written = asText(raw.writtenCadence);
   return OTHER_CADENCE.test(written) ? written.toLowerCase() : null;
+};
+
+const NUMBER_WORDS: Record<string, number> = {
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  nine: 9,
+  twelve: 12,
+};
+
+/** How many months a written cadence spans ("quarterly" is 3), or null when it is not a whole number of them. */
+const getCadenceMonths = (words: string) => {
+  const every = /every\s+(\d+|[a-z]+)\s+(month|year)s?/.exec(words);
+  if (every) {
+    const count = Number(every[1]) || NUMBER_WORDS[every[1]] || 0;
+    return count > 0 ? count * (every[2] === 'year' ? 12 : 1) : null;
+  }
+  if (/semi|half-?year/.test(words)) return 6;
+  if (/quarter/.test(words)) return 3;
+  if (/bi-?monthly/.test(words)) return 2;
+  if (/year|annual/.test(words)) return 12;
+  return null;
 };
 
 /** A bill's repeat as the document wrote it: only a monthly cadence, or none written at all, lets a day of the month stand for "monthly". */
@@ -232,6 +271,8 @@ const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
     dueOn: toDate(raw.dueOn),
     ...toRepeat(raw),
     writtenCadence,
+    writtenCents: isKept ? null : (toCents(raw.amountCents) ?? low ?? high),
+    writtenMonths: isKept ? null : getCadenceMonths(writtenCadence),
   };
 };
 
@@ -259,13 +300,52 @@ const matcher = createOptionMatcher<{ name: string }>({
 
 const orElse = <V>(first: V | null, second: V | null) => first ?? second;
 
-/** Adds `incoming` to `kept` item by item, keeping the first ones when the cap is reached and returning the ones left out. The same name in another document is one item: the first document's values stay, a value only the other has is filled in, and a different amount becomes a note on the kept item. */
-function mergeItems<T extends BudgetItem>(
+/** Whether two documents gave different values for the same thing: only a value both have can disagree, a value only one has fills the other. */
+const isDifferent = <V>(first: V | null, second: V | null) =>
+  first !== null && second !== null && first !== second;
+
+const getDueDay = (bill: BillValues) =>
+  bill.dayOfMonth ??
+  (bill.dueOn === null ? null : new Date(bill.dueOn).getUTCDate());
+
+const incomeDiffers = (a: IncomeValues, b: IncomeValues) =>
+  isDifferent(a.amountCents, b.amountCents) ||
+  isDifferent(a.scheduleKind, b.scheduleKind) ||
+  isDifferent(a.nextOn, b.nextOn) ||
+  (a.monthDays.length > 0 &&
+    b.monthDays.length > 0 &&
+    a.monthDays.join() !== b.monthDays.join());
+
+const billDiffers = (a: BillValues, b: BillValues) =>
+  isDifferent(a.amountCents, b.amountCents) ||
+  isDifferent(a.highCents, b.highCents) ||
+  isDifferent(a.repeats, b.repeats) ||
+  (a.dueOn !== null && b.dueOn !== null
+    ? a.dueOn !== b.dueOn
+    : isDifferent(getDueDay(a), getDueDay(b)));
+
+const envelopeDiffers = (a: EnvelopeValues, b: EnvelopeValues) =>
+  isDifferent(a.amountCents, b.amountCents) || isDifferent(a.period, b.period);
+
+const goalDiffers = (a: GoalValues, b: GoalValues) =>
+  isDifferent(a.targetCents, b.targetCents) ||
+  isDifferent(a.currentCents, b.currentCents) ||
+  isDifferent(a.targetDate, b.targetDate);
+
+interface MergeKind<T extends BudgetItem<V>, V> {
+  /** The values a document gave, without the name and file. */
+  pick: (item: T) => V;
+  isDifferent: (first: V, second: V) => boolean;
+  /** The kept item with what only the other one has filled in. */
+  fill: (kept: T, other: T) => T;
+  cap: number;
+}
+
+/** Adds `incoming` to `kept` item by item, keeping the first ones when the cap is reached and returning the ones left out. The same name in another document is one item: the first document's values stay and a value only the other has is filled in. When the documents give different values for it, each document's version is kept for the person to choose between. */
+function mergeItems<T extends BudgetItem<V>, V>(
   kept: T[],
   incoming: T[],
-  getAmount: (item: T) => number | null,
-  fill: (kept: T, other: T) => T,
-  cap: number,
+  { pick, isDifferent: differs, fill, cap }: MergeKind<T, V>,
 ): { items: T[]; dropped: T[] } {
   const dropped: T[] = [];
   const items = incoming.reduce<T[]>((list, item) => {
@@ -278,18 +358,21 @@ function mergeItems<T extends BudgetItem>(
       dropped.push(item);
       return list;
     }
-    const mine = getAmount(twin);
-    const theirs = getAmount(item);
-    const note =
-      mine !== null && theirs !== null && mine !== theirs
-        ? BUDGET_WORDS.alsoIn(item.sourceFile, formatCents(theirs))
-        : null;
-    const merged = fill(twin, item);
-    const notes =
-      note === null || merged.notes.includes(note)
-        ? merged.notes
-        : [...merged.notes, note];
-    return list.map((entry) => (entry === twin ? { ...merged, notes } : entry));
+    const theirs = pick(item);
+    const versions =
+      twin.versions.length > 0
+        ? twin.versions.some((version) => !differs(version.values, theirs))
+          ? twin.versions
+          : [...twin.versions, { sourceFile: item.sourceFile, values: theirs }]
+        : differs(pick(twin), theirs)
+          ? [
+              { sourceFile: twin.sourceFile, values: pick(twin) },
+              { sourceFile: item.sourceFile, values: theirs },
+            ]
+          : [];
+    return list.map((entry) =>
+      entry === twin ? { ...fill(twin, item), versions } : entry,
+    );
   }, kept);
   return { items, dropped };
 }
@@ -319,66 +402,101 @@ export function normalizeBudgetReading(
     const sent = toSourceFile(value, fileNames);
     return shownAs[sent] ?? sent;
   };
-  const named = <T extends BudgetItem>(items: T[]) =>
+  const named = <T extends { name: string }>(items: T[]) =>
     items.filter((item) => item.name !== '');
 
   const incomes = mergeItems(
     existing.incomes,
     named(asRecords(raw.incomes).map((entry) => toIncome(entry, toFile))),
-    (item) => item.amountCents,
-    (kept, other) => ({
-      ...kept,
-      amountCents: orElse(kept.amountCents, other.amountCents),
-      scheduleKind: orElse(kept.scheduleKind, other.scheduleKind),
-      nextOn: orElse(kept.nextOn, other.nextOn),
-      monthDays: kept.monthDays.length > 0 ? kept.monthDays : other.monthDays,
-    }),
-    BUDGET_LIMITS.items.incomes,
+    {
+      pick: ({ amountCents, scheduleKind, nextOn, monthDays }) => ({
+        amountCents,
+        scheduleKind,
+        nextOn,
+        monthDays,
+      }),
+      isDifferent: incomeDiffers,
+      fill: (kept, other) => ({
+        ...kept,
+        amountCents: orElse(kept.amountCents, other.amountCents),
+        scheduleKind: orElse(kept.scheduleKind, other.scheduleKind),
+        nextOn: orElse(kept.nextOn, other.nextOn),
+        monthDays: kept.monthDays.length > 0 ? kept.monthDays : other.monthDays,
+      }),
+      cap: BUDGET_LIMITS.items.incomes,
+    },
   );
   const bills = mergeItems(
     existing.bills,
     named(asRecords(raw.bills).map((entry) => toBill(entry, toFile))),
-    (item) => item.amountCents,
-    (kept, other) =>
-      kept.writtenCadence !== null
-        ? kept
-        : {
-            ...kept,
-            ...(kept.amountCents === null
-              ? { amountCents: other.amountCents, highCents: other.highCents }
-              : {}),
-            dueOn: orElse(kept.dueOn, other.dueOn),
-            dayOfMonth: orElse(kept.dayOfMonth, other.dayOfMonth),
-            repeats: orElse(kept.repeats, other.repeats),
-          },
-    BUDGET_LIMITS.items.bills,
+    {
+      pick: ({
+        amountCents,
+        highCents,
+        dueOn,
+        dayOfMonth,
+        repeats,
+        writtenCadence,
+        writtenCents,
+        writtenMonths,
+      }) => ({
+        amountCents,
+        highCents,
+        dueOn,
+        dayOfMonth,
+        repeats,
+        writtenCadence,
+        writtenCents,
+        writtenMonths,
+      }),
+      isDifferent: billDiffers,
+      fill: (kept, other) =>
+        kept.writtenCadence !== null
+          ? kept
+          : {
+              ...kept,
+              ...(kept.amountCents === null
+                ? { amountCents: other.amountCents, highCents: other.highCents }
+                : {}),
+              dueOn: orElse(kept.dueOn, other.dueOn),
+              dayOfMonth: orElse(kept.dayOfMonth, other.dayOfMonth),
+              repeats: orElse(kept.repeats, other.repeats),
+            },
+      cap: BUDGET_LIMITS.items.bills,
+    },
   );
   const envelopes = mergeItems(
     existing.envelopes,
     named(asRecords(raw.envelopes).map((entry) => toEnvelope(entry, toFile))),
-    (item) => item.amountCents,
-    (kept, other) => ({
-      ...kept,
-      amountCents: orElse(kept.amountCents, other.amountCents),
-      period: orElse(kept.period, other.period),
-    }),
-    BUDGET_LIMITS.items.envelopes,
+    {
+      pick: ({ amountCents, period }) => ({ amountCents, period }),
+      isDifferent: envelopeDiffers,
+      fill: (kept, other) => ({
+        ...kept,
+        amountCents: orElse(kept.amountCents, other.amountCents),
+        period: orElse(kept.period, other.period),
+      }),
+      cap: BUDGET_LIMITS.items.envelopes,
+    },
   );
   const incomingGoals = named(
     asRecords(raw.goals).map((entry) => toGoal(entry, toFile)),
   );
-  const goals = mergeItems(
-    existing.goals,
-    incomingGoals,
-    (item) => item.targetCents,
-    (kept, other) => ({
+  const goals = mergeItems(existing.goals, incomingGoals, {
+    pick: ({ targetCents, currentCents, targetDate }) => ({
+      targetCents,
+      currentCents,
+      targetDate,
+    }),
+    isDifferent: goalDiffers,
+    fill: (kept, other) => ({
       ...kept,
       targetCents: orElse(kept.targetCents, other.targetCents),
       currentCents: orElse(kept.currentCents, other.currentCents),
       targetDate: orElse(kept.targetDate, other.targetDate),
     }),
-    BUDGET_LIMITS.items.goals,
-  );
+    cap: BUDGET_LIMITS.items.goals,
+  });
 
   const cutLines = Object.entries({
     incomes,
@@ -415,25 +533,9 @@ export function normalizeBudgetReading(
         ]
       : [],
   );
-  const cadenceLines = asRecords(raw.bills).flatMap((entry) => {
-    const cadence = getOtherCadence(entry);
-    const name = toName(entry.name);
-    return cadence === null || name === ''
-      ? []
-      : [
-          {
-            file: toFile(entry.sourceFile),
-            text: cutAtWord(
-              BUDGET_WORDS.cadenceNotPlanned(name, cadence),
-              BUDGET_LIMITS.notReadChars,
-            ),
-          },
-        ];
-  });
   const notRead = [
     ...existing.notRead,
     ...cutLines,
-    ...cadenceLines,
     ...farGoals,
     ...extraNotRead,
     ...asRecords(raw.notRead).flatMap((entry) => {

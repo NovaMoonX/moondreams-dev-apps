@@ -8,10 +8,15 @@ import {
   DAY_MS,
 } from '@apps/runway/engine/dates';
 import type {
+  BillValues,
   BudgetBill,
   BudgetEnvelope,
   BudgetGoal,
   BudgetIncome,
+  BudgetVersion,
+  EnvelopeValues,
+  GoalValues,
+  IncomeValues,
 } from '@apps/runway/lib/normalizeBudgetReading';
 import type { CreateIncomeInput } from '@apps/runway/store/actions/itemActions';
 import type {
@@ -183,6 +188,79 @@ export function toGoalValue(item: BudgetGoal, today: number): GoalSealed {
     state: 'active',
   };
 }
+
+/** Values that move together: choosing a version replaces every key of a group that the version has any value for, so a day of the month never ends up beside another file's date. */
+const INCOME_GROUPS: (keyof IncomeValues)[][] = [
+  ['amountCents'],
+  ['scheduleKind', 'nextOn', 'monthDays'],
+];
+const BILL_GROUPS: (keyof BillValues)[][] = [
+  ['amountCents', 'highCents'],
+  ['dueOn', 'dayOfMonth'],
+  ['repeats'],
+  ['writtenCadence', 'writtenCents', 'writtenMonths'],
+];
+const ENVELOPE_GROUPS: (keyof EnvelopeValues)[][] = [
+  ['amountCents'],
+  ['period'],
+];
+const GOAL_GROUPS: (keyof GoalValues)[][] = [
+  ['targetCents'],
+  ['currentCents'],
+  ['targetDate'],
+];
+
+const isSet = (value: unknown) =>
+  value !== null && !(Array.isArray(value) && value.length === 0);
+
+const withVersion = <T extends V, V extends object>(
+  item: T,
+  version: BudgetVersion<V>,
+  groups: (keyof V)[][],
+): T => ({
+  ...item,
+  ...Object.fromEntries(
+    groups
+      .filter((group) => group.some((key) => isSet(version.values[key])))
+      .flatMap((group) => group.map((key) => [key, version.values[key]])),
+  ),
+});
+
+/** The item with the values one document gave written over it. */
+export const chooseVersion = {
+  income: (item: BudgetIncome, version: BudgetVersion<IncomeValues>) =>
+    withVersion(item, version, INCOME_GROUPS),
+  bill: (item: BudgetBill, version: BudgetVersion<BillValues>) =>
+    withVersion(item, version, BILL_GROUPS),
+  envelope: (item: BudgetEnvelope, version: BudgetVersion<EnvelopeValues>) =>
+    withVersion(item, version, ENVELOPE_GROUPS),
+  goal: (item: BudgetGoal, version: BudgetVersion<GoalValues>) =>
+    withVersion(item, version, GOAL_GROUPS),
+};
+
+/** What a bill the document wrote for another cadence comes to a month, in cents, or null when that cannot be worked out. */
+export const toPerMonthCents = (
+  bill: Pick<BillValues, 'writtenCents' | 'writtenMonths'>,
+) => {
+  const { writtenCents, writtenMonths } = bill;
+  const cents =
+    writtenCents === null || writtenMonths === null
+      ? 0
+      : Math.round(writtenCents / writtenMonths);
+  return cents > 0 ? cents : null;
+};
+
+/** The bill as the monthly one its written amount comes to; the person still adds when it is due. */
+export const toMonthlyBillValue = (item: BudgetBill, today: number) =>
+  toBillValue(
+    {
+      ...item,
+      amountCents: toPerMonthCents(item),
+      highCents: null,
+      repeats: 'monthly',
+    },
+    today,
+  );
 
 /** Every question a proposal still needs answered before it can be added, as the form names them, in the order the form asks; empty when it is complete. */
 export function getMissingSteps(

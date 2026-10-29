@@ -237,6 +237,19 @@ function StartFlow({
     setIsLeaving(true);
     window.history.back();
   };
+  /** The step after the last kind that now has entries, so the person lands on what is still empty; the last step when every kind is filled. */
+  const getStepAfterAdding = (draft: Pick<StartDraft, DraftKind>) => {
+    const filled: Record<StartKind, boolean> = {
+      income: counts.income + draft.incomes.length > 0,
+      bill: counts.bill + draft.bills.length > 0,
+      envelope: counts.envelope + draft.envelopes.length > 0,
+      goal: counts.goal + draft.goals.length > 0,
+    };
+    const last = KIND_ORDER.filter((kind) => filled[kind]).pop();
+    const lastIndex =
+      last === undefined ? -1 : steps.indexOf(KIND_WORDS[last].step);
+    return steps[Math.min(lastIndex + 1, steps.length - 1)];
+  };
   const goBack = () => (index === 0 ? leave() : goTo(steps[index - 1]));
   const goNext = () => goTo(steps[index + 1]);
 
@@ -446,7 +459,6 @@ function StartFlow({
                   emoji: <ListChecks className='h-5 w-5' />,
                   title: BUDGET_WORDS.freshTitle,
                   description: BUDGET_WORDS.freshBody,
-                  isQuiet: true,
                   onPick: () => setStage('steps'),
                 },
               ]}
@@ -464,7 +476,7 @@ function StartFlow({
             onAdd={async (draft) => {
               await budget.onAdd(draft);
               setStage('steps');
-              goTo(steps[0]);
+              goTo(getStepAfterAdding(draft));
             }}
           />
         )}

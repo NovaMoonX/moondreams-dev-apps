@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 
 import {
+  chooseVersion,
   getMissingStep,
   getMissingSteps,
   toBillValue,
   toIncomeValue,
+  toMonthlyBillValue,
+  toPerMonthCents,
 } from '../../src/apps/runway/lib/budgetDraft.ts';
 import {
   cutAtWord,
@@ -50,7 +53,11 @@ assert.deepEqual(
   ['Rent', 'Phone', 'Internet'],
   'the same bill in two files is one bill, the first file first',
 );
-assert.equal(overlap.bills[0].notes.length, 0, 'the same amount adds no note');
+assert.equal(
+  overlap.bills[0].versions.length,
+  0,
+  'the same values in two files are not a disagreement',
+);
 assert.equal(overlap.bills[0].sourceFile, 'Budget.csv');
 
 const conflict = normalizeBudgetReading(
@@ -67,11 +74,84 @@ const conflict = normalizeBudgetReading(
   { fileNames },
 );
 assert.equal(conflict.bills.length, 1);
-assert.equal(conflict.bills[0].amountCents, 125_000, 'the first file wins');
+assert.equal(
+  conflict.bills[0].amountCents,
+  125_000,
+  'the first file is what is shown until the person chooses',
+);
 assert.deepEqual(
-  conflict.bills[0].notes,
-  ['Also in Summary.csv as $1,300.00'],
-  'a different amount becomes a note',
+  conflict.bills[0].versions.map((entry) => [
+    entry.sourceFile,
+    entry.values.amountCents,
+  ]),
+  [
+    ['Budget.csv', 125_000],
+    ['Summary.csv', 130_000],
+  ],
+  'a different amount keeps both files, each with its values',
+);
+assert.equal(
+  chooseVersion.bill(conflict.bills[0], conflict.bills[0].versions[1])
+    .amountCents,
+  130_000,
+  'choosing a version writes its values',
+);
+
+const dueDay = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      bill('Budget.csv', 'Rent', 125_000),
+      { ...bill('Summary.csv', 'Rent', 125_000), dayOfMonth: 5 },
+    ],
+    envelopes: [],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames },
+);
+assert.equal(
+  dueDay.bills[0].versions.length,
+  2,
+  'the same amount on another day of the month is a disagreement',
+);
+const chosenDay = toBillValue(
+  chooseVersion.bill(dueDay.bills[0], dueDay.bills[0].versions[1]),
+  today,
+);
+assert.deepEqual(
+  chosenDay.timing.schedule.monthDays,
+  [5],
+  'the chosen file sets the day',
+);
+
+const period = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [],
+    envelopes: [
+      {
+        sourceFile: 'Budget.csv',
+        name: 'Groceries',
+        amountCents: 40_000,
+        period: 'monthly',
+      },
+      {
+        sourceFile: 'Summary.csv',
+        name: 'Groceries',
+        amountCents: 40_000,
+        period: 'weekly',
+      },
+    ],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames },
+);
+assert.equal(
+  period.envelopes[0].versions.length,
+  2,
+  'the same amount for another period is a disagreement',
 );
 
 const twoFiles = normalizeBudgetReading(
@@ -91,9 +171,9 @@ const twoFiles = normalizeBudgetReading(
 assert.equal(twoFiles.bills.length, 2, 'Rent from two files is one bill');
 assert.equal(twoFiles.bills[0].amountCents, 145_000);
 assert.deepEqual(
-  twoFiles.bills[0].notes,
-  ['Also in Summary.csv as $1,500.00'],
-  "two files read together keep the other file's amount as a note",
+  twoFiles.bills[0].versions.map((entry) => entry.sourceFile),
+  ['Budget.csv', 'Summary.csv'],
+  'two files read together keep both versions',
 );
 
 const missing = normalizeBudgetReading(
@@ -123,7 +203,11 @@ assert.equal(
   3_000,
   'a value only the other file has fills the gap',
 );
-assert.equal(missing.bills[0].notes.length, 0);
+assert.equal(
+  missing.bills[0].versions.length,
+  0,
+  'a gap is not a disagreement',
+);
 
 const added = normalizeBudgetReading(
   {
@@ -137,7 +221,11 @@ const added = normalizeBudgetReading(
 );
 assert.equal(added.bills.length, 3, 'a later file merges into what was read');
 assert.equal(added.bills[1].amountCents, 4_000);
-assert.equal(added.bills[1].notes[0], 'Also in Summary.csv as $45.00');
+assert.equal(
+  added.bills[1].versions[1].values.amountCents,
+  4_500,
+  'a later file that differs keeps its version',
+);
 
 const messy = normalizeBudgetReading(
   {
@@ -176,7 +264,7 @@ assert.ok(messy.notRead[0].text.length <= 140);
 assert.equal(cutAtWord('Annual car insurance premium', 20), 'Annual car');
 
 const value = toBillValue(
-  { ...bill('Budget.csv', 'Rent', null), notes: [] } as never,
+  { ...bill('Budget.csv', 'Rent', null), versions: [] } as never,
   today,
 );
 assert.equal(
@@ -193,7 +281,7 @@ const income = toIncomeValue(
   {
     name: 'Pay',
     sourceFile: 'a',
-    notes: [],
+    versions: [],
     amountCents: 100_000,
     scheduleKind: 'weekly',
     nextOn: Date.UTC(2026, 9, 1),
@@ -234,16 +322,44 @@ assert.equal(
   null,
   'a day of the month does not make a yearly bill monthly',
 );
-assert.deepEqual(
-  yearly.notRead.map((entry) => entry.text),
-  ["Car insurance repeats yearly, which Runway can't plan yet"],
-  'the cadence the app lacks is named',
-);
+assert.deepEqual(yearly.notRead, [], 'a yearly bill is a row, not a line');
 assert.equal(yearly.bills[0].writtenCadence, 'yearly', 'its words are kept');
 assert.equal(
   yearly.bills[0].amountCents,
   null,
   'an amount that was for a yearly bill is not kept as a monthly one',
+);
+assert.equal(
+  yearly.bills[0].writtenCents,
+  90_000,
+  'the document figure is kept beside its cadence',
+);
+assert.equal(toPerMonthCents(yearly.bills[0]), 7_500, 'a year is 12 months');
+const monthlyForm = toMonthlyBillValue(yearly.bills[0], today);
+assert.equal(monthlyForm.amount.lowCents, 7_500);
+assert.equal(monthlyForm.timing.schedule.kind, 'monthly');
+const quarterly = normalizeBudgetReading(
+  {
+    ...quiet,
+    bills: [
+      {
+        ...bill('Budget.csv', 'Water', 6_000),
+        repeats: null,
+        writtenCadence: 'Quarterly',
+      },
+      {
+        ...bill('Budget.csv', 'Dues', 1_000),
+        repeats: null,
+        writtenCadence: 'every 6 months',
+      },
+    ],
+  },
+  { fileNames },
+);
+assert.deepEqual(
+  quarterly.bills.map((entry) => entry.writtenMonths),
+  [3, 6],
+  'quarterly is 3 months and every 6 months is 6',
 );
 assert.deepEqual(
   getMissingSteps('bill', toBillValue(yearly.bills[0], today)),
@@ -258,7 +374,7 @@ assert.equal(
 
 const lateDayBill = { ...bill('Budget.csv', 'Loan', 1_000), dayOfMonth: 31 };
 const onThe31st = toBillValue(
-  { ...lateDayBill, notes: [] } as never,
+  { ...lateDayBill, versions: [] } as never,
   Date.UTC(2026, 10, 15),
 );
 assert.equal(
@@ -268,7 +384,7 @@ assert.equal(
 );
 assert.deepEqual(onThe31st.timing.schedule.monthDays, [31]);
 const febFirst = toBillValue(
-  { ...lateDayBill, notes: [] } as never,
+  { ...lateDayBill, versions: [] } as never,
   Date.UTC(2026, 1, 1),
 );
 assert.equal(
@@ -281,7 +397,7 @@ const rolled = toBillValue(
     ...lateDayBill,
     dayOfMonth: null,
     dueOn: Date.UTC(2026, 0, 31),
-    notes: [],
+    versions: [],
   } as never,
   Date.UTC(2026, 1, 10),
 );

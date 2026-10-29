@@ -1,7 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, Loader, Pencil, Trash2, Upload, X } from 'lucide-react';
+import {
+  ChevronRight,
+  CircleHelp,
+  Loader,
+  Pencil,
+  Repeat,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react';
 
-import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  Input,
+  Modal,
+  Textarea,
+} from '@moondreamsdev/dreamer-ui/components';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -16,12 +30,18 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { formatFileSize } from '@/utils/fileUtils';
+import { formatDateUTC } from '@/utils/formatUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import {
+  BILL_FREQUENCY_LABELS,
   BUDGET_ACCEPT,
   BUDGET_LIMITS,
   BUDGET_WORDS,
+  CALENDAR_PERIOD_UNITS,
+  SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
@@ -31,8 +51,11 @@ import IncomeForm from '@apps/runway/forms/IncomeForm';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import { toDraftSourceId } from '@apps/runway/forms/fundingFlow';
 import {
+  chooseVersion,
   getMissingSteps,
   toBillValue,
+  toMonthlyBillValue,
+  toPerMonthCents,
   toEnvelopeValue,
   toGoalValue,
   toIncomeValue,
@@ -41,11 +64,18 @@ import {
 } from '@apps/runway/lib/budgetDraft';
 import {
   EMPTY_BUDGET_READING,
+  type BillValues,
   type BudgetReading,
+  type BudgetVersion,
+  type EnvelopeValues,
+  type GoalValues,
+  type IncomeValues,
 } from '@apps/runway/lib/normalizeBudgetReading';
 import { nameDocuments } from '@apps/runway/lib/nameDocuments';
 import { isBudgetFile, readBudget } from '@apps/runway/lib/readBudget';
 import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { toOrdinal } from '@apps/runway/utils/monthDays';
 import SheetHead from '@apps/runway/components/SheetHead';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
 import {
@@ -72,22 +102,40 @@ const KINDS: { kind: BudgetKind; label: string; search: string }[] = [
   { kind: 'goal', label: BUDGET_WORDS.goals, search: 'Search your goals' },
 ];
 
+interface ProposalVersion {
+  sourceFile: string;
+  says: string;
+  value: BudgetValues[BudgetKind];
+}
+
 interface Proposal {
   key: string;
   kind: BudgetKind;
   name: string;
   sourceFile: string;
-  notes: string[];
-  /** What a bill's document called its repeat when Runway has no such repeat. */
-  cadenceWords: string | null;
+  /** What each file said when the files disagree; empty otherwise. */
+  versions: ProposalVersion[];
+  /** What a bill's document wrote for a repeat Runway has none for ("yearly"), with the figure it gave and what that comes to a month. */
+  cadence: {
+    words: string;
+    writtenCents: number | null;
+    perMonthCents: number | null;
+    monthly: BudgetValues['bill'];
+  } | null;
   value: BudgetValues[BudgetKind];
 }
 
-interface ReadItem {
+interface ReadItem<V> {
   name: string;
   sourceFile: string;
-  notes: string[];
-  writtenCadence?: string | null;
+  versions: BudgetVersion<V>[];
+}
+
+interface KindReading<K extends BudgetKind, V, T extends ReadItem<V>> {
+  make: (item: T) => BudgetValues[K];
+  choose: (item: T, version: BudgetVersion<V>) => T;
+  say: (values: V) => string;
+  cadence?: (item: T) => Proposal['cadence'];
 }
 
 const KEY_SEPARATOR = ':';
@@ -96,17 +144,113 @@ const SHORT_FOOTER_MAX_HEIGHT = 500;
 
 const toFileKey = (file: File) => `${file.name}${KEY_SEPARATOR}${file.size}`;
 
-const toProposals = <K extends BudgetKind, T extends ReadItem>(
+const sayAmount = (low: number | null, high: number | null) =>
+  low === null
+    ? null
+    : high === null
+      ? formatCents(low)
+      : `${formatCents(low)}–${formatCents(high)}`;
+
+const sayDays = (days: number[]) =>
+  days.length === 0
+    ? null
+    : `on the ${days.map((day) => (day === 31 ? 'last day' : toOrdinal(day))).join(' and ')}`;
+
+const sayParts = (parts: (string | null)[]) =>
+  parts.filter((part) => part !== null).join(' ') || 'nothing else';
+
+const sayIncome = (values: IncomeValues) =>
+  sayParts([
+    sayAmount(values.amountCents, null),
+    values.scheduleKind && SCHEDULE_LABELS[values.scheduleKind].toLowerCase(),
+    sayDays(values.monthDays) ??
+      (values.nextOn === null ? null : `from ${formatDateUTC(values.nextOn)}`),
+  ]);
+
+const sayBill = (values: BillValues) =>
+  values.writtenCadence !== null
+    ? sayParts([sayAmount(values.writtenCents, null), values.writtenCadence])
+    : sayParts([
+        sayAmount(values.amountCents, values.highCents),
+        values.repeats && BILL_FREQUENCY_LABELS[values.repeats].toLowerCase(),
+        sayDays(values.dayOfMonth === null ? [] : [values.dayOfMonth]) ??
+          (values.dueOn === null ? null : `due ${formatDateUTC(values.dueOn)}`),
+      ]);
+
+const sayEnvelope = (values: EnvelopeValues) =>
+  sayParts([
+    sayAmount(values.amountCents, null),
+    values.period === null
+      ? null
+      : values.period === 'perPay'
+        ? 'each pay'
+        : CALENDAR_PERIOD_UNITS[values.period],
+  ]);
+
+const sayGoal = (values: GoalValues) =>
+  sayParts([
+    values.targetCents === null
+      ? null
+      : `${formatCents(values.targetCents)} target`,
+    values.currentCents === null
+      ? null
+      : `${formatCents(values.currentCents)} saved`,
+    values.targetDate === null
+      ? null
+      : `by ${formatDateUTC(values.targetDate)}`,
+  ]);
+
+const getKindReadings = (today: number) => ({
+  income: {
+    make: (item) => toIncomeValue(item, today),
+    choose: chooseVersion.income,
+    say: sayIncome,
+  } satisfies KindReading<
+    'income',
+    IncomeValues,
+    BudgetReading['incomes'][number]
+  >,
+  bill: {
+    make: (item) => toBillValue(item, today),
+    choose: chooseVersion.bill,
+    say: sayBill,
+    cadence: (item) =>
+      item.writtenCadence === null
+        ? null
+        : {
+            words: item.writtenCadence,
+            writtenCents: item.writtenCents,
+            perMonthCents: toPerMonthCents(item),
+            monthly: toMonthlyBillValue(item, today),
+          },
+  } satisfies KindReading<'bill', BillValues, BudgetReading['bills'][number]>,
+  envelope: {
+    make: (item) => toEnvelopeValue(item, today),
+    choose: chooseVersion.envelope,
+    say: sayEnvelope,
+  } satisfies KindReading<
+    'envelope',
+    EnvelopeValues,
+    BudgetReading['envelopes'][number]
+  >,
+  goal: {
+    make: (item) => toGoalValue(item, today),
+    choose: chooseVersion.goal,
+    say: sayGoal,
+  } satisfies KindReading<'goal', GoalValues, BudgetReading['goals'][number]>,
+});
+
+const toProposals = <K extends BudgetKind, V, T extends ReadItem<V>>(
   kind: K,
   items: T[],
-  make: (item: T) => BudgetValues[K],
+  reading: KindReading<K, V, T>,
   edited: Record<string, BudgetValues[BudgetKind]>,
   removed: ReadonlySet<string>,
 ): Proposal[] =>
   items.flatMap((item, index) => {
     const key = `${kind}${KEY_SEPARATOR}${index}`;
     if (removed.has(key)) return [];
-    const value = edited[key] ?? make(item);
+    const value = edited[key] ?? reading.make(item);
     return [
       {
         key,
@@ -116,12 +260,36 @@ const toProposals = <K extends BudgetKind, T extends ReadItem>(
             ? (value as BudgetValues['income']).sourceName
             : (value as BudgetValues['bill']).name,
         sourceFile: item.sourceFile,
-        notes: item.notes,
-        cadenceWords: item.writtenCadence ?? null,
+        versions: item.versions.map((version) => ({
+          sourceFile: version.sourceFile,
+          says: BUDGET_WORDS.versionSays(
+            version.sourceFile,
+            reading.say(version.values),
+          ),
+          value: reading.make(reading.choose(item, version)),
+        })),
+        cadence: reading.cadence?.(item) ?? null,
         value,
       },
     ];
   });
+
+const toGoalLine = (goal: BudgetValues['goal']) =>
+  goal.targetDate !== null
+    ? null
+    : !goal.startingCents
+      ? 'No date set'
+      : `${formatCentsShort(goal.startingCents)} saved so far`;
+
+const toCadenceNote = ({ cadence }: Proposal) =>
+  cadence === null
+    ? null
+    : cadence.writtenCents === null
+      ? BUDGET_WORDS.documentSays(cadence.words)
+      : BUDGET_WORDS.documentSaysAmount(
+          formatCents(cadence.writtenCents),
+          cadence.words,
+        );
 
 const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
   const { key, kind, value } = proposal;
@@ -130,9 +298,12 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
       id: key,
       name: proposal.name,
       emoji: null,
-      line: BUDGET_WORDS.needs(
-        missing.map((step) => BUDGET_WORDS.needsParts[step] ?? step),
-      ),
+      line:
+        proposal.cadence !== null && missing.includes('repeats')
+          ? BUDGET_WORDS.cadenceRow(proposal.cadence.words)
+          : BUDGET_WORDS.needs(
+              missing.map((step) => BUDGET_WORDS.needsParts[step] ?? step),
+            ),
       amount: null,
     };
   if (kind === 'income') {
@@ -142,18 +313,25 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
   if (kind === 'bill') return toBillRow(key, value as BudgetValues['bill']);
   if (kind === 'envelope')
     return toEnvelopeRow(key, value as BudgetValues['envelope']);
-  return toGoalRow(key, value as BudgetValues['goal']);
+  const goal = value as BudgetValues['goal'];
+  const row = toGoalRow(key, goal);
+  return { ...row, line: toGoalLine(goal) ?? row.line };
 };
 
-const toRow = (proposal: Proposal): StartRow => {
-  const row = toBaseRow(
-    proposal,
-    getMissingSteps(proposal.kind, proposal.value),
-  );
-  return proposal.notes.length > 0
-    ? { ...row, line: `${row.line} · ${BUDGET_WORDS.disagree}` }
-    : row;
-};
+const toRow = (
+  proposal: Proposal,
+  isUndecided: boolean,
+  isHidden: boolean,
+): StartRow =>
+  isUndecided
+    ? {
+        id: proposal.key,
+        name: proposal.name,
+        emoji: null,
+        line: isHidden ? BUDGET_WORDS.needsLook : BUDGET_WORDS.disagree,
+        amount: null,
+      }
+    : toBaseRow(proposal, getMissingSteps(proposal.kind, proposal.value));
 
 const countReading = (reading: BudgetReading) =>
   reading.incomes.length +
@@ -197,6 +375,9 @@ function BudgetStart({
   const [readFiles, setReadFiles] = useState<string[]>([]);
   const [readNames, setReadNames] = useState<string[]>([]);
   const [phase, setPhase] = useState<'input' | 'review'>('input');
+  const noticeRef = useRef<HTMLDivElement>(null);
+  const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const [isReading, setIsReading] = useState(false);
   const [canStartFresh, setCanStartFresh] = useState(false);
   const [isNotReadOpen, setIsNotReadOpen] = useState(false);
@@ -218,6 +399,11 @@ function BudgetStart({
     runRef.current += 1;
     setIsReading(false);
   };
+  const goTo = (next: 'input' | 'review') => {
+    setError(null);
+    setCanStartFresh(false);
+    setPhase(next);
+  };
   const dropReading = () => {
     setReading(null);
     setReadFiles([]);
@@ -226,24 +412,16 @@ function BudgetStart({
     setRemoved(new Set());
     setSelected(null);
     setForm(null);
-    setError(null);
-    setPhase('input');
+    goTo('input');
   };
-  const stopWords = {
-    isDirty: true,
-    title: BUDGET_WORDS.stopTitle,
-    message: BUDGET_WORDS.stopMessage,
-    confirmText: BUDGET_WORDS.stopConfirm,
-    cancelText: BUDGET_WORDS.stopCancel,
+  const [stopAsk, setStopAsk] = useState<'back' | 'exit' | null>(null);
+  const askStop = () => setStopAsk('back');
+  const askStopExit = () => setStopAsk('exit');
+  const confirmStop = () => {
+    setStopAsk(null);
+    stopRead();
+    if (stopAsk === 'exit') onExit();
   };
-  const askStop = useDiscardGuard({ ...stopWords, onClose: stopRead });
-  const askStopExit = useDiscardGuard({
-    ...stopWords,
-    onClose: () => {
-      stopRead();
-      onExit();
-    },
-  });
   const askDrop = useDiscardGuard({
     isDirty: true,
     isBusy: isAdding,
@@ -264,7 +442,7 @@ function BudgetStart({
     if (isReading) return askStop();
     if (reading === null) return onBack();
     if (phase === 'review') return askDrop();
-    setPhase('review');
+    goTo('review');
   };
   const stepClose = () => {
     if (isAdding) return;
@@ -283,43 +461,39 @@ function BudgetStart({
     },
     [],
   );
+  useEffect(() => {
+    if (error) noticeRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [error]);
   const data = reading ?? EMPTY_BUDGET_READING;
+  const readings = getKindReadings(today);
 
   const proposals: Proposal[] = [
-    ...toProposals(
-      'income',
-      data.incomes,
-      (item) => toIncomeValue(item, today),
-      edited,
-      removed,
-    ),
-    ...toProposals(
-      'bill',
-      data.bills,
-      (item) => toBillValue(item, today),
-      edited,
-      removed,
-    ),
+    ...toProposals('income', data.incomes, readings.income, edited, removed),
+    ...toProposals('bill', data.bills, readings.bill, edited, removed),
     ...toProposals(
       'envelope',
       data.envelopes,
-      (item) => toEnvelopeValue(item, today),
+      readings.envelope,
       edited,
       removed,
     ),
-    ...toProposals(
-      'goal',
-      data.goals,
-      (item) => toGoalValue(item, today),
-      edited,
-      removed,
-    ),
+    ...toProposals('goal', data.goals, readings.goal, edited, removed),
   ];
   const ofKind = (kind: BudgetKind) =>
     proposals.filter((proposal) => proposal.kind === kind);
+  const isUndecided = (proposal: Proposal) =>
+    proposal.versions.length > 0 && edited[proposal.key] === undefined;
   const needing = proposals.filter(
-    (proposal) => getMissingSteps(proposal.kind, proposal.value).length > 0,
+    (proposal) =>
+      isUndecided(proposal) ||
+      getMissingSteps(proposal.kind, proposal.value).length > 0,
   ).length;
+  const toProposalRow = (proposal: Proposal) =>
+    toRow(proposal, isUndecided(proposal), isHidden);
+  const setValue = (key: string, value: BudgetValues[BudgetKind]) => {
+    setEdited((current) => ({ ...current, [key]: value }));
+    setSelected(null);
+  };
   const selectedProposal =
     proposals.find((proposal) => proposal.key === selected) ?? null;
   const formProposal =
@@ -328,15 +502,13 @@ function BudgetStart({
       : (proposals.find((proposal) => proposal.key === form.key) ?? null);
 
   const pick = (list: File[]) => {
-    const wrong = list.find((file) => !isBudgetFile(file));
-    if (wrong) return setError(BUDGET_WORDS.wrongType(wrong.name));
+    const wrong = list.filter((file) => !isBudgetFile(file));
     const isSeen = (file: File) =>
       readFiles.includes(toFileKey(file)) ||
       files.some((have) => toFileKey(have) === toFileKey(file));
-    const fresh = list.filter((file) => !isSeen(file));
-    const next = [...files, ...fresh];
-    if (readFiles.length + next.length > BUDGET_LIMITS.files)
-      return setError(BUDGET_WORDS.tooMany);
+    const fresh = list.filter((file) => isBudgetFile(file) && !isSeen(file));
+    const taken = fresh.slice(0, Math.max(0, slotsLeft));
+    const next = [...files, ...taken];
     if (next.reduce((sum, file) => sum + file.size, 0) > BUDGET_LIMITS.bytes)
       return setError(BUDGET_WORDS.tooBig);
     const alreadyRead = list.filter((file) =>
@@ -344,9 +516,17 @@ function BudgetStart({
     );
     setCanStartFresh(false);
     setError(
-      alreadyRead.length > 0
-        ? BUDGET_WORDS.alreadyRead(alreadyRead.map((file) => file.name))
-        : null,
+      [
+        wrong.length > 0
+          ? BUDGET_WORDS.wrongType(wrong.map((file) => file.name))
+          : null,
+        alreadyRead.length > 0
+          ? BUDGET_WORDS.alreadyRead(alreadyRead.map((file) => file.name))
+          : null,
+        taken.length < fresh.length ? BUDGET_WORDS.tooMany : null,
+      ]
+        .filter((line) => line !== null)
+        .join(' ') || null,
     );
     setFiles(next);
   };
@@ -370,7 +550,7 @@ function BudgetStart({
         reading !== null &&
         JSON.stringify(next) === JSON.stringify(reading)
       ) {
-        setError(BUDGET_WORDS.nothingNew);
+        setError(BUDGET_WORDS.nothingNew(files.length));
         setFiles([]);
         setPasted('');
         return;
@@ -384,7 +564,7 @@ function BudgetStart({
       ]);
       setFiles([]);
       setPasted('');
-      setPhase('review');
+      goTo('review');
     } catch (readError) {
       if (runRef.current !== run) return;
       console.error('Reading the budget failed', readError);
@@ -393,6 +573,7 @@ function BudgetStart({
         getAiReadFailureMessage(readError, {
           subject: BUDGET_WORDS.failSubject,
           fallback: BUDGET_WORDS.failFallback,
+          unreadable: BUDGET_WORDS.unreadable,
         }),
       );
     } finally {
@@ -442,10 +623,7 @@ function BudgetStart({
     ): DraftSink<BudgetValues[K]> => ({
       initial,
       openStep: getMissingSteps(kind, value)[0] ?? null,
-      repeatNote:
-        formProposal.cadenceWords === null
-          ? null
-          : BUDGET_WORDS.documentSays(formProposal.cadenceWords),
+      repeatNote: toCadenceNote(formProposal),
       sources: ofKind('income').map((entry) => {
         const name = (entry.value as BudgetValues['income']).sourceName;
         return { id: toDraftSourceId(name), name };
@@ -497,10 +675,41 @@ function BudgetStart({
   };
 
   const notRead = data.notRead;
-  const selectedRow = selectedProposal ? toRow(selectedProposal) : null;
+  const selectedRow = selectedProposal ? toProposalRow(selectedProposal) : null;
   const addLabel =
     mode === 'plan' ? BUDGET_WORDS.planAdd : BUDGET_WORDS.deviceAdd;
   const isFolded = isShort && needing > 0;
+  const isSelectedUndecided =
+    selectedProposal !== null && isUndecided(selectedProposal);
+  const selectedCadence =
+    selectedProposal?.cadence != null &&
+    getMissingSteps(selectedProposal.kind, selectedProposal.value).includes(
+      'repeats',
+    )
+      ? selectedProposal.cadence
+      : null;
+  const notice =
+    error || canStartFresh ? (
+      <div ref={noticeRef} className='scroll-mt-16 space-y-2'>
+        {error && (
+          <p className='text-destructive text-sm text-pretty' role='alert'>
+            {error}
+          </p>
+        )}
+        {canStartFresh && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='w-fit gap-1'
+            onClick={onStartFresh}
+          >
+            {BUDGET_WORDS.freshInstead}
+            <ChevronRight className='h-4 w-4' aria-hidden='true' />
+          </Button>
+        )}
+      </div>
+    ) : null;
 
   if (phase === 'input') {
     return (
@@ -515,6 +724,7 @@ function BudgetStart({
               : BUDGET_WORDS.addAnotherBody(slotsLeft)}
           </p>
         </div>
+        {notice}
         <div className='space-y-3'>
           {files.length > 0 && (
             <ul className='border-border bg-card divide-border divide-y rounded-2xl border'>
@@ -605,23 +815,25 @@ function BudgetStart({
             {BUDGET_WORDS.reading(files.length, pasted.trim() !== '')}
           </p>
         )}
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
-        {canStartFresh && (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='w-fit gap-1'
-            onClick={onStartFresh}
-          >
-            {BUDGET_WORDS.freshInstead}
-            <ChevronRight className='h-4 w-4' aria-hidden='true' />
-          </Button>
-        )}
+        <Modal
+          isOpen={stopAsk !== null}
+          onClose={() => setStopAsk(null)}
+          title={BUDGET_WORDS.stopTitle}
+          actions={[
+            {
+              label: BUDGET_WORDS.stopConfirm,
+              variant: 'secondary',
+              onClick: confirmStop,
+            },
+            {
+              label: BUDGET_WORDS.stopCancel,
+              variant: 'primary',
+              onClick: () => setStopAsk(null),
+            },
+          ]}
+        >
+          <p className='text-sm text-pretty'>{BUDGET_WORDS.stopMessage}</p>
+        </Modal>
         <ModalFooterActions
           note={
             hasInput || isReading || isShort ? null : BUDGET_WORDS.needInput
@@ -634,7 +846,6 @@ function BudgetStart({
           rightActions={
             <Button
               type='button'
-              loading={isReading}
               disabled={isReading || !hasInput}
               onClick={() => void read()}
             >
@@ -656,6 +867,7 @@ function BudgetStart({
           {BUDGET_WORDS.reviewHelp}
         </p>
       </div>
+      {notice}
       {proposals.length === 0 && (
         <p className='text-muted-foreground text-sm'>{BUDGET_WORDS.empty}</p>
       )}
@@ -665,7 +877,7 @@ function BudgetStart({
           <div key={kind} className='space-y-2'>
             <SectionDivider label={label} />
             <StartRowList
-              rows={list.map(toRow)}
+              rows={list.map(toProposalRow)}
               searchLabel={search}
               onOpen={setSelected}
             />
@@ -676,35 +888,38 @@ function BudgetStart({
         <div>
           <RevealChip
             icon={<Upload className='h-4 w-4' aria-hidden='true' />}
-            onClick={() => setPhase('input')}
+            onClick={() => goTo('input')}
           >
             {BUDGET_WORDS.addAnother}
           </RevealChip>
         </div>
       )}
       {notRead.length > 0 && (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='text-foreground! h-auto min-h-12 w-full justify-between gap-3 rounded-2xl px-3 py-2 font-normal'
-          onClick={() => setIsNotReadOpen(true)}
-        >
-          <span className='text-sm'>
-            {BUDGET_WORDS.notReadRow(notRead.length)}
-          </span>
-          <ChevronRight
-            className='text-muted-foreground h-5 w-5 shrink-0'
-            aria-hidden='true'
-          />
-        </Button>
+        <div className='border-border bg-card overflow-hidden rounded-2xl border'>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-foreground! h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3 py-2 text-left font-normal'
+            onClick={() => setIsNotReadOpen(true)}
+          >
+            <span
+              className='border-border bg-accent grid size-10 shrink-0 place-items-center rounded-xl border'
+              aria-hidden='true'
+            >
+              <CircleHelp className='h-5 w-5' />
+            </span>
+            <span className='min-w-24 flex-1 text-base font-medium'>
+              {BUDGET_WORDS.notReadRow(notRead.length)}
+            </span>
+            <ChevronRight
+              className='text-muted-foreground h-5 w-5 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        </div>
       )}
       {mode === 'device' && (
         <InlineNotice tone='info'>{BUDGET_WORDS.deviceNote}</InlineNotice>
-      )}
-      {error && (
-        <p className='text-destructive text-sm' role='alert'>
-          {error}
-        </p>
       )}
       <ModalFooterActions
         note={
@@ -762,27 +977,72 @@ function BudgetStart({
             <>
               <SheetHead
                 label={BUDGET_WORDS.sheetKind[selectedProposal.kind]}
+                isLabelDroppedWhenShort
                 figure={selectedRow.amount ?? undefined}
                 fact={selectedRow.line}
               />
               <div className='space-y-1 text-sm'>
-                <p className='text-muted-foreground'>
-                  {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
-                </p>
-                {selectedProposal.cadenceWords !== null && (
-                  <p className='text-pretty'>
-                    {BUDGET_WORDS.documentSays(selectedProposal.cadenceWords)}
+                {!isSelectedUndecided && (
+                  <p className='text-muted-foreground'>
+                    {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
                   </p>
                 )}
-                {selectedProposal.notes.map((note) => (
-                  <p key={note} className='text-pretty'>
-                    <MaskedText>{note}</MaskedText>
+                {selectedCadence !== null && (
+                  <p className='text-pretty'>
+                    <MaskedText>
+                      {toCadenceNote(selectedProposal) ?? ''}
+                    </MaskedText>
                   </p>
-                ))}
+                )}
               </div>
             </>
           )}
+          {selectedProposal && isSelectedUndecided && (
+            <div className='space-y-2'>
+              <p className='text-sm font-medium text-pretty'>
+                {BUDGET_WORDS.chooseVersion}
+              </p>
+              <ul className='space-y-2'>
+                {selectedProposal.versions.map((version) => (
+                  <li
+                    key={version.sourceFile}
+                    className='border-border bg-card flex items-center gap-3 rounded-2xl border p-3'
+                  >
+                    <p className='min-w-0 flex-1 text-sm text-pretty break-words'>
+                      <MaskedText>{version.says}</MaskedText>
+                    </p>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      onClick={() =>
+                        setValue(selectedProposal.key, version.value)
+                      }
+                    >
+                      {BUDGET_WORDS.useThis}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <ActionGroup isRoomy>
+            {selectedProposal && selectedCadence?.perMonthCents != null && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<Repeat className='h-5 w-5' />}
+                label={mask(
+                  BUDGET_WORDS.monthlyOffer(
+                    formatCents(selectedCadence.perMonthCents),
+                  ),
+                )}
+                subtitle={BUDGET_WORDS.monthlyOfferSub}
+                onClick={() =>
+                  setValue(selectedProposal.key, selectedCadence.monthly)
+                }
+              />
+            )}
             <ActionRow
               isGrouped
               isRoomy

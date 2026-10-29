@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import HelpTip from '@/components/HelpTip';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 
@@ -14,6 +16,8 @@ interface SheetHeadProps {
   /** A caveat about the figure (which end of a range it is planned at), behind a help icon. */
   help?: ReactNode;
   helpTitle?: string;
+  /** Drops the label on a screen 500px tall or less, where a sheet has little room. */
+  isLabelDroppedWhenShort?: boolean;
 }
 
 /** The top of a row's sheet: the figure large, what it is, and one short fact. */
@@ -24,10 +28,16 @@ function SheetHead({
   fact,
   help,
   helpTitle,
+  isLabelDroppedWhenShort = false,
 }: SheetHeadProps) {
   return (
     <div className='border-border bg-accent rounded-2xl border p-4 [@media(max-height:599px)]:p-3'>
-      <div className='flex min-h-6 items-center gap-1'>
+      <div
+        className={join(
+          'flex min-h-6 items-center gap-1',
+          isLabelDroppedWhenShort && '[@media(max-height:499px)]:hidden',
+        )}
+      >
         <p className='text-muted-foreground text-sm font-medium'>{label}</p>
         {help && (
           <HelpTip title={helpTitle ?? label}>

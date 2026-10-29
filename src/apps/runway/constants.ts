@@ -835,17 +835,19 @@ export const BUDGET_TEXT_EXTENSIONS = ['csv', 'tsv', 'txt', 'md'] as const;
 export const BUDGET_ACCEPT = '.csv,.tsv,.txt,.md,.pdf';
 export const BUDGET_PASTED_NAME = 'Pasted text';
 
+const BUDGET_SENT_LINE =
+  "Your documents are sent to an AI to read and aren't kept. Nothing is added until you add it.";
+
 export const BUDGET_WORDS = {
   chooseAsk: 'How do you want to start?',
   methodTitle: 'Start from your budget',
   methodBody:
-    'An AI reads them and suggests your income, bills, envelopes and goals. Nothing is saved until you add them.',
+    'Bring a spreadsheet, a PDF or pasted notes. An AI reads them and suggests your income, bills, envelopes and goals.',
   freshTitle: 'Start fresh',
   freshBody: 'Answer a few questions, one at a time.',
   ask: 'Bring your budget',
-  help: 'Pick up to 5 files, or paste text. An AI reads them and suggests your income, bills, envelopes and goals. Nothing is saved until you add them.',
-  tabsHint:
-    'A spreadsheet with several tabs? Export each tab as a CSV and pick them together.',
+  help: `Pick up to 5 files, or paste text. ${BUDGET_SENT_LINE}`,
+  tabsHint: 'Export each tab as a CSV and pick them together.',
   chooseFiles: 'Choose files',
   chooseMore: 'Choose more files',
   accepts: 'CSV, TSV, text, Markdown or PDF',
@@ -858,17 +860,17 @@ export const BUDGET_WORDS = {
     files === 0
       ? 'Reading your text'
       : `Reading ${files} ${files === 1 ? 'file' : 'files'}${hasText ? ' and your text' : ''}`,
-  tooMany: `You can pick up to ${BUDGET_LIMITS.files} files.`,
+  tooMany: `Only ${BUDGET_LIMITS.files} files can be read at once; the rest weren't added.`,
   tooBig: `Those files are over ${BUDGET_LIMITS.bytes / 1024 / 1024} MB together. Remove one, or export a smaller range.`,
-  wrongType: (name: string) =>
-    `${name} is not a CSV, TSV, text, Markdown or PDF file.`,
+  wrongType: (names: string[]) =>
+    `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} not a CSV, TSV, text, Markdown or PDF file, so ${names.length === 1 ? 'it was' : 'they were'} skipped.`,
   failSubject: 'budget',
   failFallback: 'start fresh instead',
+  unreadable: "We couldn't read that. Try again.",
   nothingFound:
     'We could not find any income, bills, envelopes or goals in that. Try another file or some pasted text, or start fresh.',
   reviewAsk: 'Here is what we found',
-  reviewHelp:
-    'Open any one to check it or change it. Nothing is added until you say so.',
+  reviewHelp: 'Open any one to check it or change it.',
   income: 'Income',
   bills: 'Bills',
   envelopes: 'Envelopes',
@@ -884,7 +886,18 @@ export const BUDGET_WORDS = {
     due: 'a due date',
   } as Record<string, string>,
   disagree: 'Two files disagree',
+  needsLook: 'Needs a look',
+  versionSays: (file: string, what: string) => `${file} says ${what}`,
+  useThis: 'Use this',
+  chooseVersion: 'The files give different answers. Which one is right?',
   documentSays: (cadence: string) => `The document says ${cadence}`,
+  documentSaysAmount: (amount: string, cadence: string) =>
+    `The document says ${amount} ${cadence}`,
+  cadenceRow: (cadence: string) =>
+    `${cadence.charAt(0).toUpperCase()}${cadence.slice(1)} in the document · needs how often it repeats`,
+  monthlyOffer: (amount: string) => `Use ${amount} a month`,
+  monthlyOfferSub:
+    'Spread evenly over the months. You still say when it is due.',
   sheetKind: {
     income: 'Suggested income',
     bill: 'Suggested bill',
@@ -893,10 +906,10 @@ export const BUDGET_WORDS = {
   } as const,
   needDetails: (count: number) =>
     count === 1
-      ? 'One needs a detail. Open it or remove it.'
-      : `${count} need a detail. Open them or remove them.`,
+      ? 'One needs a look. Open it or remove it.'
+      : `${count} need a look. Open them or remove them.`,
   needDetailsShort: (count: number) =>
-    `${count} ${count === 1 ? 'needs' : 'need'} a detail`,
+    `${count} ${count === 1 ? 'needs' : 'need'} a look`,
   openToChange: 'Check or change it',
   removeOne: 'Remove',
   leaveTitle: 'Go back?',
@@ -910,28 +923,26 @@ export const BUDGET_WORDS = {
     'Your budget is still being read. If you stop, nothing is added.',
   stopConfirm: 'Stop',
   stopCancel: 'Keep waiting',
-  tabsTitle: 'A spreadsheet with tabs',
+  tabsTitle: 'A spreadsheet with several tabs?',
   notReadRow: (count: number) =>
     `${count} ${count === 1 ? 'thing' : 'things'} we could not read`,
   addAnother: 'Add another file',
   addAnotherBody: (left: number) =>
-    `${left} more ${left === 1 ? 'file' : 'files'} can be added. Only the new one is read.`,
+    `${left} more ${left === 1 ? 'file' : 'files'} can be added. ${BUDGET_SENT_LINE} Only what you add now is read.`,
   notReadTitle: 'What we could not read',
   sourcePrefix: 'From',
   planAdd: 'Add to my plan',
   deviceAdd: 'Keep on this device',
   planFailed: 'None of this was added. Nothing was changed.',
   notReady: 'Your plan is still opening. Try again in a moment.',
-  alsoIn: (file: string, amount: string) => `Also in ${file} as ${amount}`,
   cutText: (file: string, chars: number) =>
     `Only the first ${chars.toLocaleString()} characters of ${file} were read.`,
   partialAdded: (added: number, total: number) =>
     `Added ${added} of ${total}. The rest were not added; try again to add them, and nothing will be added twice.`,
-  nothingNew: 'Nothing new in that file.',
+  nothingNew: (files: number) =>
+    `Nothing new in ${files === 0 ? 'that text' : files === 1 ? 'that file' : 'those files'}.`,
   alreadyRead: (names: string[]) =>
     `${names.join(', ')} ${names.length === 1 ? 'was' : 'were'} already read, so ${names.length === 1 ? 'it was' : 'they were'} skipped.`,
-  cadenceNotPlanned: (name: string, cadence: string) =>
-    `${name} repeats ${cadence}, which Runway can't plan yet`,
   cutItems: (count: number, label: string, kept: number) =>
     `Only the first ${kept} ${label} are kept; ${count} more ${count === 1 ? 'was' : 'were'} left out.`,
   dateTooFar: (name: string, date: string, months: number) =>
