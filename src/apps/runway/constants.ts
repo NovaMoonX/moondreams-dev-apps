@@ -873,26 +873,53 @@ export const BUDGET_WORDS = {
   bills: 'Bills',
   envelopes: 'Envelopes',
   goals: 'Goals',
-  amountNotFound: 'Amount not found',
+  needs: (parts: string[]) =>
+    `Needs ${parts.length < 2 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`}`,
+  needsParts: {
+    amount: 'an amount',
+    target: 'a target amount',
+    often: 'how often it arrives',
+    schedule: 'a next date',
+    repeats: 'how often it repeats',
+    due: 'a due date',
+  } as Record<string, string>,
+  disagree: 'Two files disagree',
+  documentSays: (cadence: string) => `The document says ${cadence}`,
+  sheetKind: {
+    income: 'Suggested income',
+    bill: 'Suggested bill',
+    envelope: 'Suggested envelope',
+    goal: 'Suggested goal',
+  } as const,
   needDetails: (count: number) =>
     count === 1
       ? 'One needs a detail. Open it or remove it.'
       : `${count} need a detail. Open them or remove them.`,
-  openToFinish: 'Open it to finish it',
+  needDetailsShort: (count: number) =>
+    `${count} ${count === 1 ? 'needs' : 'need'} a detail`,
   openToChange: 'Check or change it',
   removeOne: 'Remove',
   leaveTitle: 'Go back?',
   leaveMessage: 'What was read is dropped. Nothing has been added.',
   deviceNote:
-    'You are not signed in. These stay on this device, unencrypted, for 7 days, and are written to your plan when you sign in.',
+    'You are not signed in, so these stay on this device, unencrypted, for 7 days. They move to your plan when you sign in.',
+  addedToast: (count: number) => `Added ${count} from your budget.`,
+  freshInstead: 'Start fresh instead',
+  stopTitle: 'Stop reading?',
+  stopMessage:
+    'Your budget is still being read. If you stop, nothing is added.',
+  stopConfirm: 'Stop',
+  stopCancel: 'Keep waiting',
+  tabsTitle: 'A spreadsheet with tabs',
+  notReadRow: (count: number) =>
+    `${count} ${count === 1 ? 'thing' : 'things'} we could not read`,
   addAnother: 'Add another file',
   addAnotherBody: (left: number) =>
     `${left} more ${left === 1 ? 'file' : 'files'} can be added. Only the new one is read.`,
-  notReadLabel: 'What we could not read',
   notReadTitle: 'What we could not read',
   sourcePrefix: 'From',
-  planAdd: 'Add them to my plan',
-  deviceAdd: 'Keep them on this device',
+  planAdd: 'Add to my plan',
+  deviceAdd: 'Keep on this device',
   planFailed: 'None of this was added. Nothing was changed.',
   notReady: 'Your plan is still opening. Try again in a moment.',
   alsoIn: (file: string, amount: string) => `Also in ${file} as ${amount}`,

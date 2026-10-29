@@ -1,16 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { Loader, Pencil, Trash2, Upload, X } from 'lucide-react';
+import { ChevronRight, Loader, Pencil, Trash2, Upload, X } from 'lucide-react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
+import Field from '@/components/forms/Field';
 import HelpTip from '@/components/HelpTip';
+import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useBackStep } from '@/hooks/useBackHistory';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { formatFileSize } from '@/utils/fileUtils';
 import {
@@ -26,8 +31,7 @@ import IncomeForm from '@apps/runway/forms/IncomeForm';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import { toDraftSourceId } from '@apps/runway/forms/fundingFlow';
 import {
-  getMissingStep,
-  isAmountStep,
+  getMissingSteps,
   toBillValue,
   toEnvelopeValue,
   toGoalValue,
@@ -42,6 +46,7 @@ import {
 import { nameDocuments } from '@apps/runway/lib/nameDocuments';
 import { isBudgetFile, readBudget } from '@apps/runway/lib/readBudget';
 import { MaskedText } from '@apps/runway/components/MaskedText';
+import SheetHead from '@apps/runway/components/SheetHead';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
 import {
   toBillRow,
@@ -73,6 +78,8 @@ interface Proposal {
   name: string;
   sourceFile: string;
   notes: string[];
+  /** What a bill's document called its repeat when Runway has no such repeat. */
+  cadenceWords: string | null;
   value: BudgetValues[BudgetKind];
 }
 
@@ -80,9 +87,12 @@ interface ReadItem {
   name: string;
   sourceFile: string;
   notes: string[];
+  writtenCadence?: string | null;
 }
 
 const KEY_SEPARATOR = ':';
+
+const SHORT_FOOTER_MAX_HEIGHT = 500;
 
 const toFileKey = (file: File) => `${file.name}${KEY_SEPARATOR}${file.size}`;
 
@@ -107,25 +117,24 @@ const toProposals = <K extends BudgetKind, T extends ReadItem>(
             : (value as BudgetValues['bill']).name,
         sourceFile: item.sourceFile,
         notes: item.notes,
+        cadenceWords: item.writtenCadence ?? null,
         value,
       },
     ];
   });
 
-const toRow = (proposal: Proposal): StartRow => {
+const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
   const { key, kind, value } = proposal;
-  const step = getMissingStep(kind, value);
-  if (step !== null) {
+  if (missing.length > 0)
     return {
       id: key,
       name: proposal.name,
       emoji: null,
-      line: isAmountStep(step)
-        ? proposal.sourceFile
-        : BUDGET_WORDS.openToFinish,
-      amount: isAmountStep(step) ? BUDGET_WORDS.amountNotFound : null,
+      line: BUDGET_WORDS.needs(
+        missing.map((step) => BUDGET_WORDS.needsParts[step] ?? step),
+      ),
+      amount: null,
     };
-  }
   if (kind === 'income') {
     const income = value as BudgetValues['income'];
     return toIncomeRow(key, income.sourceName, income.amount, income.schedule);
@@ -134,6 +143,16 @@ const toRow = (proposal: Proposal): StartRow => {
   if (kind === 'envelope')
     return toEnvelopeRow(key, value as BudgetValues['envelope']);
   return toGoalRow(key, value as BudgetValues['goal']);
+};
+
+const toRow = (proposal: Proposal): StartRow => {
+  const row = toBaseRow(
+    proposal,
+    getMissingSteps(proposal.kind, proposal.value),
+  );
+  return proposal.notes.length > 0
+    ? { ...row, line: `${row.line} · ${BUDGET_WORDS.disagree}` }
+    : row;
 };
 
 const countReading = (reading: BudgetReading) =>
@@ -151,6 +170,8 @@ interface BudgetStartProps {
   onBack: () => void;
   /** Leaves Starting out altogether. */
   onExit: () => void;
+  /** Goes on to the steps without a budget. */
+  onStartFresh: () => void;
   /** Hands over the ways out that ask first once there is work, for the header's back and close. */
   onGuards: (guards: BudgetGuards) => void;
 }
@@ -166,6 +187,7 @@ function BudgetStart({
   onAdd,
   onBack,
   onExit,
+  onStartFresh,
   onGuards,
 }: BudgetStartProps) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -176,6 +198,10 @@ function BudgetStart({
   const [readNames, setReadNames] = useState<string[]>([]);
   const [phase, setPhase] = useState<'input' | 'review'>('input');
   const [isReading, setIsReading] = useState(false);
+  const [canStartFresh, setCanStartFresh] = useState(false);
+  const [isNotReadOpen, setIsNotReadOpen] = useState(false);
+  const runRef = useRef(0);
+  const isShort = useIsShortScreen(SHORT_FOOTER_MAX_HEIGHT);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [edited, setEdited] = useState<
@@ -188,17 +214,75 @@ function BudgetStart({
 
   const slotsLeft = BUDGET_LIMITS.files - readFiles.length - files.length;
   const hasInput = files.length > 0 || pasted.trim() !== '';
-  const guard = {
-    isDirty: reading !== null || hasInput,
+  const stopRead = () => {
+    runRef.current += 1;
+    setIsReading(false);
+  };
+  const dropReading = () => {
+    setReading(null);
+    setReadFiles([]);
+    setReadNames([]);
+    setEdited({});
+    setRemoved(new Set());
+    setSelected(null);
+    setForm(null);
+    setError(null);
+    setPhase('input');
+  };
+  const stopWords = {
+    isDirty: true,
+    title: BUDGET_WORDS.stopTitle,
+    message: BUDGET_WORDS.stopMessage,
+    confirmText: BUDGET_WORDS.stopConfirm,
+    cancelText: BUDGET_WORDS.stopCancel,
+  };
+  const askStop = useDiscardGuard({ ...stopWords, onClose: stopRead });
+  const askStopExit = useDiscardGuard({
+    ...stopWords,
+    onClose: () => {
+      stopRead();
+      onExit();
+    },
+  });
+  const askDrop = useDiscardGuard({
+    isDirty: true,
     isBusy: isAdding,
     title: BUDGET_WORDS.leaveTitle,
     message: BUDGET_WORDS.leaveMessage,
-  };
-  const askBack = useDiscardGuard({ ...guard, onClose: onBack });
-  const askClose = useDiscardGuard({ ...guard, onClose: onExit });
-  useEffect(() => {
-    onGuards({ back: askBack, close: askClose });
+    onClose: dropReading,
   });
+  const askExit = useDiscardGuard({
+    isDirty: reading !== null,
+    isBusy: isAdding,
+    title: BUDGET_WORDS.leaveTitle,
+    message: BUDGET_WORDS.leaveMessage,
+    onClose: onExit,
+  });
+  // One step back from wherever the person is, for the header, the footer and the back gesture alike.
+  const stepBack = () => {
+    if (isAdding) return;
+    if (isReading) return askStop();
+    if (reading === null) return onBack();
+    if (phase === 'review') return askDrop();
+    setPhase('review');
+  };
+  const stepClose = () => {
+    if (isAdding) return;
+    if (isReading) return askStopExit();
+    askExit();
+  };
+  useBackStep(true, stepBack);
+  useBackStep(reading !== null, stepBack);
+  useBackStep(reading !== null && phase === 'input', stepBack);
+  useEffect(() => {
+    onGuards({ back: stepBack, close: stepClose });
+  });
+  useEffect(
+    () => () => {
+      runRef.current += 1;
+    },
+    [],
+  );
   const data = reading ?? EMPTY_BUDGET_READING;
 
   const proposals: Proposal[] = [
@@ -234,7 +318,7 @@ function BudgetStart({
   const ofKind = (kind: BudgetKind) =>
     proposals.filter((proposal) => proposal.kind === kind);
   const needing = proposals.filter(
-    (proposal) => getMissingStep(proposal.kind, proposal.value) !== null,
+    (proposal) => getMissingSteps(proposal.kind, proposal.value).length > 0,
   ).length;
   const selectedProposal =
     proposals.find((proposal) => proposal.key === selected) ?? null;
@@ -258,6 +342,7 @@ function BudgetStart({
     const alreadyRead = list.filter((file) =>
       readFiles.includes(toFileKey(file)),
     );
+    setCanStartFresh(false);
     setError(
       alreadyRead.length > 0
         ? BUDGET_WORDS.alreadyRead(alreadyRead.map((file) => file.name))
@@ -267,13 +352,18 @@ function BudgetStart({
   };
 
   const read = async () => {
+    const run = runRef.current + 1;
+    runRef.current = run;
     setIsReading(true);
     setError(null);
+    setCanStartFresh(false);
     try {
       const names = nameDocuments(files, pasted.trim() !== '', readNames);
       const next = await readBudget(files, pasted, names, reading ?? undefined);
+      if (runRef.current !== run) return;
       if (reading === null && countReading(next) === 0) {
         setError(BUDGET_WORDS.nothingFound);
+        setCanStartFresh(true);
         return;
       }
       if (
@@ -296,7 +386,9 @@ function BudgetStart({
       setPasted('');
       setPhase('review');
     } catch (readError) {
+      if (runRef.current !== run) return;
       console.error('Reading the budget failed', readError);
+      setCanStartFresh(reading === null);
       setError(
         getAiReadFailureMessage(readError, {
           subject: BUDGET_WORDS.failSubject,
@@ -304,7 +396,7 @@ function BudgetStart({
         }),
       );
     } finally {
-      setIsReading(false);
+      if (runRef.current === run) setIsReading(false);
     }
   };
 
@@ -349,7 +441,11 @@ function BudgetStart({
       initial: BudgetValues[K],
     ): DraftSink<BudgetValues[K]> => ({
       initial,
-      openStep: getMissingStep(kind, value),
+      openStep: getMissingSteps(kind, value)[0] ?? null,
+      repeatNote:
+        formProposal.cadenceWords === null
+          ? null
+          : BUDGET_WORDS.documentSays(formProposal.cadenceWords),
       sources: ofKind('income').map((entry) => {
         const name = (entry.value as BudgetValues['income']).sourceName;
         return { id: toDraftSourceId(name), name };
@@ -401,6 +497,10 @@ function BudgetStart({
   };
 
   const notRead = data.notRead;
+  const selectedRow = selectedProposal ? toRow(selectedProposal) : null;
+  const addLabel =
+    mode === 'plan' ? BUDGET_WORDS.planAdd : BUDGET_WORDS.deviceAdd;
+  const isFolded = isShort && needing > 0;
 
   if (phase === 'input') {
     return (
@@ -447,22 +547,27 @@ function BudgetStart({
             </ul>
           )}
           {slotsLeft > 0 && (
-            <Button
-              type='button'
-              variant='secondary'
-              className='w-full gap-2'
-              disabled={isReading}
-              onClick={() => fileRef.current?.click()}
-            >
-              <Upload className='h-4 w-4' aria-hidden='true' />
-              {files.length > 0
-                ? BUDGET_WORDS.chooseMore
-                : BUDGET_WORDS.chooseFiles}
-            </Button>
+            <div className='flex items-center gap-2'>
+              <Button
+                type='button'
+                variant='secondary'
+                className='flex-1 gap-2'
+                disabled={isReading}
+                onClick={() => fileRef.current?.click()}
+              >
+                <Upload className='h-4 w-4' aria-hidden='true' />
+                {files.length > 0
+                  ? BUDGET_WORDS.chooseMore
+                  : BUDGET_WORDS.chooseFiles}
+              </Button>
+              <HelpTip title={BUDGET_WORDS.tabsTitle}>
+                {BUDGET_WORDS.tabsHint}
+              </HelpTip>
+            </div>
           )}
           <p className='text-muted-foreground text-xs text-pretty'>
             {BUDGET_WORDS.accepts} · up to {BUDGET_LIMITS.bytes / 1024 / 1024}{' '}
-            MB together. {BUDGET_WORDS.tabsHint}
+            MB together
           </p>
           <Input
             ref={fileRef}
@@ -476,16 +581,20 @@ function BudgetStart({
               event.target.value = '';
             }}
           />
-          <Textarea
-            rows={5}
-            variant='base'
-            aria-label={BUDGET_WORDS.pasteLabel}
-            placeholder={BUDGET_WORDS.pastePlaceholder}
-            maxLength={BUDGET_LIMITS.textChars}
-            disabled={isReading}
-            value={pasted}
-            onChange={(event) => setPasted(event.target.value)}
-          />
+          <Field label={BUDGET_WORDS.pasteLabel} isCompact>
+            {() => (
+              <Textarea
+                rows={3}
+                variant='outline'
+                className='min-h-20 sm:[@media(min-height:700px)]:min-h-32'
+                placeholder={BUDGET_WORDS.pastePlaceholder}
+                maxLength={BUDGET_LIMITS.textChars}
+                disabled={isReading}
+                value={pasted}
+                onChange={(event) => setPasted(event.target.value)}
+              />
+            )}
+          </Field>
         </div>
         {isReading && (
           <p
@@ -501,16 +610,24 @@ function BudgetStart({
             {error}
           </p>
         )}
+        {canStartFresh && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='w-fit gap-1'
+            onClick={onStartFresh}
+          >
+            {BUDGET_WORDS.freshInstead}
+            <ChevronRight className='h-4 w-4' aria-hidden='true' />
+          </Button>
+        )}
         <ModalFooterActions
-          note={hasInput || isReading ? null : BUDGET_WORDS.needInput}
+          note={
+            hasInput || isReading || isShort ? null : BUDGET_WORDS.needInput
+          }
           cancelAction={
-            <Button
-              type='button'
-              variant='secondary'
-              onClick={() =>
-                reading === null ? askBack() : setPhase('review')
-              }
-            >
+            <Button type='button' variant='secondary' onClick={stepBack}>
               Back
             </Button>
           }
@@ -555,45 +672,34 @@ function BudgetStart({
           </div>
         );
       })}
-      <div className='flex flex-wrap items-center gap-x-4 gap-y-1'>
-        {readFiles.length < BUDGET_LIMITS.files && (
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
+      {readFiles.length < BUDGET_LIMITS.files && (
+        <div>
+          <RevealChip
+            icon={<Upload className='h-4 w-4' aria-hidden='true' />}
             onClick={() => setPhase('input')}
           >
             {BUDGET_WORDS.addAnother}
-          </Button>
-        )}
-        {notRead.length > 0 && (
-          <span className='text-muted-foreground inline-flex items-center gap-1 text-sm'>
-            {BUDGET_WORDS.notReadLabel}
-            <HelpTip title={BUDGET_WORDS.notReadTitle}>
-              <ul className='space-y-2'>
-                {[...new Set(notRead.map((entry) => entry.file))].map(
-                  (file) => (
-                    <li key={file}>
-                      <p className='font-medium'>{file}</p>
-                      <ul className='list-disc pl-5'>
-                        {notRead
-                          .filter((entry) => entry.file === file)
-                          .map((entry) => (
-                            <li key={entry.text}>{entry.text}</li>
-                          ))}
-                      </ul>
-                    </li>
-                  ),
-                )}
-              </ul>
-            </HelpTip>
+          </RevealChip>
+        </div>
+      )}
+      {notRead.length > 0 && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='text-foreground! h-auto min-h-12 w-full justify-between gap-3 rounded-2xl px-3 py-2 font-normal'
+          onClick={() => setIsNotReadOpen(true)}
+        >
+          <span className='text-sm'>
+            {BUDGET_WORDS.notReadRow(notRead.length)}
           </span>
-        )}
-      </div>
+          <ChevronRight
+            className='text-muted-foreground h-5 w-5 shrink-0'
+            aria-hidden='true'
+          />
+        </Button>
+      )}
       {mode === 'device' && (
-        <p className='text-muted-foreground text-sm text-pretty'>
-          {BUDGET_WORDS.deviceNote}
-        </p>
+        <InlineNotice tone='info'>{BUDGET_WORDS.deviceNote}</InlineNotice>
       )}
       {error && (
         <p className='text-destructive text-sm' role='alert'>
@@ -601,13 +707,15 @@ function BudgetStart({
         </p>
       )}
       <ModalFooterActions
-        note={needing > 0 ? BUDGET_WORDS.needDetails(needing) : null}
+        note={
+          needing > 0 && !isFolded ? BUDGET_WORDS.needDetails(needing) : null
+        }
         cancelAction={
           <Button
             type='button'
             variant='secondary'
             disabled={isAdding}
-            onClick={askBack}
+            onClick={stepBack}
           >
             Back
           </Button>
@@ -619,10 +727,30 @@ function BudgetStart({
             disabled={isAdding || proposals.length === 0 || needing > 0}
             onClick={() => void add()}
           >
-            {mode === 'plan' ? BUDGET_WORDS.planAdd : BUDGET_WORDS.deviceAdd}
+            {isFolded ? BUDGET_WORDS.needDetailsShort(needing) : addLabel}
           </Button>
         }
       />
+      <DetailSheet
+        isOpen={isNotReadOpen}
+        onClose={() => setIsNotReadOpen(false)}
+        title={BUDGET_WORDS.notReadTitle}
+      >
+        <ul className='space-y-3'>
+          {[...new Set(notRead.map((entry) => entry.file))].map((file) => (
+            <li key={file}>
+              <p className='text-sm font-medium'>{file}</p>
+              <ul className='list-disc pl-5 text-sm'>
+                {notRead
+                  .filter((entry) => entry.file === file)
+                  .map((entry) => (
+                    <li key={entry.text}>{entry.text}</li>
+                  ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+      </DetailSheet>
       <DetailSheet
         isOpen={selectedProposal !== null}
         onClose={() => setSelected(null)}
@@ -630,17 +758,29 @@ function BudgetStart({
         actions={<ValuesEyeButton />}
       >
         <div className='space-y-3'>
-          {selectedProposal && (
-            <div className='space-y-1 text-sm'>
-              <p className='text-muted-foreground'>
-                {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
-              </p>
-              {selectedProposal.notes.map((note) => (
-                <p key={note} className='text-pretty'>
-                  <MaskedText>{note}</MaskedText>
+          {selectedProposal && selectedRow && (
+            <>
+              <SheetHead
+                label={BUDGET_WORDS.sheetKind[selectedProposal.kind]}
+                figure={selectedRow.amount ?? undefined}
+                fact={selectedRow.line}
+              />
+              <div className='space-y-1 text-sm'>
+                <p className='text-muted-foreground'>
+                  {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
                 </p>
-              ))}
-            </div>
+                {selectedProposal.cadenceWords !== null && (
+                  <p className='text-pretty'>
+                    {BUDGET_WORDS.documentSays(selectedProposal.cadenceWords)}
+                  </p>
+                )}
+                {selectedProposal.notes.map((note) => (
+                  <p key={note} className='text-pretty'>
+                    <MaskedText>{note}</MaskedText>
+                  </p>
+                ))}
+              </div>
+            </>
           )}
           <ActionGroup isRoomy>
             <ActionRow

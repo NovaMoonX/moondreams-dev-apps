@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import {
   getMissingStep,
+  getMissingSteps,
   toBillValue,
   toIncomeValue,
 } from '../../src/apps/runway/lib/budgetDraft.ts';
@@ -71,6 +72,28 @@ assert.deepEqual(
   conflict.bills[0].notes,
   ['Also in Summary.csv as $1,300.00'],
   'a different amount becomes a note',
+);
+
+const twoFiles = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      bill('Budget.csv', 'Rent', 145_000),
+      bill('Budget.csv', 'Water', 6_240),
+      { ...bill('Summary.csv', 'Rent', 150_000), dayOfMonth: null },
+    ],
+    envelopes: [],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames },
+);
+assert.equal(twoFiles.bills.length, 2, 'Rent from two files is one bill');
+assert.equal(twoFiles.bills[0].amountCents, 145_000);
+assert.deepEqual(
+  twoFiles.bills[0].notes,
+  ['Also in Summary.csv as $1,500.00'],
+  "two files read together keep the other file's amount as a note",
 );
 
 const missing = normalizeBudgetReading(
@@ -216,10 +239,16 @@ assert.deepEqual(
   ["Car insurance repeats yearly, which Runway can't plan yet"],
   'the cadence the app lacks is named',
 );
+assert.equal(yearly.bills[0].writtenCadence, 'yearly', 'its words are kept');
 assert.equal(
-  getMissingStep('bill', toBillValue(yearly.bills[0], today)),
-  'repeats',
-  'its repeat is left to the person',
+  yearly.bills[0].amountCents,
+  null,
+  'an amount that was for a yearly bill is not kept as a monthly one',
+);
+assert.deepEqual(
+  getMissingSteps('bill', toBillValue(yearly.bills[0], today)),
+  ['amount', 'repeats'],
+  'its amount and repeat are left to the person',
 );
 assert.equal(
   toBillValue(yearly.bills[1], today).timing.schedule.kind,

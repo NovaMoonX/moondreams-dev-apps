@@ -421,15 +421,22 @@ function BillForm({
       isAnswered: formData.frequency !== null,
       blocker: FORM_FLOW_WORDS.pickRepeat,
       render: ({ moveOn }) => (
-        <PillGroup
-          label='Repeats'
-          options={frequencyOptions}
-          value={formData.frequency}
-          onChange={(frequency) => {
-            set({ frequency });
-            moveOn();
-          }}
-        />
+        <div className='space-y-2'>
+          <PillGroup
+            label='Repeats'
+            options={frequencyOptions}
+            value={formData.frequency}
+            onChange={(frequency) => {
+              set({ frequency });
+              moveOn();
+            }}
+          />
+          {draft?.repeatNote && (
+            <p className='text-muted-foreground text-sm text-pretty'>
+              {draft.repeatNote}
+            </p>
+          )}
+        </div>
       ),
     },
     ...(isOnce || formData.frequency === null

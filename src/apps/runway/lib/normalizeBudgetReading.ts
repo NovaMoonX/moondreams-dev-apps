@@ -39,6 +39,8 @@ export interface BudgetBill extends BudgetItem {
   dueOn: number | null;
   dayOfMonth: number | null;
   repeats: BudgetBillRepeat | null;
+  /** The cadence the document wrote when Runway has no repeat for it ("yearly"); the amount is left out then, since it was for that cadence. */
+  writtenCadence: string | null;
 }
 
 export interface BudgetEnvelope extends BudgetItem {
@@ -216,12 +218,20 @@ const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
   const low = toCents(raw.lowCents);
   const high = toCents(raw.highCents);
   const isRange = low !== null && high !== null && high > low;
+  const writtenCadence = getOtherCadence(raw);
+  const isKept = writtenCadence === null;
   return {
     ...toBase(raw, toFile),
-    amountCents: isRange ? low : (toCents(raw.amountCents) ?? low ?? high),
-    highCents: isRange ? high : null,
+    amountCents:
+      isKept && isRange
+        ? low
+        : isKept
+          ? (toCents(raw.amountCents) ?? low ?? high)
+          : null,
+    highCents: isKept && isRange ? high : null,
     dueOn: toDate(raw.dueOn),
     ...toRepeat(raw),
+    writtenCadence,
   };
 };
 
@@ -329,15 +339,18 @@ export function normalizeBudgetReading(
     existing.bills,
     named(asRecords(raw.bills).map((entry) => toBill(entry, toFile))),
     (item) => item.amountCents,
-    (kept, other) => ({
-      ...kept,
-      ...(kept.amountCents === null
-        ? { amountCents: other.amountCents, highCents: other.highCents }
-        : {}),
-      dueOn: orElse(kept.dueOn, other.dueOn),
-      dayOfMonth: orElse(kept.dayOfMonth, other.dayOfMonth),
-      repeats: orElse(kept.repeats, other.repeats),
-    }),
+    (kept, other) =>
+      kept.writtenCadence !== null
+        ? kept
+        : {
+            ...kept,
+            ...(kept.amountCents === null
+              ? { amountCents: other.amountCents, highCents: other.highCents }
+              : {}),
+            dueOn: orElse(kept.dueOn, other.dueOn),
+            dayOfMonth: orElse(kept.dayOfMonth, other.dayOfMonth),
+            repeats: orElse(kept.repeats, other.repeats),
+          },
     BUDGET_LIMITS.items.bills,
   );
   const envelopes = mergeItems(

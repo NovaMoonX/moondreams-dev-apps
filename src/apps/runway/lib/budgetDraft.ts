@@ -184,36 +184,40 @@ export function toGoalValue(item: BudgetGoal, today: number): GoalSealed {
   };
 }
 
-/** The first question a proposal still needs answered before it can be added, as the form names it; null when it is complete. */
-export function getMissingStep(
+/** Every question a proposal still needs answered before it can be added, as the form names them, in the order the form asks; empty when it is complete. */
+export function getMissingSteps(
   kind: BudgetKind,
   value: BudgetValues[BudgetKind],
-): string | null {
+): string[] {
   if (kind === 'income') {
     const income = value as CreateIncomeInput;
     const { schedule } = income;
-    if (income.amount.lowCents <= 0) return 'amount';
-    if (schedule.kind === 'irregular') return 'often';
-    if (
+    const amount = income.amount.lowCents <= 0 ? ['amount'] : [];
+    if (schedule.kind === 'irregular') return [...amount, 'often'];
+    const isNoDate =
       schedule.anchor === null ||
-      (schedule.kind === 'twiceMonthly' && schedule.monthDays.length < 2)
-    )
-      return 'schedule';
-    return null;
+      (schedule.kind === 'twiceMonthly' && schedule.monthDays.length < 2);
+    return isNoDate ? [...amount, 'schedule'] : amount;
   }
   if (kind === 'bill') {
     const bill = value as BillSealed;
     const { schedule } = bill.timing;
-    if (bill.amount.lowCents <= 0) return 'amount';
-    if (schedule.kind === 'irregular') return 'repeats';
-    return schedule.anchor === null ? 'due' : null;
+    const amount = bill.amount.lowCents <= 0 ? ['amount'] : [];
+    if (schedule.kind === 'irregular') return [...amount, 'repeats'];
+    return schedule.anchor === null ? [...amount, 'due'] : amount;
   }
   if (kind === 'envelope') {
     const { amount } = (value as EnvelopeSealed).funding;
-    return amount.kind === 'exact' && amount.cents <= 0 ? 'amount' : null;
+    return amount.kind === 'exact' && amount.cents <= 0 ? ['amount'] : [];
   }
-  return (value as GoalSealed).targetCents <= 0 ? 'target' : null;
+  return (value as GoalSealed).targetCents <= 0 ? ['target'] : [];
 }
+
+/** The first question a proposal still needs answered, as the form names it; null when it is complete. */
+export const getMissingStep = (
+  kind: BudgetKind,
+  value: BudgetValues[BudgetKind],
+) => getMissingSteps(kind, value)[0] ?? null;
 
 /** Whether the missing piece is the amount, which a row says in words. */
 export const isAmountStep = (step: string | null) =>

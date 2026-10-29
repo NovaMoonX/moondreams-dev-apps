@@ -7,4 +7,6 @@ export interface DraftSink<T> {
   sources?: { id: string; name: string }[];
   /** A question to open first on a saved answer, for the one it still lacks. */
   openStep?: string | null;
+  /** A line under a bill's repeat question, such as the words a document used for it. */
+  repeatNote?: string | null;
 }

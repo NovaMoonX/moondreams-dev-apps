@@ -457,6 +457,7 @@ function StartFlow({
             mode={budget.mode}
             onBack={() => setStage('choose')}
             onExit={closeView}
+            onStartFresh={() => setStage('steps')}
             onGuards={(guards) => {
               budgetGuards.current = guards;
             }}

@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
-import { START_WORDS } from '@apps/runway/constants';
+import { BUDGET_WORDS, START_WORDS } from '@apps/runway/constants';
 import { collectStarted } from '@apps/runway/engine/progress';
 import InlineNotice from '@/components/InlineNotice';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
@@ -399,6 +399,7 @@ function SavedStart({ uid }: { uid: string }) {
 /** Starting out before signing in: answers are kept on this device for a week and written to the plan on sign-in. */
 function DeviceStart() {
   const { signInWithGoogle } = useAuth();
+  const { addToast } = useToast();
   const draft = useStartDraft();
   const entries = {
     incomes: draft?.incomes ?? [],
@@ -510,7 +511,18 @@ function DeviceStart() {
     <StartFlow
       budget={{
         mode: 'device',
-        onAdd: async (added) => addDraftEntries(added),
+        onAdd: async (added) => {
+          addDraftEntries(added);
+          addToast({
+            title: BUDGET_WORDS.addedToast(
+              added.incomes.length +
+                added.bills.length +
+                added.envelopes.length +
+                added.goals.length,
+            ),
+            type: 'success',
+          });
+        },
       }}
       steps={DRAFT_STEPS}
       rows={rows}
