@@ -20,6 +20,7 @@ import {
   startDaysListener,
   startRecordsListener,
 } from '@apps/runway/store/listeners/dayListeners';
+import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import {
@@ -45,6 +46,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import {
   setChanges,
   setChangesFailed,
+  setCards,
   setClosing,
   setDays,
   setItems,
@@ -125,6 +127,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (versions) => dispatch(setVersions(versions)),
+          fail,
+        ),
+        startCardsListener(
+          uid,
+          encryption,
+          (cards) => dispatch(setCards(cards)),
           fail,
         ),
       ];

@@ -17,7 +17,7 @@ interface CoverageHeadlineProps {
   freeCents: number;
 }
 
-/** What the day's money leaves once every item has had its turn (less than nothing when the person covered the difference from Free to spend): its own framed block under the day's lines, in the card's neutral colour so the figure above it stays the one emphasized surface. */
+/** What the day's money leaves once every item has had its turn (less than nothing when the person covered the difference from Free to Spend): its own framed block under the day's lines, in the card's neutral colour so the figure above it stays the one emphasized surface. */
 function CoverageHeadline({ freeCents }: CoverageHeadlineProps) {
   const { isHidden } = useValuesHidden();
   return (

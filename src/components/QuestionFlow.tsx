@@ -179,6 +179,7 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
             key={step.id}
             label={step.summaryLabel}
             ariaLabel={getRowName(step)}
+            detail={step.summaryDetail}
             onClick={() => reopen(step.id)}
           >
             {step.summaryValue || (
