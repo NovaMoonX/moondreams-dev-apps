@@ -200,4 +200,20 @@ assert.equal(
   'no HTML and no mention that pings on every rebuild',
 );
 
+assert.deepEqual(
+  parseStatus(
+    `- [ ] Mine (who: you, owner)
+- [ ] Not mine (who: you; the owner decides later)
+`,
+    '',
+  ).ownerItems,
+  ['Mine'],
+  'owner must be one of the names after who:',
+);
+assert.equal(
+  summarizeCi([run(1, 'check', 'cancelled')]),
+  'red',
+  'a cancelled check is not green',
+);
+
 console.log('owner inbox: ok');

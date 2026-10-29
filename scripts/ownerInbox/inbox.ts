@@ -30,9 +30,14 @@ export function summarizeCi(runs: readonly CheckRun[]): CiState {
   ];
   if (latest.length === 0) return 'none';
   const isFailed = (run: CheckRun) =>
-    ['failure', 'timed_out', 'action_required', 'startup_failure'].includes(
-      run.conclusion ?? '',
-    );
+    [
+      'failure',
+      'timed_out',
+      'action_required',
+      'startup_failure',
+      'cancelled',
+      'stale',
+    ].includes(run.conclusion ?? '');
   if (latest.some(isFailed)) return 'red';
   return latest.some((run) => run.status !== 'completed') ? 'running' : 'green';
 }
@@ -99,7 +104,10 @@ const bullet = (line: string) =>
   );
 
 const isOpenBox = (line: string) => /^\s*[-*]\s+\[ \]/.test(line);
-const isForOwner = (line: string) => /\(who:[^)]*\bowner\b[^)]*\)/i.test(line);
+const isForOwner = (line: string) =>
+  (line.match(/\(who:([^)]*)\)/i)?.[1] ?? '')
+    .split(/[,/]/)
+    .some((who) => who.trim().toLowerCase() === 'owner');
 
 /** Reads a PR's `📋 Status` comment: its session, state, unchecked owner items, good-to-know notes and latest screenshots. */
 export function parseStatus(body: string, updatedAt: string): PrStatus {
@@ -200,14 +208,15 @@ const describeStanding = (session: Session) => {
 const isStacked = (session: Session) =>
   session.prs.some((pr) => session.prs.some((other) => other.head === pr.base));
 
-const linkText = (text: string) => toPlain(text).replace(/[[\]]/g, '\\$&');
+const escapeBrackets = (text: string) => text.replace(/[[\]]/g, '\\$&');
+const linkText = (text: string) => escapeBrackets(toPlain(text));
 
 /** Markdown for the switchboard list; HTML inside a `<summary>`, where GitHub renders no markdown. */
 const switchboardLine = (session: Session, isHtml = false) => {
   const title = session.title;
   const link = isHtml
     ? `<a href="${session.url}">${title}</a>`
-    : `[${title}](${session.url})`;
+    : `[${escapeBrackets(title)}](${session.url})`;
   const name = session.url ? link : title;
   const prs = `${plural(session.prs.length, 'PR')}${isStacked(session) ? ' (stacked)' : ''}`;
   const ci = session.prs.some((pr) => pr.ci === 'red')
@@ -327,7 +336,7 @@ export function groupSessions(prs: readonly InboxPr[]): Session[] {
     const title =
       pr.status?.sessionTitle ??
       found?.title ??
-      (key === 'none' ? 'Without a status comment' : linkText(pr.title));
+      (key === 'none' ? 'Without a status comment' : toPlain(pr.title));
     return new Map(acc).set(key, {
       key,
       title,
@@ -366,7 +375,7 @@ export function buildInbox(prs: readonly InboxPr[], now: string): string {
     '---',
     '',
   ];
-  // GitHub refuses an issue body over 65,536 characters, so whole sessions are dropped from the end, never cut mid-block.
+  // GitHub refuses an issue body over 65,536 characters, so whole sessions that don't fit are left out, never cut mid-block.
   const blocks = sessions.map((session) =>
     sessionBlock(session, prs).join('\n'),
   );

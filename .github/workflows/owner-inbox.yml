@@ -30,8 +30,8 @@ permissions:
   checks: read
   issues: write
 concurrency:
-  group: owner-inbox
-  # Not cancelling: a run for an ignored event (any other comment) would otherwise cancel a real rebuild before its job is skipped.
+  # Ignored comments get a group of their own, so they never take a real rebuild's place in the queue.
+  group: owner-inbox-${{ github.event_name == 'issue_comment' && !contains(github.event.comment.body, '<!-- pr-status -->') && github.run_id || 'main' }}
   cancel-in-progress: false
 jobs:
   owner-inbox:
