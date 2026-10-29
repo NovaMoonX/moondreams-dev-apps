@@ -5,6 +5,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import RevealChip from '@/components/RevealChip';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import SectionHeader from '@/components/SectionHeader';
 import { PillGroup } from '@/components/PillGroup';
 import ReceiptPhotoStep from '@apps/waypoint/components/ReceiptPhotoStep';
 import ReceiptSplitEditor from '@apps/waypoint/components/ReceiptSplitEditor';
@@ -19,7 +20,11 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { MAX_DAYS_OUTSIDE_TRIP } from '@apps/waypoint/constants';
 import { createExpense } from '@apps/waypoint/store/actions/expenseActions';
-import type { ExpenseCategory, ExpenseLink, TripSpace } from '@apps/waypoint/types';
+import type {
+  ExpenseCategory,
+  ExpenseLink,
+  TripSpace,
+} from '@apps/waypoint/types';
 
 /** What the expense form already knew when the person chose to split a receipt instead. */
 export interface ReceiptSplitPrefill {
@@ -52,7 +57,8 @@ const RECEIPT_KIND_CATEGORIES: Record<ReceiptKind, ExpenseCategory> = {
   OTHER: 'OTHER',
 };
 
-const getReceiptCategory = (kind: ReceiptKind | null): ExpenseCategory => (kind ? RECEIPT_KIND_CATEGORIES[kind] : 'FOOD');
+const getReceiptCategory = (kind: ReceiptKind | null): ExpenseCategory =>
+  kind ? RECEIPT_KIND_CATEGORIES[kind] : 'FOOD';
 
 /** A receipt's date as a trip day, when it falls on the trip or just around it. */
 function getReceiptDay(trip: TripSpace, date: string | null) {
@@ -65,11 +71,20 @@ function getReceiptDay(trip: TripSpace, date: string | null) {
   }
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const offset = Math.round((day - trip.startDate) / 86_400_000);
-  const isNearTrip = offset >= -MAX_DAYS_OUTSIDE_TRIP && offset < dayCount + MAX_DAYS_OUTSIDE_TRIP;
+  const isNearTrip =
+    offset >= -MAX_DAYS_OUTSIDE_TRIP &&
+    offset < dayCount + MAX_DAYS_OUTSIDE_TRIP;
   return isNearTrip ? offset : null;
 }
 
-function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose }: SplitStepProps) {
+function SplitStep({
+  trip,
+  currentUserId,
+  prefill,
+  reading,
+  isDirtyRef,
+  onClose,
+}: SplitStepProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const memberIds = useMemo(() => Object.keys(trip.members), [trip.members]);
@@ -78,7 +93,12 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
     () =>
       memberIds.map((id) => ({
         id,
-        name: id === currentUserId ? 'You' : memberInfo?.map[id]?.displayName || memberInfo?.map[id]?.email || 'Trip member',
+        name:
+          id === currentUserId
+            ? 'You'
+            : memberInfo?.map[id]?.displayName ||
+              memberInfo?.map[id]?.email ||
+              'Trip member',
       })),
     [memberIds, memberInfo, currentUserId],
   );
@@ -87,25 +107,36 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
   const [payerUid, setPayerUid] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUsdConfirmed, setIsUsdConfirmed] = useState(false);
-  const foreignCurrency = reading?.currency && reading.currency !== 'USD' ? reading.currency : null;
+  const foreignCurrency =
+    reading?.currency && reading.currency !== 'USD' ? reading.currency : null;
   const isSavingRef = useRef(false);
   const { result, isComplete } = split;
 
   useEffect(() => {
     isDirtyRef.current = split.isDirty || payerUid !== null;
   }, [isDirtyRef, split.isDirty, payerUid]);
-  const canSave = isComplete && payerUid !== null && title.trim() !== '' && !isSubmitting && (foreignCurrency === null || isUsdConfirmed);
+  const canSave =
+    isComplete &&
+    payerUid !== null &&
+    title.trim() !== '' &&
+    !isSubmitting &&
+    (foreignCurrency === null || isUsdConfirmed);
   const unclaimedCount = result.unclaimedLineIds.length;
 
   const getNote = () => {
-    if (split.state.lines.length === 0) return 'Add an item to start splitting.';
-    if (split.state.lines.some((line) => line.name.trim() === '')) return 'Give each item a name.';
+    if (split.state.lines.length === 0)
+      return 'Add an item to start splitting.';
+    if (split.state.lines.some((line) => line.name.trim() === ''))
+      return 'Give each item a name.';
     if (split.hasUnpricedLine) return 'Give each item a price.';
-    if (split.hasNegativeShare) return 'A discount is bigger than what someone ordered.';
-    if (unclaimedCount > 0) return `${unclaimedCount} ${unclaimedCount === 1 ? 'item has' : 'items have'} nobody yet.`;
+    if (split.hasNegativeShare)
+      return 'A discount is bigger than what someone ordered.';
+    if (unclaimedCount > 0)
+      return `${unclaimedCount} ${unclaimedCount === 1 ? 'item has' : 'items have'} nobody yet.`;
     if (title.trim() === '') return 'Add a title to save it.';
     if (payerUid === null) return 'Say who paid the bill.';
-    if (foreignCurrency !== null && !isUsdConfirmed) return `This bill is in ${foreignCurrency}. Confirm the amounts are in USD first.`;
+    if (foreignCurrency !== null && !isUsdConfirmed)
+      return `This bill is in ${foreignCurrency}. Confirm the amounts are in USD first.`;
     return null;
   };
 
@@ -129,21 +160,31 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
         currency: 'USD',
         payerUid,
         status: 'PAID',
-        dayIndex: prefill?.dayIndex ?? getReceiptDay(trip, reading?.date ?? null),
-        category: prefill?.category ?? getReceiptCategory(reading?.kind ?? null),
+        dayIndex:
+          prefill?.dayIndex ?? getReceiptDay(trip, reading?.date ?? null),
+        category:
+          prefill?.category ?? getReceiptCategory(reading?.kind ?? null),
         customCategoryLabel: prefill?.customCategoryLabel ?? null,
         note: reading?.address ?? null,
         groupLabel: null,
         isPerPerson: false,
         linkedTo: prefill?.link ?? null,
         split: { targetType: 'SPECIFIC_MEMBERS', targetMemberIds: shared },
-        splitAmounts: Object.fromEntries(shared.map((uid) => [uid, (result.totals[uid]?.totalCents ?? 0) / 100])),
+        splitAmounts: Object.fromEntries(
+          shared.map((uid) => [
+            uid,
+            (result.totals[uid]?.totalCents ?? 0) / 100,
+          ]),
+        ),
       }),
     ).unwrap();
     write.catch((saveError) =>
       addToast({
         title: `Couldn't add ${savedTitle}`,
-        description: getErrorMessage(saveError, 'Please split the receipt again.'),
+        description: getErrorMessage(
+          saveError,
+          'Please split the receipt again.',
+        ),
         type: 'error',
       }),
     );
@@ -160,37 +201,41 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
       {foreignCurrency !== null && (
         <div className='space-y-2'>
           <p className='text-warning text-sm' role='status'>
-            This looks like a {foreignCurrency} bill. Expenses here are in USD, so type the amounts converted, then confirm.
+            This looks like a {foreignCurrency} bill. Expenses here are in USD,
+            so type the amounts converted, then confirm.
           </p>
           <RevealChip onClick={() => setIsUsdConfirmed((current) => !current)}>
-            {isUsdConfirmed ? 'Amounts are in USD ✓' : 'These amounts are in USD'}
+            {isUsdConfirmed
+              ? 'Amounts are in USD ✓'
+              : 'These amounts are in USD'}
           </RevealChip>
         </div>
       )}
       <ReceiptSplitEditor split={split} />
-      <section className='space-y-4'>
-        <div className='space-y-1.5'>
-          <Label>Expense title</Label>
-          <Input
-            aria-label='Expense title'
-            variant='outline'
-            placeholder='Dinner at Ichiran'
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-          />
-        </div>
-        <div className='space-y-2'>
-          <Label>Who paid the bill?</Label>
-          <PillGroup
-            label='Who paid the bill?'
-            options={people.map((person) => ({ value: person.id, label: person.name }))}
-            value={payerUid}
-            onChange={setPayerUid}
-          />
-          <p className='text-muted-foreground text-xs'>
-            It&apos;s added as paid by them, and everyone else owes their share.
-          </p>
-        </div>
+      <section className='space-y-1.5'>
+        <Label>Expense title</Label>
+        <Input
+          aria-label='Expense title'
+          variant='outline'
+          placeholder='Dinner at Ichiran'
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+        />
+      </section>
+      <section className='space-y-2'>
+        <SectionHeader
+          title='Who paid the bill?'
+          subtitle='They are added as paid, and everyone else owes their share.'
+        />
+        <PillGroup
+          label='Who paid the bill?'
+          options={people.map((person) => ({
+            value: person.id,
+            label: person.name,
+          }))}
+          value={payerUid}
+          onChange={setPayerUid}
+        />
       </section>
       <ModalFooterActions
         note={getNote()}
@@ -200,7 +245,12 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
           </Button>
         }
         rightActions={
-          <Button type='button' loading={isSubmitting} disabled={!canSave} onClick={handleSave}>
+          <Button
+            type='button'
+            loading={isSubmitting}
+            disabled={!canSave}
+            onClick={handleSave}
+          >
             Add
           </Button>
         }
@@ -210,9 +260,16 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
 }
 
 /** Splitting one bill between the people who shared it: a photo of the receipt (or the items by hand), who had what, tax and tip, then one expense with each person's exact share. */
-function ReceiptSplitScreen({ trip, currentUserId, prefill, onClose }: ReceiptSplitScreenProps) {
+function ReceiptSplitScreen({
+  trip,
+  currentUserId,
+  prefill,
+  onClose,
+}: ReceiptSplitScreenProps) {
   const { confirm } = useActionModal();
-  const [stage, setStage] = useState<{ step: 'photo' } | { step: 'split'; reading: ReceiptReading | null }>({
+  const [stage, setStage] = useState<
+    { step: 'photo' } | { step: 'split'; reading: ReceiptReading | null }
+  >({
     step: 'photo',
   });
 
@@ -236,7 +293,11 @@ function ReceiptSplitScreen({ trip, currentUserId, prefill, onClose }: ReceiptSp
   };
 
   return (
-    <Subview overlay title='Split a receipt' onClose={() => void requestClose()}>
+    <Subview
+      overlay
+      title='Split a receipt'
+      onClose={() => void requestClose()}
+    >
       {stage.step === 'photo' ? (
         <ReceiptPhotoStep
           noun='receipt'
