@@ -7680,6 +7680,262 @@ const version = (
   );
 }
 
+// Cards (Issue 50): a reserve per card, bills paid by card, and paying a card off.
+{
+  const start = Date.UTC(2026, 9, 1);
+  const day = (n: number) => start + n * 86_400_000;
+  const move = (
+    id: string,
+    kind: OpenMove['kind'],
+    on: number,
+    refId: string | null,
+    payload: object,
+    reversesMoveId: string | null = null,
+  ) =>
+    ({
+      id,
+      kind,
+      date: on,
+      refId,
+      reversesMoveId,
+      createdAt: on,
+      payload,
+    }) as unknown as OpenMove;
+  const purchase = (
+    id: string,
+    on: number,
+    envelopeId: string,
+    cents: number,
+    paidByCardId: string | null,
+  ): OpenPurchase => ({
+    id,
+    date: on,
+    source: 'manual',
+    needsHome: false,
+    createdAt: on,
+    updatedAt: on,
+    amountCents: cents,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: toChosenLines([{ envelopeId, cents }]),
+    refundOfId: null,
+    paidByCardId,
+  });
+  const starts = [
+    move('s-money', 'start', start, null, {
+      amountCents: 100_000,
+      holding: 'money',
+    }),
+    move('s-food', 'start', start, 'food', {
+      amountCents: 10_000,
+      holding: 'envelope',
+    }),
+    move('s-rent', 'start', start, 'rent', {
+      amountCents: 8_000,
+      holding: 'bill',
+    }),
+    move('s-venture', 'start', start, 'venture', {
+      amountCents: 2_500,
+      holding: 'card',
+    }),
+  ];
+  const kinds = {
+    food: 'envelope',
+    rent: 'bill',
+    venture: 'card',
+    freedom: 'card',
+  } as const;
+  const base = {
+    startDate: start,
+    moves: starts,
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds,
+  };
+  const before = deriveBalances(base);
+  assert.equal(
+    before.reserveByCard.venture,
+    2_500,
+    'what the card owed at the start',
+  );
+  assert.equal(before.moneyOnHandCents, 100_000);
+  assert.equal(
+    before.freeToSpendCents,
+    100_000 - 10_000 - 8_000 - 2_500,
+    'what a card owes is spoken for',
+  );
+  assert.equal(
+    before.assignedByItem.venture,
+    undefined,
+    'a card is not an envelope',
+  );
+
+  const charged = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(
+    charged.assignedByItem.food,
+    6_000,
+    'the envelope goes down as in cash',
+  );
+  assert.equal(
+    charged.reserveByCard.venture,
+    6_500,
+    'and the card waits for it',
+  );
+  assert.equal(
+    charged.moneyOnHandCents,
+    100_000,
+    'a card purchase leaves the cash where it is',
+  );
+  assert.equal(
+    charged.freeToSpendCents,
+    before.freeToSpendCents,
+    'a card purchase is not counted twice in Free to spend',
+  );
+  const cash = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 4_000, null)],
+  });
+  assert.equal(
+    cash.freeToSpendCents,
+    charged.freeToSpendCents,
+    'paid by card or in cash, Free to spend is the same',
+  );
+
+  const over = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 13_000, 'venture')],
+  });
+  assert.equal(
+    over.freeToSpendCents,
+    before.freeToSpendCents - 3_000,
+    'an overspend on a card draws Free to spend by the overspend, as in cash',
+  );
+
+  const payoff = move('pay1', 'cardPayment', day(5), 'venture', {
+    amountCents: 6_500,
+  });
+  const paid = deriveBalances({
+    ...base,
+    moves: [...starts, payoff],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(paid.reserveByCard.venture, 0);
+  assert.equal(
+    paid.moneyOnHandCents,
+    93_500,
+    'paying the card spends the cash',
+  );
+  assert.equal(
+    paid.freeToSpendCents,
+    charged.freeToSpendCents,
+    'paying a card off leaves Free to spend where it was',
+  );
+
+  const overpaid = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      move('pay2', 'cardPayment', day(5), 'venture', { amountCents: 8_000 }),
+    ],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(overpaid.reserveByCard.venture, -1_500);
+  assert.equal(
+    overpaid.assignedToCardsCents,
+    0,
+    'an overpaid card counts as zero',
+  );
+  assert.equal(
+    overpaid.freeToSpendCents,
+    charged.freeToSpendCents - 1_500,
+    'paying more than a card waits for comes out of Free to spend',
+  );
+
+  const undone = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      payoff,
+      move(
+        'unpay1',
+        'cardPayment',
+        day(5),
+        'venture',
+        { amountCents: 6_500 },
+        'pay1',
+      ),
+    ],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.deepEqual(undone, charged, 'an undone payment is as if never made');
+
+  const billOnCard = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      move('paid_rent', 'billPaid', day(1), 'rent', {
+        amountCents: 8_000,
+        paidOn: day(1),
+        fromFreeCents: 0,
+        cardId: 'freedom',
+      }),
+    ],
+  });
+  assert.equal(billOnCard.assignedByItem.rent, 0, 'the bill is paid');
+  assert.equal(
+    billOnCard.reserveByCard.freedom,
+    8_000,
+    'and its card waits for it',
+  );
+  assert.equal(billOnCard.moneyOnHandCents, 100_000, 'the cash stays put');
+  assert.equal(billOnCard.freeToSpendCents, before.freeToSpendCents);
+
+  assert.equal(
+    deriveBalancesBefore(
+      { ...base, moves: [...starts, payoff], purchases: [] },
+      day(5),
+    ).reserveByCard.venture,
+    2_500,
+    'a payment on or after the day is not counted before it',
+  );
+
+  // A closing over the month gives the same figures as the replay.
+  const ledger = {
+    moves: [...starts, payoff],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  };
+  const closed = decodeClosing(
+    toMonthKey(start),
+    encodeClosing(
+      buildClosing(toMonthKey(start), null, {
+        startDate: start,
+        days: [],
+        records: [],
+        ...ledger,
+        billIds: new Set(['rent']),
+      }),
+    ),
+  );
+  assert.deepEqual(
+    deriveBalances({ ...base, moves: starts, closing: closed }),
+    deriveBalances({ ...base, ...ledger }),
+    'cards: a closing equals the replay',
+  );
+  assert.equal(
+    deriveBalances({
+      ...base,
+      moves: starts,
+      closing: withoutSpending(closed),
+    }).reserveByCard.venture,
+    -4_000,
+    'at Plan the card purchases are left out with the rest of the spending',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to spend, then what gets less.
@@ -8470,6 +8726,262 @@ console.log('runway engine: ok');
       `G9: a closing with choice ${index + 1} equals the replay`,
     );
   });
+}
+
+// Cards (Issue 50): a reserve per card, bills paid by card, and paying a card off.
+{
+  const start = Date.UTC(2026, 9, 1);
+  const day = (n: number) => start + n * 86_400_000;
+  const move = (
+    id: string,
+    kind: OpenMove['kind'],
+    on: number,
+    refId: string | null,
+    payload: object,
+    reversesMoveId: string | null = null,
+  ) =>
+    ({
+      id,
+      kind,
+      date: on,
+      refId,
+      reversesMoveId,
+      createdAt: on,
+      payload,
+    }) as unknown as OpenMove;
+  const purchase = (
+    id: string,
+    on: number,
+    envelopeId: string,
+    cents: number,
+    paidByCardId: string | null,
+  ): OpenPurchase => ({
+    id,
+    date: on,
+    source: 'manual',
+    needsHome: false,
+    createdAt: on,
+    updatedAt: on,
+    amountCents: cents,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: toChosenLines([{ envelopeId, cents }]),
+    refundOfId: null,
+    paidByCardId,
+  });
+  const starts = [
+    move('s-money', 'start', start, null, {
+      amountCents: 100_000,
+      holding: 'money',
+    }),
+    move('s-food', 'start', start, 'food', {
+      amountCents: 10_000,
+      holding: 'envelope',
+    }),
+    move('s-rent', 'start', start, 'rent', {
+      amountCents: 8_000,
+      holding: 'bill',
+    }),
+    move('s-venture', 'start', start, 'venture', {
+      amountCents: 2_500,
+      holding: 'card',
+    }),
+  ];
+  const kinds = {
+    food: 'envelope',
+    rent: 'bill',
+    venture: 'card',
+    freedom: 'card',
+  } as const;
+  const base = {
+    startDate: start,
+    moves: starts,
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds,
+  };
+  const before = deriveBalances(base);
+  assert.equal(
+    before.reserveByCard.venture,
+    2_500,
+    'what the card owed at the start',
+  );
+  assert.equal(before.moneyOnHandCents, 100_000);
+  assert.equal(
+    before.freeToSpendCents,
+    100_000 - 10_000 - 8_000 - 2_500,
+    'what a card owes is spoken for',
+  );
+  assert.equal(
+    before.assignedByItem.venture,
+    undefined,
+    'a card is not an envelope',
+  );
+
+  const charged = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(
+    charged.assignedByItem.food,
+    6_000,
+    'the envelope goes down as in cash',
+  );
+  assert.equal(
+    charged.reserveByCard.venture,
+    6_500,
+    'and the card waits for it',
+  );
+  assert.equal(
+    charged.moneyOnHandCents,
+    100_000,
+    'a card purchase leaves the cash where it is',
+  );
+  assert.equal(
+    charged.freeToSpendCents,
+    before.freeToSpendCents,
+    'a card purchase is not counted twice in Free to spend',
+  );
+  const cash = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 4_000, null)],
+  });
+  assert.equal(
+    cash.freeToSpendCents,
+    charged.freeToSpendCents,
+    'paid by card or in cash, Free to spend is the same',
+  );
+
+  const over = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 13_000, 'venture')],
+  });
+  assert.equal(
+    over.freeToSpendCents,
+    before.freeToSpendCents - 3_000,
+    'an overspend on a card draws Free to spend by the overspend, as in cash',
+  );
+
+  const payoff = move('pay1', 'cardPayment', day(5), 'venture', {
+    amountCents: 6_500,
+  });
+  const paid = deriveBalances({
+    ...base,
+    moves: [...starts, payoff],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(paid.reserveByCard.venture, 0);
+  assert.equal(
+    paid.moneyOnHandCents,
+    93_500,
+    'paying the card spends the cash',
+  );
+  assert.equal(
+    paid.freeToSpendCents,
+    charged.freeToSpendCents,
+    'paying a card off leaves Free to spend where it was',
+  );
+
+  const overpaid = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      move('pay2', 'cardPayment', day(5), 'venture', { amountCents: 8_000 }),
+    ],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(overpaid.reserveByCard.venture, -1_500);
+  assert.equal(
+    overpaid.assignedToCardsCents,
+    0,
+    'an overpaid card counts as zero',
+  );
+  assert.equal(
+    overpaid.freeToSpendCents,
+    charged.freeToSpendCents - 1_500,
+    'paying more than a card waits for comes out of Free to spend',
+  );
+
+  const undone = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      payoff,
+      move(
+        'unpay1',
+        'cardPayment',
+        day(5),
+        'venture',
+        { amountCents: 6_500 },
+        'pay1',
+      ),
+    ],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.deepEqual(undone, charged, 'an undone payment is as if never made');
+
+  const billOnCard = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      move('paid_rent', 'billPaid', day(1), 'rent', {
+        amountCents: 8_000,
+        paidOn: day(1),
+        fromFreeCents: 0,
+        cardId: 'freedom',
+      }),
+    ],
+  });
+  assert.equal(billOnCard.assignedByItem.rent, 0, 'the bill is paid');
+  assert.equal(
+    billOnCard.reserveByCard.freedom,
+    8_000,
+    'and its card waits for it',
+  );
+  assert.equal(billOnCard.moneyOnHandCents, 100_000, 'the cash stays put');
+  assert.equal(billOnCard.freeToSpendCents, before.freeToSpendCents);
+
+  assert.equal(
+    deriveBalancesBefore(
+      { ...base, moves: [...starts, payoff], purchases: [] },
+      day(5),
+    ).reserveByCard.venture,
+    2_500,
+    'a payment on or after the day is not counted before it',
+  );
+
+  // A closing over the month gives the same figures as the replay.
+  const ledger = {
+    moves: [...starts, payoff],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  };
+  const closed = decodeClosing(
+    toMonthKey(start),
+    encodeClosing(
+      buildClosing(toMonthKey(start), null, {
+        startDate: start,
+        days: [],
+        records: [],
+        ...ledger,
+        billIds: new Set(['rent']),
+      }),
+    ),
+  );
+  assert.deepEqual(
+    deriveBalances({ ...base, moves: starts, closing: closed }),
+    deriveBalances({ ...base, ...ledger }),
+    'cards: a closing equals the replay',
+  );
+  assert.equal(
+    deriveBalances({
+      ...base,
+      moves: starts,
+      closing: withoutSpending(closed),
+    }).reserveByCard.venture,
+    -4_000,
+    'at Plan the card purchases are left out with the rest of the spending',
+  );
 }
 
 console.log('runway engine: ok');

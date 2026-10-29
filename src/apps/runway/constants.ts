@@ -253,7 +253,12 @@ export const DAY_RECORD_KINDS = [
   'correction',
 ] as const;
 /** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding and a `trackingChange` (tracking turned on or off). */
-export const MOVE_KINDS = ['billPaid', 'start', 'trackingChange'] as const;
+export const MOVE_KINDS = [
+  'billPaid',
+  'start',
+  'trackingChange',
+  'cardPayment',
+] as const;
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
 /** How a purchase line got its envelope: the person chose it, or it is Free to spend. */
@@ -268,7 +273,13 @@ export const SPEND_PAGE_SIZE = 30;
 export const SPEND_PILL_LIMIT = 12;
 
 /** What a `start` move holds the starting amount of. */
-export const START_HOLDINGS = ['money', 'goal', 'bill', 'envelope'] as const;
+export const START_HOLDINGS = [
+  'money',
+  'goal',
+  'bill',
+  'envelope',
+  'card',
+] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
 /** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
@@ -290,7 +301,7 @@ export const CLOSING_WRITE_CHUNK = 6;
 /** Times one rebuild is tried again after another device changed the plan under it. */
 export const CLOSING_REBUILD_ATTEMPTS = 3;
 /** A closing is stored as this version of its sealed payload; a reader of a different one rebuilds it. */
-export const CLOSING_VERSION = 2;
+export const CLOSING_VERSION = 3;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;

@@ -307,6 +307,8 @@ export interface BillSealed {
   fundedBy: BillFundedBy;
   /** Replaces the plan's stance for this bill; a version written before it existed has none. */
   stanceOverride: Stance | null;
+  /** The card it is usually charged to, which marking it paid starts from; null (or missing on an older version) when it is paid in cash. */
+  paidByCardId?: string | null;
 }
 
 export interface GoalSealed {
@@ -333,6 +335,29 @@ export interface PlanItemDoc {
   archivedAt: number | null;
   /** From this day what the item holds is Free to spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
   heldReleasedOn: DateOnly | null;
+}
+
+/** A credit card: the reserve it shows is what has been charged to it and not yet paid off. `archivedAt` hides it from new charges. */
+export interface CardDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface CardSealed {
+  /** The bank that issues it ("Capital One"). */
+  issuer: string;
+  /** The card's own name ("Venture X"), when it has one. */
+  name: string | null;
+}
+
+export interface OpenCard extends CardSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
 }
 
 export interface PlanVersionDoc {
@@ -414,11 +439,18 @@ export interface BillPaidSealed {
   paidOn: DateOnly;
   /** The part that had not been set aside yet, which came out of Free to spend. */
   fromFreeCents: Cents;
+  /** The card it was charged to, which then owes it while the cash stays put; null (or missing on an older move) when it was paid in cash. */
+  cardId?: string | null;
+}
+
+/** A card paid off: `refId` is the card, `date` the day it was paid. */
+export interface CardPaymentSealed {
+  amountCents: Cents;
 }
 
 export type StartHolding = (typeof START_HOLDINGS)[number];
 
-/** What one holding had on the starting day: the money on hand, or what an envelope or goal holds or a bill has set aside. */
+/** What one holding had on the starting day: the money on hand, what an envelope or goal holds, what a bill has set aside, or what a card owes. */
 export interface StartSealed {
   amountCents: Cents;
   holding: StartHolding;
@@ -440,7 +472,8 @@ interface OpenMoveBase {
 export type OpenMove =
   | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
   | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
-  | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed });
+  | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed })
+  | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed });
 
 export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
 export type StartMove = Extract<OpenMove, { kind: 'start' }>;
@@ -468,6 +501,8 @@ export interface PurchaseSealed {
   lines: PurchaseLine[];
   /** The purchase a refund returns money for; null for a purchase or a refund that names none. */
   refundOfId: string | null;
+  /** The card it was charged to, whose payment it then waits for; null (or missing on an older purchase) when it was paid in cash. */
+  paidByCardId?: string | null;
 }
 
 /** `date` is the spending day, date-only; `createdAt` is the instant it was added. */
@@ -501,7 +536,15 @@ export interface ClosingSealed {
   spentCents: Cents;
   spentByItem: Record<string, Cents>;
   funded: Record<string, [number, Cents][]>;
-  paid: Record<string, [number, Cents, number, Cents, number | string][]>;
+  /** `[dueDay, amountCents, paidDay, fromFreeCents, mark, cardId]`. */
+  paid: Record<
+    string,
+    [number, Cents, number, Cents, number | string, string | null][]
+  >;
+  /** What purchases charged to each card, by card id. */
+  charged: Record<string, Cents>;
+  /** `[day, cents, moveId]` for each card payment not undone. */
+  cardPaid: Record<string, [number, Cents, string][]>;
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */
