@@ -16,18 +16,17 @@ import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS } from '@apps/runway/constants';
-import {
-  collectCardHistory,
-  type CardHistoryEntry,
-} from '@apps/runway/engine/cards';
+import { collectCardHistory, withOwedAfter } from '@apps/runway/engine/cards';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoCardPayment } from '@apps/runway/store/actions/cardActions';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   selectIsMovesLoaded,
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { describeCardTakenBack } from '@apps/runway/utils/cardText';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 
 const monthFormat = new Intl.DateTimeFormat('en-US', {
@@ -43,7 +42,14 @@ interface CardHistoryViewProps {
   onOpenPurchase: (purchaseId: string) => void;
 }
 
-type Payment = Extract<CardHistoryEntry, { kind: 'payment' }>;
+type Entry = ReturnType<typeof withOwedAfter>[number];
+type Payment = Extract<Entry, { kind: 'payment' }>;
+
+const PAID_WORDS = {
+  full: CARD_WORDS.historyPaidFull,
+  minimum: CARD_WORDS.historyPaidMinimum,
+  part: CARD_WORDS.historyPaidPart,
+} as const;
 
 /** What one card was charged and paid since tracking began, newest first by month; a charge opens its purchase and a payment can be taken back. */
 function CardHistoryView({
@@ -66,10 +72,12 @@ function CardHistoryView({
   );
   const [takingBack, setTakingBack] = useState<string | null>(null);
 
-  const entries = collectCardHistory(cardId, purchases, moves).filter(
-    (entry) => entry.on >= startDate,
-  );
-  const months = entries.reduce<{ label: string; rows: CardHistoryEntry[] }[]>(
+  const balances = useAppSelector(selectBalances);
+  const entries = withOwedAfter(
+    collectCardHistory(cardId, purchases, moves),
+    balances.reserveByCard[cardId] ?? 0,
+  ).filter((entry) => entry.on >= startDate);
+  const months = entries.reduce<{ label: string; rows: Entry[] }[]>(
     (groups, entry) => {
       const label = monthFormat.format(entry.on);
       const last = groups.at(-1);
@@ -82,7 +90,16 @@ function CardHistoryView({
   const hasEarlier = recentFrom !== null && startDate < recentFrom;
   const owedAtStart =
     collectStarted(moves, startDate || null).byItem[cardId] ?? 0;
-  const startRow = owedAtStart > 0 && (
+  const oldest = entries.at(-1);
+  const getEffect = (entry: Entry) => {
+    if (entry.kind !== 'payment') return entry.cents;
+    return entry.isTakenBack ? 0 : -entry.cents;
+  };
+  const owedBeforeOldest =
+    oldest === undefined
+      ? (balances.reserveByCard[cardId] ?? 0)
+      : oldest.owedAfterCents - getEffect(oldest);
+  const startRow = owedAtStart > 0 && owedAtStart === owedBeforeOldest && (
     <section className='space-y-2'>
       <SectionDivider label={formatDateShortUTC(startDate)} />
       <ul className='border-border bg-card rounded-2xl border'>
@@ -116,6 +133,8 @@ function CardHistoryView({
         cardId,
         date: payment.on,
         amountCents: payment.cents,
+        covers: payment.covers,
+        summary: describeCardTakenBack(cardName, payment.cents, payment.on),
       });
       addToast({ title: CARD_WORDS.undone(cardName), type: 'success' });
     } catch (error) {
@@ -128,7 +147,8 @@ function CardHistoryView({
     setTakingBack(null);
   };
 
-  const renderRow = (entry: CardHistoryEntry) => {
+  const renderRow = (entry: Entry) => {
+    const owes = CARD_WORDS.historyOwes(formatCents(entry.owedAfterCents));
     const day = formatDateShortUTC(entry.on);
     if (entry.kind === 'purchase') {
       const first = entry.purchase.lines[0]?.envelopeId ?? null;
@@ -149,6 +169,7 @@ function CardHistoryView({
               : CARD_WORDS.historyCharged(day)
           }
           figure={formatCents(Math.abs(entry.cents))}
+          figureWord={owes}
           ariaLabel={`${title}. Open`}
           onOpen={() => onOpenPurchase(entry.id)}
         />
@@ -164,6 +185,7 @@ function CardHistoryView({
           emoji={look?.emoji ?? null}
           detail={CARD_WORDS.historyBill(day)}
           figure={formatCents(entry.cents)}
+          figureWord={owes}
         />
       );
     }
@@ -177,15 +199,20 @@ function CardHistoryView({
         </span>
         <span className='block min-w-0 flex-1'>
           <span className='flex items-start justify-between gap-3'>
-            <span className='font-medium'>{CARD_WORDS.historyPaid}</span>
-            <span
-              className={
-                entry.isTakenBack
-                  ? 'text-muted-foreground font-semibold tabular-nums'
-                  : 'font-semibold tabular-nums'
-              }
-            >
-              <SensitiveValue>{formatCents(entry.cents)}</SensitiveValue>
+            <span className='font-medium'>{PAID_WORDS[entry.covers]}</span>
+            <span className='block text-right'>
+              <span
+                className={
+                  entry.isTakenBack
+                    ? 'text-muted-foreground block font-semibold tabular-nums'
+                    : 'block font-semibold tabular-nums'
+                }
+              >
+                <SensitiveValue>{formatCents(entry.cents)}</SensitiveValue>
+              </span>
+              <span className='text-muted-foreground block text-xs tabular-nums'>
+                <SensitiveValue>{owes}</SensitiveValue>
+              </span>
             </span>
           </span>
           <span className='flex items-center justify-between gap-3'>

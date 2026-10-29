@@ -16,6 +16,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { CARD_WORDS } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { archiveCard } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
@@ -24,7 +25,11 @@ import { useNow } from '@/hooks/useNow';
 import CardHistoryView from '@apps/runway/components/CardHistoryView';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
-import { describeCardDue, getCardName } from '@apps/runway/utils/cardText';
+import {
+  describeCardDue,
+  getCardDueNow,
+  getCardName,
+} from '@apps/runway/utils/cardText';
 
 interface CardSheetProps {
   card: OpenCard;
@@ -47,6 +52,17 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const [view, setView] = useState<'menu' | 'history' | 'purchase'>('menu');
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const name = getCardName(card, cards);
+  const moves = useAppSelector((state) => state.runway.moves);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? 0,
+  );
+  const due = getCardDueNow(
+    card,
+    { [card.id]: reserveCents },
+    moves,
+    today,
+    startDate,
+  );
 
   const handleArchive = async () => {
     if (!user || isArchiving) return;
@@ -61,7 +77,12 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
     if (!isConfirmed) return;
     setIsArchiving(true);
     try {
-      await archiveCard(user.uid, card.id);
+      await archiveCard(
+        user.uid,
+        await getRunwayEncryption(user.uid),
+        card.id,
+        CARD_WORDS.changeArchived(name),
+      );
       addToast({ title: CARD_WORDS.archived(name), type: 'success' });
       onClose();
     } catch (error) {
@@ -116,7 +137,7 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
             fact={
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
-                : describeCardDue(card, reserveCents, today)
+                : describeCardDue(card, reserveCents, today, due)
             }
           />
           <Button

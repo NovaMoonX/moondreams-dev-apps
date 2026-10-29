@@ -448,7 +448,11 @@ export interface BillPaidSealed {
 /** A card paid off: `refId` is the card, `date` the day it was paid. */
 export interface CardPaymentSealed {
   amountCents: Cents;
+  /** What it covered: everything waiting, the minimum, or part of it. A payment written before this existed has none and reads as `full`, since Pay off then always started at the whole balance. */
+  covers?: CardPaymentCovers;
 }
+
+export type CardPaymentCovers = 'full' | 'minimum' | 'part';
 
 export type StartHolding = (typeof START_HOLDINGS)[number];
 

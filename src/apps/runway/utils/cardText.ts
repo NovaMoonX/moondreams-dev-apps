@@ -1,16 +1,25 @@
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { toOrdinal } from '@apps/runway/utils/monthDays';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CARD_DUE_WARN_DAYS,
   CARD_ISSUERS,
   CARD_WORDS,
 } from '@apps/runway/constants';
-import { DAY_MS } from '@apps/runway/engine/dates';
-import { getNextDueOn } from '@apps/runway/engine/cards';
+import { DAY_MS, startOfUtcDay } from '@apps/runway/engine/dates';
+import {
+  collectCardHistory,
+  getCardDueState,
+  getNextDueOn,
+  type DueCard,
+} from '@apps/runway/engine/cards';
 import type {
+  CardPaymentCovers,
+  CardSealed,
   Cents,
   DateOnly,
   OpenCard,
+  OpenMove,
   OpenVersion,
 } from '@apps/runway/types';
 import { resolveVersion } from '@apps/runway/engine/resolve';
@@ -104,12 +113,43 @@ export function getMarkCardId(
     : null;
 }
 
-/** The one due fact a card shows: "Due Nov 14", or "Due in 3 days" / "Due today" inside the warning window when money waits; null with no due day. */
+/** What warns about one card today (the same answer as Home's), or null; `startDate` is when tracking began. */
+export const getCardDueNow = (
+  card: OpenCard,
+  reserveByCard: Readonly<Record<string, Cents>>,
+  moves: readonly OpenMove[],
+  today: DateOnly,
+  startDate: DateOnly,
+): DueCard | null =>
+  getCardDueState(
+    card,
+    reserveByCard[card.id] ?? 0,
+    collectCardHistory(card.id, [], moves).flatMap((entry) =>
+      entry.kind === 'payment' && !entry.isTakenBack
+        ? [{ on: entry.on, covers: entry.covers }]
+        : [],
+    ),
+    today,
+    CARD_DUE_WARN_DAYS,
+    Math.max(startDate, startOfUtcDay(card.createdAt)),
+  );
+
+/** The one due fact a card shows: "Due Nov 14", "Due in 3 days" / "Due today" inside the warning window when money waits, "Past due since Oct 14", or "Due Nov 3 · not paid by Oct 14"; null with no due day. `due` is what `getCardDueNow` found. */
 export function describeCardDue(
   card: OpenCard,
   waitingCents: Cents,
   today: DateOnly,
+  due: DueCard | null,
 ): string | null {
+  if (due?.isPastDue) {
+    return CARD_WORDS.pastDueSince(formatDateShortUTC(due.dueOn));
+  }
+  if (due?.rolledFrom) {
+    return CARD_WORDS.dueRolled(
+      formatDateShortUTC(due.dueOn),
+      formatDateShortUTC(due.rolledFrom),
+    );
+  }
   const dueOn = getNextDueOn(card.dueDay, today);
   if (dueOn === null) return null;
   const inDays = Math.round((dueOn - today) / DAY_MS);
@@ -128,19 +168,69 @@ export const getListedCards = (
     (card) => card.archivedAt === null || (reserveByCard[card.id] ?? 0) > 0,
   );
 
-/** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", or "is due today". */
-export const describeDueCard = (
-  name: string,
-  dueOn: DateOnly,
-  inDays: number,
-  waitingCents: Cents,
-) => {
-  const amount = formatCents(waitingCents);
-  return inDays === 0
+/** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", "is due today", or "was due Oct 14" when past due. */
+export const describeDueCard = (name: string, due: DueCard) => {
+  const amount = formatCents(due.waitingCents);
+  const date = formatDateShortUTC(due.dueOn).replace(/ /g, '\u00a0');
+  if (due.isPastDue) return CARD_WORDS.dueWarningPast(name, date, amount);
+  return due.inDays === 0
     ? CARD_WORDS.dueTodayWarning(name, amount)
-    : CARD_WORDS.dueWarning(
-        name,
-        formatDateShortUTC(dueOn).replace(/ /g, ' '),
-        amount,
-      );
+    : CARD_WORDS.dueWarning(name, date, amount);
 };
+
+/** "Not paid by Oct 14" for a warning that has moved on to the next due day, else null. */
+export const describeDueNote = (due: DueCard) =>
+  due.rolledFrom === null
+    ? null
+    : CARD_WORDS.notPaidBy(formatDateShortUTC(due.rolledFrom));
+
+/** The change-log sentence for a card just added. */
+export const describeCardAdded = (name: string, owedCents: Cents) =>
+  CARD_WORDS.changeAdded(name, owedCents > 0 ? formatCents(owedCents) : null);
+
+/** The change-log sentence for a card edited: only what differs, from and to; null when nothing does. */
+export function describeCardChanged(
+  name: string,
+  before: CardSealed,
+  after: CardSealed,
+): string | null {
+  const parts = [
+    before.issuer === after.issuer
+      ? null
+      : CARD_WORDS.changeIssuer(before.issuer, after.issuer),
+    before.name === after.name
+      ? null
+      : CARD_WORDS.changeName(
+          before.name ?? CARD_WORDS.changeNoName,
+          after.name ?? CARD_WORDS.changeNoName,
+        ),
+    before.dueDay === after.dueDay
+      ? null
+      : CARD_WORDS.changeDueDay(
+          before.dueDay === null
+            ? CARD_WORDS.changeNoDueDay
+            : CARD_WORDS.dueSummaryDay(before.dueDay, toOrdinal(before.dueDay)),
+          after.dueDay === null
+            ? CARD_WORDS.changeNoDueDay
+            : CARD_WORDS.dueSummaryDay(after.dueDay, toOrdinal(after.dueDay)),
+        ),
+  ].filter((part) => part !== null);
+  return parts.length === 0
+    ? null
+    : CARD_WORDS.changeChanged(name, parts.join('; '));
+}
+
+/** The change-log sentence for a payment made. */
+export const describeCardPaid = (
+  covers: CardPaymentCovers,
+  name: string,
+  cents: Cents,
+  on: DateOnly,
+) => CARD_WORDS.changePaid(covers, name, formatCents(cents), formatDateUTC(on));
+
+/** The change-log sentence for a payment taken back. */
+export const describeCardTakenBack = (
+  name: string,
+  cents: Cents,
+  on: DateOnly,
+) => CARD_WORDS.changeTakenBack(name, formatCents(cents), formatDateUTC(on));

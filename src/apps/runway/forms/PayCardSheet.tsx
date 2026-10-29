@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { X } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -8,6 +9,7 @@ import FoldedDateField from '@/components/FoldedDateField';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import RevealChip from '@/components/RevealChip';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
@@ -31,13 +33,17 @@ import {
 } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenCard } from '@apps/runway/types';
+import type { CardPaymentCovers, OpenCard } from '@apps/runway/types';
 import {
   selectClosingBase,
   selectRecentFrom,
 } from '@apps/runway/store/selectors/historySelectors';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { getCardName } from '@apps/runway/utils/cardText';
+import {
+  describeCardPaid,
+  describeCardTakenBack,
+  getCardName,
+} from '@apps/runway/utils/cardText';
 
 interface PayCardSheetProps {
   card: OpenCard;
@@ -68,6 +74,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   }));
   const [amount, setAmount] = useState(initial.amount);
   const [day, setDay] = useState(initial.day);
+  const [isMinimum, setIsMinimum] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +89,17 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const paidCents =
     cents !== null && cents > 0 && cents <= MAX_PURCHASE_CENTS ? cents : null;
   const paidOn = fromDateInputValue(day) ?? null;
+  const isBelowFull = paidCents !== null && paidCents < reserveCents;
+  const getCovers = (): CardPaymentCovers => {
+    if (!isBelowFull) return 'full';
+    return isMinimum ? 'minimum' : 'part';
+  };
+  const covers = getCovers();
+  const handleAmountChange = (value: string) => {
+    setAmount(value);
+    const next = parseMoneyToCents(value);
+    if (next !== null && next >= reserveCents) setIsMinimum(false);
+  };
   // A payment before tracking started, or inside months already added up, would count nowhere.
   const floor = useAppSelector((state) =>
     Math.min(
@@ -105,7 +123,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const blocker = getBlocker();
 
   const requestClose = useDiscardGuard({
-    isDirty: amount !== initial.amount || day !== initial.day,
+    isDirty: amount !== initial.amount || day !== initial.day || isMinimum,
     onClose: onCancel ?? onClose,
     isBusy: isSaving,
   });
@@ -114,6 +132,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
     moveId: string;
     date: number;
     amountCents: number;
+    covers: CardPaymentCovers;
   }) => {
     if (!user) return;
     try {
@@ -121,6 +140,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
       await undoCardPayment(user.uid, encryption, {
         ...paid,
         cardId: card.id,
+        summary: describeCardTakenBack(name, paid.amountCents, paid.date),
       });
       addToast({ title: CARD_WORDS.undone(name), type: 'success' });
     } catch (undoError) {
@@ -132,6 +152,13 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
         type: 'error',
       });
     }
+  };
+
+  const getPaidToast = (kind: CardPaymentCovers, amount: string) => {
+    if (kind === 'minimum') return CARD_WORDS.paidMinimumToast(name);
+    return kind === 'full'
+      ? CARD_WORDS.paidFullToast(name)
+      : CARD_WORDS.paidToast(amount, name);
   };
 
   const handlePay = async () => {
@@ -158,14 +185,21 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
         amountCents: paidCents,
         date: paidOn,
         count,
+        covers,
+        summary: describeCardPaid(covers, name, paidCents, paidOn),
       });
       addToast({
-        title: mask(CARD_WORDS.paidToast(formatCents(paidCents), name)),
+        title: mask(getPaidToast(covers, formatCents(paidCents))),
         type: 'success',
         action: {
           label: CARD_WORDS.undo,
           onClick: () =>
-            void undo({ moveId, date: paidOn, amountCents: paidCents }),
+            void undo({
+              moveId,
+              date: paidOn,
+              amountCents: paidCents,
+              covers,
+            }),
         },
       });
       onClose();
@@ -193,9 +227,17 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
           <AmountHero
             label={CARD_WORDS.payAmount}
             value={amount}
-            onChange={setAmount}
+            onChange={handleAmountChange}
             disabled={isSaving}
           />
+          {isBelowFull && (
+            <RevealChip
+              icon={isMinimum ? <X className='h-4 w-4' /> : undefined}
+              onClick={() => setIsMinimum((current) => !current)}
+            >
+              {CARD_WORDS.minimumChip}
+            </RevealChip>
+          )}
           {extraCents > 0 &&
             (isHidden ? (
               <NeedsALookRow />

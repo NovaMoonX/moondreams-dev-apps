@@ -1,4 +1,4 @@
-import { doc, runTransaction, updateDoc } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -9,8 +9,11 @@ import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import { getStartMoveId } from '@apps/runway/store/actions/moveActions';
 import type {
   CardDoc,
+  CardPaymentCovers,
   CardPaymentSealed,
   CardSealed,
+  ChangeDoc,
+  ChangeSealed,
   Cents,
   DateOnly,
   MoveDoc,
@@ -24,6 +27,28 @@ const cardRef = (uid: string, cardId: string) =>
 const moveRef = (uid: string, moveId: string) =>
   doc(db, 'apps', 'runway', 'plans', uid, 'moves', moveId);
 const planRef = (uid: string) => doc(db, 'apps', 'runway', 'plans', uid);
+
+/** The change-log entry written in the same transaction as a card action; `summary` is sealed with the person's words for it. */
+const getChangeDoc = async (
+  encryption: RunwayEncryption,
+  summary: string,
+  effectiveFrom: DateOnly | null,
+) => {
+  const id = generateUuid();
+  return {
+    id,
+    kind: 'cardChange',
+    createdAt: Date.now(),
+    effectiveFrom,
+    itemIds: [],
+    sealed: await sealJson(
+      { summary, note: null } satisfies ChangeSealed,
+      encryption,
+    ),
+  } satisfies ChangeDoc;
+};
+const changeRef = (uid: string, changeId: string) =>
+  doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId);
 
 /** Payments to one card on one day, the nth being `_<n>`; several in a day are real (a part payment, then the rest). */
 export const getCardPaymentMoveId = (
@@ -44,10 +69,11 @@ export async function createCard(
   uid: string,
   encryption: RunwayEncryption,
   input: CardSealed & { owedCents: Cents },
+  summary: string,
 ): Promise<string> {
   const id = generateUuid();
   const now = Date.now();
-  const [sealed, startSealed] = await Promise.all([
+  const [sealed, startSealed, change] = await Promise.all([
     sealJson(
       {
         issuer: input.issuer,
@@ -60,6 +86,7 @@ export async function createCard(
       { amountCents: input.owedCents, holding: 'card' } satisfies StartSealed,
       encryption,
     ),
+    getChangeDoc(encryption, summary, null),
   ]);
   await runTransaction(db, async (transaction) => {
     const plan = await transaction.get(planRef(uid));
@@ -72,6 +99,7 @@ export async function createCard(
       archivedAt: null,
       sealed,
     } satisfies CardDoc);
+    transaction.set(changeRef(uid, change.id), change);
     if (startDate === null || input.owedCents <= 0) return;
     markLedgerWrite(transaction, uid, data, [startDate]);
     const moveId = getStartMoveId(id, now);
@@ -94,22 +122,41 @@ export async function updateCard(
   encryption: RunwayEncryption,
   cardId: string,
   input: CardSealed,
+  summary: string,
 ): Promise<void> {
-  const sealed = await sealJson(
-    {
-      issuer: input.issuer,
-      name: input.name,
-      dueDay: input.dueDay,
-    } satisfies CardSealed,
-    encryption,
-  );
-  await updateDoc(cardRef(uid, cardId), { sealed, updatedAt: Date.now() });
+  const [sealed, change] = await Promise.all([
+    sealJson(
+      {
+        issuer: input.issuer,
+        name: input.name,
+        dueDay: input.dueDay,
+      } satisfies CardSealed,
+      encryption,
+    ),
+    getChangeDoc(encryption, summary, null),
+  ]);
+  await runTransaction(db, async (transaction) => {
+    transaction.update(cardRef(uid, cardId), { sealed, updatedAt: Date.now() });
+    transaction.set(changeRef(uid, change.id), change);
+  });
 }
 
 /** Hides a card from new charges; what it was charged and paid stays in the ledger. */
-export async function archiveCard(uid: string, cardId: string): Promise<void> {
+export async function archiveCard(
+  uid: string,
+  encryption: RunwayEncryption,
+  cardId: string,
+  summary: string,
+): Promise<void> {
   const now = Date.now();
-  await updateDoc(cardRef(uid, cardId), { archivedAt: now, updatedAt: now });
+  const change = await getChangeDoc(encryption, summary, null);
+  await runTransaction(db, async (transaction) => {
+    transaction.update(cardRef(uid, cardId), {
+      archivedAt: now,
+      updatedAt: now,
+    });
+    transaction.set(changeRef(uid, change.id), change);
+  });
 }
 
 export interface PayCardInput {
@@ -119,6 +166,9 @@ export interface PayCardInput {
   date: DateOnly;
   /** How many payments to this card on that day are already known, which the next id counts from. */
   count: number;
+  covers: CardPaymentCovers;
+  /** The change-log sentence for this payment. */
+  summary: string;
 }
 
 /** Records a card paid off on a day. Resolves with the move written, so an Undo can name it. */
@@ -128,10 +178,16 @@ export async function payCard(
   input: PayCardInput,
 ): Promise<string> {
   if (input.amountCents <= 0) throw new Error('Enter how much you paid.');
-  const sealed = await sealJson(
-    { amountCents: input.amountCents } satisfies CardPaymentSealed,
-    encryption,
-  );
+  const [sealed, change] = await Promise.all([
+    sealJson(
+      {
+        amountCents: input.amountCents,
+        covers: input.covers,
+      } satisfies CardPaymentSealed,
+      encryption,
+    ),
+    getChangeDoc(encryption, input.summary, input.date),
+  ]);
   const id = await runTransaction(db, async (transaction) => {
     const plan = await transaction.get(planRef(uid));
     const findFree = async (count: number): Promise<string> => {
@@ -153,6 +209,7 @@ export async function payCard(
       createdAt: Date.now(),
       sealed,
     } satisfies MoveDoc);
+    transaction.set(changeRef(uid, change.id), change);
     return moveId;
   });
   return id;
@@ -167,13 +224,22 @@ export async function undoCardPayment(
     cardId: string;
     date: DateOnly;
     amountCents: Cents;
+    covers: CardPaymentCovers;
+    /** The change-log sentence for taking it back. */
+    summary: string;
   },
 ): Promise<void> {
   const id = getUndoCardPaymentMoveId(paid.moveId);
-  const sealed = await sealJson(
-    { amountCents: paid.amountCents } satisfies CardPaymentSealed,
-    encryption,
-  );
+  const [sealed, change] = await Promise.all([
+    sealJson(
+      {
+        amountCents: paid.amountCents,
+        covers: paid.covers,
+      } satisfies CardPaymentSealed,
+      encryption,
+    ),
+    getChangeDoc(encryption, paid.summary, paid.date),
+  ]);
   await runTransaction(db, async (transaction) => {
     const [existing, plan] = await Promise.all([
       transaction.get(moveRef(uid, id)),
@@ -190,5 +256,6 @@ export async function undoCardPayment(
       createdAt: Date.now(),
       sealed,
     } satisfies MoveDoc);
+    transaction.set(changeRef(uid, change.id), change);
   });
 }

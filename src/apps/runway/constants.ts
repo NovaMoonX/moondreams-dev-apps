@@ -98,6 +98,7 @@ export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
     ended: 'Ended',
     correction: 'Correction',
     purchaseChange: 'Purchase',
+    cardChange: 'Card',
   };
 
 export const RANGE_END_WORDS = {
@@ -136,6 +137,7 @@ export const CHANGE_KINDS = [
   'ended',
   'correction',
   'purchaseChange',
+  'cardChange',
 ] as const;
 
 export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
@@ -1498,6 +1500,10 @@ export const CARD_WORDS = {
   historyRefunded: (day: string) => `${day} · Refunded to the card`,
   historyBill: (day: string) => `${day} · Bill charged`,
   historyPaid: 'Paid off',
+  historyPaidFull: 'Paid in full',
+  historyPaidMinimum: 'Paid the minimum',
+  historyPaidPart: 'Paid part',
+  historyOwes: (amount: string) => `Owes ${amount}`,
   historyTakenBack: 'Taken back',
   historyOlder: 'Earlier charges are counted but not listed.',
   historyUnknownBill: 'A bill',
@@ -1547,6 +1553,9 @@ export const CARD_WORDS = {
   payMore: (amount: string) =>
     `That is ${amount} more than it waits for. The extra comes out of Free to spend.`,
   paidToast: (amount: string, name: string) => `Paid ${amount} to ${name}`,
+  paidMinimumToast: (name: string) => `Paid the minimum on ${name}`,
+  paidFullToast: (name: string) => `Paid ${name} in full`,
+  minimumChip: 'This is the minimum payment',
   undo: 'Undo',
   undone: (name: string) => `Payment to ${name} taken back`,
   payFailed: 'The payment was not saved',
@@ -1594,4 +1603,32 @@ export const CARD_WORDS = {
   dueTodayWarning: (name: string, amount: string) =>
     `${name} is due today · ${amount} waiting`,
   dueWarningOpen: 'Pay it off',
+  dueWarningPast: (name: string, date: string, amount: string) =>
+    `${name} was due ${date} · ${amount} waiting`,
+  notPaidBy: (date: string) => `Not paid by ${date}`,
+  pastDueSince: (date: string) => `Past due since ${date}`,
+  dueRolled: (due: string, since: string) =>
+    `Due ${due} · not paid by ${since}`,
+  changeAdded: (name: string, owed: string | null) =>
+    owed === null ? `Added ${name}` : `Added ${name}, owing ${owed}`,
+  changeChanged: (name: string, what: string) => `Changed ${name}: ${what}`,
+  changeIssuer: (from: string, to: string) => `issuer ${from} to ${to}`,
+  changeName: (from: string, to: string) => `name ${from} to ${to}`,
+  changeNoName: 'no name',
+  changeDueDay: (from: string, to: string) => `due day ${from} to ${to}`,
+  changeNoDueDay: 'no due day',
+  changeArchived: (name: string) => `Archived ${name}`,
+  changePaid: (
+    covers: 'full' | 'minimum' | 'part',
+    name: string,
+    amount: string,
+    day: string,
+  ) =>
+    covers === 'minimum'
+      ? `Paid the minimum on ${name}, ${amount}, on ${day}`
+      : covers === 'full'
+        ? `Paid ${name} in full, ${amount}, on ${day}`
+        : `Paid ${amount} to ${name} on ${day}`,
+  changeTakenBack: (name: string, amount: string, day: string) =>
+    `Took back the ${amount} payment to ${name} from ${day}`,
 } as const;

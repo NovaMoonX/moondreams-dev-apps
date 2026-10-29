@@ -23,7 +23,11 @@ import {
   groupProblems,
   type ProblemGroup,
 } from '@apps/runway/utils/lookaheadText';
-import { describeDueCard, getCardName } from '@apps/runway/utils/cardText';
+import {
+  describeDueCard,
+  describeDueNote,
+  getCardName,
+} from '@apps/runway/utils/cardText';
 import type { DueCard } from '@apps/runway/engine/cards';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import CardSheets, {
@@ -81,12 +85,7 @@ function LookaheadWarnings({
       }
     : PROBLEM_WORDS;
   const describeDue = (due: DueCard) =>
-    describeDueCard(
-      getCardName(due.card, allCards),
-      due.dueOn,
-      due.inDays,
-      due.waitingCents,
-    );
+    describeDueCard(getCardName(due.card, allCards), due);
   const openPay = (due: DueCard) => {
     closeFixes();
     setPaying({ cardId: due.card.id, view: 'pay' });
@@ -184,6 +183,7 @@ function LookaheadWarnings({
                 {row.kind === 'card' ? (
                   <DueCardRow
                     sentence={describeDue(row.due)}
+                    note={describeDueNote(row.due)}
                     onOpen={() => openPay(row.due)}
                   />
                 ) : (

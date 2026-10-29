@@ -17,8 +17,11 @@ import {
 } from '../../src/apps/runway/engine/balances.ts';
 import {
   collectCardHistory,
+  getCardDueState,
   getDueCards,
   getNextDueOn,
+  getPrevDueOn,
+  withOwedAfter,
 } from '../../src/apps/runway/engine/cards.ts';
 import {
   buildClosings,
@@ -8052,8 +8055,10 @@ const version = (
   const due = getDueCards(
     [card('a', 8), card('b', 9), card('c', 3), card('d', null), card('e', 2)],
     { a: 1_000, b: 500, c: 200, d: 900, e: 0 },
+    [],
     today,
     7,
+    today,
   );
   assert.deepEqual(
     due.map((entry) => [entry.card.id, entry.inDays]),
@@ -8062,6 +8067,100 @@ const version = (
       ['a', 7],
     ],
     'due within 7 days with money waiting, soonest first; 8 days out, no due day and nothing waiting are left out',
+  );
+
+  // Past due sticks until a full or minimum payment, or until the next due day is within 7 days.
+  const venture = card('v', 14);
+  const state = (
+    on: number,
+    payments: { on: number; covers: 'full' | 'minimum' | 'part' }[] = [],
+    waiting = 5_000,
+  ) => getCardDueState(venture, waiting, payments, on, 7, d(2026, 9, 1));
+  assert.equal(getPrevDueOn(14, d(2026, 11, 14)), d(2026, 11, 14));
+  assert.equal(getPrevDueOn(31, d(2026, 3, 30)), d(2026, 2, 28));
+  assert.equal(getPrevDueOn(20, d(2026, 1, 5)), d(2025, 12, 20));
+  assert.equal(state(d(2026, 11, 10))?.inDays, 4, 'due in 4 days warns');
+  assert.equal(
+    state(d(2026, 11, 6), [{ on: d(2026, 10, 1), covers: 'full' }]),
+    null,
+    'due in 8 days, with the last due day paid for, does not',
+  );
+  assert.deepEqual(
+    [state(d(2026, 11, 19))?.isPastDue, state(d(2026, 11, 19))?.dueOn],
+    [true, d(2026, 11, 14)],
+    'five days past due and unpaid still warns',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [{ on: d(2026, 11, 16), covers: 'minimum' }]),
+    null,
+    'the minimum paid clears it',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [{ on: d(2026, 11, 16), covers: 'part' }])
+      ?.isPastDue,
+    true,
+    'part of it leaves it up',
+  );
+  assert.equal(
+    state(d(2026, 11, 10), [{ on: d(2026, 10, 20), covers: 'full' }])?.dueOn,
+    d(2026, 11, 14),
+    'a payment late for one due day pays for that one, not the next',
+  );
+  assert.equal(
+    state(d(2026, 11, 10), [
+      { on: d(2026, 10, 10), covers: 'minimum' },
+      { on: d(2026, 10, 20), covers: 'full' },
+    ]),
+    null,
+    'paid on time, then again: the second covers the next due day',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [{ on: d(2026, 11, 16), covers: 'minimum' }], 5_000),
+    null,
+    'an old unpaid month never soaks up a new payment',
+  );
+  const rolled = state(d(2026, 12, 9));
+  assert.deepEqual(
+    [rolled?.dueOn, rolled?.isPastDue, rolled?.rolledFrom],
+    [d(2026, 12, 14), false, d(2026, 11, 14)],
+    'unpaid, the warning moves to the next due day and says which one was missed',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [], 0),
+    null,
+    'nothing waiting, nothing to warn',
+  );
+  assert.equal(
+    getCardDueState(venture, 5_000, [], d(2026, 11, 19), 7, d(2026, 11, 15)),
+    null,
+    'a due day before the card was added never warns',
+  );
+  const runs = withOwedAfter(
+    [
+      {
+        kind: 'payment',
+        id: 'p3',
+        on: 3,
+        cents: 100,
+        isTakenBack: true,
+        covers: 'full',
+      },
+      {
+        kind: 'payment',
+        id: 'p2',
+        on: 2,
+        cents: 300,
+        isTakenBack: false,
+        covers: 'minimum',
+      },
+      { kind: 'bill', id: 'b1', on: 1, cents: 800, billId: 'rent' },
+    ],
+    1_000,
+  );
+  assert.deepEqual(
+    runs.map((row) => row.owedAfterCents),
+    [1_000, 1_000, 1_300],
+    'owed after each entry, worked back from today; a taken-back payment moves nothing',
   );
 
   const pay = (id: string, cents: number, reverses: string | null = null) =>

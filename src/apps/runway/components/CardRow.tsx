@@ -1,9 +1,14 @@
+import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS } from '@apps/runway/constants';
 import type { DateOnly, OpenCard } from '@apps/runway/types';
-import { describeCardDue, getCardName } from '@apps/runway/utils/cardText';
+import {
+  describeCardDue,
+  getCardDueNow,
+  getCardName,
+} from '@apps/runway/utils/cardText';
 
 interface CardRowProps {
   card: OpenCard;
@@ -22,12 +27,23 @@ function CardRow({
   onOpen,
 }: CardRowProps) {
   const name = getCardName(card, allCards);
+  const moves = useAppSelector((state) => state.runway.moves);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? 0,
+  );
+  const due = getCardDueNow(
+    card,
+    { [card.id]: reserveCents },
+    moves,
+    today,
+    startDate,
+  );
   return (
     <ItemRow
       name={name}
       leading={<ItemBadge name={card.issuer} emoji={null} />}
       detail={
-        describeCardDue(card, reserveCents, today) ??
+        describeCardDue(card, reserveCents, today, due) ??
         (reserveCents > 0
           ? CARD_WORDS.waiting
           : reserveCents < 0

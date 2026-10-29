@@ -29,6 +29,8 @@ import { createCard, updateCard } from '@apps/runway/store/actions/cardActions';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard } from '@apps/runway/types';
 import {
+  describeCardAdded,
+  describeCardChanged,
   getCardName,
   hasUnnamedCardFrom,
   resolveIssuer,
@@ -331,12 +333,13 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
         dueDay: formData.dueDay,
       };
       if (editing) {
-        if (
-          sealed.issuer !== editing.issuer ||
-          sealed.name !== editing.name ||
-          sealed.dueDay !== editing.dueDay
-        ) {
-          await updateCard(user.uid, encryption, editing.id, sealed);
+        const summary = describeCardChanged(
+          getCardName(editing, cards),
+          editing,
+          sealed,
+        );
+        if (summary !== null) {
+          await updateCard(user.uid, encryption, editing.id, sealed, summary);
           addToast({
             title: CARD_WORDS.saved(
               getCardName({ ...editing, ...sealed }, cards),
@@ -347,10 +350,25 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
         onClose();
         return;
       }
-      const id = await createCard(user.uid, encryption, {
-        ...sealed,
-        owedCents: asksOwed ? (owedCents ?? 0) : 0,
-      });
+      const owedNow = asksOwed ? (owedCents ?? 0) : 0;
+      const id = await createCard(
+        user.uid,
+        encryption,
+        { ...sealed, owedCents: owedNow },
+        describeCardAdded(
+          getCardName(
+            {
+              ...sealed,
+              id: '',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              archivedAt: null,
+            },
+            cards,
+          ),
+          owedNow,
+        ),
+      );
       addToast({
         title: CARD_WORDS.added(
           getCardName(

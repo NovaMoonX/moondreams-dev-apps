@@ -615,7 +615,7 @@ async function writeSeedHistory(
 const SEED_VENTURE_CARD = 'seed-card-venture';
 const SEED_CHASE_CARD = 'seed-card-chase';
 
-/** Two cards: a Capital One Venture X that owed $250.00 on the starting day and was paid that off twelve days ago, and an unnamed Chase that the car registration is charged to, marked paid. Five documents. */
+/** Two cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), and an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid. Six documents. */
 async function writeSeedCards(
   context: SeedContext,
   uid: string,
@@ -637,7 +637,7 @@ async function writeSeedCards(
       sealed: {
         issuer: 'Chase',
         name: null,
-        dueDay: new Date(today + 3 * DAY_MS).getUTCDate(),
+        dueDay: new Date(today - 3 * DAY_MS).getUTCDate(),
       },
       createdAt: createdAt + 60_000,
     },
@@ -666,20 +666,32 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  const paidOn = today - 12 * DAY_MS;
-  const paymentId = `cardpay_${SEED_VENTURE_CARD}_${toDayStamp(paidOn)}_1`;
-  batch.set(context.firestore.doc(`${plan}/moves/${paymentId}`), {
-    id: paymentId,
-    kind: 'cardPayment',
-    date: paidOn,
-    refId: SEED_VENTURE_CARD,
-    reversesMoveId: null,
-    createdAt: paidOn + 10 * 3_600_000,
-    sealed: await sealJson(
-      { amountCents: 25_000 } satisfies CardPaymentSealed,
-      encryption,
-    ),
-  } satisfies MoveDoc);
+  await Promise.all(
+    (
+      [
+        { days: 12, cents: 3_500, covers: 'minimum' },
+        { days: 10, cents: 21_500, covers: 'full' },
+      ] as const
+    ).map(async (payment) => {
+      const paidOn = today - payment.days * DAY_MS;
+      const paymentId = `cardpay_${SEED_VENTURE_CARD}_${toDayStamp(paidOn)}_1`;
+      batch.set(context.firestore.doc(`${plan}/moves/${paymentId}`), {
+        id: paymentId,
+        kind: 'cardPayment',
+        date: paidOn,
+        refId: SEED_VENTURE_CARD,
+        reversesMoveId: null,
+        createdAt: paidOn + 10 * 3_600_000,
+        sealed: await sealJson(
+          {
+            amountCents: payment.cents,
+            covers: payment.covers,
+          } satisfies CardPaymentSealed,
+          encryption,
+        ),
+      } satisfies MoveDoc);
+    }),
+  );
   const carDueOn = today + 40 * DAY_MS;
   const carId = getPaidMoveId('seed-bill-car', carDueOn, 0);
   batch.set(context.firestore.doc(`${plan}/moves/${carId}`), {
@@ -699,7 +711,7 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  return cards.length + 3;
+  return cards.length + 4;
 }
 
 /** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside. One change and five holdings. */

@@ -77,6 +77,10 @@ function HomeScreen() {
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const allCards = useAppSelector(selectAllCards);
   const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
+  const moves = useAppSelector((state) => state.runway.moves);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? 0,
+  );
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const { isHidden } = useValuesHidden();
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
@@ -116,8 +120,10 @@ function HomeScreen() {
     ? getDueCards(
         getListedCards(allCards, balances.reserveByCard),
         balances.reserveByCard,
+        moves,
         today,
         CARD_DUE_WARN_DAYS,
+        startDate,
       )
     : [];
   const hasRanges = rangeSides.income || rangeSides.expense;
