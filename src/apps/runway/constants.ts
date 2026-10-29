@@ -1459,7 +1459,7 @@ export const PRIORITIES_WORDS = {
   shortWord: (short: string) => `${short} short`,
   shortWordTitle: 'What short means here',
   shortTip: (short: string) =>
-    `The items below this line ask ${short} more than this pay holds.`,
+    `The items below this line ask ${short} more than this pay holds, so the first may still get part of its amount. Envelopes and goals count here, not only bills.`,
   dueFirst: (day: string | null) =>
     day === null ? 'Due first' : `Due first · before ${day}`,
   dueFirstLabel: 'Due first',
