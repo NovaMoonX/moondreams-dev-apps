@@ -116,6 +116,9 @@ const responseSchema = {
         'What has been saved so far, in cents, when written.',
       ),
       targetDate: text('The date to reach it by, as YYYY-MM-DD, when written.'),
+      monthlyCents: cents(
+        'What the document says is put toward it each month, in cents, when written.',
+      ),
     }),
     notRead: list({
       file: SOURCE,

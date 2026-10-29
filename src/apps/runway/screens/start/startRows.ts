@@ -13,7 +13,7 @@ import type {
 } from '@apps/runway/types';
 
 /** A range as short as it can be read: "$300–360", so the name keeps its room. */
-const formatRowRange = (range: MoneyRange) =>
+export const formatRowRange = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCentsShort(range.lowCents)
     : `${formatCentsShort(range.lowCents)}–${formatCentsShort(range.highCents).replace('$', '')}`;

@@ -5,7 +5,7 @@ const SIGN_WORD = String.raw`(?:\s(?:short|over|left)\b)?`;
 
 /** Matches one amount, a range as one, and the "short", "over" or "left" that follows it; the match is the one capture group, so `split` keeps it. */
 export const FIGURE = new RegExp(
-  `(${AMOUNT}(?:\\s?[–-]\\s?${AMOUNT})?${SIGN_WORD})`,
+  `(${AMOUNT}(?:\\s?[–-]\\s?${AMOUNT}|–[\\d,]+(?:\\.\\d+)?)?${SIGN_WORD})`,
   'g',
 );
 

@@ -886,10 +886,16 @@ export const BUDGET_WORDS = {
     due: 'a due date',
   } as Record<string, string>,
   disagree: 'Two files disagree',
+  disagreeAgain: 'A new file disagrees',
   needsLook: 'Needs a look',
   versionSays: (file: string, what: string) => `${file} says ${what}`,
   useThis: 'Use this',
   chooseVersion: 'The files give different answers. Which one is right?',
+  chooseVersionAgain:
+    'A file you added disagrees with your choice. Which one is right?',
+  showToCompare: 'Show amounts to compare',
+  goalMonthly: (amount: string) => `The document says ${amount} a month`,
+  noIncome: 'No income found in your documents. Add it next.',
   documentSays: (cadence: string) => `The document says ${cadence}`,
   documentSaysAmount: (amount: string, cadence: string) =>
     `The document says ${amount} ${cadence}`,

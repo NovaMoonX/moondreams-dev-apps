@@ -237,7 +237,7 @@ function StartFlow({
     setIsLeaving(true);
     window.history.back();
   };
-  /** The step after the last kind that now has entries, so the person lands on what is still empty; the last step when every kind is filled. */
+  /** The step of the first kind that still has nothing in it, Income first; the step after Goals when every kind is filled. */
   const getStepAfterAdding = (draft: Pick<StartDraft, DraftKind>) => {
     const filled: Record<StartKind, boolean> = {
       income: counts.income + draft.incomes.length > 0,
@@ -245,10 +245,12 @@ function StartFlow({
       envelope: counts.envelope + draft.envelopes.length > 0,
       goal: counts.goal + draft.goals.length > 0,
     };
-    const last = KIND_ORDER.filter((kind) => filled[kind]).pop();
-    const lastIndex =
-      last === undefined ? -1 : steps.indexOf(KIND_WORDS[last].step);
-    return steps[Math.min(lastIndex + 1, steps.length - 1)];
+    const empty = KIND_ORDER.find((kind) => !filled[kind]);
+    const target =
+      empty === undefined
+        ? steps.indexOf(KIND_WORDS.goal.step) + 1
+        : steps.indexOf(KIND_WORDS[empty].step);
+    return steps[Math.min(Math.max(target, 0), steps.length - 1)];
   };
   const goBack = () => (index === 0 ? leave() : goTo(steps[index - 1]));
   const goNext = () => goTo(steps[index + 1]);

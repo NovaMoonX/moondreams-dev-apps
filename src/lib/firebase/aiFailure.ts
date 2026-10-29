@@ -12,13 +12,13 @@ export function getAiReadFailureMessage(
     return `The reader is busy right now. Give it a minute and try again, or ${fallback}.`;
   }
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    return "You're offline. Connect and try again.";
+    return `You're offline. Connect and try again, or ${fallback}.`;
   }
   const isUnavailable =
     (typeof status === 'number' && status >= 500) ||
     (error instanceof Error && /UNAVAILABLE|\[5\d\d\b/.test(error.message));
   if (isUnavailable) {
-    return 'The reading service is busy right now. Try again in a minute.';
+    return `The reading service is busy right now. Try again in a minute, or ${fallback}.`;
   }
   if (
     error instanceof AIError &&

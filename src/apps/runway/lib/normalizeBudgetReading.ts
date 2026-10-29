@@ -27,6 +27,8 @@ interface BudgetItem<V> {
   sourceFile: string;
   /** Empty, or what each document said when they disagree: the person picks one. */
   versions: BudgetVersion<V>[];
+  /** What each document that named it said on its own, before anything was filled in from another. */
+  own: BudgetVersion<V>[];
 }
 
 export interface IncomeValues {
@@ -61,6 +63,8 @@ export interface GoalValues {
   targetCents: number | null;
   currentCents: number | null;
   targetDate: number | null;
+  /** What the document says goes toward it each month; goals have no monthly field, so it is only mentioned. */
+  monthlyCents: number | null;
 }
 
 export interface BudgetIncome extends BudgetItem<IncomeValues>, IncomeValues {}
@@ -184,6 +188,7 @@ const toBase = (raw: Raw, toFile: ToFile) => ({
   name: toName(raw.name),
   sourceFile: toFile(raw.sourceFile),
   versions: [],
+  own: [],
 });
 
 const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => ({
@@ -230,9 +235,9 @@ const getCadenceMonths = (words: string) => {
     const count = Number(every[1]) || NUMBER_WORDS[every[1]] || 0;
     return count > 0 ? count * (every[2] === 'year' ? 12 : 1) : null;
   }
-  if (/semi|half-?year/.test(words)) return 6;
+  if (/semi-?\s?(annual|year)|half-?year/.test(words)) return 6;
+  if (/semi|bi-?\s?(monthly|annual|year)/.test(words)) return null;
   if (/quarter/.test(words)) return 3;
-  if (/bi-?monthly/.test(words)) return 2;
   if (/year|annual/.test(words)) return 12;
   return null;
 };
@@ -290,6 +295,7 @@ const toGoal = (raw: Raw, toFile: ToFile): BudgetGoal => ({
   targetCents: toCents(raw.targetCents),
   currentCents: toCents(raw.currentCents),
   targetDate: toDate(raw.targetDate),
+  monthlyCents: toCents(raw.monthlyCents),
 });
 
 const matcher = createOptionMatcher<{ name: string }>({
@@ -320,6 +326,9 @@ const billDiffers = (a: BillValues, b: BillValues) =>
   isDifferent(a.amountCents, b.amountCents) ||
   isDifferent(a.highCents, b.highCents) ||
   isDifferent(a.repeats, b.repeats) ||
+  isDifferent(a.writtenCadence, b.writtenCadence) ||
+  isDifferent(a.writtenCents, b.writtenCents) ||
+  isDifferent(a.writtenMonths, b.writtenMonths) ||
   (a.dueOn !== null && b.dueOn !== null
     ? a.dueOn !== b.dueOn
     : isDifferent(getDueDay(a), getDueDay(b)));
@@ -330,7 +339,8 @@ const envelopeDiffers = (a: EnvelopeValues, b: EnvelopeValues) =>
 const goalDiffers = (a: GoalValues, b: GoalValues) =>
   isDifferent(a.targetCents, b.targetCents) ||
   isDifferent(a.currentCents, b.currentCents) ||
-  isDifferent(a.targetDate, b.targetDate);
+  isDifferent(a.targetDate, b.targetDate) ||
+  isDifferent(a.monthlyCents, b.monthlyCents);
 
 interface MergeKind<T extends BudgetItem<V>, V> {
   /** The values a document gave, without the name and file. */
@@ -354,24 +364,42 @@ function mergeItems<T extends BudgetItem<V>, V>(
       list.filter((entry) => entry.sourceFile !== item.sourceFile),
     ) as T | null;
     if (twin === null) {
-      if (list.length < cap) return [...list, item];
+      if (list.length < cap)
+        return [
+          ...list,
+          {
+            ...item,
+            own: [{ sourceFile: item.sourceFile, values: pick(item) }],
+          },
+        ];
       dropped.push(item);
       return list;
     }
     const theirs = pick(item);
+    const mine = { sourceFile: item.sourceFile, values: theirs };
+    const own = twin.own.some((entry) => entry.sourceFile === item.sourceFile)
+      ? twin.own
+      : [...twin.own, mine];
     const versions =
       twin.versions.length > 0
         ? twin.versions.some((version) => !differs(version.values, theirs))
           ? twin.versions
-          : [...twin.versions, { sourceFile: item.sourceFile, values: theirs }]
+          : [...twin.versions, mine]
         : differs(pick(twin), theirs)
-          ? [
-              { sourceFile: twin.sourceFile, values: pick(twin) },
-              { sourceFile: item.sourceFile, values: theirs },
-            ]
+          ? [...twin.own, mine].reduce<BudgetVersion<V>[]>(
+              (list, entry) =>
+                list.some(
+                  (kept) =>
+                    JSON.stringify(kept.values) ===
+                    JSON.stringify(entry.values),
+                )
+                  ? list
+                  : [...list, entry],
+              [],
+            )
           : [];
     return list.map((entry) =>
-      entry === twin ? { ...fill(twin, item), versions } : entry,
+      entry === twin ? { ...fill(twin, item), versions, own } : entry,
     );
   }, kept);
   return { items, dropped };
@@ -483,10 +511,11 @@ export function normalizeBudgetReading(
     asRecords(raw.goals).map((entry) => toGoal(entry, toFile)),
   );
   const goals = mergeItems(existing.goals, incomingGoals, {
-    pick: ({ targetCents, currentCents, targetDate }) => ({
+    pick: ({ targetCents, currentCents, targetDate, monthlyCents }) => ({
       targetCents,
       currentCents,
       targetDate,
+      monthlyCents,
     }),
     isDifferent: goalDiffers,
     fill: (kept, other) => ({
@@ -494,6 +523,7 @@ export function normalizeBudgetReading(
       targetCents: orElse(kept.targetCents, other.targetCents),
       currentCents: orElse(kept.currentCents, other.currentCents),
       targetDate: orElse(kept.targetDate, other.targetDate),
+      monthlyCents: orElse(kept.monthlyCents, other.monthlyCents),
     }),
     cap: BUDGET_LIMITS.items.goals,
   });

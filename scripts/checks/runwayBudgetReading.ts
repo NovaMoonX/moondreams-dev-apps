@@ -13,6 +13,7 @@ import {
   cutAtWord,
   normalizeBudgetReading,
 } from '../../src/apps/runway/lib/normalizeBudgetReading.ts';
+import { maskFigures } from '../../src/apps/runway/utils/maskText.ts';
 import { nameDocuments } from '../../src/apps/runway/lib/nameDocuments.ts';
 
 const fileNames = ['Budget.csv', 'Summary.csv'];
@@ -361,6 +362,52 @@ assert.deepEqual(
   [3, 6],
   'quarterly is 3 months and every 6 months is 6',
 );
+const semi = normalizeBudgetReading(
+  {
+    ...quiet,
+    bills: [
+      'semiannual',
+      'semi-yearly',
+      'semi-monthly',
+      'bi-monthly',
+      'bi-annual',
+      'half-yearly',
+    ].map((writtenCadence, index) => ({
+      ...bill('Budget.csv', `Bill ${index}`, 1_000),
+      repeats: null,
+      writtenCadence,
+    })),
+  },
+  { fileNames },
+);
+assert.deepEqual(
+  semi.bills.map((entry) => entry.writtenMonths),
+  [6, 6, null, null, null, 6],
+  'semi means six months only before annual or year; the other twice-or-every-other words are left unsure',
+);
+const cadenceClash = normalizeBudgetReading(
+  {
+    ...quiet,
+    bills: [
+      {
+        ...bill('Budget.csv', 'Water', 6_000),
+        repeats: null,
+        writtenCadence: 'quarterly',
+      },
+      {
+        ...bill('Summary.csv', 'Water', 2_000),
+        repeats: null,
+        writtenCadence: 'yearly',
+      },
+    ],
+  },
+  { fileNames },
+);
+assert.equal(
+  cadenceClash.bills[0].versions.length,
+  2,
+  'two files that give different cadences or figures for a bill disagree',
+);
 assert.deepEqual(
   getMissingSteps('bill', toBillValue(yearly.bills[0], today)),
   ['amount', 'repeats'],
@@ -478,3 +525,33 @@ assert.deepEqual(
 );
 
 console.log('runwayBudgetReading: ok');
+
+assert.equal(
+  maskFigures('$300–360 a month'),
+  '•••• a month',
+  'a hidden range is one mask, never a mask beside a bare figure',
+);
+
+const three = normalizeBudgetReading(
+  {
+    ...quiet,
+    bills: [
+      { ...bill('Budget.csv', 'Gym', 3_000), dayOfMonth: null },
+      { ...bill('Summary.csv', 'Gym', 3_000), dayOfMonth: 5 },
+      { ...bill('Extra.csv', 'Gym', 4_000), dayOfMonth: null },
+    ],
+  },
+  { fileNames: [...fileNames, 'Extra.csv'] },
+);
+assert.deepEqual(
+  three.bills[0].versions.map((entry) => [
+    entry.sourceFile,
+    entry.values.dayOfMonth,
+  ]),
+  [
+    ['Budget.csv', null],
+    ['Summary.csv', 5],
+    ['Extra.csv', null],
+  ],
+  'each file is listed with what it said itself, not with what another file filled in',
+);

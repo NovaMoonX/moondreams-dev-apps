@@ -208,6 +208,7 @@ const GOAL_GROUPS: (keyof GoalValues)[][] = [
   ['targetCents'],
   ['currentCents'],
   ['targetDate'],
+  ['monthlyCents'],
 ];
 
 const isSet = (value: unknown) =>

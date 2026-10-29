@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ChevronRight,
   CircleHelp,
+  Eye,
   Loader,
   Pencil,
   Repeat,
@@ -10,12 +11,7 @@ import {
   X,
 } from 'lucide-react';
 
-import {
-  Button,
-  Input,
-  Modal,
-  Textarea,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -83,6 +79,7 @@ import {
   toEnvelopeRow,
   toGoalRow,
   toIncomeRow,
+  formatRowRange,
   type StartRow,
 } from '@apps/runway/screens/start/startRows';
 import {
@@ -108,6 +105,12 @@ interface ProposalVersion {
   value: BudgetValues[BudgetKind];
 }
 
+/** A choice the person made, with how many versions the files gave when they made it: a later file that adds one reopens it. */
+interface Decision {
+  value: BudgetValues[BudgetKind];
+  versionCount: number;
+}
+
 interface Proposal {
   key: string;
   kind: BudgetKind;
@@ -115,6 +118,12 @@ interface Proposal {
   sourceFile: string;
   /** What each file said when the files disagree; empty otherwise. */
   versions: ProposalVersion[];
+  /** The files disagree and the person has not chosen among the versions they gave. */
+  isUndecided: boolean;
+  /** The person had chosen, and a file added since disagrees. */
+  isReopened: boolean;
+  /** What a goal's document says goes toward it each month. */
+  monthlyCents: number | null;
   /** What a bill's document wrote for a repeat Runway has none for ("yearly"), with the figure it gave and what that comes to a month. */
   cadence: {
     words: string;
@@ -136,6 +145,7 @@ interface KindReading<K extends BudgetKind, V, T extends ReadItem<V>> {
   choose: (item: T, version: BudgetVersion<V>) => T;
   say: (values: V) => string;
   cadence?: (item: T) => Proposal['cadence'];
+  monthly?: (item: T) => number | null;
 }
 
 const KEY_SEPARATOR = ':';
@@ -237,6 +247,7 @@ const getKindReadings = (today: number) => ({
     make: (item) => toGoalValue(item, today),
     choose: chooseVersion.goal,
     say: sayGoal,
+    monthly: (item) => item.monthlyCents,
   } satisfies KindReading<'goal', GoalValues, BudgetReading['goals'][number]>,
 });
 
@@ -244,13 +255,17 @@ const toProposals = <K extends BudgetKind, V, T extends ReadItem<V>>(
   kind: K,
   items: T[],
   reading: KindReading<K, V, T>,
-  edited: Record<string, BudgetValues[BudgetKind]>,
+  edited: Record<string, Decision>,
   removed: ReadonlySet<string>,
 ): Proposal[] =>
   items.flatMap((item, index) => {
     const key = `${kind}${KEY_SEPARATOR}${index}`;
     if (removed.has(key)) return [];
-    const value = edited[key] ?? reading.make(item);
+    const decision = edited[key];
+    const value = decision?.value ?? reading.make(item);
+    const isUndecided =
+      item.versions.length > 0 &&
+      decision?.versionCount !== item.versions.length;
     return [
       {
         key,
@@ -260,6 +275,9 @@ const toProposals = <K extends BudgetKind, V, T extends ReadItem<V>>(
             ? (value as BudgetValues['income']).sourceName
             : (value as BudgetValues['bill']).name,
         sourceFile: item.sourceFile,
+        isUndecided,
+        isReopened: isUndecided && decision !== undefined,
+        monthlyCents: reading.monthly?.(item) ?? null,
         versions: item.versions.map((version) => ({
           sourceFile: version.sourceFile,
           says: BUDGET_WORDS.versionSays(
@@ -291,6 +309,21 @@ const toCadenceNote = ({ cadence }: Proposal) =>
           cadence.words,
         );
 
+const toKnownAmount = ({ kind, value }: Proposal) => {
+  const range =
+    kind === 'income'
+      ? (value as BudgetValues['income']).amount
+      : kind === 'bill'
+        ? (value as BudgetValues['bill']).amount
+        : null;
+  return range !== null && range.lowCents > 0 ? formatRowRange(range) : null;
+};
+
+const toNeeds = (missing: string[]) =>
+  BUDGET_WORDS.needs(
+    missing.map((step) => BUDGET_WORDS.needsParts[step] ?? step),
+  );
+
 const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
   const { key, kind, value } = proposal;
   if (missing.length > 0)
@@ -301,10 +334,8 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
       line:
         proposal.cadence !== null && missing.includes('repeats')
           ? BUDGET_WORDS.cadenceRow(proposal.cadence.words)
-          : BUDGET_WORDS.needs(
-              missing.map((step) => BUDGET_WORDS.needsParts[step] ?? step),
-            ),
-      amount: null,
+          : toNeeds(missing),
+      amount: toKnownAmount(proposal),
     };
   if (kind === 'income') {
     const income = value as BudgetValues['income'];
@@ -318,17 +349,17 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
   return { ...row, line: toGoalLine(goal) ?? row.line };
 };
 
-const toRow = (
-  proposal: Proposal,
-  isUndecided: boolean,
-  isHidden: boolean,
-): StartRow =>
-  isUndecided
+const toRow = (proposal: Proposal, isHidden: boolean): StartRow =>
+  proposal.isUndecided
     ? {
         id: proposal.key,
         name: proposal.name,
         emoji: null,
-        line: isHidden ? BUDGET_WORDS.needsLook : BUDGET_WORDS.disagree,
+        line: isHidden
+          ? BUDGET_WORDS.needsLook
+          : proposal.isReopened
+            ? BUDGET_WORDS.disagreeAgain
+            : BUDGET_WORDS.disagree,
         amount: null,
       }
     : toBaseRow(proposal, getMissingSteps(proposal.kind, proposal.value));
@@ -377,7 +408,7 @@ function BudgetStart({
   const [phase, setPhase] = useState<'input' | 'review'>('input');
   const noticeRef = useRef<HTMLDivElement>(null);
   const mask = useMaskedText();
-  const { isHidden } = useValuesHidden();
+  const { isHidden, toggle: toggleHidden } = useValuesHidden();
   const [isReading, setIsReading] = useState(false);
   const [canStartFresh, setCanStartFresh] = useState(false);
   const [isNotReadOpen, setIsNotReadOpen] = useState(false);
@@ -385,9 +416,7 @@ function BudgetStart({
   const isShort = useIsShortScreen(SHORT_FOOTER_MAX_HEIGHT);
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [edited, setEdited] = useState<
-    Record<string, BudgetValues[BudgetKind]>
-  >({});
+  const [edited, setEdited] = useState<Record<string, Decision>>({});
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [form, setForm] = useState<{ key: string; token: number } | null>(null);
@@ -414,14 +443,25 @@ function BudgetStart({
     setForm(null);
     goTo('input');
   };
-  const [stopAsk, setStopAsk] = useState<'back' | 'exit' | null>(null);
-  const askStop = () => setStopAsk('back');
-  const askStopExit = () => setStopAsk('exit');
-  const confirmStop = () => {
-    setStopAsk(null);
-    stopRead();
-    if (stopAsk === 'exit') onExit();
-  };
+  const askStop = useDiscardGuard({
+    isDirty: true,
+    title: BUDGET_WORDS.stopTitle,
+    message: BUDGET_WORDS.stopMessage,
+    confirmText: BUDGET_WORDS.stopConfirm,
+    cancelText: BUDGET_WORDS.stopCancel,
+    onClose: stopRead,
+  });
+  const askStopExit = useDiscardGuard({
+    isDirty: true,
+    title: BUDGET_WORDS.stopTitle,
+    message: BUDGET_WORDS.stopMessage,
+    confirmText: BUDGET_WORDS.stopConfirm,
+    cancelText: BUDGET_WORDS.stopCancel,
+    onClose: () => {
+      stopRead();
+      onExit();
+    },
+  });
   const askDrop = useDiscardGuard({
     isDirty: true,
     isBusy: isAdding,
@@ -481,17 +521,20 @@ function BudgetStart({
   ];
   const ofKind = (kind: BudgetKind) =>
     proposals.filter((proposal) => proposal.kind === kind);
-  const isUndecided = (proposal: Proposal) =>
-    proposal.versions.length > 0 && edited[proposal.key] === undefined;
   const needing = proposals.filter(
     (proposal) =>
-      isUndecided(proposal) ||
+      proposal.isUndecided ||
       getMissingSteps(proposal.kind, proposal.value).length > 0,
   ).length;
-  const toProposalRow = (proposal: Proposal) =>
-    toRow(proposal, isUndecided(proposal), isHidden);
-  const setValue = (key: string, value: BudgetValues[BudgetKind]) => {
-    setEdited((current) => ({ ...current, [key]: value }));
+  const toProposalRow = (proposal: Proposal) => toRow(proposal, isHidden);
+  const setValue = (
+    { key, versions }: Proposal,
+    value: BudgetValues[BudgetKind],
+  ) => {
+    setEdited((current) => ({
+      ...current,
+      [key]: { value, versionCount: versions.length },
+    }));
     setSelected(null);
   };
   const selectedProposal =
@@ -628,7 +671,11 @@ function BudgetStart({
         const name = (entry.value as BudgetValues['income']).sourceName;
         return { id: toDraftSourceId(name), name };
       }),
-      onSave: (next) => setEdited((current) => ({ ...current, [key]: next })),
+      onSave: (next) =>
+        setEdited((current) => ({
+          ...current,
+          [key]: { value: next, versionCount: formProposal.versions.length },
+        })),
     });
     const close = () => setForm(null);
     const formKey = form.token;
@@ -679,13 +726,15 @@ function BudgetStart({
   const addLabel =
     mode === 'plan' ? BUDGET_WORDS.planAdd : BUDGET_WORDS.deviceAdd;
   const isFolded = isShort && needing > 0;
-  const isSelectedUndecided =
-    selectedProposal !== null && isUndecided(selectedProposal);
+  const selectedMissing =
+    selectedProposal === null
+      ? []
+      : getMissingSteps(selectedProposal.kind, selectedProposal.value);
+  const isSelectedUndecided = selectedProposal?.isUndecided ?? false;
+  const isSelectedNeedy = isSelectedUndecided || selectedMissing.length > 0;
+  const hasIncome = proposals.some((proposal) => proposal.kind === 'income');
   const selectedCadence =
-    selectedProposal?.cadence != null &&
-    getMissingSteps(selectedProposal.kind, selectedProposal.value).includes(
-      'repeats',
-    )
+    selectedProposal?.cadence != null && selectedMissing.includes('repeats')
       ? selectedProposal.cadence
       : null;
   const notice =
@@ -699,9 +748,8 @@ function BudgetStart({
         {canStartFresh && (
           <Button
             type='button'
-            variant='tertiary'
-            size='sm'
-            className='w-fit gap-1'
+            variant='secondary'
+            className='w-full justify-between'
             onClick={onStartFresh}
           >
             {BUDGET_WORDS.freshInstead}
@@ -745,7 +793,7 @@ function BudgetStart({
                     size='icon'
                     aria-label={BUDGET_WORDS.removeFile(file.name)}
                     disabled={isReading}
-                    className="relative before:absolute before:-inset-1.5 before:content-['']"
+                    className="relative size-7 p-0 before:absolute before:-inset-1.5 before:content-['']"
                     onClick={() =>
                       setFiles((current) => current.filter((f) => f !== file))
                     }
@@ -806,37 +854,16 @@ function BudgetStart({
             )}
           </Field>
         </div>
-        {isReading && (
-          <p
-            className='text-muted-foreground flex items-center gap-2 text-sm'
-            role='status'
-          >
-            <Loader className='h-4 w-4 animate-spin' aria-hidden='true' />
-            {BUDGET_WORDS.reading(files.length, pasted.trim() !== '')}
-          </p>
-        )}
-        <Modal
-          isOpen={stopAsk !== null}
-          onClose={() => setStopAsk(null)}
-          title={BUDGET_WORDS.stopTitle}
-          actions={[
-            {
-              label: BUDGET_WORDS.stopConfirm,
-              variant: 'secondary',
-              onClick: confirmStop,
-            },
-            {
-              label: BUDGET_WORDS.stopCancel,
-              variant: 'primary',
-              onClick: () => setStopAsk(null),
-            },
-          ]}
-        >
-          <p className='text-sm text-pretty'>{BUDGET_WORDS.stopMessage}</p>
-        </Modal>
         <ModalFooterActions
           note={
-            hasInput || isReading || isShort ? null : BUDGET_WORDS.needInput
+            isReading ? (
+              <span className='flex items-center gap-2'>
+                <Loader className='h-4 w-4 animate-spin' aria-hidden='true' />
+                {BUDGET_WORDS.reading(files.length, pasted.trim() !== '')}
+              </span>
+            ) : hasInput || isShort ? null : (
+              BUDGET_WORDS.needInput
+            )
           }
           cancelAction={
             <Button type='button' variant='secondary' onClick={stepBack}>
@@ -865,6 +892,7 @@ function BudgetStart({
         </h2>
         <p className='text-muted-foreground text-sm text-pretty'>
           {BUDGET_WORDS.reviewHelp}
+          {proposals.length > 0 && !hasIncome && ` ${BUDGET_WORDS.noIncome}`}
         </p>
       </div>
       {notice}
@@ -895,26 +923,17 @@ function BudgetStart({
         </div>
       )}
       {notRead.length > 0 && (
-        <div className='border-border bg-card overflow-hidden rounded-2xl border'>
+        <div>
           <Button
             type='button'
             variant='tertiary'
-            className='text-foreground! h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3 py-2 text-left font-normal'
+            size='sm'
+            className="text-muted-foreground! relative -ml-2 gap-1.5 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
             onClick={() => setIsNotReadOpen(true)}
           >
-            <span
-              className='border-border bg-accent grid size-10 shrink-0 place-items-center rounded-xl border'
-              aria-hidden='true'
-            >
-              <CircleHelp className='h-5 w-5' />
-            </span>
-            <span className='min-w-24 flex-1 text-base font-medium'>
-              {BUDGET_WORDS.notReadRow(notRead.length)}
-            </span>
-            <ChevronRight
-              className='text-muted-foreground h-5 w-5 shrink-0'
-              aria-hidden='true'
-            />
+            <CircleHelp className='h-4 w-4' aria-hidden='true' />
+            {BUDGET_WORDS.notReadRow(notRead.length)}
+            <ChevronRight className='h-4 w-4' aria-hidden='true' />
           </Button>
         </div>
       )}
@@ -973,35 +992,73 @@ function BudgetStart({
         actions={<ValuesEyeButton />}
       >
         <div className='space-y-3'>
-          {selectedProposal && selectedRow && (
-            <>
-              <SheetHead
-                label={BUDGET_WORDS.sheetKind[selectedProposal.kind]}
-                isLabelDroppedWhenShort
-                figure={selectedRow.amount ?? undefined}
-                fact={selectedRow.line}
-              />
-              <div className='space-y-1 text-sm'>
-                {!isSelectedUndecided && (
-                  <p className='text-muted-foreground'>
-                    {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
-                  </p>
-                )}
-                {selectedCadence !== null && (
-                  <p className='text-pretty'>
-                    <MaskedText>
-                      {toCadenceNote(selectedProposal) ?? ''}
-                    </MaskedText>
-                  </p>
-                )}
-              </div>
-            </>
+          {selectedProposal && selectedRow && !isSelectedNeedy && (
+            <SheetHead
+              label={BUDGET_WORDS.sheetKind[selectedProposal.kind]}
+              isLabelDroppedWhenShort
+              figure={selectedRow.amount ?? undefined}
+              fact={selectedRow.line}
+            />
+          )}
+          {selectedProposal && isSelectedNeedy && (
+            <InlineNotice
+              tone='warning'
+              title={
+                selectedRow?.amount && !isSelectedUndecided ? (
+                  <MaskedText>{selectedRow.amount}</MaskedText>
+                ) : undefined
+              }
+            >
+              {isSelectedUndecided ? (
+                selectedProposal.isReopened ? (
+                  BUDGET_WORDS.chooseVersionAgain
+                ) : (
+                  BUDGET_WORDS.chooseVersion
+                )
+              ) : (
+                <MaskedText>{toNeeds(selectedMissing)}</MaskedText>
+              )}
+            </InlineNotice>
+          )}
+          {selectedProposal && (
+            <div className='space-y-1 text-sm'>
+              {!isSelectedUndecided && (
+                <p className='text-muted-foreground'>
+                  {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
+                </p>
+              )}
+              {selectedCadence !== null && (
+                <p className='text-pretty'>
+                  <MaskedText>
+                    {toCadenceNote(selectedProposal) ?? ''}
+                  </MaskedText>
+                </p>
+              )}
+              {selectedProposal.monthlyCents !== null && (
+                <p className='text-pretty'>
+                  <MaskedText>
+                    {BUDGET_WORDS.goalMonthly(
+                      formatCents(selectedProposal.monthlyCents),
+                    )}
+                  </MaskedText>
+                </p>
+              )}
+            </div>
           )}
           {selectedProposal && isSelectedUndecided && (
             <div className='space-y-2'>
-              <p className='text-sm font-medium text-pretty'>
-                {BUDGET_WORDS.chooseVersion}
-              </p>
+              {isHidden && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className='gap-1.5'
+                  onClick={toggleHidden}
+                >
+                  <Eye className='h-4 w-4' aria-hidden='true' />
+                  {BUDGET_WORDS.showToCompare}
+                </Button>
+              )}
               <ul className='space-y-2'>
                 {selectedProposal.versions.map((version) => (
                   <li
@@ -1015,9 +1072,8 @@ function BudgetStart({
                       type='button'
                       variant='secondary'
                       size='sm'
-                      onClick={() =>
-                        setValue(selectedProposal.key, version.value)
-                      }
+                      className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                      onClick={() => setValue(selectedProposal, version.value)}
                     >
                       {BUDGET_WORDS.useThis}
                     </Button>
@@ -1026,12 +1082,12 @@ function BudgetStart({
               </ul>
             </div>
           )}
-          <ActionGroup isRoomy>
+          <ActionGroup isRoomy={!isShort}>
             {selectedProposal && selectedCadence?.perMonthCents != null && (
               <ActionRow
                 isGrouped
-                isRoomy
-                icon={<Repeat className='h-5 w-5' />}
+                isRoomy={!isShort}
+                icon={<Repeat />}
                 label={mask(
                   BUDGET_WORDS.monthlyOffer(
                     formatCents(selectedCadence.perMonthCents),
@@ -1039,14 +1095,14 @@ function BudgetStart({
                 )}
                 subtitle={BUDGET_WORDS.monthlyOfferSub}
                 onClick={() =>
-                  setValue(selectedProposal.key, selectedCadence.monthly)
+                  setValue(selectedProposal, selectedCadence.monthly)
                 }
               />
             )}
             <ActionRow
               isGrouped
-              isRoomy
-              icon={<Pencil className='h-5 w-5' />}
+              isRoomy={!isShort}
+              icon={<Pencil />}
               label={BUDGET_WORDS.openToChange}
               hasChevron
               onClick={() => {
@@ -1060,9 +1116,9 @@ function BudgetStart({
             />
             <ActionRow
               isGrouped
-              isRoomy
+              isRoomy={!isShort}
               isDestructive
-              icon={<Trash2 className='h-5 w-5' />}
+              icon={<Trash2 />}
               label={BUDGET_WORDS.removeOne}
               onClick={() => {
                 if (selected)
