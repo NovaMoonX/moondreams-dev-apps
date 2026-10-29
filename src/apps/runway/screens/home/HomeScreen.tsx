@@ -18,16 +18,22 @@ import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import LookaheadWarnings from '@apps/runway/components/LookaheadWarnings';
 import {
+  CARD_DUE_WARN_DAYS,
   HOME_TILE_COUNT,
   HOME_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
+import { getDueCards } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import HomeCards from '@apps/runway/screens/home/HomeCards';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { getListedCards } from '@apps/runway/utils/cardText';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
+  selectAllCards,
   selectBills,
   selectHasIncome,
   selectEnvelopes,
@@ -69,6 +75,8 @@ function HomeScreen() {
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
+  const allCards = useAppSelector(selectAllCards);
+  const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const { isHidden } = useValuesHidden();
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
@@ -104,13 +112,21 @@ function HomeScreen() {
     ...envelopes.filter(hasMoney),
     ...envelopes.filter((entry) => !hasMoney(entry)),
   ].slice(0, HOME_TILE_COUNT);
+  const dueCards = isTrack
+    ? getDueCards(
+        getListedCards(allCards, balances.reserveByCard),
+        balances.reserveByCard,
+        today,
+        CARD_DUE_WARN_DAYS,
+      )
+    : [];
   const hasRanges = rangeSides.income || rangeSides.expense;
 
   return (
     <div className='space-y-6'>
       <div className='space-y-2'>
-        {lookahead && lookahead.problems.length > 0 ? (
-          <LookaheadWarnings lookahead={lookahead} />
+        {lookahead && (lookahead.problems.length > 0 || dueCards.length > 0) ? (
+          <LookaheadWarnings lookahead={lookahead} dueCards={dueCards} />
         ) : lookahead ? (
           <HoldsThroughLine lookahead={lookahead} />
         ) : (
@@ -162,6 +178,9 @@ function HomeScreen() {
           {HOME_WORDS.resume}
         </EmptyCard>
       )}
+      <LevelGate level='track'>
+        <HomeCards today={today} />
+      </LevelGate>
       {envelopes.length > 0 && (
         <div className='space-y-2'>
           <SectionHeader

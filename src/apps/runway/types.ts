@@ -351,6 +351,8 @@ export interface CardSealed {
   issuer: string;
   /** The card's own name ("Venture X"), when it has one. */
   name: string | null;
+  /** The day of the month a payment is due (1 to 31, the month's last day when shorter); null when none was given. */
+  dueDay: number | null;
 }
 
 export interface OpenCard extends CardSealed {

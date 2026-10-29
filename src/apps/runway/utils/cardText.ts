@@ -1,5 +1,18 @@
-import { CARD_ISSUERS, CARD_WORDS } from '@apps/runway/constants';
-import type { OpenCard, OpenVersion } from '@apps/runway/types';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
+import {
+  CARD_DUE_WARN_DAYS,
+  CARD_ISSUERS,
+  CARD_WORDS,
+} from '@apps/runway/constants';
+import { DAY_MS } from '@apps/runway/engine/dates';
+import { getNextDueOn } from '@apps/runway/engine/cards';
+import type {
+  Cents,
+  DateOnly,
+  OpenCard,
+  OpenVersion,
+} from '@apps/runway/types';
 import { resolveVersion } from '@apps/runway/engine/resolve';
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import type { RootState } from '@/store';
@@ -90,3 +103,44 @@ export function getMarkCardId(
     ? getBillCardId(state.runway.versions, billId, dueOn)
     : null;
 }
+
+/** The one due fact a card shows: "Due Nov 14", or "Due in 3 days" / "Due today" inside the warning window when money waits; null with no due day. */
+export function describeCardDue(
+  card: OpenCard,
+  waitingCents: Cents,
+  today: DateOnly,
+): string | null {
+  const dueOn = getNextDueOn(card.dueDay, today);
+  if (dueOn === null) return null;
+  const inDays = Math.round((dueOn - today) / DAY_MS);
+  if (waitingCents <= 0 || inDays > CARD_DUE_WARN_DAYS) {
+    return CARD_WORDS.dueOn(formatDateShortUTC(dueOn));
+  }
+  return inDays === 0 ? CARD_WORDS.dueToday : CARD_WORDS.dueInDays(inDays);
+}
+
+/** The cards a list shows: those in use, and an archived one while it still waits to be paid so it can be paid off. */
+export const getListedCards = (
+  cards: readonly OpenCard[],
+  reserveByCard: Readonly<Record<string, Cents>>,
+) =>
+  cards.filter(
+    (card) => card.archivedAt === null || (reserveByCard[card.id] ?? 0) > 0,
+  );
+
+/** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", or "is due today". */
+export const describeDueCard = (
+  name: string,
+  dueOn: DateOnly,
+  inDays: number,
+  waitingCents: Cents,
+) => {
+  const amount = formatCents(waitingCents);
+  return inDays === 0
+    ? CARD_WORDS.dueTodayWarning(name, amount)
+    : CARD_WORDS.dueWarning(
+        name,
+        formatDateShortUTC(dueOn).replace(/ /g, ' '),
+        amount,
+      );
+};

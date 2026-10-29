@@ -629,12 +629,16 @@ async function writeSeedCards(
   const cards: { id: string; sealed: CardSealed; createdAt: number }[] = [
     {
       id: SEED_VENTURE_CARD,
-      sealed: { issuer: 'Capital One', name: 'Venture X' },
+      sealed: { issuer: 'Capital One', name: 'Venture X', dueDay: 14 },
       createdAt,
     },
     {
       id: SEED_CHASE_CARD,
-      sealed: { issuer: 'Chase', name: null },
+      sealed: {
+        issuer: 'Chase',
+        name: null,
+        dueDay: new Date(today + 3 * DAY_MS).getUTCDate(),
+      },
       createdAt: createdAt + 60_000,
     },
   ];

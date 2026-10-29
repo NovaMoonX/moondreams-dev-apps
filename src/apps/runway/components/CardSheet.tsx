@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Archive, Pencil } from 'lucide-react';
+import { Archive, History, Pencil } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,21 +16,15 @@ import { formatCents } from '@/utils/moneyUtils';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { CARD_WORDS } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import {
-  archiveCard,
-  undoCardPayment,
-} from '@apps/runway/store/actions/cardActions';
-import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { collectCardPaid, type CardPaid } from '@apps/runway/engine/progress';
-import SensitiveValue from '@/components/SensitiveValue';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { archiveCard } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard } from '@apps/runway/types';
-import { getCardName } from '@apps/runway/utils/cardText';
-
-/** Payments the sheet lists; older ones stay in the ledger and the figures. */
-const RECENT_PAYMENTS = 5;
+import { useNow } from '@/hooks/useNow';
+import CardHistoryView from '@apps/runway/components/CardHistoryView';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
+import { describeCardDue, getCardName } from '@apps/runway/utils/cardText';
 
 interface CardSheetProps {
   card: OpenCard;
@@ -38,7 +33,7 @@ interface CardSheetProps {
   onChange: () => void;
 }
 
-/** What a card row opens: what it waits for as the figure, then paying it off, changing it and archiving it. */
+/** What a card row opens: what it waits for as the figure, then paying it off, changing it, archiving it and its history. */
 function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -48,15 +43,9 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const balances = useAppSelector(selectBalances);
   const [isArchiving, setIsArchiving] = useState(false);
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
-  const moves = useAppSelector((state) => state.runway.moves);
-  const [takingBack, setTakingBack] = useState<string | null>(null);
-  const startDate = useAppSelector(
-    (state) => state.runway.plan?.startDate ?? 0,
-  );
-  const payments = [...(collectCardPaid(moves)[card.id] ?? [])]
-    .filter((payment) => payment.on >= startDate)
-    .sort((a, b) => b.on - a.on || (a.moveId < b.moveId ? 1 : -1))
-    .slice(0, RECENT_PAYMENTS);
+  const today = todayAsUtcDate(useNow(60_000));
+  const [view, setView] = useState<'menu' | 'history' | 'purchase'>('menu');
+  const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const name = getCardName(card, cards);
 
   const handleArchive = async () => {
@@ -85,35 +74,16 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
     }
   };
 
-  const takeBack = async (payment: CardPaid) => {
-    if (!user || takingBack !== null) return;
-    const amount = formatCents(payment.cents);
-    const day = formatDateShortUTC(payment.on);
-    const isConfirmed = await confirm({
-      title: CARD_WORDS.takeBackTitle,
-      message: mask(CARD_WORDS.takeBackText(amount, day)),
-      confirmText: CARD_WORDS.takeBackConfirm,
-    });
-    if (!isConfirmed) return;
-    setTakingBack(payment.moveId);
-    try {
-      const encryption = await getRunwayEncryption(user.uid);
-      await undoCardPayment(user.uid, encryption, {
-        moveId: payment.moveId,
-        cardId: card.id,
-        date: payment.on,
-        amountCents: payment.cents,
-      });
-      addToast({ title: CARD_WORDS.undone(name), type: 'success' });
-    } catch (error) {
-      addToast({
-        title: CARD_WORDS.undoFailed,
-        description: getErrorMessage(error, CARD_WORDS.failed),
-        type: 'error',
-      });
-    }
-    setTakingBack(null);
-  };
+  if (view === 'purchase' && purchaseId !== null) {
+    return (
+      <PurchaseScreen
+        key={purchaseId}
+        purchaseId={purchaseId}
+        onOpen={setPurchaseId}
+        onClose={() => setView('history')}
+      />
+    );
+  }
 
   return (
     <FormSheet
@@ -123,83 +93,67 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       title={name}
       actions={<ValuesEyeButton />}
     >
-      <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
-        <SheetHead
-          label={
-            reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
-          }
-          figure={formatCents(Math.max(0, reserveCents))}
-          fact={
-            reserveCents < 0
-              ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
-              : undefined
-          }
-        />
-        <Button
-          type='button'
-          variant={reserveCents > 0 ? 'primary' : 'secondary'}
-          className='w-full'
-          onClick={onPay}
-        >
-          {CARD_WORDS.payOffShort}
-        </Button>
-        <ActionGroup>
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Pencil />}
-            label={CARD_WORDS.change}
-            onClick={onChange}
+      {view === 'history' ? (
+        <div className='space-y-4'>
+          <BackLink onBack={() => setView('menu')} />
+          <p className='text-2xl font-semibold'>{CARD_WORDS.historyTitle}</p>
+          <CardHistoryView
+            cardId={card.id}
+            cardName={name}
+            onOpenPurchase={(id) => {
+              setPurchaseId(id);
+              setView('purchase');
+            }}
           />
-          {card.archivedAt === null && (
+        </div>
+      ) : (
+        <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
+          <SheetHead
+            label={
+              reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
+            }
+            figure={formatCents(Math.max(0, reserveCents))}
+            fact={
+              reserveCents < 0
+                ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
+                : describeCardDue(card, reserveCents, today)
+            }
+          />
+          <Button
+            type='button'
+            variant={reserveCents > 0 ? 'primary' : 'secondary'}
+            className='w-full'
+            onClick={onPay}
+          >
+            {CARD_WORDS.payOffShort}
+          </Button>
+          <ActionGroup>
             <ActionRow
               isGrouped
-              icon={<Archive />}
-              label={CARD_WORDS.archive}
-              isDisabled={isArchiving}
-              onClick={() => void handleArchive()}
+              hasChevron
+              icon={<Pencil />}
+              label={CARD_WORDS.change}
+              onClick={onChange}
             />
-          )}
-        </ActionGroup>
-        {payments.length > 0 && (
-          <section className='space-y-1.5'>
-            <p className='text-muted-foreground text-xs'>
-              {CARD_WORDS.paymentsTitle}
-            </p>
-            <ul className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
-              {payments.map((payment) => (
-                <li
-                  key={payment.moveId}
-                  className='flex items-center justify-between gap-3 py-1.5 pr-1.5 pl-3'
-                >
-                  <span className='min-w-0'>
-                    {formatDateShortUTC(payment.on)}
-                    {' · '}
-                    <SensitiveValue className='tabular-nums'>
-                      {formatCents(payment.cents)}
-                    </SensitiveValue>
-                  </span>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='sm'
-                    aria-label={mask(
-                      CARD_WORDS.takeBackLabel(
-                        formatCents(payment.cents),
-                        formatDateShortUTC(payment.on),
-                      ),
-                    )}
-                    disabled={takingBack !== null}
-                    onClick={() => void takeBack(payment)}
-                  >
-                    {CARD_WORDS.takeBack}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
-      </div>
+            {card.archivedAt === null && (
+              <ActionRow
+                isGrouped
+                icon={<Archive />}
+                label={CARD_WORDS.archive}
+                isDisabled={isArchiving}
+                onClick={() => void handleArchive()}
+              />
+            )}
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<History />}
+              label={CARD_WORDS.historyTitle}
+              onClick={() => setView('history')}
+            />
+          </ActionGroup>
+        </div>
+      )}
     </FormSheet>
   );
 }

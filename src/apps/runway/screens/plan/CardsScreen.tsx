@@ -5,38 +5,34 @@ import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
 import SectionHeader from '@/components/SectionHeader';
 import { useAppSelector } from '@/store';
-import { formatCents } from '@/utils/moneyUtils';
-import CardSheet from '@apps/runway/components/CardSheet';
-import ItemBadge from '@apps/runway/components/ItemBadge';
-import ItemRow from '@apps/runway/components/ItemRow';
+import CardRow from '@apps/runway/components/CardRow';
+import CardSheets, {
+  type OpenedCard,
+} from '@apps/runway/components/CardSheets';
 import { CARD_WORDS } from '@apps/runway/constants';
 import CardForm from '@apps/runway/forms/CardForm';
-import PayCardSheet from '@apps/runway/forms/PayCardSheet';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectAllCards,
   selectIsMovesLoaded,
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { getCardName } from '@apps/runway/utils/cardText';
-
-type Open = { cardId: string; view: 'menu' | 'pay' | 'change' };
+import { useNow } from '@/hooks/useNow';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getListedCards } from '@apps/runway/utils/cardText';
 
 function CardsScreen() {
+  const today = todayAsUtcDate(useNow(60_000));
   const allCards = useAppSelector(selectAllCards);
   const balances = useAppSelector(selectBalances);
   const isLedgerReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [formKey, setFormKey] = useState<number | null>(null);
-  const [open, setOpen] = useState<Open | null>(null);
+  const [open, setOpen] = useState<OpenedCard | null>(null);
 
   // An archived card that still waits to be paid stays listed, so it can be paid off.
-  const cards = allCards.filter(
-    (card) =>
-      card.archivedAt === null || (balances.reserveByCard[card.id] ?? 0) > 0,
-  );
-  const opened = cards.find((card) => card.id === open?.cardId) ?? null;
+  const cards = getListedCards(allCards, balances.reserveByCard);
 
   return (
     <div className='space-y-4'>
@@ -51,27 +47,16 @@ function CardsScreen() {
         </EmptyCard>
       ) : (
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          {cards.map((card) => {
-            const reserveCents = balances.reserveByCard[card.id] ?? 0;
-            const name = getCardName(card, allCards);
-            return (
-              <ItemRow
-                key={card.id}
-                name={name}
-                leading={<ItemBadge name={card.issuer} emoji={null} />}
-                detail={
-                  reserveCents > 0
-                    ? CARD_WORDS.waiting
-                    : reserveCents < 0
-                      ? CARD_WORDS.paidAhead(formatCents(-reserveCents))
-                      : CARD_WORDS.nothingToPay
-                }
-                figure={formatCents(Math.max(0, reserveCents))}
-                ariaLabel={`${name}. Open`}
-                onOpen={() => setOpen({ cardId: card.id, view: 'menu' })}
-              />
-            );
-          })}
+          {cards.map((card) => (
+            <CardRow
+              key={card.id}
+              card={card}
+              allCards={allCards}
+              reserveCents={balances.reserveByCard[card.id] ?? 0}
+              today={today}
+              onOpen={() => setOpen({ cardId: card.id, view: 'menu' })}
+            />
+          ))}
         </ul>
       )}
       <FloatingAction
@@ -82,29 +67,7 @@ function CardsScreen() {
       {formKey !== null && (
         <CardForm key={formKey} isOpen onClose={() => setFormKey(null)} />
       )}
-      {opened && open?.view === 'menu' && (
-        <CardSheet
-          card={opened}
-          onClose={() => setOpen(null)}
-          onPay={() => setOpen({ cardId: opened.id, view: 'pay' })}
-          onChange={() => setOpen({ cardId: opened.id, view: 'change' })}
-        />
-      )}
-      {opened && open?.view === 'pay' && (
-        <PayCardSheet
-          card={opened}
-          onClose={() => setOpen(null)}
-          onCancel={() => setOpen({ cardId: opened.id, view: 'menu' })}
-        />
-      )}
-      {opened && open?.view === 'change' && (
-        <CardForm
-          isOpen
-          editing={opened}
-          onClose={() => setOpen(null)}
-          onCancel={() => setOpen({ cardId: opened.id, view: 'menu' })}
-        />
-      )}
+      <CardSheets cards={cards} open={open} onChange={setOpen} />
     </div>
   );
 }

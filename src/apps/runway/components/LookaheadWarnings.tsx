@@ -10,6 +10,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
   FIX_ROWS_SHOWN,
@@ -19,40 +20,85 @@ import {
 import {
   describeGroupShort,
   groupProblems,
+  type ProblemGroup,
 } from '@apps/runway/utils/lookaheadText';
+import { describeDueCard, getCardName } from '@apps/runway/utils/cardText';
+import type { DueCard } from '@apps/runway/engine/cards';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
+import CardSheets, {
+  type OpenedCard,
+} from '@apps/runway/components/CardSheets';
+import DueCardRow from '@apps/runway/components/DueCardRow';
+import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ProblemRow from '@apps/runway/components/ProblemRow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 interface LookaheadWarningsProps {
   lookahead: Lookahead;
+  /** Cards coming due with money waiting; each is its own row beside the plan's problems. */
+  dueCards?: readonly DueCard[];
 }
 
+type WarningRow =
+  | { kind: 'plan'; on: number; group: ProblemGroup }
+  | { kind: 'card'; on: number; due: DueCard };
+
 /** What stops the plan, as one warning row that counts the rest; it opens "Things to fix", one row per problem, soonest first. The open list lives in the URL, so coming back from a row's day lands on it again. */
-function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
+function LookaheadWarnings({
+  lookahead,
+  dueCards = [],
+}: LookaheadWarningsProps) {
   const { isFixesOpen, openFixes, closeFixes } = useRunwayUrlState();
   const { isHidden } = useValuesHidden();
   const { incomeEndsOn } = lookahead;
   const [isAllShown, setIsAllShown] = useState(false);
-  const groups = groupProblems(lookahead.problems);
-  const first = groups[0] ?? null;
+  const [paying, setPaying] = useState<OpenedCard | null>(null);
+  const allCards = useAppSelector(selectAllCards);
+  const rows = [
+    ...groupProblems(lookahead.problems).map((group): WarningRow => ({
+      kind: 'plan',
+      on: group.on,
+      group,
+    })),
+    ...dueCards.map((due): WarningRow => ({
+      kind: 'card',
+      on: due.dueOn,
+      due,
+    })),
+  ].sort((a, b) => a.on - b.on);
+  const first = rows[0] ?? null;
+  const describeDue = (due: DueCard) =>
+    describeDueCard(
+      getCardName(due.card, allCards),
+      due.dueOn,
+      due.inDays,
+      due.waitingCents,
+    );
+  const openPay = (due: DueCard) => {
+    closeFixes();
+    setPaying({ cardId: due.card.id, view: 'pay' });
+  };
   const endsText =
     incomeEndsOn === null
       ? null
       : FIX_WORDS.incomeEnds(formatDateUTC(incomeEndsOn));
 
-  if (!first && !endsText) return null;
-  const label = first
-    ? describeGroupShort(first, isHidden)
-    : { before: endsText ?? '', figure: null, after: '' };
-  const more = groups.length - 1;
-  const moreText = groups.every((group) => group.kind === 'day')
+  if (rows.length === 0 && !endsText) return null;
+  const label = !first
+    ? { before: endsText ?? '', figure: null, after: '' }
+    : first.kind === 'plan'
+      ? describeGroupShort(first.group, isHidden)
+      : { before: describeDue(first.due), figure: null, after: '' };
+  const more = rows.length - 1;
+  const moreText = rows.every(
+    (row) => row.kind === 'plan' && row.group.kind === 'day',
+  )
     ? `${more} more ${more === 1 ? 'day' : 'days'}`
     : `${more} more`;
-  const isCounted = groups.length > 0;
+  const isCounted = rows.length > 0;
   const isLabelPrivate = label.figure !== null;
-  const shown = isAllShown ? groups : groups.slice(0, FIX_ROWS_SHOWN);
+  const shown = isAllShown ? rows : rows.slice(0, FIX_ROWS_SHOWN);
 
   if (isHidden) {
     return (
@@ -90,9 +136,9 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         <span className='min-w-0 flex-1 text-sm font-medium'>
           {isCounted && (
             <span className='sm:hidden'>
-              {groups.length === 1
+              {rows.length === 1
                 ? PROBLEM_WORDS.one
-                : PROBLEM_WORDS.many(groups.length)}
+                : PROBLEM_WORDS.many(rows.length)}
             </span>
           )}
           <span className={join(isCounted && 'max-sm:hidden')}>
@@ -120,17 +166,28 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
         title={PROBLEM_WORDS.title}
         actions={<ValuesEyeButton />}
       >
-        {isFixesOpen && groups.length > 0 && (
+        {isFixesOpen && rows.length > 0 && (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {shown.map((group) => (
+            {shown.map((row) => (
               <li
-                key={`${group.kind}:${group.on}:${group.kind === 'day' ? group.dayKey : group.problem.kind}`}
+                key={
+                  row.kind === 'card'
+                    ? `card:${row.due.card.id}`
+                    : `${row.group.kind}:${row.on}:${row.group.kind === 'day' ? row.group.dayKey : row.group.problem.kind}`
+                }
                 className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'
               >
-                <ProblemRow group={group} />
+                {row.kind === 'card' ? (
+                  <DueCardRow
+                    sentence={describeDue(row.due)}
+                    onOpen={() => openPay(row.due)}
+                  />
+                ) : (
+                  <ProblemRow group={row.group} />
+                )}
               </li>
             ))}
-            {groups.length > FIX_ROWS_SHOWN && (
+            {rows.length > FIX_ROWS_SHOWN && (
               <li className='px-3 py-1'>
                 <ShowMoreButton
                   isOpen={isAllShown}
@@ -138,7 +195,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
                 >
                   {isAllShown
                     ? 'Show fewer'
-                    : `Show ${groups.length - FIX_ROWS_SHOWN} more`}
+                    : `Show ${rows.length - FIX_ROWS_SHOWN} more`}
                 </ShowMoreButton>
               </li>
             )}
@@ -150,6 +207,7 @@ function LookaheadWarnings({ lookahead }: LookaheadWarningsProps) {
           </InlineNotice>
         )}
       </DetailSheet>
+      <CardSheets cards={allCards} open={paying} onChange={setPaying} />
     </>
   );
 }

@@ -16,6 +16,11 @@ import {
   deriveBalancesBefore,
 } from '../../src/apps/runway/engine/balances.ts';
 import {
+  collectCardHistory,
+  getDueCards,
+  getNextDueOn,
+} from '../../src/apps/runway/engine/cards.ts';
+import {
   buildClosings,
   closing as buildClosing,
   CLOSED_DAY_KEY,
@@ -8014,6 +8019,104 @@ const version = (
   );
 }
 
+// Cards round 2: due days and a card's history.
+{
+  const card = (id: string, dueDay: number | null) => ({
+    id,
+    issuer: 'Chase',
+    name: null,
+    dueDay,
+    createdAt: 1,
+    updatedAt: 1,
+    archivedAt: null,
+  });
+  const d = (y: number, m: number, day: number) => Date.UTC(y, m - 1, day);
+  assert.equal(
+    getNextDueOn(31, d(2027, 2, 10)),
+    d(2027, 2, 28),
+    'the 31st in February is its last day',
+  );
+  assert.equal(
+    getNextDueOn(14, d(2026, 11, 14)),
+    d(2026, 11, 14),
+    'due today is today',
+  );
+  assert.equal(getNextDueOn(14, d(2026, 11, 15)), d(2026, 12, 14));
+  assert.equal(
+    getNextDueOn(5, d(2026, 12, 20)),
+    d(2027, 1, 5),
+    'past the day in December is next January',
+  );
+  assert.equal(getNextDueOn(null, d(2026, 11, 15)), null);
+  const today = d(2026, 11, 1);
+  const due = getDueCards(
+    [card('a', 8), card('b', 9), card('c', 3), card('d', null), card('e', 2)],
+    { a: 1_000, b: 500, c: 200, d: 900, e: 0 },
+    today,
+    7,
+  );
+  assert.deepEqual(
+    due.map((entry) => [entry.card.id, entry.inDays]),
+    [
+      ['c', 2],
+      ['a', 7],
+    ],
+    'due within 7 days with money waiting, soonest first; 8 days out, no due day and nothing waiting are left out',
+  );
+
+  const pay = (id: string, cents: number, reverses: string | null = null) =>
+    ({
+      id,
+      kind: 'cardPayment',
+      date: d(2026, 11, 3),
+      refId: 'a',
+      reversesMoveId: reverses,
+      createdAt: 1,
+      payload: { amountCents: cents },
+    }) as unknown as OpenMove;
+  const billOn = {
+    id: 'paid_rent',
+    kind: 'billPaid',
+    date: d(2026, 11, 1),
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: {
+      amountCents: 800,
+      paidOn: d(2026, 11, 2),
+      fromFreeCents: 0,
+      cardId: 'a',
+    },
+  } as unknown as OpenMove;
+  const bought = {
+    id: 'p1',
+    date: d(2026, 11, 4),
+    source: 'manual',
+    needsHome: false,
+    createdAt: 1,
+    updatedAt: 1,
+    amountCents: 400,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: toChosenLines([{ envelopeId: 'food', cents: 400 }]),
+    refundOfId: null,
+    paidByCardId: 'a',
+  } as OpenPurchase;
+  const history = collectCardHistory(
+    'a',
+    [bought, { ...bought, id: 'p2', paidByCardId: null }],
+    [billOn, pay('pay1', 300), pay('pay2', 100), pay('unpay2', 100, 'pay2')],
+  );
+  assert.deepEqual(
+    history.map((entry) =>
+      entry.kind === 'payment' ? [entry.id, entry.isTakenBack] : [entry.id],
+    ),
+    [['p1'], ['pay2', true], ['pay1', false], ['paid_rent']],
+    'newest first: its purchases, its payments (one taken back), the bill charged to it; cash purchases and undo moves are not entries',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to spend, then what gets less.
@@ -9059,6 +9162,104 @@ console.log('runway engine: ok');
     }).reserveByCard.venture,
     -4_000,
     'at Plan the card purchases are left out with the rest of the spending',
+  );
+}
+
+// Cards round 2: due days and a card's history.
+{
+  const card = (id: string, dueDay: number | null) => ({
+    id,
+    issuer: 'Chase',
+    name: null,
+    dueDay,
+    createdAt: 1,
+    updatedAt: 1,
+    archivedAt: null,
+  });
+  const d = (y: number, m: number, day: number) => Date.UTC(y, m - 1, day);
+  assert.equal(
+    getNextDueOn(31, d(2027, 2, 10)),
+    d(2027, 2, 28),
+    'the 31st in February is its last day',
+  );
+  assert.equal(
+    getNextDueOn(14, d(2026, 11, 14)),
+    d(2026, 11, 14),
+    'due today is today',
+  );
+  assert.equal(getNextDueOn(14, d(2026, 11, 15)), d(2026, 12, 14));
+  assert.equal(
+    getNextDueOn(5, d(2026, 12, 20)),
+    d(2027, 1, 5),
+    'past the day in December is next January',
+  );
+  assert.equal(getNextDueOn(null, d(2026, 11, 15)), null);
+  const today = d(2026, 11, 1);
+  const due = getDueCards(
+    [card('a', 8), card('b', 9), card('c', 3), card('d', null), card('e', 2)],
+    { a: 1_000, b: 500, c: 200, d: 900, e: 0 },
+    today,
+    7,
+  );
+  assert.deepEqual(
+    due.map((entry) => [entry.card.id, entry.inDays]),
+    [
+      ['c', 2],
+      ['a', 7],
+    ],
+    'due within 7 days with money waiting, soonest first; 8 days out, no due day and nothing waiting are left out',
+  );
+
+  const pay = (id: string, cents: number, reverses: string | null = null) =>
+    ({
+      id,
+      kind: 'cardPayment',
+      date: d(2026, 11, 3),
+      refId: 'a',
+      reversesMoveId: reverses,
+      createdAt: 1,
+      payload: { amountCents: cents },
+    }) as unknown as OpenMove;
+  const billOn = {
+    id: 'paid_rent',
+    kind: 'billPaid',
+    date: d(2026, 11, 1),
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: {
+      amountCents: 800,
+      paidOn: d(2026, 11, 2),
+      fromFreeCents: 0,
+      cardId: 'a',
+    },
+  } as unknown as OpenMove;
+  const bought = {
+    id: 'p1',
+    date: d(2026, 11, 4),
+    source: 'manual',
+    needsHome: false,
+    createdAt: 1,
+    updatedAt: 1,
+    amountCents: 400,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: toChosenLines([{ envelopeId: 'food', cents: 400 }]),
+    refundOfId: null,
+    paidByCardId: 'a',
+  } as OpenPurchase;
+  const history = collectCardHistory(
+    'a',
+    [bought, { ...bought, id: 'p2', paidByCardId: null }],
+    [billOn, pay('pay1', 300), pay('pay2', 100), pay('unpay2', 100, 'pay2')],
+  );
+  assert.deepEqual(
+    history.map((entry) =>
+      entry.kind === 'payment' ? [entry.id, entry.isTakenBack] : [entry.id],
+    ),
+    [['p1'], ['pay2', true], ['pay1', false], ['paid_rent']],
+    'newest first: its purchases, its payments (one taken back), the bill charged to it; cash purchases and undo moves are not entries',
   );
 }
 

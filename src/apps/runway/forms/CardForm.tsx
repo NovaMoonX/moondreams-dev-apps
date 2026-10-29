@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import AmountHero from '@/components/AmountHero';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import Pill from '@/components/Pill';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import RevealChip from '@/components/RevealChip';
@@ -32,11 +33,13 @@ import {
   hasUnnamedCardFrom,
   resolveIssuer,
 } from '@apps/runway/utils/cardText';
+import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 const OTHER_VALUE = 'other';
+const DUE_DAYS = Array.from({ length: LAST_DAY }, (_, index) => index + 1);
 
 interface CardFormData {
   /** A known issuer, or `other` when the bank is typed. */
@@ -45,6 +48,9 @@ interface CardFormData {
   name: string;
   hasNoName: boolean;
   owed: string;
+  /** The day of the month it is due, when one was picked. */
+  dueDay: number | null;
+  hasNoDueDay: boolean;
 }
 
 interface CardFormProps {
@@ -68,6 +74,8 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
       name: '',
       hasNoName: false,
       owed: '',
+      dueDay: null,
+      hasNoDueDay: false,
     };
   }
   const known = CARD_ISSUERS.find((issuer) => issuer === editing.issuer);
@@ -77,10 +85,12 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
     name: editing.name ?? '',
     hasNoName: editing.name === null,
     owed: '',
+    dueDay: editing.dueDay,
+    hasNoDueDay: editing.dueDay === null,
   };
 };
 
-/** Adds a card, or changes who issues it and what it is called. Adding can also say what it owed on the starting day. */
+/** Adds a card, or changes who issues it, what it is called and the day it is due. Adding can also say what it owed on the starting day. */
 function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -135,6 +145,7 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
   const isOwedValid =
     owedCents !== null && owedCents >= 0 && owedCents <= MAX_PURCHASE_CENTS;
   const asksOwed = editing === undefined && startDate !== null;
+  const isDueAnswered = formData.dueDay !== null || formData.hasNoDueDay;
   const hasOther = hasUnnamedCardFrom(issuer, cards, editing?.id ?? null);
 
   const steps: QuestionStep[] = [
@@ -233,6 +244,55 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
           } satisfies QuestionStep,
         ]
       : []),
+    {
+      id: 'due',
+      title: CARD_WORDS.dueTitle,
+      summaryLabel: CARD_WORDS.dueLabel,
+      summaryValue: formData.hasNoDueDay
+        ? CARD_WORDS.noDueDay
+        : formData.dueDay === null
+          ? ''
+          : CARD_WORDS.dueSummaryDay(
+              formData.dueDay,
+              toOrdinal(formData.dueDay),
+            ),
+      isAnswered: isDueAnswered,
+      blocker: CARD_WORDS.needsDue,
+      render: ({ moveOn }) => (
+        <div className='space-y-3'>
+          <div
+            className='grid grid-cols-7 gap-1.5'
+            role='group'
+            aria-label={CARD_WORDS.dueTitle}
+          >
+            {DUE_DAYS.map((day) => (
+              <Pill
+                key={day}
+                className='w-full px-0!'
+                isSelected={formData.dueDay === day}
+                ariaLabel={day === LAST_DAY ? 'Last day' : toOrdinal(day)}
+                onClick={() => {
+                  set({ dueDay: day, hasNoDueDay: false });
+                  moveOn();
+                }}
+              >
+                {String(day)}
+              </Pill>
+            ))}
+          </div>
+          <div>
+            <RevealChip
+              onClick={() => {
+                set({ dueDay: null, hasNoDueDay: true });
+                moveOn();
+              }}
+            >
+              {CARD_WORDS.noDueDay}
+            </RevealChip>
+          </div>
+        </div>
+      ),
+    },
   ];
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
@@ -255,7 +315,9 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
         ? CARD_WORDS.needsName
         : !isOwedValid
           ? FORM_FLOW_WORDS.badAmount
-          : null;
+          : !isDueAnswered
+            ? CARD_WORDS.needsDue
+            : null;
 
   const handleSave = async () => {
     if (!user || blocker !== null) return;
@@ -263,9 +325,17 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      const sealed = { issuer, name: hasName ? name : null };
+      const sealed = {
+        issuer,
+        name: hasName ? name : null,
+        dueDay: formData.dueDay,
+      };
       if (editing) {
-        if (sealed.issuer !== editing.issuer || sealed.name !== editing.name) {
+        if (
+          sealed.issuer !== editing.issuer ||
+          sealed.name !== editing.name ||
+          sealed.dueDay !== editing.dueDay
+        ) {
           await updateCard(user.uid, encryption, editing.id, sealed);
           addToast({
             title: CARD_WORDS.saved(

@@ -8,6 +8,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 
+import HelpTip from '@/components/HelpTip';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
@@ -45,6 +46,8 @@ interface SumRow {
   name: string;
   value: string;
   section?: PlanSection;
+  /** What the row counts, behind an info icon beside its name. */
+  help?: string;
   isResult?: boolean;
 }
 
@@ -77,6 +80,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       sign: '',
       name: FREE_SUM_WORDS.onHand,
       value: formatCents(balances.moneyOnHandCents),
+      help: hasCards ? CARD_WORDS.freeOnHandHelp : undefined,
     },
     {
       sign: '−',
@@ -106,6 +110,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             name: CARD_WORDS.freeWaiting,
             value: formatCents(balances.assignedToCardsCents),
             section: 'cards' as const,
+            help: CARD_WORDS.freeWaitingHelp,
           },
         ]
       : []),
@@ -207,6 +212,11 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                     )}
                   >
                     {row.name}
+                    {row.help && (
+                      <span className='relative z-10 ml-1 inline-block align-middle'>
+                        <HelpTip title={row.name}>{row.help}</HelpTip>
+                      </span>
+                    )}
                   </span>,
                   <span
                     key='value'
@@ -231,7 +241,19 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 const { section } = row;
                 return (
                   <div key={row.name}>
-                    {section ? (
+                    {section && row.help ? (
+                      <div className={join(rowClass, 'relative')}>
+                        {cells}
+                        <Button
+                          type='button'
+                          variant='tertiary'
+                          size='stripped'
+                          className='absolute inset-0 size-full rounded-none'
+                          aria-label={`${row.name}. See what makes it up`}
+                          onClick={() => openSection(section)}
+                        />
+                      </div>
+                    ) : section ? (
                       <Button
                         type='button'
                         variant='tertiary'

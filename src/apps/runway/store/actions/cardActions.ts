@@ -49,7 +49,11 @@ export async function createCard(
   const now = Date.now();
   const [sealed, startSealed] = await Promise.all([
     sealJson(
-      { issuer: input.issuer, name: input.name } satisfies CardSealed,
+      {
+        issuer: input.issuer,
+        name: input.name,
+        dueDay: input.dueDay,
+      } satisfies CardSealed,
       encryption,
     ),
     sealJson(
@@ -84,7 +88,7 @@ export async function createCard(
   return id;
 }
 
-/** Changes a card's issuer or name; only those fields and when it changed are written. */
+/** Changes a card's issuer, name or due day; only those fields and when it changed are written. */
 export async function updateCard(
   uid: string,
   encryption: RunwayEncryption,
@@ -92,7 +96,11 @@ export async function updateCard(
   input: CardSealed,
 ): Promise<void> {
   const sealed = await sealJson(
-    { issuer: input.issuer, name: input.name } satisfies CardSealed,
+    {
+      issuer: input.issuer,
+      name: input.name,
+      dueDay: input.dueDay,
+    } satisfies CardSealed,
     encryption,
   );
   await updateDoc(cardRef(uid, cardId), { sealed, updatedAt: Date.now() });

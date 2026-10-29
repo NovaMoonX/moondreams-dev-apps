@@ -41,6 +41,7 @@ export function startCardsListener(
               archivedAt: data.archivedAt ?? null,
               issuer: payload.issuer,
               name: payload.name ?? null,
+              dueDay: payload.dueDay ?? null,
             };
           }),
         );

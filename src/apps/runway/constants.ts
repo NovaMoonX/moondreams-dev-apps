@@ -889,6 +889,8 @@ export const PROBLEM_WORDS = {
 
 /** Envelope tiles Home shows at Track, two to a row. */
 export const HOME_TILE_COUNT = 4;
+/** How many days ahead Home warns that a card with money waiting is due. */
+export const CARD_DUE_WARN_DAYS = 7;
 
 /** The words of the one-question-at-a-time forms and their hero amounts. */
 export const FORM_FLOW_WORDS = {
@@ -1490,7 +1492,14 @@ export const CARD_WORDS = {
   payOffShort: 'Pay off',
   paidAhead: (amount: string) => `Paid ${amount} ahead`,
   allPaid: 'All paid',
-  paymentsTitle: 'Recent payments',
+  historyTitle: 'History',
+  historyEmpty: 'Nothing has been charged or paid on this card yet.',
+  historyCharged: (day: string) => `${day} · Charged`,
+  historyBill: (day: string) => `${day} · Bill charged`,
+  historyPaid: 'Paid off',
+  historyTakenBack: 'Taken back',
+  historyOlder: 'Earlier charges are counted but not listed.',
+  historyUnknownBill: 'A bill',
   takeBack: 'Take back',
   takeBackLabel: (amount: string, day: string) =>
     `Take back the ${amount} payment on ${day}`,
@@ -1547,7 +1556,7 @@ export const CARD_WORDS = {
   paidByTitle: 'What did you pay with?',
   cashOrDebit: 'Cash or debit',
   willWait: (name: string, amount: string) =>
-    `${name} will wait for ${amount}.`,
+    `${name} will wait for ${amount}. Free to spend changes as if you paid cash.`,
   willWaitMore: (name: string, amount: string) =>
     `${name} will wait for ${amount} more.`,
   willWaitLess: (name: string, amount: string) =>
@@ -1559,4 +1568,25 @@ export const CARD_WORDS = {
   markedPaidWith: (bill: string, card: string) =>
     `Marked ${bill} paid with ${card}`,
   freeWaiting: 'Waiting on cards',
+  freeWaitingHelp:
+    "Charged to your cards and not paid yet. It's set aside now, so paying a card doesn't change Free to spend.",
+  freeOnHandHelp:
+    "Your cash. A card purchase doesn't lower it until you pay the card.",
+  dueTitle: 'What day is it due each month?',
+  dueLabel: 'Due',
+  dueSummaryDay: (day: number, ordinal: string) =>
+    day === 31 ? 'the last day' : `the ${ordinal}`,
+  noDueDay: 'No due day',
+  needsDue: 'Pick a day, or say it has none.',
+  dueOn: (date: string) => `Due ${date}`,
+  dueInDays: (days: number) =>
+    days === 1 ? 'Due tomorrow' : `Due in ${days} days`,
+  dueToday: 'Due today',
+  homeTitle: 'Cards',
+  homeSeeAll: 'See all',
+  dueWarning: (name: string, date: string, amount: string) =>
+    `${name} is due ${date} · ${amount} waiting`,
+  dueTodayWarning: (name: string, amount: string) =>
+    `${name} is due today · ${amount} waiting`,
+  dueWarningOpen: 'Pay it off',
 } as const;
