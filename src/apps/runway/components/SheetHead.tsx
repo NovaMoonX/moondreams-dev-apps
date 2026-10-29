@@ -8,7 +8,8 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 interface SheetHeadProps {
   /** What the figure is ("Next payment", "Saved", "Left"). */
   label: string;
-  figure?: string;
+  /** A string has its amounts masked; a node (a range as one `SensitiveValue`) is drawn as given. */
+  figure?: ReactNode;
   /** Small words after the figure ("of $600"). */
   suffix?: string;
   /** The one short fact under the figure. */
@@ -63,7 +64,11 @@ function SheetHead({
       {figure && (
         <p className='break-words'>
           <span className='text-4xl font-semibold tracking-tight tabular-nums [@media(max-height:599px)]:text-3xl'>
-            <MaskedText>{figure}</MaskedText>
+            {typeof figure === 'string' ? (
+              <MaskedText>{figure}</MaskedText>
+            ) : (
+              figure
+            )}
           </span>
           {suffix && (
             <span className='text-muted-foreground ml-2 text-base whitespace-nowrap'>

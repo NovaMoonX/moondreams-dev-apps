@@ -23,6 +23,7 @@ import {
 import {
   selectAllCards,
   selectComingDays,
+  selectGroups,
   selectSettledKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
@@ -37,7 +38,12 @@ import {
   type ChangeSpan,
 } from '@apps/runway/utils/fromWhen';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import type { EnvelopeSealed, GoalSealed, ItemKind } from '@apps/runway/types';
+import type {
+  EnvelopeSealed,
+  GoalSealed,
+  GroupSealed,
+  ItemKind,
+} from '@apps/runway/types';
 
 interface UseChangeFlowArgs {
   itemId: string;
@@ -47,6 +53,8 @@ interface UseChangeFlowArgs {
   candidate: ItemPayload | null;
   /** The income day whose screen opened the form; the "this income day" answers then mean it. */
   presetDayKey?: string | null;
+  /** A group the person named while changing a bill, written in the same batch as the change. */
+  newGroup?: GroupSealed | null;
   onDone: () => void;
 }
 
@@ -106,6 +114,7 @@ export function useChangeFlow({
   current,
   candidate,
   presetDayKey = null,
+  newGroup = null,
   onDone,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
@@ -113,6 +122,7 @@ export function useChangeFlow({
   const store = useStore<RootState>();
   const today = todayAsUtcDate();
   const days = useAppSelector((state) => selectComingDays(state, today));
+  const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
   const [from, setFrom] = useState(INITIAL_FROM_WHEN);
   const [step, setStep] = useState<'form' | 'reason'>('form');
@@ -136,7 +146,16 @@ export function useChangeFlow({
   const summaryText =
     candidate === null
       ? ''
-      : describeChange(current, candidate, getCardNamer(allCards));
+      : describeChange(
+          current,
+          candidate,
+          getCardNamer(allCards),
+          (groupId) =>
+            groups.find(({ item }) => item.id === groupId)?.version.payload
+              .name ??
+            newGroup?.name ??
+            'a group',
+        );
 
   const changeJson = isUnchanged
     ? null
@@ -199,6 +218,7 @@ export function useChangeFlow({
           itemId,
           kind,
           payload: candidate,
+          newGroup,
           summary,
           note: reason,
           effectiveFrom: span.effectiveFrom,

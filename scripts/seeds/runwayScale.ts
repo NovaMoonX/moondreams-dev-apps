@@ -410,6 +410,7 @@ export async function seedRunwayScale(
         ending: never,
         fundedBy: { kind: 'suggested' },
         stanceOverride: null,
+        groupId: null,
       };
       return {
         id: `scale-bill-${pad(index)}`,

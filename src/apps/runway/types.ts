@@ -307,8 +307,17 @@ export interface BillSealed {
   fundedBy: BillFundedBy;
   /** Replaces the plan's stance for this bill; a version written before it existed has none. */
   stanceOverride: Stance | null;
+  /** The group that lists this bill; a version written before groups existed reads as null. */
+  groupId: string | null;
   /** The card it is usually charged to, which marking it paid starts from; null (or missing on an older version) when it is paid in cash. */
   paidByCardId?: string | null;
+}
+
+/** A named collection of bills; its bills carry its id, so archiving it rewrites none of them. */
+export interface GroupSealed {
+  name: string;
+  /** The priority a new bill in this group starts with; null leaves it to the bill. */
+  startingPriority: Priority | null;
 }
 
 export interface GoalSealed {
@@ -414,13 +423,15 @@ export type OpenVersion =
   | (OpenVersionBase & { kind: 'payLine'; payload: PayLineSealed })
   | (OpenVersionBase & { kind: 'envelope'; payload: EnvelopeSealed })
   | (OpenVersionBase & { kind: 'bill'; payload: BillSealed })
-  | (OpenVersionBase & { kind: 'goal'; payload: GoalSealed });
+  | (OpenVersionBase & { kind: 'goal'; payload: GoalSealed })
+  | (OpenVersionBase & { kind: 'group'; payload: GroupSealed });
 
 export type PayLineVersion = Extract<OpenVersion, { kind: 'payLine' }>;
 export type SourceVersion = Extract<OpenVersion, { kind: 'source' }>;
 export type EnvelopeVersion = Extract<OpenVersion, { kind: 'envelope' }>;
 export type BillVersion = Extract<OpenVersion, { kind: 'bill' }>;
 export type GoalVersion = Extract<OpenVersion, { kind: 'goal' }>;
+export type GroupVersion = Extract<OpenVersion, { kind: 'group' }>;
 
 export type MoveKind = (typeof MOVE_KINDS)[number];
 

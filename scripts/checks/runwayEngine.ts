@@ -59,6 +59,7 @@ import {
   matchMovedDates,
   planOverrideCarry,
 } from '../../src/apps/runway/engine/moved.ts';
+import { monthlyTotal } from '../../src/apps/runway/engine/groups.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -210,6 +211,7 @@ import {
   percentShares,
 } from '../../src/apps/runway/engine/money.ts';
 import {
+  getVersionStretches,
   resolve,
   resolveCurrentOrNext,
   resolveNextChange,
@@ -9097,6 +9099,176 @@ console.log('runway engine: ok');
       `G9: a closing with choice ${index + 1} equals the replay`,
     );
   });
+}
+
+{
+  const every = (kind: Schedule['kind'], anchor: number | null): Schedule => ({
+    kind,
+    anchor,
+    monthDays: [],
+  });
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const nov = utc(2026, 11, 14);
+  const NO_END = { onDate: null, afterCount: null };
+  const member = (
+    amount: { lowCents: number; highCents: number },
+    schedule: Schedule,
+    extra: Partial<{ startsOn: number; ending: typeof NO_END }> = {},
+  ) => ({
+    amount,
+    schedule,
+    startsOn: utc(2026, 1, 1),
+    ending: NO_END,
+    ...extra,
+  });
+
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(120_000), every('monthly', utc(2026, 11, 1))),
+        member(exact(5_200), every('weekly', utc(2026, 11, 3))),
+        member(exact(2_600), every('everyOtherWeek', utc(2026, 11, 3))),
+        member(exact(1_000), every('twiceMonthly', null)),
+      ],
+      nov,
+    ),
+    {
+      total: exact(150_167),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: each schedule counts at its monthly average, rounded once',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(9_000), every('once', utc(2026, 11, 30))),
+        member(exact(7_000), every('once', utc(2026, 12, 1))),
+      ],
+      nov,
+    ),
+    {
+      total: exact(0),
+      uncounted: 0,
+      oneTime: {
+        count: 2,
+        range: exact(16_000),
+        dueOn: utc(2026, 11, 30),
+      },
+    },
+    'G10: a once bill is never in the usual month; it is named beside it with its earliest day',
+  );
+  assert.deepEqual(
+    monthlyTotal([], nov),
+    {
+      total: exact(0),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: an empty group comes to nothing',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(
+          { lowCents: 14_000, highCents: 18_000 },
+          every('monthly', utc(2026, 11, 1)),
+        ),
+        member(exact(5_000), every('monthly', utc(2026, 11, 5))),
+      ],
+      nov,
+    ),
+    {
+      total: { lowCents: 19_000, highCents: 23_000 },
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: a group with a range member shows a range',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(120_000), every('monthly', utc(2026, 11, 1))),
+        member(exact(18_000), every('irregular', null)),
+      ],
+      nov,
+    ),
+    {
+      total: exact(120_000),
+      uncounted: 1,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: a bill with no regular beat is named as left out, never counted as 0 silently',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(30_000), every('monthly', utc(2026, 1, 5)), {
+          ending: { onDate: utc(2026, 10, 5), afterCount: null },
+        }),
+        member(exact(40_000), every('monthly', utc(2027, 1, 1)), {
+          startsOn: utc(2027, 1, 1),
+        }),
+        member(exact(50_000), every('monthly', utc(2026, 1, 1)), {
+          ending: { onDate: utc(2026, 11, 20), afterCount: null },
+        }),
+      ],
+      nov,
+    ),
+    {
+      total: exact(50_000),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: a bill that ended before the month or begins after it counts nothing; one ending in it still counts',
+  );
+}
+
+{
+  const D = 86_400_000;
+  const v = (
+    id: string,
+    createdAt: number,
+    from: number,
+    until: number | null,
+    cents: number,
+  ) => ({
+    id,
+    itemId: 'x',
+    createdAt,
+    effectiveFrom: from,
+    effectiveUntil: until,
+    payload: { cents },
+  });
+  assert.deepEqual(
+    getVersionStretches([v('base', 1, 0, null, 80)], 'x', 10 * D),
+    [{ payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: null }],
+    'an item with one version in force is one stretch',
+  );
+  assert.deepEqual(
+    getVersionStretches(
+      [v('base', 1, 0, null, 80), v('stretch', 2, 5 * D, 20 * D, 40)],
+      'x',
+      10 * D,
+    ),
+    [
+      { payload: { cents: 40 }, effectiveFrom: 10 * D, effectiveUntil: 20 * D },
+      { payload: { cents: 80 }, effectiveFrom: 20 * D, effectiveUntil: null },
+    ],
+    'a stretch in force keeps its amount and its end, and the amount after it comes back',
+  );
+  assert.deepEqual(
+    getVersionStretches(
+      [v('base', 1, 0, null, 80), v('ahead', 2, 30 * D, null, 95)],
+      'x',
+      10 * D,
+    ),
+    [
+      { payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: 30 * D },
+      { payload: { cents: 95 }, effectiveFrom: 30 * D, effectiveUntil: null },
+    ],
+    'a change ahead keeps its date and amount',
+  );
 }
 
 console.log('runway engine: ok');

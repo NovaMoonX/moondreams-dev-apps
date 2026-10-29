@@ -16,6 +16,7 @@ Runway is an income-first budget planner for money that does not arrive or leave
 Built:
 - [x] Income with pay lines, exact or range amounts, and endings
 - [x] Bills, envelopes and goals with priorities and a planning stance
+- [x] Bills grouped under a name (Home, Subscriptions) with what they come to a month
 - [x] Drafts for every income day, confirmed with what arrived, with a change log
 - [x] Guided setup, look-ahead, and a Plan or Track choice
 - [x] Start from a budget you already have: files or pasted text, read by an AI, reviewed before anything is added
