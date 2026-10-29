@@ -155,7 +155,7 @@ export interface ConfirmDayInput {
   edits: Record<string, Cents>;
   /** The notes on changed lines, by line id. */
   lineNotes: Record<string, string | null>;
-  /** What the person chose to cover from Free to spend: the day may leave this much less than nothing. */
+  /** What the person chose to cover from Free to Spend: the day may leave this much less than nothing. */
   coverCents: Cents;
 }
 
@@ -356,7 +356,7 @@ export interface CorrectDayInput {
   /** The amounts the person gave lines in place of the current ones, by line id. */
   edits: Record<string, Cents>;
   note: string | null;
-  /** What the person chose to cover from Free to spend beyond the cover the day already had. */
+  /** What the person chose to cover from Free to Spend beyond the cover the day already had. */
   addedCoverCents: Cents;
 }
 

@@ -46,6 +46,7 @@ const pairingCount = (list: readonly unknown[]) =>
 const getParts = (
   before: ItemPayload,
   after: ItemPayload,
+  cardNameOf: (cardId: string | null) => string,
   groupName: GroupNamer,
 ): Part[] => {
   const base: Part[] = [
@@ -148,6 +149,12 @@ const getParts = (
           : 'the days before',
       ),
       diff(
+        'Paid by',
+        billBefore.paidByCardId ?? null,
+        billAfter.paidByCardId ?? null,
+        cardNameOf,
+      ),
+      diff(
         'Emoji',
         billBefore.emoji,
         billAfter.emoji,
@@ -204,9 +211,10 @@ export const isSamePayload = (a: ItemPayload, b: ItemPayload) => same(a, b);
 export function describeChange(
   before: ItemPayload,
   after: ItemPayload,
+  cardNameOf: (cardId: string | null) => string,
   groupName: GroupNamer = () => 'a group',
 ) {
-  const result = getParts(before, after, groupName)
+  const result = getParts(before, after, cardNameOf, groupName)
     .flatMap((part) => (part === null ? [] : [part]))
     .map(([label, from, to]) => `${label} ${from} to ${to}`)
     .join('; ');

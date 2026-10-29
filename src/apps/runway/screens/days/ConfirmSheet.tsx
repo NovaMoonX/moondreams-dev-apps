@@ -100,7 +100,7 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-/** Asks the amount that arrived and the day it did, and confirms the day. When less arrives it offers to cover the difference from Free to spend and proposes what gets less; nothing moves without a tap. Needs a connection: the day and its two records are written together. */
+/** Asks the amount that arrived and the day it did, and confirms the day. When less arrives it offers to cover the difference from Free to Spend and proposes what gets less; nothing moves without a tap. Needs a connection: the day and its two records are written together. */
 function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();

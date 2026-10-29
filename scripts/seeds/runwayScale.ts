@@ -871,6 +871,7 @@ export async function seedRunwayScale(
           {
             amountCents: entry.amountCents,
             merchant: entry.merchant,
+            label: null,
             note: entry.note,
             lines: entry.lines,
             refundOfId: null,

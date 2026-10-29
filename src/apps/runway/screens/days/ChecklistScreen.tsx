@@ -7,7 +7,7 @@ import SectionDivider from '@/components/SectionDivider';
 import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
@@ -17,6 +17,7 @@ import {
   BILL_WORDS,
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
+  CARD_WORDS,
   ITEM_SHEET_R2_WORDS,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
@@ -36,7 +37,13 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { RecordLine } from '@apps/runway/types';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
+import {
+  getBillCardName,
+  getCardName,
+  getMarkCardId,
+} from '@apps/runway/utils/cardText';
 
 interface ChecklistBillRowProps {
   line: RecordLine;
@@ -86,10 +93,22 @@ function ChecklistBillRow({
     const isWritten = next ? await paid.mark() : await paid.undo();
     setPending(null);
     if (!isWritten) return;
+    const state = store.getState();
+    const cardName =
+      selectLevel(state) === 'track'
+        ? getBillCardName(
+            state.runway.versions,
+            state.runway.cards,
+            line.itemId,
+            payment.dueOn,
+          )
+        : null;
     addToast({
-      title: next
-        ? ITEM_SHEET_R2_WORDS.markedPaid(line.name)
-        : ITEM_SHEET_R2_WORDS.unmarkedPaid(line.name),
+      title: !next
+        ? ITEM_SHEET_R2_WORDS.unmarkedPaid(line.name)
+        : cardName === null
+          ? ITEM_SHEET_R2_WORDS.markedPaid(line.name)
+          : CARD_WORDS.markedPaidWith(line.name, cardName),
       type: 'success',
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,
@@ -218,6 +237,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         encryption,
         unpaid.map(({ billId, payment }) => ({
           billId,
+          cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
           dueOn: payment.dueOn,
           amountCents: payment.totalCents,
           fundedCents: payment.heldNowCents,
@@ -226,11 +246,24 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         })),
         dayLines,
       );
+      const { cards } = store.getState().runway;
+      const chargedCards = [
+        ...new Set(
+          written.flatMap(({ cardId }) => {
+            const card = cards.find((entry) => entry.id === cardId);
+            return card ? [getCardName(card, cards)] : [];
+          }),
+        ),
+      ];
       addToast({
         title:
           written.length === 0 && unpaid.length > 0
             ? CHECKLIST_R3_WORDS.nothingToMark
             : CHECKLIST_R3_WORDS.markedAllPaid(written.length),
+        description:
+          chargedCards.length === 0
+            ? undefined
+            : CARD_WORDS.markedAllWith(chargedCards.join(', ')),
         type: 'success',
         action:
           written.length === 0 && lineIds.length === 0

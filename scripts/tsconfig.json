@@ -9,6 +9,9 @@
     "./fbInvoker.ts",
     "./checkFirestoreIndexes.ts",
     "./runway/publishKeyring.ts",
-    "./runway/drillKeyring.ts"
+    "./runway/drillKeyring.ts",
+    "./ownerInbox/inbox.ts",
+    "./ownerInbox/run.ts",
+    "./checks/ownerInbox.ts"
   ]
 }

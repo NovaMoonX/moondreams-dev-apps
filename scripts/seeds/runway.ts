@@ -14,6 +14,7 @@ import {
   DAY_MS,
   startOfUtcDay,
   toDayKey,
+  toDayStamp,
 } from '../../src/apps/runway/engine/dates.ts';
 import {
   applyLineEdits,
@@ -37,6 +38,9 @@ import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
+  CardDoc,
+  CardPaymentSealed,
+  CardSealed,
   ChangeDoc,
   ChangeSealed,
   ClosingDoc,
@@ -610,6 +614,108 @@ async function writeSeedHistory(
   return all.length;
 }
 
+const SEED_VENTURE_CARD = 'seed-card-venture';
+const SEED_CHASE_CARD = 'seed-card-chase';
+
+/** Two cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), and an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid. Six documents. */
+async function writeSeedCards(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+  batch: ReturnType<SeedContext['firestore']['batch']>,
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const startDate = today - 45 * DAY_MS;
+  const createdAt = context.now - 14 * DAY_MS;
+  const cards: { id: string; sealed: CardSealed; createdAt: number }[] = [
+    {
+      id: SEED_VENTURE_CARD,
+      sealed: { issuer: 'Capital One', name: 'Venture X', dueDay: 14 },
+      createdAt,
+    },
+    {
+      id: SEED_CHASE_CARD,
+      sealed: {
+        issuer: 'Chase',
+        name: null,
+        dueDay: new Date(today - 3 * DAY_MS).getUTCDate(),
+      },
+      createdAt: createdAt + 60_000,
+    },
+  ];
+  await Promise.all(
+    cards.map(async (card) => {
+      batch.set(context.firestore.doc(`${plan}/cards/${card.id}`), {
+        id: card.id,
+        createdAt: card.createdAt,
+        updatedAt: card.createdAt,
+        archivedAt: null,
+        sealed: await sealJson(card.sealed, encryption),
+      } satisfies CardDoc);
+    }),
+  );
+  const startId = `start_${SEED_VENTURE_CARD}_${createdAt}`;
+  batch.set(context.firestore.doc(`${plan}/moves/${startId}`), {
+    id: startId,
+    kind: 'start',
+    date: startDate,
+    refId: SEED_VENTURE_CARD,
+    reversesMoveId: null,
+    createdAt,
+    sealed: await sealJson(
+      { amountCents: 25_000, holding: 'card' } satisfies StartSealed,
+      encryption,
+    ),
+  } satisfies MoveDoc);
+  await Promise.all(
+    (
+      [
+        { days: 12, cents: 3_500, covers: 'minimum' },
+        { days: 10, cents: 21_500, covers: 'full' },
+      ] as const
+    ).map(async (payment) => {
+      const paidOn = today - payment.days * DAY_MS;
+      const paymentId = `cardpay_${SEED_VENTURE_CARD}_${toDayStamp(paidOn)}_1`;
+      batch.set(context.firestore.doc(`${plan}/moves/${paymentId}`), {
+        id: paymentId,
+        kind: 'cardPayment',
+        date: paidOn,
+        refId: SEED_VENTURE_CARD,
+        reversesMoveId: null,
+        createdAt: paidOn + 10 * 3_600_000,
+        sealed: await sealJson(
+          {
+            amountCents: payment.cents,
+            covers: payment.covers,
+          } satisfies CardPaymentSealed,
+          encryption,
+        ),
+      } satisfies MoveDoc);
+    }),
+  );
+  const carDueOn = today + 40 * DAY_MS;
+  const carId = getPaidMoveId('seed-bill-car', carDueOn, 0);
+  batch.set(context.firestore.doc(`${plan}/moves/${carId}`), {
+    id: carId,
+    kind: 'billPaid',
+    date: carDueOn,
+    refId: 'seed-bill-car',
+    reversesMoveId: null,
+    createdAt: today - DAY_MS + 10 * 3_600_000,
+    sealed: await sealJson(
+      {
+        amountCents: 18_500,
+        paidOn: today - DAY_MS,
+        fromFreeCents: 12_500,
+        cardId: SEED_CHASE_CARD,
+      } satisfies BillPaidSealed,
+      encryption,
+    ),
+  } satisfies MoveDoc);
+  return cards.length + 4;
+}
+
 /** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside. One change and five holdings. */
 async function writeSeedStart(
   context: SeedContext,
@@ -1157,7 +1263,7 @@ async function writeSeedConfirmedDays(
   );
 }
 
-/** The laptop plan's next payment, marked paid ahead of its due date: $50.00 of it was set aside by the confirmed day, so $39.00 came from Free to spend (planned at the bill's own optimistic end, $89.00). */
+/** The laptop plan's next payment, marked paid ahead of its due date: $50.00 of it was set aside by the confirmed day, so $39.00 came from Free to Spend (planned at the bill's own optimistic end, $89.00). */
 async function writeSeedPaidAhead(
   context: SeedContext,
   plan: string,
@@ -1470,6 +1576,7 @@ async function writeSeedBills(
         fundedBy: { kind: 'suggested' },
         stanceOverride: null,
         groupId: null,
+        paidByCardId: SEED_CHASE_CARD,
       },
     },
     {
@@ -1911,6 +2018,12 @@ async function seedTrackingPlan(
     encryption,
     startBatch,
   );
+  const cardDocuments = await writeSeedCards(
+    context,
+    owner.uid,
+    encryption,
+    startBatch,
+  );
   await startBatch.commit();
   const purchaseDocuments = await writeSeedPurchases(
     context,
@@ -1931,6 +2044,7 @@ async function seedTrackingPlan(
     1 +
     documents +
     startDocuments +
+    cardDocuments +
     purchaseDocuments
   );
 }
@@ -1954,10 +2068,12 @@ async function writeSeedPurchases(
     id: string;
     daysAgo: number;
     merchant: string | null;
+    label?: string;
     note: string | null;
     lines: PurchaseLine[];
     refundOfId?: string;
     editedAt?: number;
+    paidByCardId?: string;
   }[] = [
     {
       id: 'seed-purchase-safeway',
@@ -1973,13 +2089,16 @@ async function writeSeedPurchases(
       merchant: 'Shell',
       note: null,
       lines: [line('seed-envelope-gas', 3_850)],
+      paidByCardId: SEED_VENTURE_CARD,
     },
     {
       id: 'seed-purchase-ramen',
       daysAgo: 2,
       merchant: 'Ramen Ya',
-      note: 'Dinner with Sam',
+      label: "Sam's birthday dinner",
+      note: 'Sam paid for drinks',
       lines: [line('seed-envelope-dining', 3_800)],
+      paidByCardId: SEED_VENTURE_CARD,
     },
     {
       id: 'seed-purchase-target',
@@ -2014,7 +2133,8 @@ async function writeSeedPurchases(
       id: 'seed-purchase-card',
       daysAgo: 9,
       merchant: null,
-      note: 'Birthday card',
+      label: 'Birthday card',
+      note: null,
       lines: [line(gifts, 650)],
     },
     {
@@ -2043,9 +2163,11 @@ async function writeSeedPurchases(
           {
             amountCents,
             merchant: entry.merchant,
+            label: entry.label ?? null,
             note: entry.note,
             lines: entry.lines,
             refundOfId: entry.refundOfId ?? null,
+            paidByCardId: entry.paidByCardId ?? null,
           } satisfies PurchaseSealed,
           encryption,
         ),

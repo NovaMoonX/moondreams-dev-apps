@@ -6,6 +6,7 @@ import {
 } from '@apps/runway/security';
 import type {
   BillPaidSealed,
+  CardPaymentSealed,
   ConfirmedSealed,
   CorrectionSealed,
   DateOnly,
@@ -42,8 +43,16 @@ export async function openMove(
     const payload = await read<TrackingChangeSealed>(entry.sealed);
     return { ...base, kind: 'trackingChange', payload };
   }
+  if (entry.kind === 'cardPayment') {
+    const payload = await read<CardPaymentSealed>(entry.sealed);
+    return { ...base, kind: 'cardPayment', payload };
+  }
   const payload = await read<BillPaidSealed>(entry.sealed);
-  return { ...base, kind: 'billPaid', payload };
+  return {
+    ...base,
+    kind: 'billPaid',
+    payload: { ...payload, cardId: payload.cardId ?? null },
+  };
 }
 
 export async function openRecord(
@@ -73,6 +82,8 @@ export async function openPurchase(
   read: SealedReader,
 ): Promise<OpenPurchase> {
   const payload = await read<PurchaseSealed>(entry.sealed);
+  // Before labels, a note with no merchant was what named the row, so it reads as the label.
+  const isNoteName = payload.label === undefined && !payload.merchant?.trim();
   const result: OpenPurchase = {
     id: entry.id,
     date: entry.date,
@@ -82,9 +93,11 @@ export async function openPurchase(
     updatedAt: entry.updatedAt,
     amountCents: payload.amountCents,
     merchant: payload.merchant ?? null,
-    note: payload.note ?? null,
+    label: isNoteName ? (payload.note ?? null) : (payload.label ?? null),
+    note: isNoteName ? null : (payload.note ?? null),
     lines: payload.lines ?? [],
     refundOfId: payload.refundOfId ?? null,
+    paidByCardId: payload.paidByCardId ?? null,
   };
   return result;
 }
@@ -134,7 +147,9 @@ export async function openMonthEntries(
     Promise.all(
       docs.moves
         .map((entry) => ({ ...(entry.data() as MoveDoc), id: entry.id }))
-        .filter((entry) => entry.kind === 'billPaid')
+        .filter(
+          (entry) => entry.kind === 'billPaid' || entry.kind === 'cardPayment',
+        )
         .map((entry) => openMove(entry, read)),
     ),
     Promise.all(

@@ -7,7 +7,7 @@ tools: Read, Grep, Glob, Bash
 
 # validator
 
-You run checks and report what fails. You never edit, commit or judge design; the orchestrator decides what to do with each failure.
+You run checks and report what fails. You never edit, commit or judge design; the orchestrator decides what to do with each failure. **You never move the checkout:** no `git checkout`, `switch`, `reset` or `stash` (twice a validator left HEAD detached and the orchestrator's next push silently sent nothing); to look at a base or another commit use `git diff`, `git show <rev>:<path>` or a throwaway `git worktree add` under the scratchpad, removed when done.
 
 The brief gives you a base (default `origin/main`). Run, from the repo root:
 

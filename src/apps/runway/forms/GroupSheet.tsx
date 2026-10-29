@@ -44,6 +44,7 @@ import {
   describeGroupTotal,
 } from '@apps/runway/utils/billText';
 import { resolveGroupRename } from '@apps/runway/utils/groupChoice';
+import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
 
 type StartingChoice = Priority | 'none';
@@ -108,7 +109,7 @@ function GroupSheet({
         itemId: groupId,
         kind: 'group',
         payload: next,
-        summary: `${next.name}: ${describeChange(payload, next)}, from ${formatDateUTC(today)}.`,
+        summary: `${next.name}: ${describeChange(payload, next, getCardNamer([]))}, from ${formatDateUTC(today)}.`,
         note: null,
         effectiveFrom: today,
       });

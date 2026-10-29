@@ -8,14 +8,17 @@ import type {
 
 import {
   closingBefore,
+  joinCardPaid,
   joinCents,
   joinPaid,
+  sumChargedByCard,
   type ClosingState,
 } from './closings';
 import { getEffectiveSplits } from './correct';
 import { START_DAY_KEY } from '@apps/runway/constants';
 
 import {
+  collectCardPaid,
   collectFunded,
   collectPaid,
   collectStarted,
@@ -30,14 +33,16 @@ export interface BalancesInput {
   arrivedOn: ReadonlyMap<string, DateOnly>;
   /** Each day's scheduled date, by day id, which places what it set aside for a bill against that bill's payments; `arrivedOn` stands in when it is left out. */
   expectedOn?: ReadonlyMap<string, DateOnly>;
-  /** Which plan items are goals and which are bills, by item id. */
-  kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope'>>;
-  /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to spend from then. */
+  /** Which plan items are goals, bills and envelopes, and which ids are cards. */
+  kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope' | 'card'>>;
+  /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to Spend from then. */
   releasedFrom?: Readonly<Record<string, DateOnly>>;
   /** The day the figures are for, which `releasedFrom` is read against; every release counts when it is left out. */
   asOf?: DateOnly;
   /** What was spent, only while tracking is on; a purchase dated before the starting point is not counted. */
   purchases?: readonly OpenPurchase[];
+  /** Cards are part of tracking: while it is off they are left out entirely, a bill charged to one reads as paid in cash, and nothing waits on a card. Counted when left out. */
+  isCountingCards?: boolean;
   /** What the ledger before the records, moves and purchases above summed to, counted from the same starting day; its spending is left out by the caller when spending is not counted. */
   closing?: ClosingState | null;
 }
@@ -45,7 +50,7 @@ export interface BalancesInput {
 export interface Balances {
   /** A starting point exists. */
   isStarted: boolean;
-  /** The person said how much money they have; without it Free to spend is unknown, never zero. */
+  /** The person said how much money they have; without it Free to Spend is unknown, never zero. */
   hasMoney: boolean;
   /** The starting money, plus what arrived since, less the bills paid. */
   moneyOnHandCents: Cents;
@@ -55,6 +60,12 @@ export interface Balances {
   assignedToGoalsCents: Cents;
   /** What envelopes still hold; an envelope that is over holds nothing, and its overspend has already left the money on hand. */
   assignedToEnvelopesCents: Cents;
+  /** What each card owes and waits to be paid: what it owed on the starting day, plus what was charged to it, less what was paid off; below zero when it was overpaid. */
+  reserveByCard: Record<string, Cents>;
+  /** What the cards wait to be paid; an overpaid card counts as zero. */
+  assignedToCardsCents: Cents;
+  /** While cards are left out: the cash that tracking would still hold, the bills charged to cards less the card payments, so a figure that adds cards back starts from real cash. Zero while they count. */
+  uncountedCardCashCents: Cents;
   /** Money on hand less everything assigned; below zero when more is assigned than is held. */
   freeToSpendCents: Cents;
   startMoneyCents: Cents;
@@ -126,6 +137,7 @@ export function deriveBalances(input: BalancesInput): Balances {
       billId,
       amountCents: counted.reduce((sum, p) => sum + p.amountCents, 0),
       fromFreeCents: counted.reduce((sum, p) => sum + p.fromFreeCents, 0),
+      charged: counted.filter((p) => p.cardId !== null),
     };
   });
   const paidCents = paidByBill.reduce((sum, bill) => sum + bill.amountCents, 0);
@@ -157,11 +169,14 @@ export function deriveBalances(input: BalancesInput): Balances {
       }, {}),
   );
 
-  const itemIds = new Set([
-    ...Object.keys(given),
-    ...Object.keys(started.byItem),
-    ...Object.keys(spentByItem),
-  ]);
+  const isCard = (id: string) => input.kinds[id] === 'card';
+  const itemIds = new Set(
+    [
+      ...Object.keys(given),
+      ...Object.keys(started.byItem),
+      ...Object.keys(spentByItem),
+    ].filter((id) => !isCard(id)),
+  );
   const assignedByItem = Object.fromEntries(
     [...itemIds].map((id) => [
       id,
@@ -186,9 +201,55 @@ export function deriveBalances(input: BalancesInput): Balances {
   const assignedToGoalsCents = sumKind('goal');
   const assignedToEnvelopesCents = sumKind('envelope');
 
+  const isCountingCards = input.isCountingCards ?? true;
+  const allCharged = joinCents(
+    joinCents(base?.chargedByCard, sumChargedByCard(counted)),
+    paidByBill
+      .flatMap((bill) => bill.charged)
+      .reduce<Record<string, Cents>>((sums, payment) => {
+        const cardId = payment.cardId ?? '';
+        sums[cardId] = (sums[cardId] ?? 0) + payment.amountCents;
+        return sums;
+      }, {}),
+  );
+  const charged = isCountingCards ? allCharged : {};
+  const allCardPaid = Object.fromEntries(
+    Object.entries(joinCardPaid(base, collectCardPaid(input.moves))).map(
+      ([id, list]) => [
+        id,
+        list
+          .filter((payment) => startDate !== null && payment.on >= startDate)
+          .reduce((sum, payment) => sum + payment.cents, 0),
+      ],
+    ),
+  );
+  const cardPaid = isCountingCards ? allCardPaid : {};
+  const cardIds = new Set([
+    ...(isCountingCards ? Object.keys(started.byItem).filter(isCard) : []),
+    ...Object.keys(charged),
+    ...Object.keys(cardPaid),
+  ]);
+  const reserveByCard = Object.fromEntries(
+    [...cardIds].map((id) => [
+      id,
+      (started.byItem[id] ?? 0) + (charged[id] ?? 0) - (cardPaid[id] ?? 0),
+    ]),
+  );
+  const assignedToCardsCents = Object.values(reserveByCard).reduce(
+    (sum, cents) => sum + Math.max(0, cents),
+    0,
+  );
+  const sumValues = (sums: Record<string, Cents>) =>
+    Object.values(sums).reduce((sum, cents) => sum + cents, 0);
+
   const startMoneyCents = started.money ?? 0;
   const moneyOnHandCents =
-    startMoneyCents + arrivedCents - paidCents - spentCents;
+    startMoneyCents +
+    arrivedCents -
+    paidCents -
+    spentCents +
+    sumValues(charged) -
+    sumValues(cardPaid);
   const result: Balances = {
     isStarted: startDate !== null,
     hasMoney: started.money !== null,
@@ -197,11 +258,17 @@ export function deriveBalances(input: BalancesInput): Balances {
     assignedToBillsCents,
     assignedToGoalsCents,
     assignedToEnvelopesCents,
+    reserveByCard,
+    assignedToCardsCents,
+    uncountedCardCashCents: isCountingCards
+      ? 0
+      : sumValues(allCharged) - sumValues(allCardPaid),
     freeToSpendCents:
       moneyOnHandCents -
       assignedToBillsCents -
       assignedToGoalsCents -
-      assignedToEnvelopesCents,
+      assignedToEnvelopesCents -
+      assignedToCardsCents,
     startMoneyCents,
     arrivedCents,
     paidCents,
@@ -210,7 +277,7 @@ export function deriveBalances(input: BalancesInput): Balances {
   return result;
 }
 
-/** How the Free to spend figure reads: the amount, over-assigned, or not known yet. */
+/** How the Free to Spend figure reads: the amount, over-assigned, or not known yet. */
 export type FreeToSpendFigure =
   | { kind: 'amount'; cents: Cents }
   | { kind: 'over'; cents: Cents }
@@ -231,9 +298,9 @@ export function deriveBalancesBefore(
 ): Balances {
   const dropped = new Set(
     input.moves.flatMap((move) =>
-      move.kind === 'billPaid' &&
       !move.reversesMoveId &&
-      move.payload.paidOn >= day
+      ((move.kind === 'billPaid' && move.payload.paidOn >= day) ||
+        (move.kind === 'cardPayment' && move.date >= day))
         ? [move.id]
         : [],
     ),

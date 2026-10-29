@@ -6,6 +6,7 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import type { OpenPurchase } from '@apps/runway/types';
 import {
   describeEnvelopes,
+  getPurchaseFacts,
   getPurchaseTitle,
   isRefund,
 } from '@apps/runway/utils/purchaseText';
@@ -16,21 +17,16 @@ interface PurchaseRowProps {
   onOpen: () => void;
 }
 
-/** One purchase in a list: where it was, the day and the envelopes it came out of, and the amount. A refund reads as money coming back. */
-function PurchaseRow({
-  purchase,
-  looks,
-  onOpen,
-}: PurchaseRowProps) {
+/** One purchase in a list: its label, merchant or envelopes as the name, the day and whichever of those the name left out, and the amount. A refund reads as money coming back. */
+function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
   const refund = isRefund(purchase);
-  const named = purchase.merchant?.trim() || purchase.note?.trim() || null;
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
   const firstName = purchase.lines[0]
     ? purchase.lines[0].envelopeId === null
-      ? 'Free to spend'
+      ? 'Free to Spend'
       : nameOf(purchase.lines[0].envelopeId)
     : '';
   const shortEnvelopes =
@@ -41,9 +37,10 @@ function PurchaseRow({
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateShortUTC(purchase.date);
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
-  const detail = named
-    ? `${date} · ${refund && !isHidden ? 'refund to ' : ''}${shortEnvelopes}`
-    : date;
+  const detail = [
+    date,
+    ...getPurchaseFacts(purchase, shortEnvelopes, isHidden),
+  ].join(' · ');
   const amount = refund
     ? `+${formatCents(-purchase.amountCents)}`
     : formatCents(purchase.amountCents);

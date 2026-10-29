@@ -309,6 +309,8 @@ export interface BillSealed {
   stanceOverride: Stance | null;
   /** The group that lists this bill; a version written before groups existed reads as null. */
   groupId: string | null;
+  /** The card it is usually charged to, which marking it paid starts from; null (or missing on an older version) when it is paid in cash. */
+  paidByCardId?: string | null;
 }
 
 /** A named collection of bills; its bills carry its id, so archiving it rewrites none of them. */
@@ -340,8 +342,33 @@ export interface PlanItemDoc {
   createdAt: number;
   endedAt: DateOnly | null;
   archivedAt: number | null;
-  /** From this day what the item holds is Free to spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
+  /** From this day what the item holds is Free to Spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
   heldReleasedOn: DateOnly | null;
+}
+
+/** A credit card: the reserve it shows is what has been charged to it and not yet paid off. `archivedAt` hides it from new charges. */
+export interface CardDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface CardSealed {
+  /** The bank that issues it ("Capital One"). */
+  issuer: string;
+  /** The card's own name ("Venture X"), when it has one. */
+  name: string | null;
+  /** The day of the month a payment is due (1 to 31, the month's last day when shorter); null when none was given. */
+  dueDay: number | null;
+}
+
+export interface OpenCard extends CardSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
 }
 
 export interface PlanVersionDoc {
@@ -423,13 +450,24 @@ export interface BillPaidSealed {
   amountCents: Cents;
   /** The day the person marked it paid. */
   paidOn: DateOnly;
-  /** The part that had not been set aside yet, which came out of Free to spend. */
+  /** The part that had not been set aside yet, which came out of Free to Spend. */
   fromFreeCents: Cents;
+  /** The card it was charged to, which then owes it while the cash stays put; null (or missing on an older move) when it was paid in cash. */
+  cardId?: string | null;
 }
+
+/** A card paid off: `refId` is the card, `date` the day it was paid. */
+export interface CardPaymentSealed {
+  amountCents: Cents;
+  /** What it covered: everything waiting, the minimum, or part of it. A payment written before this existed has none and reads as `full`, since Pay off then always started at the whole balance. */
+  covers?: CardPaymentCovers;
+}
+
+export type CardPaymentCovers = 'full' | 'minimum' | 'part';
 
 export type StartHolding = (typeof START_HOLDINGS)[number];
 
-/** What one holding had on the starting day: the money on hand, or what an envelope or goal holds or a bill has set aside. */
+/** What one holding had on the starting day: the money on hand, what an envelope or goal holds, what a bill has set aside, or what a card owes. */
 export interface StartSealed {
   amountCents: Cents;
   holding: StartHolding;
@@ -451,7 +489,8 @@ interface OpenMoveBase {
 export type OpenMove =
   | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
   | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
-  | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed });
+  | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed })
+  | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed });
 
 export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
 export type StartMove = Extract<OpenMove, { kind: 'start' }>;
@@ -459,7 +498,7 @@ export type StartMove = Extract<OpenMove, { kind: 'start' }>;
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
 export type PurchaseLineVia = (typeof PURCHASE_LINE_VIAS)[number];
 
-/** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to spend. */
+/** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to Spend. */
 export interface PurchaseLine {
   envelopeId: string | null;
   /** Negative on a refund. */
@@ -471,11 +510,16 @@ export interface PurchaseSealed {
   /** Negative for a refund. */
   amountCents: Cents;
   merchant: string | null;
+  /** The person's own name for the purchase; it titles the row before the merchant. Null on purchases saved before labels existed. */
+  label: string | null;
+  /** A memo, read on the purchase's sheet and never used as its title. */
   note: string | null;
   /** Adds up to `amountCents`. */
   lines: PurchaseLine[];
   /** The purchase a refund returns money for; null for a purchase or a refund that names none. */
   refundOfId: string | null;
+  /** The card it was charged to, whose payment it then waits for; null (or missing on an older purchase) when it was paid in cash. */
+  paidByCardId?: string | null;
 }
 
 /** `date` is the spending day, date-only; `createdAt` is the instant it was added. */
@@ -509,7 +553,15 @@ export interface ClosingSealed {
   spentCents: Cents;
   spentByItem: Record<string, Cents>;
   funded: Record<string, [number, Cents][]>;
-  paid: Record<string, [number, Cents, number, Cents, number | string][]>;
+  /** `[dueDay, amountCents, paidDay, fromFreeCents, mark, cardId]`. */
+  paid: Record<
+    string,
+    [number, Cents, number, Cents, number | string, string | null][]
+  >;
+  /** What purchases charged to each card, by card id. */
+  charged: Record<string, Cents>;
+  /** `[day, cents, moveId]` for each card payment not undone. */
+  cardPaid: Record<string, [number, Cents, string][]>;
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

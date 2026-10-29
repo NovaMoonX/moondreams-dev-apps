@@ -21,6 +21,7 @@ import {
   type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
+  selectAllCards,
   selectComingDays,
   selectGroups,
   selectSettledKey,
@@ -30,6 +31,7 @@ import {
   isSamePayload,
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
+import { getCardNamer } from '@apps/runway/utils/cardText';
 import {
   getChangeSpan,
   INITIAL_FROM_WHEN,
@@ -121,6 +123,7 @@ export function useChangeFlow({
   const today = todayAsUtcDate();
   const days = useAppSelector((state) => selectComingDays(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
+  const allCards = useAppSelector(selectAllCards);
   const [from, setFrom] = useState(INITIAL_FROM_WHEN);
   const [step, setStep] = useState<'form' | 'reason'>('form');
   const [note, setNote] = useState('');
@@ -146,6 +149,7 @@ export function useChangeFlow({
       : describeChange(
           current,
           candidate,
+          getCardNamer(allCards),
           (groupId) =>
             groups.find(({ item }) => item.id === groupId)?.version.payload
               .name ??

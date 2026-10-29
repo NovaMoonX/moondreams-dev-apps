@@ -613,7 +613,7 @@ export async function archiveItem(
 }
 
 /**
- * Releases what a stopped item kept: from `releasedOn` it is Free to spend. Only a header that is
+ * Releases what a stopped item kept: from `releasedOn` it is Free to Spend. Only a header that is
  * stopped and still keeps its money is changed, so a second tap or another device writes nothing;
  * returns whether this call wrote it.
  */
