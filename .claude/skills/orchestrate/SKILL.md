@@ -58,6 +58,32 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
    Merge, never rebase or force-push. Validate as for any push, push, and say in the status comment what conflicted and what you chose. Only where one side's behaviour had to give way, add a "Must do: check the conflict resolution in `<file>`" line to the status comment so the owner knows to look.
 5. **Stay cheap between events.** Your safety-net check-in rules stand (about 50 minutes after the last activity, then every four hours, stopping after three quiet ones). A quiet check-in re-arms without a message. Put the PR's freshness in its status comment's "Last verified" line.
 
+## Merging a run's PRs
+
+The owner merges, unless they hand the merges over. "Merge them through" (in chat or in a PR comment) lets you merge this run's open PRs down their merge order; it covers the PRs open when it was given, and a PR opened later needs its own go. Say in each status comment's Next moves that you are merging, and on whose go.
+
+For each PR, in order:
+
+1. **Gate it.** Merge only when every one holds on the current head, and never with admin rights or past a failing check:
+   - CI is green.
+   - There is no conflict with the base.
+   - Claude Approvals passes, where the repo runs it.
+   - Every `(who: owner)` decision on it is answered. A PR with an open decision is skipped, along with those after it that depend on it, and the rest go on.
+   - No owner comment or review on it is left unanswered.
+   - The last review and screenshots covered this head; otherwise run what the push needed first.
+   - A stacked PR's base has merged.
+2. **Merge it.** Mark it ready for review, then merge it the way the repo's history does (squash, the PR's title as the commit title, its number appended).
+3. **Wait for its deploy.** `firebase-hosting-merge.yml` must succeed on the merge commit before the next merge. A failed deploy stops the run: report it, and fix it if it is yours.
+4. **Keep the rest current.** Merge the new base into the remaining PRs (above), and wait for their CI on the new heads before the next merge.
+
+Stop and tell the owner when:
+- a gate can't be made to pass within the PR's own scope;
+- a conflict needs one side's behaviour to give way;
+- a deploy fails;
+- the owner says stop.
+
+After the last merge, check that each `Resolves` issue closed and that the workflows finished, then unsubscribe from the merged PRs and say what shipped in one line each.
+
 ## Improving as you go
 
 Every task feeds `docs/conventions/pipeline.md` "The pipeline improves itself": change a step when you are confident, propose it to the owner when you are not, log both, and end an orchestrated run with its short retro.
