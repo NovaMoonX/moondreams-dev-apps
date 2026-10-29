@@ -616,7 +616,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             0,
             list.length > 0
               ? PRIORITIES_WORDS.above(nameOf(list[0]))
-              : PRIORITIES_WORDS.topOf(PRIORITY_LABELS[section.tier]),
+              : PRIORITIES_WORDS.topOf(PRIORITY_LABELS[section.tier], ''),
           )
         : []),
       ...shownIndexes.flatMap((index): Unit[] => {
@@ -780,9 +780,12 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         : getSlot(
             section.tier,
             0,
-            (hasLockedFirst
-              ? PRIORITIES_WORDS.topOfAfterBills
-              : PRIORITIES_WORDS.topOf)(PRIORITY_LABELS[section.tier]),
+            hasLockedFirst
+              ? PRIORITIES_WORDS.topOfAfterBills(PRIORITY_LABELS[section.tier])
+              : PRIORITIES_WORDS.topOf(
+                  PRIORITY_LABELS[section.tier],
+                  nameOf(live[section.tier][0] ?? ''),
+                ),
             live[section.tier].indexOf(lifted ?? ''),
           );
     const unitHeight = (unit: Unit) =>
@@ -1016,6 +1019,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             changeJson={changeJson}
             emptyText={`${PRIORITIES_WORDS.nothingChanges} ${PRIORITIES_WORDS.nothingChangesNote}`}
             describeLead={describeLead}
+            pinnedItemIds={movedIds}
           />
           <div className={join(PINNED_FOOTER_CLASS, 'mt-auto')}>
             <ModalFooterActions

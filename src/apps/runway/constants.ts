@@ -1471,10 +1471,11 @@ export const PRIORITIES_WORDS = {
   empty:
     'Bills, envelopes and goals you add show up here in the order they are funded.',
   reorder: 'Reorder',
-  reorderHint: 'Tap an item, then tap where it goes.',
+  reorderHint: 'Tap an item, then tap where it goes, or use its arrows.',
   moving: (name: string) => `Moving ${name}`,
   cancelMove: 'Cancel move',
-  topOf: (tier: string) => `Top of ${tier}`,
+  topOf: (tier: string, neighbour: string) =>
+    neighbour === '' ? `Top of ${tier}` : `Top of ${tier}, above ${neighbour}`,
   topOfAfterBills: (tier: string) => `Top of ${tier}, after bills due first`,
   endOf: (tier: string) => `End of ${tier}`,
   above: (name: string) => `Above ${name}`,

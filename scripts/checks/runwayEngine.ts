@@ -630,6 +630,21 @@ const version = (
     'an item that has not begun resolves to its first version',
   );
   assert.equal(resolveCurrentOrNext(versions, 'zzz', utc(2025, 1, 1)), null);
+  const notBegun = [
+    version('n1', 'n', 100, utc(2026, 5, 1), 'old'),
+    version('n2', 'n', 200, utc(2026, 5, 1), 'newer, same start'),
+    version('n3', 'n', 300, utc(2026, 8, 1), 'newer, starts later'),
+  ];
+  assert.equal(
+    resolveCurrentOrNext(notBegun, 'n', utc(2026, 4, 1))?.id,
+    'n2',
+    'a not-begun item resolves to the newest version of its first start',
+  );
+  assert.equal(
+    resolveCurrentOrNext(notBegun, 'n', utc(2026, 4, 1))?.id,
+    resolveVersion(notBegun, 'n', utc(2026, 5, 1))?.id,
+    'the lists agree with the lookahead on the first start',
+  );
 
   const headers = [
     item('a', 5),
