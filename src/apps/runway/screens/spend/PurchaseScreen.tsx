@@ -30,6 +30,7 @@ import {
 import {
   describeEnvelopes,
   describePurchaseRemoval,
+  getPurchaseFacts,
   getPurchaseTitle,
   isRefund,
 } from '@apps/runway/utils/purchaseText';
@@ -103,18 +104,14 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
     0,
   );
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
+  const facts = getPurchaseFacts(purchase, envelopes, isHidden);
   const fact = [
     formatDateShortUTC(purchase.date),
-    refund && !isHidden ? `refund to ${envelopes}` : envelopes,
+    ...(facts.length > 0
+      ? facts
+      : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
   ].join(' · ');
-  const extraText = [
-    purchase.merchant?.trim() && purchase.merchant.trim() !== title
-      ? purchase.merchant.trim()
-      : null,
-    purchase.note?.trim() && purchase.note.trim() !== title
-      ? purchase.note.trim()
-      : null,
-  ].filter((text): text is string => Boolean(text));
+  const note = purchase.note?.trim() || null;
 
   const remove = async () => {
     if (!user || isBusy) return;
@@ -192,14 +189,16 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
             figure={refund ? `+${amount}` : amount}
             fact={fact}
           />
-          {(extraText.length > 0 || purchase.lines.length > 1) && (
+          {(note !== null || purchase.lines.length > 1) && (
             <dl className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
-              {extraText.map((text) => (
-                <div key={text} className='p-3 break-words'>
-                  <dt className='sr-only'>{SPEND_WORDS.note}</dt>
-                  <dd>{text}</dd>
+              {note !== null && (
+                <div className='space-y-0.5 p-3 break-words'>
+                  <dt className='text-muted-foreground text-xs'>
+                    {SPEND_WORDS.note}
+                  </dt>
+                  <dd className='whitespace-pre-line'>{note}</dd>
                 </div>
-              ))}
+              )}
               {purchase.lines.length > 1 &&
                 purchase.lines.map((line, index) => (
                   <div

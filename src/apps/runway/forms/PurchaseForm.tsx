@@ -65,7 +65,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
+import PurchaseEffectNotice from '@apps/runway/components/PurchaseEffectNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 
 const ORIGIN_PAGE = 20;
@@ -73,10 +73,53 @@ const MOST_USED_SHOWN = 5;
 const RECENT_PURCHASES = 60;
 const FREE_VALUE = 'free';
 
+type ExtraKey = 'label' | 'merchant' | 'note';
+
+const EXTRAS: {
+  key: ExtraKey;
+  words: { name: string; placeholder: string; add: string; unset: string };
+  maxLength: number;
+}[] = [
+  {
+    key: 'label',
+    words: {
+      name: SPEND_WORDS.label,
+      placeholder: SPEND_WORDS.labelPlaceholder,
+      add: SPEND_WORDS.addLabel,
+      unset: SPEND_WORDS.unsetLabel,
+    },
+    maxLength: MAX_NAME_LENGTH,
+  },
+  {
+    key: 'merchant',
+    words: {
+      name: SPEND_WORDS.merchant,
+      placeholder: SPEND_WORDS.merchantPlaceholder,
+      add: SPEND_WORDS.addMerchant,
+      unset: SPEND_WORDS.unsetMerchant,
+    },
+    maxLength: MAX_NAME_LENGTH,
+  },
+  {
+    key: 'note',
+    words: {
+      name: SPEND_WORDS.note,
+      placeholder: SPEND_WORDS.notePlaceholder,
+      add: SPEND_WORDS.addNote,
+      unset: SPEND_WORDS.unsetNote,
+    },
+    maxLength: MAX_NOTE_LENGTH,
+  },
+];
+
 interface PurchaseFormData {
   amount: string;
   date: string;
-  extras: { merchant: string | null; note: string | null };
+  extras: {
+    merchant: string | null;
+    label: string | null;
+    note: string | null;
+  };
 }
 
 interface PurchaseFormProps {
@@ -119,6 +162,7 @@ function PurchaseForm({
     date: toDateInputValue(editing ? editing.date : todayAsUtcDate()),
     extras: {
       merchant: editing?.merchant ?? null,
+      label: editing?.label ?? null,
       note: editing?.note ?? null,
     },
   }));
@@ -166,7 +210,7 @@ function PurchaseForm({
       : FREE_VALUE,
   );
   const [originQuery, setOriginQuery] = useState('');
-  const [revealed, setRevealed] = useState<'merchant' | 'note' | null>(null);
+  const [revealed, setRevealed] = useState<ExtraKey | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -343,33 +387,31 @@ function PurchaseForm({
     date !== null && countedFrom !== null && date >= countedFrom;
   const effect =
     lines === null || !isCounted ? null : getPurchaseEffect(lines, leftById);
-  const getEffectLine = () => {
-    if (effect === null || lines === null) return null;
-    const freeChange =
-      effect.freeDropCents < 0
-        ? `Free to spend goes up by ${formatCents(-effect.freeDropCents)}.`
-        : `Free to spend drops by ${formatCents(effect.freeDropCents)}.`;
-    if (effect.over.length === 1) {
-      const [only] = effect.over;
-      return `${nameOf(only.envelopeId)} would be ${formatCents(only.overCents)} over. ${freeChange}`;
-    }
-    if (effect.over.length > 1) {
-      return `${effect.over.length} envelopes would be over. ${freeChange}`;
-    }
-    if (effect.freeDropCents < 0) {
-      return `Free to spend goes up by ${formatCents(-effect.freeDropCents)}.`;
-    }
-    if (lines.length === 1 && lines[0].envelopeId !== null) {
-      const left = (leftById[lines[0].envelopeId] ?? 0) - lines[0].cents;
-      return `${nameOf(lines[0].envelopeId)} would have ${formatCents(left)} left.`;
-    }
-    return null;
-  };
   const { isHidden } = useValuesHidden();
-  const effectLine =
-    editing !== undefined && snapshot === startSnapshot
-      ? null
-      : getEffectLine();
+  const getEffect = () => {
+    if (effect === null || lines === null) return null;
+    if (editing !== undefined && snapshot === startSnapshot) return null;
+    const own = isEditingCounted ? editingLines : [];
+    const ids = [
+      ...new Set(
+        [...lines, ...own].flatMap((line) =>
+          line.envelopeId === null ? [] : [line.envelopeId],
+        ),
+      ),
+    ];
+    const changes = ids
+      .map((id) => ({
+        id,
+        name: nameOf(id),
+        beforeCents: (leftById[id] ?? 0) - centsAt(own, id),
+        afterCents: (leftById[id] ?? 0) - centsAt(lines, id),
+      }))
+      .filter((change) => change.beforeCents !== change.afterCents);
+    const freeDropCents =
+      effect.freeDropCents - getPurchaseEffect(own, leftById).freeDropCents;
+    return { changes, freeDropCents };
+  };
+  const preview = getEffect();
 
   const startSplit = () => {
     const first = envelopeId !== null ? [envelopeId] : [];
@@ -421,11 +463,13 @@ function PurchaseForm({
     try {
       const encryption = await getRunwayEncryption(user.uid);
       const merchant = formData.extras.merchant?.trim() || null;
+      const label = formData.extras.label?.trim() || null;
       const note = formData.extras.note?.trim() || null;
       const input = {
         date,
         amountCents: isRefund ? -amount : amount,
         merchant,
+        label,
         note,
         lines,
         refundOfId: isRefund ? originalId : null,
@@ -435,6 +479,7 @@ function PurchaseForm({
           input.date === editing.date &&
           input.amountCents === editing.amountCents &&
           input.merchant === (editing.merchant?.trim() || null) &&
+          input.label === (editing.label?.trim() || null) &&
           input.note === (editing.note?.trim() || null) &&
           input.refundOfId === editing.refundOfId &&
           JSON.stringify(input.lines) === JSON.stringify(editing.lines);
@@ -457,12 +502,6 @@ function PurchaseForm({
       await addPurchase(user.uid, encryption, input);
       addToast({
         title: isRefund ? 'Refund added' : 'Purchase added',
-        description: [
-          `${formatCents(amount)} ${isRefund ? 'back to' : 'from'} ${describeEnvelopes(lines, nameOf)}.`,
-          effect && effect.over.length > 0 ? 'Free to spend dropped.' : null,
-        ]
-          .filter(Boolean)
-          .join(' '),
         type: 'success',
       });
       onClose();
@@ -541,15 +580,11 @@ function PurchaseForm({
     }));
   const { extras } = formData;
 
-  const isOverHidden = isHidden && (effect?.over.length ?? 0) > 0;
-  const effectNote = isOverHidden ? (
-    <NeedsALookRow />
-  ) : (
-    effectLine && (
-      <p className='text-muted-foreground text-sm' role='status'>
-        <MaskedText>{effectLine}</MaskedText>
-      </p>
-    )
+  const effectNote = preview && (
+    <PurchaseEffectNotice
+      changes={preview.changes}
+      freeDropCents={preview.freeDropCents}
+    />
   );
   const getEnvelopeSummary = () => {
     if (lines === null) return '';
@@ -760,65 +795,40 @@ function PurchaseForm({
       <QuestionFlow flow={questions} />
       {questions.hasReviewed && (
         <div className='space-y-3'>
-          {effectNote}
-          {extras.merchant !== null && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>
-                {SPEND_WORDS.where}
-              </p>
-              <Input
-                variant='outline'
-                aria-label={SPEND_WORDS.where}
-                autoFocus={revealed === 'merchant'}
-                maxLength={MAX_NAME_LENGTH}
-                placeholder={SPEND_WORDS.wherePlaceholder}
-                value={extras.merchant}
-                disabled={isSaving}
-                onChange={(event) =>
-                  setExtras({ merchant: event.target.value })
-                }
-              />
-            </div>
-          )}
-          {extras.note !== null && (
-            <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>
-                {SPEND_WORDS.note}
-              </p>
-              <Input
-                variant='outline'
-                aria-label={SPEND_WORDS.note}
-                autoFocus={revealed === 'note'}
-                maxLength={MAX_NOTE_LENGTH}
-                placeholder={SPEND_WORDS.notePlaceholder}
-                value={extras.note}
-                disabled={isSaving}
-                onChange={(event) => setExtras({ note: event.target.value })}
-              />
-            </div>
+          {EXTRAS.map(
+            ({ key, words, maxLength }) =>
+              extras[key] !== null && (
+                <div key={key} className='space-y-1.5'>
+                  <p className='text-muted-foreground text-xs'>{words.name}</p>
+                  <Input
+                    variant='outline'
+                    aria-label={words.name}
+                    autoFocus={revealed === key}
+                    maxLength={maxLength}
+                    placeholder={words.placeholder}
+                    value={extras[key] ?? ''}
+                    disabled={isSaving}
+                    onChange={(event) =>
+                      setExtras({ [key]: event.target.value })
+                    }
+                  />
+                </div>
+              ),
           )}
           <div className='flex flex-wrap gap-2'>
-            <RevealChip
-              onClick={() => {
-                setRevealed(extras.merchant === null ? 'merchant' : null);
-                setExtras({ merchant: extras.merchant === null ? '' : null });
-              }}
-            >
-              {extras.merchant === null
-                ? FORM_FLOW_WORDS.addPlace
-                : FORM_FLOW_WORDS.removePlace}
-            </RevealChip>
-            <RevealChip
-              onClick={() => {
-                setRevealed(extras.note === null ? 'note' : null);
-                setExtras({ note: extras.note === null ? '' : null });
-              }}
-            >
-              {extras.note === null
-                ? SPEND_WORDS.addNote
-                : SPEND_WORDS.removeNote}
-            </RevealChip>
+            {EXTRAS.map(({ key, words }) => (
+              <RevealChip
+                key={key}
+                onClick={() => {
+                  setRevealed(extras[key] === null ? key : null);
+                  setExtras({ [key]: extras[key] === null ? '' : null });
+                }}
+              >
+                {extras[key] === null ? words.add : words.unset}
+              </RevealChip>
+            ))}
           </div>
+          {effectNote}
         </div>
       )}
       <ModalFooterActions

@@ -1830,6 +1830,7 @@ async function writeSeedPurchases(
     id: string;
     daysAgo: number;
     merchant: string | null;
+    label?: string;
     note: string | null;
     lines: PurchaseLine[];
     refundOfId?: string;
@@ -1854,7 +1855,8 @@ async function writeSeedPurchases(
       id: 'seed-purchase-ramen',
       daysAgo: 2,
       merchant: 'Ramen Ya',
-      note: 'Dinner with Sam',
+      label: "Sam's birthday dinner",
+      note: 'Sam paid for drinks',
       lines: [line('seed-envelope-dining', 3_800)],
     },
     {
@@ -1890,7 +1892,8 @@ async function writeSeedPurchases(
       id: 'seed-purchase-card',
       daysAgo: 9,
       merchant: null,
-      note: 'Birthday card',
+      label: 'Birthday card',
+      note: null,
       lines: [line(gifts, 650)],
     },
     {
@@ -1919,6 +1922,7 @@ async function writeSeedPurchases(
           {
             amountCents,
             merchant: entry.merchant,
+            label: entry.label ?? null,
             note: entry.note,
             lines: entry.lines,
             refundOfId: entry.refundOfId ?? null,

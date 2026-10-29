@@ -73,6 +73,8 @@ export async function openPurchase(
   read: SealedReader,
 ): Promise<OpenPurchase> {
   const payload = await read<PurchaseSealed>(entry.sealed);
+  // Before labels, a note with no merchant was what named the row, so it reads as the label.
+  const isNoteName = payload.label === undefined && !payload.merchant?.trim();
   const result: OpenPurchase = {
     id: entry.id,
     date: entry.date,
@@ -82,7 +84,8 @@ export async function openPurchase(
     updatedAt: entry.updatedAt,
     amountCents: payload.amountCents,
     merchant: payload.merchant ?? null,
-    note: payload.note ?? null,
+    label: isNoteName ? (payload.note ?? null) : (payload.label ?? null),
+    note: isNoteName ? null : (payload.note ?? null),
     lines: payload.lines ?? [],
     refundOfId: payload.refundOfId ?? null,
   };

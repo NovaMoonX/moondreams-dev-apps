@@ -34,6 +34,7 @@ export interface AddPurchaseInput {
   /** Negative for a refund. */
   amountCents: Cents;
   merchant: string | null;
+  label: string | null;
   note: string | null;
   lines: PurchaseLine[];
   refundOfId: string | null;
@@ -58,6 +59,7 @@ export async function addPurchase(
     {
       amountCents: input.amountCents,
       merchant: input.merchant,
+      label: input.label,
       note: input.note,
       lines: input.lines,
       refundOfId: input.refundOfId,
@@ -190,6 +192,7 @@ export async function editPurchase(
       {
         amountCents: input.amountCents,
         merchant: input.merchant,
+        label: input.label,
         note: input.note,
         lines: input.lines,
         refundOfId: input.refundOfId,
