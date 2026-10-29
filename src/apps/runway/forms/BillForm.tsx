@@ -216,7 +216,10 @@ const getBlocker = (
   return null;
 };
 
-const getEditingData = (payload: BillSealed): BillFormData => {
+const getEditingData = (
+  payload: BillSealed,
+  isDraft: boolean,
+): BillFormData => {
   const { schedule } = payload.timing;
   const frequency = BILL_FREQUENCIES.find((kind) => kind === schedule.kind);
   return {
@@ -225,7 +228,7 @@ const getEditingData = (payload: BillSealed): BillFormData => {
     priority: payload.priority,
     startDate:
       schedule.anchor === null ? '' : toDateInputValue(schedule.anchor),
-    frequency: frequency ?? 'once',
+    frequency: frequency ?? (isDraft ? null : 'once'),
     endKind:
       payload.ending.onDate !== null
         ? 'date'
@@ -263,7 +266,10 @@ function BillForm({
   const bills = useAppSelector((state) => selectBills(state, today));
   const [formData, setFormData] = useState<BillFormData>(() =>
     editing || draft?.initial
-      ? getEditingData((editing?.payload ?? draft?.initial) as BillSealed)
+      ? getEditingData(
+          (editing?.payload ?? draft?.initial) as BillSealed,
+          editing === undefined,
+        )
       : {
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,

@@ -32,8 +32,19 @@ export class DraftPlanNotReady extends Error {}
 export interface DraftCommitResult {
   added: number;
   skipped: number;
+  /** The ids of the draft's entries that were written. */
+  addedIds: string[];
   /** Goals whose starting amount did not record; they were added without it. */
   unrecordedHoldings: string[];
+}
+
+/** A write failed part way: what was written stays written, and `result` says which entries those were. */
+export class DraftPartialWrite extends Error {
+  result: DraftCommitResult;
+  constructor(result: DraftCommitResult, cause: unknown) {
+    super('Only part of the draft was written', { cause });
+    this.result = result;
+  }
 }
 
 const norm = (name: string) => name.trim().toLowerCase();
@@ -53,6 +64,7 @@ export async function commitStartDraft(
   const result: DraftCommitResult = {
     added: 0,
     skipped: 0,
+    addedIds: [],
     unrecordedHoldings: [],
   };
   const ranks = {
@@ -71,86 +83,98 @@ export async function commitStartDraft(
   };
   const sourceIds = new Map<string, string>();
 
-  for (const { value } of draft.incomes) {
-    const key = norm(value.sourceName);
-    if (existing.sources.map(norm).includes(key) && !sourceIds.has(key)) {
-      result.skipped += 1;
-      continue;
-    }
-    const { sourceId } = await createIncome(uid, encryption, {
-      ...value,
-      sourceId: sourceIds.get(key) ?? null,
-    });
-    sourceIds.set(key, sourceId);
-    result.added += 1;
-  }
-  for (const { value } of draft.bills) {
-    if (taken.bills.has(norm(value.name))) {
-      result.skipped += 1;
-      continue;
-    }
-    await createBill(uid, encryption, {
-      startDate: today,
-      bill: { ...value, orderIndex: nextRank('bills', value.priority) },
-    });
-    result.added += 1;
-  }
-  const mapFunding = <F extends { sourceId?: string | null }>(
-    funding: F,
-  ): F => {
-    const id = funding.sourceId ?? null;
-    if (id === null || !id.startsWith('draft:')) return funding;
-    const real = sourceIds.get(id.slice('draft:'.length)) ?? null;
-    return { ...funding, sourceId: real };
-  };
-  for (const { value } of draft.envelopes) {
-    if (taken.envelopes.has(norm(value.name))) {
-      result.skipped += 1;
-      continue;
-    }
-    await createEnvelope(uid, encryption, {
-      startDate: today,
-      envelope: {
+  try {
+    for (const { id, value } of draft.incomes) {
+      const key = norm(value.sourceName);
+      if (existing.sources.map(norm).includes(key) && !sourceIds.has(key)) {
+        result.skipped += 1;
+        continue;
+      }
+      const { sourceId } = await createIncome(uid, encryption, {
         ...value,
-        funding: mapFunding(value.funding),
-        orderIndex: nextRank('envelopes', value.priority),
-      },
-    });
-    result.added += 1;
-  }
-  for (const { value } of draft.goals) {
-    if (taken.goals.has(norm(value.name))) {
-      result.skipped += 1;
-      continue;
-    }
-    const startingCents = value.startingCents ?? 0;
-    const hasStartDay = existing.startDate !== null;
-    const { goalId } = await createGoal(uid, encryption, {
-      startDate: today,
-      goal: {
-        ...value,
-        funding: mapFunding(value.funding),
-        orderIndex: nextRank('goals', value.priority),
-        ...(hasStartDay ? { startingCents: undefined } : {}),
-      },
-    });
-    if (existing.startDate !== null && startingCents > 0) {
-      const isRecorded = await recordHolding(
-        uid,
-        encryption,
-        existing.startDate,
-        {
-          holding: 'goal',
-          refId: goalId,
-          amountCents: startingCents,
-        },
-      ).catch((error) => {
-        console.error(error);
-        return false;
+        sourceId: sourceIds.get(key) ?? null,
       });
-      if (!isRecorded) result.unrecordedHoldings.push(value.name);
+      sourceIds.set(key, sourceId);
+      result.added += 1;
+      result.addedIds.push(id);
     }
-    result.added += 1;
+    for (const { id, value } of draft.bills) {
+      if (taken.bills.has(norm(value.name))) {
+        result.skipped += 1;
+        continue;
+      }
+      await createBill(uid, encryption, {
+        startDate: today,
+        bill: { ...value, orderIndex: nextRank('bills', value.priority) },
+      });
+      taken.bills.add(norm(value.name));
+      result.added += 1;
+      result.addedIds.push(id);
+    }
+    const mapFunding = <F extends { sourceId?: string | null }>(
+      funding: F,
+    ): F => {
+      const id = funding.sourceId ?? null;
+      if (id === null || !id.startsWith('draft:')) return funding;
+      const real = sourceIds.get(id.slice('draft:'.length)) ?? null;
+      return { ...funding, sourceId: real };
+    };
+    for (const { id, value } of draft.envelopes) {
+      if (taken.envelopes.has(norm(value.name))) {
+        result.skipped += 1;
+        continue;
+      }
+      await createEnvelope(uid, encryption, {
+        startDate: today,
+        envelope: {
+          ...value,
+          funding: mapFunding(value.funding),
+          orderIndex: nextRank('envelopes', value.priority),
+        },
+      });
+      taken.envelopes.add(norm(value.name));
+      result.added += 1;
+      result.addedIds.push(id);
+    }
+    for (const { id, value } of draft.goals) {
+      if (taken.goals.has(norm(value.name))) {
+        result.skipped += 1;
+        continue;
+      }
+      const startingCents = value.startingCents ?? 0;
+      const hasStartDay = existing.startDate !== null;
+      const { goalId } = await createGoal(uid, encryption, {
+        startDate: today,
+        goal: {
+          ...value,
+          funding: mapFunding(value.funding),
+          orderIndex: nextRank('goals', value.priority),
+          ...(hasStartDay ? { startingCents: undefined } : {}),
+        },
+      });
+      if (existing.startDate !== null && startingCents > 0) {
+        const isRecorded = await recordHolding(
+          uid,
+          encryption,
+          existing.startDate,
+          {
+            holding: 'goal',
+            refId: goalId,
+            amountCents: startingCents,
+          },
+        ).catch((error) => {
+          console.error(error);
+          return false;
+        });
+        if (!isRecorded) result.unrecordedHoldings.push(value.name);
+      }
+      taken.goals.add(norm(value.name));
+      result.added += 1;
+      result.addedIds.push(id);
+    }
+  } catch (error) {
+    if (result.added === 0) throw error;
+    throw new DraftPartialWrite(result, error);
   }
   return result;
 }

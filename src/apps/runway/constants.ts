@@ -883,7 +883,6 @@ export const BUDGET_WORDS = {
   removeOne: 'Remove',
   leaveTitle: 'Go back?',
   leaveMessage: 'What was read is dropped. Nothing has been added.',
-  leaveConfirm: 'Go back',
   deviceNote:
     'You are not signed in. These stay on this device, unencrypted, for 7 days, and are written to your plan when you sign in.',
   addAnother: 'Add another file',
@@ -899,6 +898,17 @@ export const BUDGET_WORDS = {
   alsoIn: (file: string, amount: string) => `Also in ${file} as ${amount}`,
   cutText: (file: string, chars: number) =>
     `Only the first ${chars.toLocaleString()} characters of ${file} were read.`,
+  partialAdded: (added: number, total: number) =>
+    `Added ${added} of ${total}. The rest were not added; try again to add them, and nothing will be added twice.`,
+  nothingNew: 'Nothing new in that file.',
+  alreadyRead: (names: string[]) =>
+    `${names.join(', ')} ${names.length === 1 ? 'was' : 'were'} already read, so ${names.length === 1 ? 'it was' : 'they were'} skipped.`,
+  cadenceNotPlanned: (name: string, cadence: string) =>
+    `${name} repeats ${cadence}, which Runway can't plan yet`,
+  cutItems: (count: number, label: string, kept: number) =>
+    `Only the first ${kept} ${label} are kept; ${count} more ${count === 1 ? 'was' : 'were'} left out.`,
+  dateTooFar: (name: string, date: string, months: number) =>
+    `${name} aims for ${date}, which is more than ${months} months away. The date was left out.`,
   empty: 'Nothing is left to add.',
 } as const;
 

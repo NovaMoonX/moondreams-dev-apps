@@ -1,8 +1,7 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader, Pencil, Trash2, Upload, X } from 'lucide-react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -11,6 +10,7 @@ import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { formatFileSize } from '@/utils/fileUtils';
 import {
@@ -23,6 +23,7 @@ import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
 import GoalForm from '@apps/runway/forms/GoalForm';
 import IncomeForm from '@apps/runway/forms/IncomeForm';
+import type { DraftSink } from '@apps/runway/forms/draftSink';
 import { toDraftSourceId } from '@apps/runway/forms/fundingFlow';
 import {
   getMissingStep,
@@ -38,6 +39,7 @@ import {
   EMPTY_BUDGET_READING,
   type BudgetReading,
 } from '@apps/runway/lib/normalizeBudgetReading';
+import { nameDocuments } from '@apps/runway/lib/nameDocuments';
 import { isBudgetFile, readBudget } from '@apps/runway/lib/readBudget';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
@@ -48,7 +50,10 @@ import {
   toIncomeRow,
   type StartRow,
 } from '@apps/runway/screens/start/startRows';
-import { DraftPlanNotReady } from '@apps/runway/store/actions/draftActions';
+import {
+  DraftPartialWrite,
+  DraftPlanNotReady,
+} from '@apps/runway/store/actions/draftActions';
 import type { DraftKind, StartDraft } from '@apps/runway/utils/startDraft';
 
 const KINDS: { kind: BudgetKind; label: string; search: string }[] = [
@@ -79,27 +84,32 @@ interface ReadItem {
 
 const KEY_SEPARATOR = ':';
 
-const toProposals = <K extends BudgetKind>(
+const toFileKey = (file: File) => `${file.name}${KEY_SEPARATOR}${file.size}`;
+
+const toProposals = <K extends BudgetKind, T extends ReadItem>(
   kind: K,
-  items: ReadItem[],
-  make: (item: never) => BudgetValues[K],
+  items: T[],
+  make: (item: T) => BudgetValues[K],
   edited: Record<string, BudgetValues[BudgetKind]>,
   removed: ReadonlySet<string>,
 ): Proposal[] =>
   items.flatMap((item, index) => {
     const key = `${kind}${KEY_SEPARATOR}${index}`;
-    return removed.has(key)
-      ? []
-      : [
-          {
-            key,
-            kind,
-            name: item.name,
-            sourceFile: item.sourceFile,
-            notes: item.notes,
-            value: edited[key] ?? make(item as never),
-          },
-        ];
+    if (removed.has(key)) return [];
+    const value = edited[key] ?? make(item);
+    return [
+      {
+        key,
+        kind,
+        name:
+          kind === 'income'
+            ? (value as BudgetValues['income']).sourceName
+            : (value as BudgetValues['bill']).name,
+        sourceFile: item.sourceFile,
+        notes: item.notes,
+        value,
+      },
+    ];
   });
 
 const toRow = (proposal: Proposal): StartRow => {
@@ -139,16 +149,31 @@ interface BudgetStartProps {
   onAdd: (draft: Pick<StartDraft, DraftKind>) => Promise<void>;
   /** Leaves for the choice of how to start. */
   onBack: () => void;
+  /** Leaves Starting out altogether. */
+  onExit: () => void;
+  /** Hands over the ways out that ask first once there is work, for the header's back and close. */
+  onGuards: (guards: BudgetGuards) => void;
+}
+
+export interface BudgetGuards {
+  back: () => void;
+  close: () => void;
 }
 
 /** "Start from your budget": pick files or paste text, have an AI read them in one go, then review what it found in the same forms Starting out uses. Nothing is saved until the person adds it. */
-function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
-  const { confirm } = useActionModal();
+function BudgetStart({
+  mode,
+  onAdd,
+  onBack,
+  onExit,
+  onGuards,
+}: BudgetStartProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [pasted, setPasted] = useState('');
   const [reading, setReading] = useState<BudgetReading | null>(null);
-  const [readFiles, setReadFiles] = useState(0);
+  const [readFiles, setReadFiles] = useState<string[]>([]);
+  const [readNames, setReadNames] = useState<string[]>([]);
   const [phase, setPhase] = useState<'input' | 'review'>('input');
   const [isReading, setIsReading] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -161,8 +186,19 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
   const [form, setForm] = useState<{ key: string; token: number } | null>(null);
   const today = todayAsUtcDate();
 
-  const slotsLeft = BUDGET_LIMITS.files - readFiles - files.length;
+  const slotsLeft = BUDGET_LIMITS.files - readFiles.length - files.length;
   const hasInput = files.length > 0 || pasted.trim() !== '';
+  const guard = {
+    isDirty: reading !== null || hasInput,
+    isBusy: isAdding,
+    title: BUDGET_WORDS.leaveTitle,
+    message: BUDGET_WORDS.leaveMessage,
+  };
+  const askBack = useDiscardGuard({ ...guard, onClose: onBack });
+  const askClose = useDiscardGuard({ ...guard, onClose: onExit });
+  useEffect(() => {
+    onGuards({ back: askBack, close: askClose });
+  });
   const data = reading ?? EMPTY_BUDGET_READING;
 
   const proposals: Proposal[] = [
@@ -210,18 +246,23 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
   const pick = (list: File[]) => {
     const wrong = list.find((file) => !isBudgetFile(file));
     if (wrong) return setError(BUDGET_WORDS.wrongType(wrong.name));
-    const fresh = list.filter(
-      (file) =>
-        !files.some(
-          (have) => have.name === file.name && have.size === file.size,
-        ),
-    );
+    const isSeen = (file: File) =>
+      readFiles.includes(toFileKey(file)) ||
+      files.some((have) => toFileKey(have) === toFileKey(file));
+    const fresh = list.filter((file) => !isSeen(file));
     const next = [...files, ...fresh];
-    if (readFiles + next.length > BUDGET_LIMITS.files)
+    if (readFiles.length + next.length > BUDGET_LIMITS.files)
       return setError(BUDGET_WORDS.tooMany);
     if (next.reduce((sum, file) => sum + file.size, 0) > BUDGET_LIMITS.bytes)
       return setError(BUDGET_WORDS.tooBig);
-    setError(null);
+    const alreadyRead = list.filter((file) =>
+      readFiles.includes(toFileKey(file)),
+    );
+    setError(
+      alreadyRead.length > 0
+        ? BUDGET_WORDS.alreadyRead(alreadyRead.map((file) => file.name))
+        : null,
+    );
     setFiles(next);
   };
 
@@ -229,13 +270,28 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
     setIsReading(true);
     setError(null);
     try {
-      const next = await readBudget(files, pasted, reading ?? undefined);
+      const names = nameDocuments(files, pasted.trim() !== '', readNames);
+      const next = await readBudget(files, pasted, names, reading ?? undefined);
       if (reading === null && countReading(next) === 0) {
         setError(BUDGET_WORDS.nothingFound);
         return;
       }
+      if (
+        reading !== null &&
+        JSON.stringify(next) === JSON.stringify(reading)
+      ) {
+        setError(BUDGET_WORDS.nothingNew);
+        setFiles([]);
+        setPasted('');
+        return;
+      }
       setReading(next);
-      setReadFiles((count) => count + files.length);
+      setReadFiles((keys) => [...keys, ...files.map(toFileKey)]);
+      setReadNames((used) => [
+        ...used,
+        ...names.files.map((entry) => entry.shown),
+        ...(names.pasted ? [names.pasted.shown] : []),
+      ]);
       setFiles([]);
       setPasted('');
       setPhase('review');
@@ -250,17 +306,6 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
     } finally {
       setIsReading(false);
     }
-  };
-
-  const leave = async () => {
-    if (reading === null) return onBack();
-    const isConfirmed = await confirm({
-      title: BUDGET_WORDS.leaveTitle,
-      message: BUDGET_WORDS.leaveMessage,
-      confirmText: BUDGET_WORDS.leaveConfirm,
-      destructive: true,
-    });
-    if (isConfirmed) onBack();
   };
 
   const add = async () => {
@@ -280,11 +325,19 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
       });
     } catch (addError) {
       console.error('Adding the budget failed', addError);
-      setError(
-        addError instanceof DraftPlanNotReady
-          ? BUDGET_WORDS.notReady
-          : BUDGET_WORDS.planFailed,
-      );
+      if (addError instanceof DraftPartialWrite) {
+        const written = new Set(addError.result.addedIds);
+        setRemoved((current) => new Set([...current, ...written]));
+        setError(
+          BUDGET_WORDS.partialAdded(addError.result.added, proposals.length),
+        );
+      } else {
+        setError(
+          addError instanceof DraftPlanNotReady
+            ? BUDGET_WORDS.notReady
+            : BUDGET_WORDS.planFailed,
+        );
+      }
       setIsAdding(false);
     }
   };
@@ -292,16 +345,17 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
   const renderForm = () => {
     if (form === null || formProposal === null) return null;
     const { kind, value, key } = formProposal;
-    const sink = {
-      initial: value,
+    const sinkFor = <K extends BudgetKind>(
+      initial: BudgetValues[K],
+    ): DraftSink<BudgetValues[K]> => ({
+      initial,
       openStep: getMissingStep(kind, value),
       sources: ofKind('income').map((entry) => {
         const name = (entry.value as BudgetValues['income']).sourceName;
         return { id: toDraftSourceId(name), name };
       }),
-      onSave: (next: BudgetValues[BudgetKind]) =>
-        setEdited((current) => ({ ...current, [key]: next })),
-    };
+      onSave: (next) => setEdited((current) => ({ ...current, [key]: next })),
+    });
     const close = () => setForm(null);
     const formKey = form.token;
     if (kind === 'income')
@@ -311,7 +365,7 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
           isOpen
           title='Income source'
           defaultFrequency={null}
-          draft={sink as never}
+          draft={sinkFor<'income'>(value as BudgetValues['income'])}
           onClose={close}
         />
       );
@@ -321,7 +375,7 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
           key={formKey}
           isOpen
           title='Bill'
-          draft={sink as never}
+          draft={sinkFor<'bill'>(value as BudgetValues['bill'])}
           onClose={close}
         />
       );
@@ -331,7 +385,7 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
           key={formKey}
           isOpen
           title='Envelope'
-          draft={sink as never}
+          draft={sinkFor<'envelope'>(value as BudgetValues['envelope'])}
           onClose={close}
         />
       );
@@ -340,7 +394,7 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
         key={formKey}
         isOpen
         title='Goal'
-        draft={sink as never}
+        draft={sinkFor<'goal'>(value as BudgetValues['goal'])}
         onClose={close}
       />
     );
@@ -453,8 +507,9 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
             <Button
               type='button'
               variant='secondary'
-              disabled={isReading}
-              onClick={() => (reading === null ? onBack() : setPhase('review'))}
+              onClick={() =>
+                reading === null ? askBack() : setPhase('review')
+              }
             >
               Back
             </Button>
@@ -501,7 +556,7 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
         );
       })}
       <div className='flex flex-wrap items-center gap-x-4 gap-y-1'>
-        {readFiles < BUDGET_LIMITS.files && (
+        {readFiles.length < BUDGET_LIMITS.files && (
           <Button
             type='button'
             variant='tertiary'
@@ -552,7 +607,7 @@ function BudgetStart({ mode, onAdd, onBack }: BudgetStartProps) {
             type='button'
             variant='secondary'
             disabled={isAdding}
-            onClick={() => void leave()}
+            onClick={askBack}
           >
             Back
           </Button>

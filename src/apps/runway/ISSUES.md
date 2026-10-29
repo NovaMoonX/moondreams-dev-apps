@@ -2494,6 +2494,6 @@ Someone who already keeps a budget in a spreadsheet, a CSV, a notes file or a me
 ### Success Criteria
 - [ ] A CSV, a pasted list and a notes-style text each produce proposals a person can review; nothing is written before Save (emulator).
 - [ ] A value the source doesn't give stays empty and is named, never invented.
-- [ ] The reader logs no document content (only the error), sends no account or bank identifiers it was told to leave out, and `check:runway-engine` covers overlap across files, a conflicting amount and a missing amount staying empty.
+- [ ] The reader logs no document content (only the error), returns no account or bank identifiers (the documents themselves are sent as they are), and `check:runway-engine` covers overlap across files, a conflicting amount and a missing amount staying empty.
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.

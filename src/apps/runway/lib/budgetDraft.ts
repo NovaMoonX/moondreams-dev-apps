@@ -31,7 +31,15 @@ export interface BudgetValues {
   goal: GoalSealed;
 }
 
-/** The first day on or after today that the same schedule lands on, or null when a one-time date has passed. */
+/** The date `count` months after `date` when that month has the same day of the month, else null. */
+const sameDayAfter = (date: number, count: number) => {
+  const moved = addUtcMonths(date, count);
+  return new Date(moved).getUTCDate() === new Date(date).getUTCDate()
+    ? moved
+    : null;
+};
+
+/** The first day on or after today that the same schedule lands on, or null when a one-time date has passed. A monthly one keeps its written day, skipping months too short to hold it. */
 const rollForward = (anchor: number, kind: string, today: number) => {
   if (anchor >= today) return anchor;
   if (kind === 'weekly' || kind === 'everyOtherWeek') {
@@ -39,31 +47,38 @@ const rollForward = (anchor: number, kind: string, today: number) => {
     return anchor + Math.ceil((today - anchor) / step) * step;
   }
   if (kind === 'monthly') {
-    const months = Array.from({ length: 14 }, (_, index) => index + 1)
-      .map((count) => addUtcMonths(anchor, count))
-      .find((date) => date >= today);
-    return months ?? null;
+    const from = new Date(anchor);
+    const now = new Date(today);
+    const behind =
+      (now.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+      now.getUTCMonth() -
+      from.getUTCMonth();
+    return (
+      Array.from({ length: 24 }, (_, index) => Math.max(1, behind) + index)
+        .map((count) => sameDayAfter(anchor, count))
+        .find((date) => date !== null && date >= today) ?? null
+    );
   }
   return null;
 };
 
-/** The next time a day of the month comes round, a short month ending on its last day. */
+/** The next time a day of the month comes round; a month too short to hold the day is skipped, so the 31st stays the 31st. */
 const nextDayOfMonth = (day: number, today: number) => {
   const now = new Date(today);
-  const pick = (offset: number) => {
-    const first = Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1);
-    const target = new Date(first);
-    const length = daysInUtcMonth(
-      target.getUTCFullYear(),
-      target.getUTCMonth(),
-    );
-    return Date.UTC(
-      target.getUTCFullYear(),
-      target.getUTCMonth(),
-      Math.min(day, length),
-    );
-  };
-  return pick(0) >= today ? pick(0) : pick(1);
+  return (
+    Array.from({ length: 14 }, (_, offset) => {
+      const first = new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1),
+      );
+      const length = daysInUtcMonth(
+        first.getUTCFullYear(),
+        first.getUTCMonth(),
+      );
+      return day > length
+        ? null
+        : Date.UTC(first.getUTCFullYear(), first.getUTCMonth(), day);
+    }).find((date) => date !== null && date >= today) ?? today
+  );
 };
 
 const toRange = (low: number | null, high: number | null): MoneyRange => ({

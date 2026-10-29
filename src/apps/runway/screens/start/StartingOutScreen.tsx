@@ -35,6 +35,7 @@ import {
 } from '@apps/runway/screens/start/startRows';
 import {
   commitStartDraft,
+  DraftPartialWrite,
   toTopRanks,
   type ExistingNames,
 } from '@apps/runway/store/actions/draftActions';
@@ -246,19 +247,26 @@ function SavedStart({ uid }: { uid: string }) {
       itemCount: items.length,
     };
     const encryption = await getRunwayEncryption(uid);
+    const warnUnrecorded = (names: string[]) => {
+      if (names.length > 0)
+        addToast({
+          title: START_WORDS.handoffUnrecorded(names.join(', ')),
+          type: 'warning',
+        });
+    };
     const { added, unrecordedHoldings } = await commitStartDraft(
       uid,
       encryption,
       { ...EMPTY_START_DRAFT, ...draft },
       existing,
       today,
-    );
+    ).catch((error: unknown) => {
+      if (error instanceof DraftPartialWrite)
+        warnUnrecorded(error.result.unrecordedHoldings);
+      throw error;
+    });
     addToast({ title: START_WORDS.handoffSaved(added), type: 'success' });
-    if (unrecordedHoldings.length > 0)
-      addToast({
-        title: START_WORDS.handoffUnrecorded(unrecordedHoldings.join(', ')),
-        type: 'warning',
-      });
+    warnUnrecorded(unrecordedHoldings);
   };
 
   const renderForm = (form: StartFormState, close: () => void) => {

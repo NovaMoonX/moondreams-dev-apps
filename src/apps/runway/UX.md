@@ -24,7 +24,8 @@ The canvas has one clickable screen set (Home, Days, Plan, Spend) with a Tweak t
 ```
 Sign in
  └─ Plan has an income source?
-     ├─ No  → Starting Out → Home
+     ├─ No  → How do you want to start? → Start from your budget → review → Home
+     │                                  → Start fresh → Starting Out → Home
      └─ Yes → Home
 
 Bottom tabs        Home · Days · Plan · Spend (Track and Link only)
@@ -151,7 +152,7 @@ Existing repo components are used as they are. A new component whose props name 
 
 Arrows read left to right. A branch is in parentheses.
 
-1. **First session.** (Sign in, or start signed out and sign in at the end) → add an income source (schedule, amount, next date) → add a bill → add an envelope → add a goal → say where things stand (or "Later") → Home with a draft for the next income day. Only the income source is required. Coming back part-way asks "Continue where you left off" or "Start over".
+1. **First session.** (Sign in, or start signed out and sign in at the end) → (How do you want to start? → Start from your budget → pick files or paste text → Read my budget → review what was found, open or remove any one → Add them to my plan, then the steps below with those in them) or (Start fresh) → add an income source (schedule, amount, next date) → add a bill → add an envelope → add a goal → say where things stand (or "Later") → Home with a draft for the next income day. Only the income source is required. Coming back part-way asks "Continue where you left off" or "Start over".
 2. **Payday.** Home → next income day → read the draft → (change a line for this day) → Confirm money arrived → enter amount and date → Confirmed → checklist → tick bills and transfers → Done.
 3. **The money was not what was planned.** Confirm money arrived → enter the real amount → (more: a success notice, the extra adds to Free to spend) or (less: a warning notice; covered by what is left from the day, or "Cover it from Free to spend" with an Undo, then "What gets less" for any rest, Wants, then Shoulds, then Musts, with "Use these" or each item changed by hand) → add a note → Confirm → the day keeps planned and confirmed. Later: Correct this day → new amounts → (short beyond the day's cover: the same warning, cover and "What gets less" as Confirm) → the original stays beside the correction.
 4. **Change the plan.** Plan → open Groceries → Change → new amount → from when → effect on each upcoming day → (a day is short: Top up or Cover it, pick what gives) → Apply change → change log entry with an optional note.

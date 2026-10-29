@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   CircleHelp,
   FileText,
@@ -27,7 +27,9 @@ import {
   START_HELD_WORDS,
   START_WORDS,
 } from '@apps/runway/constants';
-import BudgetStart from '@apps/runway/screens/start/BudgetStart';
+import BudgetStart, {
+  type BudgetGuards,
+} from '@apps/runway/screens/start/BudgetStart';
 import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import type { HeldChoice } from '@apps/runway/engine/endings';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -196,6 +198,7 @@ function StartFlow({
     kind: StartKind;
     id: string;
   } | null>(null);
+  const budgetGuards = useRef<BudgetGuards | null>(null);
   const [isEnvelopeHelpOpen, setIsEnvelopeHelpOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [heldAsk, setHeldAsk] = useState<
@@ -259,6 +262,7 @@ function StartFlow({
         await startOver(heldChoice);
         setIsAsking(false);
         setStep(steps[0]);
+        if (budget) setStage('choose');
       }
       setHeldAsk(null);
     } catch {
@@ -310,6 +314,7 @@ function StartFlow({
       await startOver(null);
       setIsAsking(false);
       setStep(steps[0]);
+      if (budget) setStage('choose');
     } catch {
       setError(START_WORDS.removeFailed);
     }
@@ -410,9 +415,17 @@ function StartFlow({
       <Subview
         overlay
         title={START_WORDS.title}
-        onClose={closeView}
+        onClose={() =>
+          stage === 'budget' && budgetGuards.current
+            ? budgetGuards.current.close()
+            : closeView()
+        }
         headerAction={headerAction ?? <ValuesEyeButton />}
-        onBack={() => (stage === 'budget' ? setStage('choose') : leave())}
+        onBack={() => {
+          if (stage !== 'budget') leave();
+          else if (budgetGuards.current) budgetGuards.current.back();
+          else setStage('choose');
+        }}
       >
         {stage === 'choose' ? (
           <div className='flex flex-1 flex-col gap-4'>
@@ -443,6 +456,10 @@ function StartFlow({
           <BudgetStart
             mode={budget.mode}
             onBack={() => setStage('choose')}
+            onExit={closeView}
+            onGuards={(guards) => {
+              budgetGuards.current = guards;
+            }}
             onAdd={async (draft) => {
               await budget.onAdd(draft);
               setStage('steps');

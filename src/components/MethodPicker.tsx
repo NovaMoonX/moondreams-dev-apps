@@ -6,7 +6,7 @@ import { ChevronRight } from 'lucide-react';
 
 export interface Method {
   id: string;
-  /** An emoji, or an icon for an app that keeps emoji out of its words. */
+  /** An emoji, or an icon. */
   emoji: ReactNode;
   title: string;
   description: string;

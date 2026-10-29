@@ -9,6 +9,7 @@ import {
   cutAtWord,
   normalizeBudgetReading,
 } from '../../src/apps/runway/lib/normalizeBudgetReading.ts';
+import { nameDocuments } from '../../src/apps/runway/lib/nameDocuments.ts';
 
 const fileNames = ['Budget.csv', 'Summary.csv'];
 const today = Date.UTC(2026, 9, 29);
@@ -183,5 +184,152 @@ assert.equal(
   'a past payday rolls to the next one',
 );
 assert.equal(getMissingStep('income', income), null);
+
+const quiet = { incomes: [], envelopes: [], goals: [], notRead: [] };
+
+const yearly = normalizeBudgetReading(
+  {
+    ...quiet,
+    bills: [
+      {
+        ...bill('Budget.csv', 'Car insurance', 90_000),
+        repeats: null,
+        writtenCadence: 'Yearly',
+      },
+      {
+        ...bill('Budget.csv', 'Rent', 100_000),
+        repeats: null,
+        writtenCadence: 'monthly',
+      },
+    ],
+  },
+  { fileNames },
+);
+assert.equal(yearly.bills[0].repeats, null, 'a yearly bill has no repeat');
+assert.equal(
+  yearly.bills[0].dayOfMonth,
+  null,
+  'a day of the month does not make a yearly bill monthly',
+);
+assert.deepEqual(
+  yearly.notRead.map((entry) => entry.text),
+  ["Car insurance repeats yearly, which Runway can't plan yet"],
+  'the cadence the app lacks is named',
+);
+assert.equal(
+  getMissingStep('bill', toBillValue(yearly.bills[0], today)),
+  'repeats',
+  'its repeat is left to the person',
+);
+assert.equal(
+  toBillValue(yearly.bills[1], today).timing.schedule.kind,
+  'monthly',
+  'a monthly cadence with a day stays monthly',
+);
+
+const lateDayBill = { ...bill('Budget.csv', 'Loan', 1_000), dayOfMonth: 31 };
+const onThe31st = toBillValue(
+  { ...lateDayBill, notes: [] } as never,
+  Date.UTC(2026, 10, 15),
+);
+assert.equal(
+  onThe31st.timing.schedule.anchor,
+  Date.UTC(2026, 11, 31),
+  'the 31st skips a 30-day month',
+);
+assert.deepEqual(onThe31st.timing.schedule.monthDays, [31]);
+const febFirst = toBillValue(
+  { ...lateDayBill, notes: [] } as never,
+  Date.UTC(2026, 1, 1),
+);
+assert.equal(
+  febFirst.timing.schedule.anchor,
+  Date.UTC(2026, 2, 31),
+  'the 31st is not moved onto the end of February',
+);
+const rolled = toBillValue(
+  {
+    ...lateDayBill,
+    dayOfMonth: null,
+    dueOn: Date.UTC(2026, 0, 31),
+    notes: [],
+  } as never,
+  Date.UTC(2026, 1, 10),
+);
+assert.equal(
+  rolled.timing.schedule.anchor,
+  Date.UTC(2026, 2, 31),
+  'a monthly bill due on the 31st next falls on the next 31st',
+);
+assert.deepEqual(rolled.timing.schedule.monthDays, [31]);
+
+const makeFile = (name: string) => new File(['x'], name);
+const named = nameDocuments(
+  [makeFile('Budget.csv'), makeFile('Budget.csv'), makeFile('b--c\n---.csv')],
+  true,
+  ['Budget.csv', 'Pasted text'],
+);
+assert.deepEqual(
+  named.files.map((entry) => entry.shown),
+  ['Budget (2).csv', 'Budget (3).csv', 'b--c\n---.csv'],
+  'a repeated file name is told apart',
+);
+assert.equal(named.pasted?.shown, 'Pasted text 2');
+assert.equal(
+  named.files[2].sent,
+  'b-c -.csv',
+  'dash runs and line breaks never reach the markers',
+);
+const mapped = normalizeBudgetReading(
+  {
+    ...quiet,
+    bills: [bill(named.files[2].sent, 'Rent', 100)],
+  },
+  {
+    fileNames: named.files.map((entry) => entry.sent),
+    shownAs: Object.fromEntries(
+      named.files.map((entry) => [entry.sent, entry.shown]),
+    ),
+  },
+);
+assert.equal(
+  mapped.bills[0].sourceFile,
+  'b--c\n---.csv',
+  'the source maps back to the name the person sees',
+);
+
+const many = normalizeBudgetReading(
+  {
+    ...quiet,
+    incomes: Array.from({ length: 12 }, (_, index) => ({
+      sourceFile: 'Budget.csv',
+      name: `Job ${String.fromCharCode(65 + index)}`,
+      amountCents: 100,
+      scheduleKind: 'weekly',
+      nextOn: null,
+      monthDays: null,
+    })),
+    goals: [
+      {
+        sourceFile: 'Budget.csv',
+        name: 'House',
+        targetCents: 5_000_000,
+        currentCents: null,
+        targetDate: '2031-01-01',
+      },
+    ],
+  },
+  { fileNames, today },
+);
+assert.equal(many.incomes.length, 10, 'incomes stop at the cap, first kept');
+assert.equal(many.incomes[0].name, 'Job A');
+assert.deepEqual(
+  many.notRead.map((entry) => entry.text),
+  [
+    'Only the first 10 incomes are kept; 2 more were left out.',
+    'House aims for January 1, 2031, which is more than 12 months away. The date was left out.',
+  ],
+  'what was cut is said',
+);
 
 console.log('runwayBudgetReading: ok');

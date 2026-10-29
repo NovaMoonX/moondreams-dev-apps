@@ -1,3 +1,4 @@
+import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { createOptionMatcher, toDisplayCase } from '@/utils/optionMatchUtils';
 import {
@@ -6,8 +7,10 @@ import {
   BUDGET_WORDS,
   CALENDAR_PERIODS,
   INCOME_FREQUENCIES,
+  LOOKAHEAD_MONTHS,
   MAX_NAME_LENGTH,
 } from '@apps/runway/constants';
+import { addUtcMonths } from '@apps/runway/engine/dates';
 
 export type BudgetIncomeKind = (typeof INCOME_FREQUENCIES)[number];
 export type BudgetBillRepeat = (typeof BILL_FREQUENCIES)[number];
@@ -78,6 +81,10 @@ interface NormalizeOptions {
   existing?: BudgetReading;
   /** Lines to add to what could not be read, such as a document that was cut short. */
   extraNotRead?: BudgetNotRead[];
+  /** What each name the documents were sent under is called on screen, when they differ. */
+  shownAs?: Readonly<Record<string, string>>;
+  /** Today, so a goal date beyond the planning window can be reported; without it none is. */
+  today?: number;
 }
 
 type Raw = Record<string, unknown>;
@@ -154,14 +161,16 @@ const toSourceFile = (raw: unknown, fileNames: readonly string[]) => {
   );
 };
 
-const toBase = (raw: Raw, fileNames: readonly string[]): BudgetItem => ({
+type ToFile = (raw: unknown) => string;
+
+const toBase = (raw: Raw, toFile: ToFile): BudgetItem => ({
   name: toName(raw.name),
-  sourceFile: toSourceFile(raw.sourceFile, fileNames),
+  sourceFile: toFile(raw.sourceFile),
   notes: [],
 });
 
-const toIncome = (raw: Raw, fileNames: readonly string[]): BudgetIncome => ({
-  ...toBase(raw, fileNames),
+const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => ({
+  ...toBase(raw, toFile),
   amountCents: toCents(raw.amountCents),
   scheduleKind: toOneOf(raw.scheduleKind, INCOME_FREQUENCIES),
   nextOn: toDate(raw.nextOn),
@@ -178,25 +187,46 @@ const toIncome = (raw: Raw, fileNames: readonly string[]): BudgetIncome => ({
     : [],
 });
 
-const toBill = (raw: Raw, fileNames: readonly string[]): BudgetBill => {
+const OTHER_CADENCE =
+  /year|annual|quarter|semi|half-?year|bi-?monthly|every\s+(\d+|two|three|four|five|six|nine|twelve)\s+months?/i;
+
+/** The cadence words the document wrote when Runway has no repeat for them, or null. */
+const getOtherCadence = (raw: Raw) => {
+  const written = asText(raw.writtenCadence);
+  return OTHER_CADENCE.test(written) ? written.toLowerCase() : null;
+};
+
+/** A bill's repeat as the document wrote it: only a monthly cadence, or none written at all, lets a day of the month stand for "monthly". */
+const toRepeat = (raw: Raw) => {
+  const written = asText(raw.writtenCadence);
+  const isOdd =
+    getOtherCadence(raw) !== null ||
+    (written !== '' &&
+      !/month/i.test(written) &&
+      toOneOf(raw.repeats, BILL_FREQUENCIES) === null);
+  return isOdd
+    ? { repeats: null, dayOfMonth: null }
+    : {
+        repeats: toOneOf(raw.repeats, BILL_FREQUENCIES),
+        dayOfMonth: toDayOfMonth(raw.dayOfMonth),
+      };
+};
+
+const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
   const low = toCents(raw.lowCents);
   const high = toCents(raw.highCents);
   const isRange = low !== null && high !== null && high > low;
   return {
-    ...toBase(raw, fileNames),
+    ...toBase(raw, toFile),
     amountCents: isRange ? low : (toCents(raw.amountCents) ?? low ?? high),
     highCents: isRange ? high : null,
     dueOn: toDate(raw.dueOn),
-    dayOfMonth: toDayOfMonth(raw.dayOfMonth),
-    repeats: toOneOf(raw.repeats, BILL_FREQUENCIES),
+    ...toRepeat(raw),
   };
 };
 
-const toEnvelope = (
-  raw: Raw,
-  fileNames: readonly string[],
-): BudgetEnvelope => ({
-  ...toBase(raw, fileNames),
+const toEnvelope = (raw: Raw, toFile: ToFile): BudgetEnvelope => ({
+  ...toBase(raw, toFile),
   amountCents: toCents(raw.amountCents),
   period: toOneOf<BudgetEnvelopePeriod>(raw.period, [
     ...CALENDAR_PERIODS,
@@ -204,8 +234,8 @@ const toEnvelope = (
   ]),
 });
 
-const toGoal = (raw: Raw, fileNames: readonly string[]): BudgetGoal => ({
-  ...toBase(raw, fileNames),
+const toGoal = (raw: Raw, toFile: ToFile): BudgetGoal => ({
+  ...toBase(raw, toFile),
   targetCents: toCents(raw.targetCents),
   currentCents: toCents(raw.currentCents),
   targetDate: toDate(raw.targetDate),
@@ -219,20 +249,25 @@ const matcher = createOptionMatcher<{ name: string }>({
 
 const orElse = <V>(first: V | null, second: V | null) => first ?? second;
 
-/** Adds `incoming` to `kept` item by item. The same name in another document is one item: the first document's values stay, a value only the other has is filled in, and a different amount becomes a note on the kept item. */
+/** Adds `incoming` to `kept` item by item, keeping the first ones when the cap is reached and returning the ones left out. The same name in another document is one item: the first document's values stay, a value only the other has is filled in, and a different amount becomes a note on the kept item. */
 function mergeItems<T extends BudgetItem>(
   kept: T[],
   incoming: T[],
   getAmount: (item: T) => number | null,
   fill: (kept: T, other: T) => T,
   cap: number,
-): T[] {
-  return incoming.reduce<T[]>((list, item) => {
+): { items: T[]; dropped: T[] } {
+  const dropped: T[] = [];
+  const items = incoming.reduce<T[]>((list, item) => {
     const twin = matcher.match(
       item.name,
       list.filter((entry) => entry.sourceFile !== item.sourceFile),
     ) as T | null;
-    if (twin === null) return list.length >= cap ? list : [...list, item];
+    if (twin === null) {
+      if (list.length < cap) return [...list, item];
+      dropped.push(item);
+      return list;
+    }
     const mine = getAmount(twin);
     const theirs = getAmount(item);
     const note =
@@ -246,7 +281,15 @@ function mergeItems<T extends BudgetItem>(
         : [...merged.notes, note];
     return list.map((entry) => (entry === twin ? { ...merged, notes } : entry));
   }, kept);
+  return { items, dropped };
 }
+
+const CUT_LABELS = {
+  incomes: 'incomes',
+  bills: 'bills',
+  envelopes: 'envelopes',
+  goals: 'goals',
+} as const;
 
 /** Settles what the reader answered into amounts, dates and choices the forms take, cuts names and lists to their caps, and merges what several documents say about one thing. Pure: the same answer always gives the same reading. */
 export function normalizeBudgetReading(
@@ -255,17 +298,23 @@ export function normalizeBudgetReading(
     fileNames,
     existing = EMPTY_BUDGET_READING,
     extraNotRead = [],
+    shownAs = {},
+    today,
   }: NormalizeOptions,
 ): BudgetReading {
   const raw = (
     typeof answer === 'object' && answer !== null ? answer : {}
   ) as Raw;
+  const toFile: ToFile = (value) => {
+    const sent = toSourceFile(value, fileNames);
+    return shownAs[sent] ?? sent;
+  };
   const named = <T extends BudgetItem>(items: T[]) =>
     items.filter((item) => item.name !== '');
 
   const incomes = mergeItems(
     existing.incomes,
-    named(asRecords(raw.incomes).map((entry) => toIncome(entry, fileNames))),
+    named(asRecords(raw.incomes).map((entry) => toIncome(entry, toFile))),
     (item) => item.amountCents,
     (kept, other) => ({
       ...kept,
@@ -278,7 +327,7 @@ export function normalizeBudgetReading(
   );
   const bills = mergeItems(
     existing.bills,
-    named(asRecords(raw.bills).map((entry) => toBill(entry, fileNames))),
+    named(asRecords(raw.bills).map((entry) => toBill(entry, toFile))),
     (item) => item.amountCents,
     (kept, other) => ({
       ...kept,
@@ -293,9 +342,7 @@ export function normalizeBudgetReading(
   );
   const envelopes = mergeItems(
     existing.envelopes,
-    named(
-      asRecords(raw.envelopes).map((entry) => toEnvelope(entry, fileNames)),
-    ),
+    named(asRecords(raw.envelopes).map((entry) => toEnvelope(entry, toFile))),
     (item) => item.amountCents,
     (kept, other) => ({
       ...kept,
@@ -304,9 +351,12 @@ export function normalizeBudgetReading(
     }),
     BUDGET_LIMITS.items.envelopes,
   );
+  const incomingGoals = named(
+    asRecords(raw.goals).map((entry) => toGoal(entry, toFile)),
+  );
   const goals = mergeItems(
     existing.goals,
-    named(asRecords(raw.goals).map((entry) => toGoal(entry, fileNames))),
+    incomingGoals,
     (item) => item.targetCents,
     (kept, other) => ({
       ...kept,
@@ -316,16 +366,74 @@ export function normalizeBudgetReading(
     }),
     BUDGET_LIMITS.items.goals,
   );
+
+  const cutLines = Object.entries({
+    incomes,
+    bills,
+    envelopes,
+    goals,
+  }).flatMap(([kind, { dropped }]) =>
+    dropped.length === 0
+      ? []
+      : [
+          {
+            file: dropped[0].sourceFile,
+            text: BUDGET_WORDS.cutItems(
+              dropped.length,
+              CUT_LABELS[kind as keyof typeof CUT_LABELS],
+              BUDGET_LIMITS.items[kind as keyof typeof CUT_LABELS],
+            ),
+          },
+        ],
+  );
+  const lastDay =
+    today === undefined ? null : addUtcMonths(today, LOOKAHEAD_MONTHS);
+  const farGoals = incomingGoals.flatMap((goal) =>
+    lastDay !== null && goal.targetDate !== null && goal.targetDate > lastDay
+      ? [
+          {
+            file: goal.sourceFile,
+            text: BUDGET_WORDS.dateTooFar(
+              goal.name,
+              formatDateUTC(goal.targetDate),
+              LOOKAHEAD_MONTHS,
+            ),
+          },
+        ]
+      : [],
+  );
+  const cadenceLines = asRecords(raw.bills).flatMap((entry) => {
+    const cadence = getOtherCadence(entry);
+    const name = toName(entry.name);
+    return cadence === null || name === ''
+      ? []
+      : [
+          {
+            file: toFile(entry.sourceFile),
+            text: cutAtWord(
+              BUDGET_WORDS.cadenceNotPlanned(name, cadence),
+              BUDGET_LIMITS.notReadChars,
+            ),
+          },
+        ];
+  });
   const notRead = [
     ...existing.notRead,
+    ...cutLines,
+    ...cadenceLines,
+    ...farGoals,
+    ...extraNotRead,
     ...asRecords(raw.notRead).flatMap((entry) => {
       const text = cutAtWord(asText(entry.text), BUDGET_LIMITS.notReadChars);
-      return text === ''
-        ? []
-        : [{ file: toSourceFile(entry.file, fileNames), text }];
+      return text === '' ? [] : [{ file: toFile(entry.file), text }];
     }),
-    ...extraNotRead,
   ].slice(0, BUDGET_LIMITS.notRead);
 
-  return { incomes, bills, envelopes, goals, notRead };
+  return {
+    incomes: incomes.items,
+    bills: bills.items,
+    envelopes: envelopes.items,
+    goals: goals.items,
+    notRead,
+  };
 }
