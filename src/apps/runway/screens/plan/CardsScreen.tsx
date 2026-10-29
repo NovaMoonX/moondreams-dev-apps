@@ -58,9 +58,7 @@ function CardsScreen() {
               <ItemRow
                 key={card.id}
                 name={name}
-                leading={
-                  <ItemBadge name={card.name ?? card.issuer} emoji={null} />
-                }
+                leading={<ItemBadge name={card.issuer} emoji={null} />}
                 detail={
                   reserveCents > 0
                     ? CARD_WORDS.waiting

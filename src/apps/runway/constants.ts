@@ -1489,6 +1489,7 @@ export const CARD_WORDS = {
   payOff: (name: string) => `Pay off ${name.replace(/ (\S+)$/, '\u00a0$1')}`,
   payOffShort: 'Pay off',
   paidAhead: (amount: string) => `Paid ${amount} ahead`,
+  allPaid: 'All paid',
   paymentsTitle: 'Recent payments',
   takeBack: 'Take back',
   takeBackLabel: (amount: string, day: string) =>

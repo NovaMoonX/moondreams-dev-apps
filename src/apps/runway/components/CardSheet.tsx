@@ -125,7 +125,9 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
     >
       <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
         <SheetHead
-          label={CARD_WORDS.reserveLabel}
+          label={
+            reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
+          }
           figure={formatCents(Math.max(0, reserveCents))}
           fact={
             reserveCents < 0
