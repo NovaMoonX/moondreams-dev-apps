@@ -45,11 +45,22 @@ export function summarizeCi(runs: readonly CheckRun[]): CiState {
 export interface OwnerItem {
   /** The question or step, in the person's words. */
   text: string;
-  /** Screenshots on the lines indented under it, so the question and the screen it is about sit together. */
-  images: string[];
+  /** The options on the lines indented under it, each with its words and its screenshots, so the question and the screens it is about sit together. */
+  options: { label: string; images: string[] }[];
 }
 
 const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;
+
+const toOption = (line: string) => {
+  const images = line.match(IMAGE_URL) ?? [];
+  const label = toPlain(
+    line
+      .replace(IMAGE_URL, '')
+      .replace(/^\s*[-*]\s+/, '')
+      .replace(/[\s:]+$/, ''),
+  );
+  return images.length > 0 || label ? [{ label, images }] : [];
+};
 
 export interface PrStatus {
   sessionUrl: string | null;
@@ -138,9 +149,7 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
       (next) => next.trim() === '' || next.search(/\S/) <= depth,
     );
     const nested = end === -1 ? after : after.slice(0, end);
-    return [
-      { text: bullet(line), images: nested.join(' ').match(IMAGE_URL) ?? [] },
-    ];
+    return [{ text: bullet(line), options: nested.flatMap(toOption) }];
   });
   const goodToKnow = section(body, 'Good to know')
     .filter((line) => /^\s*[-*]\s+/.test(line))
@@ -290,16 +299,16 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
   const needs = session.prs.flatMap((pr) =>
     (pr.status?.ownerItems ?? []).flatMap((item) => [
       `- [#${pr.number}](${pr.url}) ${item.text}`,
-      ...(item.images.length > 0
-        ? [
-            `  <br>${item.images
-              .slice(0, MAX_SHOTS)
-              .map(
-                (src) => `<a href="${src}"><img src="${src}" width="160"></a>`,
-              )
-              .join(' ')}`,
-          ]
-        : []),
+      ...item.options.map(
+        (option) =>
+          `  - ${option.label}${option.images
+            .slice(0, MAX_SHOTS)
+            .map(
+              (src) =>
+                `<br><a href="${src}"><img src="${src}" width="160"></a>`,
+            )
+            .join('')}`,
+      ),
     ]),
   );
   const allShots = session.prs.flatMap((pr) =>

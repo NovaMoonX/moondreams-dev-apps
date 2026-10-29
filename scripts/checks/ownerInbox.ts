@@ -65,8 +65,14 @@ const asked = parseStatus(
   '',
 );
 assert.deepEqual(
-  asked.ownerItems.map((item) => item.images),
-  [['https://x.test/a.png', 'https://x.test/b.png'], []],
+  asked.ownerItems.map((item) => item.options),
+  [
+    [
+      { label: 'Now', images: ['https://x.test/a.png'] },
+      { label: 'Box', images: ['https://x.test/b.png'] },
+    ],
+    [],
+  ],
   'a question carries the screenshots indented under it, and only those',
 );
 assert.match(
@@ -87,7 +93,7 @@ assert.match(
     ],
     '2026-10-29T17:00:00Z',
   ),
-  /make it a box\?\n {2}<br><a href="https:\/\/x.test\/a.png"><img src="https:\/\/x.test\/a.png" width="160">/,
+  /make it a box\?\n {2}- Now<br><a href="https:\/\/x.test\/a.png"><img src="https:\/\/x.test\/a.png" width="160"><\/a>\n {2}- Box<br>/,
   'the screenshots sit right under the question in the inbox',
 );
 
