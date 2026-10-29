@@ -51,14 +51,28 @@ export interface OwnerItem {
 
 const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;
 
+const MAX_OPTIONS = 6;
+const isImage = (url: string) => /\.(png|jpe?g|gif|webp)(\?|$)/i.test(url);
+
 const toOption = (line: string) => {
-  const images = line.match(IMAGE_URL) ?? [];
-  const label = toPlain(
-    line
+  const unlinked = line.replace(/\[([^\]]*)\]\((https:[^)\s]+)\)/g, '$1 $2');
+  const urls = (unlinked.match(IMAGE_URL) ?? []).map((url) =>
+    url.replace(/[.,;:!\\]+$/, ''),
+  );
+  const links = urls
+    .filter((url) => !isImage(url))
+    .map((url) => ` ([link](${url}))`)
+    .join('');
+  const words = toPlain(
+    unlinked
       .replace(IMAGE_URL, '')
       .replace(/^\s*[-*]\s+/, '')
-      .replace(/[\s:]+$/, ''),
+      .replace(/\s+/g, ' ')
+      .replace(/[\s:]+$/, '')
+      .trim(),
   );
+  const images = urls.filter(isImage);
+  const label = `${words}${links}`;
   return images.length > 0 || label ? [{ label, images }] : [];
 };
 
@@ -146,10 +160,16 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     const depth = line.search(/\S/);
     const after = all.slice(index + 1);
     const end = after.findIndex(
-      (next) => next.trim() === '' || next.search(/\S/) <= depth,
+      (next) =>
+        next.trim() === '' || next.search(/\S/) <= depth || isOpenBox(next),
     );
     const nested = end === -1 ? after : after.slice(0, end);
-    return [{ text: bullet(line), options: nested.flatMap(toOption) }];
+    return [
+      {
+        text: bullet(line),
+        options: nested.flatMap(toOption).slice(0, MAX_OPTIONS),
+      },
+    ];
   });
   const goodToKnow = section(body, 'Good to know')
     .filter((line) => /^\s*[-*]\s+/.test(line))

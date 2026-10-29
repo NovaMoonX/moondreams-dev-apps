@@ -258,4 +258,32 @@ assert.equal(
   'a cancelled check is not green',
 );
 
+const tricky = parseStatus(
+  `- [ ] Pick one (who: owner)
+  - [Now](https://x.test/a.png), see https://github.com/o/r/pull/3.
+  - <script> for @x: https://x.test/b.png.
+  - [ ] A nested ask (who: owner)
+    - deeper https://x.test/n.png
+
+  - after a blank line https://x.test/c.png
+`,
+  '',
+);
+assert.deepEqual(
+  tricky.ownerItems.map((item) => item.text),
+  ['Pick one', 'A nested ask'],
+  'a nested ask is its own item, never an option of the one above',
+);
+assert.deepEqual(
+  tricky.ownerItems[0].options,
+  [
+    {
+      label: 'Now see ([link](https://github.com/o/r/pull/3))',
+      images: ['https://x.test/a.png'],
+    },
+    { label: '&lt;script&gt; for @\u200bx', images: ['https://x.test/b.png'] },
+  ],
+  'a markdown link keeps its words, a page link stays a link, trailing punctuation is not part of a URL, labels are escaped, and a blank line or a nested ask ends the options',
+);
+
 console.log('owner inbox: ok');
