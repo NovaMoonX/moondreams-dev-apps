@@ -100,11 +100,17 @@ function LineRow({ line, holders, split }: LineRowProps) {
   const shortNames = getShortNames(people);
   const unitCount = line.groupId ? state.lines.filter((other) => other.groupId === line.groupId).length : 0;
   const hasInlinePicker = people.length <= PICKER_INLINE_LIMIT;
-  const warning = line.priceCents <= 0 ? 'Add a price' : holders.length === 0 ? 'Nobody yet' : null;
+  const warning = line.priceCents <= 0 ? 'Add a price' : null;
 
-  const toggleEveryone = () => setLineClaims(line.id, isEveryone ? [] : people.map((person) => person.id));
-  const togglePerson = (uid: string) =>
-    setLineClaims(line.id, holders.includes(uid) ? holders.filter((id) => id !== uid) : [...holders, uid]);
+  const showsPicker = holders.length === 0 || isOpen;
+  const summary = isEveryone ? 'Everyone' : formatNames(holders.map((uid) => shortNames[uid] ?? ''));
+
+  const assign = (uids: string[]) => {
+    setLineClaims(line.id, uids);
+    if (!isOpen) openLine(line.id);
+  };
+  const toggleEveryone = () => assign(isEveryone ? [] : people.map((person) => person.id));
+  const togglePerson = (uid: string) => assign(holders.includes(uid) ? holders.filter((id) => id !== uid) : [...holders, uid]);
 
   const pickerPills = (
     <div className='flex flex-wrap gap-1.5'>
@@ -126,7 +132,7 @@ function LineRow({ line, holders, split }: LineRowProps) {
   );
 
   return (
-    <li className='space-y-2 px-3 py-2.5'>
+    <li className={join('space-y-2 px-3 py-2.5', isOpen && 'bg-muted/50')}>
       <Button
         type='button'
         variant='tertiary'
@@ -136,7 +142,11 @@ function LineRow({ line, holders, split }: LineRowProps) {
       >
         <span className='min-w-0 flex-1'>
           <span className='line-clamp-2 text-sm font-medium'>{line.name || 'New item'}</span>
-          {warning && <span className='text-warning mt-0.5 text-xs'>{warning}</span>}
+          {warning ? (
+            <span className='text-warning mt-0.5 text-xs'>{warning}</span>
+          ) : (
+            !showsPicker && <span className='text-muted-foreground mt-0.5 text-xs'>{summary}</span>
+          )}
         </span>
         <span className='flex shrink-0 items-center gap-1.5'>
           <span className='text-sm font-medium whitespace-nowrap'>{formatCents(line.priceCents)}</span>
@@ -154,7 +164,7 @@ function LineRow({ line, holders, split }: LineRowProps) {
         />
       ) : (
         <>
-          {hasInlinePicker && pickerPills}
+          {hasInlinePicker && showsPicker && pickerPills}
           {isOpen && (
             <div className='flex flex-wrap items-center gap-x-1'>
               {!hasInlinePicker && (
@@ -313,6 +323,7 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
           </div>
         )}
         <div className='space-y-2'>
+          <Label>Tip</Label>
           <PillGroup
             label='Tip'
             options={tipOptions}
@@ -393,6 +404,11 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
           <span className='text-muted-foreground'>Bill total</span>
           <span className='font-semibold whitespace-nowrap'>{formatCents(result.totalCents)}</span>
         </div>
+        {unclaimedCount > 0 && (
+          <p className='text-muted-foreground px-[13px] text-xs'>
+            {unclaimedCount} {unclaimedCount === 1 ? 'item isn’t' : 'items aren’t'} picked yet, so they aren’t in anyone’s share.
+          </p>
+        )}
         {mismatch && (
           <p className='text-warning px-[13px] text-xs' role='status'>
             The receipt says {formatCents(printedTotalCents ?? 0)}, and the items, tax and fees here add up to{' '}
