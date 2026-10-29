@@ -1,6 +1,10 @@
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { PRIORITY_LABELS, SCHEDULE_LABELS } from '@apps/runway/constants';
+import {
+  GROUP_WORDS,
+  PRIORITY_LABELS,
+  SCHEDULE_LABELS,
+} from '@apps/runway/constants';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { formatRange } from '@apps/runway/utils/rangeText';
@@ -8,12 +12,21 @@ import type {
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
+  GroupSealed,
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
 
 export type ItemPayload =
-  SourceSealed | PayLineSealed | EnvelopeSealed | BillSealed | GoalSealed;
+  | SourceSealed
+  | PayLineSealed
+  | EnvelopeSealed
+  | BillSealed
+  | GoalSealed
+  | GroupSealed;
+
+/** The name of a group by its id, from the plan's groups. */
+export type GroupNamer = (groupId: string) => string;
 
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -34,10 +47,22 @@ const getParts = (
   before: ItemPayload,
   after: ItemPayload,
   cardNameOf: (cardId: string | null) => string,
+  groupName: GroupNamer,
 ): Part[] => {
   const base: Part[] = [
     diff('Name', before.name, after.name, (value) => value),
   ];
+  if ('startingPriority' in before && 'startingPriority' in after) {
+    return [
+      ...base,
+      diff(
+        'Starting priority',
+        before.startingPriority,
+        after.startingPriority,
+        (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
+      ),
+    ];
+  }
   if (
     !('schedule' in before) &&
     !('timing' in before) &&
@@ -135,6 +160,12 @@ const getParts = (
         billAfter.emoji,
         (value) => value ?? 'none',
       ),
+      diff(
+        'Group',
+        billBefore.groupId ?? null,
+        billAfter.groupId ?? null,
+        (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
+      ),
     ];
   }
   if ('funding' in before && 'funding' in after) {
@@ -181,8 +212,9 @@ export function describeChange(
   before: ItemPayload,
   after: ItemPayload,
   cardNameOf: (cardId: string | null) => string,
+  groupName: GroupNamer = () => 'a group',
 ) {
-  const result = getParts(before, after, cardNameOf)
+  const result = getParts(before, after, cardNameOf, groupName)
     .flatMap((part) => (part === null ? [] : [part]))
     .map(([label, from, to]) => `${label} ${from} to ${to}`)
     .join('; ');

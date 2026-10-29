@@ -912,6 +912,13 @@ export const FORM_FLOW_WORDS = {
   name: 'Name',
   priorityTitle: 'How much does it matter?',
   priority: 'How much it matters',
+  groupTitle: 'Does it belong in a group?',
+  group: 'Group',
+  noGroup: 'None',
+  newGroup: 'New group',
+  newGroupPlaceholder: 'Home, Subscriptions',
+  clearGroup: 'No group',
+  nameGroup: 'Name the group, or choose none.',
   emojiTitle: 'Pick an emoji, if you like',
   emoji: 'Emoji',
   noEmoji: 'None',
@@ -1266,6 +1273,62 @@ export const FIX_ROWS_SHOWN = 12;
 
 /** Rows any Runway list holds before it offers a search. */
 export const RUNWAY_SEARCH_THRESHOLD = 5;
+
+export const GROUP_WORDS = {
+  ungrouped: 'Other bills',
+  perMonth: (amount: string) => `${amount} a month`,
+  monthLabel: 'Together, each month',
+  openLabel: (name: string) => `${name}, open group`,
+  rename: 'Rename',
+  nameLabel: 'Name',
+  startingPriority: 'Starting priority',
+  startingPriorityHelp:
+    'A new bill in this group starts with this priority; with None, it starts at Should. You can still change it on the bill.',
+  startingPriorityFailed: 'The priority did not save. Nothing was changed.',
+  noPriority: 'None',
+  archive: 'Archive group',
+  archiveTitle: (name: string) => `Archive ${name}?`,
+  archiveBody: (count: number) =>
+    count === 0
+      ? 'It has no bills right now.'
+      : `Its ${count} ${count === 1 ? 'bill stays' : 'bills stay'} in your plan, without a group.`,
+  archived: (name: string, count: number) =>
+    count === 0
+      ? `Archived ${name}.`
+      : `Archived ${name}. Its ${count} ${count === 1 ? 'bill is' : 'bills are'} now without a group.`,
+  archivedToast: (name: string) => `Archived ${name}`,
+  addBill: 'Add a bill to this group',
+  inGroup: 'Group',
+  none: 'No group',
+  oneTimeNote: 'Not in monthly total',
+  noBills: 'No bills yet',
+  nameTaken: (name: string) => `There's already a group called ${name}.`,
+  oneTimeDue: (date: string) => `due ${date}`,
+  oneTimeCount: (count: number) => `in ${count} one-time bills`,
+  oneTimeLabel: 'Together, one-time',
+  moved: (bill: string, group: string) => `Moved ${bill} to ${group}`,
+  movedOut: (bill: string) => `Took ${bill} out of its group`,
+  willBe: (name: string) => `It will be in ${name}.`,
+  plusOneTime: (amount: string, count: number, due: string | null) =>
+    count === 1 && due !== null
+      ? `Plus ${amount} due ${due}`
+      : `Plus ${amount} in ${count} one-time bills`,
+  members: (names: readonly string[]) =>
+    names.length <= 4
+      ? names.join(', ')
+      : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
+  archiveFailed: 'The group did not archive. Nothing was changed.',
+  saveFailed: 'This did not save. Nothing was changed.',
+  basisTitle: 'How a month is worked out',
+  rangeTotal:
+    'A bill that varies counts at its low and its high amount, so the total is a range.',
+  basis:
+    'A usual month: each repeating bill at what it comes to in an average month. A one-time bill is not in it.',
+  uncounted: (count: number) =>
+    count === 1
+      ? 'One bill has no regular schedule, so it is not in this total.'
+      : `${count} bills have no regular schedule, so they are not in this total.`,
+} as const;
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {

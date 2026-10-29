@@ -37,7 +37,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
-import BillRow from '@apps/runway/components/BillRow';
+import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import GoalRow from '@apps/runway/components/GoalRow';
@@ -197,6 +197,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const versions = useAppSelector((state) => state.runway.versions);
   const lookahead = useDeferredLookahead(today, isLoaded);
   const [query, setQuery] = useState('');
+  const [openBillId, setOpenBillId] = useState<string | null>(null);
   const [folds, setFolds] = useState<Partial<Record<Priority, boolean>>>({});
   const [edit, setEdit] = useState<EditState | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -272,7 +273,6 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
           render: (reorder, isHighlighted) => (
             <BillRow
               key={item.id}
-              billId={item.id}
               bill={payload}
               payment={
                 (payments[item.id] ?? []).find(
@@ -280,7 +280,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                 ) ?? null
               }
               planStance={stance}
-              today={today}
+              onOpen={() => setOpenBillId(item.id)}
               detailOverride={
                 dueFirst.isFirst
                   ? PRIORITIES_WORDS.dueFirst(
@@ -1166,6 +1166,8 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     );
   }
 
+  const openBill = bills.find(({ item }) => item.id === openBillId);
+
   return (
     <Subview
       title={PRIORITIES_WORDS.title}
@@ -1274,6 +1276,21 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
           </div>
         )}
       </div>
+      {openBill && (
+        <BillSheet
+          key={openBill.item.id}
+          billId={openBill.item.id}
+          bill={openBill.version.payload}
+          payment={
+            (payments[openBill.item.id] ?? []).find(
+              (entry) => entry.dueOn >= today,
+            ) ?? null
+          }
+          planStance={stance}
+          today={today}
+          onClose={() => setOpenBillId(null)}
+        />
+      )}
     </Subview>
   );
 }
