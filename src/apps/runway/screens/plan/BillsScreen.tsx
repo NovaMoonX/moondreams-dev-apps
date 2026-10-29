@@ -22,7 +22,10 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { monthlyTotal } from '@apps/runway/engine/groups';
 import BillForm from '@apps/runway/forms/BillForm';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
-import { describeGroupLead } from '@apps/runway/utils/billText';
+import {
+  describeGroupLead,
+  getGroupMemberNames,
+} from '@apps/runway/utils/billText';
 import {
   selectBills,
   selectBillPayments,
@@ -91,7 +94,16 @@ function BillsScreen() {
           today,
         ),
         count: members.length,
-        names: members.map(({ payload }) => payload.name),
+        names: getGroupMemberNames(
+          members.map(({ payload, startsOn }) => ({
+            name: payload.name,
+            amount: payload.amount,
+            schedule: payload.timing.schedule,
+            startsOn,
+            ending: payload.ending,
+          })),
+          today,
+        ),
       };
     })
     .filter(({ rows }) => needle === '' || rows.length > 0);

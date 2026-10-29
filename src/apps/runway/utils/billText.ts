@@ -5,7 +5,8 @@ import {
   GROUP_WORDS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import type { GroupTotal } from '@apps/runway/engine/groups';
+import { monthlyTotal } from '@apps/runway/engine/groups';
+import type { GroupMember, GroupTotal } from '@apps/runway/engine/groups';
 import type { BillFundedBy, MoneyRange, Schedule } from '@apps/runway/types';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -36,6 +37,17 @@ export function describeGroupLead(total: GroupTotal, billCount: number) {
     rest: 'a month',
     isOneTime: false,
   };
+}
+
+/** The bill names a group's monthly figure stands for; every name only when none is counted (a group of one-time bills). */
+export function getGroupMemberNames(
+  members: readonly (GroupMember & { name: string })[],
+  today: number,
+) {
+  const counted = members.filter(
+    (member) => monthlyTotal([member], today).total.highCents > 0,
+  );
+  return (counted.length > 0 ? counted : members).map(({ name }) => name);
 }
 
 export function describeBillRepeat(kind: Schedule['kind']) {

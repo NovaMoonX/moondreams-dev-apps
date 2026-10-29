@@ -1245,9 +1245,9 @@ export const GROUP_WORDS = {
   nameLabel: 'Name',
   startingPriority: 'Starting priority',
   startingPriorityHelp:
-    'A new bill in this group starts with this priority. You can still change it on the bill.',
+    'A new bill in this group starts with this priority; with None, it starts at Should. You can still change it on the bill.',
   startingPriorityFailed: 'The priority did not save. Nothing was changed.',
-  noPriority: 'None (starts at Should)',
+  noPriority: 'None',
   archive: 'Archive group',
   archiveTitle: (name: string) => `Archive ${name}?`,
   archiveBody: (count: number) =>
