@@ -2141,13 +2141,13 @@ Pick how matching, plan resolution, schedule generation and the `dirtyFrom` help
 - `functions/src/apps/runway/sendReminders.ts`, `notificationText.ts`, `functions/README.md`
 - `scripts/checks/runwayNotifyText.ts`
 - `src/apps/runway/screens/more/NotificationsScreen.tsx`
-- `src/apps/runway/types.ts` (`PlanDoc.notify` keys `billDue`, `incomeToday`; sealed `notifyTimeZone`, `notifyHour`)
+- `src/apps/runway/types.ts` (`PlanDoc.notify` keys `billDue`, `incomeToday`, `cardDue`; sealed `notifyTimeZone`, `notifyHour`)
 - `firestore.rules`, `scripts/seeds/runway.ts`
 
 **Context:** Read the TDD's "Server-side Reconcile and Notifications" step 3, Invariant 14 and Decision 21.
 
 ### Description
-A person can turn on a push the day before a bill is due and on an income day. The text is fixed, with no amounts or names, and each push is sent once.
+A person can turn on a push the day before a bill is due, on an income day, and the day before a card is due while it still has money waiting (owner, card-first round: `cardDue`, needing the server-side balance from Issue 63). The text is fixed, with no amounts or names, and each push is sent once.
 
 ### Possible Approach
 1. `sendRunwayReminders` runs hourly, reads only plans with a switch on, and compares each plan's sealed `notifyTimeZone` and `notifyHour` (default 9:00 local) with its schedules.
