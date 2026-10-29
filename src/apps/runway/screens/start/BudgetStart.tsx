@@ -349,7 +349,9 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
       name: proposal.name,
       emoji: null,
       line:
-        proposal.cadence !== null && missing.includes('repeats')
+        proposal.cadence !== null &&
+        !proposal.cadence.writtenCents &&
+        missing.includes('repeats')
           ? BUDGET_WORDS.cadenceRow(
               proposal.cadence.words,
               toNeeds(proposal, missing),
