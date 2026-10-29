@@ -1128,7 +1128,7 @@ export const DAYS_WORDS = {
   emptyMonth: 'No income was confirmed in this month.',
   noMatch: 'No income day matches that.',
   readOnlyNote:
-    'This pay is from a finished month, so it stays as it was. To fix a balance, correct a recent pay.',
+    'A finished month stays as it was. Correct a recent pay to fix a balance.',
 } as const;
 
 export const PLAN_VIEW_EMOJI = {

@@ -5,6 +5,7 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 
 import EmptyCard from '@/components/EmptyCard';
+import InlineNotice from '@/components/InlineNotice';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
@@ -135,11 +136,6 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
             />
           )}
         </ActionGroup>
-        {!isCorrectable && (
-          <p className='text-muted-foreground text-sm'>
-            {DAYS_WORDS.readOnlyNote}
-          </p>
-        )}
       </div>
     );
   };
@@ -174,6 +170,9 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
               .join(', ')}
           </p>
         </div>
+        {!isCorrectable && (
+          <InlineNotice tone='info'>{DAYS_WORDS.readOnlyNote}</InlineNotice>
+        )}
         {getBody()}
       </div>
       {isCorrecting && isCorrectable && record && (

@@ -1,6 +1,5 @@
 import { useState } from 'react';
 
-import BackLink from '@/components/BackLink';
 import SearchInput from '@/components/SearchInput';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -25,11 +24,10 @@ const shortMonth = new Intl.DateTimeFormat('en-US', {
 
 interface EarlierDaysViewProps {
   month: string;
-  onBack: () => void;
 }
 
 /** The confirmed income days of one month before the recent window, read when it is chosen and only looked at. */
-function EarlierDaysView({ month, onBack }: EarlierDaysViewProps) {
+function EarlierDaysView({ month }: EarlierDaysViewProps) {
   const today = todayAsUtcDate(useNow(60_000));
   const { openDay } = useRunwayUrlState();
   const [query, setQuery] = useState('');
@@ -101,12 +99,7 @@ function EarlierDaysView({ month, onBack }: EarlierDaysViewProps) {
     );
   };
 
-  return (
-    <div className='space-y-3'>
-      <BackLink label={DAYS_WORDS.backToRecent} onBack={onBack} />
-      {getBody()}
-    </div>
-  );
+  return <div className='space-y-3'>{getBody()}</div>;
 }
 
 export default EarlierDaysView;

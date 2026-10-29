@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Banknote, CalendarDays } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
+import BackLink from '@/components/BackLink';
 import FloatingAction from '@/components/FloatingAction';
 import HelpTip from '@/components/HelpTip';
 import { PillGroup } from '@/components/PillGroup';
@@ -137,13 +138,7 @@ function DaysScreen() {
 
   const getBody = () => {
     if (earlierMonth !== null) {
-      return (
-        <EarlierDaysView
-          key={earlierMonth}
-          month={earlierMonth}
-          onBack={() => showDaysMonth(null)}
-        />
-      );
+      return <EarlierDaysView key={earlierMonth} month={earlierMonth} />;
     }
     if (!isLoaded) {
       return (
@@ -233,6 +228,12 @@ function DaysScreen() {
     <div className='space-y-4'>
       <div className='flex min-h-10 items-center justify-between gap-2'>
         <div className='min-w-0 flex-1'>
+          {earlierMonth !== null && (
+            <BackLink
+              label={DAYS_WORDS.backToRecent}
+              onBack={() => showDaysMonth(null)}
+            />
+          )}
           {earlierMonth === null && lookahead && days.length > 0 && (
             <HoldsThroughLine
               lookahead={lookahead}

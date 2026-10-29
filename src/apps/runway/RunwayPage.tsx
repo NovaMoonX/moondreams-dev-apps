@@ -26,6 +26,7 @@ import TrackingScreen from '@apps/runway/screens/plan/TrackingScreen';
 import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PlanScreen from '@apps/runway/screens/plan/PlanScreen';
 import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
+import { getDayKeyMonth } from '@apps/runway/utils/historyWindow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import { HISTORY_WORDS, RUNWAY_TAB_LABELS } from '@apps/runway/constants';
@@ -132,6 +133,7 @@ function RunwayContent() {
     showTab,
     openDayKey,
     closeDay,
+    showDaysMonth,
     moreEntry,
     closeMoreEntry,
     view,
@@ -159,6 +161,17 @@ function RunwayContent() {
       selectIsDayOlderThanRecent(state, openDayKey) &&
       state.runway.historyFor === null,
   );
+  const isOpenDayOlder = useAppSelector(
+    (state) =>
+      openDayKey !== null && selectIsDayOlderThanRecent(state, openDayKey),
+  );
+  // An older day takes the place of its month's view in history, so closing it returns there.
+  const closeOpenDay = () => {
+    const month =
+      isOpenDayOlder && openDayKey !== null ? getDayKeyMonth(openDayKey) : null;
+    closeDay();
+    if (month !== null) showDaysMonth(month);
+  };
   const level = useAppSelector(selectLevel);
   const activeTab =
     requestedTab === 'spend' && level === 'plan' ? 'home' : requestedTab;
@@ -326,7 +339,7 @@ function RunwayContent() {
   ) {
     return (
       <div>
-        <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />
+        <IncomeDayScreen dayKey={openDayKey} onClose={closeOpenDay} />
       </div>
     );
   }
