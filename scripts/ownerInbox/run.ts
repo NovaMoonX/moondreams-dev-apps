@@ -49,6 +49,15 @@ const api = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
   return (await response.json()) as T;
 };
 
+/** Every page of a list endpoint, 100 at a time. */
+const apiAll = async <T>(path: string, page = 1): Promise<T[]> => {
+  const join = path.includes('?') ? '&' : '?';
+  const items = await api<T[]>(`${path}${join}per_page=100&page=${page}`);
+  return items.length < 100
+    ? items
+    : [...items, ...(await apiAll<T>(path, page + 1))];
+};
+
 interface ApiPull {
   number: number;
   title: string;
@@ -69,6 +78,7 @@ interface ApiCheckRuns {
 }
 interface ApiIssue {
   number: number;
+  state: string;
   body: string | null;
   node_id: string;
   pull_request?: unknown;
@@ -82,12 +92,12 @@ const getCi = async (sha: string): Promise<CiState> => {
 };
 
 const readPr = async (pull: ApiPull): Promise<InboxPr> => {
-  const comments = await api<ApiComment[]>(
-    `/repos/${repo}/issues/${pull.number}/comments?per_page=100`,
+  const comments = await apiAll<ApiComment>(
+    `/repos/${repo}/issues/${pull.number}/comments`,
   );
-  const status = comments.find(
+  const status = comments.findLast(
     (comment) =>
-      comment.body.includes(STATUS_MARKER) &&
+      comment.body.trimStart().startsWith(STATUS_MARKER) &&
       TRUSTED.has(comment.author_association),
   );
   return {
@@ -105,26 +115,28 @@ const readPr = async (pull: ApiPull): Promise<InboxPr> => {
 };
 
 const readOpenPrs = async (): Promise<InboxPr[]> => {
-  const pulls = await api<ApiPull[]>(
-    `/repos/${repo}/pulls?state=open&per_page=100`,
-  );
+  const pulls = await apiAll<ApiPull>(`/repos/${repo}/pulls?state=open`);
   const own = pulls.filter((pull) => pull.head.repo?.full_name === repo);
-  return Promise.all(own.map(readPr));
+  // One PR at a time keeps clear of GitHub's secondary rate limits.
+  return own.reduce<Promise<InboxPr[]>>(
+    async (done, pull) => [...(await done), await readPr(pull)],
+    Promise.resolve([]),
+  );
 };
 
 const writeInbox = async (body: string) => {
-  const issues = await api<ApiIssue[]>(
-    `/repos/${repo}/issues?state=open&labels=${INBOX_LABEL}&per_page=10`,
+  const issues = await apiAll<ApiIssue>(
+    `/repos/${repo}/issues?state=all&labels=${INBOX_LABEL}`,
   );
   const found = issues.find(
     (issue) => !issue.pull_request && issue.body?.includes(INBOX_MARKER),
   );
   if (found) {
-    if (found.body === body)
+    if (found.body === body && found.state === 'open')
       return console.log(`#${found.number} is already current`);
     await api(`/repos/${repo}/issues/${found.number}`, {
       method: 'PATCH',
-      body: JSON.stringify({ body }),
+      body: JSON.stringify({ body, state: 'open' }),
     });
     return console.log(`Updated #${found.number}`);
   }
@@ -141,16 +153,19 @@ const writeInbox = async (body: string) => {
     body: JSON.stringify({ title: INBOX_TITLE, body, labels: [INBOX_LABEL] }),
   });
   // Pinning needs GraphQL and a token allowed to pin; an unpinned inbox still works.
-  await api('/graphql', {
+  const pinned = await api<{ errors?: { message: string }[] }>('/graphql', {
     method: 'POST',
     body: JSON.stringify({
       query:
         'mutation($id: ID!) { pinIssue(input: { issueId: $id }) { issue { number } } }',
       variables: { id: created.node_id },
     }),
-  }).catch((error) =>
-    console.log(`::warning::Couldn't pin #${created.number}: ${error}`),
-  );
+  }).catch((error: Error) => ({ errors: [{ message: error.message }] }));
+  if (pinned.errors?.length) {
+    console.log(
+      `::warning::Couldn't pin #${created.number}, pin it by hand: ${pinned.errors[0].message}`,
+    );
+  }
   console.log(`Created #${created.number}`);
 };
 

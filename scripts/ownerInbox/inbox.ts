@@ -1,6 +1,10 @@
 export const STATUS_MARKER = '<!-- pr-status -->';
 export const INBOX_MARKER = '<!-- owner-inbox -->';
-const SESSION_MARKER = /<!--\s*session:\s*(\S+)\s*-->/;
+const SESSION_MARKER =
+  /<!--\s*session:\s*(https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)\s*-->/;
+const MAX_BODY = 60_000;
+const MAX_SHOTS = 8;
+const MAX_NOTES = 6;
 
 export type CiState = 'green' | 'red' | 'running' | 'none';
 
@@ -26,7 +30,9 @@ export function summarizeCi(runs: readonly CheckRun[]): CiState {
   ];
   if (latest.length === 0) return 'none';
   const isFailed = (run: CheckRun) =>
-    ['failure', 'timed_out', 'action_required'].includes(run.conclusion ?? '');
+    ['failure', 'timed_out', 'action_required', 'startup_failure'].includes(
+      run.conclusion ?? '',
+    );
   if (latest.some(isFailed)) return 'red';
   return latest.some((run) => run.status !== 'completed') ? 'running' : 'green';
 }
@@ -76,15 +82,24 @@ const section = (body: string, name: string): string[] => {
   return end === -1 ? rest : rest.slice(0, end);
 };
 
+/** Text from a comment, made safe to place in markdown: no HTML, and no @mention that would ping someone on every rebuild. */
+export const toPlain = (text: string) =>
+  text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/@(?=\w)/g, '@\u200b');
+
 const bullet = (line: string) =>
-  line
-    .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
-    .replace(/\s*\(who:[^)]*\)\s*$/i, '')
-    .trim();
+  toPlain(
+    line
+      .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
+      .replace(/\s*\(who:[^)]*\)/i, '')
+      .trim(),
+  );
 
 const isOpenBox = (line: string) => /^\s*[-*]\s+\[ \]/.test(line);
-const isForOwner = (line: string) =>
-  /\(who:[^)]*\bowner\b[^)]*\)\s*$/i.test(line);
+const isForOwner = (line: string) => /\(who:[^)]*\bowner\b[^)]*\)/i.test(line);
 
 /** Reads a PR's `📋 Status` comment: its session, state, unchecked owner items, good-to-know notes and latest screenshots. */
 export function parseStatus(body: string, updatedAt: string): PrStatus {
@@ -93,10 +108,10 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     /^\s*\*\*Session:\*\*/.test(line),
   );
   const sessionTitle = titleLine
-    ? titleLine.replace(/^\s*\*\*Session:\*\*\s*/, '').trim() || null
+    ? toPlain(titleLine.replace(/^\s*\*\*Session:\*\*\s*/, '').trim()) || null
     : null;
   const heading = lines(body).find((line) => /^##\s+📋\s*Status/.test(line));
-  const state = heading?.split('·')[1]?.trim() || null;
+  const state = toPlain(heading?.split('·')[1]?.trim() ?? '') || null;
   const ownerItems = lines(body)
     .filter((line) => isOpenBox(line) && isForOwner(line))
     .map(bullet);
@@ -105,7 +120,7 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     .map(bullet);
   const screenshots = section(body, 'New screenshots')
     .join(' ')
-    .match(/https:\/\/[^\s)"'<>]+/g);
+    .match(/https:\/\/[^\s)"'<>`]+/g);
   return {
     sessionUrl,
     sessionTitle,
@@ -185,12 +200,11 @@ const describeStanding = (session: Session) => {
 const isStacked = (session: Session) =>
   session.prs.some((pr) => session.prs.some((other) => other.head === pr.base));
 
-const escapeHtml = (text: string) =>
-  text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const linkText = (text: string) => toPlain(text).replace(/[[\]]/g, '\\$&');
 
 /** Markdown for the switchboard list; HTML inside a `<summary>`, where GitHub renders no markdown. */
 const switchboardLine = (session: Session, isHtml = false) => {
-  const title = escapeHtml(session.title);
+  const title = session.title;
   const link = isHtml
     ? `<a href="${session.url}">${title}</a>`
     : `[${title}](${session.url})`;
@@ -224,7 +238,7 @@ const prLine = (pr: InboxPr, all: readonly InboxPr[]) => {
   const outside = all.find((other) => other.head === pr.base);
   const onTop = outside ? ` · on top of #${outside.number}` : '';
   const state = pr.status?.state ? ` · ${pr.status.state}` : '';
-  return `[#${pr.number}](${pr.url}) ${pr.title}${state} · ${flags.join(' · ')}${onTop}`;
+  return `[#${pr.number}](${pr.url}) ${linkText(pr.title)}${state} · ${flags.join(' · ')}${onTop}`;
 };
 
 /** The session's PRs as nested bullets: each under the PR whose branch it targets, so the merge order reads top down. */
@@ -250,15 +264,24 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
       (item) => `- [#${pr.number}](${pr.url}) ${item}`,
     ),
   );
-  const shots = session.prs.flatMap((pr) =>
+  const allShots = session.prs.flatMap((pr) =>
     (pr.status?.screenshots ?? []).map(
       (src) =>
         `<a href="${pr.url}"><img src="${src}" width="120" alt="#${pr.number}"></a>`,
     ),
   );
-  const notes = session.prs.flatMap((pr) =>
+  const shots = allShots.slice(0, MAX_SHOTS);
+  const allNotes = session.prs.flatMap((pr) =>
     (pr.status?.goodToKnow ?? []).map((note) => `- #${pr.number}: ${note}`),
   );
+  const notes = [
+    ...allNotes.slice(0, MAX_NOTES),
+    ...(allNotes.length > MAX_NOTES
+      ? [
+          `- and ${allNotes.length - MAX_NOTES} more in the PRs' status comments`,
+        ]
+      : []),
+  ];
   const isOpen = getStanding(session) === 'needsYou';
   return [
     `<details${isOpen ? ' open' : ''}><summary>${switchboardLine(session, true)}</summary>`,
@@ -268,7 +291,15 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
     ...stackTree(session, all),
     '',
     ...(shots.length > 0
-      ? ['**New screenshots**', '', shots.join(' '), '']
+      ? [
+          '**New screenshots**',
+          '',
+          shots.join(' '),
+          ...(allShots.length > MAX_SHOTS
+            ? ['', `and ${allShots.length - MAX_SHOTS} more in the PRs`]
+            : []),
+          '',
+        ]
       : []),
     ...(notes.length > 0
       ? [
@@ -296,7 +327,7 @@ export function groupSessions(prs: readonly InboxPr[]): Session[] {
     const title =
       pr.status?.sessionTitle ??
       found?.title ??
-      (key === 'none' ? 'Without a status comment' : pr.title);
+      (key === 'none' ? 'Without a status comment' : linkText(pr.title));
     return new Map(acc).set(key, {
       key,
       title,
@@ -309,7 +340,8 @@ export function groupSessions(prs: readonly InboxPr[]): Session[] {
       Number(a.key === 'none') - Number(b.key === 'none') ||
       STANDING_ORDER.indexOf(getStanding(a)) -
         STANDING_ORDER.indexOf(getStanding(b)) ||
-      (latestUpdate(b) > latestUpdate(a) ? 1 : -1),
+      latestUpdate(b).localeCompare(latestUpdate(a)) ||
+      a.key.localeCompare(b.key),
   );
 }
 
@@ -324,7 +356,8 @@ export function buildInbox(prs: readonly InboxPr[], now: string): string {
           sessions.filter((session) => ownerCount(session) > 0).length,
           'session',
         )}.`;
-  return [
+  const footer = `<sub>Rebuilt ${formatWhen(now)} from each open PR's 📋 Status comment by \`owner-inbox.yml\`. Don't edit by hand.</sub>`;
+  const top = [
     INBOX_MARKER,
     `## 📥 ${headline}`,
     '',
@@ -332,7 +365,24 @@ export function buildInbox(prs: readonly InboxPr[], now: string): string {
     '',
     '---',
     '',
-    ...sessions.flatMap((session) => sessionBlock(session, prs)),
-    `<sub>Rebuilt ${formatWhen(now)} from each open PR's 📋 Status comment by \`owner-inbox.yml\`. Don't edit by hand.</sub>`,
-  ].join('\n');
+  ];
+  // GitHub refuses an issue body over 65,536 characters, so whole sessions are dropped from the end, never cut mid-block.
+  const blocks = sessions.map((session) =>
+    sessionBlock(session, prs).join('\n'),
+  );
+  const kept = blocks.reduce<string[]>(
+    (acc, block) =>
+      [...top, ...acc, block, footer].join('\n').length > MAX_BODY
+        ? acc
+        : [...acc, block],
+    [],
+  );
+  const dropped =
+    blocks.length > kept.length
+      ? [
+          `${plural(blocks.length - kept.length, 'more session')} didn't fit; open the PRs list.`,
+          '',
+        ]
+      : [];
+  return [...top, ...kept, ...dropped, footer].join('\n');
 }

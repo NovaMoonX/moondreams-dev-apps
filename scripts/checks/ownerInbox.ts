@@ -11,7 +11,7 @@ import {
 } from '../ownerInbox/inbox.ts';
 
 const status = (session: string, extra: string) => `<!-- pr-status -->
-<!-- session: https://claude.ai/code/${session} -->
+<!-- session: https://claude.ai/code/session_${session} -->
 ## 📋 Status · ready when you are · abc1234
 **Session:** Runway cards
 
@@ -20,7 +20,7 @@ const status = (session: string, extra: string) => `<!-- pr-status -->
 - [x] Fix the red check. (who: you)
 
 **Should do**
-- [ ] Decide where Back sits. (who: owner)
+- [ ] Decide where Back sits (who: owner), see the screenshots
 - [ ] A flaky speed budget. (who: me, later)
 ${extra}
 **Last verified:** abc1234 · CI green`;
@@ -37,13 +37,13 @@ const parsed = parseStatus(
   ),
   '2026-10-29T16:20:00Z',
 );
-assert.equal(parsed.sessionUrl, 'https://claude.ai/code/s1');
+assert.equal(parsed.sessionUrl, 'https://claude.ai/code/session_s1');
 assert.equal(parsed.sessionTitle, 'Runway cards');
 assert.equal(parsed.state, 'ready when you are');
 assert.deepEqual(
   parsed.ownerItems,
-  ['Merge #1 first.', 'Decide where Back sits.'],
-  'only unchecked owner items, without their (who:) tag',
+  ['Merge #1 first.', 'Decide where Back sits, see the screenshots'],
+  'only unchecked owner items, without their (who:) tag, text after it kept',
 );
 assert.deepEqual(parsed.goodToKnow, ['Nothing that writes was driven.']);
 assert.equal(parsed.screenshots.length, 2, 'every screenshot URL on the line');
@@ -76,7 +76,7 @@ const pr = (
 });
 
 const quiet = `<!-- pr-status -->
-<!-- session: https://claude.ai/code/s2 -->
+<!-- session: https://claude.ai/code/session_s2 -->
 ## 📋 Status · in progress · def5678
 **Session:** Pinch voice
 `;
@@ -111,11 +111,11 @@ assert.match(
 );
 assert.match(
   inbox,
-  /<details open><summary><b><a href="https:\/\/claude.ai\/code\/s1">Runway cards/,
+  /<details open><summary><b><a href="https:\/\/claude.ai\/code\/session_s1">Runway cards/,
 );
 assert.match(
   inbox,
-  /<details><summary><b><a href="https:\/\/claude.ai\/code\/s2">Pinch voice<\/a><\/b> · ⏳ in progress/,
+  /<details><summary><b><a href="https:\/\/claude.ai\/code\/session_s2">Pinch voice<\/a><\/b> · ⏳ in progress/,
   'a session that needs nothing stays folded',
 );
 assert.match(inbox, /Without a status comment<\/b> · nobody is driving these/);
@@ -181,5 +181,23 @@ assert.equal(
   'red',
 );
 assert.equal(summarizeCi([]), 'none');
+
+const unsafe = parseStatus(
+  `<!-- pr-status -->
+<!-- session: https://evil.example/" onclick="x -->
+- [ ] Ask @someone about <details> (who: owner)
+`,
+  '',
+);
+assert.equal(
+  unsafe.sessionUrl,
+  null,
+  'only a Claude session link is a session',
+);
+assert.equal(
+  unsafe.ownerItems[0],
+  'Ask @\u200bsomeone about &lt;details&gt;',
+  'no HTML and no mention that pings on every rebuild',
+);
 
 console.log('owner inbox: ok');

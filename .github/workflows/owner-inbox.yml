@@ -10,6 +10,7 @@ on:
       [
         opened,
         reopened,
+        synchronize,
         closed,
         ready_for_review,
         converted_to_draft,
@@ -30,12 +31,16 @@ permissions:
   issues: write
 concurrency:
   group: owner-inbox
-  cancel-in-progress: true
+  # Not cancelling: a run for an ignored event (any other comment) would otherwise cancel a real rebuild before its job is skipped.
+  cancel-in-progress: false
 jobs:
   owner-inbox:
+    # A fork's PR gets a read-only token, so only this repo's PRs rebuild on their own events.
     if: >-
-      github.event_name != 'issue_comment' ||
-      (github.event.issue.pull_request && contains(github.event.comment.body, '<!-- pr-status -->'))
+      (github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request && contains(github.event.comment.body, '<!-- pr-status -->'))) &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
