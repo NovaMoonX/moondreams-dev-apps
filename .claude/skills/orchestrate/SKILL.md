@@ -87,11 +87,14 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 - <what you would do next, or suggest the owner does: a decision to make, a device to try it on, the next issue>
 
 **Where this sits**
-| Issue | PR | State |
-|---|---|---|
-| <App> 3: … (#123) | #456 | ✅ merged |
-| <App> 4: … (#124) | this PR | 🔨 in review |
-| <App> 5: … (#125) | – | ⏭ next |
+| Merge | Issue | PR | State |
+|---|---|---|---|
+| – | <App> 3: … (#123) | #456 | ✅ merged |
+| 1st | <App> 4: … (#124) | this PR | ✅ ready |
+| 2nd | <App> 5: … (#125) | #457 | ✅ ready |
+| – | <App> 6: … (#126) | – | ⏭ next |
+
+**Merge order:** <one line on why this order: smallest and least shared first; a PR whose code another builds on before it; the one touching shared files last; or "stacked: bottom first">
 
 **Pipeline proposals** (only when there are any; `docs/conventions/pipeline.md` "The pipeline improves itself")
 - <a change to a skill, hook, agent or convention you aren't sure the owner wants: the change, the evidence, the cost either way>
@@ -100,4 +103,6 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 **Last verified:** <sha> · CI <green/red> · base <up to date / N behind / conflicts> · review <S/M/L, who> · <date>
 ```
 
-"Where this sits" lists the app's planned issues around this one (from `ISSUES.md` and the board: the issue before, this one, the next two, and any open issue this PR blocks or is blocked by), so the owner sees the plan and the progress at once. "Must do" holds only what blocks the merge and isn't a given: never "mark it ready for review", "merge it", "approve it" or anything else every PR needs. An empty one says "Nothing: ready when you are". Anything checkable after the merge (a workflow run, a label landing) is yours: check it when the merge event wakes you and report it, never a "check after merge" line for the owner. Use the GitHub MCP tools (`add_issue_comment`, `update_issue_comment`) or `gh`, and end the comment with the attribution footer.
+"Where this sits" lists the app's planned issues around this one (from `ISSUES.md` and the board: the issue before, this one, the next two, and any open issue this PR blocks or is blocked by), so the owner sees the plan and the progress at once. When a run has several open PRs that are not stacked, the table carries a **merge order**, the same in every PR's comment: smaller and lighter first, a PR whose code another builds on before it, and the PRs that touch shared files or overlap most with the others last. After each merge, sync the rest at once (conflicts in docs and `constants.ts` are yours to resolve) and say in the next one's comment that it is current and green, so the owner can keep merging down the list.
+
+**The owner's PR comments are their feedback channel.** A comment or review left on any PR you drive (on a phone or a laptop; it persists, a chat draft does not) reaches you as a PR event: treat it as the owner's request, answer on its thread, fix and push as you would a chat message, and say in the status comment's "Since last update" what it changed. One comment that says it applies to several PRs is acted on in each. On every wake and when you take a PR over, read the comments and review threads newer than the last status comment, so feedback left while you were away is never missed. "Must do" holds only what blocks the merge and isn't a given: never "mark it ready for review", "merge it", "approve it" or anything else every PR needs. An empty one says "Nothing: ready when you are". Anything checkable after the merge (a workflow run, a label landing) is yours: check it when the merge event wakes you and report it, never a "check after merge" line for the owner. Use the GitHub MCP tools (`add_issue_comment`, `update_issue_comment`) or `gh`, and end the comment with the attribution footer.
