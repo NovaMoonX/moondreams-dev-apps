@@ -502,12 +502,6 @@ function PurchaseForm({
       await addPurchase(user.uid, encryption, input);
       addToast({
         title: isRefund ? 'Refund added' : 'Purchase added',
-        description: [
-          `${formatCents(amount)} ${isRefund ? 'back to' : 'from'} ${describeEnvelopes(lines, nameOf)}.`,
-          effect && effect.over.length > 0 ? 'Free to spend dropped.' : null,
-        ]
-          .filter(Boolean)
-          .join(' '),
         type: 'success',
       });
       onClose();
@@ -801,7 +795,6 @@ function PurchaseForm({
       <QuestionFlow flow={questions} />
       {questions.hasReviewed && (
         <div className='space-y-3'>
-          {effectNote}
           {EXTRAS.map(
             ({ key, words, maxLength }) =>
               extras[key] !== null && (
@@ -835,6 +828,7 @@ function PurchaseForm({
               </RevealChip>
             ))}
           </div>
+          {effectNote}
         </div>
       )}
       <ModalFooterActions

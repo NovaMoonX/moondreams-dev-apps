@@ -74,9 +74,7 @@ function PurchaseEffectNotice({
         {rest > 0 && (
           <p className='text-muted-foreground mt-1'>and {rest} more</p>
         )}
-        {freeDropCents !== 0 && !isHidden && (
-          <p className='text-muted-foreground mt-1'>{freeLine}</p>
-        )}
+        {freeDropCents !== 0 && !isHidden && <p className='mt-1'>{freeLine}</p>}
       </InlineNotice>
     </div>
   );
