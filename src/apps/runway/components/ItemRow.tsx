@@ -59,6 +59,8 @@ interface ItemRowProps {
   tick?: { checked: boolean; onChange: (checked: boolean) => void };
   /** Replaces the chevron and the sheet with the controls for placing the row. */
   reorder?: ItemRowReorder;
+  /** Just moved by a saved reorder: the row is highlighted for a moment. */
+  isHighlighted?: boolean;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -78,6 +80,7 @@ function ItemRow({
   hiddenAriaLabel,
   tick,
   reorder,
+  isHighlighted = false,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const ariaLabel =
@@ -286,7 +289,12 @@ function ItemRow({
   }
 
   return (
-    <li className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'>
+    <li
+      className={join(
+        'first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl',
+        isHighlighted && 'bg-accent',
+      )}
+    >
       <Button
         type='button'
         variant='tertiary'

@@ -21,6 +21,7 @@ interface BillRowProps {
   /** Said in the row's one line in place of the due date. */
   detailOverride?: string | null;
   reorder?: ItemRowReorder;
+  isHighlighted?: boolean;
 }
 
 const getDueLine = (payment: BillPayment | null) => {
@@ -50,6 +51,7 @@ function BillRow({
   today,
   detailOverride = null,
   reorder,
+  isHighlighted = false,
 }: BillRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const stance = effectiveStance(planStance, bill.stanceOverride);
@@ -83,6 +85,7 @@ function BillRow({
         ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}
         onOpen={reorder ? undefined : () => setIsOpen(true)}
         reorder={reorder}
+        isHighlighted={isHighlighted}
       />
       {isOpen && (
         <ItemSheet

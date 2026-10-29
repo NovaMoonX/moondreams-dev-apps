@@ -30,6 +30,7 @@ interface EnvelopeTileProps {
   /** A tile on Home (the figure large, two to a row) or a row in a list. */
   look?: 'row' | 'tile';
   reorder?: ItemRowReorder;
+  isHighlighted?: boolean;
 }
 
 const capitalize = (text: string) =>
@@ -44,6 +45,7 @@ function EnvelopeTile({
   today,
   look = 'row',
   reorder,
+  isHighlighted = false,
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -115,6 +117,7 @@ function EnvelopeTile({
           ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
+          isHighlighted={isHighlighted}
         />
       )}
       {isOpen && (

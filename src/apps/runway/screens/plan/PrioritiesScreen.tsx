@@ -4,6 +4,7 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type MouseEvent,
   type ReactNode,
 } from 'react';
 import {
@@ -14,7 +15,6 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import BackLink from '@/components/BackLink';
@@ -58,6 +58,7 @@ import {
   orderPriorities,
   planReorder,
   reconcileWorking,
+  type PriorityAssignment,
   type PriorityItem,
   type PrioritySection,
 } from '@apps/runway/engine/priorities';
@@ -100,6 +101,8 @@ const ESTIMATED_ROW_HEIGHT = 69;
 const ESTIMATED_EDIT_ROW_HEIGHT = 45;
 const ESTIMATED_SLOT_HEIGHT = 29;
 const UNFOLDED_TOTAL = 12;
+const CONFIRM_TAP_DELAY_MS = 500;
+const RESTORED_SHOWN_MS = 2500;
 
 type Tiers = Record<Priority, string[]>;
 
@@ -112,6 +115,18 @@ interface EditState {
   step: 'edit' | 'confirm';
 }
 
+/** The last saved order, kept so one Undo can write the previous ranks back. */
+interface SavedOrder {
+  restore: PriorityAssignment[];
+  /** What the save wrote, so Undo leaves alone an item changed again since. */
+  written: PriorityAssignment[];
+  summary: string;
+  detail: string;
+  movedIds: string[];
+  status: 'saved' | 'undoing' | 'restored';
+  error: string | null;
+}
+
 type RankedVersion = Extract<
   OpenVersion,
   { kind: 'bill' | 'envelope' | 'goal' }
@@ -119,7 +134,10 @@ type RankedVersion = Extract<
 
 interface Entry {
   name: string;
-  render: (reorder: ItemRowReorder | undefined) => ReactNode;
+  render: (
+    reorder: ItemRowReorder | undefined,
+    isHighlighted?: boolean,
+  ) => ReactNode;
 }
 
 type Unit =
@@ -185,8 +203,10 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flashId, setFlashId] = useState<string | null>(null);
-  const { addToast } = useToast();
+  const [flashedIds, setFlashedIds] = useState<string[]>([]);
+  const [saved, setSaved] = useState<SavedOrder | null>(null);
   const isSavingRef = useRef(false);
+  const confirmShownAtRef = useRef(0);
   const cutRef = useRef<HTMLDivElement | null>(null);
   const hasScrolledRef = useRef(false);
 
@@ -250,7 +270,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         item.id,
         {
           name: payload.name,
-          render: (reorder) => (
+          render: (reorder, isHighlighted) => (
             <BillRow
               key={item.id}
               billId={item.id}
@@ -273,6 +293,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                   : null
               }
               reorder={reorder}
+              isHighlighted={isHighlighted}
             />
           ),
         },
@@ -282,7 +303,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       item.id,
       {
         name: version.payload.name,
-        render: (reorder) => (
+        render: (reorder, isHighlighted) => (
           <EnvelopeTile
             key={item.id}
             itemId={item.id}
@@ -291,6 +312,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
             today={today}
             reorder={reorder}
+            isHighlighted={isHighlighted}
           />
         ),
       },
@@ -299,7 +321,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       item.id,
       {
         name: version.payload.name,
-        render: (reorder) => (
+        render: (reorder, isHighlighted) => (
           <GoalRow
             key={item.id}
             goalId={item.id}
@@ -308,6 +330,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             heldCents={heldByItem[item.id] ?? 0}
             today={today}
             reorder={reorder}
+            isHighlighted={isHighlighted}
           />
         ),
       },
@@ -436,10 +459,20 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
 
   const step = edit?.step;
   useEffect(() => {
-    if (step === 'confirm') window.scrollTo({ top: 0 });
+    if (step !== 'confirm') return;
+    confirmShownAtRef.current = performance.now();
+    window.scrollTo({ top: 0 });
   }, [step]);
 
+  const savedStatus = saved?.status;
+  useEffect(() => {
+    if (savedStatus !== 'restored') return;
+    const timer = window.setTimeout(() => setSaved(null), RESTORED_SHOWN_MS);
+    return () => window.clearTimeout(timer);
+  }, [savedStatus]);
+
   const startEdit = () => {
+    setSaved(null);
     setEdit({
       working: Object.fromEntries(
         order.sections.map((section) => [
@@ -462,6 +495,12 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     const timer = window.setTimeout(() => setFlashId(null), 1600);
     return () => window.clearTimeout(timer);
   }, [flashId]);
+
+  useEffect(() => {
+    if (flashedIds.length === 0) return;
+    const timer = window.setTimeout(() => setFlashedIds([]), 1600);
+    return () => window.clearTimeout(timer);
+  }, [flashedIds]);
 
   const getPlacedNote = (itemId: string, tier: Priority, list: string[]) => {
     const index = list.indexOf(itemId);
@@ -557,13 +596,90 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         summary,
         effectiveFrom: today,
       });
-      addToast({ title: savedText, type: 'success' });
+      setSaved({
+        restore: assignments.flatMap((assignment) => {
+          const before = itemById.get(assignment.itemId);
+          return before === undefined
+            ? []
+            : [
+                {
+                  itemId: before.itemId,
+                  tier: before.tier,
+                  orderIndex: before.orderIndex,
+                },
+              ];
+        }),
+        written: assignments,
+        summary,
+        detail: savedText,
+        movedIds: [...movedIds],
+        status: 'saved',
+        error: null,
+      });
+      setFolds((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          PRIORITIES.filter((tier) =>
+            live[tier].some((id) => movedIds.has(id)),
+          ).map((tier) => [tier, true]),
+        ),
+      }));
+      setFlashedIds([...movedIds]);
       setEdit(null);
     } catch (saveError) {
       setError(getErrorMessage(saveError, PRIORITIES_WORDS.saveFailed));
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
+    }
+  };
+
+  const saveFromConfirm = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.timeStamp - confirmShownAtRef.current < CONFIRM_TAP_DELAY_MS)
+      return;
+    void save();
+  };
+
+  const undo = async () => {
+    if (isSavingRef.current || !user || saved === null) return;
+    if (saved.status !== 'saved') return;
+    const restore = saved.restore.filter(({ itemId }) => {
+      const now = itemById.get(itemId);
+      const written = saved.written.find((entry) => entry.itemId === itemId);
+      return (
+        now !== undefined &&
+        written !== undefined &&
+        now.tier === written.tier &&
+        now.orderIndex === written.orderIndex
+      );
+    });
+    if (restore.length === 0) {
+      setSaved({ ...saved, error: PRIORITIES_WORDS.undoStale });
+      return;
+    }
+    isSavingRef.current = true;
+    setSaved({ ...saved, status: 'undoing', error: null });
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      await reorderItems(user.uid, encryption, {
+        moves: buildMoves(
+          restore,
+          store.getState().runway.versions as RankedVersion[],
+          today,
+        ),
+        summary: PRIORITIES_WORDS.undid(saved.summary),
+        effectiveFrom: today,
+      });
+      setSaved({ ...saved, status: 'restored', error: null });
+      setFlashedIds(saved.movedIds);
+    } catch (undoError) {
+      setSaved({
+        ...saved,
+        status: 'saved',
+        error: getErrorMessage(undoError, PRIORITIES_WORDS.undoFailed),
+      });
+    } finally {
+      isSavingRef.current = false;
     }
   };
 
@@ -684,7 +800,8 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     if (unit.kind === 'slot') return renderSlot(unit);
     const entry = entries.get(unit.item.itemId);
     if (!entry) return null;
-    if (live === null) return entry.render(undefined);
+    if (live === null)
+      return entry.render(undefined, flashedIds.includes(unit.item.itemId));
     const list = live[tier];
     const tierRank = PRIORITIES.indexOf(tier);
     const id = unit.item.itemId;
@@ -1045,7 +1162,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                   className='whitespace-nowrap max-sm:px-3'
                   loading={isSaving}
                   disabled={isSaving}
-                  onClick={() => void save()}
+                  onClick={saveFromConfirm}
                 >
                   {PRIORITIES_WORDS.confirmSave}
                 </Button>
@@ -1119,6 +1236,42 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                 >
                   {PRIORITIES_WORDS.save}
                 </Button>
+              }
+            />
+          </div>
+        )}
+        {edit === null && saved !== null && (
+          <div className={PINNED_FOOTER_CLASS}>
+            <ModalFooterActions
+              note={
+                saved.error ?? (
+                  <span className='[@media(max-height:500px)]:hidden'>
+                    {saved.status === 'restored' ? null : saved.detail}
+                  </span>
+                )
+              }
+              leftActions={
+                <span className='text-sm font-medium' role='status'>
+                  {saved.status === 'restored'
+                    ? PRIORITIES_WORDS.restored
+                    : PRIORITIES_WORDS.savedBar}
+                </span>
+              }
+              rightActions={
+                saved.status === 'restored' ? null : (
+                  <span className='flex justify-end'>
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      className='px-5 whitespace-nowrap'
+                      loading={saved.status === 'undoing'}
+                      disabled={saved.status === 'undoing'}
+                      onClick={() => void undo()}
+                    >
+                      {PRIORITIES_WORDS.undo}
+                    </Button>
+                  </span>
+                )
               }
             />
           </div>

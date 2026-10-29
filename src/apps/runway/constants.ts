@@ -1480,7 +1480,7 @@ export const PRIORITIES_WORDS = {
   endOf: (tier: string) => `End of ${tier}`,
   above: (name: string) => `Above ${name}`,
   below: (name: string) => `Below ${name}`,
-  saveNote: 'Save shows what changes first.',
+  saveNote: 'Review shows what changes first.',
   gainsMore: (name: string, figure: string | null, when: string) =>
     figure === null
       ? `${name} gets more on ${when}`
@@ -1495,7 +1495,7 @@ export const PRIORITIES_WORDS = {
   soonestSame: (day: string) => `The ${day} pay does not change.`,
   nothingChanges: 'Nothing changes on the coming pays.',
   nothingChangesNote:
-    'The new order still applies whenever money runs short, so Save keeps it.',
+    'The new order still applies whenever money runs short, so Save new order keeps it.',
   placed: (name: string, where: string) => `Moved ${name} ${where}`,
   placedTop: (tier: string) => `to the top of ${tier}`,
   placedEnd: (tier: string) => `to the end of ${tier}`,
@@ -1508,10 +1508,17 @@ export const PRIORITIES_WORDS = {
   nowIn: (name: string, tier: string) => `${name} is now in ${tier}`,
   savedMany: 'Saved the new order',
   cancel: 'Cancel',
-  save: 'Save order',
+  save: 'Review new order',
   nothingMoved: 'Move an item to save a new order.',
   confirmTitle: 'Save this order?',
-  confirmSave: 'Save order',
+  confirmSave: 'Save new order',
+  savedBar: 'New order saved',
+  undo: 'Undo',
+  restored: 'Order restored',
+  undid: (summary: string) => `Undid: ${summary}`,
+  undoFailed: 'That did not undo. Your new order is still saved.',
+  undoStale:
+    'These items have been moved again since, so there is nothing to undo.',
   saveFailed: 'That did not save. Nothing was changed.',
   discardTitle: 'Discard the new order?',
   discardMessage: 'The items go back to where they were.',
