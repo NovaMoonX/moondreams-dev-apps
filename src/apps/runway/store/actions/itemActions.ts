@@ -23,6 +23,7 @@ import type {
   DateOnly,
   EnvelopeSealed,
   GoalSealed,
+  GroupSealed,
   Ending,
   MoneyRange,
   ItemKind,
@@ -215,24 +216,84 @@ export async function createEnvelope(
   return { envelopeId };
 }
 
+export interface CreateGroupInput {
+  group: GroupSealed;
+  /** The first day this group is in the plan. */
+  startDate: number;
+}
+
+/** The three documents that add a group, committed in the batch of the bill that names it. */
+async function buildGroupDocs(
+  encryption: RunwayEncryption,
+  { group, startDate }: CreateGroupInput,
+  now: number,
+) {
+  const groupId = generateUuid();
+  const changeId = generateUuid();
+  const [groupSealed, changeSealed] = await Promise.all([
+    sealJson(group, encryption),
+    sealJson<ChangeSealed>(
+      { summary: `Added the group ${group.name}.` },
+      encryption,
+    ),
+  ]);
+  const header: PlanItemDoc = {
+    id: groupId,
+    kind: 'group',
+    parentId: null,
+    createdAt: now,
+    endedAt: null,
+    archivedAt: null,
+    heldReleasedOn: null,
+  };
+  const version: PlanVersionDoc = {
+    id: generateUuid(),
+    itemId: groupId,
+    kind: 'group',
+    createdAt: now,
+    effectiveFrom: startDate,
+    effectiveUntil: null,
+    changeId,
+    sealed: groupSealed,
+  };
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: startDate,
+    itemIds: [groupId],
+    sealed: changeSealed,
+  };
+  return { groupId, header, version, change };
+}
+
 export interface CreateBillInput {
   bill: BillSealed;
   /** The first day this bill is in the plan. */
   startDate: number;
+  /** A group the person named while adding the bill; it is written in the same batch and the bill joins it. */
+  newGroup?: GroupSealed | null;
 }
 
 /**
- * Adds a bill as a header, a first version and one change entry in a single batch. Items and
- * versions are created and never updated; nothing is written to `days`.
+ * Adds a bill as a header, a first version and one change entry in a single batch, with the new
+ * group's three documents beside them when the bill names one. Items and versions are created and
+ * never updated; nothing is written to `days`.
  */
 export async function createBill(
   uid: string,
   encryption: RunwayEncryption,
-  { bill, startDate }: CreateBillInput,
+  { bill: draftBill, startDate, newGroup = null }: CreateBillInput,
 ): Promise<{ billId: string }> {
   const now = Date.now();
   const billId = generateUuid();
   const changeId = generateUuid();
+  const groupDocs = newGroup
+    ? await buildGroupDocs(encryption, { group: newGroup, startDate }, now)
+    : null;
+  const bill: BillSealed = groupDocs
+    ? { ...draftBill, groupId: groupDocs.groupId }
+    : draftBill;
   const changePayload: ChangeSealed = {
     summary: `Added ${bill.name}, ${formatRange(bill.amount)}. ${describeBillTiming(bill.timing.schedule)}.`,
   };
@@ -271,6 +332,14 @@ export async function createBill(
   };
 
   const batch = writeBatch(db);
+  if (groupDocs) {
+    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
+    batch.set(
+      itemPath(uid, 'versions', groupDocs.version.id),
+      groupDocs.version,
+    );
+    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
+  }
   batch.set(itemPath(uid, 'items', billId), header);
   batch.set(itemPath(uid, 'versions', version.id), version);
   batch.set(itemPath(uid, 'changes', changeId), change);
@@ -356,6 +425,8 @@ export interface ChangeItemInput {
   effectiveFrom: number;
   /** The first day the change no longer covers, so the version before it returns; null lasts until superseded. */
   effectiveUntil?: number | null;
+  /** A group the person named while changing a bill; it is written in the same batch and the bill joins it. */
+  newGroup?: GroupSealed | null;
 }
 
 /**
@@ -374,8 +445,19 @@ export async function changeItem(
     summary: input.summary,
     note: input.note,
   };
+  const groupDocs =
+    input.newGroup && input.kind === 'bill'
+      ? await buildGroupDocs(
+          encryption,
+          { group: input.newGroup, startDate: input.effectiveFrom },
+          now,
+        )
+      : null;
+  const payload: ItemPayload = groupDocs
+    ? { ...(input.payload as BillSealed), groupId: groupDocs.groupId }
+    : input.payload;
   const [versionSealed, changeSealed] = await Promise.all([
-    sealJson(input.payload, encryption),
+    sealJson(payload, encryption),
     sealJson(changePayload, encryption),
   ]);
   const version: PlanVersionDoc = {
@@ -397,6 +479,14 @@ export async function changeItem(
     sealed: changeSealed,
   };
   const batch = writeBatch(db);
+  if (groupDocs) {
+    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
+    batch.set(
+      itemPath(uid, 'versions', groupDocs.version.id),
+      groupDocs.version,
+    );
+    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
+  }
   batch.set(itemPath(uid, 'versions', version.id), version);
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();

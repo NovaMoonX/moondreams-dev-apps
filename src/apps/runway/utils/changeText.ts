@@ -8,12 +8,18 @@ import type {
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
+  GroupSealed,
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
 
 export type ItemPayload =
-  SourceSealed | PayLineSealed | EnvelopeSealed | BillSealed | GoalSealed;
+  | SourceSealed
+  | PayLineSealed
+  | EnvelopeSealed
+  | BillSealed
+  | GoalSealed
+  | GroupSealed;
 
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -34,6 +40,17 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
   const base: Part[] = [
     diff('Name', before.name, after.name, (value) => value),
   ];
+  if ('startingPriority' in before && 'startingPriority' in after) {
+    return [
+      ...base,
+      diff(
+        'Starting priority',
+        before.startingPriority,
+        after.startingPriority,
+        (value) => (value === null ? 'none' : PRIORITY_LABELS[value]),
+      ),
+    ];
+  }
   if (
     !('schedule' in before) &&
     !('timing' in before) &&
@@ -124,6 +141,12 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
         billBefore.emoji,
         billAfter.emoji,
         (value) => value ?? 'none',
+      ),
+      diff(
+        'Group',
+        billBefore.groupId ?? null,
+        billAfter.groupId ?? null,
+        (value) => (value === null ? 'none' : 'a group'),
       ),
     ];
   }

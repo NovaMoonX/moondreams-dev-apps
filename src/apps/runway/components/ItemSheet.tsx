@@ -265,7 +265,7 @@ function ItemSheet({
     onUndone,
   });
 
-  if (!version) return null;
+  if (!version || version.kind === 'group') return null;
   const payload = version.payload;
   const itemKind: ItemKind = version.kind ?? kind;
   const endedAt = header?.endedAt ?? null;

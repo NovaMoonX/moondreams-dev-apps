@@ -4,9 +4,15 @@ import {
   BILL_FREQUENCIES,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import type { BillFundedBy, Schedule } from '@apps/runway/types';
+import type { BillFundedBy, MoneyRange, Schedule } from '@apps/runway/types';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+
+/** What a group's bills come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
+export const describeGroupTotal = (range: MoneyRange) =>
+  range.lowCents === range.highCents
+    ? formatCents(range.lowCents)
+    : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
 
 export function describeBillRepeat(kind: Schedule['kind']) {
   const known = BILL_FREQUENCIES.find((frequency) => frequency === kind);

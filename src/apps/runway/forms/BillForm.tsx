@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -18,6 +19,7 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
+import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import {
   BILL_FREQUENCIES,
   BILL_FREQUENCY_LABELS,
@@ -39,7 +41,9 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
-import { createBill } from '@apps/runway/store/actions/itemActions';
+import {
+  createBill,
+} from '@apps/runway/store/actions/itemActions';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
@@ -63,12 +67,14 @@ import {
 import {
   selectBills,
   selectComingDays,
+  selectGroups,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   BillFundedBy,
   BillSealed,
   Ending,
+  GroupSealed,
   Priority,
 } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
@@ -93,6 +99,8 @@ interface BillFormData {
   dayKeys: string[];
   /** Null until the person adds one. */
   emoji: string | null;
+  /** An existing group's id, `NEW_CHOICE` while naming one, or '' for none. */
+  group: { choice: string; newText: string };
 }
 
 interface BillFormProps {
@@ -121,6 +129,7 @@ export type BillStepId =
   | 'ends'
   | 'funding'
   | 'priority'
+  | 'group'
   | 'emoji';
 
 const EMPTY_BILL: BillSealed = {
@@ -136,7 +145,17 @@ const EMPTY_BILL: BillSealed = {
   ending: { onDate: null, afterCount: null },
   fundedBy: { kind: 'suggested' },
   stanceOverride: null,
+  groupId: null,
 };
+
+/** Stands in for a group that is written with the bill, so a change to "a new group" reads as a change. */
+const NEW_GROUP_ID = '__new_group__';
+
+const groupMatcher = createOptionMatcher<{ id: string; name: string }>({
+  names: (option) => [option.name],
+  typos: false,
+  casing: { style: 'sentence', keepAcronyms: true, keepMixedCase: true },
+});
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
@@ -201,6 +220,8 @@ const getBlocker = (
   isEditing: boolean,
   noun: string,
 ) => {
+  if (data.group.choice === NEW_CHOICE && data.group.newText.trim() === '')
+    return FORM_FLOW_WORDS.nameGroup;
   if (data.name.trim() === '') return `Name the ${noun}.`;
   if (!hasAmount) {
     return data.amount.mode === 'range'
@@ -243,6 +264,7 @@ const getEditingData = (payload: BillSealed): BillFormData => {
     funding: payload.fundedBy.kind === 'chosen' ? 'chosen' : 'suggested',
     dayKeys: payload.fundedBy.kind === 'chosen' ? payload.fundedBy.dayKeys : [],
     emoji: payload.emoji,
+    group: { choice: payload.groupId ?? '', newText: '' },
   };
 };
 
@@ -261,6 +283,11 @@ function BillForm({
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
+  const groups = useAppSelector((state) => selectGroups(state, today));
+  const groupOptions = groups.map(({ item, version }) => ({
+    value: item.id,
+    label: version.payload.name,
+  }));
   const [formData, setFormData] = useState<BillFormData>(() =>
     editing || draft?.initial
       ? getEditingData((editing?.payload ?? draft?.initial) as BillSealed)
@@ -276,7 +303,11 @@ function BillForm({
           funding: 'suggested',
           dayKeys: [],
           emoji: null,
+          group: { choice: '', newText: '' },
         },
+  );
+  const [isPriorityChosen, setIsPriorityChosen] = useState(
+    editing !== undefined || draft !== undefined,
   );
   const [startData] = useState(formData);
   const [error, setError] = useState<string | null>(null);
@@ -314,6 +345,35 @@ function BillForm({
   const isDueValid =
     dueDate !== undefined && (editing !== undefined || dueDate >= today);
 
+  const resolveGroup = (
+    data: BillFormData,
+  ): { groupId: string | null; newGroup: GroupSealed | null } => {
+    const { choice, newText } = data.group;
+    if (choice === '') return { groupId: null, newGroup: null };
+    if (choice !== NEW_CHOICE) return { groupId: choice, newGroup: null };
+    if (newText.trim() === '') return { groupId: null, newGroup: null };
+    const resolved = groupMatcher.resolve(
+      newText,
+      groups.map(({ item, version }) => ({
+        id: item.id,
+        name: version.payload.name,
+      })),
+    );
+    if (resolved.kind === 'match')
+      return { groupId: resolved.option.id, newGroup: null };
+    return {
+      groupId: null,
+      newGroup: { name: resolved.label, startingPriority: null },
+    };
+  };
+  const getGroupName = (group: BillFormData['group']) => {
+    if (group.choice === NEW_CHOICE) return group.newText.trim();
+    return (
+      groups.find(({ item }) => item.id === group.choice)?.version.payload
+        .name ?? FORM_FLOW_WORDS.noGroup
+    );
+  };
+
   const steps: QuestionStep[] = [
     {
       id: 'name',
@@ -340,6 +400,7 @@ function BillForm({
                   (entry) => toPickLabel(entry) === pick,
                 );
                 if (!found) return;
+                if ('priority' in found) setIsPriorityChosen(true);
                 set({
                   name: found.name,
                   emoji: found.emoji,
@@ -519,6 +580,46 @@ function BillForm({
           },
         ]
       : []),
+    ...(draft
+      ? []
+      : [
+          {
+            id: 'group',
+            title: FORM_FLOW_WORDS.groupTitle,
+            summaryLabel: FORM_FLOW_WORDS.group,
+            summaryValue: getGroupName(formData.group),
+            isAnswered:
+              formData.group.choice !== NEW_CHOICE ||
+              formData.group.newText.trim() !== '',
+            blocker: FORM_FLOW_WORDS.nameGroup,
+            isPreAnswered: true,
+            render: ({ moveOn }: QuestionControls) => (
+              <PickOrCreate
+                label={FORM_FLOW_WORDS.group}
+                options={groupOptions}
+                choice={formData.group.choice}
+                newText={formData.group.newText}
+                newPillLabel={FORM_FLOW_WORDS.newGroup}
+                newPlaceholder={FORM_FLOW_WORDS.newGroupPlaceholder}
+                hasPlus={false}
+                maxLength={MAX_NAME_LENGTH}
+                clearLabel={FORM_FLOW_WORDS.clearGroup}
+                onChange={(choice, newText) => {
+                  const startsWith = groups.find(
+                    ({ item }) => item.id === choice,
+                  )?.version.payload.startingPriority;
+                  set({
+                    group: { choice, newText },
+                    ...(startsWith && !isPriorityChosen
+                      ? { priority: startsWith }
+                      : {}),
+                  });
+                  if (choice !== '' && choice !== NEW_CHOICE) moveOn();
+                }}
+              />
+            ),
+          },
+        ]),
     {
       id: 'priority',
       title: FORM_FLOW_WORDS.priorityTitle,
@@ -532,6 +633,7 @@ function BillForm({
           options={priorityOptions}
           value={formData.priority}
           onChange={(priority) => {
+            setIsPriorityChosen(true);
             set({ priority });
             moveOn();
           }}
@@ -596,6 +698,7 @@ function BillForm({
         ? editing.payload.orderIndex
         : Math.max(0, ...tier.map((bill) => bill.version.payload.orderIndex)) +
           ENVELOPE_ORDER_STEP;
+    const { groupId, newGroup } = resolveGroup(data);
     const fundedBy: BillFundedBy = isChosen
       ? { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
       : { kind: 'suggested' };
@@ -617,6 +720,7 @@ function BillForm({
       ending,
       fundedBy,
       stanceOverride: getStanceOverride(data.amount),
+      groupId: groupId ?? (newGroup ? NEW_GROUP_ID : null),
     };
     return result;
   };
@@ -628,6 +732,7 @@ function BillForm({
     current: editing?.payload ?? EMPTY_BILL,
     candidate,
     presetDayKey,
+    newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
   });
   const editBlocker = flow.getBlocker(blocker);
@@ -662,7 +767,11 @@ function BillForm({
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await createBill(user.uid, encryption, { startDate: today, bill });
+      await createBill(user.uid, encryption, {
+        startDate: today,
+        bill,
+        newGroup: resolveGroup(formData).newGroup,
+      });
       onClose();
     } catch (saveError) {
       setError(

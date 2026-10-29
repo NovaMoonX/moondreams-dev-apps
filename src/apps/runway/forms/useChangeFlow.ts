@@ -35,7 +35,12 @@ import {
   type ChangeSpan,
 } from '@apps/runway/utils/fromWhen';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import type { EnvelopeSealed, GoalSealed, ItemKind } from '@apps/runway/types';
+import type {
+  EnvelopeSealed,
+  GoalSealed,
+  GroupSealed,
+  ItemKind,
+} from '@apps/runway/types';
 
 interface UseChangeFlowArgs {
   itemId: string;
@@ -45,6 +50,8 @@ interface UseChangeFlowArgs {
   candidate: ItemPayload | null;
   /** The income day whose screen opened the form; the "this income day" answers then mean it. */
   presetDayKey?: string | null;
+  /** A group the person named while changing a bill, written in the same batch as the change. */
+  newGroup?: GroupSealed | null;
   onDone: () => void;
 }
 
@@ -104,6 +111,7 @@ export function useChangeFlow({
   current,
   candidate,
   presetDayKey = null,
+  newGroup = null,
   onDone,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
@@ -194,6 +202,7 @@ export function useChangeFlow({
           itemId,
           kind,
           payload: candidate,
+          newGroup,
           summary,
           note: reason,
           effectiveFrom: span.effectiveFrom,

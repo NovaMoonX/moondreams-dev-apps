@@ -883,6 +883,13 @@ export const FORM_FLOW_WORDS = {
   name: 'Name',
   priorityTitle: 'How much does it matter?',
   priority: 'How much it matters',
+  groupTitle: 'Does it belong in a group?',
+  group: 'Group',
+  noGroup: 'None',
+  newGroup: 'New group',
+  newGroupPlaceholder: 'Home, Subscriptions',
+  clearGroup: 'No group',
+  nameGroup: 'Name the group, or choose none.',
   emojiTitle: 'Pick an emoji, if you like',
   emoji: 'Emoji',
   noEmoji: 'None',
@@ -1229,6 +1236,30 @@ export const FIX_ROWS_SHOWN = 12;
 /** Rows any Runway list holds before it offers a search. */
 export const RUNWAY_SEARCH_THRESHOLD = 5;
 
+export const GROUP_WORDS = {
+  ungrouped: 'Other bills',
+  perMonth: (amount: string) => `${amount} a month`,
+  monthLabel: 'Together, each month',
+  openLabel: (name: string) => `${name}, open group`,
+  rename: 'Rename',
+  startingPriority: 'Starting priority',
+  startingPriorityHelp:
+    'A new bill in this group starts with this priority. You can still change it on the bill.',
+  noPriority: 'None',
+  archive: 'Archive group',
+  archiveTitle: (name: string) => `Archive ${name}?`,
+  archiveBody: (count: number) =>
+    count === 0
+      ? 'It has no bills right now.'
+      : `Its ${count} ${count === 1 ? 'bill stays' : 'bills stay'} in your plan, without a group.`,
+  archived: (name: string) => `Archived ${name}.`,
+  archiveFailed: 'The group did not archive. Nothing was changed.',
+  saveFailed: 'This did not save. Nothing was changed.',
+  basisTitle: 'How a month is worked out',
+  rangeTotal:
+    'A bill that varies counts at its low and its high amount, so the total is a range.',
+} as const;
+
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {
   onHand: 'Money on hand',
@@ -1370,8 +1401,7 @@ export const CORRECT_COVER_WORDS = {
   needsCuts: 'Give some items less this time to correct the day.',
   freeRow: 'Free\u00a0to\u00a0spend',
   now: 'Now',
-  freeLead:
-    'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
+  freeLead: 'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
   coverGone:
     'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
 } as const;

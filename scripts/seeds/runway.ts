@@ -48,6 +48,7 @@ import type {
   RecordLine,
   EnvelopeSealed,
   GoalSealed,
+  GroupSealed,
   IncomeDayDoc,
   MoveDoc,
   PayLineSealed,
@@ -353,6 +354,7 @@ async function writeSeedLifecycle(
     ending: { onDate: null, afterCount: null },
     fundedBy: { kind: 'suggested' },
     stanceOverride: null,
+    groupId: null,
   };
   const pausedGoal: GoalSealed = {
     name: 'Car repair',
@@ -1374,7 +1376,7 @@ async function writeSeedEnvelopes(
   return envelopes.length * 3;
 }
 
-/** Four bills: rent that repeats monthly and goes up from a date two months ahead, a one-time bill, a bill chosen across three paydays and a bill that ends after six payments. */
+/** Eight bills and two groups: rent that repeats monthly and goes up from a date two months ahead, a one-time bill, a bill chosen across three paydays and a bill that ends after six payments, and Home (rent, water, building fees) and Subscriptions (streaming, music) to group them. */
 async function writeSeedBills(
   context: SeedContext,
   uid: string,
@@ -1392,6 +1394,38 @@ async function writeSeedBills(
     const now = new Date(today);
     return Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, day);
   };
+
+  const monthly = (
+    id: string,
+    name: string,
+    emoji: string | null,
+    priority: BillSealed['priority'],
+    orderIndex: number,
+    cents: number,
+    day: number,
+    groupId: string,
+  ): { id: string; payload: BillSealed } => ({
+    id,
+    payload: {
+      name,
+      emoji,
+      priority,
+      orderIndex,
+      amount: exact(cents),
+      timing: {
+        kind: 'date',
+        schedule: {
+          kind: 'monthly',
+          anchor: dayOfNextMonth(day),
+          monthDays: [day],
+        },
+      },
+      ending: never,
+      fundedBy: { kind: 'suggested' },
+      stanceOverride: null,
+      groupId,
+    },
+  });
 
   const bills: { id: string; payload: BillSealed }[] = [
     {
@@ -1413,6 +1447,7 @@ async function writeSeedBills(
         ending: never,
         fundedBy: { kind: 'suggested' },
         stanceOverride: null,
+        groupId: 'seed-group-home',
       },
     },
     {
@@ -1434,6 +1469,7 @@ async function writeSeedBills(
         ending: never,
         fundedBy: { kind: 'suggested' },
         stanceOverride: null,
+        groupId: null,
       },
     },
     {
@@ -1458,6 +1494,7 @@ async function writeSeedBills(
           dayKeys: [paydayKey(0), paydayKey(1), paydayKey(2)],
         },
         stanceOverride: null,
+        groupId: null,
       },
     },
     {
@@ -1479,7 +1516,58 @@ async function writeSeedBills(
         ending: { onDate: null, afterCount: 6 },
         fundedBy: { kind: 'suggested' },
         stanceOverride: 'optimistic',
+        groupId: null,
       },
+    },
+    monthly(
+      'seed-bill-water',
+      'Water',
+      '💧',
+      'must',
+      3,
+      6_500,
+      12,
+      'seed-group-home',
+    ),
+    monthly(
+      'seed-bill-fees',
+      'Building fees',
+      null,
+      'must',
+      4,
+      8_500,
+      3,
+      'seed-group-home',
+    ),
+    monthly(
+      'seed-bill-streaming',
+      'Streaming',
+      null,
+      'want',
+      1,
+      1_599,
+      20,
+      'seed-group-subscriptions',
+    ),
+    monthly(
+      'seed-bill-music',
+      'Music',
+      '🎧',
+      'want',
+      2,
+      1_199,
+      22,
+      'seed-group-subscriptions',
+    ),
+  ];
+  const groups: { id: string; payload: GroupSealed }[] = [
+    {
+      id: 'seed-group-home',
+      payload: { name: 'Home', startingPriority: 'must' },
+    },
+    {
+      id: 'seed-group-subscriptions',
+      payload: { name: 'Subscriptions', startingPriority: 'want' },
     },
   ];
 
@@ -1495,7 +1583,43 @@ async function writeSeedBills(
     bills.map(({ payload }) => sealJson(payload, encryption)),
   );
 
+  const sealedGroups = await Promise.all(
+    groups.map(({ payload }) => sealJson(payload, encryption)),
+  );
+  const sealedGroupChanges = await Promise.all(
+    groups.map(({ payload }) =>
+      sealJson(
+        { summary: `Added the group ${payload.name}.` } satisfies ChangeSealed,
+        encryption,
+      ),
+    ),
+  );
+
   const batch = context.firestore.batch();
+  groups.forEach(({ id }, index) => {
+    const createdAt = addedAt - 1000 + index;
+    const changeId = `seed-change-${id}`;
+    batch.set(
+      context.firestore.doc(`${plan}/items/${id}`),
+      header(id, 'group', null, createdAt),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${id}`),
+      version(
+        `seed-version-${id}`,
+        id,
+        'group',
+        createdAt,
+        today,
+        changeId,
+        sealedGroups[index],
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, createdAt, today, [id], sealedGroupChanges[index]),
+    );
+  });
   bills.forEach(({ id }, index) => {
     const createdAt = addedAt + index * 1000;
     const changeId = `seed-change-${id}`;
@@ -1564,7 +1688,7 @@ async function writeSeedBills(
     ),
   );
   await batch.commit();
-  return bills.length * 3 + 2;
+  return (bills.length + groups.length) * 3 + 2;
 }
 
 /** Three goals: one with a date that lands exactly on pace, one with no date, and one the plan fills on the first income day. */

@@ -50,6 +50,7 @@ import {
   matchMovedDates,
   planOverrideCarry,
 } from '../../src/apps/runway/engine/moved.ts';
+import { monthlyTotal } from '../../src/apps/runway/engine/groups.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -8467,6 +8468,66 @@ console.log('runway engine: ok');
       `G9: a closing with choice ${index + 1} equals the replay`,
     );
   });
+}
+
+{
+  const every = (kind: Schedule['kind'], anchor: number | null): Schedule => ({
+    kind,
+    anchor,
+    monthDays: [],
+  });
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const nov = utc(2026, 11, 14);
+
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        {
+          amount: exact(120_000),
+          schedule: every('monthly', utc(2026, 11, 1)),
+        },
+        { amount: exact(5_200), schedule: every('weekly', utc(2026, 11, 3)) },
+        {
+          amount: exact(2_600),
+          schedule: every('everyOtherWeek', utc(2026, 11, 3)),
+        },
+        { amount: exact(1_000), schedule: every('twiceMonthly', null) },
+      ],
+      nov,
+    ),
+    exact(150_167),
+    'G10: each schedule counts at its monthly average, rounded once',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        { amount: exact(9_000), schedule: every('once', utc(2026, 11, 30)) },
+        { amount: exact(7_000), schedule: every('once', utc(2026, 12, 1)) },
+      ],
+      nov,
+    ),
+    exact(9_000),
+    'G10: a once bill counts only in the month it falls in',
+  );
+  assert.deepEqual(
+    monthlyTotal([], nov),
+    exact(0),
+    'G10: an empty group comes to nothing',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        {
+          amount: { lowCents: 14_000, highCents: 18_000 },
+          schedule: every('monthly', utc(2026, 11, 1)),
+        },
+        { amount: exact(5_000), schedule: every('monthly', utc(2026, 11, 5)) },
+      ],
+      nov,
+    ),
+    { lowCents: 19_000, highCents: 23_000 },
+    'G10: a group with a range member shows a range',
+  );
 }
 
 console.log('runway engine: ok');

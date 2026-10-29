@@ -143,7 +143,7 @@ Money going out comes in three shapes, by how well you know the date:
 A bill is funded by the income days you choose, or by the ones Runway suggests (the days before it is due, divided evenly). A bill is marked paid by you, or automatically when a matching purchase arrives.
 
 - **Paid ahead of time.** A card, a car note or any bill can be marked paid before its due date. It stops asking for money, and the payment is recorded with the day you made it. If the bill was not yet funded, the payment comes out of Free to spend and the next draft makes it up.
-- **Groups.** Any bill or expected expense can belong to a group you name, with starting suggestions such as Subscriptions, Housing and Car. The Bills list shows each group with its bills under it and what they come to per month. A group can set the priority its bills start with. A group is a label for organizing and totaling; it does not change when a bill is funded.
+- **Groups.** Any bill or expected expense can belong to a group you name or pick (Home, Subscriptions). The Bills list shows each group with its bills under it and what they come to per month (a range when a bill varies). A group can set the priority a new bill in it starts with. Archiving a group leaves its bills in the plan, without a group. A group is a label for organizing and totaling; it does not change when a bill is funded.
 
 ### Envelopes, In Detail
 
@@ -363,7 +363,7 @@ Every change says from when and shows, before it saves, which coming income days
 
 ## The Build Plan
 
-**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Days lists confirmed income days only from the months since the newest monthly closing, so an older day counts in every figure but cannot be opened or corrected until a history window is built. Spend reaches further: its "Older months" period lists and edits purchases back to the month the plan started. The rest of what is built, and its limits, is under "How Runway Works" above.
+**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Days lists confirmed income days only from the months since the newest monthly closing, so an older day counts in every figure but cannot be opened or corrected until a history window is built. Spend reaches further: its "Older months" period lists and edits purchases back to the month the plan started. The rest of what is built, and its limits, is under "How Runway Works" above.
 
 ### Core MVP
 

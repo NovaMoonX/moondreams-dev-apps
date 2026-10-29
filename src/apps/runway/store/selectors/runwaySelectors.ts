@@ -58,6 +58,7 @@ import type {
   FundingRule,
   GoalSealed,
   GoalVersion,
+  GroupVersion,
   OpenVersion,
   PayLineVersion,
   PlanItemDoc,
@@ -463,6 +464,34 @@ export const selectBills = createSelector(
             PRIORITIES.indexOf(b.version.payload.priority) ||
           a.version.payload.orderIndex - b.version.payload.orderIndex ||
           a.item.createdAt - b.item.createdAt ||
+          a.item.id.localeCompare(b.item.id),
+      );
+    return result;
+  },
+);
+
+export interface ResolvedGroup {
+  item: PlanItemDoc;
+  version: GroupVersion;
+}
+
+const isGroup = (version: OpenVersion): version is GroupVersion =>
+  version.kind === 'group';
+
+/** The groups on the Bills list on a date, by name; an archived group is gone and its bills list without one. */
+export const selectGroups = createSelector(
+  [selectItems, selectVersions, selectOn],
+  (items, versions, on): ResolvedGroup[] => {
+    const groupVersions = versions.filter(isGroup);
+    const result = items
+      .filter((item) => item.kind === 'group' && isListed(item, on))
+      .flatMap((item) => {
+        const version = resolveCurrentOrNext(groupVersions, item.id, on);
+        return version ? [{ item, version }] : [];
+      })
+      .sort(
+        (a, b) =>
+          a.version.payload.name.localeCompare(b.version.payload.name) ||
           a.item.id.localeCompare(b.item.id),
       );
     return result;
