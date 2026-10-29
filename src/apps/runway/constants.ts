@@ -899,8 +899,14 @@ export const BUDGET_WORDS = {
   documentSays: (cadence: string) => `The document says ${cadence}`,
   documentSaysAmount: (amount: string, cadence: string) =>
     `The document says ${amount} ${cadence}`,
-  cadenceRow: (cadence: string) =>
-    `${cadence.charAt(0).toUpperCase()}${cadence.slice(1)} in the document · needs how often it repeats`,
+  cadenceRow: (cadence: string, needs: string) =>
+    `${cadence.charAt(0).toUpperCase()}${cadence.slice(1)} in the document · ${needs.charAt(0).toLowerCase()}${needs.slice(1)}`,
+  needsMonthlyAmount: 'a monthly amount',
+  yourChoice: 'Your choice',
+  goalOf: (target: string) => `of ${target}`,
+  amountPerCadence: (amount: string, cadence: string) =>
+    `${amount} ${cadence === 'yearly' ? 'a year' : cadence}`,
+  amountAMonth: (amount: string) => `${amount} a month`,
   monthlyOffer: (amount: string) => `Use ${amount} a month`,
   monthlyOfferSub:
     'Spread evenly over the months. You still say when it is due.',

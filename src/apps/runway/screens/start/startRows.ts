@@ -26,6 +26,8 @@ export interface StartRow {
   line: string;
   /** The figure on the right, or null when the row has none. */
   amount: string | null;
+  /** The figure is one the document gave that is not what gets added, so it reads quieter. */
+  isAmountMuted?: boolean;
   /** The source a pay line belongs to, when that source has several. */
   group?: string;
 }

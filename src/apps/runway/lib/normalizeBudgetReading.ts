@@ -210,7 +210,7 @@ const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => ({
 });
 
 const OTHER_CADENCE =
-  /year|annual|quarter|semi|half-?year|bi-?monthly|every\s+(\d+|two|three|four|five|six|nine|twelve)\s+months?/i;
+  /year|annual|quarter|semi|half-?year|bi-?monthly|twice|thrice|\d+\s*x\b|\b\w+\s+times\b|every\s+(\d+|two|three|four|five|six|nine|twelve)\s+months?/i;
 
 /** The cadence words the document wrote when Runway has no repeat for them, or null. */
 const getOtherCadence = (raw: Raw) => {
@@ -235,6 +235,9 @@ const getCadenceMonths = (words: string) => {
     const count = Number(every[1]) || NUMBER_WORDS[every[1]] || 0;
     return count > 0 ? count * (every[2] === 'year' ? 12 : 1) : null;
   }
+  if (/(twice|two times|2\s*x)\D*(a|per|each)?\s*(year|annual)/.test(words))
+    return 6;
+  if (/twice|thrice|\d+\s*x\b|\b\w+\s+times\b/.test(words)) return null;
   if (/semi-?\s?(annual|year)|half-?year/.test(words)) return 6;
   if (/semi|bi-?\s?(monthly|annual|year)/.test(words)) return null;
   if (/quarter/.test(words)) return 3;

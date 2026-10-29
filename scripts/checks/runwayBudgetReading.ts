@@ -385,6 +385,51 @@ assert.deepEqual(
   [6, 6, null, null, null, 6],
   'semi means six months only before annual or year; the other twice-or-every-other words are left unsure',
 );
+const twice = normalizeBudgetReading(
+  {
+    ...quiet,
+    bills: [
+      'twice a month',
+      '2x a month',
+      'two times a month',
+      'twice monthly',
+      'twice a year',
+      'twice yearly',
+    ].map((writtenCadence, index) => ({
+      ...bill('Budget.csv', `Twice ${index}`, 4_000),
+      repeats: 'monthly' as const,
+      dayOfMonth: 1,
+      writtenCadence,
+    })),
+  },
+  { fileNames },
+);
+assert.deepEqual(
+  twice.bills.map((entry) => [
+    entry.repeats,
+    entry.amountCents,
+    entry.writtenCents,
+  ]),
+  twice.bills.map(() => [null, null, 4_000]),
+  'a twice-a-month bill keeps the document figure and no repeat',
+);
+assert.deepEqual(
+  twice.bills.map((entry) => entry.writtenCadence),
+  [
+    'twice a month',
+    '2x a month',
+    'two times a month',
+    'twice monthly',
+    'twice a year',
+    'twice yearly',
+  ],
+  'its words are kept so the sheet says what the document wrote',
+);
+assert.deepEqual(
+  twice.bills.map((entry) => entry.writtenMonths),
+  [null, null, null, null, 6, 6],
+  'twice a month has no whole-month spread; twice a year is six months',
+);
 const cadenceClash = normalizeBudgetReading(
   {
     ...quiet,

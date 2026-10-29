@@ -309,7 +309,7 @@ const toCadenceNote = ({ cadence }: Proposal) =>
           cadence.words,
         );
 
-const toKnownAmount = ({ kind, value }: Proposal) => {
+const toValueAmount = ({ kind, value }: Proposal) => {
   const range =
     kind === 'income'
       ? (value as BudgetValues['income']).amount
@@ -319,9 +319,26 @@ const toKnownAmount = ({ kind, value }: Proposal) => {
   return range !== null && range.lowCents > 0 ? formatRowRange(range) : null;
 };
 
-const toNeeds = (missing: string[]) =>
+/** The figure the document gave when the value has none yet: a yearly bill's, or a goal's monthly amount. */
+const toDocumentAmount = ({ kind, cadence, monthlyCents }: Proposal) => {
+  if (cadence?.writtenCents)
+    return BUDGET_WORDS.amountPerCadence(
+      formatCentsShort(cadence.writtenCents),
+      cadence.words,
+    );
+  return kind === 'goal' && monthlyCents
+    ? BUDGET_WORDS.amountAMonth(formatCentsShort(monthlyCents))
+    : null;
+};
+
+/** What the row still needs, worded for the step that opens: a figure the document gave for a yearly bill is converted, not missing. */
+const toNeeds = ({ cadence }: Proposal, missing: string[]) =>
   BUDGET_WORDS.needs(
-    missing.map((step) => BUDGET_WORDS.needsParts[step] ?? step),
+    (cadence?.writtenCents ? missing.slice(0, 1) : missing).map((step) =>
+      cadence?.writtenCents && step === 'amount'
+        ? BUDGET_WORDS.needsMonthlyAmount
+        : (BUDGET_WORDS.needsParts[step] ?? step),
+    ),
   );
 
 const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
@@ -333,9 +350,13 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
       emoji: null,
       line:
         proposal.cadence !== null && missing.includes('repeats')
-          ? BUDGET_WORDS.cadenceRow(proposal.cadence.words)
-          : toNeeds(missing),
-      amount: toKnownAmount(proposal),
+          ? BUDGET_WORDS.cadenceRow(
+              proposal.cadence.words,
+              toNeeds(proposal, missing),
+            )
+          : toNeeds(proposal, missing),
+      amount: toValueAmount(proposal) ?? toDocumentAmount(proposal),
+      isAmountMuted: toValueAmount(proposal) === null,
     };
   if (kind === 'income') {
     const income = value as BudgetValues['income'];
@@ -346,7 +367,14 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
     return toEnvelopeRow(key, value as BudgetValues['envelope']);
   const goal = value as BudgetValues['goal'];
   const row = toGoalRow(key, goal);
-  return { ...row, line: toGoalLine(goal) ?? row.line };
+  const line = toGoalLine(goal);
+  return line === null || !goal.startingCents
+    ? { ...row, line: line ?? row.line }
+    : {
+        ...row,
+        line,
+        amount: BUDGET_WORDS.goalOf(formatCentsShort(goal.targetCents)),
+      };
 };
 
 const toRow = (proposal: Proposal, isHidden: boolean): StartRow =>
@@ -1016,7 +1044,9 @@ function BudgetStart({
                   BUDGET_WORDS.chooseVersion
                 )
               ) : (
-                <MaskedText>{toNeeds(selectedMissing)}</MaskedText>
+                <MaskedText>
+                  {toNeeds(selectedProposal, selectedMissing)}
+                </MaskedText>
               )}
             </InlineNotice>
           )}
@@ -1065,9 +1095,18 @@ function BudgetStart({
                     key={version.sourceFile}
                     className='border-border bg-card flex items-center gap-3 rounded-2xl border p-3'
                   >
-                    <p className='min-w-0 flex-1 text-sm text-pretty break-words'>
-                      <MaskedText>{version.says}</MaskedText>
-                    </p>
+                    <div className='min-w-0 flex-1 text-sm text-pretty break-words'>
+                      {selectedProposal.isReopened &&
+                        JSON.stringify(version.value) ===
+                          JSON.stringify(selectedProposal.value) && (
+                          <span className='bg-accent text-accent-foreground mb-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium'>
+                            {BUDGET_WORDS.yourChoice}
+                          </span>
+                        )}
+                      <p>
+                        <MaskedText>{version.says}</MaskedText>
+                      </p>
+                    </div>
                     <Button
                       type='button'
                       variant='secondary'
