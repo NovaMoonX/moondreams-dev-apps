@@ -13,6 +13,8 @@ import {
   buildInbox,
   findSessionLink,
   parseStatus,
+  summarizeCi,
+  type CheckRun,
   type CiState,
   type InboxPr,
 } from './inbox.ts';
@@ -63,7 +65,7 @@ interface ApiComment {
   author_association: string;
 }
 interface ApiCheckRuns {
-  check_runs: { status: string; conclusion: string | null }[];
+  check_runs: CheckRun[];
 }
 interface ApiIssue {
   number: number;
@@ -76,16 +78,7 @@ const getCi = async (sha: string): Promise<CiState> => {
   const { check_runs: runs } = await api<ApiCheckRuns>(
     `/repos/${repo}/commits/${sha}/check-runs?per_page=100`,
   );
-  if (runs.length === 0) return 'none';
-  if (
-    runs.some((run) =>
-      ['failure', 'timed_out', 'action_required'].includes(
-        run.conclusion ?? '',
-      ),
-    )
-  )
-    return 'red';
-  return runs.some((run) => run.status !== 'completed') ? 'running' : 'green';
+  return summarizeCi(runs);
 };
 
 const readPr = async (pull: ApiPull): Promise<InboxPr> => {

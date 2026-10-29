@@ -6,6 +6,7 @@ import {
   findSessionLink,
   groupSessions,
   parseStatus,
+  summarizeCi,
   type InboxPr,
 } from '../ownerInbox/inbox.ts';
 
@@ -155,5 +156,30 @@ assert.equal(
   'PR 5',
   'named after its first PR until a status names it',
 );
+
+const run = (id: number, name: string, conclusion: string | null) => ({
+  id,
+  name,
+  status: conclusion === null ? 'in_progress' : 'completed',
+  conclusion,
+});
+assert.equal(
+  summarizeCi([
+    run(1, 'version-label', 'failure'),
+    run(2, 'version-label', 'success'),
+  ]),
+  'green',
+  'a re-run that passed replaces the failure',
+);
+assert.equal(
+  summarizeCi([run(1, 'check', 'success'), run(2, 'owner-inbox', null)]),
+  'green',
+  "the inbox's own job never reads as CI running",
+);
+assert.equal(
+  summarizeCi([run(1, 'check', 'success'), run(2, 'lint', 'failure')]),
+  'red',
+);
+assert.equal(summarizeCi([]), 'none');
 
 console.log('owner inbox: ok');

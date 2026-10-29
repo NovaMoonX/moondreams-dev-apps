@@ -4,6 +4,33 @@ const SESSION_MARKER = /<!--\s*session:\s*(\S+)\s*-->/;
 
 export type CiState = 'green' | 'red' | 'running' | 'none';
 
+export const INBOX_JOB = 'owner-inbox';
+
+export interface CheckRun {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+}
+
+/** A head's CI from its check runs: only each check's latest run counts (a re-run replaces a failure), and the inbox's own job is left out. */
+export function summarizeCi(runs: readonly CheckRun[]): CiState {
+  const latest = [
+    ...runs
+      .filter((run) => run.name !== INBOX_JOB)
+      .reduce<Map<string, CheckRun>>((acc, run) => {
+        const kept = acc.get(run.name);
+        return kept && kept.id > run.id ? acc : new Map(acc).set(run.name, run);
+      }, new Map())
+      .values(),
+  ];
+  if (latest.length === 0) return 'none';
+  const isFailed = (run: CheckRun) =>
+    ['failure', 'timed_out', 'action_required'].includes(run.conclusion ?? '');
+  if (latest.some(isFailed)) return 'red';
+  return latest.some((run) => run.status !== 'completed') ? 'running' : 'green';
+}
+
 export interface PrStatus {
   sessionUrl: string | null;
   sessionTitle: string | null;
