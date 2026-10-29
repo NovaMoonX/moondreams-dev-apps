@@ -48,6 +48,7 @@ Generic trackers log what you watched; this one logs what it *cost* and what the
 - [x] Backfill Past Movies: A first-time flow to add movies already watched since joining, one after another with "Add + another" as the main button.
 - [x] Poster Calendar: Month calendar where each day is filled by the poster(s) of what was watched or is planned — one, a corner-to-corner split, pizza-style thirds, or quadrants.
 - [x] Day Details: Tap a day to see its movies with format, rating, and price.
+- [x] Release Days: A watchlist movie you haven't seen or planned gets a small 🎬 on the day it opens; tap the day to see what opens and plan one for that day in a tap. Planned days keep their posters.
 - [x] Top-of-Calendar Counters: Total movies watched, movies since Friday (watched/goal), and weekly and monthly goal status.
 - [x] Add to Calendar: Add a watched or planned movie from your watchlist or a search; new movies join the watchlist automatically.
 - [x] Rewatches: Every viewing is its own entry, so the same movie can appear many times.

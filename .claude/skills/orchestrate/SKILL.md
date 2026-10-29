@@ -32,9 +32,17 @@ Every brief has: the goal in one line; the files to touch (and not to touch); wh
 3. Commit in coherent steps. Agents never commit or push (the one exception is `stack-pr-reviewer`, which commits its fix and syncs the stack it was handed), and an agent that needs another revision works in its own `git worktree`, never a checkout in yours.
 4. **Prove each push landed.** Read `git push`'s own output (never piped through `tail` or `-q`) and check `git status -sb` names your branch, not `HEAD (no branch)`. Before a review starts, check the SHA it reads contains every fix commit (`git merge-base --is-ancestor <fix> origin/<branch>`). A detached checkout once turned two pushes into silent no-ops and a whole fix round went unreviewed.
 
-## Iterating on owner feedback
+## Writing a plan
 
-When the owner answers a review or adds follow-ups (in plan mode or not), the plan covers only that message: each answer and what it changes, the questions they asked, and the checks that follow. Never re-output the earlier plan or what is already built (owner: "the plan should be focused on my last message").
+The plan is for the owner, and its job is to lighten their mental load (owner: "the plan is so dense"). Keep it to a short page with plain bullets:
+
+- **The idea** in a line or two, and **what the person will see or be able to do**.
+- **What counts** (the criteria) when the request has them, with any change you made to them in a clause.
+- **Decisions for the owner**, only the ones that are uncertain or risky, each a 🚩 question with your recommendation. When none are left, say "No open decisions."
+
+Leave out the files, selectors, data paths, verification steps, docs to update and review sizing. They are yours to get right, and they belong in the PR's How it works and evidence blocks. Keep paragraphs and nested bullets out of the plan.
+
+**Iterating on owner feedback.** When the owner answers a review or adds follow-ups (in plan mode or not), the plan covers only that message: each answer and what it changes, and the questions they asked. Never re-output the earlier plan or what is already built (owner: "the plan should be focused on my last message").
 
 ## Several issues in order
 

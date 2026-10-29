@@ -4,6 +4,8 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-29 | shared | The Stop hook asked for an L review on a branch with no commits of its own (origin/main was stale) | `pr-gate.sh` fetches the default branch and stays quiet when the branch has no commits beyond it | `.claude/hooks/pr-gate.sh` | changed |
+| 2026-10-29 | shared | Owner: the A-List release-days plan was too dense to read | A plan is a short page: what the person sees, the criteria, and only the uncertain or risky decisions; files and checks stay out | `orchestrate/SKILL.md`, `CLAUDE.md` | changed |
 | 2026-10-29 | shared | Owner: a plan for a follow-up re-output everything | Iteration plans cover only the owner's latest message | `orchestrate/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: approving every string is too much | PR bodies flag only copy that warrants a second look, with why; the full copy list is gone | `CLAUDE.md`, `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: the Cards entry point was never screenshotted, and a stale image showed a bug already fixed | Screenshots include each new screen's door in the app shell, and an image older than its screen is retaken or dropped | `pr-wrap-up/SKILL.md` | changed |
