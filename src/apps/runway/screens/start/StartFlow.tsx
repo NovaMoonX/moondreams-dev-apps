@@ -1,6 +1,8 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   CircleHelp,
+  FileText,
+  ListChecks,
   Mail,
   Pencil,
   ReceiptText,
@@ -19,7 +21,16 @@ import DetailSheet from '@/components/DetailSheet';
 import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
-import { START_HELD_WORDS, START_WORDS } from '@apps/runway/constants';
+import MethodPicker from '@/components/MethodPicker';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  BUDGET_WORDS,
+  START_HELD_WORDS,
+  START_WORDS,
+} from '@apps/runway/constants';
+import BudgetStart, {
+  type BudgetGuards,
+} from '@apps/runway/screens/start/BudgetStart';
 import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import type { HeldChoice } from '@apps/runway/engine/endings';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -30,7 +41,11 @@ import {
   type StartRow,
 } from '@apps/runway/screens/start/startRows';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import type { StartStep } from '@apps/runway/utils/startDraft';
+import type {
+  DraftKind,
+  StartDraft,
+  StartStep,
+} from '@apps/runway/utils/startDraft';
 
 export type StartKind = 'income' | 'bill' | 'envelope' | 'goal';
 export type StartFormName = StartKind | 'stand';
@@ -135,7 +150,22 @@ interface StartFlowProps {
   startOverMessage: (parts: string) => string;
   /** On the title line, such as the eye that shows or hides private figures. */
   headerAction?: ReactNode;
+  /** Offers "Start from your budget" beside starting fresh when nothing has been added yet. */
+  budget?: {
+    /** Null for a visitor who is signed out: the option is shown, asks them to sign in, and no reading can start. */
+    onAdd: ((draft: Pick<StartDraft, DraftKind>) => Promise<void>) | null;
+  };
 }
+
+/** Where Starting out opens: the method choice when nothing is added, or the budget step when a sign-in was started from it. A signed-out visitor never opens on the budget step. */
+const getFirstStage = (
+  total: number,
+  budget: StartFlowProps['budget'],
+  method: string | null,
+): 'choose' | 'budget' | 'steps' => {
+  if (total > 0 || !budget) return 'steps';
+  return method === 'budget' && budget.onAdd ? 'budget' : 'choose';
+};
 
 /** Starting out, one short question at a time. Only the income source is required; every other step has a Later. */
 function StartFlow({
@@ -156,8 +186,17 @@ function StartFlow({
   startOverMessage,
   headerAction,
   getHeldCents,
+  budget,
 }: StartFlowProps) {
-  const { closeView } = useRunwayUrlState();
+  const { closeView, startMethod, setStartMethod } = useRunwayUrlState();
+  const { signInWithGoogle } = useAuth();
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const { confirm } = useActionModal();
   const counts = {
     income: new Set(rows.income.map((row) => row.group ?? row.id)).size,
@@ -167,6 +206,23 @@ function StartFlow({
   };
   const total = counts.income + counts.bill + counts.envelope + counts.goal;
   const [isAsking, setIsAsking] = useState(total > 0);
+  const [stage, setStage] = useState<'choose' | 'budget' | 'steps'>(
+    getFirstStage(total, budget, startMethod),
+  );
+  const changeStage = (next: 'choose' | 'budget' | 'steps') => {
+    setStage(next);
+    if (next !== 'budget') setStartMethod(null);
+  };
+  const handleBudgetPick = async () => {
+    if (budget?.onAdd) {
+      setStage('budget');
+      return;
+    }
+    setStartMethod('budget');
+    await signInWithGoogle();
+    // Signing in swaps this screen for the signed-in one, so still being here means it did not happen.
+    if (isMountedRef.current) setStartMethod(null);
+  };
   const [step, setStep] = useState<StartStep>(
     steps.includes(resumeStep) ? resumeStep : steps[0],
   );
@@ -175,6 +231,7 @@ function StartFlow({
     kind: StartKind;
     id: string;
   } | null>(null);
+  const budgetGuards = useRef<BudgetGuards | null>(null);
   const [isEnvelopeHelpOpen, setIsEnvelopeHelpOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [heldAsk, setHeldAsk] = useState<
@@ -213,6 +270,21 @@ function StartFlow({
     setIsLeaving(true);
     window.history.back();
   };
+  /** The step of the first kind that still has nothing in it, Income first; the step after Goals when every kind is filled. */
+  const getStepAfterAdding = (draft: Pick<StartDraft, DraftKind>) => {
+    const filled: Record<StartKind, boolean> = {
+      income: counts.income + draft.incomes.length > 0,
+      bill: counts.bill + draft.bills.length > 0,
+      envelope: counts.envelope + draft.envelopes.length > 0,
+      goal: counts.goal + draft.goals.length > 0,
+    };
+    const empty = KIND_ORDER.find((kind) => !filled[kind]);
+    const target =
+      empty === undefined
+        ? steps.indexOf(KIND_WORDS.goal.step) + 1
+        : steps.indexOf(KIND_WORDS[empty].step);
+    return steps[Math.min(Math.max(target, 0), steps.length - 1)];
+  };
   const goBack = () => (index === 0 ? leave() : goTo(steps[index - 1]));
   const goNext = () => goTo(steps[index + 1]);
 
@@ -238,6 +310,7 @@ function StartFlow({
         await startOver(heldChoice);
         setIsAsking(false);
         setStep(steps[0]);
+        if (budget) setStage('choose');
       }
       setHeldAsk(null);
     } catch {
@@ -289,6 +362,7 @@ function StartFlow({
       await startOver(null);
       setIsAsking(false);
       setStep(steps[0]);
+      if (budget) setStage('choose');
     } catch {
       setError(START_WORDS.removeFailed);
     }
@@ -383,6 +457,68 @@ function StartFlow({
       )}
     </div>
   );
+
+  if (stage !== 'steps' && budget) {
+    return (
+      <Subview
+        overlay
+        title={START_WORDS.title}
+        onClose={() =>
+          stage === 'budget' && budgetGuards.current
+            ? budgetGuards.current.close()
+            : closeView()
+        }
+        headerAction={headerAction ?? <ValuesEyeButton />}
+        onBack={() => {
+          if (stage !== 'budget') leave();
+          else if (budgetGuards.current) budgetGuards.current.back();
+          else changeStage('choose');
+        }}
+      >
+        {stage === 'choose' || !budget.onAdd ? (
+          <div className='flex flex-1 flex-col gap-4'>
+            <h2 className='text-2xl font-semibold text-balance'>
+              {BUDGET_WORDS.chooseAsk}
+            </h2>
+            <MethodPicker
+              methods={[
+                {
+                  id: 'budget',
+                  emoji: <FileText className='h-5 w-5' />,
+                  title: BUDGET_WORDS.methodTitle,
+                  description: budget.onAdd
+                    ? BUDGET_WORDS.methodBody
+                    : BUDGET_WORDS.methodBodySignedOut,
+                  onPick: () => void handleBudgetPick(),
+                },
+                {
+                  id: 'fresh',
+                  emoji: <ListChecks className='h-5 w-5' />,
+                  title: BUDGET_WORDS.freshTitle,
+                  description: BUDGET_WORDS.freshBody,
+                  onPick: () => changeStage('steps'),
+                },
+              ]}
+            />
+          </div>
+        ) : (
+          <BudgetStart
+            onBack={() => changeStage('choose')}
+            onExit={closeView}
+            onStartFresh={() => changeStage('steps')}
+            onGuards={(guards) => {
+              budgetGuards.current = guards;
+            }}
+            onAdd={async (draft) => {
+              await budget.onAdd?.(draft);
+              changeStage('steps');
+              goTo(getStepAfterAdding(draft));
+            }}
+          />
+        )}
+      </Subview>
+    );
+  }
 
   return (
     <Subview

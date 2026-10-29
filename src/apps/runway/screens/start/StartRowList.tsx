@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
@@ -70,7 +71,14 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
                 </span>
               </span>
               {row.amount && (
-                <span className='max-w-[40%] min-w-0 shrink text-right text-base font-semibold break-words tabular-nums'>
+                <span
+                  className={join(
+                    'text-right tabular-nums',
+                    row.isAmountMuted
+                      ? 'text-muted-foreground max-w-[40%] min-w-0 shrink text-sm'
+                      : 'shrink-0 text-base font-semibold whitespace-nowrap',
+                  )}
+                >
                   <MaskedText>{row.amount}</MaskedText>
                 </span>
               )}

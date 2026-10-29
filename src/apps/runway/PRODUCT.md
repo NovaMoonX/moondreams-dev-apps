@@ -70,6 +70,7 @@ Tracking is one switch for the whole plan: off is Plan, on is Track. Linking is 
   - **Accounts** *(optional)*: as many as you have, at any bank or app. Each has a name, an institution, a kind (checking, savings, cash management, investment or other), what it holds, and whether it counts toward the money you can plan with. A retirement or brokerage account can be listed and left out of the total. Goals and envelopes can live in any account.
 - **One line-up screen.** "Where is your money now?" sets what is assigned (goals, bills, envelopes, card reserve) beside what the accounts hold, and what is left over is Free to Spend. If the assignments are more than the accounts hold, it says "Over-assigned $X". The same screen is used when you start to track and when you link an account.
 - **What is missing is said out loud.** Until bills are added, Free to Spend and the lookahead headline say so ("No bills added yet"). They never let a gap in the plan look like a gap in your finances.
+- **Or start from a budget you already keep.** When nothing has been added yet, Starting out offers to read up to five files (CSV, text, Markdown or PDF) or pasted text. An AI reads them and proposes income, bills, envelopes and goals; reading needs a signed-in account (a signed-out visitor sees the option, with a note that it needs signing in, and signing in brings them straight to it); nothing is saved until you add them, a value the documents don't give stays empty and asks you, and each proposal opens in its usual form to check.
 - **The starting point is the first entry in history.** The plan cannot be opened as of a date before it.
 
 ### Income, In Detail
@@ -412,6 +413,7 @@ Every change says from when and shows, before it saves, which coming income days
 
 ### Next Steps
 
+- [x] Start from a budget you already have: pick up to five files or paste text, an AI reads them in the browser, and you review each income source, bill, envelope and goal in Starting out before anything is added
 - [ ] Start from gross pay, with each tax and deduction a percentage or an exact amount
 - [ ] Amounts that are a percentage of what is left at their turn in priority order
 - [ ] Plan consecutive income days together in one sitting

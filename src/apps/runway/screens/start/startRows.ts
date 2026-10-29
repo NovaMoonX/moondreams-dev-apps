@@ -13,7 +13,7 @@ import type {
 } from '@apps/runway/types';
 
 /** A range as short as it can be read: "$300–360", so the name keeps its room. */
-const formatRowRange = (range: MoneyRange) =>
+export const formatRowRange = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCentsShort(range.lowCents)
     : `${formatCentsShort(range.lowCents)}–${formatCentsShort(range.highCents).replace('$', '')}`;
@@ -26,6 +26,8 @@ export interface StartRow {
   line: string;
   /** The figure on the right, or null when the row has none. */
   amount: string | null;
+  /** The figure is one the document gave that is not what gets added, so it reads quieter. */
+  isAmountMuted?: boolean;
   /** The source a pay line belongs to, when that source has several. */
   group?: string;
 }

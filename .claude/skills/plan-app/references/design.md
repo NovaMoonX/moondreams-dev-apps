@@ -50,6 +50,11 @@ Run this against the canvas. Each item is a problem a real review turned up.
 - [ ] Lists that can grow are groupable, with totals on the group.
 - [ ] Named things can carry an emoji.
 
+**Form and context**
+- [ ] Every view that orders, compares or sums many items names its form (a list, a chart, a pyramid, a map) and why that form fits its one job, and it is drawn at 5 and at 50 items on a 390px board, with amounts hidden where the app hides them. A chart that cannot name its items, be reordered or be drawn while amounts are hidden is not the view's form (Runway's Priorities view reached a build plan with its form undecided).
+- [ ] Every view says what it opens on and why that is the context the person needs; a figure, day or example the job does not need is left out, and a row reuses the facts the person already knows from the item's own list unless the view's job needs a new one (Runway's Priorities first opened on the next pay with "Gets $40 of $120" rows the owner could not read).
+- [ ] Reordering many items on a phone is planned at 50: how an item crosses a long list or a group line in a few taps, not only "drag" or "move up".
+
 **Consistency**
 - [ ] Where two features can cover the same case, state which applies when, and draw each state. Do not show both firing on one board.
 - [ ] A word means one thing everywhere (e.g. "Free to Spend", "left", and "safe to spend" are not three names for one number).

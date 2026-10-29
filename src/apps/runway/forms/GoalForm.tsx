@@ -422,6 +422,7 @@ function GoalForm({
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
+    initialOpenId: draft?.openStep ?? null,
     onAdvance: (fromId) => {
       const suggestion = getSuggestion(formData);
       if (

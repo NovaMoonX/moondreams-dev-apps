@@ -648,6 +648,7 @@ function IncomeForm({
       isHidden,
     ),
     startFolded: isEditing || !!draft?.initial,
+    initialOpenId: draft?.openStep ?? null,
   });
 
   const buildPayLine = (data: IncomeFormData): PayLineSealed | null => {

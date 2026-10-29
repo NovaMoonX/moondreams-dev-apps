@@ -45,6 +45,7 @@ import { createBill } from '@apps/runway/store/actions/itemActions';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
@@ -242,7 +243,10 @@ const getBlocker = (
   return null;
 };
 
-const getEditingData = (payload: BillSealed): BillFormData => {
+const getEditingData = (
+  payload: BillSealed,
+  isDraft: boolean,
+): BillFormData => {
   const { schedule } = payload.timing;
   const frequency = BILL_FREQUENCIES.find((kind) => kind === schedule.kind);
   return {
@@ -251,7 +255,7 @@ const getEditingData = (payload: BillSealed): BillFormData => {
     priority: payload.priority,
     startDate:
       schedule.anchor === null ? '' : toDateInputValue(schedule.anchor),
-    frequency: frequency ?? 'once',
+    frequency: frequency ?? (isDraft ? null : 'once'),
     endKind:
       payload.ending.onDate !== null
         ? 'date'
@@ -301,7 +305,10 @@ function BillForm({
   const isTracking = useAppSelector(selectLevel) === 'track';
   const [formData, setFormData] = useState<BillFormData>(() =>
     editing || draft?.initial
-      ? getEditingData((editing?.payload ?? draft?.initial) as BillSealed)
+      ? getEditingData(
+          (editing?.payload ?? draft?.initial) as BillSealed,
+          editing === undefined,
+        )
       : {
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,
@@ -439,15 +446,22 @@ function BillForm({
       isAnswered: parseAmountDraft(formData.amount) !== null,
       blocker: getAmountDraftProblem(formData.amount),
       render: () => (
-        <RangeAmountField
-          isHero
-          label={FORM_FLOW_WORDS.amount}
-          hint=''
-          side='expense'
-          planStance={planStance}
-          value={formData.amount}
-          onChange={(amount) => set({ amount })}
-        />
+        <div className='space-y-2'>
+          <RangeAmountField
+            isHero
+            label={FORM_FLOW_WORDS.amount}
+            hint=''
+            side='expense'
+            planStance={planStance}
+            value={formData.amount}
+            onChange={(amount) => set({ amount })}
+          />
+          {draft?.repeatNote && (
+            <p className='text-muted-foreground text-sm text-pretty'>
+              <MaskedText>{draft.repeatNote}</MaskedText>
+            </p>
+          )}
+        </div>
       ),
     },
     {
@@ -491,15 +505,22 @@ function BillForm({
       isAnswered: formData.frequency !== null,
       blocker: FORM_FLOW_WORDS.pickRepeat,
       render: ({ moveOn }) => (
-        <PillGroup
-          label='Repeats'
-          options={frequencyOptions}
-          value={formData.frequency}
-          onChange={(frequency) => {
-            set({ frequency });
-            moveOn();
-          }}
-        />
+        <div className='space-y-2'>
+          <PillGroup
+            label='Repeats'
+            options={frequencyOptions}
+            value={formData.frequency}
+            onChange={(frequency) => {
+              set({ frequency });
+              moveOn();
+            }}
+          />
+          {draft?.repeatNote && (
+            <p className='text-muted-foreground text-sm text-pretty'>
+              <MaskedText>{draft.repeatNote}</MaskedText>
+            </p>
+          )}
+        </div>
       ),
     },
     ...(isOnce || formData.frequency === null
@@ -702,6 +723,7 @@ function BillForm({
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
+    initialOpenId: draft?.openStep ?? null,
   });
 
   const getChosenKeys = (picked: string[]) =>
