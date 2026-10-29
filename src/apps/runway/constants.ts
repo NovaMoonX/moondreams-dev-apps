@@ -1258,6 +1258,12 @@ export const GROUP_WORDS = {
   basisTitle: 'How a month is worked out',
   rangeTotal:
     'A bill that varies counts at its low and its high amount, so the total is a range.',
+  basis:
+    'Each bill counts at what it comes to in an average month. A one-time bill counts only in its month.',
+  uncounted: (count: number) =>
+    count === 1
+      ? 'One bill has no regular schedule, so it is not in this total.'
+      : `${count} bills have no regular schedule, so they are not in this total.`,
 } as const;
 
 // Round 4, package G4.

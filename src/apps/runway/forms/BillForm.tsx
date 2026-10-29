@@ -41,9 +41,7 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
-import {
-  createBill,
-} from '@apps/runway/store/actions/itemActions';
+import { createBill } from '@apps/runway/store/actions/itemActions';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
@@ -366,6 +364,14 @@ function BillForm({
       newGroup: { name: resolved.label, startingPriority: null },
     };
   };
+  /** The priority the person chose, else the starting priority of the group the bill joins, else the default. */
+  const getPriority = (data: BillFormData): Priority => {
+    if (isPriorityChosen) return data.priority;
+    const { groupId } = resolveGroup(data);
+    const startsWith = groups.find(({ item }) => item.id === groupId)?.version
+      .payload.startingPriority;
+    return startsWith ?? data.priority;
+  };
   const getGroupName = (group: BillFormData['group']) => {
     if (group.choice === NEW_CHOICE) return group.newText.trim();
     return (
@@ -605,15 +611,7 @@ function BillForm({
                 maxLength={MAX_NAME_LENGTH}
                 clearLabel={FORM_FLOW_WORDS.clearGroup}
                 onChange={(choice, newText) => {
-                  const startsWith = groups.find(
-                    ({ item }) => item.id === choice,
-                  )?.version.payload.startingPriority;
-                  set({
-                    group: { choice, newText },
-                    ...(startsWith && !isPriorityChosen
-                      ? { priority: startsWith }
-                      : {}),
-                  });
+                  set({ group: { choice, newText } });
                   if (choice !== '' && choice !== NEW_CHOICE) moveOn();
                 }}
               />
@@ -624,14 +622,14 @@ function BillForm({
       id: 'priority',
       title: FORM_FLOW_WORDS.priorityTitle,
       summaryLabel: FORM_FLOW_WORDS.priority,
-      summaryValue: PRIORITY_LABELS[formData.priority],
+      summaryValue: PRIORITY_LABELS[getPriority(formData)],
       isAnswered: true,
       isPreAnswered: true,
       render: ({ moveOn }) => (
         <PillGroup
           label={FORM_FLOW_WORDS.priority}
           options={priorityOptions}
-          value={formData.priority}
+          value={getPriority(formData)}
           onChange={(priority) => {
             setIsPriorityChosen(true);
             set({ priority });
@@ -690,11 +688,12 @@ function BillForm({
     )
       return null;
 
+    const priority = getPriority(data);
     const tier = bills.filter(
-      (bill) => bill.version.payload.priority === data.priority,
+      (bill) => bill.version.payload.priority === priority,
     );
     const orderIndex =
-      editing && editing.payload.priority === data.priority
+      editing && editing.payload.priority === priority
         ? editing.payload.orderIndex
         : Math.max(0, ...tier.map((bill) => bill.version.payload.orderIndex)) +
           ENVELOPE_ORDER_STEP;
@@ -705,7 +704,7 @@ function BillForm({
     const result: BillSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,
-      priority: data.priority,
+      priority,
       orderIndex,
       amount,
       timing: {

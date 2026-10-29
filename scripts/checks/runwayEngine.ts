@@ -8478,55 +8478,90 @@ console.log('runway engine: ok');
   });
   const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
   const nov = utc(2026, 11, 14);
+  const NO_END = { onDate: null, afterCount: null };
+  const member = (
+    amount: { lowCents: number; highCents: number },
+    schedule: Schedule,
+    extra: Partial<{ startsOn: number; ending: typeof NO_END }> = {},
+  ) => ({
+    amount,
+    schedule,
+    startsOn: utc(2026, 1, 1),
+    ending: NO_END,
+    ...extra,
+  });
 
   assert.deepEqual(
     monthlyTotal(
       [
-        {
-          amount: exact(120_000),
-          schedule: every('monthly', utc(2026, 11, 1)),
-        },
-        { amount: exact(5_200), schedule: every('weekly', utc(2026, 11, 3)) },
-        {
-          amount: exact(2_600),
-          schedule: every('everyOtherWeek', utc(2026, 11, 3)),
-        },
-        { amount: exact(1_000), schedule: every('twiceMonthly', null) },
+        member(exact(120_000), every('monthly', utc(2026, 11, 1))),
+        member(exact(5_200), every('weekly', utc(2026, 11, 3))),
+        member(exact(2_600), every('everyOtherWeek', utc(2026, 11, 3))),
+        member(exact(1_000), every('twiceMonthly', null)),
       ],
       nov,
     ),
-    exact(150_167),
+    { total: exact(150_167), uncounted: 0 },
     'G10: each schedule counts at its monthly average, rounded once',
   );
   assert.deepEqual(
     monthlyTotal(
       [
-        { amount: exact(9_000), schedule: every('once', utc(2026, 11, 30)) },
-        { amount: exact(7_000), schedule: every('once', utc(2026, 12, 1)) },
+        member(exact(9_000), every('once', utc(2026, 11, 30))),
+        member(exact(7_000), every('once', utc(2026, 12, 1))),
       ],
       nov,
     ),
-    exact(9_000),
+    { total: exact(9_000), uncounted: 0 },
     'G10: a once bill counts only in the month it falls in',
   );
   assert.deepEqual(
     monthlyTotal([], nov),
-    exact(0),
+    { total: exact(0), uncounted: 0 },
     'G10: an empty group comes to nothing',
   );
   assert.deepEqual(
     monthlyTotal(
       [
-        {
-          amount: { lowCents: 14_000, highCents: 18_000 },
-          schedule: every('monthly', utc(2026, 11, 1)),
-        },
-        { amount: exact(5_000), schedule: every('monthly', utc(2026, 11, 5)) },
+        member(
+          { lowCents: 14_000, highCents: 18_000 },
+          every('monthly', utc(2026, 11, 1)),
+        ),
+        member(exact(5_000), every('monthly', utc(2026, 11, 5))),
       ],
       nov,
     ),
-    { lowCents: 19_000, highCents: 23_000 },
+    { total: { lowCents: 19_000, highCents: 23_000 }, uncounted: 0 },
     'G10: a group with a range member shows a range',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(120_000), every('monthly', utc(2026, 11, 1))),
+        member(exact(18_000), every('irregular', null)),
+      ],
+      nov,
+    ),
+    { total: exact(120_000), uncounted: 1 },
+    'G10: a bill with no regular beat is named as left out, never counted as 0 silently',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(30_000), every('monthly', utc(2026, 1, 5)), {
+          ending: { onDate: utc(2026, 10, 5), afterCount: null },
+        }),
+        member(exact(40_000), every('monthly', utc(2027, 1, 1)), {
+          startsOn: utc(2027, 1, 1),
+        }),
+        member(exact(50_000), every('monthly', utc(2026, 1, 1)), {
+          ending: { onDate: utc(2026, 11, 20), afterCount: null },
+        }),
+      ],
+      nov,
+    ),
+    { total: exact(50_000), uncounted: 0 },
+    'G10: a bill that ended before the month or begins after it counts nothing; one ending in it still counts',
   );
 }
 

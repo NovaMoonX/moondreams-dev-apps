@@ -34,7 +34,8 @@ import {
   selectGroups,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { GroupSealed, MoneyRange, Priority } from '@apps/runway/types';
+import type { GroupTotal } from '@apps/runway/engine/groups';
+import type { GroupSealed, Priority } from '@apps/runway/types';
 import { describeGroupTotal } from '@apps/runway/utils/billText';
 import { describeChange } from '@apps/runway/utils/changeText';
 
@@ -43,7 +44,7 @@ type StartingChoice = Priority | 'none';
 interface GroupSheetProps {
   groupId: string;
   /** What the group's bills come to in a month, worked out by the screen that lists them. */
-  total: MoneyRange;
+  total: GroupTotal;
   billCount: number;
   today: number;
   onClose: () => void;
@@ -76,7 +77,7 @@ function GroupSheet({
 
   if (!group) return null;
   const payload = group.version.payload;
-  const hasRange = !isHidden && total.lowCents !== total.highCents;
+  const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
 
   const save = async (next: GroupSealed) => {
     if (!user) return;
@@ -180,11 +181,17 @@ function GroupSheet({
           <>
             <SheetHead
               label={GROUP_WORDS.monthLabel}
-              figure={isHidden ? MASK : describeGroupTotal(total)}
+              figure={isHidden ? MASK : describeGroupTotal(total.total)}
               help={
-                hasRange ? (
-                  <RangeBasisNote stance={stance} side='expense' />
-                ) : undefined
+                <>
+                  <p>{GROUP_WORDS.basis}</p>
+                  {total.uncounted > 0 && (
+                    <p>{GROUP_WORDS.uncounted(total.uncounted)}</p>
+                  )}
+                  {hasRange && (
+                    <RangeBasisNote stance={stance} side='expense' />
+                  )}
+                </>
               }
               helpTitle={GROUP_WORDS.basisTitle}
             />

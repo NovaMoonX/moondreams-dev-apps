@@ -62,6 +62,7 @@ function BillsScreen() {
     const { groupId } = version.payload;
     return {
       item,
+      startsOn: version.effectiveFrom,
       payload: version.payload,
       payment,
       groupId: groupId !== null && groupIds.has(groupId) ? groupId : null,
@@ -80,9 +81,11 @@ function BillsScreen() {
         name: version.payload.name,
         rows: members.filter(isShown),
         total: monthlyTotal(
-          members.map(({ payload }) => ({
+          members.map(({ payload, startsOn }) => ({
             amount: payload.amount,
             schedule: payload.timing.schedule,
+            startsOn,
+            ending: payload.ending,
           })),
           today,
         ),
@@ -158,41 +161,49 @@ function BillsScreen() {
           <p className='text-muted-foreground text-sm'>No bill matches that.</p>
         ) : (
           <>
-            {sections.map(({ id, name, rows, total, count }) => (
-              <div key={id} className='space-y-2'>
-                <SectionDivider
-                  label={
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      size='sm'
-                      aria-label={GROUP_WORDS.openLabel(name)}
-                      className="relative after:absolute after:-inset-2 after:content-['']"
-                      onClick={() => setOpenGroupId(id)}
-                    >
-                      {name}
-                    </Button>
-                  }
-                  trailing={
-                    <span className='text-muted-foreground flex items-center gap-1 text-sm'>
-                      <span>
-                        <SensitiveValue>
-                          {describeGroupTotal(total)}
-                        </SensitiveValue>{' '}
-                        a month
-                      </span>
-                      {!isHidden && total.lowCents !== total.highCents && (
+            {sections.map(
+              ({ id, name, rows, total: { total, uncounted }, count }) => (
+                <div key={id} className='space-y-2'>
+                  <SectionDivider
+                    label={
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        size='sm'
+                        aria-label={GROUP_WORDS.openLabel(name)}
+                        className="relative after:absolute after:-inset-2 after:content-['']"
+                        onClick={() => setOpenGroupId(id)}
+                      >
+                        {name}
+                      </Button>
+                    }
+                    trailing={
+                      <span className='text-muted-foreground flex items-center gap-1 text-sm'>
+                        <span>
+                          <SensitiveValue>
+                            {describeGroupTotal(total)}
+                          </SensitiveValue>{' '}
+                          a month
+                        </span>
                         <HelpTip title={GROUP_WORDS.basisTitle}>
-                          <p>{GROUP_WORDS.rangeTotal}</p>
-                          <RangeBasisNote stance={stance} side='expense' />
+                          <p>{GROUP_WORDS.basis}</p>
+                          {uncounted > 0 && (
+                            <p>{GROUP_WORDS.uncounted(uncounted)}</p>
+                          )}
+                          {!isHidden && total.lowCents !== total.highCents && (
+                            <>
+                              <p>{GROUP_WORDS.rangeTotal}</p>
+                              <RangeBasisNote stance={stance} side='expense' />
+                            </>
+                          )}
                         </HelpTip>
-                      )}
-                    </span>
-                  }
-                />
-                {count > 0 && rows.length > 0 && getCard(rows)}
-              </div>
-            ))}
+                      </span>
+                    }
+                  />
+                  {count > 0 && rows.length > 0 && getCard(rows)}
+                </div>
+              ),
+            )}
             {ungrouped.length > 0 && (
               <div className='space-y-2'>
                 {sections.length > 0 && (
