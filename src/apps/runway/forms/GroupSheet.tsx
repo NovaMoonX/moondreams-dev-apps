@@ -153,7 +153,7 @@ function GroupSheet({
     setPriorityError(
       failure === null ? null : GROUP_WORDS.startingPriorityFailed,
     );
-    setPickedPriority(null);
+    setPickedPriority((current) => (current === choice ? null : current));
   };
 
   const archive = async () => {

@@ -10,6 +10,7 @@ import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
 import { DAY_MS } from '@apps/runway/engine/dates';
+import type { VersionStretch } from '@apps/runway/engine/resolve';
 import {
   getHeldReleaseDay,
   readHeldReleasedOn,
@@ -427,6 +428,8 @@ export interface ChangeItemInput {
   effectiveUntil?: number | null;
   /** A group the person named while changing a bill; it is written in the same batch and the bill joins it. */
   newGroup?: GroupSealed | null;
+  /** For a change to one field only: the item's stretches from `effectiveFrom` on, each written as its own version so later and temporary versions keep their amounts and dates. */
+  stretches?: VersionStretch<ItemPayload>[];
 }
 
 /**
@@ -453,23 +456,33 @@ export async function changeItem(
           now,
         )
       : null;
-  const payload: ItemPayload = groupDocs
-    ? { ...(input.payload as BillSealed), groupId: groupDocs.groupId }
-    : input.payload;
-  const [versionSealed, changeSealed] = await Promise.all([
-    sealJson(payload, encryption),
+  const withGroup = (payload: ItemPayload): ItemPayload =>
+    groupDocs
+      ? { ...(payload as BillSealed), groupId: groupDocs.groupId }
+      : payload;
+  const stretches: VersionStretch<ItemPayload>[] = input.stretches ?? [
+    {
+      payload: input.payload,
+      effectiveFrom: input.effectiveFrom,
+      effectiveUntil: input.effectiveUntil ?? null,
+    },
+  ];
+  const [changeSealed, ...versionsSealed] = await Promise.all([
     sealJson(changePayload, encryption),
+    ...stretches.map((stretch) =>
+      sealJson(withGroup(stretch.payload), encryption),
+    ),
   ]);
-  const version: PlanVersionDoc = {
+  const versions = stretches.map((stretch, index): PlanVersionDoc => ({
     id: generateUuid(),
     itemId: input.itemId,
     kind: input.kind,
     createdAt: now,
-    effectiveFrom: input.effectiveFrom,
-    effectiveUntil: input.effectiveUntil ?? null,
+    effectiveFrom: stretch.effectiveFrom,
+    effectiveUntil: stretch.effectiveUntil,
     changeId,
-    sealed: versionSealed,
-  };
+    sealed: versionsSealed[index],
+  }));
   const change: ChangeDoc = {
     id: changeId,
     kind: 'planChange',
@@ -487,7 +500,9 @@ export async function changeItem(
     );
     batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
   }
-  batch.set(itemPath(uid, 'versions', version.id), version);
+  versions.forEach((version) =>
+    batch.set(itemPath(uid, 'versions', version.id), version),
+  );
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();
 }

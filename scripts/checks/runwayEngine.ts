@@ -197,6 +197,7 @@ import {
   percentShares,
 } from '../../src/apps/runway/engine/money.ts';
 import {
+  getVersionStretches,
   resolve,
   resolveCurrentOrNext,
   resolveNextChange,
@@ -8590,6 +8591,53 @@ console.log('runway engine: ok');
       oneTime: { count: 0, range: exact(0), dueOn: null },
     },
     'G10: a bill that ended before the month or begins after it counts nothing; one ending in it still counts',
+  );
+}
+
+{
+  const D = 86_400_000;
+  const v = (
+    id: string,
+    createdAt: number,
+    from: number,
+    until: number | null,
+    cents: number,
+  ) => ({
+    id,
+    itemId: 'x',
+    createdAt,
+    effectiveFrom: from,
+    effectiveUntil: until,
+    payload: { cents },
+  });
+  assert.deepEqual(
+    getVersionStretches([v('base', 1, 0, null, 80)], 'x', 10 * D),
+    [{ payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: null }],
+    'an item with one version in force is one stretch',
+  );
+  assert.deepEqual(
+    getVersionStretches(
+      [v('base', 1, 0, null, 80), v('stretch', 2, 5 * D, 20 * D, 40)],
+      'x',
+      10 * D,
+    ),
+    [
+      { payload: { cents: 40 }, effectiveFrom: 10 * D, effectiveUntil: 20 * D },
+      { payload: { cents: 80 }, effectiveFrom: 20 * D, effectiveUntil: null },
+    ],
+    'a stretch in force keeps its amount and its end, and the amount after it comes back',
+  );
+  assert.deepEqual(
+    getVersionStretches(
+      [v('base', 1, 0, null, 80), v('ahead', 2, 30 * D, null, 95)],
+      'x',
+      10 * D,
+    ),
+    [
+      { payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: 30 * D },
+      { payload: { cents: 95 }, effectiveFrom: 30 * D, effectiveUntil: null },
+    ],
+    'a change ahead keeps its date and amount',
   );
 }
 

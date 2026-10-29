@@ -35,7 +35,7 @@ import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import SuggestionChips from '@/components/SuggestionChips';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -82,6 +82,7 @@ import {
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import {
+  getVersionStretches,
   resolveCurrentOrNext,
   resolveNextChange,
   resolveVersion,
@@ -121,6 +122,7 @@ import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import type {
   BillSealed,
+  BillVersion,
   GoalSealed,
   ItemKind,
   OpenVersion,
@@ -459,6 +461,18 @@ function ItemSheet({
         note: null,
         effectiveFrom: today,
         newGroup: pickedGroup.newGroup,
+        stretches: getVersionStretches<BillVersion, BillSealed>(
+          store
+            .getState()
+            .runway.versions.filter(
+              (version): version is BillVersion => version.kind === 'bill',
+            ),
+          itemId,
+          today,
+        ).map((stretch) => ({
+          ...stretch,
+          payload: { ...stretch.payload, groupId: next.groupId },
+        })),
       });
       addToast({
         title:
