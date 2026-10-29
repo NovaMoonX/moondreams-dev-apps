@@ -72,9 +72,9 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
       );
     }
     const { freeToSpendCents, lines } = record;
-    const otherLines = lines.filter(
-      (line) => !(billIds.has(line.itemId) && line.cents > 0),
-    );
+    const otherLines = isCorrectable
+      ? lines.filter((line) => !(billIds.has(line.itemId) && line.cents > 0))
+      : lines;
     const funded = otherLines.filter((line) => line.shortBy === 0);
     const unfunded = otherLines.filter((line) => line.shortBy > 0);
     const dayLeft = <CoverageHeadline freeCents={freeToSpendCents} />;
@@ -176,7 +176,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
         </div>
         {getBody()}
       </div>
-      {isCorrecting && record && (
+      {isCorrecting && isCorrectable && record && (
         <CorrectSheet
           key={record.recordId}
           dayKey={day.dayKey}

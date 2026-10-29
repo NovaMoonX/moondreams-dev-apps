@@ -409,11 +409,16 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
   const isOlder = useAppSelector((state) =>
     selectIsDayOlderThanRecent(state, dayKey),
   );
+  const isOlderFailed = useAppSelector(
+    (state) => state.runway.historyFailedFor !== null,
+  );
 
   if (listed === null && isOlder) {
     return (
       <Subview title='Income day' onClose={onClose}>
-        <p className='text-muted-foreground text-sm'>{DAYS_WORDS.loadingDay}</p>
+        <p className='text-muted-foreground text-sm'>
+          {isOlderFailed ? DAYS_WORDS.failedMonth : DAYS_WORDS.loadingDay}
+        </p>
       </Subview>
     );
   }
