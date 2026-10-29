@@ -211,7 +211,7 @@ function CardHistoryView({
                 <SensitiveValue>{formatCents(entry.cents)}</SensitiveValue>
               </span>
               <span className='text-muted-foreground block text-xs tabular-nums'>
-                <SensitiveValue>{owes}</SensitiveValue>
+                {isHidden ? '\u00a0' : owes}
               </span>
             </span>
           </span>

@@ -7,7 +7,7 @@ import type {
   OpenPurchase,
 } from '@apps/runway/types';
 
-import { DAY_MS, daysInUtcMonth, startOfUtcDay } from './dates';
+import { DAY_MS, daysInUtcMonth, todayAsUtcDate } from './dates';
 
 /** The day a card is due in one month: its due day, or the month's last day when the month is shorter. */
 const dueInMonth = (dueDay: number, year: number, month: number): DateOnly =>
@@ -85,18 +85,16 @@ export function getCardDueState(
   const covering = [...payments]
     .filter((payment) => payment.covers !== 'part')
     .sort((a, b) => a.on - b.on);
-  const paidFor = dueDays.reduce<{ paid: Set<DateOnly>; used: number }>(
-    (acc, dueOn) => {
-      const opens = getPrevDueOn(card.dueDay, dueOn - DAY_MS) ?? 0;
-      const index = covering.findIndex(
-        (payment, at) => at >= acc.used && payment.on > opens,
-      );
-      if (index === -1) return acc;
-      acc.paid.add(dueOn);
-      return { paid: acc.paid, used: index + 1 };
-    },
-    { paid: new Set<DateOnly>(), used: 0 },
-  ).paid;
+  // A payment in full pays for every open due day it came after; the minimum pays for one, earliest first.
+  const paidFor = covering.reduce<Set<DateOnly>>((paid, payment) => {
+    const open = dueDays.filter(
+      (dueOn) =>
+        !paid.has(dueOn) &&
+        payment.on > (getPrevDueOn(card.dueDay, dueOn - DAY_MS) ?? 0),
+    );
+    const settled = payment.covers === 'full' ? open : open.slice(0, 1);
+    return new Set([...paid, ...settled]);
+  }, new Set<DateOnly>());
   const isPaidFor = (dueOn: DateOnly) => paidFor.has(dueOn);
   const unpaidPrev =
     prev !== null && prev >= since && !isPaidFor(prev) ? prev : null;
@@ -147,7 +145,7 @@ export function getDueCards(
         payments,
         today,
         days,
-        Math.max(startDate, startOfUtcDay(card.createdAt)),
+        Math.max(startDate, todayAsUtcDate(card.createdAt)),
       );
       return state === null ? [] : [state];
     })

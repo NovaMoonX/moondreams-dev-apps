@@ -137,7 +137,7 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
             fact={
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
-                : describeCardDue(card, reserveCents, today, due)
+                : describeCardDue(card, today, due)
             }
           />
           <Button

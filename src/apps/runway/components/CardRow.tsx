@@ -43,7 +43,7 @@ function CardRow({
       name={name}
       leading={<ItemBadge name={card.issuer} emoji={null} />}
       detail={
-        describeCardDue(card, reserveCents, today, due) ??
+        describeCardDue(card, today, due) ??
         (reserveCents > 0
           ? CARD_WORDS.waiting
           : reserveCents < 0

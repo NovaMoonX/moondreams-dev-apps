@@ -8102,11 +8102,6 @@ const version = (
     'part of it leaves it up',
   );
   assert.equal(
-    state(d(2026, 11, 10), [{ on: d(2026, 10, 20), covers: 'full' }])?.dueOn,
-    d(2026, 11, 14),
-    'a payment late for one due day pays for that one, not the next',
-  );
-  assert.equal(
     state(d(2026, 11, 10), [
       { on: d(2026, 10, 10), covers: 'minimum' },
       { on: d(2026, 10, 20), covers: 'full' },
@@ -8118,6 +8113,16 @@ const version = (
     state(d(2026, 11, 19), [{ on: d(2026, 11, 16), covers: 'minimum' }], 5_000),
     null,
     'an old unpaid month never soaks up a new payment',
+  );
+  assert.equal(
+    state(d(2026, 11, 10), [{ on: d(2026, 10, 20), covers: 'minimum' }])?.dueOn,
+    d(2026, 11, 14),
+    'one minimum pays for one due day: a late October minimum leaves November due',
+  );
+  assert.equal(
+    state(d(2026, 11, 10), [{ on: d(2026, 10, 20), covers: 'full' }]),
+    null,
+    'paid in full after the last due day pays for every due day still open',
   );
   const rolled = state(d(2026, 12, 9));
   assert.deepEqual(

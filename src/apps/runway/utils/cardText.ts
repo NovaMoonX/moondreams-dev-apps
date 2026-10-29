@@ -6,7 +6,7 @@ import {
   CARD_ISSUERS,
   CARD_WORDS,
 } from '@apps/runway/constants';
-import { DAY_MS, startOfUtcDay } from '@apps/runway/engine/dates';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   collectCardHistory,
   getCardDueState,
@@ -131,13 +131,12 @@ export const getCardDueNow = (
     ),
     today,
     CARD_DUE_WARN_DAYS,
-    Math.max(startDate, startOfUtcDay(card.createdAt)),
+    Math.max(startDate, todayAsUtcDate(card.createdAt)),
   );
 
 /** The one due fact a card shows: "Due Nov 14", "Due in 3 days" / "Due today" inside the warning window when money waits, "Past due since Oct 14", or "Due Nov 3 · not paid by Oct 14"; null with no due day. `due` is what `getCardDueNow` found. */
 export function describeCardDue(
   card: OpenCard,
-  waitingCents: Cents,
   today: DateOnly,
   due: DueCard | null,
 ): string | null {
@@ -150,13 +149,14 @@ export function describeCardDue(
       formatDateShortUTC(due.rolledFrom),
     );
   }
-  const dueOn = getNextDueOn(card.dueDay, today);
-  if (dueOn === null) return null;
-  const inDays = Math.round((dueOn - today) / DAY_MS);
-  if (waitingCents <= 0 || inDays > CARD_DUE_WARN_DAYS) {
-    return CARD_WORDS.dueOn(formatDateShortUTC(dueOn));
+  // Counting down only while the warning is up, so a card already paid for reads as a plain date.
+  if (due !== null) {
+    return due.inDays === 0
+      ? CARD_WORDS.dueToday
+      : CARD_WORDS.dueInDays(due.inDays);
   }
-  return inDays === 0 ? CARD_WORDS.dueToday : CARD_WORDS.dueInDays(inDays);
+  const dueOn = getNextDueOn(card.dueDay, today);
+  return dueOn === null ? null : CARD_WORDS.dueOn(formatDateShortUTC(dueOn));
 }
 
 /** The cards a list shows: those in use, and an archived one while it still waits to be paid so it can be paid off. */

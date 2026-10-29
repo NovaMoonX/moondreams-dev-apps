@@ -186,7 +186,7 @@ export async function payCard(
       } satisfies CardPaymentSealed,
       encryption,
     ),
-    getChangeDoc(encryption, input.summary, input.date),
+    getChangeDoc(encryption, input.summary, null),
   ]);
   const id = await runTransaction(db, async (transaction) => {
     const plan = await transaction.get(planRef(uid));
@@ -238,7 +238,7 @@ export async function undoCardPayment(
       } satisfies CardPaymentSealed,
       encryption,
     ),
-    getChangeDoc(encryption, paid.summary, paid.date),
+    getChangeDoc(encryption, paid.summary, null),
   ]);
   await runTransaction(db, async (transaction) => {
     const [existing, plan] = await Promise.all([
