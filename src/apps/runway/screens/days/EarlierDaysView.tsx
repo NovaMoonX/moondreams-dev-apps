@@ -1,8 +1,7 @@
 import { useState } from 'react';
 
+import BackLink from '@/components/BackLink';
 import SearchInput from '@/components/SearchInput';
-import SectionDivider from '@/components/SectionDivider';
-import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -18,11 +17,6 @@ import {
 import { getHistoryRange } from '@apps/runway/utils/historyWindow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
-const longMonth = new Intl.DateTimeFormat('en-US', {
-  month: 'long',
-  year: 'numeric',
-  timeZone: 'UTC',
-});
 const shortMonth = new Intl.DateTimeFormat('en-US', {
   month: 'short',
   year: 'numeric',
@@ -109,10 +103,7 @@ function EarlierDaysView({ month, onBack }: EarlierDaysViewProps) {
 
   return (
     <div className='space-y-3'>
-      <ShowMoreButton isOpen onClick={onBack}>
-        {DAYS_WORDS.backToRecent}
-      </ShowMoreButton>
-      <SectionDivider label={longMonth.format(start)} />
+      <BackLink label={DAYS_WORDS.backToRecent} onBack={onBack} />
       {getBody()}
     </div>
   );

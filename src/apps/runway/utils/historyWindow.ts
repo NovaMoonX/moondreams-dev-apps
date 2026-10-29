@@ -29,3 +29,11 @@ export function listHistoryMonths(
     toMonthKey(recentFrom - DAY_MS),
   ).reverse();
 }
+
+/** The month (`yyyy-mm`) a day key's date stamp falls in, so a link to an older day can read its month. */
+export const getDayKeyMonth = (dayKey: string) => {
+  const stamp = dayKey.slice(-8);
+  return /^\d{8}$/.test(stamp)
+    ? `${stamp.slice(0, 4)}-${stamp.slice(4, 6)}`
+    : null;
+};

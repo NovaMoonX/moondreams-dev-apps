@@ -1121,7 +1121,7 @@ export const DAYS_WORDS = {
   addExpected: 'Add expected money',
   addExpectedShort: 'Add money',
   earlierMonths: 'Earlier months',
-  backToRecent: 'Back to recent days',
+  backToRecent: 'Recent days',
   loadingMonth: 'Getting these income days.',
   loadingDay: 'Getting this day.',
   failedMonth: 'These income days did not load. Nothing was changed.',

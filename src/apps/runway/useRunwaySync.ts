@@ -22,7 +22,10 @@ import {
 } from '@apps/runway/store/listeners/dayListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
-import { getHistoryRange } from '@apps/runway/utils/historyWindow';
+import {
+  getDayKeyMonth,
+  getHistoryRange,
+} from '@apps/runway/utils/historyWindow';
 import { getMonthStart } from '@apps/runway/engine/closings';
 import { startPurchasesListener } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
@@ -253,11 +256,13 @@ export function useRunwaySync(uid: string | null, attempt: number) {
   } = getSpendRange(spendPeriod, today);
   const isChangeLogOpen = moreEntry === 'changeLog';
 
+  const windowMonth =
+    (openDayKey === null ? null : getDayKeyMonth(openDayKey)) ?? daysMonth;
   const historyRange =
-    daysMonth !== null &&
+    windowMonth !== null &&
     recentFrom !== null &&
-    getMonthStart(daysMonth) < recentFrom
-      ? getHistoryRange(daysMonth, recentFrom)
+    getMonthStart(windowMonth) < recentFrom
+      ? getHistoryRange(windowMonth, recentFrom)
       : null;
   const isHistoryOpen =
     historyRange !== null && (activeTab === 'days' || openDayKey !== null);

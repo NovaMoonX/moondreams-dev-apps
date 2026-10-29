@@ -36,7 +36,6 @@ import {
   selectIsDaysLoaded,
   selectHistoryListedDays,
   selectIsDayOlderThanRecent,
-  selectIsHistoryMonth,
   selectListedDays,
   selectSpendPurchases,
   selectIsPlanItemsLoaded,
@@ -132,7 +131,6 @@ function RunwayContent() {
     activeTab: requestedTab,
     showTab,
     openDayKey,
-    daysMonth,
     closeDay,
     moreEntry,
     closeMoreEntry,
@@ -158,9 +156,7 @@ function RunwayContent() {
   const isOlderDayLoading = useAppSelector(
     (state) =>
       openDayKey !== null &&
-      daysMonth !== null &&
       selectIsDayOlderThanRecent(state, openDayKey) &&
-      selectIsHistoryMonth(state, daysMonth) &&
       state.runway.historyFor === null,
   );
   const level = useAppSelector(selectLevel);

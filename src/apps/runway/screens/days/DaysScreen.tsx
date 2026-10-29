@@ -231,7 +231,7 @@ function DaysScreen() {
 
   return (
     <div className='space-y-4'>
-      <div className='flex items-center justify-between gap-2'>
+      <div className='flex min-h-10 items-center justify-between gap-2'>
         <div className='min-w-0 flex-1'>
           {earlierMonth === null && lookahead && days.length > 0 && (
             <HoldsThroughLine
@@ -260,7 +260,7 @@ function DaysScreen() {
         {monthChip}
       </div>
       {getBody()}
-      {hasIncome && (
+      {hasIncome && earlierMonth === null && (
         <FloatingAction
           label={DAYS_WORDS.addExpected}
           icon={<Banknote className='h-5 w-5' aria-hidden='true' />}

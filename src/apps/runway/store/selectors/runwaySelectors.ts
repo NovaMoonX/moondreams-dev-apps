@@ -9,7 +9,6 @@ import {
 import {
   deriveBillProgress,
   deriveHeldByItem,
-  getMonthStart,
 } from '@apps/runway/engine/closings';
 import {
   selectClosingBase,
@@ -493,12 +492,6 @@ export const selectIsDayOlderThanRecent = (
 ) => {
   const recentFrom = selectRecentFrom(state);
   return recentFrom !== null && getDayKeyDate(dayKey) < recentFrom;
-};
-
-/** True when the month (`yyyy-mm`) starts before the recent window, so Days reads it on demand. */
-export const selectIsHistoryMonth = (state: RootState, month: string) => {
-  const recentFrom = selectRecentFrom(state);
-  return recentFrom !== null && getMonthStart(month) < recentFrom;
 };
 
 /** True for a day inside the recent window, the only days a correction is offered for. */

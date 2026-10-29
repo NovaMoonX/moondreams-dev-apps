@@ -106,6 +106,7 @@ import {
   readHeldReleasedOn,
 } from '../../src/apps/runway/engine/endings.ts';
 import {
+  getDayKeyMonth,
   getHistoryRange,
   listHistoryMonths,
 } from '../../src/apps/runway/utils/historyWindow.ts';
@@ -6461,6 +6462,12 @@ const version = (
     'every month from the start to the recent window, newest first',
   );
   assert.deepEqual(listHistoryMonths(null, utc(2026, 6, 10)), []);
+  assert.equal(
+    getDayKeyMonth('seed-income-paycheck_20260920'),
+    '2026-09',
+    'a link to an older day names the month to read',
+  );
+  assert.equal(getDayKeyMonth('not-a-day'), null);
   assert.equal(getMonthStart('2026-02'), utc(2026, 2, 1));
   assert.equal(
     getLastClosableMonth(utc(2026, 11, 15)),
