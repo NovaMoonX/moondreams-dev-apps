@@ -76,17 +76,22 @@ A docs-only or comment-only change needs no review agents; `validator` is enough
 
 ## The PR status comment
 
-Each PR you drive has one comment that starts with `<!-- pr-status -->`, which you rewrite in place (never a new comment) after every push, review round and decision. The PR body's first line under the `Resolves` lines links to it: `📋 Status: <one line>`. Its shape:
+Each PR you drive has one comment that starts with `<!-- pr-status -->`, which you rewrite in place (never a new comment) after every push, review round and decision. `owner-inbox.yml` rebuilds the pinned "📥 Owner inbox" issue from these comments, grouped by the `session` marker, so the shape below is a contract: an owner decision is an unchecked `- [ ]` line carrying `(who: owner)` (the inbox counts those as 🚩), written as a question a person can answer from the inbox alone, with each option's screenshot on a line indented under it (the inbox shows them beside the question; owner: "I'd like to see the question and then the screen that's in question"), notes go under **Good to know** and images under **New screenshots** (`scripts/ownerInbox/inbox.ts` parses them; `check:owner-inbox`). The PR body's first line under the `Resolves` lines links to it: `📋 Status: <one line>`. Its shape:
 
 ```markdown
 <!-- pr-status -->
+<!-- session: <this session's URL, from the Claude-Session line> -->
 ## 📋 Status · <ready to merge | blocked | in progress> · <short sha>
+**Session:** <a two-to-four-word name for what this session is doing, the same on every PR it drives ("Runway cards")>
 
 **Must do before merge**
 - [ ] <red CI, conflicts, a blocking finding, an owner decision, a secret to create> (who: you / owner)
 
 **Should do**
 - [ ] <optional findings carried, a follow-up worth doing in this PR>
+- [ ] <a decision, asked as a question with its options: "History's header: A, B or C?"> (who: owner)
+  - A, <what it is>: <screenshot URL>
+  - B, <what it is>: <screenshot URL>
 
 **Next moves**
 - <what you would do next, or suggest the owner does: a decision to make, a device to try it on, the next issue>
@@ -100,6 +105,12 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 
 **Pipeline proposals** (only when there are any; `docs/conventions/pipeline.md` "The pipeline improves itself")
 - <a change to a skill, hook, agent or convention you aren't sure the owner wants: the change, the evidence, the cost either way>
+
+**Good to know** (only when there is any: risks, what couldn't be checked, a changed default; the reply's ⚠️ lines)
+- <one line each>
+
+**New screenshots** (only the latest push's; replaced, never appended)
+- <the image URLs `publish-screenshots.sh` printed, space-separated>
 
 **Since last update:** <what changed: pushed fixes, review results, decisions>
 **Last verified:** <sha> · CI <green/red> · base <up to date / N behind / conflicts> · review <S/M/L, who> · <date>
