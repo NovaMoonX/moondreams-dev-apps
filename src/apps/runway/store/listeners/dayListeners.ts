@@ -47,13 +47,14 @@ async function openDay(
   return result;
 }
 
-/** The days from `from` on that the person has changed. Each snapshot is opened before it is delivered; a slow open never overwrites a newer snapshot or lands after the listener stopped. */
+/** The days from `from` on (before `to` when it is given) that the person has changed. Each snapshot is opened before it is delivered; a slow open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startDaysListener(
   uid: string,
   encryption: RunwayEncryption,
   from: number,
   onChange: (days: OpenDay[]) => void,
   onError: (error: Error) => void,
+  to: number | null = null,
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const read = createSealedReader(encryption);
@@ -62,6 +63,7 @@ export function startDaysListener(
     query(
       collection(db, 'apps', 'runway', 'plans', uid, 'days'),
       where('expectedOn', '>=', from),
+      ...(to === null ? [] : [where('expectedOn', '<', to)]),
     ),
     async (snapshot) => {
       sequence.latest += 1;

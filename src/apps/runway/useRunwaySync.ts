@@ -23,6 +23,11 @@ import {
 import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
+import {
+  getDayKeyMonth,
+  getHistoryRange,
+} from '@apps/runway/utils/historyWindow';
+import { getMonthStart } from '@apps/runway/engine/closings';
 import { startPurchasesListener } from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
@@ -48,7 +53,11 @@ import {
   setKeyStatus,
   setLoadDay,
   setMoves,
+  clearHistory,
   clearPeriodPurchases,
+  setHistoryDays,
+  setHistoryFailed,
+  setHistoryRecords,
   setPeriodFailed,
   setPeriodPurchases,
   setPlan,
@@ -237,8 +246,16 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     };
   }, [uid, keyStatus, confirmedDayIds, dispatch]);
 
-  const { moreEntry, logSpan, logPage, logItem, activeTab, spendPeriod } =
-    useRunwayUrlState();
+  const {
+    moreEntry,
+    logSpan,
+    logPage,
+    logItem,
+    activeTab,
+    spendPeriod,
+    daysMonth,
+    openDayKey,
+  } = useRunwayUrlState();
   const isSpendOpen = activeTab === 'spend';
   const {
     from: periodFrom,
@@ -246,6 +263,102 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     key: periodKey,
   } = getSpendRange(spendPeriod, today);
   const isChangeLogOpen = moreEntry === 'changeLog';
+
+  const windowMonth =
+    (openDayKey === null ? null : getDayKeyMonth(openDayKey)) ?? daysMonth;
+  const historyRange =
+    windowMonth !== null &&
+    recentFrom !== null &&
+    getMonthStart(windowMonth) < recentFrom
+      ? getHistoryRange(windowMonth, recentFrom)
+      : null;
+  const isHistoryOpen =
+    historyRange !== null && (activeTab === 'days' || openDayKey !== null);
+  const historyFrom = historyRange?.from ?? 0;
+  const historyTo = historyRange?.to ?? 0;
+  const historyKey = historyRange?.key ?? '';
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !isHistoryOpen) return;
+
+    const stop: { current: (() => void) | null } = { current: null };
+    const run = { isCurrent: true };
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        stop.current = startDaysListener(
+          uid,
+          encryption,
+          historyFrom,
+          (days) => dispatch(setHistoryDays({ key: historyKey, days })),
+          (error) => {
+            console.error('The older days did not open', error);
+            dispatch(setHistoryFailed(historyKey));
+          },
+          historyTo,
+        );
+      })
+      .catch(() => {
+        if (run.isCurrent) dispatch(setHistoryFailed(historyKey));
+      });
+
+    return () => {
+      run.isCurrent = false;
+      stop.current?.();
+      dispatch(clearHistory());
+    };
+  }, [
+    uid,
+    keyStatus,
+    isHistoryOpen,
+    historyFrom,
+    historyTo,
+    historyKey,
+    dispatch,
+  ]);
+
+  const historyDayIds = useAppSelector((state) =>
+    isHistoryOpen && state.runway.historyFor === historyKey
+      ? state.runway.historyDays
+          .filter((day) => day.status === 'confirmed')
+          .map((day) => day.id)
+          .sort()
+          .join(',')
+      : null,
+  );
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || historyDayIds === null) return;
+
+    const stop: { current: (() => void) | null } = { current: null };
+    const run = { isCurrent: true };
+    const dayIds = historyDayIds === '' ? [] : historyDayIds.split(',');
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        stop.current = startRecordsListener(
+          uid,
+          encryption,
+          dayIds,
+          (records) =>
+            dispatch(setHistoryRecords({ dayIds: historyDayIds, records })),
+          (error) => {
+            console.error('The older days did not open', error);
+            dispatch(setHistoryFailed(historyKey));
+          },
+        );
+      })
+      .catch(() => {
+        if (run.isCurrent) dispatch(setHistoryFailed(historyKey));
+      });
+
+    return () => {
+      run.isCurrent = false;
+      stop.current?.();
+    };
+  }, [uid, keyStatus, historyDayIds, historyKey, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || !isSpendOpen) return;
