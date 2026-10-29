@@ -108,7 +108,6 @@ import {
 import {
   buildMoves,
   getNextTierRank,
-  getRankSegments,
   isDueBeforeNext,
   orderPriorities,
   placeBetween,
@@ -116,6 +115,7 @@ import {
   reconcileWorking,
   type PriorityItem,
 } from '../../src/apps/runway/engine/priorities.ts';
+import { getVersionStretches } from '../../src/apps/runway/engine/resolve.ts';
 import {
   findReturning,
   getStretchEnd,
@@ -8610,12 +8610,12 @@ console.log('runway engine: ok');
       payload: { cents },
     });
     assert.deepEqual(
-      getRankSegments([v('base', 1, 0, null, 80)], 'x', 10 * D),
+      getVersionStretches([v('base', 1, 0, null, 80)], 'x', 10 * D),
       [{ payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: null }],
       'an item with one version in force is reranked by one version',
     );
     assert.deepEqual(
-      getRankSegments(
+      getVersionStretches(
         [v('base', 1, 0, null, 80), v('stretch', 2, 5 * D, 20 * D, 40)],
         'x',
         10 * D,
@@ -8631,7 +8631,7 @@ console.log('runway engine: ok');
       'a stretch in force keeps its amount and its end, and the amount after it comes back',
     );
     assert.deepEqual(
-      getRankSegments(
+      getVersionStretches(
         [v('base', 1, 0, null, 80), v('ahead', 2, 30 * D, null, 95)],
         'x',
         10 * D,

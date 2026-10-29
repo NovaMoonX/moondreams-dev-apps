@@ -98,6 +98,7 @@ const PINNED_FOOTER_CLASS =
 const ROWS_PER_CHUNK = 12;
 const ESTIMATED_ROW_HEIGHT = 69;
 const ESTIMATED_EDIT_ROW_HEIGHT = 45;
+const ESTIMATED_SLOT_HEIGHT = 29;
 const UNFOLDED_TOTAL = 12;
 
 type Tiers = Record<Priority, string[]>;
@@ -583,7 +584,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
 
   const getUnits = (section: PrioritySection): Unit[] => {
     const withCut = (itemId: string, row: Unit): Unit[] =>
-      itemId === cutItemId && !isSearching && !isHidden
+      itemId === cutItemId && !isSearching && !isHidden && !isDirty
         ? [{ kind: 'cut' }, row]
         : [row];
     if (live === null) {
@@ -669,10 +670,11 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         type='button'
         variant='tertiary'
         size='stripped'
+        aria-label={unit.label}
         className="text-muted-foreground! relative flex h-5 w-full items-center justify-center rounded-md border border-dashed text-xs before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
         onClick={() => placeLifted(unit.tier, unit.gap)}
       >
-        <span className='line-clamp-1 block'>{unit.label}</span>
+        <span className='min-w-0 truncate'>{unit.label}</span>
       </Button>
     </li>
   );
@@ -783,8 +785,14 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
               : PRIORITIES_WORDS.topOf)(PRIORITY_LABELS[section.tier]),
             live[section.tier].indexOf(lifted ?? ''),
           );
-    const rowHeight =
-      edit === null ? ESTIMATED_ROW_HEIGHT : ESTIMATED_EDIT_ROW_HEIGHT;
+    const unitHeight = (unit: Unit) =>
+      unit.kind === 'slot'
+        ? ESTIMATED_SLOT_HEIGHT
+        : edit === null
+          ? ESTIMATED_ROW_HEIGHT
+          : ESTIMATED_EDIT_ROW_HEIGHT;
+    const chunkHeight = (chunk: readonly Unit[]) =>
+      chunk.reduce((sum, unit) => sum + unitHeight(unit), 0);
     const headingText = `${PRIORITY_LABELS[section.tier]} · ${count}`;
     return (
       <section key={section.tier} className='space-y-2'>
@@ -842,9 +850,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                                 aria-hidden='true'
                               />
                               {shortOn !== null &&
-                                (edit === null
-                                  ? PRIORITIES_WORDS.cutLine
-                                  : PRIORITIES_WORDS.cutLineBefore)(
+                                PRIORITIES_WORDS.cutLine(
                                   formatDateShortUTC(shortOn),
                                 )}
                             </span>
@@ -871,13 +877,13 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                       className='defer-offscreen'
                       style={
                         {
-                          '--defer-size': `${chunk.length * rowHeight}px`,
+                          '--defer-size': `${chunkHeight(chunk)}px`,
                         } as CSSProperties
                       }
                     >
                       <LazyMount
                         eager={segmentIndex === 0 && chunkIndex === 0}
-                        estimatedHeight={chunk.length * rowHeight}
+                        estimatedHeight={chunkHeight(chunk)}
                       >
                         <ul className='divide-border divide-y'>
                           {chunk.map((unit) => renderUnit(unit, section.tier))}

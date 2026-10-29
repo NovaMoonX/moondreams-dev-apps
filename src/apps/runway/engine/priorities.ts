@@ -4,7 +4,11 @@ import { ENVELOPE_ORDER_STEP } from '@apps/runway/constants';
 
 import { compareText, TIER_RANK } from './demands';
 import type { Draft } from './draft';
-import { resolveVersion, type Versioned } from './resolve';
+import {
+  getVersionStretches,
+  type VersionStretch,
+  type Versioned,
+} from './resolve';
 
 export type PriorityKind = 'bill' | 'envelope' | 'goal';
 
@@ -309,58 +313,10 @@ export function isDueBeforeNext(
   return line?.bill ? line.bill.dueOn < nextOn : null;
 }
 
-export interface RankSegment<P> {
-  payload: P;
-  effectiveFrom: number;
-  effectiveUntil: number | null;
-}
-
-/**
- * The stretches from `today` on over which an item's resolved version stays the same, each with that
- * version's payload. A new rank is written once per stretch, so a stretch change or a change ahead keeps
- * its amounts and its dates; an item with one version in force is one stretch.
- */
-export function getRankSegments<
-  V extends Versioned & { id: string; payload: P },
-  P,
->(versions: readonly V[], itemId: string, today: number): RankSegment<P>[] {
-  const own = versions.filter((version) => version.itemId === itemId);
-  const breaks = [
-    ...new Set([
-      today,
-      ...own.flatMap((version) =>
-        [version.effectiveFrom, version.effectiveUntil].filter(
-          (on): on is number => on !== null && on > today,
-        ),
-      ),
-    ]),
-  ].sort((a, b) => a - b);
-  const stretches = breaks.map((on, index) => ({
-    version: resolveVersion(own, itemId, on),
-    effectiveFrom: on,
-    effectiveUntil: breaks[index + 1] ?? null,
-  }));
-  const merged = stretches.reduce<typeof stretches>((acc, stretch) => {
-    const last = acc[acc.length - 1];
-    if (last && last.version?.id === stretch.version?.id) {
-      return [
-        ...acc.slice(0, -1),
-        { ...last, effectiveUntil: stretch.effectiveUntil },
-      ];
-    }
-    return [...acc, stretch];
-  }, []);
-  return merged.flatMap(({ version, effectiveFrom, effectiveUntil }) =>
-    version
-      ? [{ payload: version.payload, effectiveFrom, effectiveUntil }]
-      : [],
-  );
-}
-
 export interface PriorityMove<P> {
   itemId: string;
   kind: PriorityKind;
-  segments: RankSegment<P>[];
+  segments: VersionStretch<P>[];
   priority: Priority;
   orderIndex: number;
 }
@@ -377,7 +333,7 @@ export function buildMoves<
     const kind = versions.find(
       (version) => version.itemId === assignment.itemId,
     )?.kind;
-    const segments = getRankSegments<V, V['payload']>(
+    const segments = getVersionStretches<V, V['payload']>(
       versions,
       assignment.itemId,
       today,

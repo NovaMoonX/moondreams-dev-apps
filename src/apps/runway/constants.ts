@@ -1456,8 +1456,6 @@ export const PRIORITIES_WORDS = {
   checking: 'Checking your coming pays',
   shortOn: (day: string) => `The plan leaves items short on ${day}`,
   cutLine: (day: string) => `The ${day} pay runs out here`,
-  cutLineBefore: (day: string) =>
-    `Before your changes, the ${day} pay runs out here`,
   shortWord: (short: string) => `${short} short`,
   shortWordTitle: 'What short means here',
   shortTip: (short: string) =>

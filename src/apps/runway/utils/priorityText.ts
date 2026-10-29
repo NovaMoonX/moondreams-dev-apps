@@ -80,15 +80,17 @@ interface MoveReading {
   soonestSame: string | null;
 }
 
-const toDates = (days: readonly number[]) =>
-  days
+const toDates = (days: readonly number[]) => {
+  const ons = [...new Set(days)];
+  const firstYear = new Date(ons[0]).getUTCFullYear();
+  return ons
     .map((on) => {
-      const [month, day] = formatDateShortUTC(on).replace(',', '').split(' ');
-      return { month, day };
+      const text = formatDateShortUTC(on);
+      const year = new Date(on).getUTCFullYear();
+      return year !== firstYear && !text.includes(String(year))
+        ? `${text}, ${year}`
+        : text;
     })
-    .map(({ month, day }, index, all) =>
-      index > 0 && all[index - 1].month === month ? day : `${month} ${day}`,
-    )
     .reduce(
       (text, part, index, all) =>
         index === 0
@@ -98,6 +100,7 @@ const toDates = (days: readonly number[]) =>
             : `${text}, ${part}`,
       '',
     );
+};
 
 /** The confirm step's reading of a move: what the moved items gain, what it takes from whom (no figures while amounts are hidden), and whether the soonest pay stays as it was. */
 export function readMove(
@@ -124,8 +127,12 @@ export function readMove(
     itemId,
     name: lines[0].name,
     lines,
-    net: lines.reduce(
-      (sum, line) => sum + line.afterCents - line.beforeCents,
+    gained: lines.reduce(
+      (sum, line) => sum + Math.max(0, line.afterCents - line.beforeCents),
+      0,
+    ),
+    lost: lines.reduce(
+      (sum, line) => sum + Math.max(0, line.beforeCents - line.afterCents),
       0,
     ),
   }));
@@ -142,11 +149,11 @@ export function readMove(
       ? null
       : formatCents(cents[0]);
   const mover = entries
-    .filter((entry) => moved.has(entry.itemId) && entry.net > 0)
-    .sort((a, b) => b.net - a.net)[0];
+    .filter((entry) => moved.has(entry.itemId) && entry.gained > 0)
+    .sort((a, b) => b.gained - a.gained)[0];
   const losers = entries
-    .filter((entry) => entry.net < 0)
-    .sort((a, b) => a.net - b.net);
+    .filter((entry) => entry.lost > 0)
+    .sort((a, b) => b.lost - a.lost);
   const loser = losers[0];
   const gains = mover?.lines.filter(
     (line) => line.afterCents > line.beforeCents,

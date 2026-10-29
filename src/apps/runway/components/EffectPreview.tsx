@@ -290,6 +290,7 @@ function EffectPreview({
       );
     }
     if (days.length === 0) {
+      if (describeLead !== undefined && holdsText?.isSame !== true) return null;
       return emptyText ? (
         <InlineNotice tone='info'>
           <MaskedText>{emptyText}</MaskedText>
@@ -400,30 +401,33 @@ function EffectPreview({
             {note.text}
           </InlineNotice>
         ))}
-      {describeLead === undefined &&
-        holdsText &&
+      {holdsText &&
         !(isCompact && holdsText.isSame) &&
-        holdsText.blocks.map((block) =>
-          isHidden && block.tone === 'warning' ? (
-            <NeedsALookRow key={block.text} />
-          ) : (
-            <InlineNotice key={block.text} tone={block.tone}>
-              {block.figure === null ? (
-                block.text
-              ) : (
-                <>
-                  {block.text.slice(0, block.text.indexOf(block.figure))}
-                  <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
-                    {block.figure}
-                  </strong>
-                  {block.text.slice(
-                    block.text.indexOf(block.figure) + block.figure.length,
-                  )}
-                </>
-              )}
-            </InlineNotice>
-          ),
-        )}
+        holdsText.blocks
+          .filter(
+            (block) => describeLead === undefined || block.tone === 'warning',
+          )
+          .map((block) =>
+            isHidden && block.tone === 'warning' ? (
+              <NeedsALookRow key={block.text} />
+            ) : (
+              <InlineNotice key={block.text} tone={block.tone}>
+                {block.figure === null ? (
+                  block.text
+                ) : (
+                  <>
+                    {block.text.slice(0, block.text.indexOf(block.figure))}
+                    <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
+                      {block.figure}
+                    </strong>
+                    {block.text.slice(
+                      block.text.indexOf(block.figure) + block.figure.length,
+                    )}
+                  </>
+                )}
+              </InlineNotice>
+            ),
+          )}
     </ActionSection>
   );
 }

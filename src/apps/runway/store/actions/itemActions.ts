@@ -10,7 +10,7 @@ import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
 import { DAY_MS } from '@apps/runway/engine/dates';
-import type { RankSegment } from '@apps/runway/engine/priorities';
+import type { VersionStretch } from '@apps/runway/engine/resolve';
 import {
   getHeldReleaseDay,
   readHeldReleasedOn,
@@ -412,7 +412,7 @@ export interface ReorderItemsInput {
     itemId: string;
     kind: 'bill' | 'envelope' | 'goal';
     /** The stretches from today on that each keep their own payload; only the tier and rank change. */
-    segments: RankSegment<BillSealed | EnvelopeSealed | GoalSealed>[];
+    segments: VersionStretch<BillSealed | EnvelopeSealed | GoalSealed>[];
     priority: Priority;
     orderIndex: number;
   }[];
