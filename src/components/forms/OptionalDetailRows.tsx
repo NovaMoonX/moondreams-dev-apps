@@ -73,7 +73,13 @@ function DetailSheet({
       </div>
       <ModalFooterActions
         cancelAction={
-          <Button type='button' variant='tertiary' size='sm' onClick={onRemove}>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            onClick={onRemove}
+          >
             {removeLabel}
           </Button>
         }
