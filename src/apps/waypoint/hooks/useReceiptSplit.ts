@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 
+import { useUndoRemoval } from '@/hooks/useUndoRemoval';
+
 import type { ReceiptReading } from '@/lib/receipts/receiptTypes';
 import { generateUuid } from '@/utils/idUtils';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
@@ -70,7 +72,7 @@ function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
     tipChoice: reading?.tipCents ? 'RECEIPT' : 'NONE',
     customTip: '',
     tipSplit: 'PROPORTIONAL',
-    openLineId: lines[0]?.id ?? null,
+    openLineId: lines[0] && (lines[0].name === '' || lines[0].priceCents === 0) ? lines[0].id : null,
     editingLineId: lines[0] && (lines[0].name === '' || lines[0].priceCents === 0) ? lines[0].id : null,
   };
 }
@@ -78,6 +80,7 @@ function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
 /** The state of one bill being split between people: who had which line, the charges on top, the tip, and what each person owes. The host draws the footer and reads `result` when the person is done. */
 export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptPerson[]) {
   const [state, setState] = useState(() => getInitialState(reading));
+  const { pending: pendingUndo, showUndo, undo } = useUndoRemoval();
   const [baseline] = useState(() => toSnapshot(state));
   const peopleIds = useMemo(() => people.map((person) => person.id), [people]);
   const receiptTipCents = reading?.tipCents ?? 0;
@@ -147,7 +150,7 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
     }));
   };
 
-  const removeLine = (lineId: string) =>
+  const discardLine = (lineId: string) =>
     setState((current) => ({
       ...current,
       lines: current.lines.filter((line) => line.id !== lineId),
@@ -155,6 +158,23 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
       openLineId: current.openLineId === lineId ? null : current.openLineId,
       editingLineId: current.editingLineId === lineId ? null : current.editingLineId,
     }));
+
+  const removeLine = (lineId: string) => {
+    const index = state.lines.findIndex((line) => line.id === lineId);
+    const line = state.lines[index];
+    if (!line) {
+      return;
+    }
+    const holders = state.claims[lineId];
+    discardLine(lineId);
+    showUndo(`Removed ${line.name || 'the item'}`, () =>
+      setState((current) => ({
+        ...current,
+        lines: [...current.lines.slice(0, index), line, ...current.lines.slice(index)],
+        claims: holders ? { ...current.claims, [lineId]: holders } : current.claims,
+      })),
+    );
+  };
 
   const itemsCents = sumLinesCents(state.lines);
   const printedTotalCents = reading?.totalCents ?? null;
@@ -196,6 +216,9 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
     stopEditing,
     addLine,
     removeLine,
+    discardLine,
+    pendingUndo,
+    undo,
   };
 }
 

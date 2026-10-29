@@ -1,15 +1,15 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 
-import { Button, DropdownMenuFactories, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ArrowRight, ChevronDown, Plus, Users } from 'lucide-react';
+import { ChevronDown, Copy, Pencil, Plus, X } from 'lucide-react';
 
-import ActionChips from '@/components/ActionChips';
-import EllipsisDropdown from '@/components/EllipsisDropdown';
 import MoneyInput from '@/components/MoneyInput';
+import Pill from '@/components/Pill';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import SectionHeader from '@/components/SectionHeader';
+import UndoSnackbar from '@/components/UndoSnackbar';
 import { type ReceiptSplit, type TipChoice } from '@apps/waypoint/hooks/useReceiptSplit';
 import { centsToInputValue, formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import type { ReceiptLine, TipSplit } from '@apps/waypoint/utils/receiptSplit';
@@ -45,7 +45,7 @@ function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
     <div className='space-y-3'>
       <div className='grid gap-3 sm:grid-cols-2'>
         <div className='space-y-1.5'>
-          <Label>Item</Label>
+          <Label className='text-muted-foreground text-xs'>Item</Label>
           <Input
             aria-label='Item name'
             variant='outline'
@@ -57,17 +57,18 @@ function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
           />
         </div>
         <div className='space-y-1.5'>
-          <Label>Price</Label>
+          <Label className='text-muted-foreground text-xs'>Price</Label>
           <MoneyInput variant='outline' className='h-10' ariaLabel='Item price' placeholder='0.00' value={priceText} onChange={setPriceText} />
         </div>
       </div>
-      <div className='flex gap-2'>
-        <Button type='button' variant='secondary' className='flex-1' onClick={onCancel}>
+      <div className='flex justify-end gap-2'>
+        <Button type='button' variant='tertiary' size='sm' className='h-10 px-4' onClick={onCancel}>
           Cancel
         </Button>
         <Button
           type='button'
-          className='flex-1'
+          size='sm'
+          className='h-10 px-5'
           disabled={!canSave}
           onClick={() => onSave({ name: name.trim(), priceCents: parseMoneyToCents(priceText) ?? 0 })}
         >
@@ -78,113 +79,138 @@ function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
   );
 }
 
-const { option } = DropdownMenuFactories;
+/** First names, or the full name where two people share one. */
+const getShortNames = (people: { id: string; name: string }[]) =>
+  Object.fromEntries(
+    people.map((person) => {
+      const first = person.name.split(' ')[0] ?? person.name;
+      const isShared = people.filter((other) => (other.name.split(' ')[0] ?? other.name) === first).length > 1;
+      return [person.id, isShared ? person.name : first];
+    }),
+  );
+
+const PICKER_INLINE_LIMIT = 8;
+const EVERYONE = '__everyone__';
 
 function LineRow({ line, holders, split }: LineRowProps) {
-  const { state, people, setLineClaims, setGroupClaims, updateLine, removeLine, openLine, startEditing, stopEditing } = split;
+  const { state, people, setLineClaims, setGroupClaims, updateLine, removeLine, discardLine, openLine, startEditing, stopEditing } = split;
   const isOpen = state.openLineId === line.id;
   const isEditing = isOpen && state.editingLineId === line.id;
-  const names = people.filter((person) => holders.includes(person.id)).map((person) => person.name);
   const isEveryone = people.length > 0 && holders.length === people.length;
-  const scrollIntoViewWhenOpen = useCallback(
-    (node: HTMLLIElement | null) => {
-      if (isOpen) node?.scrollIntoView({ block: 'nearest' });
-    },
-    [isOpen],
-  );
+  const shortNames = getShortNames(people);
   const unitCount = line.groupId ? state.lines.filter((other) => other.groupId === line.groupId).length : 0;
-  const nextUnclaimedId = state.lines.find((other) => other.id !== line.id && (state.claims[other.id] ?? []).length === 0)?.id;
+  const hasInlinePicker = people.length <= PICKER_INLINE_LIMIT;
+  const warning = line.priceCents <= 0 ? 'Add a price' : holders.length === 0 ? 'Nobody yet' : null;
+
+  const toggleEveryone = () => setLineClaims(line.id, isEveryone ? [] : people.map((person) => person.id));
+  const togglePerson = (uid: string) =>
+    setLineClaims(line.id, holders.includes(uid) ? holders.filter((id) => id !== uid) : [...holders, uid]);
+
+  const pickerPills = (
+    <div className='flex flex-wrap gap-1.5'>
+      <Pill isThin isSelected={isEveryone} onClick={toggleEveryone}>
+        Everyone
+      </Pill>
+      {people.map((person) => (
+        <Pill
+          key={person.id}
+          isThin
+          isSelected={holders.includes(person.id)}
+          ariaLabel={person.name}
+          onClick={() => togglePerson(person.id)}
+        >
+          {shortNames[person.id]}
+        </Pill>
+      ))}
+    </div>
+  );
 
   return (
-    <li ref={scrollIntoViewWhenOpen}>
+    <li className='space-y-2 px-3 py-2.5'>
       <Button
         type='button'
         variant='tertiary'
         aria-expanded={isOpen}
-        className='h-auto min-h-14 w-full items-start justify-between gap-3 rounded-none px-3! py-2.5 text-left font-normal whitespace-normal'
+        className='h-auto min-h-0 w-full items-start justify-between gap-3 rounded-none p-0! text-left font-normal whitespace-normal'
         onClick={() => openLine(isOpen ? null : line.id)}
       >
         <span className='min-w-0 flex-1'>
           <span className='line-clamp-2 text-sm font-medium'>{line.name || 'New item'}</span>
-          <span className={join('mt-0.5 text-xs', names.length === 0 || line.priceCents <= 0 ? 'text-warning' : 'text-muted-foreground')}>
-            {line.priceCents <= 0 ? 'Add a price' : names.length === 0 ? 'Nobody yet' : isEveryone ? 'Everyone' : formatNames(names)}
-          </span>
+          {warning && <span className='text-warning mt-0.5 text-xs'>{warning}</span>}
         </span>
         <span className='flex shrink-0 items-center gap-1.5'>
           <span className='text-sm font-medium whitespace-nowrap'>{formatCents(line.priceCents)}</span>
           <ChevronDown className={join('text-muted-foreground h-4 w-4', isOpen && 'rotate-180')} aria-hidden='true' />
         </span>
       </Button>
-      {isOpen && (
-        <div className='bg-muted/50 space-y-3 px-3 pt-1 pb-3'>
-          {isEditing ? (
-            <LineEditFields
-              line={line}
-              onSave={(changes) => {
-                updateLine(line.id, changes);
-                stopEditing();
-              }}
-              onCancel={() => (line.name === '' ? removeLine(line.id) : stopEditing())}
-            />
-          ) : (
-            <>
-              <MultiPillGroup
-                label={`Who had ${line.name || 'this item'}`}
-                options={people.map((person) => ({ value: person.id, label: person.name }))}
-                values={holders}
-                onChange={(uids) => setLineClaims(line.id, uids)}
-              />
-              <div className='flex items-center gap-2'>
-                <ActionChips
-                  className='min-w-0 flex-1'
-                  label='Item actions'
-                  actions={[
-                    {
-                      key: 'everyone',
-                      icon: <Users className='h-4 w-4' />,
-                      label: isEveryone ? 'Clear' : 'Everyone',
-                      description: isEveryone ? 'Clear who had this' : 'Everyone shares this',
-                      onClick: () => setLineClaims(line.id, isEveryone ? [] : people.map((person) => person.id)),
-                    },
-                    ...(nextUnclaimedId
-                      ? [
-                          {
-                            key: 'next',
-                            icon: <ArrowRight className='h-4 w-4' />,
-                            label: 'Next',
-                            description: 'Next item nobody has yet',
-                            onClick: () => openLine(nextUnclaimedId),
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-                <EllipsisDropdown
+      {isEditing ? (
+        <LineEditFields
+          line={line}
+          onSave={(changes) => {
+            updateLine(line.id, changes);
+            stopEditing();
+          }}
+          onCancel={() => (line.name === '' ? discardLine(line.id) : stopEditing())}
+        />
+      ) : (
+        <>
+          {hasInlinePicker && pickerPills}
+          {isOpen && (
+            <div className='flex flex-wrap items-center gap-x-1'>
+              {!hasInlinePicker && (
+                <div className='w-full pb-1'>
+                  <MultiPillGroup
+                    label={`Who had ${line.name || 'this item'}`}
+                    options={[{ value: EVERYONE, label: 'Everyone' }, ...people.map((person) => ({ value: person.id, label: person.name }))]}
+                    values={isEveryone ? [EVERYONE, ...holders] : holders}
+                    onChange={(next) => {
+                      const wantsEveryone = next.includes(EVERYONE);
+                      if (wantsEveryone !== isEveryone) {
+                        setLineClaims(line.id, wantsEveryone ? people.map((person) => person.id) : []);
+                        return;
+                      }
+                      setLineClaims(line.id, next.filter((value) => value !== EVERYONE));
+                    }}
+                  />
+                </div>
+              )}
+              <Button type='button' variant='tertiary' size='sm' className='text-muted-foreground! h-10 gap-1.5 px-2 font-normal' onClick={() => startEditing(line.id)}>
+                <Pencil className='h-4 w-4' aria-hidden='true' />
+                Edit
+              </Button>
+              {unitCount > 1 && holders.length > 0 && (
+                <Button
+                  type='button'
                   variant='tertiary'
-                  className='border-border size-10! shrink-0 border'
-                  ariaLabel={`More for ${line.name || 'this item'}`}
-                  items={[
-                    ...(unitCount > 1 && holders.length > 0 ? [option({ label: `Same for all ${unitCount}`, value: 'same' })] : []),
-                    option({ label: 'Edit item', value: 'edit' }),
-                    option({ label: 'Remove item', value: 'remove' }),
-                  ]}
-                  onItemSelect={(value) => {
-                    if (value === 'same' && line.groupId) setGroupClaims(line.groupId, holders);
-                    else if (value === 'edit') startEditing(line.id);
-                    else removeLine(line.id);
-                  }}
-                />
-              </div>
-            </>
+                  size='sm'
+                  className='text-muted-foreground! h-10 gap-1.5 px-2 font-normal'
+                  onClick={() => line.groupId && setGroupClaims(line.groupId, holders)}
+                >
+                  <Copy className='h-4 w-4' aria-hidden='true' />
+                  Same for all {unitCount}
+                </Button>
+              )}
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                aria-label={`Remove ${line.name || 'this item'}`}
+                className='text-destructive! h-10 gap-1.5 px-2 font-normal'
+                onClick={() => removeLine(line.id)}
+              >
+                <X className='h-4 w-4' aria-hidden='true' />
+                <span className='max-sm:hidden'>Remove</span>
+              </Button>
+            </div>
           )}
-        </div>
+        </>
       )}
     </li>
   );
 }
 
 function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
-  const { state, result, people, itemsCents, taxCents, tipCents, receiptTipCents, tipPercents, printedTotalCents, patch, addLine } = split;
+  const { state, result, people, itemsCents, taxCents, tipCents, receiptTipCents, tipPercents, printedTotalCents, patch, addLine, pendingUndo, undo } = split;
   const [showFees, setShowFees] = useState(state.fees !== '');
   const [showDiscount, setShowDiscount] = useState(state.discount !== '');
   const nameOf = (uid: string) => people.find((person) => person.id === uid)?.name ?? 'Someone';
@@ -198,9 +224,9 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
     ...tipPercents.map((percent) => ({ value: `${percent}` as const, label: `${percent}%` })),
     { value: 'CUSTOM', label: 'Other amount' },
   ];
-  const tipSplitOptions: { value: TipSplit; label: string; detail: string }[] = [
-    { value: 'PROPORTIONAL', label: 'By what they ordered', detail: 'A bigger order tips more.' },
-    { value: 'EVEN', label: 'Evenly', detail: 'Everyone on the bill tips the same.' },
+  const tipSplitOptions: { value: TipSplit; label: string }[] = [
+    { value: 'PROPORTIONAL', label: 'By what they ordered' },
+    { value: 'EVEN', label: 'Evenly' },
   ];
 
   const billWithoutOwnTip = itemsCents + taxCents + split.feesCents - split.discountCents + receiptTipCents;
@@ -309,12 +335,18 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
           )}
         </div>
         {state.tipChoice !== 'NONE' && (
-          <PillGroup
-            label='Split the tip'
-            options={tipSplitOptions}
-            value={state.tipSplit}
-            onChange={(tipSplit) => patch({ tipSplit })}
-          />
+          <div className='space-y-1'>
+            <PillGroup
+              label='Split the tip'
+              isThin
+              options={tipSplitOptions}
+              value={state.tipSplit}
+              onChange={(tipSplit) => patch({ tipSplit })}
+            />
+            <p className='text-muted-foreground text-xs'>
+              {state.tipSplit === 'EVEN' ? 'Everyone on the bill tips the same.' : 'A bigger order tips more.'}
+            </p>
+          </div>
         )}
       </section>
 
@@ -374,6 +406,7 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
           </>
         )}
       </section>
+      <UndoSnackbar pending={pendingUndo} onUndo={undo} />
     </div>
   );
 }
