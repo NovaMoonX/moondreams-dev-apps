@@ -237,6 +237,7 @@ function EnvelopeForm({
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
+    initialOpenId: draft?.openStep ?? null,
   });
 
   const buildEnvelope = (data: EnvelopeFormData): EnvelopeSealed | null => {

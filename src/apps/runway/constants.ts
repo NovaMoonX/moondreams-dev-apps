@@ -844,6 +844,153 @@ export const START_WORDS = {
   landingButton: 'Start planning',
 } as const;
 
+/** What "Start from your budget" takes and keeps from the documents, told to the reader and enforced on its answer. */
+export const BUDGET_LIMITS = {
+  files: 5,
+  bytes: 10 * 1024 * 1024,
+  /** Characters kept from one text document or the pasted text. */
+  textChars: 40_000,
+  items: { incomes: 10, bills: 40, envelopes: 30, goals: 15 },
+  notRead: 20,
+  notReadChars: 140,
+  fileNameChars: 80,
+  /** The most one amount can hold, in cents. */
+  maxCents: 999_999_999,
+} as const;
+
+/** The ways Starting out can begin, kept in the URL as `method` so a choice survives sign-in. */
+export const START_METHODS = ['budget'] as const;
+
+export const BUDGET_TEXT_EXTENSIONS = ['csv', 'tsv', 'txt', 'md'] as const;
+export const BUDGET_ACCEPT = '.csv,.tsv,.txt,.md,.pdf';
+export const BUDGET_PASTED_NAME = 'Pasted text';
+
+const BUDGET_SENT_LINE =
+  "Your documents are sent to an AI to read and aren't kept. Nothing is added until you add it.";
+
+export const BUDGET_WORDS = {
+  chooseAsk: 'How do you want to start?',
+  methodTitle: 'Start from your budget',
+  methodBody:
+    'Bring a spreadsheet, a PDF or pasted notes. An AI reads them and suggests your income, bills, envelopes and goals.',
+  methodBodySignedOut:
+    'Bring a spreadsheet, a PDF or pasted notes and an AI suggests your plan. Sign in to use it.',
+  freshTitle: 'Start fresh',
+  freshBody: 'Answer a few questions, one at a time.',
+  ask: 'Bring your budget',
+  help: `Pick up to 5 files, or paste text. ${BUDGET_SENT_LINE}`,
+  tabsHint: 'Export each tab as a CSV and pick them together.',
+  chooseFiles: 'Choose files',
+  chooseMore: 'Choose more files',
+  accepts: 'CSV, TSV, text, Markdown or PDF',
+  pasteLabel: 'Or paste text',
+  pastePlaceholder: 'Paste rows from a spreadsheet, or notes about your budget',
+  removeFile: (name: string) => `Remove ${name}`,
+  read: 'Read my budget',
+  needInput: 'Choose a file or paste some text first.',
+  reading: (files: number, hasText: boolean) =>
+    files === 0
+      ? 'Reading your text'
+      : `Reading ${files} ${files === 1 ? 'file' : 'files'}${hasText ? ' and your text' : ''}`,
+  tooMany: `Only ${BUDGET_LIMITS.files} files can be read at once; the rest weren't added.`,
+  tooBig: `Those files are over ${BUDGET_LIMITS.bytes / 1024 / 1024} MB together. Remove one, or export a smaller range.`,
+  wrongType: (names: string[]) =>
+    `${names.join(', ')} ${names.length === 1 ? 'is' : 'are'} not a CSV, TSV, text, Markdown or PDF file, so ${names.length === 1 ? 'it was' : 'they were'} skipped.`,
+  failSubject: 'budget',
+  failFallback: 'start fresh instead',
+  unreadable: "We couldn't read that. Try again.",
+  nothingFound:
+    'We could not find any income, bills, envelopes or goals in that. Try another file or some pasted text, or start fresh.',
+  reviewAsk: 'Here is what we found',
+  reviewHelp: 'Open any one to check it or change it.',
+  income: 'Income',
+  bills: 'Bills',
+  envelopes: 'Envelopes',
+  goals: 'Goals',
+  needs: (parts: string[]) =>
+    `Needs ${parts.length < 2 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`}`,
+  needsParts: {
+    amount: 'an amount',
+    target: 'a target amount',
+    often: 'how often it arrives',
+    schedule: 'a next date',
+    repeats: 'how often it repeats',
+    due: 'a due date',
+  } as Record<string, string>,
+  disagree: 'Two files disagree',
+  disagreeAgain: 'A new file disagrees',
+  needsLook: 'Needs a look',
+  versionSays: (file: string, what: string) => `${file} says ${what}`,
+  useThis: 'Use this',
+  chooseVersion: 'The files give different answers. Which one is right?',
+  chooseVersionAgain:
+    'A file you added disagrees with your choice. Which one is right?',
+  showToCompare: 'Show amounts to compare',
+  goalMonthly: (amount: string) => `The document says ${amount} a month`,
+  noIncome: 'No income found in your documents. Add it next.',
+  documentSays: (cadence: string) => `The document says ${cadence}`,
+  documentSaysAmount: (amount: string, cadence: string) =>
+    `The document says ${amount} ${cadence}`,
+  cadenceRow: (cadence: string, needs: string) =>
+    `${cadence.charAt(0).toUpperCase()}${cadence.slice(1)} in the document · ${needs.charAt(0).toLowerCase()}${needs.slice(1)}`,
+  needsMonthlyAmount: 'a monthly amount',
+  yourChoice: 'Your choice',
+  goalOf: (target: string) => `of ${target}`,
+  amountPerCadence: (amount: string, cadence: string) =>
+    `${amount} ${cadence === 'yearly' ? 'a year' : cadence}`,
+  amountAMonth: (amount: string) => `${amount} a month`,
+  monthlyOffer: (amount: string) => `Use ${amount} a month`,
+  monthlyOfferSub:
+    'Spread evenly over the months. You still say when it is due.',
+  sheetKind: {
+    income: 'Suggested income',
+    bill: 'Suggested bill',
+    envelope: 'Suggested envelope',
+    goal: 'Suggested goal',
+  } as const,
+  needDetails: (count: number) =>
+    count === 1
+      ? 'One needs a look. Open it or remove it.'
+      : `${count} need a look. Open them or remove them.`,
+  needDetailsShort: (count: number) =>
+    `${count} ${count === 1 ? 'needs' : 'need'} a look`,
+  openToChange: 'Check or change it',
+  removeOne: 'Remove',
+  leaveTitle: 'Go back?',
+  leaveMessage: 'What was read is dropped. Nothing has been added.',
+  addedToast: (count: number) => `Added ${count} from your budget.`,
+  freshInstead: 'Start fresh instead',
+  stopTitle: 'Stop reading?',
+  stopMessage:
+    'Your budget is still being read. If you stop, nothing is added.',
+  stopConfirm: 'Stop',
+  stopCancel: 'Keep waiting',
+  tabsTitle: 'A spreadsheet with several tabs?',
+  notReadRow: (count: number) =>
+    `${count} ${count === 1 ? 'thing' : 'things'} we could not read`,
+  addAnother: 'Add another file',
+  addAnotherBody: (left: number) =>
+    `${left} more ${left === 1 ? 'file' : 'files'} can be added. ${BUDGET_SENT_LINE} Only what you add now is read.`,
+  notReadTitle: 'What we could not read',
+  sourcePrefix: 'From',
+  planAdd: 'Add to my plan',
+  planFailed: 'None of this was added. Nothing was changed.',
+  notReady: 'Your plan is still opening. Try again in a moment.',
+  cutText: (file: string, chars: number) =>
+    `Only the first ${chars.toLocaleString()} characters of ${file} were read.`,
+  partialAdded: (added: number, total: number) =>
+    `Added ${added} of ${total}. The rest were not added; try again to add them, and nothing will be added twice.`,
+  nothingNew: (files: number) =>
+    `Nothing new in ${files === 0 ? 'that text' : files === 1 ? 'that file' : 'those files'}.`,
+  alreadyRead: (names: string[]) =>
+    `${names.join(', ')} ${names.length === 1 ? 'was' : 'were'} already read, so ${names.length === 1 ? 'it was' : 'they were'} skipped.`,
+  cutItems: (count: number, label: string, kept: number) =>
+    `Only the first ${kept} ${label} are kept; ${count} more ${count === 1 ? 'was' : 'were'} left out.`,
+  dateTooFar: (name: string, date: string, months: number) =>
+    `${name} aims for ${date}, which is more than ${months} months away. The date was left out.`,
+  empty: 'Nothing is left to add.',
+} as const;
+
 export const DELETE_PLAN_PHRASE = 'delete my plan';
 
 export const DELETE_PLAN_WORDS = {

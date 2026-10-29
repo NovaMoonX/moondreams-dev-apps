@@ -10,6 +10,10 @@ interface UseDiscardGuardOptions {
   isBusy?: boolean;
   title?: string;
   message?: string;
+  /** The leaving button, "Discard" unless the work is something other than typed input. */
+  confirmText?: string;
+  /** The staying button. */
+  cancelText?: string;
 }
 
 /** The one way out of a form holding typed work: asks Keep editing / Discard once, and leaves at once when nothing was typed. Pass it to every route out (the close button, Escape, the back gesture, Cancel). */
@@ -19,6 +23,8 @@ export function useDiscardGuard({
   isBusy = false,
   title = 'Discard what you typed?',
   message = 'It will not be saved.',
+  confirmText = 'Discard',
+  cancelText = 'Keep editing',
 }: UseDiscardGuardOptions) {
   const { confirm } = useActionModal();
   const isAskingRef = useRef(false);
@@ -33,8 +39,8 @@ export function useDiscardGuard({
     const isDiscarded = await confirm({
       title,
       message,
-      confirmText: 'Discard',
-      cancelText: 'Keep editing',
+      confirmText,
+      cancelText,
       destructive: true,
     });
     isAskingRef.current = false;
