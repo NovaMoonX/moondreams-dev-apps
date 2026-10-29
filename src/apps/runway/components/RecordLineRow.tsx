@@ -18,16 +18,23 @@ interface RecordLineRowProps {
   plannedCents?: number;
   /** The person's note on the change. */
   note?: string | null;
+  /** A heading above already says the line got less, so a hidden row doesn't repeat it. */
+  isShortSaidAbove?: boolean;
 }
 
 /** One line of a confirmed day, as it was kept with the name it had then. */
-function RecordLineRow({ line, plannedCents, note }: RecordLineRowProps) {
+function RecordLineRow({
+  line,
+  plannedCents,
+  note,
+  isShortSaidAbove = false,
+}: RecordLineRowProps) {
   const mask = useMaskedText();
   const { isHidden } = useValuesHidden();
   const name = line.name === '' ? DRAFT_WORDS.billFallback : line.name;
   const isChanged = plannedCents !== undefined && plannedCents !== line.cents;
   const shortText =
-    line.shortBy <= 0
+    line.shortBy <= 0 || (isHidden && isShortSaidAbove)
       ? null
       : isHidden
         ? RECORD_WORDS.shortHidden

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Pencil } from 'lucide-react';
+import { ChevronRight, FileText, Pencil } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -117,7 +117,11 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
                 <SectionDivider label={RECORD_WORDS.shortHeading} />
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {unfunded.map((line) => (
-                    <RecordLineRow key={line.lineId} line={line} />
+                    <RecordLineRow
+                      key={line.lineId}
+                      line={line}
+                      isShortSaidAbove
+                    />
                   ))}
                 </ul>
               </div>
@@ -183,9 +187,9 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           <InlineNotice tone='info'>
             <p>{DAYS_WORDS.readOnlyNote(describeBoundary(recentFrom))}</p>
             <Button
-              variant='tertiary'
+              variant='secondary'
               size='sm'
-              className='mt-1 px-0! underline-offset-4 hover:underline'
+              className="relative mt-2 gap-1 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
               onClick={() => {
                 onClose();
                 showDaysMonth(null);
@@ -193,6 +197,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
               }}
             >
               {DAYS_WORDS.goToRecent}
+              <ChevronRight className='h-4 w-4' aria-hidden='true' />
             </Button>
           </InlineNotice>
         )}
