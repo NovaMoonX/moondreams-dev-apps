@@ -42,7 +42,7 @@ export function resolveVersion<V extends Versioned & { id: string }>(
   return result;
 }
 
-/** The version in force on `on`, else the item's earliest one that starts later (an income that has not begun). */
+/** The version in force on `on`, else the one in force on the item's earliest later start (an income that has not begun). */
 export function resolveCurrentOrNext<V extends Versioned & { id: string }>(
   versions: readonly V[],
   itemId: string,
@@ -50,14 +50,15 @@ export function resolveCurrentOrNext<V extends Versioned & { id: string }>(
 ): V | null {
   const current = resolveVersion(versions, itemId, on);
   if (current) return current;
-  const later = versions
+  const starts = versions
     .filter(
       (version) => version.itemId === itemId && version.effectiveFrom > on,
     )
-    .sort(
-      (a, b) => a.effectiveFrom - b.effectiveFrom || byCreatedAtThenId(a, b),
-    );
-  const result = later[0] ?? null;
+    .map((version) => version.effectiveFrom);
+  const result =
+    starts.length === 0
+      ? null
+      : resolveVersion(versions, itemId, Math.min(...starts));
   return result;
 }
 
@@ -116,4 +117,52 @@ export function resolveNextChange<V extends Versioned & { id: string }>(
           resolveVersion(own, itemId, version.effectiveFrom)?.id === version.id,
       ) ?? null;
   return result;
+}
+
+export interface VersionStretch<P> {
+  payload: P;
+  effectiveFrom: number;
+  effectiveUntil: number | null;
+}
+
+/**
+ * The stretches from `today` on over which an item's resolved version stays the same, each with that
+ * version's payload. A change to one field is written once per stretch, so a stretch change or a
+ * change ahead keeps its amounts and its dates; an item with one version in force is one stretch.
+ */
+export function getVersionStretches<
+  V extends Versioned & { id: string; payload: P },
+  P,
+>(versions: readonly V[], itemId: string, today: number): VersionStretch<P>[] {
+  const own = versions.filter((version) => version.itemId === itemId);
+  const breaks = [
+    ...new Set([
+      today,
+      ...own.flatMap((version) =>
+        [version.effectiveFrom, version.effectiveUntil].filter(
+          (on): on is number => on !== null && on > today,
+        ),
+      ),
+    ]),
+  ].sort((a, b) => a - b);
+  const stretches = breaks.map((on, index) => ({
+    version: resolveVersion(own, itemId, on),
+    effectiveFrom: on,
+    effectiveUntil: breaks[index + 1] ?? null,
+  }));
+  const merged = stretches.reduce<typeof stretches>((acc, stretch) => {
+    const last = acc[acc.length - 1];
+    if (last && last.version?.id === stretch.version?.id) {
+      return [
+        ...acc.slice(0, -1),
+        { ...last, effectiveUntil: stretch.effectiveUntil },
+      ];
+    }
+    return [...acc, stretch];
+  }, []);
+  return merged.flatMap(({ version, effectiveFrom, effectiveUntil }) =>
+    version
+      ? [{ payload: version.payload, effectiveFrom, effectiveUntil }]
+      : [],
+  );
 }

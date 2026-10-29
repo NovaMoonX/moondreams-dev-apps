@@ -1,5 +1,11 @@
 import type { ReactNode } from 'react';
-import { ChevronRight, TriangleAlert } from 'lucide-react';
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronRight,
+  Lock,
+  TriangleAlert,
+} from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -8,7 +14,23 @@ import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import { TICK_HIT_CLASS } from '@apps/runway/constants';
+import { PRIORITIES_WORDS, TICK_HIT_CLASS } from '@apps/runway/constants';
+
+/** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
+export interface ItemRowReorder {
+  /** Funded first or last by the engine whatever its rank, so it cannot be lifted. */
+  isFixed: boolean;
+  /** Why the row is fixed, heard and seen on hover; null falls back to the detail. */
+  fixedNote: string | null;
+  /** Two words beside the lock that say why the row is fixed. */
+  fixedLabel: string;
+  /** Just placed: the row is highlighted for a moment. */
+  isFlashed: boolean;
+  isLifted: boolean;
+  onLift: () => void;
+  onMoveUp: (() => void) | null;
+  onMoveDown: (() => void) | null;
+}
 
 interface ItemRowProps {
   name: string;
@@ -35,6 +57,10 @@ interface ItemRowProps {
   hiddenAriaLabel?: string;
   /** A row ticked from a checklist: tapping the row ticks it and the chevron opens the sheet. */
   tick?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Replaces the chevron and the sheet with the controls for placing the row. */
+  reorder?: ItemRowReorder;
+  /** Just moved by a saved reorder: the row is highlighted for a moment. */
+  isHighlighted?: boolean;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -53,6 +79,8 @@ function ItemRow({
   ariaLabel: givenAriaLabel,
   hiddenAriaLabel,
   tick,
+  reorder,
+  isHighlighted = false,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const ariaLabel =
@@ -61,7 +89,9 @@ function ItemRow({
       : givenAriaLabel;
   const hide = (node: ReactNode, isOn: boolean) =>
     isOn ? <SensitiveValue>{node}</SensitiveValue> : node;
-  const hasDetail = Boolean(detail) || Boolean(warningLine);
+  const shownDetail =
+    reorder?.isFixed && reorder.fixedNote ? reorder.fixedNote : detail;
+  const hasDetail = Boolean(shownDetail) || Boolean(warningLine);
   const badge = tick
     ? null
     : (leading ?? <ItemBadge name={name} emoji={emoji} />);
@@ -107,7 +137,11 @@ function ItemRow({
             />
           )}
           <span className='line-clamp-2'>
-            {isPrivate && detail ? <MaskedText>{detail}</MaskedText> : detail}
+            {isPrivate && shownDetail ? (
+              <MaskedText>{shownDetail}</MaskedText>
+            ) : (
+              shownDetail
+            )}
           </span>
         </span>
       )}
@@ -124,6 +158,87 @@ function ItemRow({
   );
   const rowClass =
     'text-foreground! h-auto min-h-16 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal';
+
+  const compactName = (
+    <span className='block min-w-0 flex-1 text-sm font-medium break-words'>
+      <span className='line-clamp-2'>{name}</span>
+    </span>
+  );
+
+  if (reorder?.isFixed) {
+    return (
+      <li
+        className='flex min-h-11 items-center gap-2 px-3 py-1'
+        title={shownDetail ?? undefined}
+      >
+        {badge}
+        {compactName}
+        <span className='text-muted-foreground shrink-0 text-xs'>
+          {reorder.fixedLabel}
+        </span>
+        <Lock
+          className='text-muted-foreground h-4 w-4 shrink-0'
+          aria-hidden='true'
+        />
+        <span className='sr-only'>
+          {PRIORITIES_WORDS.fixedHidden}
+          {shownDetail ? `. ${shownDetail}` : ''}
+        </span>
+      </li>
+    );
+  }
+
+  if (reorder) {
+    const nudge = (
+      label: string,
+      icon: ReactNode,
+      onClick: (() => void) | null,
+    ) => (
+      <Button
+        type='button'
+        variant='tertiary'
+        size='stripped'
+        className="text-muted-foreground! relative grid size-8 shrink-0 place-items-center before:absolute before:-inset-1 before:content-['']"
+        aria-label={label}
+        disabled={onClick === null}
+        onClick={onClick ?? undefined}
+      >
+        {icon}
+      </Button>
+    );
+    return (
+      <li
+        className={join(
+          'flex items-center first:rounded-t-2xl last:rounded-b-2xl',
+          (reorder.isLifted || reorder.isFlashed) && 'bg-accent',
+        )}
+      >
+        <Button
+          type='button'
+          variant='tertiary'
+          className='text-foreground! h-auto min-h-11 min-w-0 flex-1 items-center justify-start gap-2 rounded-none p-0! px-3! py-1! text-left font-normal whitespace-normal'
+          aria-pressed={reorder.isLifted}
+          aria-label={`${name}. ${reorder.isLifted ? 'Lifted, choose where to place it' : 'Tap to lift'}`}
+          onClick={reorder.onLift}
+        >
+          {badge}
+          {compactName}
+        </Button>
+        <span className='mr-2 flex shrink-0 items-center gap-2'>
+          {nudge(
+            `Move ${name} up`,
+            <ArrowUp className='h-4 w-4' aria-hidden='true' />,
+            reorder.onMoveUp,
+          )}
+          {nudge(
+            `Move ${name} down`,
+            <ArrowDown className='h-4 w-4' aria-hidden='true' />,
+            reorder.onMoveDown,
+          )}
+        </span>
+      </li>
+    );
+  }
 
   if (tick) {
     return (
@@ -174,7 +289,12 @@ function ItemRow({
   }
 
   return (
-    <li className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'>
+    <li
+      className={join(
+        'first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl',
+        isHighlighted && 'bg-primary/10',
+      )}
+    >
       <Button
         type='button'
         variant='tertiary'

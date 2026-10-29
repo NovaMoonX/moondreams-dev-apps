@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from 'react-redux';
 
 import InlineNotice from '@/components/InlineNotice';
@@ -40,6 +40,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 
 const MAX_LINES_SHOWN = 3;
+const NO_PINNED: ReadonlySet<string> = new Set();
 
 interface EffectPreviewProps {
   /** What is layered over the plan, as JSON of a `PreviewChange`; null while the form is not finished. */
@@ -50,6 +51,14 @@ interface EffectPreviewProps {
   waitingText?: string;
   /** One summary line with a door to each day, for a form whose subject is the change itself. */
   isCompact?: boolean;
+  /** What the change does, said first and in place of the plan-level notices: the form's own reading of the days it moves. */
+  describeLead?: (
+    days: readonly PreviewDay[],
+    isHidden: boolean,
+    shortfalls: readonly ReactNode[],
+  ) => ReactNode;
+  /** Items whose rows lead every day's card, so a reorder shows the gain beside the losses. */
+  pinnedItemIds?: ReadonlySet<string>;
 }
 
 interface EffectEntry {
@@ -57,14 +66,21 @@ interface EffectEntry {
   title: string;
   note: string | null;
   lines: { name: string; text: string }[];
-  more: number;
   free: string | null;
   detail: string | null;
 }
 
-const toDayEntry = (day: PreviewDay): EffectEntry => {
-  const lines = day.kind === 'changed' ? day.effect.lines : [];
-  const shown = lines.slice(0, MAX_LINES_SHOWN).map((line) => ({
+const toDayEntry = (
+  day: PreviewDay,
+  pinned: ReadonlySet<string>,
+): EffectEntry => {
+  const lines =
+    day.kind === 'changed'
+      ? [...day.effect.lines].sort(
+          (a, b) => Number(pinned.has(b.itemId)) - Number(pinned.has(a.itemId)),
+        )
+      : [];
+  const shown = lines.map((line) => ({
     name: day.names[line.itemId]?.name ?? 'Something removed',
     text: `${formatCents(line.beforeCents)} → ${formatCents(line.afterCents)}`,
   }));
@@ -81,7 +97,6 @@ const toDayEntry = (day: PreviewDay): EffectEntry => {
           ? CHANGE_WORDS.removed
           : null,
     lines: shown,
-    more: lines.length - shown.length,
     free: isFreeMoved
       ? `${formatCents(day.effect.freeBeforeCents)} → ${formatCents(day.effect.freeAfterCents)}`
       : null,
@@ -90,7 +105,10 @@ const toDayEntry = (day: PreviewDay): EffectEntry => {
 };
 
 /** Days that move the same way, with nothing of their own to say, become one row; the days with lines that change come first, each on its own. */
-const toEntries = (days: readonly PreviewDay[]): EffectEntry[] => {
+const toEntries = (
+  days: readonly PreviewDay[],
+  pinned: ReadonlySet<string>,
+): EffectEntry[] => {
   const kindOf = (day: PreviewDay) =>
     day.kind !== 'changed'
       ? day.kind
@@ -98,11 +116,14 @@ const toEntries = (days: readonly PreviewDay[]): EffectEntry[] => {
           day.effect.freeBeforeCents === day.effect.freeAfterCents
         ? 'same'
         : 'own';
-  const own = days.filter((day) => kindOf(day) === 'own').map(toDayEntry);
+  const own = days
+    .filter((day) => kindOf(day) === 'own')
+    .map((day) => toDayEntry(day, pinned));
   const folded = (['removed', 'added', 'same'] as const).flatMap((kind) => {
     const group = days.filter((day) => kindOf(day) === kind);
     if (group.length === 0) return [];
-    if (group.length === 1 && kind !== 'same') return [toDayEntry(group[0])];
+    if (group.length === 1 && kind !== 'same')
+      return [toDayEntry(group[0], pinned)];
     const first = formatDateUTC(group[0].on);
     const last = formatDateUTC(group[group.length - 1].on);
     return [
@@ -111,7 +132,6 @@ const toEntries = (days: readonly PreviewDay[]): EffectEntry[] => {
         title: EFFECT_FOLD_WORDS[kind](group.length),
         note: null,
         lines: [],
-        more: 0,
         free: null,
         detail: group.length > 1 ? `${first} to ${last}` : first,
       },
@@ -162,6 +182,8 @@ function EffectPreview({
   emptyText,
   waitingText,
   isCompact = false,
+  describeLead,
+  pinnedItemIds,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -176,6 +198,7 @@ function EffectPreview({
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [isOpen, setIsOpen] = useState(false);
+  const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
   const { isHidden } = useValuesHidden();
   const settledJson = useDeferredValue(changeJson);
   const settledVirtual = useMemo<PreviewChange | null>(
@@ -287,6 +310,7 @@ function EffectPreview({
       );
     }
     if (days.length === 0) {
+      if (describeLead !== undefined && holdsText?.isSame !== true) return null;
       return emptyText ? (
         <InlineNotice tone='info'>
           <MaskedText>{emptyText}</MaskedText>
@@ -297,7 +321,7 @@ function EffectPreview({
         </p>
       );
     }
-    const entries = toEntries(days);
+    const entries = toEntries(days, pinnedItemIds ?? NO_PINNED);
     const shown = isOpen ? entries : entries.slice(0, PREVIEW_SHOWN);
     if (isCompact && !isOpen) {
       const first = getMoves(days).isMove
@@ -341,7 +365,10 @@ function EffectPreview({
               <p className='line-clamp-2 font-medium break-words'>
                 {entry.title}
               </p>
-              {entry.lines.map((line) => (
+              {(expandedKeys.includes(entry.key)
+                ? entry.lines
+                : entry.lines.slice(0, MAX_LINES_SHOWN)
+              ).map((line) => (
                 <p
                   key={line.name}
                   className='flex items-baseline justify-between gap-3'
@@ -352,8 +379,21 @@ function EffectPreview({
                   </span>
                 </p>
               ))}
-              {entry.more > 0 && (
-                <p className='text-muted-foreground'>and {entry.more} more</p>
+              {entry.lines.length > MAX_LINES_SHOWN && (
+                <ShowMoreButton
+                  isOpen={expandedKeys.includes(entry.key)}
+                  onClick={() =>
+                    setExpandedKeys((keys) =>
+                      keys.includes(entry.key)
+                        ? keys.filter((key) => key !== entry.key)
+                        : [...keys, entry.key],
+                    )
+                  }
+                >
+                  {expandedKeys.includes(entry.key)
+                    ? 'Show fewer'
+                    : `Show ${entry.lines.length - MAX_LINES_SHOWN} more`}
+                </ShowMoreButton>
               )}
               {entry.free && (
                 <p className='text-muted-foreground flex items-baseline justify-between gap-3'>
@@ -383,8 +423,41 @@ function EffectPreview({
     );
   };
 
+  const isLeadShown =
+    describeLead !== undefined && days !== null && days.length > 0;
+  const shownBlocks =
+    holdsText && !(isCompact && holdsText.isSame)
+      ? holdsText.blocks.filter(
+          (block) => describeLead === undefined || block.tone === 'warning',
+        )
+      : [];
+  const renderFigure = (block: (typeof shownBlocks)[number]) =>
+    block.figure === null ? (
+      block.text
+    ) : (
+      <>
+        {block.text.slice(0, block.text.indexOf(block.figure))}
+        <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
+          {block.figure}
+        </strong>
+        {block.text.slice(
+          block.text.indexOf(block.figure) + block.figure.length,
+        )}
+      </>
+    );
+  const isLeadFirst = isLeadShown && !isHidden;
+  const leadShortfalls = isLeadFirst
+    ? shownBlocks.map((block) => (
+        <span key={block.text}>{renderFigure(block)}</span>
+      ))
+    : [];
+
   return (
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
+      {isLeadShown &&
+        isHidden &&
+        shownBlocks.map((block) => <NeedsALookRow key={block.text} />)}
+      {isLeadShown && describeLead(days, isHidden, leadShortfalls)}
       {getBody()}
       {movedNotes
         .filter((note) => !(note.isOneCarried && isCarrySaid))
@@ -393,26 +466,13 @@ function EffectPreview({
             {note.text}
           </InlineNotice>
         ))}
-      {holdsText &&
-        !(isCompact && holdsText.isSame) &&
-        holdsText.blocks.map((block) =>
+      {!isLeadShown &&
+        shownBlocks.map((block) =>
           isHidden && block.tone === 'warning' ? (
             <NeedsALookRow key={block.text} />
           ) : (
             <InlineNotice key={block.text} tone={block.tone}>
-              {block.figure === null ? (
-                block.text
-              ) : (
-                <>
-                  {block.text.slice(0, block.text.indexOf(block.figure))}
-                  <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
-                    {block.figure}
-                  </strong>
-                  {block.text.slice(
-                    block.text.indexOf(block.figure) + block.figure.length,
-                  )}
-                </>
-              )}
+              {renderFigure(block)}
             </InlineNotice>
           ),
         )}

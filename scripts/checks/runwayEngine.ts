@@ -59,6 +59,7 @@ import {
   matchMovedDates,
   planOverrideCarry,
 } from '../../src/apps/runway/engine/moved.ts';
+import { monthlyTotal } from '../../src/apps/runway/engine/groups.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -114,6 +115,17 @@ import {
   getLaterReleaseDay,
   readHeldReleasedOn,
 } from '../../src/apps/runway/engine/endings.ts';
+import {
+  buildMoves,
+  getNextTierRank,
+  isDueBeforeNext,
+  orderPriorities,
+  placeBetween,
+  planReorder,
+  reconcileWorking,
+  type PriorityItem,
+} from '../../src/apps/runway/engine/priorities.ts';
+import { getVersionStretches } from '../../src/apps/runway/engine/resolve.ts';
 import {
   getDayKeyMonth,
   getHistoryRange,
@@ -210,6 +222,7 @@ import {
   percentShares,
 } from '../../src/apps/runway/engine/money.ts';
 import {
+  getVersionStretches,
   resolve,
   resolveCurrentOrNext,
   resolveNextChange,
@@ -633,6 +646,21 @@ const version = (
     'an item that has not begun resolves to its first version',
   );
   assert.equal(resolveCurrentOrNext(versions, 'zzz', utc(2025, 1, 1)), null);
+  const notBegun = [
+    version('n1', 'n', 100, utc(2026, 5, 1), 'old'),
+    version('n2', 'n', 200, utc(2026, 5, 1), 'newer, same start'),
+    version('n3', 'n', 300, utc(2026, 8, 1), 'newer, starts later'),
+  ];
+  assert.equal(
+    resolveCurrentOrNext(notBegun, 'n', utc(2026, 4, 1))?.id,
+    'n2',
+    'a not-begun item resolves to the newest version of its first start',
+  );
+  assert.equal(
+    resolveCurrentOrNext(notBegun, 'n', utc(2026, 4, 1))?.id,
+    resolveVersion(notBegun, 'n', utc(2026, 5, 1))?.id,
+    'the lists agree with the lookahead on the first start',
+  );
 
   const headers = [
     item('a', 5),
@@ -6856,6 +6884,7 @@ const version = (
     holdsThrough,
     problems,
     shortByDay: {},
+    firstShortDay: null,
     incomeEndsOn: null,
   });
   const short = (on: number, name: string, shortBy: number) =>
@@ -9097,6 +9126,619 @@ console.log('runway engine: ok');
       `G9: a closing with choice ${index + 1} equals the replay`,
     );
   });
+}
+
+{
+  const day = utc(2026, 11, 6);
+  const draftWith = (mustCents: number) =>
+    buildDraft({
+      days: [
+        {
+          dayKey: toDayKey('line-a', day),
+          sourceId: 'src-a',
+          on: day,
+          amount: { lowCents: 100_000, highCents: 100_000 },
+        },
+      ],
+      plan: {
+        envelopes: [
+          ['must', 'must', 1, mustCents],
+          ['a', 'should', 1, 20_000],
+          ['b', 'should', 2, 20_000],
+          ['c', 'want', 1, 20_000],
+        ].map(([itemId, priority, orderIndex, cents]) => ({
+          itemId: itemId as string,
+          createdAt: 1_000,
+          priority: priority as 'must' | 'should' | 'want',
+          orderIndex: orderIndex as number,
+          funding: {
+            amount: { kind: 'exact' as const, cents: cents as number },
+            cadence: { kind: 'everyIncomeDay' as const },
+          },
+        })),
+        bills: [],
+        goals: [],
+        horizon: 0,
+        incomeDays: [{ dayKey: toDayKey('line-a', day), on: day }],
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const item = (
+    itemId: string,
+    tier: 'must' | 'should' | 'want',
+    orderIndex: number,
+    extra: Partial<PriorityItem> = {},
+  ): PriorityItem => ({
+    itemId,
+    kind: 'envelope',
+    tier,
+    orderIndex,
+    createdAt: 1_000,
+    isRest: false,
+    isDueFirst: false,
+    ...extra,
+  });
+  const items = [
+    item('must', 'must', 1),
+    item('a', 'should', 1),
+    item('b', 'should', 2),
+    item('c', 'want', 1),
+  ];
+  const flat = (order: ReturnType<typeof orderPriorities>) =>
+    order.sections.flatMap((section) => section.items.map((i) => i.itemId));
+
+  assert.deepEqual(flat(orderPriorities(items, null)), ['must', 'a', 'b', 'c']);
+  assert.equal(
+    orderPriorities(items, null).cutIndex,
+    null,
+    'no draft, no line',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(30_000)).cutIndex,
+    null,
+    'every pay covers everything: no line',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(50_000)).cutIndex,
+    3,
+    'the line sits above the first item that is short',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(70_000)).cutIndex,
+    2,
+    'a larger Must moves the line up the list',
+  );
+  assert.equal(
+    orderPriorities(items, draftWith(40_000)).cutIndex,
+    null,
+    'a smaller Must moves the line away once nothing is short',
+  );
+
+  const due = orderPriorities(
+    [item('late', 'should', 9, { isDueFirst: true }), ...items],
+    null,
+  );
+  assert.deepEqual(
+    due.sections[1].items.map((i) => i.itemId),
+    ['late', 'a', 'b'],
+    'a bill due before the next pay goes first in its tier',
+  );
+  assert.deepEqual(
+    flat(
+      orderPriorities(
+        [item('rest', 'should', 0, { isRest: true }), ...items],
+        null,
+      ),
+    ).slice(1, 4),
+    ['a', 'b', 'rest'],
+    'an item that asks for what is left goes last in its tier',
+  );
+
+  assert.equal(placeBetween(1, 2), 1.5);
+  assert.equal(placeBetween(3, null), 4);
+  assert.equal(placeBetween(null, 3), 2);
+  assert.equal(placeBetween(null, null), 1);
+
+  {
+    const D = 86_400_000;
+    const v = (
+      id: string,
+      createdAt: number,
+      from: number,
+      until: number | null,
+      cents: number,
+    ) => ({
+      id,
+      itemId: 'x',
+      createdAt,
+      effectiveFrom: from,
+      effectiveUntil: until,
+      payload: { cents },
+    });
+    assert.deepEqual(
+      getVersionStretches([v('base', 1, 0, null, 80)], 'x', 10 * D),
+      [{ payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: null }],
+      'an item with one version in force is reranked by one version',
+    );
+    assert.deepEqual(
+      getVersionStretches(
+        [v('base', 1, 0, null, 80), v('stretch', 2, 5 * D, 20 * D, 40)],
+        'x',
+        10 * D,
+      ),
+      [
+        {
+          payload: { cents: 40 },
+          effectiveFrom: 10 * D,
+          effectiveUntil: 20 * D,
+        },
+        { payload: { cents: 80 }, effectiveFrom: 20 * D, effectiveUntil: null },
+      ],
+      'a stretch in force keeps its amount and its end, and the amount after it comes back',
+    );
+    assert.deepEqual(
+      getVersionStretches(
+        [v('base', 1, 0, null, 80), v('ahead', 2, 30 * D, null, 95)],
+        'x',
+        10 * D,
+      ),
+      [
+        {
+          payload: { cents: 80 },
+          effectiveFrom: 10 * D,
+          effectiveUntil: 30 * D,
+        },
+        { payload: { cents: 95 }, effectiveFrom: 30 * D, effectiveUntil: null },
+      ],
+      'a change ahead keeps its date and amount under the new rank',
+    );
+  }
+
+  const order = orderPriorities(items, null);
+  const working = (should: string[], want: string[] = ['c']) => ({
+    must: ['must'],
+    should,
+    want,
+  });
+  assert.deepEqual(
+    planReorder(order.sections, working(['b', 'a']), new Set(['b'])),
+    [{ itemId: 'b', tier: 'should', orderIndex: 0 }],
+    'one move writes one version',
+  );
+  assert.deepEqual(
+    planReorder(order.sections, working(['b'], ['a', 'c']), new Set(['a'])),
+    [{ itemId: 'a', tier: 'want', orderIndex: 0 }],
+    'a move to another tier changes the tier',
+  );
+  assert.deepEqual(
+    planReorder(order.sections, working(['a', 'b']), new Set(['b'])),
+    [],
+    'putting an item back where it was writes nothing',
+  );
+
+  const tied = orderPriorities(
+    [
+      item('x', 'should', 1, { createdAt: 1 }),
+      item('y', 'should', 1, { createdAt: 2 }),
+      item('z', 'should', 2),
+    ],
+    null,
+  );
+  const reranked = planReorder(
+    tied.sections,
+    { must: [], should: ['x', 'z', 'y'], want: [] },
+    new Set(['z']),
+  );
+  const finalIndex = new Map([
+    ['x', 1],
+    ['y', 1],
+    ['z', 2],
+    ...reranked.map((move): [string, number] => [move.itemId, move.orderIndex]),
+  ]);
+  assert.deepEqual(
+    ['x', 'y', 'z'].sort(
+      (p, q) => (finalIndex.get(p) ?? 0) - (finalIndex.get(q) ?? 0),
+    ),
+    ['x', 'z', 'y'],
+    'neighbours that tie are ranked apart so the moved item lands between them',
+  );
+  assert.ok(
+    reranked.some((move) => move.itemId === 'z') &&
+      reranked.every((move) => move.itemId !== 'y'),
+    'the moved item is written and only the smaller side of the tie is ranked again',
+  );
+
+  // Neighbours that tie, with the moved item already sorting between them, write only the moved item.
+  {
+    const run = orderPriorities(
+      [
+        item('p', 'should', 1, { createdAt: 1 }),
+        item('q', 'should', 1, { createdAt: 2 }),
+        item('r', 'should', 1, { createdAt: 3 }),
+        item('m', 'should', 5, { createdAt: 2 }),
+      ],
+      null,
+    );
+    assert.deepEqual(
+      planReorder(
+        run.sections,
+        { must: [], should: ['p', 'm', 'q', 'r'], want: [] },
+        new Set(['m']),
+      ),
+      [{ itemId: 'm', tier: 'should', orderIndex: 1 }],
+      'a tie the sort already settles keeps the rank and writes nothing else',
+    );
+  }
+
+  // Items that ask for what is left are fixed: never in the working copy, never written.
+  {
+    const withRest = orderPriorities(
+      [
+        item('a2', 'should', 5),
+        item('b2', 'should', 6),
+        item('r1', 'should', 1, { isRest: true }),
+        item('r2', 'should', 2, { isRest: true }),
+      ],
+      null,
+    );
+    assert.deepEqual(
+      withRest.sections[1].items.map((i) => i.itemId),
+      ['a2', 'b2', 'r1', 'r2'],
+      'rest items sit after the movable ones whatever their rank',
+    );
+    assert.deepEqual(
+      planReorder(
+        withRest.sections,
+        { must: [], should: ['b2', 'a2', 'r1', 'r2'], want: [] },
+        new Set(['b2', 'r1']),
+      ),
+      [{ itemId: 'b2', tier: 'should', orderIndex: 4 }],
+      'a rest item is neither placed nor ranked again',
+    );
+    assert.deepEqual(
+      reconcileWorking(
+        { must: [], should: ['gone', 'r1', 'b2', 'a2'], want: [] },
+        withRest.sections,
+        new Set(['b2']),
+      ),
+      { must: [], should: ['b2', 'a2'], want: [] },
+      'a gone or fixed id drops out of the working copy',
+    );
+    const grown = orderPriorities(
+      [...withRest.sections.flatMap((s) => s.items), item('n', 'should', 9)],
+      null,
+    );
+    assert.deepEqual(
+      reconcileWorking(
+        { must: [], should: ['b2', 'a2'], want: [] },
+        grown.sections,
+        new Set(['b2']),
+      ),
+      { must: [], should: ['b2', 'a2', 'n'], want: [] },
+      'a new item goes unmoved at the end of its tier',
+    );
+    assert.deepEqual(
+      reconcileWorking(
+        { must: [], should: ['a2', 'b2'], want: [] },
+        orderPriorities(
+          [
+            item('a2', 'should', 5, { isDueFirst: true }),
+            item('b2', 'should', 6),
+          ],
+          null,
+        ).sections,
+        new Set(),
+      ),
+      { must: [], should: ['b2'], want: [] },
+      'an item whose due-first flips drops out',
+    );
+  }
+
+  // One builder: a stretch is its own move segment, with its own dates.
+  {
+    const D = 86_400_000;
+    const versions = [
+      {
+        id: 'v1',
+        itemId: 'x',
+        kind: 'envelope' as const,
+        createdAt: 1,
+        effectiveFrom: 0,
+        effectiveUntil: null,
+        payload: { cents: 1 },
+      },
+      {
+        id: 'v2',
+        itemId: 'x',
+        kind: 'envelope' as const,
+        createdAt: 2,
+        effectiveFrom: 30 * D,
+        effectiveUntil: null,
+        payload: { cents: 2 },
+      },
+    ];
+    const moves = buildMoves(
+      [{ itemId: 'x', tier: 'want', orderIndex: 3 }],
+      versions,
+      10 * D,
+    );
+    assert.deepEqual(
+      moves[0].segments.map((seg) => [
+        seg.effectiveFrom,
+        seg.effectiveUntil,
+        seg.payload.cents,
+      ]),
+      [
+        [10 * D, 30 * D, 1],
+        [30 * D, null, 2],
+      ],
+      'a change ahead is its own segment',
+    );
+    assert.equal(moves[0].kind, 'envelope');
+    assert.deepEqual(
+      buildMoves(
+        [{ itemId: 'none', tier: 'want', orderIndex: 3 }],
+        versions,
+        0,
+      ),
+      [],
+      'an item with no version writes nothing',
+    );
+    const bill = {
+      version: { payload: { priority: 'must' as const, orderIndex: 4 } },
+    };
+    const goal = {
+      version: { payload: { priority: 'must' as const, orderIndex: 9 } },
+    };
+    assert.equal(
+      getNextTierRank([bill, goal], 'must'),
+      10,
+      'a new item takes the highest rank across every kind',
+    );
+  }
+
+  // A short day that is not the next pay: the list agrees with that day's lines and the cut sits above the first short one.
+  {
+    const pay = (on: number, key: string) => ({
+      dayKey: toDayKey(`line-${key}`, on),
+      sourceId: 'src-a',
+      on,
+      amount: { lowCents: 60_000, highCents: 60_000 },
+    });
+    const payA = pay(utc(2026, 11, 6), 'a');
+    const payB = pay(utc(2026, 11, 20), 'b');
+    const payC = pay(utc(2026, 12, 4), 'c');
+    const bill = (itemId: string, orderIndex: number, dueOn: number) => ({
+      itemId,
+      createdAt: 1_000,
+      priority: 'should' as const,
+      orderIndex,
+      amount: { lowCents: 60_000, highCents: 60_000 },
+      schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
+      ending: { onDate: null, afterCount: null },
+      fundedBy: { kind: 'suggested' as const },
+    });
+    const bills = [
+      bill('late-first', 3, utc(2026, 11, 28)),
+      bill('early', 1, utc(2026, 12, 20)),
+      bill('mid', 2, utc(2026, 12, 25)),
+    ];
+    const shortDraft = buildDraft({
+      days: [payB],
+      plan: {
+        envelopes: [],
+        bills,
+        goals: [],
+        horizon: utc(2027, 3, 1),
+        incomeDays: [payA, payB, payC],
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+    const lineIds = shortDraft.lines
+      .filter((line) => line.pairing === null)
+      .map((line) => line.itemId);
+    const items = bills.map((entry) =>
+      item(entry.itemId, 'should', entry.orderIndex, {
+        kind: 'bill',
+        isDueFirst: isDueBeforeNext(shortDraft, entry.itemId, payC.on) ?? false,
+      }),
+    );
+    const ordered = orderPriorities(items, shortDraft);
+    const flatIds = ordered.sections.flatMap((section) =>
+      section.items.map((i) => i.itemId),
+    );
+    assert.deepEqual(
+      flatIds.filter((id) => lineIds.includes(id)),
+      lineIds,
+      "the list order of items with lines is the short day's line order",
+    );
+    const firstShort = shortDraft.lines.find(
+      (line) => line.pairing === null && line.shortBy > 0,
+    );
+    assert.ok(firstShort, 'the day is short');
+    assert.equal(
+      ordered.cutIndex,
+      flatIds.indexOf(firstShort?.itemId ?? ''),
+      'the cut sits above the first short item',
+    );
+    assert.equal(
+      isDueBeforeNext(shortDraft, 'not-here', payC.on),
+      null,
+      'a bill with no line that day has no answer',
+    );
+  }
+}
+
+{
+  const every = (kind: Schedule['kind'], anchor: number | null): Schedule => ({
+    kind,
+    anchor,
+    monthDays: [],
+  });
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const nov = utc(2026, 11, 14);
+  const NO_END = { onDate: null, afterCount: null };
+  const member = (
+    amount: { lowCents: number; highCents: number },
+    schedule: Schedule,
+    extra: Partial<{ startsOn: number; ending: typeof NO_END }> = {},
+  ) => ({
+    amount,
+    schedule,
+    startsOn: utc(2026, 1, 1),
+    ending: NO_END,
+    ...extra,
+  });
+
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(120_000), every('monthly', utc(2026, 11, 1))),
+        member(exact(5_200), every('weekly', utc(2026, 11, 3))),
+        member(exact(2_600), every('everyOtherWeek', utc(2026, 11, 3))),
+        member(exact(1_000), every('twiceMonthly', null)),
+      ],
+      nov,
+    ),
+    {
+      total: exact(150_167),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: each schedule counts at its monthly average, rounded once',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(9_000), every('once', utc(2026, 11, 30))),
+        member(exact(7_000), every('once', utc(2026, 12, 1))),
+      ],
+      nov,
+    ),
+    {
+      total: exact(0),
+      uncounted: 0,
+      oneTime: {
+        count: 2,
+        range: exact(16_000),
+        dueOn: utc(2026, 11, 30),
+      },
+    },
+    'G10: a once bill is never in the usual month; it is named beside it with its earliest day',
+  );
+  assert.deepEqual(
+    monthlyTotal([], nov),
+    {
+      total: exact(0),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: an empty group comes to nothing',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(
+          { lowCents: 14_000, highCents: 18_000 },
+          every('monthly', utc(2026, 11, 1)),
+        ),
+        member(exact(5_000), every('monthly', utc(2026, 11, 5))),
+      ],
+      nov,
+    ),
+    {
+      total: { lowCents: 19_000, highCents: 23_000 },
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: a group with a range member shows a range',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(120_000), every('monthly', utc(2026, 11, 1))),
+        member(exact(18_000), every('irregular', null)),
+      ],
+      nov,
+    ),
+    {
+      total: exact(120_000),
+      uncounted: 1,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: a bill with no regular beat is named as left out, never counted as 0 silently',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [
+        member(exact(30_000), every('monthly', utc(2026, 1, 5)), {
+          ending: { onDate: utc(2026, 10, 5), afterCount: null },
+        }),
+        member(exact(40_000), every('monthly', utc(2027, 1, 1)), {
+          startsOn: utc(2027, 1, 1),
+        }),
+        member(exact(50_000), every('monthly', utc(2026, 1, 1)), {
+          ending: { onDate: utc(2026, 11, 20), afterCount: null },
+        }),
+      ],
+      nov,
+    ),
+    {
+      total: exact(50_000),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G10: a bill that ended before the month or begins after it counts nothing; one ending in it still counts',
+  );
+}
+
+{
+  const D = 86_400_000;
+  const v = (
+    id: string,
+    createdAt: number,
+    from: number,
+    until: number | null,
+    cents: number,
+  ) => ({
+    id,
+    itemId: 'x',
+    createdAt,
+    effectiveFrom: from,
+    effectiveUntil: until,
+    payload: { cents },
+  });
+  assert.deepEqual(
+    getVersionStretches([v('base', 1, 0, null, 80)], 'x', 10 * D),
+    [{ payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: null }],
+    'an item with one version in force is one stretch',
+  );
+  assert.deepEqual(
+    getVersionStretches(
+      [v('base', 1, 0, null, 80), v('stretch', 2, 5 * D, 20 * D, 40)],
+      'x',
+      10 * D,
+    ),
+    [
+      { payload: { cents: 40 }, effectiveFrom: 10 * D, effectiveUntil: 20 * D },
+      { payload: { cents: 80 }, effectiveFrom: 20 * D, effectiveUntil: null },
+    ],
+    'a stretch in force keeps its amount and its end, and the amount after it comes back',
+  );
+  assert.deepEqual(
+    getVersionStretches(
+      [v('base', 1, 0, null, 80), v('ahead', 2, 30 * D, null, 95)],
+      'x',
+      10 * D,
+    ),
+    [
+      { payload: { cents: 80 }, effectiveFrom: 10 * D, effectiveUntil: 30 * D },
+      { payload: { cents: 95 }, effectiveFrom: 30 * D, effectiveUntil: null },
+    ],
+    'a change ahead keeps its date and amount',
+  );
 }
 
 console.log('runway engine: ok');

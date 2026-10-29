@@ -59,7 +59,7 @@ export const STANCE_HELP: Record<(typeof STANCES)[number], string> = {
 export const STANCE_FOLLOW_PLAN = 'plan' as const;
 
 /** Entries on Plan > More; one appears when the screen it opens exists. */
-export const MORE_ENTRIES = ['settings', 'changeLog'] as const;
+export const MORE_ENTRIES = ['priorities', 'settings', 'changeLog'] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
 export const RUNWAY_VIEWS = ['start', 'freeToSpend', 'checkAmount'] as const;
@@ -68,9 +68,10 @@ export const RUNWAY_VIEWS = ['start', 'freeToSpend', 'checkAmount'] as const;
 export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
 
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
-  { settings: 'Settings', changeLog: 'Change log' };
+  { priorities: 'Priorities', settings: 'Settings', changeLog: 'Change log' };
 
 export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
+  priorities: 'Which items get their money first when it runs short.',
   settings:
     'How the plan reads a range of pay or a bill, and whether you track spending.',
   changeLog: 'Every change to the plan, with the reason you gave.',
@@ -911,6 +912,13 @@ export const FORM_FLOW_WORDS = {
   name: 'Name',
   priorityTitle: 'How much does it matter?',
   priority: 'How much it matters',
+  groupTitle: 'Does it belong in a group?',
+  group: 'Group',
+  noGroup: 'None',
+  newGroup: 'New group',
+  newGroupPlaceholder: 'Home, Subscriptions',
+  clearGroup: 'No group',
+  nameGroup: 'Name the group, or choose none.',
   emojiTitle: 'Pick an emoji, if you like',
   emoji: 'Emoji',
   noEmoji: 'None',
@@ -1266,6 +1274,62 @@ export const FIX_ROWS_SHOWN = 12;
 /** Rows any Runway list holds before it offers a search. */
 export const RUNWAY_SEARCH_THRESHOLD = 5;
 
+export const GROUP_WORDS = {
+  ungrouped: 'Other bills',
+  perMonth: (amount: string) => `${amount} a month`,
+  monthLabel: 'Together, each month',
+  openLabel: (name: string) => `${name}, open group`,
+  rename: 'Rename',
+  nameLabel: 'Name',
+  startingPriority: 'Starting priority',
+  startingPriorityHelp:
+    'A new bill in this group starts with this priority; with None, it starts at Should. You can still change it on the bill.',
+  startingPriorityFailed: 'The priority did not save. Nothing was changed.',
+  noPriority: 'None',
+  archive: 'Archive group',
+  archiveTitle: (name: string) => `Archive ${name}?`,
+  archiveBody: (count: number) =>
+    count === 0
+      ? 'It has no bills right now.'
+      : `Its ${count} ${count === 1 ? 'bill stays' : 'bills stay'} in your plan, without a group.`,
+  archived: (name: string, count: number) =>
+    count === 0
+      ? `Archived ${name}.`
+      : `Archived ${name}. Its ${count} ${count === 1 ? 'bill is' : 'bills are'} now without a group.`,
+  archivedToast: (name: string) => `Archived ${name}`,
+  addBill: 'Add a bill to this group',
+  inGroup: 'Group',
+  none: 'No group',
+  oneTimeNote: 'Not in monthly total',
+  noBills: 'No bills yet',
+  nameTaken: (name: string) => `There's already a group called ${name}.`,
+  oneTimeDue: (date: string) => `due ${date}`,
+  oneTimeCount: (count: number) => `in ${count} one-time bills`,
+  oneTimeLabel: 'Together, one-time',
+  moved: (bill: string, group: string) => `Moved ${bill} to ${group}`,
+  movedOut: (bill: string) => `Took ${bill} out of its group`,
+  willBe: (name: string) => `It will be in ${name}.`,
+  plusOneTime: (amount: string, count: number, due: string | null) =>
+    count === 1 && due !== null
+      ? `Plus ${amount} due ${due}`
+      : `Plus ${amount} in ${count} one-time bills`,
+  members: (names: readonly string[]) =>
+    names.length <= 4
+      ? names.join(', ')
+      : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
+  archiveFailed: 'The group did not archive. Nothing was changed.',
+  saveFailed: 'This did not save. Nothing was changed.',
+  basisTitle: 'How a month is worked out',
+  rangeTotal:
+    'A bill that varies counts at its low and its high amount, so the total is a range.',
+  basis:
+    'A usual month: each repeating bill at what it comes to in an average month. A one-time bill is not in it.',
+  uncounted: (count: number) =>
+    count === 1
+      ? 'One bill has no regular schedule, so it is not in this total.'
+      : `${count} bills have no regular schedule, so they are not in this total.`,
+} as const;
+
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {
   onHand: 'Money on hand',
@@ -1482,6 +1546,83 @@ export const RELEASE_UNDO_WORDS = {
 /** Round 7b package F2: a correction's short notice while amounts are hidden. */
 export const CORRECT_HIDDEN_WORDS = {
   shortTitle: 'Short',
+} as const;
+
+/** Priorities: the order bills, envelopes and goals are funded in when money runs short. */
+export const PRIORITIES_WORDS = {
+  title: 'Priorities',
+  allCovered: 'Every coming pay covers everything',
+  noIncome: 'No income is coming, so nothing is being funded yet',
+  checking: 'Checking your coming pays',
+  shortOn: (day: string) => `The plan leaves items short on ${day}`,
+  cutLine: (day: string) => `The ${day} pay runs out here`,
+  shortWord: (short: string) => `${short} short`,
+  shortWordTitle: 'What short means here',
+  shortTip: (short: string) =>
+    `The items below this line ask ${short} more than this pay holds, so the first may still get part of its amount. Envelopes and goals count here, not only bills.`,
+  dueFirst: (day: string | null) =>
+    day === null ? 'Due first' : `Due first · before ${day}`,
+  dueFirstLabel: 'Due first',
+  restLastLabel: 'Goes last',
+  restLast: 'Gets what is left, so it goes last',
+  fixedHidden: 'Fixed in place',
+  searchPlaceholder: 'Search priorities',
+  noMatch: 'Nothing matches that.',
+  empty:
+    'Bills, envelopes and goals you add show up here in the order they are funded.',
+  reorder: 'Reorder',
+  reorderHint: 'Tap an item, then tap where it goes, or use its arrows.',
+  moving: (name: string) => `Moving ${name}`,
+  cancelMove: 'Cancel move',
+  topOf: (tier: string, neighbour: string) =>
+    neighbour === '' ? `Top of ${tier}` : `Top of ${tier}, above ${neighbour}`,
+  topOfAfterBills: (tier: string) => `Top of ${tier}, after bills due first`,
+  endOf: (tier: string) => `End of ${tier}`,
+  above: (name: string) => `Above ${name}`,
+  below: (name: string) => `Below ${name}`,
+  saveNote: 'Review shows what changes first.',
+  gainsMore: (name: string, figure: string | null, when: string) =>
+    figure === null
+      ? `${name} gets more on ${when}`
+      : `${name} gets ${figure} more on ${when}`,
+  getsFigure: (name: string, figure: string | null, when: string) =>
+    figure === null
+      ? `${name} gets less on ${when}`
+      : `${name} gets ${figure} on ${when}`,
+  nextPays: (count: number) =>
+    count === 1 ? 'the next pay' : `the next ${count} pays`,
+  somePays: (count: number) => `${count} of the coming pays`,
+  soonestSame: (day: string) => `The ${day} pay does not change.`,
+  nothingChanges: 'Nothing changes on the coming pays.',
+  nothingChangesNote:
+    'The new order still applies whenever money runs short, so Save new order keeps it.',
+  placed: (name: string, where: string) => `Moved ${name} ${where}`,
+  placedTop: (tier: string) => `to the top of ${tier}`,
+  placedEnd: (tier: string) => `to the end of ${tier}`,
+  placedAbove: (name: string) => `above ${name}`,
+  othersGetLess: (count: number) =>
+    count === 1 ? 'One more item gets less.' : `${count} more items get less.`,
+  nowBefore: (name: string, other: string) =>
+    `${name} now comes before ${other}`,
+  nowAfter: (name: string, other: string) => `${name} now comes after ${other}`,
+  nowIn: (name: string, tier: string) => `${name} is now in ${tier}`,
+  savedMany: 'Saved the new order',
+  cancel: 'Cancel',
+  save: 'Review new order',
+  nothingMoved: 'Move an item to save a new order.',
+  confirmTitle: 'Save this order?',
+  confirmSave: 'Save new order',
+  savedBar: 'New order saved',
+  undo: 'Undo',
+  restored: 'Order restored',
+  restoredDetail: 'Your earlier order is back.',
+  undid: (summary: string) => `Undid: ${summary}`,
+  undoFailed: 'That did not undo. Your new order is still saved.',
+  undoStale:
+    'These items have been moved again since, so there is nothing to undo.',
+  saveFailed: 'That did not save. Nothing was changed.',
+  discardTitle: 'Discard the new order?',
+  discardMessage: 'The items go back to where they were.',
 } as const;
 
 /** Banks offered as a quick pick when adding a card; any other is typed. */
