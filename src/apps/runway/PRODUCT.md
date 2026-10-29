@@ -246,9 +246,12 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 ### Credit Cards, In Detail
 
-- **A card purchase moves money, not the account.** The amount moves from its envelope into the card reserve, and the cash stays in your checking account. A purchase added by hand is marked as paid by card to do this.
-- **One payment per bill.** On the due date, or earlier if you like, pay the card from checking using the reserve balance.
-- **Linked cards show the gap.** If the card's statement balance differs from the reserve (a pending charge, interest), Runway shows the difference and leaves the choice to you.
+- **Each card is its own.** A card is named by who issues it (Chase, Capital One) and, when it has one, its own name ("Capital One Venture X"). Each keeps its own reserve: what was charged to it and not yet paid, shown as "Waiting to be paid". Plan > Cards lists them.
+- **A card purchase moves money, not the account.** The amount comes out of its envelope as any purchase does, and moves into that card's reserve, while the cash stays where it is. "Paid by" on the purchase form picks the card, starting from the one used last.
+- **A bill can be paid by a card.** A bill says which card it is usually charged to. Marking it paid moves its amount into that card's reserve instead of out of your cash.
+- **Paying a card off is one step.** Open the card and tap "Pay off": the amount starts at what it waits for, and you change it to the statement if it differs. Your cash goes down and the reserve with it, so Free to spend does not move. Paying more than the card waits for says how much more comes out of Free to spend before you confirm. Every payment has an Undo.
+- **What a card owed before.** Adding a card asks what it owes right now, for what you charged before you started using Runway; that is set aside from the start.
+- **Linked cards show the gap** *(on hold with linking)*. If the card's statement balance differs from the reserve (a pending charge, interest), Runway shows the difference and leaves the choice to you.
 
 ### Notes and Receipts, In Detail
 
@@ -425,7 +428,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] After confirming, a checklist of money to move between accounts
 - [ ] Import purchases from a CSV, with Needs a home, merchant rules and "varies" merchants
 - [ ] Spill-over between envelopes, any number of steps deep, and proposals by priority where none is set
-- [ ] Card reserve, filled by card purchases you add
+- [ ] Cards with a reserve each, filled by card purchases and bills paid by card, and paid off in one step
 - [ ] Link bank and card accounts through one provider, with a one-time line-up of balances, matching purchases you entered by hand, and matching deposits to expected income days
 - [ ] Move down from Link: unlink an account and keep its history
 - [ ] "Safe to spend" for each envelope from live balances, and Where your cash is

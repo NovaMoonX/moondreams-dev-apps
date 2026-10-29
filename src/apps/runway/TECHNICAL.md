@@ -680,14 +680,17 @@ The checklist (`ChecklistScreen`, in a confirmed day) lists the day's bill lines
 |---|---|
 | `start` move | sets every starting balance |
 | confirmed day (latest correction wins) | adds each line to its envelope, goal, bill progress or reserve; leftover to Free to spend by source |
-| purchase with `lines` | subtracts each line from its envelope; `via: 'free'` lines draw Free to spend; a `paidByCard` purchase also moves that amount into the card reserve |
+| purchase with `lines` | subtracts each line from its envelope; `via: 'free'` lines draw Free to spend; a purchase with `paidByCardId` also adds its amount to that card's reserve and leaves money on hand where it was |
 | purchase with `needsHome` | draws Free to spend until assigned |
 | refund purchase | returns to its original lines in proportion by `allocate`; an archived or unmatched original goes to the envelope the person picked, default Free to spend |
 | `billPaid` | marks the occurrence paid; the part of the amount beyond what was set aside for the bill draws Free to spend (`settlePaid`). *Not built yet:* an actual amount, and a smaller actual returning the difference; a mark records the planned total |
-| `transfer`, `withdrawal`, `cardPayment`, `balanceCorrection` | *not built yet;* as named; a move with `reversesMoveId` set cancels the move it names (as built, only a `billPaid` undo uses it) |
+| `billPaid` with `cardId` | as above, and the amount moves into that card's reserve instead of out of money on hand |
+| `start` with `holding: 'card'` | what the card owed on the starting day (or when it was added), its reserve's base |
+| `cardPayment` | lowers the card's reserve and money on hand by the same amount, so Free to spend does not move; a reserve below zero (overpaid) counts as zero, so the extra came out of Free to spend; an undo is a move with `reversesMoveId` |
+| `transfer`, `withdrawal`, `balanceCorrection` | *not built yet;* as named; a move with `reversesMoveId` set cancels the move it names (`billPaid` and `cardPayment` undos use it) |
 | archived or ended item | *as built:* from its `heldReleasedOn` day the item's figure leaves the sums, so what it held is Free to spend (`releasedFrom`); a kept item (null) keeps it until "Release what it holds" |
 
-Free to spend is derived last: money on hand plus leftovers, minus draws. If it is below zero the Over-assigned line shows.
+Free to spend is derived last: money on hand plus leftovers, minus draws, minus what the cards wait for (`assignedToCardsCents`, each card's reserve at no less than zero). If it is below zero the Over-assigned line shows. *Cards as built (Issue 50):* money on hand is the real cash, so it gains back every card charge (`chargedByCard` from purchases, the `cardId` payments from bills) and loses every card payment. `reserveByCard` is each card's start plus its charges less its payments. A closing (version 3) keeps purchase charges by card (left out at Plan with the rest of the spending), each bill payment's `cardId`, and each card's payments as `[day, cents, moveId]`. `check:runway-engine` proves that a card purchase or a card-paid bill leaves Free to spend as cash would, that a payoff does not move it, that an overpayment draws it by the extra, that an undo restores it exactly, and that a closing equals the replay.
 
 **Purchases as first shipped (Issue 24).**
 

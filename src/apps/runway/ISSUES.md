@@ -1723,31 +1723,35 @@ Free to spend shows how much came from each source, and a purchase can be assign
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
-### Issue 50: Card reserve
+### Issue 50: Credit cards: a reserve per card, paid by card, and paying a card off
 
 **Prerequisites:** Issue 24
-**Target PR Size:** ~400 lines
+**Target PR Size:** ~900 lines (widened by the owner for card-first budgeting)
 **Files:**
-- `src/apps/runway/types.ts` (`paidByCard`, `cardPayment` moves)
-- `src/apps/runway/screens/spend/CardReserveScreen.tsx`
+- `src/apps/runway/types.ts` (`CardDoc`, `paidByCardId` on purchases and bills, `cardId` on `billPaid`, `cardPayment` moves)
+- `src/apps/runway/engine/balances.ts`, `engine/closings.ts` (a reserve per card)
+- `src/apps/runway/forms/CardForm.tsx`, `forms/PayCardSheet.tsx`, Plan > Cards
+- `firestore.rules` (`cards`)
 
-**Context:** Read the TDD's `MOVE_KINDS` and Matching step 3.
+**Context:** `PRODUCT.md` "Who It Is Built For First" and "Credit Cards, In Detail"; the TDD's balances table.
 
 ### Description
-Card purchases you add fill a reserve; paying the card empties it. The reserve is shown as money already spoken for.
+A card is named by its issuer and an optional name ("Capital One Venture X"). A purchase or bill paid by a card fills that card's reserve while the cash stays put; "Pay off" lowers the cash and the reserve together, so Free to spend does not move.
 
 ### Possible Approach
-1. A `cardPayment` move settles the reserve; purchases flagged `paidByCard` add to it. Once imports exist (Issue 51), matching step 3 turns a purchase that settles a card payment into a `cardPayment` move (see Issue 55).
+1. Cards are their own collection; a card's reserve is its start (what it owed when added) plus its charges less its payments.
+2. Matching card payments from imports (Issue 55) stays on hold with importing.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read:** purchases flagged by card, payments.
+- [ ] **Create / Read / Update / Archive:** cards on Plan > Cards.
+- [ ] **Paid by** on the purchase and bill forms; **Pay off** on the card's sheet, with an Undo.
 
 ### Success Criteria
-- [ ] The reserve never goes negative and Free to spend does not double count card purchases (check case).
+- [ ] Card purchases and card-paid bills never count twice in Free to spend, a payoff leaves it unchanged, an overpayment draws it by the extra, and a closing equals the replay (check cases).
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
-- [ ] Every sealed field this issue adds is read by this issue's own screens; a field for a later tier is not added early.
-- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
-- [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+- [ ] `firestore.rules` gained only `cards` in the update list, verified with `check:runway-rules`.
+- [ ] The PR carries one `minor` label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; driven at 390×844 in light and dark.
+- [ ] `PRODUCT.md`, `UX.md` and `TECHNICAL.md` match what shipped.
 
 ### Issue 51: Import purchases from a CSV, with Needs a home and merchant rules
 
