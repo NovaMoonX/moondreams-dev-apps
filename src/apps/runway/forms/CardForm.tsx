@@ -268,7 +268,7 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
             {DUE_DAYS.map((day) => (
               <Pill
                 key={day}
-                className="relative w-full px-0! after:absolute after:inset-y-0 after:-inset-x-[3px] after:content-['']"
+                className="relative w-full px-0! after:absolute after:-inset-x-[3px] after:inset-y-0 after:content-['']"
                 isSelected={formData.dueDay === day}
                 ariaLabel={day === LAST_DAY ? 'Last day' : toOrdinal(day)}
                 onClick={() => {
