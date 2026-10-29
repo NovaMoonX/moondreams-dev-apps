@@ -702,16 +702,6 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
-        {canChange && itemKind === 'bill' && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<FolderOpen />}
-            label={GROUP_WORDS.inGroup}
-            subtitle={currentGroupName}
-            onClick={openGroup}
-          />
-        )}
         {canChange && !quickChange && (
           <ActionRow
             isGrouped
@@ -789,6 +779,16 @@ function ItemSheet({
           label={ITEM_SHEET_WORDS.history}
           onClick={openHistory}
         />
+        {canChange && itemKind === 'bill' && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<FolderOpen />}
+            label={GROUP_WORDS.inGroup}
+            subtitle={currentGroupName}
+            onClick={openGroup}
+          />
+        )}
         {canRelease && (
           <ActionRow
             isGrouped

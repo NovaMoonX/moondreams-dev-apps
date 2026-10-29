@@ -58,7 +58,7 @@ const getParts = (
         'Starting priority',
         before.startingPriority,
         after.startingPriority,
-        (value) => (value === null ? 'none' : PRIORITY_LABELS[value]),
+        (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
       ),
     ];
   }

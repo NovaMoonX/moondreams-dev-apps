@@ -1247,19 +1247,27 @@ export const GROUP_WORDS = {
   startingPriorityHelp:
     'A new bill in this group starts with this priority. You can still change it on the bill.',
   startingPriorityFailed: 'The priority did not save. Nothing was changed.',
-  noPriority: 'None',
+  noPriority: 'None (starts at Should)',
   archive: 'Archive group',
   archiveTitle: (name: string) => `Archive ${name}?`,
   archiveBody: (count: number) =>
     count === 0
       ? 'It has no bills right now.'
       : `Its ${count} ${count === 1 ? 'bill stays' : 'bills stay'} in your plan, without a group.`,
-  archived: (name: string) => `Archived ${name}.`,
+  archived: (name: string, count: number) =>
+    count === 0
+      ? `Archived ${name}.`
+      : `Archived ${name}. Its ${count} ${count === 1 ? 'bill is' : 'bills are'} now without a group.`,
   archivedToast: (name: string) => `Archived ${name}`,
   addBill: 'Add a bill to this group',
   inGroup: 'Group',
   none: 'No group',
-  oneTimeNote: 'Not in the monthly total',
+  oneTimeNote: 'Not in monthly total',
+  noBills: 'No bills yet',
+  nameTaken: (name: string) => `There's already a group called ${name}.`,
+  oneTimeDue: (date: string) => `due ${date}`,
+  oneTimeCount: (count: number) => `in ${count} one-time bills`,
+  oneTimeLabel: 'Together, one-time',
   moved: (bill: string, group: string) => `Moved ${bill} to ${group}`,
   movedOut: (bill: string) => `Took ${bill} out of its group`,
   willBe: (name: string) => `It will be in ${name}.`,
@@ -1268,7 +1276,7 @@ export const GROUP_WORDS = {
       ? `Plus ${amount} due ${due}`
       : `Plus ${amount} in ${count} one-time bills`,
   members: (names: readonly string[]) =>
-    names.length <= 3
+    names.length <= 4
       ? names.join(', ')
       : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
   archiveFailed: 'The group did not archive. Nothing was changed.',

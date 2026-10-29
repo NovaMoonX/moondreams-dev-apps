@@ -16,13 +16,13 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { GROUP_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
-import BillRow from '@apps/runway/components/BillRow';
+import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
+import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import { monthlyTotal } from '@apps/runway/engine/groups';
 import BillForm from '@apps/runway/forms/BillForm';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
-import { describeGroupTotal } from '@apps/runway/utils/billText';
+import { describeGroupLead } from '@apps/runway/utils/billText';
 import {
   selectBills,
   selectBillPayments,
@@ -52,6 +52,7 @@ function BillsScreen() {
   const [formKey, setFormKey] = useState<number | null>(null);
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const [openBillId, setOpenBillId] = useState<string | null>(null);
 
   const hasSearch = bills.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -96,6 +97,7 @@ function BillsScreen() {
     .filter(({ rows }) => needle === '' || rows.length > 0);
   const ungrouped = visible.filter(({ groupId }) => groupId === null);
   const openSection = sections.find(({ id }) => id === openGroupId);
+  const openBill = listed.find(({ item }) => item.id === openBillId);
 
   const getCard = (rows: typeof visible) => (
     <div className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -121,11 +123,10 @@ function BillsScreen() {
               {chunk.map(({ item, payload, payment, groupId }) => (
                 <BillRow
                   key={item.id}
-                  billId={item.id}
                   bill={payload}
                   payment={payment}
                   planStance={stance}
-                  today={today}
+                  onOpen={() => setOpenBillId(item.id)}
                   isOutsideTotal={
                     groupId !== null && payload.timing.schedule.kind === 'once'
                   }
@@ -165,67 +166,78 @@ function BillsScreen() {
           <p className='text-muted-foreground text-sm'>No bill matches that.</p>
         ) : (
           <>
-            {sections.map(
-              ({
-                id,
-                name,
-                rows,
-                total: { total, uncounted, oneTime },
-                count,
-              }) => {
-                const hasRange =
-                  !isHidden && total.lowCents !== total.highCents;
-                return (
-                  <div key={id} className='space-y-2'>
-                    <div className='flex items-start gap-1'>
+            {sections.map(({ id, name, rows, total: groupTotal, count }) => {
+              const hasRange =
+                !isHidden &&
+                groupTotal.total.lowCents !== groupTotal.total.highCents;
+              const lead = describeGroupLead(groupTotal, count);
+              const open = () => setOpenGroupId(id);
+              return (
+                <div key={id} className='space-y-2'>
+                  <div className='flex items-start gap-1'>
+                    <div className='min-w-0 flex-1 px-2 py-1.5'>
                       <Button
                         type='button'
                         variant='tertiary'
                         aria-label={GROUP_WORDS.openLabel(name)}
-                        className='text-foreground! h-auto min-h-11 min-w-0 flex-1 items-start justify-start gap-2 rounded-xl px-2! py-1.5! text-left font-normal whitespace-normal'
-                        onClick={() => setOpenGroupId(id)}
+                        className='text-foreground! block h-auto min-h-6 w-full justify-start p-0! text-left text-base font-semibold whitespace-normal'
+                        onClick={open}
                       >
-                        <span className='block min-w-0 flex-1'>
-                          <span className='block text-base font-semibold break-words'>
-                            <span className='line-clamp-2'>{name}</span>
-                          </span>
-                          <span className='text-muted-foreground block text-sm'>
-                            <SensitiveValue>
-                              {describeGroupTotal(total)}
-                            </SensitiveValue>{' '}
-                            a month
-                          </span>
+                        <span className='block break-words'>
+                          <span className='line-clamp-2'>{name}</span>
                         </span>
-                        <ChevronRight
-                          className='text-muted-foreground mt-1 h-4 w-4 shrink-0'
-                          aria-hidden='true'
-                        />
                       </Button>
-                      {(hasRange || uncounted > 0 || oneTime.count > 0) && (
-                        <span className='mt-2.5 shrink-0'>
-                          <HelpTip title={GROUP_WORDS.basisTitle}>
-                            <p>{GROUP_WORDS.basis}</p>
-                            {uncounted > 0 && (
-                              <p>{GROUP_WORDS.uncounted(uncounted)}</p>
-                            )}
-                            {hasRange && (
+                      <div className='flex items-center gap-1'>
+                        <Button
+                          type='button'
+                          variant='tertiary'
+                          tabIndex={-1}
+                          aria-hidden='true'
+                          className='text-muted-foreground! h-auto min-h-6 min-w-0 justify-start p-0! text-left text-sm font-normal whitespace-normal'
+                          onClick={open}
+                        >
+                          <span className='block'>
+                            {lead.amount !== null && (
                               <>
-                                <p>{GROUP_WORDS.rangeTotal}</p>
-                                <RangeBasisNote
-                                  stance={stance}
-                                  side='expense'
-                                />
+                                <SensitiveValue>
+                                  {lead.amount}
+                                </SensitiveValue>{' '}
                               </>
                             )}
+                            {lead.rest}
+                          </span>
+                        </Button>
+                        {(hasRange ||
+                          groupTotal.uncounted > 0 ||
+                          groupTotal.oneTime.count > 0) && (
+                          <HelpTip title={GROUP_WORDS.basisTitle}>
+                            <GroupTotalHelp
+                              total={groupTotal}
+                              hasRange={hasRange}
+                              stance={stance}
+                            />
                           </HelpTip>
-                        </span>
-                      )}
+                        )}
+                      </div>
                     </div>
-                    {count > 0 && rows.length > 0 && getCard(rows)}
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      tabIndex={-1}
+                      aria-hidden='true'
+                      className='h-auto min-h-11 p-0! pt-2.5 pr-3!'
+                      onClick={open}
+                    >
+                      <ChevronRight
+                        className='text-muted-foreground h-4 w-4 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
                   </div>
-                );
-              },
-            )}
+                  {count > 0 && rows.length > 0 && getCard(rows)}
+                </div>
+              );
+            })}
             {ungrouped.length > 0 && (
               <div className='space-y-2'>
                 {sections.length > 0 && (
@@ -258,6 +270,17 @@ function BillsScreen() {
           memberNames={openSection.names}
           today={today}
           onClose={() => setOpenGroupId(null)}
+        />
+      )}
+      {openBill && (
+        <BillSheet
+          key={openBill.item.id}
+          billId={openBill.item.id}
+          bill={openBill.payload}
+          payment={openBill.payment}
+          planStance={stance}
+          today={today}
+          onClose={() => setOpenBillId(null)}
         />
       )}
       {formKey !== null && (

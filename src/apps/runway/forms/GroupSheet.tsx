@@ -11,7 +11,7 @@ import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
-import { MASK } from '@/components/SensitiveValue';
+import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -27,7 +27,7 @@ import {
 import SheetHead from '@apps/runway/components/SheetHead';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
-import { RangeBasisNote } from '@apps/runway/components/RangeNote';
+import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveItem,
@@ -39,7 +39,11 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GroupTotal } from '@apps/runway/engine/groups';
 import type { GroupSealed, Priority } from '@apps/runway/types';
-import { describeGroupTotal } from '@apps/runway/utils/billText';
+import {
+  describeGroupLead,
+  describeGroupTotal,
+} from '@apps/runway/utils/billText';
+import { resolveGroupRename } from '@apps/runway/utils/groupChoice';
 import { describeChange } from '@apps/runway/utils/changeText';
 
 type StartingChoice = Priority | 'none';
@@ -82,15 +86,22 @@ function GroupSheet({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [priorityError, setPriorityError] = useState<string | null>(null);
+  const [pickedPriority, setPickedPriority] = useState<StartingChoice | null>(
+    null,
+  );
+  const allGroups = useAppSelector((state) => selectGroups(state, today));
   const [isAddingBill, setIsAddingBill] = useState(false);
 
   if (!group) return null;
   const payload = group.version.payload;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
 
-  const save = async (next: GroupSealed): Promise<string | null> => {
+  const save = async (
+    next: GroupSealed,
+    isQuiet = false,
+  ): Promise<string | null> => {
     if (!user) return null;
-    setIsSaving(true);
+    if (!isQuiet) setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
       await changeItem(user.uid, encryption, {
@@ -105,26 +116,44 @@ function GroupSheet({
     } catch (saveError) {
       return getErrorMessage(saveError, GROUP_WORDS.saveFailed);
     } finally {
-      setIsSaving(false);
+      if (!isQuiet) setIsSaving(false);
     }
   };
 
   const rename = async (next: string) => {
     setError(null);
-    const failure = await save({ ...payload, name: next });
+    const renamed = resolveGroupRename(
+      next,
+      groupId,
+      allGroups.map(({ item, version }) => ({
+        id: item.id,
+        name: version.payload.name,
+      })),
+    );
+    if (renamed.kind === 'taken') {
+      setError(GROUP_WORDS.nameTaken(renamed.name));
+      return;
+    }
+    if (renamed.name === payload.name) {
+      setIsRenaming(false);
+      return;
+    }
+    const failure = await save({ ...payload, name: renamed.name });
     if (failure === null) setIsRenaming(false);
     else setError(failure);
   };
 
   const setStartingPriority = async (choice: StartingChoice) => {
     setPriorityError(null);
-    const failure = await save({
-      ...payload,
-      startingPriority: choice === 'none' ? null : choice,
-    });
+    setPickedPriority(choice);
+    const failure = await save(
+      { ...payload, startingPriority: choice === 'none' ? null : choice },
+      true,
+    );
     setPriorityError(
       failure === null ? null : GROUP_WORDS.startingPriorityFailed,
     );
+    setPickedPriority(null);
   };
 
   const archive = async () => {
@@ -145,7 +174,7 @@ function GroupSheet({
         encryption,
         {
           itemId: groupId,
-          summary: GROUP_WORDS.archived(payload.name),
+          summary: GROUP_WORDS.archived(payload.name, billCount),
           note: null,
           heldChoice: null,
         },
@@ -164,6 +193,7 @@ function GroupSheet({
 
   const trimmed = name.trim();
   const canRename = trimmed !== '' && trimmed !== payload.name;
+  const lead = describeGroupLead(total, billCount);
 
   if (isAddingBill) {
     return (
@@ -217,25 +247,34 @@ function GroupSheet({
         ) : (
           <>
             <SheetHead
-              label={GROUP_WORDS.monthLabel}
-              figure={isHidden ? MASK : describeGroupTotal(total.total)}
+              label={
+                lead.isOneTime
+                  ? GROUP_WORDS.oneTimeLabel
+                  : GROUP_WORDS.monthLabel
+              }
+              figure={
+                lead.amount === null ? undefined : (
+                  <SensitiveValue>{lead.amount}</SensitiveValue>
+                )
+              }
+              suffix={lead.isOneTime ? lead.rest : undefined}
               fact={
-                memberNames.length > 0 ? GROUP_WORDS.members(memberNames) : null
+                billCount === 0
+                  ? GROUP_WORDS.noBills
+                  : memberNames.length > 0
+                    ? GROUP_WORDS.members(memberNames)
+                    : null
               }
               help={
-                <>
-                  <p>{GROUP_WORDS.basis}</p>
-                  {total.uncounted > 0 && (
-                    <p>{GROUP_WORDS.uncounted(total.uncounted)}</p>
-                  )}
-                  {hasRange && (
-                    <RangeBasisNote stance={stance} side='expense' />
-                  )}
-                </>
+                <GroupTotalHelp
+                  total={total}
+                  hasRange={hasRange}
+                  stance={stance}
+                />
               }
               helpTitle={GROUP_WORDS.basisTitle}
             />
-            {total.oneTime.count > 0 && (
+            {total.oneTime.count > 0 && !lead.isOneTime && (
               <p className='text-muted-foreground -mt-2 text-sm'>
                 <MaskedText>
                   {GROUP_WORDS.plusOneTime(
@@ -257,19 +296,14 @@ function GroupSheet({
                   <p>{GROUP_WORDS.startingPriorityHelp}</p>
                 </HelpTip>
               </div>
-              <div
-                aria-busy={isSaving}
-                className={isSaving ? 'pointer-events-none opacity-60' : ''}
-              >
-                <PillGroup
-                  label={GROUP_WORDS.startingPriority}
-                  options={startingOptions}
-                  value={payload.startingPriority ?? 'none'}
-                  onChange={(choice: StartingChoice) =>
-                    void setStartingPriority(choice)
-                  }
-                />
-              </div>
+              <PillGroup
+                label={GROUP_WORDS.startingPriority}
+                options={startingOptions}
+                value={pickedPriority ?? payload.startingPriority ?? 'none'}
+                onChange={(choice: StartingChoice) =>
+                  void setStartingPriority(choice)
+                }
+              />
               {priorityError && (
                 <p className='text-destructive text-sm' role='alert'>
                   {priorityError}

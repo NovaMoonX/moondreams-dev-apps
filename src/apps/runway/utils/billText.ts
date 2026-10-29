@@ -2,10 +2,12 @@ import {
   BILL_WORDS,
   BILL_FREQUENCY_LABELS,
   BILL_FREQUENCIES,
+  GROUP_WORDS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
+import type { GroupTotal } from '@apps/runway/engine/groups';
 import type { BillFundedBy, MoneyRange, Schedule } from '@apps/runway/types';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 
 /** What a group's bills come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
@@ -13,6 +15,28 @@ export const describeGroupTotal = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCents(range.lowCents)
     : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
+
+/** What a group's heading and sheet lead with: its monthly total, or the one-time bills when those are all it has, or that it is empty. `amount` is the private part. */
+export function describeGroupLead(total: GroupTotal, billCount: number) {
+  if (billCount === 0)
+    return { amount: null, rest: GROUP_WORDS.noBills, isOneTime: false };
+  const { oneTime } = total;
+  if (total.total.highCents === 0 && oneTime.count > 0) {
+    return {
+      amount: describeGroupTotal(oneTime.range),
+      rest:
+        oneTime.count === 1 && oneTime.dueOn !== null
+          ? GROUP_WORDS.oneTimeDue(formatDateShortUTC(oneTime.dueOn))
+          : GROUP_WORDS.oneTimeCount(oneTime.count),
+      isOneTime: true,
+    };
+  }
+  return {
+    amount: describeGroupTotal(total.total),
+    rest: 'a month',
+    isOneTime: false,
+  };
+}
 
 export function describeBillRepeat(kind: Schedule['kind']) {
   const known = BILL_FREQUENCIES.find((frequency) => frequency === kind);

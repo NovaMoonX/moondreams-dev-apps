@@ -37,3 +37,18 @@ export function resolveGroupChoice(
     name: resolved.label,
   };
 }
+
+/** A group's new name: refused when it matches another group, otherwise written the way a new group's is. */
+export function resolveGroupRename(
+  text: string,
+  groupId: string,
+  groups: readonly { id: string; name: string }[],
+): { kind: 'taken' | 'name'; name: string } {
+  const resolved = groupMatcher.resolve(
+    text,
+    groups.filter(({ id }) => id !== groupId),
+  );
+  return resolved.kind === 'match'
+    ? { kind: 'taken', name: resolved.option.name }
+    : { kind: 'name', name: resolved.label };
+}
