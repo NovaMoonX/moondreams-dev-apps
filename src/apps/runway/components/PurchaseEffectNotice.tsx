@@ -1,5 +1,3 @@
-import { CreditCard } from 'lucide-react';
-
 import SensitiveValue from '@/components/SensitiveValue';
 import InlineNotice from '@/components/InlineNotice';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -85,18 +83,14 @@ function PurchaseEffectNotice({
   );
 }
 
-/** What a purchase does to a card's balance, kept apart from the envelope notice so each says one thing. */
+/** What a purchase does to a card's balance, in a box of its own beside the envelope notice so each says one thing. */
 export function CardChargeNotice({ line }: { line: string }) {
   return (
-    <p
-      role='status'
-      className='text-muted-foreground flex items-start gap-2 px-1 text-sm'
-    >
-      <CreditCard className='mt-0.5 size-4 shrink-0' aria-hidden='true' />
-      <span>
+    <div role='status'>
+      <InlineNotice tone='info'>
         <MaskedText>{line}</MaskedText>
-      </span>
-    </p>
+      </InlineNotice>
+    </div>
   );
 }
 
