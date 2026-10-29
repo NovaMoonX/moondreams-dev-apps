@@ -9,6 +9,7 @@ import {
   PLAN_SECTIONS,
   PLAN_VIEW_EMOJI,
 } from '@apps/runway/constants';
+import CardsScreen from '@apps/runway/screens/plan/CardsScreen';
 import BillsScreen from '@apps/runway/screens/plan/BillsScreen';
 import EnvelopesScreen from '@apps/runway/screens/plan/EnvelopesScreen';
 import GoalsScreen from '@apps/runway/screens/plan/GoalsScreen';
@@ -49,6 +50,7 @@ function PlanScreen() {
       {isMore && <MoreScreen />}
       {planSection === 'goals' && <GoalsScreen />}
       {planSection === 'bills' && <BillsScreen />}
+      {planSection === 'cards' && <CardsScreen />}
       {planSection === 'income' && <IncomeScreen />}
       {hasIncome && !isMore && (
         <div className='grid'>

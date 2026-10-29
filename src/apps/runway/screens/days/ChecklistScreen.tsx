@@ -7,7 +7,7 @@ import SectionDivider from '@/components/SectionDivider';
 import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
@@ -37,6 +37,7 @@ import {
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { RecordLine } from '@apps/runway/types';
 import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
+import { getBillCardId } from '@apps/runway/utils/cardText';
 
 interface ChecklistBillRowProps {
   line: RecordLine;
@@ -218,6 +219,11 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         encryption,
         unpaid.map(({ billId, payment }) => ({
           billId,
+          cardId: getBillCardId(
+            store.getState().runway.versions,
+            billId,
+            payment.dueOn,
+          ),
           dueOn: payment.dueOn,
           amountCents: payment.totalCents,
           fundedCents: payment.heldNowCents,

@@ -16,7 +16,11 @@ import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import {
+  useQuestionFlow,
+  type QuestionControls,
+  type QuestionStep,
+} from '@/hooks/useQuestionFlow';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -26,6 +30,7 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import SplitEditor from '@apps/runway/components/SplitEditor';
 import { isTooLong } from '@apps/runway/utils/rangeInput';
 import {
+  CARD_WORDS,
   FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
@@ -50,6 +55,8 @@ import {
 } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
+  selectAllCards,
+  selectCards,
   selectEnvelopes,
   selectItemLooks,
   selectSpendPurchases,
@@ -60,6 +67,7 @@ import {
   describePurchaseEdit,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
+import { getCardName } from '@apps/runway/utils/cardText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -72,6 +80,7 @@ const ORIGIN_PAGE = 20;
 const MOST_USED_SHOWN = 5;
 const RECENT_PURCHASES = 60;
 const FREE_VALUE = 'free';
+const CASH_VALUE = 'cash';
 
 type ExtraKey = 'label' | 'merchant' | 'note';
 
@@ -153,6 +162,8 @@ function PurchaseForm({
   const balances = useAppSelector(selectBalances);
   const purchases = useAppSelector(selectSpendPurchases);
   const looks = useAppSelector(selectItemLooks);
+  const cards = useAppSelector(selectCards);
+  const allCards = useAppSelector(selectAllCards);
   const periods = useAppSelector(
     (state) => state.runway.plan?.trackingPeriods ?? [],
   );
@@ -209,6 +220,13 @@ function PurchaseForm({
       ? (editingLines[0]?.envelopeId ?? FREE_VALUE)
       : FREE_VALUE,
   );
+  const [paidByCardId, setPaidByCardId] = useState<string | null>(() => {
+    if (editing) return editing.paidByCardId ?? null;
+    const lastId =
+      purchases.find((purchase) => purchase.amountCents > 0)?.paidByCardId ??
+      null;
+    return cards.some((card) => card.id === lastId) ? lastId : null;
+  });
   const [originQuery, setOriginQuery] = useState('');
   const [revealed, setRevealed] = useState<ExtraKey | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -278,6 +296,17 @@ function PurchaseForm({
       : (others.find((purchase) => purchase.id === originalId) ?? null);
   const refundable =
     original === null ? null : getRefundableCents(original, others);
+  const cardId =
+    isRefund && original !== null
+      ? (original.paidByCardId ?? null)
+      : paidByCardId;
+  const nameOfCard = (id: string | null) => {
+    const found = allCards.find((card) => card.id === id);
+    return found ? getCardName(found, allCards) : CARD_WORDS.cashOrDebit;
+  };
+  const cardOptions = allCards.filter(
+    (card) => card.archivedAt === null || card.id === paidByCardId,
+  );
   const refundedBy = others
     .filter((purchase) => editing && purchase.refundOfId === editing.id)
     .flatMap((purchase) => purchase.lines)
@@ -381,6 +410,7 @@ function PurchaseForm({
     shares,
     originalId,
     returnTo,
+    paidByCardId,
   });
   const [startSnapshot] = useState(snapshot);
   const isCounted =
@@ -473,6 +503,7 @@ function PurchaseForm({
         note,
         lines,
         refundOfId: isRefund ? originalId : null,
+        paidByCardId: cardId,
       };
       if (editing) {
         const isUnchanged =
@@ -482,6 +513,7 @@ function PurchaseForm({
           input.label === (editing.label?.trim() || null) &&
           input.note === (editing.note?.trim() || null) &&
           input.refundOfId === editing.refundOfId &&
+          input.paidByCardId === (editing.paidByCardId ?? null) &&
           JSON.stringify(input.lines) === JSON.stringify(editing.lines);
         if (!isUnchanged) {
           await editPurchase(
@@ -489,7 +521,7 @@ function PurchaseForm({
             encryption,
             editing,
             input,
-            describePurchaseEdit(editing, input, nameOf),
+            describePurchaseEdit(editing, input, nameOf, nameOfCard),
           );
           addToast({
             title: isRefund ? 'Refund saved' : 'Purchase saved',
@@ -580,10 +612,21 @@ function PurchaseForm({
     }));
   const { extras } = formData;
 
-  const effectNote = preview && (
+  const isCardChanged =
+    editing === undefined || cardId !== (editing.paidByCardId ?? null);
+  const cardLine =
+    cardId !== null &&
+    !isRefund &&
+    amount !== null &&
+    isCounted &&
+    isCardChanged
+      ? CARD_WORDS.willWait(nameOfCard(cardId), formatCents(amount))
+      : null;
+  const effectNote = (preview || cardLine) && (
     <PurchaseEffectNotice
-      changes={preview.changes}
-      freeDropCents={preview.freeDropCents}
+      changes={preview?.changes ?? []}
+      freeDropCents={preview?.freeDropCents ?? 0}
+      cardLine={cardLine}
     />
   );
   const getEnvelopeSummary = () => {
@@ -743,6 +786,35 @@ function PurchaseForm({
         </div>
       ),
     },
+    ...(cardOptions.length > 0 && !(isRefund && original !== null)
+      ? [
+          {
+            id: 'paidBy',
+            title: CARD_WORDS.paidByTitle,
+            summaryLabel: CARD_WORDS.paidBy,
+            summaryValue: nameOfCard(cardId),
+            isAnswered: true,
+            isPreAnswered: true,
+            render: ({ moveOn }: QuestionControls) => (
+              <PillGroup
+                label={CARD_WORDS.paidBy}
+                options={[
+                  { value: CASH_VALUE, label: CARD_WORDS.cashOrDebit },
+                  ...cardOptions.map((card) => ({
+                    value: card.id,
+                    label: getCardName(card, allCards),
+                  })),
+                ]}
+                value={paidByCardId ?? CASH_VALUE}
+                onChange={(value) => {
+                  setPaidByCardId(value === CASH_VALUE ? null : value);
+                  moveOn();
+                }}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       id: 'day',
       title: FORM_FLOW_WORDS.dayTitle,

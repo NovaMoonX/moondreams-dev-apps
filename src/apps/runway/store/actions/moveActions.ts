@@ -41,6 +41,8 @@ export interface MarkBillPaidInput {
   /** What was set aside for it already; the rest comes out of Free to spend. */
   fundedCents: Cents;
   paidOn: DateOnly;
+  /** The card it is charged to; null when it is paid in cash. */
+  cardId: string | null;
   /** How many times this payment has been marked before, undone marks included. */
   marks: number;
 }
@@ -62,6 +64,7 @@ export async function markBillPaid(
     amountCents: input.amountCents,
     paidOn: input.paidOn,
     fromFreeCents: Math.max(0, input.amountCents - input.fundedCents),
+    cardId: input.cardId,
   };
   const sealed = await sealJson(payload, encryption);
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
@@ -106,6 +109,7 @@ export async function undoBillPaid(
       amountCents: paid.amountCents,
       paidOn: paid.paidOn,
       fromFreeCents: paid.fromFreeCents,
+      cardId: paid.cardId ?? null,
     } satisfies BillPaidSealed,
     encryption,
   );
@@ -188,6 +192,7 @@ export async function markBillsPaid(
         amountCents: input.amountCents,
         paidOn: input.paidOn,
         fromFreeCents: Math.max(0, input.amountCents - input.fundedCents),
+        cardId: input.cardId,
       };
       const sealed = await sealJson(payload, encryption);
       return { input, payload, sealed };
@@ -280,6 +285,7 @@ export async function undoBillsPaid(
           amountCents: paid.amountCents,
           paidOn: paid.paidOn,
           fromFreeCents: paid.fromFreeCents,
+          cardId: paid.cardId ?? null,
         } satisfies BillPaidSealed,
         encryption,
       ),

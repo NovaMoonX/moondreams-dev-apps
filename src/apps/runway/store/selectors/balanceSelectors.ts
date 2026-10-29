@@ -19,6 +19,7 @@ export const selectBalanceInputs = createSelector(
     (state: RootState) => state.runway.days,
     (state: RootState) => state.runway.items,
     (state: RootState) => state.runway.purchases,
+    (state: RootState) => state.runway.cards,
     selectLevel,
     selectClosingBase,
     () => todayAsUtcDate(),
@@ -30,6 +31,7 @@ export const selectBalanceInputs = createSelector(
     days,
     items,
     purchases,
+    cards,
     level,
     closing,
     today,
@@ -52,13 +54,14 @@ export const selectBalanceInputs = createSelector(
       ),
     ),
     asOf: today,
-    kinds: Object.fromEntries(
-      items.flatMap((item) =>
+    kinds: Object.fromEntries([
+      ...items.flatMap((item) =>
         item.kind === 'goal' || item.kind === 'bill' || item.kind === 'envelope'
           ? [[item.id, item.kind] as const]
           : [],
       ),
-    ),
+      ...cards.map((card) => [card.id, 'card'] as const),
+    ]),
   }),
 );
 

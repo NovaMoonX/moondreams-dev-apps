@@ -104,7 +104,16 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
     ...row,
     cents: parseMoneyToCents(amounts[row.id] ?? ''),
   }));
-  const assignedCents = typed.reduce((sum, row) => sum + (row.cents ?? 0), 0);
+  const cardHoldings = Object.entries(asOf.reserveByCard)
+    .filter(([, cents]) => cents !== 0)
+    .map(([refId, amountCents]) => ({
+      holding: 'card' as const,
+      refId,
+      amountCents,
+    }));
+  const assignedCents =
+    typed.reduce((sum, row) => sum + (row.cents ?? 0), 0) +
+    asOf.assignedToCardsCents;
   const getFigure = (): FreeToSpendFigure => {
     if (moneyCents === null) return { kind: 'unknown' };
     if (moneyCents < assignedCents) {
@@ -128,6 +137,7 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
         ? []
         : [{ holding: row.holding, refId: row.id, amountCents: 0 }];
     }),
+    ...cardHoldings,
   ];
   const planStart = plan?.startDate ?? null;
   const summarizedBefore = useAppSelector((state) =>

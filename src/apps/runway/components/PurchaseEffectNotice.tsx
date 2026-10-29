@@ -2,6 +2,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import InlineNotice from '@/components/InlineNotice';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 
@@ -18,6 +19,8 @@ interface PurchaseEffectNoticeProps {
   changes: readonly EnvelopeChange[];
   /** How far Free to spend falls; negative when it rises. */
   freeDropCents: number;
+  /** What a card will wait for, when the purchase is charged to one. */
+  cardLine?: string | null;
 }
 
 const figure = (cents: number) => {
@@ -29,12 +32,18 @@ const figure = (cents: number) => {
 function PurchaseEffectNotice({
   changes,
   freeDropCents,
+  cardLine = null,
 }: PurchaseEffectNoticeProps) {
   const { isHidden } = useValuesHidden();
   const isWorseOver = (change: EnvelopeChange) =>
     change.afterCents < 0 && change.afterCents < change.beforeCents;
   const isOver = changes.some(isWorseOver);
-  if (changes.length === 0 && (freeDropCents === 0 || isHidden)) return null;
+  if (
+    changes.length === 0 &&
+    cardLine === null &&
+    (freeDropCents === 0 || isHidden)
+  )
+    return null;
   if (isHidden && isOver) return <NeedsALookRow />;
 
   const shown = [
@@ -50,31 +59,38 @@ function PurchaseEffectNotice({
   return (
     <div role='status'>
       <InlineNotice tone={isOver ? 'warning' : 'info'}>
-        <ul className='space-y-1'>
-          {shown.map((change) => (
-            <li
-              key={change.id}
-              className='flex flex-wrap items-baseline justify-between gap-x-3'
-            >
-              <span className='min-w-0 font-medium break-words'>
-                {change.name}
-              </span>
-              <span className='tabular-nums'>
-                <SensitiveValue className='text-muted-foreground'>
-                  {formatCents(change.beforeCents)}
-                </SensitiveValue>
-                {' → '}
-                <SensitiveValue className='font-semibold'>
-                  {figure(change.afterCents)}
-                </SensitiveValue>
-              </span>
-            </li>
-          ))}
-        </ul>
+        {shown.length > 0 && (
+          <ul className='space-y-1'>
+            {shown.map((change) => (
+              <li
+                key={change.id}
+                className='flex flex-wrap items-baseline justify-between gap-x-3'
+              >
+                <span className='min-w-0 font-medium break-words'>
+                  {change.name}
+                </span>
+                <span className='tabular-nums'>
+                  <SensitiveValue className='text-muted-foreground'>
+                    {formatCents(change.beforeCents)}
+                  </SensitiveValue>
+                  {' → '}
+                  <SensitiveValue className='font-semibold'>
+                    {figure(change.afterCents)}
+                  </SensitiveValue>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
         {rest > 0 && (
           <p className='text-muted-foreground mt-1'>and {rest} more</p>
         )}
         {freeDropCents !== 0 && !isHidden && <p className='mt-1'>{freeLine}</p>}
+        {cardLine && (
+          <p className='mt-1'>
+            <MaskedText>{cardLine}</MaskedText>
+          </p>
+        )}
       </InlineNotice>
     </div>
   );

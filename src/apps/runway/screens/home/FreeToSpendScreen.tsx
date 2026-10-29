@@ -16,6 +16,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import {
+  CARD_WORDS,
   CHECK_WORDS,
   ENVELOPE_SPEND_WORDS,
   FREE_SUM_WORDS,
@@ -66,6 +67,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [sheetKey, setSheetKey] = useState<number | null>(null);
+  const hasCards = useAppSelector((state) => state.runway.cards.length > 0);
   const figure = getFreeToSpendFigure(balances);
   const free = describeFreeToSpend(figure);
   const rows: SumRow[] = [
@@ -95,6 +97,16 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       value: formatCents(balances.assignedToEnvelopesCents),
       section: 'envelopes',
     },
+    ...(hasCards
+      ? [
+          {
+            sign: '−',
+            name: CARD_WORDS.freeWaiting,
+            value: formatCents(balances.assignedToCardsCents),
+            section: 'cards' as const,
+          },
+        ]
+      : []),
     {
       sign: '=',
       name: FREE_SUM_WORDS.result,

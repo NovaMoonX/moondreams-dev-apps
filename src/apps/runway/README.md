@@ -21,6 +21,7 @@ Built:
 - [x] Purchases entered by hand, with Left per envelope and Free to spend
 - [x] Savings goals with a pace line, and monthly envelope funding
 - [x] Plan changes from a date or for a stretch, with the effect shown first
+- [x] Credit cards, each with its own reserve: purchases and bills paid by card, and paying a card off in one step
 
 Next:
 - [ ] Start from gross pay with taxes and deductions

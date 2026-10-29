@@ -68,6 +68,7 @@ interface PurchaseFields {
   label: string | null;
   note: string | null;
   lines: readonly PurchaseLine[];
+  paidByCardId: string | null;
 }
 
 const money = (cents: number) => formatCents(Math.abs(cents));
@@ -86,6 +87,7 @@ export function describePurchaseEdit(
   before: OpenPurchase,
   after: PurchaseFields,
   nameOf: (envelopeId: string) => string,
+  cardNameOf: (cardId: string | null) => string = () => 'a card',
 ): string {
   const was = (value: string | null) => value?.trim() || 'nothing';
   const shape = (lines: readonly PurchaseLine[]) =>
@@ -103,6 +105,9 @@ export function describePurchaseEdit(
       : null,
     after.date !== before.date
       ? `day ${formatDateUTC(before.date)} to ${formatDateUTC(after.date)}`
+      : null,
+    (after.paidByCardId ?? null) !== (before.paidByCardId ?? null)
+      ? `paid by ${cardNameOf(before.paidByCardId ?? null)} to ${cardNameOf(after.paidByCardId ?? null)}`
       : null,
     (after.merchant?.trim() || null) !== (before.merchant?.trim() || null)
       ? `merchant ${was(before.merchant)} to ${was(after.merchant)}`

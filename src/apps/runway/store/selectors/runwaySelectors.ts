@@ -964,3 +964,17 @@ export const selectSpendPurchases = createSelector(
     return result;
   },
 );
+
+const selectCardList = (state: RootState) => state.runway.cards;
+
+/** Every card, archived ones too, oldest first. */
+export const selectAllCards = createSelector([selectCardList], (cards) =>
+  [...cards].sort(
+    (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+  ),
+);
+
+/** The cards that can take a new charge, oldest first. */
+export const selectCards = createSelector([selectAllCards], (cards) =>
+  cards.filter((card) => card.archivedAt === null),
+);

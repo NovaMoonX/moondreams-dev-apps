@@ -5,6 +5,7 @@ export const PLAN_SECTIONS = [
   'bills',
   'envelopes',
   'goals',
+  'cards',
   'more',
 ] as const;
 
@@ -18,6 +19,7 @@ export const PLAN_SECTION_LABELS: Record<
   bills: 'Bills',
   envelopes: 'Envelopes',
   goals: 'Goals',
+  cards: 'Cards',
   more: 'More',
 };
 
@@ -1142,6 +1144,7 @@ export const PLAN_VIEW_EMOJI = {
   bills: '🧾',
   envelopes: '✉️',
   goals: '🎯',
+  cards: '💳',
 } as const;
 
 export const PLAN_MORE_LABEL = 'Settings and tools';
@@ -1384,8 +1387,7 @@ export const CORRECT_COVER_WORDS = {
   needsCuts: 'Give some items less this time to correct the day.',
   freeRow: 'Free\u00a0to\u00a0spend',
   now: 'Now',
-  freeLead:
-    'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
+  freeLead: 'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
   coverGone:
     'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
 } as const;
@@ -1460,4 +1462,79 @@ export const RELEASE_UNDO_WORDS = {
 /** Round 7b package F2: a correction's short notice while amounts are hidden. */
 export const CORRECT_HIDDEN_WORDS = {
   shortTitle: 'Short',
+} as const;
+
+/** Banks offered as a quick pick when adding a card; any other is typed. */
+export const CARD_ISSUERS = [
+  'Chase',
+  'Capital One',
+  'Citi',
+  'American Express',
+  'Discover',
+  'Bank of America',
+  'Wells Fargo',
+  'Apple Card',
+] as const;
+
+export const CARD_WORDS = {
+  sectionTitle: 'Cards',
+  add: 'Add a card',
+  sheetTitle: 'Card',
+  emptyTitle:
+    'Add the cards you spend on. What you charge waits here until you pay the card.',
+  waiting: 'Waiting to be paid',
+  nothingToPay: 'Nothing to pay',
+  reserveLabel: 'Waiting to be paid',
+  payOff: (name: string) => `Pay off ${name}`,
+  change: 'Change the card',
+  archive: 'Archive',
+  archiveSub: 'It stays in your history and leaves the list.',
+  archiveWaitingText: (amount: string) =>
+    `${amount} keeps waiting until you pay this card.`,
+  archiveConfirmTitle: (name: string) => `Archive ${name}`,
+  archiveConfirmText: 'Archive',
+  archived: (name: string) => `${name} archived`,
+  archiveFailed: 'The card was not archived',
+  issuerTitle: 'Who issues it?',
+  issuerLabel: 'Issuer',
+  anotherBank: 'Another bank',
+  otherBankPlaceholder: 'Bank name',
+  nameTitle: 'What is the card called?',
+  nameLabel: 'Name',
+  namePlaceholder: 'Venture X',
+  noName: 'It has no name',
+  noNameValue: 'No name',
+  nameSecond: (issuer: string) =>
+    `You have another ${issuer} card; give this one a name.`,
+  owesTitle: 'What does it owe right now?',
+  owesLabel: 'Owes now',
+  owesHint: 'What you charged before you started using Runway.',
+  nothingYet: 'Nothing yet',
+  needsIssuer: 'Say who issues it.',
+  needsName: 'Give it a name, or say it has none.',
+  saveAdd: 'Add card',
+  save: 'Save',
+  added: (name: string) => `${name} added`,
+  saved: (name: string) => `${name} saved`,
+  offline: 'This needs a connection. Nothing was changed.',
+  failed: 'This did not save. Nothing was changed.',
+  discardNew: 'card',
+  payAmount: 'Amount paid',
+  payDay: 'Paid',
+  payAction: 'Pay off',
+  payMore: (amount: string) =>
+    `That is ${amount} more than it waits for. The extra comes out of Free to spend.`,
+  paidToast: (amount: string, name: string) => `Paid ${amount} to ${name}`,
+  undo: 'Undo',
+  undone: (name: string) => `Payment to ${name} taken back`,
+  payFailed: 'The payment was not saved',
+  undoFailed: 'The payment was not taken back',
+  needsAmount: 'Enter how much you paid.',
+  needsDay: 'Pick today or an earlier day.',
+  paidBy: 'Paid by',
+  paidByTitle: 'What did you pay with?',
+  cashOrDebit: 'Cash or debit',
+  willWait: (name: string, amount: string) =>
+    `${name} will wait for ${amount}.`,
+  freeWaiting: 'Waiting on cards',
 } as const;

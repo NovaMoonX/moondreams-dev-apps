@@ -30,7 +30,11 @@ const diff = <T>(
 const pairingCount = (list: readonly unknown[]) =>
   list.length === 1 ? '1 funded' : `${list.length} funded`;
 
-const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
+const getParts = (
+  before: ItemPayload,
+  after: ItemPayload,
+  cardNameOf: (cardId: string | null) => string,
+): Part[] => {
   const base: Part[] = [
     diff('Name', before.name, after.name, (value) => value),
   ];
@@ -120,6 +124,12 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
           : 'the days before',
       ),
       diff(
+        'Paid by',
+        billBefore.paidByCardId ?? null,
+        billAfter.paidByCardId ?? null,
+        cardNameOf,
+      ),
+      diff(
         'Emoji',
         billBefore.emoji,
         billAfter.emoji,
@@ -167,8 +177,12 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
 export const isSamePayload = (a: ItemPayload, b: ItemPayload) => same(a, b);
 
 /** What differs, from and to: "Amount $1,250.00 to $1,300.00; Name Rent to Home rent". */
-export function describeChange(before: ItemPayload, after: ItemPayload) {
-  const result = getParts(before, after)
+export function describeChange(
+  before: ItemPayload,
+  after: ItemPayload,
+  cardNameOf: (cardId: string | null) => string = () => 'a card',
+) {
+  const result = getParts(before, after, cardNameOf)
     .flatMap((part) => (part === null ? [] : [part]))
     .map(([label, from, to]) => `${label} ${from} to ${to}`)
     .join('; ');
