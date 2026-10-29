@@ -1515,6 +1515,7 @@ export const PRIORITIES_WORDS = {
   savedBar: 'New order saved',
   undo: 'Undo',
   restored: 'Order restored',
+  restoredDetail: 'Your earlier order is back.',
   undid: (summary: string) => `Undid: ${summary}`,
   undoFailed: 'That did not undo. Your new order is still saved.',
   undoStale:

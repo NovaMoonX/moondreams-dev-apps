@@ -102,7 +102,6 @@ const ESTIMATED_EDIT_ROW_HEIGHT = 45;
 const ESTIMATED_SLOT_HEIGHT = 29;
 const UNFOLDED_TOTAL = 12;
 const CONFIRM_TAP_DELAY_MS = 500;
-const RESTORED_SHOWN_MS = 2500;
 
 type Tiers = Record<Priority, string[]>;
 
@@ -463,13 +462,6 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     confirmShownAtRef.current = performance.now();
     window.scrollTo({ top: 0 });
   }, [step]);
-
-  const savedStatus = saved?.status;
-  useEffect(() => {
-    if (savedStatus !== 'restored') return;
-    const timer = window.setTimeout(() => setSaved(null), RESTORED_SHOWN_MS);
-    return () => window.clearTimeout(timer);
-  }, [savedStatus]);
 
   const startEdit = () => {
     setSaved(null);
@@ -1246,12 +1238,17 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
               note={
                 saved.error ?? (
                   <span className='[@media(max-height:500px)]:hidden'>
-                    {saved.status === 'restored' ? null : saved.detail}
+                    {saved.status === 'restored'
+                      ? PRIORITIES_WORDS.restoredDetail
+                      : saved.detail}
                   </span>
                 )
               }
               leftActions={
-                <span className='text-sm font-medium' role='status'>
+                <span
+                  className='flex min-h-10 items-center text-sm font-medium'
+                  role='status'
+                >
                   {saved.status === 'restored'
                     ? PRIORITIES_WORDS.restored
                     : PRIORITIES_WORDS.savedBar}

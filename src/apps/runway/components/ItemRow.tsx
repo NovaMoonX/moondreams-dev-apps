@@ -292,7 +292,7 @@ function ItemRow({
     <li
       className={join(
         'first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl',
-        isHighlighted && 'bg-accent',
+        isHighlighted && 'bg-primary/10',
       )}
     >
       <Button
