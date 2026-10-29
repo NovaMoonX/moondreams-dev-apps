@@ -77,7 +77,10 @@ export function useQuestionFlow({
     /** Every answer has been seen once: from here the form's own primary (Add, Save) is offered and reopened answers keep the rest folded around them. */
     hasReviewed: hasReviewed || open === null,
     blocker: open !== null && !open.isAnswered ? (open.blocker ?? null) : null,
-    reopen: (id: string) => setOpenId(id),
+    reopen: (id: string) => {
+      if (open === null) setHasReviewed(true);
+      setOpenId(id);
+    },
     /** The question the person reopened, which a reviewed form shows in its own sheet; null while none is. */
     reopenedId: openId,
     /** Closes a reopened question's sheet without moving on from it. */
