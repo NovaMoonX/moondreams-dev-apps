@@ -50,6 +50,8 @@ interface EffectPreviewProps {
   waitingText?: string;
   /** One summary line with a door to each day, for a form whose subject is the change itself. */
   isCompact?: boolean;
+  /** Warns, in place of the plan still holding, when any item gets less on a day; the words for the first one. */
+  describeLess?: (name: string, day: string) => string;
 }
 
 interface EffectEntry {
@@ -162,6 +164,7 @@ function EffectPreview({
   emptyText,
   waitingText,
   isCompact = false,
+  describeLess,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -268,6 +271,24 @@ function EffectPreview({
     openDays,
     isHidden,
   ]);
+
+  const lessText = useMemo(() => {
+    if (describeLess === undefined || days === null) return null;
+    const day = days.find(
+      (entry) =>
+        entry.kind === 'changed' &&
+        entry.effect.lines.some((line) => line.afterCents < line.beforeCents),
+    );
+    const line = day?.effect.lines.find(
+      (entry) => entry.afterCents < entry.beforeCents,
+    );
+    return day === undefined || line === undefined
+      ? null
+      : describeLess(
+          day.names[line.itemId]?.name ?? 'An item',
+          formatDateShortUTC(day.on),
+        );
+  }, [describeLess, days]);
 
   const isMoveSaid =
     isCompact &&
@@ -395,27 +416,36 @@ function EffectPreview({
         ))}
       {holdsText &&
         !(isCompact && holdsText.isSame) &&
-        holdsText.blocks.map((block) =>
-          isHidden && block.tone === 'warning' ? (
-            <NeedsALookRow key={block.text} />
-          ) : (
-            <InlineNotice key={block.text} tone={block.tone}>
-              {block.figure === null ? (
-                block.text
-              ) : (
-                <>
-                  {block.text.slice(0, block.text.indexOf(block.figure))}
-                  <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
-                    {block.figure}
-                  </strong>
-                  {block.text.slice(
-                    block.text.indexOf(block.figure) + block.figure.length,
-                  )}
-                </>
-              )}
-            </InlineNotice>
-          ),
-        )}
+        holdsText.blocks
+          .filter((block) => lessText === null || block.tone !== 'success')
+          .map((block) =>
+            isHidden && block.tone === 'warning' ? (
+              <NeedsALookRow key={block.text} />
+            ) : (
+              <InlineNotice key={block.text} tone={block.tone}>
+                {block.figure === null ? (
+                  block.text
+                ) : (
+                  <>
+                    {block.text.slice(0, block.text.indexOf(block.figure))}
+                    <strong className='whitespace-nowrap text-(--runway-warning-ink)'>
+                      {block.figure}
+                    </strong>
+                    {block.text.slice(
+                      block.text.indexOf(block.figure) + block.figure.length,
+                    )}
+                  </>
+                )}
+              </InlineNotice>
+            ),
+          )}
+      {lessText !== null &&
+        !holdsText?.blocks.some((block) => block.tone === 'warning') &&
+        (isHidden ? (
+          <NeedsALookRow />
+        ) : (
+          <InlineNotice tone='warning'>{lessText}</InlineNotice>
+        ))}
     </ActionSection>
   );
 }

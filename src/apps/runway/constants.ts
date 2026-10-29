@@ -1455,8 +1455,10 @@ export const PRIORITIES_WORDS = {
   noIncome: 'No income is coming, so nothing is being funded yet',
   checking: 'Checking your coming pays',
   shortOn: (day: string) => `The plan leaves items short on ${day}`,
-  cutLine: (day: string) => `${day}'s money runs out here`,
-  cutLineHidden: 'Money runs out here',
+  cutLine: (day: string, short: string) =>
+    `The ${day} pay runs out here · ${short} short`,
+  cutLineBefore: (day: string, short: string) =>
+    `Before your changes, the ${day} pay runs out here · ${short} short`,
   dueFirst: (day: string | null) =>
     `Due before the ${day ?? 'next'} pay, so it goes first`,
   restLast: 'Gets what is left, so it goes last',
@@ -1466,7 +1468,15 @@ export const PRIORITIES_WORDS = {
   empty:
     'Bills, envelopes and goals you add show up here in the order they are funded.',
   reorder: 'Reorder',
-  placeHere: 'Place here',
+  reorderHint: 'Tap an item, then tap where it goes.',
+  moving: (name: string) => `Moving ${name}`,
+  cancelMove: 'Cancel move',
+  topOf: (tier: string) => `Top of ${tier}`,
+  endOf: (tier: string) => `End of ${tier}`,
+  above: (name: string) => `Above ${name}`,
+  below: (name: string) => `Below ${name}`,
+  saveNote: 'Save shows what changes first.',
+  getsLess: (name: string, day: string) => `${name} gets less on ${day}`,
   cancel: 'Cancel',
   save: 'Save order',
   nothingMoved: 'Move an item to save a new order.',

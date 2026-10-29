@@ -31,6 +31,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
 import BillRow from '@apps/runway/components/BillRow';
 import EffectPreview from '@apps/runway/components/EffectPreview';
@@ -83,8 +84,11 @@ import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import { describeReorder } from '@apps/runway/utils/priorityText';
 
+const PINNED_FOOTER_CLASS =
+  'bg-background border-border sticky bottom-0 z-10 -mx-(--subview-pad) border-t px-(--subview-pad) pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]';
 const ROWS_PER_CHUNK = 12;
 const ESTIMATED_ROW_HEIGHT = 69;
+const ESTIMATED_EDIT_ROW_HEIGHT = 45;
 const UNFOLDED_TOTAL = 12;
 
 type Tiers = Record<Priority, string[]>;
@@ -313,12 +317,20 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     })),
   ];
   const shortOn = shortDay?.on ?? null;
+  const shortCents = (shortDay?.draft.lines ?? [])
+    .filter((line) => line.pairing === null && line.shortBy > 0)
+    .reduce((sum, line) => sum + line.shortBy, 0);
   const total = priorityItems.length;
   const order = orderPriorities(priorityItems, shortDay?.draft ?? null);
   const itemById = new Map(priorityItems.map((item) => [item.itemId, item]));
   const nameOf = (itemId: string) => entries.get(itemId)?.name ?? '';
+  const cutItemId =
+    order.cutIndex === null
+      ? null
+      : (order.sections.flatMap((section) => section.items)[order.cutIndex]
+          ?.itemId ?? null);
 
-  const hasSearch = total >= RUNWAY_SEARCH_THRESHOLD && edit === null;
+  const hasSearch = total >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
   const isSearching = needle !== '';
 
@@ -391,7 +403,6 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   }, [lookahead, order.cutIndex, query]);
 
   const startEdit = () => {
-    setQuery('');
     setEdit({
       working: Object.fromEntries(
         order.sections.map((section) => [
@@ -501,77 +512,100 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     }));
   };
 
+  const isShown = (itemId: string) =>
+    !isSearching || nameOf(itemId).toLowerCase().includes(needle);
+
   const getUnits = (section: PrioritySection): Unit[] => {
+    const withCut = (itemId: string, row: Unit): Unit[] =>
+      itemId === cutItemId && !isSearching && !isHidden
+        ? [{ kind: 'cut' }, row]
+        : [row];
     if (live === null) {
-      return section.items.flatMap((item, index): Unit[] => {
-        const isMatch =
-          !isSearching || nameOf(item.itemId).toLowerCase().includes(needle);
-        if (!isMatch) return [];
-        const row: Unit = { kind: 'row', item, tierIndex: index };
-        return !isSearching && section.start + index === order.cutIndex
-          ? [{ kind: 'cut' }, row]
-          : [row];
-      });
+      return section.items.flatMap((item, index): Unit[] =>
+        isShown(item.itemId)
+          ? withCut(item.itemId, { kind: 'row', item, tierIndex: index })
+          : [],
+      );
     }
     const list = live[section.tier];
     const fixedFirst = section.items.filter((item) => item.isDueFirst);
     const fixedLast = section.items.filter(
       (item) => item.isRest && !item.isDueFirst,
     );
-    const liftedAt = list.indexOf(lifted ?? '');
-    const slotAt = (gap: number): Unit[] => {
-      if (lifted === null) return [];
-      if (liftedAt >= 0 && (gap === liftedAt || gap === liftedAt + 1))
-        return [];
-      return [
-        {
-          kind: 'slot',
-          tier: section.tier,
-          gap: liftedAt >= 0 && gap > liftedAt ? gap - 1 : gap,
-          label:
-            gap < list.length
-              ? `${PRIORITIES_WORDS.placeHere}, above ${nameOf(list[gap])}`
-              : `${PRIORITIES_WORDS.placeHere}, at the end of ${PRIORITY_LABELS[section.tier]}`,
-        },
-      ];
-    };
+    const shownIndexes = list.flatMap((id, index) =>
+      isShown(id) ? [index] : [],
+    );
+    const lastShown = shownIndexes.at(-1) ?? -1;
+    const slotAt = (gap: number, label: string): Unit[] =>
+      getSlot(section.tier, gap, label, list.indexOf(lifted ?? ''));
     return [
-      ...fixedFirst.map((item): Unit => ({ kind: 'row', item, tierIndex: -1 })),
-      ...list.flatMap((id, index): Unit[] => [
-        ...slotAt(index),
-        ...(itemById.has(id)
-          ? [
-              {
-                kind: 'row' as const,
-                item: itemById.get(id) as PriorityItem,
-                tierIndex: index,
-              },
-            ]
-          : []),
-      ]),
-      ...slotAt(list.length),
-      ...fixedLast.map((item): Unit => ({ kind: 'row', item, tierIndex: -1 })),
+      ...fixedFirst.flatMap((item): Unit[] =>
+        isShown(item.itemId)
+          ? withCut(item.itemId, { kind: 'row', item, tierIndex: -1 })
+          : [],
+      ),
+      ...shownIndexes.flatMap((index): Unit[] => {
+        const item = itemById.get(list[index]);
+        return [
+          ...(index === 0
+            ? []
+            : slotAt(index, PRIORITIES_WORDS.above(nameOf(list[index])))),
+          ...(item
+            ? withCut(item.itemId, { kind: 'row', item, tierIndex: index })
+            : []),
+        ];
+      }),
+      ...(lastShown < 0
+        ? []
+        : slotAt(
+            lastShown + 1,
+            lastShown + 1 >= list.length
+              ? PRIORITIES_WORDS.endOf(PRIORITY_LABELS[section.tier])
+              : PRIORITIES_WORDS.below(nameOf(list[lastShown])),
+          )),
+      ...fixedLast.flatMap((item): Unit[] =>
+        isShown(item.itemId)
+          ? withCut(item.itemId, { kind: 'row', item, tierIndex: -1 })
+          : [],
+      ),
     ];
   };
 
+  const getSlot = (
+    tier: Priority,
+    gap: number,
+    label: string,
+    liftedAt: number,
+  ): Unit[] => {
+    if (lifted === null) return [];
+    if (liftedAt >= 0 && (gap === liftedAt || gap === liftedAt + 1)) return [];
+    return [
+      {
+        kind: 'slot',
+        tier,
+        gap: liftedAt >= 0 && gap > liftedAt ? gap - 1 : gap,
+        label,
+      },
+    ];
+  };
+
+  const renderSlot = (unit: Extract<Unit, { kind: 'slot' }>) => (
+    <li key={unitKey(unit)} className='px-3 py-0.5'>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='stripped'
+        className="text-muted-foreground! relative flex h-5 w-full items-center justify-center rounded-md border border-dashed text-xs before:absolute before:inset-x-0 before:-inset-y-0.5 before:content-['']"
+        onClick={() => placeLifted(unit.tier, unit.gap)}
+      >
+        <span className='line-clamp-1 block'>{unit.label}</span>
+      </Button>
+    </li>
+  );
+
   const renderUnit = (unit: Unit, tier: Priority) => {
     if (unit.kind === 'cut') return null;
-    if (unit.kind === 'slot') {
-      return (
-        <li key={unitKey(unit)} className='px-3 py-1'>
-          <Button
-            type='button'
-            variant='secondary'
-            size='sm'
-            className="relative h-8 w-full border-dashed before:absolute before:-inset-1 before:content-['']"
-            aria-label={unit.label}
-            onClick={() => placeLifted(unit.tier, unit.gap)}
-          >
-            {PRIORITIES_WORDS.placeHere}
-          </Button>
-        </li>
-      );
-    }
+    if (unit.kind === 'slot') return renderSlot(unit);
     const entry = entries.get(unit.item.itemId);
     if (!entry) return null;
     if (live === null) return entry.render(undefined);
@@ -654,28 +688,54 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       ? rowCount > 0
       : (folds[section.tier] ?? getDefaultOpen(section));
     const count = isSearching ? rowCount : section.items.length;
+    const topSlot =
+      live === null
+        ? []
+        : getSlot(
+            section.tier,
+            0,
+            PRIORITIES_WORDS.topOf(PRIORITY_LABELS[section.tier]),
+            live[section.tier].indexOf(lifted ?? ''),
+          );
+    const rowHeight =
+      edit === null ? ESTIMATED_ROW_HEIGHT : ESTIMATED_EDIT_ROW_HEIGHT;
+    const headingText = `${PRIORITY_LABELS[section.tier]} · ${count}`;
     return (
       <section key={section.tier} className='space-y-2'>
         <SectionDivider
           label={
-            <Button
-              type='button'
-              variant='tertiary'
-              size='stripped'
-              className="text-muted-foreground! relative inline-flex h-8 items-center gap-1 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"
-              aria-expanded={isOpen}
-              onClick={() =>
-                setFolds((current) => ({ ...current, [section.tier]: !isOpen }))
-              }
-            >
-              {PRIORITY_LABELS[section.tier]} · {count}
-              <ChevronDown
-                className={join('h-4 w-4', isOpen && 'rotate-180')}
-                aria-hidden='true'
-              />
-            </Button>
+            count === 0 && edit !== null ? (
+              <span className='text-muted-foreground inline-flex h-8 items-center'>
+                {headingText}
+              </span>
+            ) : (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='stripped'
+                className="text-muted-foreground! relative inline-flex h-8 items-center gap-1 before:absolute before:-inset-x-2 before:-inset-y-1 before:content-['']"
+                aria-expanded={isOpen}
+                onClick={() =>
+                  setFolds((current) => ({
+                    ...current,
+                    [section.tier]: !isOpen,
+                  }))
+                }
+              >
+                {headingText}
+                <ChevronDown
+                  className={join('h-4 w-4', isOpen && 'rotate-180')}
+                  aria-hidden='true'
+                />
+              </Button>
+            )
           }
         />
+        {topSlot.length > 0 && (
+          <ul>
+            {topSlot.map((unit) => unit.kind === 'slot' && renderSlot(unit))}
+          </ul>
+        )}
         {isOpen && units.length > 0 && (
           <div className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {toSegments(units).flatMap((segment, segmentIndex) =>
@@ -694,11 +754,13 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                               className='h-3.5 w-3.5'
                               aria-hidden='true'
                             />
-                            {isHidden || shortOn === null
-                              ? PRIORITIES_WORDS.cutLineHidden
-                              : PRIORITIES_WORDS.cutLine(
-                                  formatDateShortUTC(shortOn),
-                                )}
+                            {shortOn !== null &&
+                              (edit === null
+                                ? PRIORITIES_WORDS.cutLine
+                                : PRIORITIES_WORDS.cutLineBefore)(
+                                formatDateShortUTC(shortOn),
+                                formatCents(shortCents),
+                              )}
                           </span>
                         }
                       />
@@ -710,13 +772,13 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                       className='defer-offscreen'
                       style={
                         {
-                          '--defer-size': `${chunk.length * ESTIMATED_ROW_HEIGHT}px`,
+                          '--defer-size': `${chunk.length * rowHeight}px`,
                         } as CSSProperties
                       }
                     >
                       <LazyMount
                         eager={segmentIndex === 0 && chunkIndex === 0}
-                        estimatedHeight={chunk.length * ESTIMATED_ROW_HEIGHT}
+                        estimatedHeight={chunk.length * rowHeight}
                       >
                         <ul className='divide-border divide-y'>
                           {chunk.map((unit) => renderUnit(unit, section.tier))}
@@ -754,13 +816,34 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             placeholder={PRIORITIES_WORDS.searchPlaceholder}
           />
         )}
-        {lifted !== null && (
-          <p
-            className='text-muted-foreground sticky-day-bar bg-background py-2 text-sm'
+        {lifted !== null ? (
+          <div
+            className='sticky-day-bar bg-background border-border flex items-center justify-between gap-3 border-b py-1.5 [@media(max-height:500px)]:py-0.5'
             role='status'
           >
-            Tap Place here where {nameOf(lifted)} should go.
-          </p>
+            <span className='block min-w-0 text-sm font-medium'>
+              <span className='line-clamp-1'>
+                {PRIORITIES_WORDS.moving(nameOf(lifted))}
+              </span>
+            </span>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative shrink-0 whitespace-nowrap before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+              onClick={() =>
+                patchEdit((current) => ({ ...current, lifted: null }))
+              }
+            >
+              {PRIORITIES_WORDS.cancelMove}
+            </Button>
+          </div>
+        ) : (
+          edit !== null && (
+            <p className='text-muted-foreground text-sm'>
+              {PRIORITIES_WORDS.reorderHint}
+            </p>
+          )
         )}
         {getSections().map(renderSection)}
         {isSearching &&
@@ -797,21 +880,26 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
               {summary}
             </p>
           </div>
-          <EffectPreview changeJson={changeJson} />
-          <ModalFooterActions
-            note={error}
-            rightActions={
-              <Button
-                type='button'
-                className='whitespace-nowrap max-sm:px-3'
-                loading={isSaving}
-                disabled={isSaving}
-                onClick={() => void save()}
-              >
-                {PRIORITIES_WORDS.confirmSave}
-              </Button>
-            }
+          <EffectPreview
+            changeJson={changeJson}
+            describeLess={PRIORITIES_WORDS.getsLess}
           />
+          <div className={PINNED_FOOTER_CLASS}>
+            <ModalFooterActions
+              note={error}
+              rightActions={
+                <Button
+                  type='button'
+                  className='whitespace-nowrap max-sm:px-3'
+                  loading={isSaving}
+                  disabled={isSaving}
+                  onClick={() => void save()}
+                >
+                  {PRIORITIES_WORDS.confirmSave}
+                </Button>
+              }
+            />
+          </div>
         </div>
       </Subview>
     );
@@ -843,9 +931,15 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       <div className='space-y-4'>
         {getBody()}
         {edit !== null && (
-          <div className='bg-background border-border sticky bottom-0 z-10 -mx-(--subview-pad) border-t px-(--subview-pad) py-3'>
+          <div className={PINNED_FOOTER_CLASS}>
             <ModalFooterActions
-              note={isDirty ? null : PRIORITIES_WORDS.nothingMoved}
+              note={
+                <span className='[@media(max-height:500px)]:hidden'>
+                  {isDirty
+                    ? PRIORITIES_WORDS.saveNote
+                    : PRIORITIES_WORDS.nothingMoved}
+                </span>
+              }
               cancelAction={
                 <Button
                   type='button'

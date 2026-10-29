@@ -20,7 +20,7 @@ import { PRIORITIES_WORDS, TICK_HIT_CLASS } from '@apps/runway/constants';
 export interface ItemRowReorder {
   /** Funded first or last by the engine whatever its rank, so it cannot be lifted. */
   isFixed: boolean;
-  /** Replaces the row's detail while it is fixed; null keeps the detail. */
+  /** Why the row is fixed, heard and seen on hover; null falls back to the detail. */
   fixedNote: string | null;
   isLifted: boolean;
   onLift: () => void;
@@ -152,16 +152,28 @@ function ItemRow({
   const rowClass =
     'text-foreground! h-auto min-h-16 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal';
 
+  const compactName = (
+    <span className='block min-w-0 flex-1 text-sm font-medium break-words'>
+      <span className='line-clamp-1'>{name}</span>
+    </span>
+  );
+
   if (reorder?.isFixed) {
     return (
-      <li className='flex min-h-16 items-start gap-3 p-3'>
+      <li
+        className='flex min-h-11 items-center gap-2 px-3'
+        title={shownDetail ?? undefined}
+      >
         {badge}
-        {text}
+        {compactName}
         <Lock
-          className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+          className='text-muted-foreground h-4 w-4 shrink-0'
           aria-hidden='true'
         />
-        <span className='sr-only'>{PRIORITIES_WORDS.fixedHidden}</span>
+        <span className='sr-only'>
+          {PRIORITIES_WORDS.fixedHidden}
+          {shownDetail ? `. ${shownDetail}` : ''}
+        </span>
       </li>
     );
   }
@@ -187,22 +199,22 @@ function ItemRow({
     return (
       <li
         className={join(
-          'flex items-start first:rounded-t-2xl last:rounded-b-2xl',
+          'flex items-center first:rounded-t-2xl last:rounded-b-2xl',
           reorder.isLifted && 'bg-accent',
         )}
       >
         <Button
           type='button'
           variant='tertiary'
-          className={join(rowClass, 'min-w-0 flex-1')}
+          className='text-foreground! h-11 min-h-11 min-w-0 flex-1 items-center justify-start gap-2 rounded-none p-0! px-3! text-left font-normal whitespace-normal'
           aria-pressed={reorder.isLifted}
-          aria-label={`${name}. ${isPrivate && isHidden ? '' : shownDetail ? `${shownDetail}. ` : ''}${reorder.isLifted ? 'Lifted, choose where to place it' : 'Tap to lift'}`}
+          aria-label={`${name}. ${reorder.isLifted ? 'Lifted, choose where to place it' : 'Tap to lift'}`}
           onClick={reorder.onLift}
         >
           {badge}
-          {text}
+          {compactName}
         </Button>
-        <span className='mt-4 mr-2 flex shrink-0 gap-2'>
+        <span className='mr-2 flex shrink-0 items-center gap-2'>
           {nudge(
             `Move ${name} up`,
             <ArrowUp className='h-4 w-4' aria-hidden='true' />,

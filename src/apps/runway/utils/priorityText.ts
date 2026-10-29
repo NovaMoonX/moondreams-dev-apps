@@ -2,7 +2,7 @@ import { PRIORITY_LABELS } from '@apps/runway/constants';
 import type { PriorityAssignment } from '@apps/runway/engine/priorities';
 import type { Priority } from '@apps/runway/types';
 
-/** The change-log line for a saved order: one move names its item and where it went, several count. */
+/** The change-log line for a saved order and the confirm step's subtitle: up to three moved items, each with where it went, then a count of the rest. */
 export function describeReorder(
   assignments: readonly PriorityAssignment[],
   moved: ReadonlySet<string>,
@@ -11,18 +11,21 @@ export function describeReorder(
   nameOf: (itemId: string) => string,
 ) {
   const placed = assignments.filter((entry) => moved.has(entry.itemId));
-  if (placed.length !== 1) return `Moved ${placed.length} items`;
-  const { itemId, tier } = placed[0];
-  const name = nameOf(itemId);
-  if (originalTiers.get(itemId) !== tier) {
-    return `Moved ${name} to ${PRIORITY_LABELS[tier]}`;
-  }
-  const list = working[tier];
-  const index = list.indexOf(itemId);
-  if (index < list.length - 1) {
-    return `Moved ${name} above ${nameOf(list[index + 1])}`;
-  }
-  return index > 0
-    ? `Moved ${name} below ${nameOf(list[index - 1])}`
-    : `Moved ${name}`;
+  const describeOne = ({ itemId, tier }: PriorityAssignment) => {
+    const name = nameOf(itemId);
+    if (originalTiers.get(itemId) !== tier) {
+      return `${name} to ${PRIORITY_LABELS[tier]}`;
+    }
+    const list = working[tier];
+    const index = list.indexOf(itemId);
+    if (index < list.length - 1)
+      return `${name} above ${nameOf(list[index + 1])}`;
+    return index > 0 ? `${name} below ${nameOf(list[index - 1])}` : name;
+  };
+  const shown = placed.slice(0, 3).map(describeOne);
+  const rest = placed.length - shown.length;
+  if (shown.length === 0) return 'Moved items';
+  if (rest > 0) return `Moved ${shown.join(', ')} and ${rest} more`;
+  if (shown.length === 1) return `Moved ${shown[0]}`;
+  return `Moved ${shown.slice(0, -1).join(', ')} and ${shown.at(-1)}`;
 }
