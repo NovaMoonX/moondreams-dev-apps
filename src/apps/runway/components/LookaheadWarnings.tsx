@@ -13,6 +13,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
+  CARD_WORDS,
   FIX_ROWS_SHOWN,
   FIX_WORDS,
   PROBLEM_WORDS,
@@ -35,7 +36,8 @@ import ProblemRow from '@apps/runway/components/ProblemRow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 interface LookaheadWarningsProps {
-  lookahead: Lookahead;
+  /** Null before the plan can look ahead (no income yet); cards coming due still warn. */
+  lookahead: Lookahead | null;
   /** Cards coming due with money waiting; each is its own row beside the plan's problems. */
   dueCards?: readonly DueCard[];
 }
@@ -51,12 +53,12 @@ function LookaheadWarnings({
 }: LookaheadWarningsProps) {
   const { isFixesOpen, openFixes, closeFixes } = useRunwayUrlState();
   const { isHidden } = useValuesHidden();
-  const { incomeEndsOn } = lookahead;
+  const incomeEndsOn = lookahead?.incomeEndsOn ?? null;
   const [isAllShown, setIsAllShown] = useState(false);
   const [paying, setPaying] = useState<OpenedCard | null>(null);
   const allCards = useAppSelector(selectAllCards);
   const rows = [
-    ...groupProblems(lookahead.problems).map((group): WarningRow => ({
+    ...groupProblems(lookahead?.problems ?? []).map((group): WarningRow => ({
       kind: 'plan',
       on: group.on,
       group,
@@ -68,6 +70,16 @@ function LookaheadWarnings({
     })),
   ].sort((a, b) => a.on - b.on);
   const first = rows[0] ?? null;
+  // A card coming due is not a gap in the plan, so a list of only cards is not "things to fix".
+  const isCardsOnly =
+    rows.length > 0 && rows.every((row) => row.kind === 'card');
+  const words = isCardsOnly
+    ? {
+        title: CARD_WORDS.comingDueTitle,
+        one: CARD_WORDS.comingDueOne,
+        many: CARD_WORDS.comingDueMany,
+      }
+    : PROBLEM_WORDS;
   const describeDue = (due: DueCard) =>
     describeDueCard(
       getCardName(due.card, allCards),
@@ -97,7 +109,6 @@ function LookaheadWarnings({
     ? `${more} more ${more === 1 ? 'day' : 'days'}`
     : `${more} more`;
   const isCounted = rows.length > 0;
-  const isLabelPrivate = label.figure !== null;
   const shown = isAllShown ? rows : rows.slice(0, FIX_ROWS_SHOWN);
 
   if (isHidden) {
@@ -107,7 +118,7 @@ function LookaheadWarnings({
         <DetailSheet
           isOpen={isFixesOpen}
           onClose={closeFixes}
-          title={PROBLEM_WORDS.title}
+          title={words.title}
         >
           {isFixesOpen && <NeedsALookRow />}
         </DetailSheet>
@@ -120,11 +131,6 @@ function LookaheadWarnings({
         type='button'
         variant='tertiary'
         className='text-foreground! h-auto min-h-11 w-full items-center justify-start gap-3 rounded-2xl border border-(--runway-warning-edge) bg-(--runway-warning-soft) px-3! py-1.5 text-left font-normal whitespace-normal'
-        aria-label={
-          isHidden && isLabelPrivate
-            ? `The plan falls short. Amount hidden${more > 0 ? `, ${more} more` : ''}. See what to fix`
-            : undefined
-        }
         onClick={openFixes}
       >
         <span
@@ -136,9 +142,7 @@ function LookaheadWarnings({
         <span className='min-w-0 flex-1 text-sm font-medium'>
           {isCounted && (
             <span className='sm:hidden'>
-              {rows.length === 1
-                ? PROBLEM_WORDS.one
-                : PROBLEM_WORDS.many(rows.length)}
+              {rows.length === 1 ? words.one : words.many(rows.length)}
             </span>
           )}
           <span className={join(isCounted && 'max-sm:hidden')}>
@@ -163,7 +167,7 @@ function LookaheadWarnings({
       <DetailSheet
         isOpen={isFixesOpen}
         onClose={closeFixes}
-        title={PROBLEM_WORDS.title}
+        title={words.title}
         actions={<ValuesEyeButton />}
       >
         {isFixesOpen && rows.length > 0 && (

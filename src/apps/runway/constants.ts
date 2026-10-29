@@ -1563,6 +1563,10 @@ export const CARD_WORDS = {
     `${name} will wait for ${amount} less.`,
   loading: 'Getting what each card waits for.',
   chargedTo: (card: string) => `Charged to ${card}`,
+  comingDueTitle: 'Coming due',
+  comingDueOne: '1 card due',
+  comingDueMany: (count: number) => `${count} cards due`,
+  historyStart: 'Owed when tracking started',
   beforeTracking: (day: string) => `Pick ${day} or a later day.`,
   markedAllWith: (cards: string) => `Charged to ${cards}.`,
   markedPaidWith: (bill: string, card: string) =>

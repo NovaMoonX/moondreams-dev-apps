@@ -1,3 +1,4 @@
+import { collectStarted } from '@apps/runway/engine/progress';
 import { useState } from 'react';
 import { CreditCard } from 'lucide-react';
 
@@ -79,6 +80,21 @@ function CardHistoryView({
     [],
   );
   const hasEarlier = recentFrom !== null && startDate < recentFrom;
+  const owedAtStart =
+    collectStarted(moves, startDate || null).byItem[cardId] ?? 0;
+  const startRow = owedAtStart > 0 && (
+    <section className='space-y-2'>
+      <SectionDivider label={formatDateShortUTC(startDate)} />
+      <ul className='border-border bg-card rounded-2xl border'>
+        <li className='flex items-start justify-between gap-3 p-3 text-sm'>
+          <span className='min-w-0 font-medium'>{CARD_WORDS.historyStart}</span>
+          <SensitiveValue className='font-medium whitespace-nowrap tabular-nums'>
+            {formatCents(owedAtStart)}
+          </SensitiveValue>
+        </li>
+      </ul>
+    </section>
+  );
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
 
@@ -199,18 +215,11 @@ function CardHistoryView({
       <p className='text-muted-foreground text-sm'>{CARD_WORDS.loading}</p>
     );
   }
-  if (months.length === 0) {
+  if (months.length === 0 && !startRow) {
     return (
-      <div className='space-y-2'>
-        <p className='text-muted-foreground text-sm'>
-          {CARD_WORDS.historyEmpty}
-        </p>
-        {hasEarlier && (
-          <p className='text-muted-foreground text-sm'>
-            {CARD_WORDS.historyOlder}
-          </p>
-        )}
-      </div>
+      <p className='text-muted-foreground text-sm'>
+        {hasEarlier ? CARD_WORDS.historyOlder : CARD_WORDS.historyEmpty}
+      </p>
     );
   }
   return (
@@ -223,6 +232,7 @@ function CardHistoryView({
           </ul>
         </section>
       ))}
+      {!hasEarlier && startRow}
       {hasEarlier && (
         <p className='text-muted-foreground text-sm'>
           {CARD_WORDS.historyOlder}
