@@ -1495,6 +1495,7 @@ export const CARD_WORDS = {
   historyTitle: 'History',
   historyEmpty: 'Nothing has been charged or paid on this card yet.',
   historyCharged: (day: string) => `${day} · Charged`,
+  historyRefunded: (day: string) => `${day} · Refunded to the card`,
   historyBill: (day: string) => `${day} · Bill charged`,
   historyPaid: 'Paid off',
   historyTakenBack: 'Taken back',
@@ -1571,7 +1572,7 @@ export const CARD_WORDS = {
   markedAllWith: (cards: string) => `Charged to ${cards}.`,
   markedPaidWith: (bill: string, card: string) =>
     `Marked ${bill} paid with ${card}`,
-  freeWaiting: 'Waiting on cards',
+  freeWaiting: 'Waiting to be paid on cards',
   freeWaitingHelp:
     "Charged to your cards and not paid yet. It's set aside now, so paying a card doesn't change Free to spend.",
   freeOnHandHelp:

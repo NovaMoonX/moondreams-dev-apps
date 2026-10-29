@@ -143,8 +143,12 @@ function CardHistoryView({
               emoji={first === null ? null : (looks.get(first)?.emoji ?? null)}
             />
           }
-          detail={CARD_WORDS.historyCharged(day)}
-          figure={`${entry.cents < 0 ? '−' : '+'}${formatCents(Math.abs(entry.cents))}`}
+          detail={
+            entry.cents < 0
+              ? CARD_WORDS.historyRefunded(day)
+              : CARD_WORDS.historyCharged(day)
+          }
+          figure={formatCents(Math.abs(entry.cents))}
           ariaLabel={`${title}. Open`}
           onOpen={() => onOpenPurchase(entry.id)}
         />
@@ -159,7 +163,7 @@ function CardHistoryView({
           name={title}
           emoji={look?.emoji ?? null}
           detail={CARD_WORDS.historyBill(day)}
-          figure={`+${formatCents(entry.cents)}`}
+          figure={formatCents(entry.cents)}
         />
       );
     }
@@ -181,7 +185,7 @@ function CardHistoryView({
                   : 'font-semibold tabular-nums'
               }
             >
-              <SensitiveValue>{`−${formatCents(entry.cents)}`}</SensitiveValue>
+              <SensitiveValue>{formatCents(entry.cents)}</SensitiveValue>
             </span>
           </span>
           <span className='flex items-center justify-between gap-3'>
