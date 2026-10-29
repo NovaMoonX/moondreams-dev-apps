@@ -106,7 +106,10 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
             </div>
             <ul className='-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1'>
               {openings.map((row) => (
-                <li key={row.item.movieKey} className='w-14 shrink-0 snap-start'>
+                <li
+                  key={row.item.movieKey}
+                  className='w-14 shrink-0 snap-start'
+                >
                   <Button
                     type='button'
                     variant='tertiary'
