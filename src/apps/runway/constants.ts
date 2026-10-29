@@ -1134,10 +1134,8 @@ export const DAYS_WORDS = {
   failedMonth: 'These income days did not load. Nothing was changed.',
   emptyMonth: 'No income was confirmed in this month.',
   noMatch: 'No income day matches that.',
-  readOnlyNote: (boundary: string | null) =>
-    boundary === null
-      ? "Pays in earlier months can't be changed. To fix a balance, correct a recent pay."
-      : `Pays before ${boundary} can't be changed. To fix a balance, correct a pay from ${boundary} on.`,
+  readOnlyNote: (boundary: string) =>
+    `Pays before ${boundary} can't be changed. To fix a balance, correct a pay from ${boundary} on.`,
   goToRecent: 'Go to recent days',
 } as const;
 

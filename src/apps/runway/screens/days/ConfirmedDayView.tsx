@@ -55,7 +55,7 @@ interface ConfirmedDayViewProps {
 
 /** A confirmed day: what arrived, where it went, and a door to what was planned against it. */
 function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
-  const { showDaysMonth } = useRunwayUrlState();
+  const { showDaysMonth, showTab } = useRunwayUrlState();
   const recentFrom = useAppSelector(selectRecentFrom);
   const [isRecordOpen, setIsRecordOpen] = useState(false);
   const isReady = useAppSelector((state) =>
@@ -179,13 +179,9 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
               .join(', ')}
           </p>
         </div>
-        {!isCorrectable && (
+        {!isCorrectable && recentFrom !== null && (
           <InlineNotice tone='info'>
-            <p>
-              {DAYS_WORDS.readOnlyNote(
-                recentFrom === null ? null : describeBoundary(recentFrom),
-              )}
-            </p>
+            <p>{DAYS_WORDS.readOnlyNote(describeBoundary(recentFrom))}</p>
             <Button
               variant='tertiary'
               size='sm'
@@ -193,6 +189,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
               onClick={() => {
                 onClose();
                 showDaysMonth(null);
+                showTab('days');
               }}
             >
               {DAYS_WORDS.goToRecent}
