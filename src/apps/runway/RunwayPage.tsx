@@ -170,7 +170,7 @@ function RunwayContent() {
     const month =
       isOpenDayOlder && openDayKey !== null ? getDayKeyMonth(openDayKey) : null;
     closeDay();
-    if (month !== null) showDaysMonth(month);
+    if (month !== null && activeTab === 'days') showDaysMonth(month);
   };
   const level = useAppSelector(selectLevel);
   const activeTab =
