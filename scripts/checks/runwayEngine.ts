@@ -16,6 +16,15 @@ import {
   deriveBalancesBefore,
 } from '../../src/apps/runway/engine/balances.ts';
 import {
+  collectCardHistory,
+  getCardDueState,
+  getDueCards,
+  getNextDueOn,
+  getPrevDueOn,
+  getUsualCardId,
+  withOwedAfter,
+} from '../../src/apps/runway/engine/cards.ts';
+import {
   buildClosings,
   closing as buildClosing,
   CLOSED_DAY_KEY,
@@ -1008,7 +1017,7 @@ const version = (
     { dayKey: tight.days[0].dayKey, sourceId: 'src-a', cents: 50_000 },
   ]);
 
-  // Free to spend is what is left, by source; a typed amount replaces the plan's.
+  // Free to Spend is what is left, by source; a typed amount replaces the plan's.
   const roomy = draftOf([makeEnvelope('a', 'must', 1, 30_000)]);
   assert.equal(roomy.freeToSpend.cents, 70_000);
   assert.deepEqual(roomy.freeToSpend.bySource, [
@@ -1111,7 +1120,7 @@ const version = (
       baseline.lines.reduce((sum, line) => sum + line.cents, 0) +
         baseline.freeToSpend.cents,
       baseline.moneyCents,
-      'line cents plus Free to spend equal the day money',
+      'line cents plus Free to Spend equal the day money',
     );
     assert.equal(
       baseline.freeToSpend.cents,
@@ -2974,7 +2983,7 @@ const version = (
   assert.deepEqual(
     collectPaid([mark]).rent.map((entry) => entry.fromFreeCents),
     [20_000],
-    'a mark is a paid payment and keeps what came from Free to spend',
+    'a mark is a paid payment and keeps what came from Free to Spend',
   );
   assert.deepEqual(collectPaid([mark, undo]), {}, 'an undone mark is not paid');
   assert.equal(countMarks([mark, undo], 'rent', dec1), 1);
@@ -3088,7 +3097,7 @@ const version = (
   assert.equal(
     first.freeToSpendCents,
     45_000,
-    'lowering a line raises Free to spend',
+    'lowering a line raises Free to Spend',
   );
   assert.deepEqual(
     first.changes.map((c) => [c.lineId, c.beforeCents, c.afterCents]),
@@ -3356,7 +3365,7 @@ const version = (
   assert.equal(
     paidBalances.freeToSpendCents,
     40_000,
-    'the part beyond what was set aside draws Free to spend',
+    'the part beyond what was set aside draws Free to Spend',
   );
   const undo: OpenMove = {
     ...paid,
@@ -3715,6 +3724,7 @@ const version = (
     describeChange(
       payload(10_000) as ItemPayload,
       payload(15_000) as ItemPayload,
+      () => 'a card',
     ),
     'Funding $100.00 every income day to $150.00 every income day',
   );
@@ -3725,12 +3735,16 @@ const version = (
     ending: never,
   } as unknown as ItemPayload;
   assert.equal(
-    describeChange(legacyLine, {
-      ...legacyLine,
-      amount: exactRange(120_000),
-      pairings: [],
-      stanceOverride: null,
-    } as ItemPayload),
+    describeChange(
+      legacyLine,
+      {
+        ...legacyLine,
+        amount: exactRange(120_000),
+        pairings: [],
+        stanceOverride: null,
+      } as ItemPayload,
+      () => 'a card',
+    ),
     'Amount $1,000.00 to $1,200.00',
     'a pay line written before pairings and ranges existed can be changed',
   );
@@ -4347,7 +4361,7 @@ const version = (
   assert.deepEqual(
     archivePreview.map((day) => day.effect.freeAfterCents),
     archivePreview.map((day) => day.effect.freeBeforeCents + 30_000),
-    'archiving shows each coming day giving its money back to Free to spend',
+    'archiving shows each coming day giving its money back to Free to Spend',
   );
 
   // Pause and resume a goal: a paused goal demands nothing, a legacy one is active.
@@ -4408,7 +4422,7 @@ const version = (
     pausePreview.every(
       (day) => day.effect.freeAfterCents - day.effect.freeBeforeCents === 5_000,
     ) && pausePreview.length > 0,
-    'pausing shows $50 returning to Free to spend on each day',
+    'pausing shows $50 returning to Free to Spend on each day',
   );
 
   // A pay line's ending, reached.
@@ -5517,6 +5531,7 @@ const version = (
       updatedAt: on,
       amountCents: sumLines(chosen),
       merchant: null,
+      label: null,
       note: null,
       lines: chosen,
       refundOfId,
@@ -5560,7 +5575,7 @@ const version = (
   assert.equal(
     over.freeToSpendCents,
     before.freeToSpendCents - 2_000,
-    'Free to spend falls by exactly the overspend',
+    'Free to Spend falls by exactly the overspend',
   );
   assert.equal(over.spentCents, 12_000);
   assert.equal(
@@ -5577,7 +5592,7 @@ const version = (
   assert.equal(
     within.freeToSpendCents,
     before.freeToSpendCents,
-    'spending inside an envelope leaves Free to spend alone',
+    'spending inside an envelope leaves Free to Spend alone',
   );
 
   const overAgain = deriveBalances({
@@ -5591,7 +5606,7 @@ const version = (
   assert.equal(
     overAgain.freeToSpendCents,
     before.freeToSpendCents - 2_500,
-    'spending from an envelope that is already over draws Free to spend by all of it',
+    'spending from an envelope that is already over draws Free to Spend by all of it',
   );
 
   const refunded = deriveBalances({
@@ -5605,7 +5620,7 @@ const version = (
   assert.equal(
     refunded.freeToSpendCents,
     before.freeToSpendCents,
-    'a refund after an overspend restores Free to spend with no extra step',
+    'a refund after an overspend restores Free to Spend with no extra step',
   );
 
   const toFree = deriveBalances({
@@ -5665,7 +5680,7 @@ const version = (
     getPurchaseEffect(toChosenLines([{ envelopeId: null, cents: -500 }]), {})
       .freeDropCents,
     -500,
-    'a refund to Free to spend raises it by all of it',
+    'a refund to Free to Spend raises it by all of it',
   );
   assert.equal(
     getPurchaseEffect(toChosenLines([{ envelopeId: null, cents: 700 }]), {})
@@ -5841,7 +5856,7 @@ const version = (
       ],
       uncoveredCents: 0,
     },
-    'Free to spend, when it holds money, is the first source and the envelopes cover the rest',
+    'Free to Spend, when it holds money, is the first source and the envelopes cover the rest',
   );
   const coveredByFree = checkAmount('dining', 4_200, envelopes, 5_000);
   assert.ok(
@@ -5849,12 +5864,12 @@ const version = (
       coveredByFree.sources.length === 1 &&
       coveredByFree.sources[0].envelopeId === null &&
       coveredByFree.sources[0].leftAfterCents === 3_800,
-    'Free to spend alone covers an overage it can hold',
+    'Free to Spend alone covers an overage it can hold',
   );
   assert.deepEqual(
     checkAmount('dining', 4_200, envelopes, -300),
     checkAmount('dining', 4_200, envelopes),
-    'Free to spend that is over-assigned is never a source',
+    'Free to Spend that is over-assigned is never a source',
   );
   const alreadyOver = checkAmount('over', 100, envelopes);
   assert.equal(alreadyOver.kind === 'over' && alreadyOver.overCents, 500);
@@ -5876,6 +5891,7 @@ const version = (
     updatedAt: 1,
     amountCents: 4_000,
     merchant: 'Safeway',
+    label: null,
     note: null,
     refundOfId: null,
     lines: [{ envelopeId: 'dining', cents: 4_000, via: 'chosen' as const }],
@@ -5889,6 +5905,7 @@ const version = (
         lines: [{ envelopeId: 'dining', cents: 5_500, via: 'chosen' }],
       },
       (id) => id,
+      () => 'a card',
     ),
     'Purchase changed: Safeway, amount $40.00 to $55.00.',
   );
@@ -6187,6 +6204,7 @@ const version = (
       updatedAt: date,
       amountCents: cents,
       merchant: null,
+      label: null,
       note: null,
       lines,
       refundOfId: null,
@@ -7295,12 +7313,12 @@ const version = (
   assert.equal(
     after.freeToSpendCents,
     50_000,
-    'B1: the cut paid part of the rent from Free to spend, so Free to spend is what the money left after the payment, not up by the cut',
+    'B1: the cut paid part of the rent from Free to Spend, so Free to Spend is what the money left after the payment, not up by the cut',
   );
   assert.equal(
     after.freeToSpendCents,
     after.moneyOnHandCents - after.assignedToBillsCents,
-    'B1: and Free to spend is still money on hand less what is held',
+    'B1: and Free to Spend is still money on hand less what is held',
   );
   const progress = deriveBillProgress(
     records,
@@ -7312,7 +7330,7 @@ const version = (
   assert.deepEqual(
     progress.rent.paid.map((payment) => payment.fromFreeCents),
     [40_000],
-    'B1: the paid mark says the $400 the correction took off came from Free to spend',
+    'B1: the paid mark says the $400 the correction took off came from Free to Spend',
   );
   const twoDays = [...records, confirmedDay('d2', 150_000, 50_000)];
   assert.equal(
@@ -7607,7 +7625,7 @@ const version = (
   );
 }
 
-// B1 (round 7): money held for an item that stopped for good is Free to spend again.
+// B1 (round 7): money held for an item that stopped for good is Free to Spend again.
 {
   const start = utc(2026, 1, 1);
   const startOf = (
@@ -7652,7 +7670,7 @@ const version = (
       archived.assignedByItem.trip,
     ],
     [80_000, 0, 30_000],
-    'B1: from the day a goal is archived its $300 is Free to spend, and the goal still shows what it held',
+    'B1: from the day a goal is archived its $300 is Free to Spend, and the goal still shows what it held',
   );
   assert.equal(
     deriveBalances({
@@ -7677,9 +7695,590 @@ const version = (
   );
 }
 
+// Cards (Issue 50): a reserve per card, bills paid by card, and paying a card off.
+{
+  const start = Date.UTC(2026, 9, 1);
+  const day = (n: number) => start + n * 86_400_000;
+  const move = (
+    id: string,
+    kind: OpenMove['kind'],
+    on: number,
+    refId: string | null,
+    payload: object,
+    reversesMoveId: string | null = null,
+  ) =>
+    ({
+      id,
+      kind,
+      date: on,
+      refId,
+      reversesMoveId,
+      createdAt: on,
+      payload,
+    }) as unknown as OpenMove;
+  const purchase = (
+    id: string,
+    on: number,
+    envelopeId: string,
+    cents: number,
+    paidByCardId: string | null,
+  ): OpenPurchase => ({
+    id,
+    date: on,
+    source: 'manual',
+    needsHome: false,
+    createdAt: on,
+    updatedAt: on,
+    amountCents: cents,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: toChosenLines([{ envelopeId, cents }]),
+    refundOfId: null,
+    paidByCardId,
+  });
+  const starts = [
+    move('s-money', 'start', start, null, {
+      amountCents: 100_000,
+      holding: 'money',
+    }),
+    move('s-food', 'start', start, 'food', {
+      amountCents: 10_000,
+      holding: 'envelope',
+    }),
+    move('s-rent', 'start', start, 'rent', {
+      amountCents: 8_000,
+      holding: 'bill',
+    }),
+    move('s-venture', 'start', start, 'venture', {
+      amountCents: 2_500,
+      holding: 'card',
+    }),
+  ];
+  const kinds = {
+    food: 'envelope',
+    rent: 'bill',
+    venture: 'card',
+    freedom: 'card',
+  } as const;
+  const base = {
+    startDate: start,
+    moves: starts,
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds,
+  };
+  const before = deriveBalances(base);
+  assert.equal(
+    before.reserveByCard.venture,
+    2_500,
+    'what the card owed at the start',
+  );
+  assert.equal(before.moneyOnHandCents, 100_000);
+  assert.equal(
+    before.freeToSpendCents,
+    100_000 - 10_000 - 8_000 - 2_500,
+    'what a card owes is spoken for',
+  );
+  assert.equal(
+    before.assignedByItem.venture,
+    undefined,
+    'a card is not an envelope',
+  );
+
+  const charged = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(
+    charged.assignedByItem.food,
+    6_000,
+    'the envelope goes down as in cash',
+  );
+  assert.equal(
+    charged.reserveByCard.venture,
+    6_500,
+    'and the card waits for it',
+  );
+  assert.equal(
+    charged.moneyOnHandCents,
+    100_000,
+    'a card purchase leaves the cash where it is',
+  );
+  assert.equal(
+    charged.freeToSpendCents,
+    before.freeToSpendCents,
+    'a card purchase is not counted twice in Free to Spend',
+  );
+  const cash = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 4_000, null)],
+  });
+  assert.equal(
+    cash.freeToSpendCents,
+    charged.freeToSpendCents,
+    'paid by card or in cash, Free to Spend is the same',
+  );
+
+  const over = deriveBalances({
+    ...base,
+    purchases: [purchase('p1', day(2), 'food', 13_000, 'venture')],
+  });
+  assert.equal(
+    over.freeToSpendCents,
+    before.freeToSpendCents - 3_000,
+    'an overspend on a card draws Free to Spend by the overspend, as in cash',
+  );
+
+  const payoff = move('pay1', 'cardPayment', day(5), 'venture', {
+    amountCents: 6_500,
+  });
+  const paid = deriveBalances({
+    ...base,
+    moves: [...starts, payoff],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(paid.reserveByCard.venture, 0);
+  assert.equal(
+    paid.moneyOnHandCents,
+    93_500,
+    'paying the card spends the cash',
+  );
+  assert.equal(
+    paid.freeToSpendCents,
+    charged.freeToSpendCents,
+    'paying a card off leaves Free to Spend where it was',
+  );
+
+  const overpaid = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      move('pay2', 'cardPayment', day(5), 'venture', { amountCents: 8_000 }),
+    ],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.equal(overpaid.reserveByCard.venture, -1_500);
+  assert.equal(
+    overpaid.assignedToCardsCents,
+    0,
+    'an overpaid card counts as zero',
+  );
+  assert.equal(
+    overpaid.freeToSpendCents,
+    charged.freeToSpendCents - 1_500,
+    'paying more than a card waits for comes out of Free to Spend',
+  );
+
+  const undone = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      payoff,
+      move(
+        'unpay1',
+        'cardPayment',
+        day(5),
+        'venture',
+        { amountCents: 6_500 },
+        'pay1',
+      ),
+    ],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  });
+  assert.deepEqual(undone, charged, 'an undone payment is as if never made');
+
+  const billOnCard = deriveBalances({
+    ...base,
+    moves: [
+      ...starts,
+      move('paid_rent', 'billPaid', day(1), 'rent', {
+        amountCents: 8_000,
+        paidOn: day(1),
+        fromFreeCents: 0,
+        cardId: 'freedom',
+      }),
+    ],
+  });
+  assert.equal(billOnCard.assignedByItem.rent, 0, 'the bill is paid');
+  assert.equal(
+    billOnCard.reserveByCard.freedom,
+    8_000,
+    'and its card waits for it',
+  );
+  assert.equal(billOnCard.moneyOnHandCents, 100_000, 'the cash stays put');
+  assert.equal(billOnCard.freeToSpendCents, before.freeToSpendCents);
+
+  assert.equal(
+    deriveBalancesBefore(
+      { ...base, moves: [...starts, payoff], purchases: [] },
+      day(5),
+    ).reserveByCard.venture,
+    2_500,
+    'a payment on or after the day is not counted before it',
+  );
+
+  // A closing over the month gives the same figures as the replay.
+  const ledger = {
+    moves: [...starts, payoff],
+    purchases: [purchase('p1', day(2), 'food', 4_000, 'venture')],
+  };
+  const closed = decodeClosing(
+    toMonthKey(start),
+    encodeClosing(
+      buildClosing(toMonthKey(start), null, {
+        startDate: start,
+        days: [],
+        records: [],
+        ...ledger,
+        billIds: new Set(['rent']),
+      }),
+    ),
+  );
+  assert.deepEqual(
+    deriveBalances({ ...base, moves: starts, closing: closed }),
+    deriveBalances({ ...base, ...ledger }),
+    'cards: a closing equals the replay',
+  );
+  // Where is your money now? adds what cards owe (read at Track) to the money read at the current level.
+  const lineUp = (moves: OpenMove[]) => {
+    const plan = deriveBalances({ ...base, moves, isCountingCards: false });
+    const track = deriveBalances({ ...base, moves });
+    return (
+      plan.moneyOnHandCents +
+      plan.uncountedCardCashCents -
+      plan.assignedToBillsCents -
+      plan.assignedToEnvelopesCents -
+      plan.assignedToGoalsCents -
+      track.assignedToCardsCents
+    );
+  };
+  const rentOnCard = move('paid_rent_2', 'billPaid', day(1), 'rent', {
+    amountCents: 8_000,
+    paidOn: day(1),
+    fromFreeCents: 0,
+    cardId: 'freedom',
+  });
+  [
+    [...starts, rentOnCard],
+    [
+      ...starts,
+      rentOnCard,
+      move('payf', 'cardPayment', day(3), 'freedom', { amountCents: 5_000 }),
+    ],
+  ].forEach((moves, index) => {
+    assert.equal(
+      lineUp(moves),
+      deriveBalances({ ...base, moves }).freeToSpendCents,
+      `a line-up at Plan starts from the Free to Spend tracking would show (${index + 1})`,
+    );
+  });
+
+  const closedBill = decodeClosing(
+    toMonthKey(start),
+    encodeClosing(
+      buildClosing(toMonthKey(start), null, {
+        startDate: start,
+        days: [],
+        records: [],
+        moves: [rentOnCard],
+        purchases: [],
+        billIds: new Set(['rent']),
+      }),
+    ),
+  );
+  const fromClosing = deriveBalances({
+    ...base,
+    closing: withoutSpending(closedBill),
+    isCountingCards: false,
+  });
+  assert.equal(
+    fromClosing.moneyOnHandCents + fromClosing.uncountedCardCashCents,
+    deriveBalances({ ...base, moves: [...starts, rentOnCard] })
+      .moneyOnHandCents,
+    'a bill charged to a card in a closed month still comes back at Plan',
+  );
+
+  const atPlan = (moves: OpenMove[]) =>
+    deriveBalances({
+      ...base,
+      moves,
+      closing: withoutSpending(closed),
+      isCountingCards: false,
+    });
+  assert.deepEqual(
+    atPlan(starts).reserveByCard,
+    {},
+    'cards are part of tracking: at Plan nothing waits on one',
+  );
+  assert.equal(
+    atPlan([...starts, payoff]).freeToSpendCents,
+    atPlan(starts).freeToSpendCents,
+    'a card payment does not move Free to Spend at Plan either',
+  );
+  assert.equal(
+    deriveBalances({ ...base, isCountingCards: false }).freeToSpendCents,
+    100_000 - 10_000 - 8_000,
+    'at Plan what a card owed at the start is left out',
+  );
+}
+
+// Cards round 2: due days and a card's history.
+{
+  const card = (id: string, dueDay: number | null) => ({
+    id,
+    issuer: 'Chase',
+    name: null,
+    dueDay,
+    createdAt: 1,
+    updatedAt: 1,
+    archivedAt: null,
+  });
+  const d = (y: number, m: number, day: number) => Date.UTC(y, m - 1, day);
+  assert.equal(
+    getNextDueOn(31, d(2027, 2, 10)),
+    d(2027, 2, 28),
+    'the 31st in February is its last day',
+  );
+  assert.equal(
+    getNextDueOn(14, d(2026, 11, 14)),
+    d(2026, 11, 14),
+    'due today is today',
+  );
+  assert.equal(getNextDueOn(14, d(2026, 11, 15)), d(2026, 12, 14));
+  assert.equal(
+    getNextDueOn(5, d(2026, 12, 20)),
+    d(2027, 1, 5),
+    'past the day in December is next January',
+  );
+  assert.equal(getNextDueOn(null, d(2026, 11, 15)), null);
+  const today = d(2026, 11, 1);
+  const due = getDueCards(
+    [card('a', 8), card('b', 9), card('c', 3), card('d', null), card('e', 2)],
+    { a: 1_000, b: 500, c: 200, d: 900, e: 0 },
+    [],
+    today,
+    7,
+    today,
+  );
+  assert.deepEqual(
+    due.map((entry) => [entry.card.id, entry.inDays]),
+    [
+      ['c', 2],
+      ['a', 7],
+    ],
+    'due within 7 days with money waiting, soonest first; 8 days out, no due day and nothing waiting are left out',
+  );
+
+  // Past due sticks until a full or minimum payment, or until the next due day is within 7 days.
+  const venture = card('v', 14);
+  const state = (
+    on: number,
+    payments: { on: number; covers: 'full' | 'minimum' | 'part' }[] = [],
+    waiting = 5_000,
+  ) => getCardDueState(venture, waiting, payments, on, 7, d(2026, 9, 1));
+  assert.equal(getPrevDueOn(14, d(2026, 11, 14)), d(2026, 11, 14));
+  assert.equal(getPrevDueOn(31, d(2026, 3, 30)), d(2026, 2, 28));
+  assert.equal(getPrevDueOn(20, d(2026, 1, 5)), d(2025, 12, 20));
+  assert.equal(state(d(2026, 11, 10))?.inDays, 4, 'due in 4 days warns');
+  assert.equal(
+    state(d(2026, 11, 6), [{ on: d(2026, 10, 1), covers: 'full' }]),
+    null,
+    'due in 8 days, with the last due day paid for, does not',
+  );
+  assert.deepEqual(
+    [state(d(2026, 11, 19))?.isPastDue, state(d(2026, 11, 19))?.dueOn],
+    [true, d(2026, 11, 14)],
+    'five days past due and unpaid still warns',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [{ on: d(2026, 11, 16), covers: 'minimum' }]),
+    null,
+    'the minimum paid clears it',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [{ on: d(2026, 11, 16), covers: 'part' }])
+      ?.isPastDue,
+    true,
+    'part of it leaves it up',
+  );
+  assert.equal(
+    state(d(2026, 11, 10), [
+      { on: d(2026, 10, 10), covers: 'minimum' },
+      { on: d(2026, 10, 20), covers: 'full' },
+    ]),
+    null,
+    'paid on time, then again: the second covers the next due day',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [{ on: d(2026, 11, 16), covers: 'minimum' }], 5_000),
+    null,
+    'an old unpaid month never soaks up a new payment',
+  );
+  assert.equal(
+    state(d(2026, 11, 10), [{ on: d(2026, 10, 20), covers: 'minimum' }])?.dueOn,
+    d(2026, 11, 14),
+    'one minimum pays for one due day: a late October minimum leaves November due',
+  );
+  assert.equal(
+    state(d(2026, 11, 10), [{ on: d(2026, 10, 20), covers: 'full' }]),
+    null,
+    'paid in full after the last due day pays for every due day still open',
+  );
+  const rolled = state(d(2026, 12, 9));
+  assert.deepEqual(
+    [rolled?.dueOn, rolled?.isPastDue, rolled?.rolledFrom],
+    [d(2026, 12, 14), false, d(2026, 11, 14)],
+    'unpaid, the warning moves to the next due day and says which one was missed',
+  );
+  assert.equal(
+    state(d(2026, 11, 19), [], 0),
+    null,
+    'nothing waiting, nothing to warn',
+  );
+  assert.equal(
+    getCardDueState(venture, 5_000, [], d(2026, 11, 19), 7, d(2026, 11, 15)),
+    null,
+    'a due day before the card was added never warns',
+  );
+  const runs = withOwedAfter(
+    [
+      {
+        kind: 'payment',
+        id: 'p3',
+        on: 3,
+        cents: 100,
+        isTakenBack: true,
+        covers: 'full',
+      },
+      {
+        kind: 'payment',
+        id: 'p2',
+        on: 2,
+        cents: 300,
+        isTakenBack: false,
+        covers: 'minimum',
+      },
+      { kind: 'bill', id: 'b1', on: 1, cents: 800, billId: 'rent' },
+    ],
+    1_000,
+  );
+  assert.deepEqual(
+    runs.map((row) => row.owedAfterCents),
+    [1_000, 1_000, 1_300],
+    'owed after each entry, worked back from today; a taken-back payment moves nothing',
+  );
+
+  const pay = (id: string, cents: number, reverses: string | null = null) =>
+    ({
+      id,
+      kind: 'cardPayment',
+      date: d(2026, 11, 3),
+      refId: 'a',
+      reversesMoveId: reverses,
+      createdAt: 1,
+      payload: { amountCents: cents },
+    }) as unknown as OpenMove;
+  const billOn = {
+    id: 'paid_rent',
+    kind: 'billPaid',
+    date: d(2026, 11, 1),
+    refId: 'rent',
+    reversesMoveId: null,
+    createdAt: 1,
+    payload: {
+      amountCents: 800,
+      paidOn: d(2026, 11, 2),
+      fromFreeCents: 0,
+      cardId: 'a',
+    },
+  } as unknown as OpenMove;
+  const bought = {
+    id: 'p1',
+    date: d(2026, 11, 4),
+    source: 'manual',
+    needsHome: false,
+    createdAt: 1,
+    updatedAt: 1,
+    amountCents: 400,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: toChosenLines([{ envelopeId: 'food', cents: 400 }]),
+    refundOfId: null,
+    paidByCardId: 'a',
+  } as OpenPurchase;
+  const history = collectCardHistory(
+    'a',
+    [bought, { ...bought, id: 'p2', paidByCardId: null }],
+    [billOn, pay('pay1', 300), pay('pay2', 100), pay('unpay2', 100, 'pay2')],
+  );
+  assert.deepEqual(
+    history.map((entry) =>
+      entry.kind === 'payment' ? [entry.id, entry.isTakenBack] : [entry.id],
+    ),
+    [['p1'], ['pay2', true], ['pay1', false], ['paid_rent']],
+    'newest first: its purchases, its payments (one taken back), the bill charged to it; cash purchases and undo moves are not entries',
+  );
+}
+
+// The card a purchase from an envelope usually goes on.
+{
+  const on = (
+    id: string,
+    day: number,
+    envelopeId: string,
+    card: string | null,
+  ) =>
+    ({
+      id,
+      date: Date.UTC(2026, 9, day),
+      amountCents: 1_000,
+      lines: toChosenLines([{ envelopeId, cents: 1_000 }]),
+      paidByCardId: card,
+    }) as OpenPurchase;
+  const bought = [
+    on('g1', 1, 'food', 'a'),
+    on('g2', 2, 'food', 'a'),
+    on('g3', 3, 'food', 'b'),
+    on('d1', 4, 'dining', null),
+    on('d2', 5, 'dining', 'b'),
+  ];
+  assert.equal(
+    getUsualCardId('food', bought, ['a', 'b']),
+    'a',
+    'most used card',
+  );
+  assert.equal(
+    getUsualCardId('dining', bought, ['a', 'b']),
+    'b',
+    'a tie goes to the most recent',
+  );
+  assert.equal(
+    getUsualCardId('dining', bought.slice(0, 4), ['a', 'b']),
+    null,
+    'cash is a usual choice too',
+  );
+  assert.equal(
+    getUsualCardId('food', bought, ['b']),
+    undefined,
+    'an archived usual card suggests nothing',
+  );
+  assert.equal(
+    getUsualCardId('rent', bought, ['a', 'b']),
+    undefined,
+    'no purchases, no suggestion',
+  );
+  assert.equal(
+    getUsualCardId('food', [{ ...bought[0], amountCents: -1_000 }], ['a']),
+    undefined,
+    'refunds are not purchases to go by',
+  );
+}
+
 console.log('runway engine: ok');
 
-// Round 7, package G8: money that arrives short. Cover from Free to spend, then what gets less.
+// Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
 {
   const base: RecordLine = {
     lineId: '',
@@ -7752,7 +8351,7 @@ console.log('runway engine: ok');
   assert.ok(isWithinCover(0, 0));
   assert.ok(!isWithinCover(-1, 0), 'nothing covered, nothing below zero');
 
-  // A covered day keeps its items and leaves less than nothing; Free to spend drops by exactly that.
+  // A covered day keeps its items and leaves less than nothing; Free to Spend drops by exactly that.
   const start = 10 * DAY_MS;
   const startMoney = (cents: number): OpenMove => ({
     id: 'start-money',
@@ -7803,7 +8402,7 @@ console.log('runway engine: ok');
   assert.equal(
     balancesOf(25_000, [exact]),
     15_000,
-    'an exact cover takes the gap, and only the gap, from Free to spend',
+    'an exact cover takes the gap, and only the gap, from Free to Spend',
   );
 
   const gap = 10_000;
@@ -7818,7 +8417,7 @@ console.log('runway engine: ok');
   assert.equal(
     balancesOf(freeBefore, [partial]),
     0,
-    'a partial cover uses all of Free to spend and the cuts take the rest',
+    'a partial cover uses all of Free to Spend and the cuts take the rest',
   );
 
   // A closing rebuilt after a covered day matches a full replay.
@@ -7911,7 +8510,7 @@ console.log('runway engine: ok');
   assert.deepEqual(
     [balancesA.freeToSpendCents, balancesA.assignedToBillsCents],
     [80_000, 0],
-    'F1 A: the rent held at the start pays it once: Free to spend 800, rent holds 0',
+    'F1 A: the rent held at the start pays it once: Free to Spend 800, rent holds 0',
   );
 
   const rentLine = (cents: number) => ({
@@ -7961,7 +8560,7 @@ console.log('runway engine: ok');
   assert.deepEqual(
     progressB.rent.paid.map((payment) => payment.fromFreeCents),
     [0],
-    'F1 B: and the paid mark says nothing came from Free to spend',
+    'F1 B: and the paid mark says nothing came from Free to Spend',
   );
   const earlyB = deriveBalances({
     startDate: startB,
@@ -8186,7 +8785,7 @@ console.log('runway engine: ok');
   assert.equal(
     added,
     10_000,
-    'Free to spend at that moment covers the whole gap',
+    'Free to Spend at that moment covers the whole gap',
   );
   assert.ok(
     isWithinCover(lowerFree, getCorrectionCover(evenSplit, added)),
@@ -8199,7 +8798,7 @@ console.log('runway engine: ok');
   assert.equal(
     freeOf([even, lower]),
     15_000,
-    'the added cover comes out of Free to spend, and only that',
+    'the added cover comes out of Free to Spend, and only that',
   );
 
   // Removes cover: confirmed $300 with $100 covered, corrected to $450.
@@ -8222,7 +8821,7 @@ console.log('runway engine: ok');
   assert.deepEqual(
     [freeOf([covered]), freeOf([covered, raised])],
     [15_000, 30_000],
-    'removing the cover gives it back to Free to spend',
+    'removing the cover gives it back to Free to Spend',
   );
 
   // Beyond the cover it had, a correction asks again: $50 more short is covered or cut.
@@ -8252,7 +8851,7 @@ console.log('runway engine: ok');
     'the cut keeps the day within the cover it had',
   );
 
-  // A day that left money gives it back first: Free to spend for the cover is what remains after that.
+  // A day that left money gives it back first: Free to Spend for the cover is what remains after that.
   const left = confirmedOf(45_000);
   const leftSplit = toSplit(left as Exclude<OpenRecord, { kind: 'proposed' }>);
   assert.equal(freeOf([left]), 30_000);
@@ -8264,7 +8863,7 @@ console.log('runway engine: ok');
   assert.equal(
     freeOf([left, short]),
     (forCover ?? 0) - getCoverable(shortGap, forCover),
-    'Free to spend after the cover is exactly what the cover card says',
+    'Free to Spend after the cover is exactly what the cover card says',
   );
   assert.equal(getFreeForCorrection(null, leftSplit), null);
   assert.equal(getFreeForCorrection(20_000, coveredSplit), 20_000);
@@ -8347,19 +8946,19 @@ console.log('runway engine: ok');
   assert.equal(
     freeDay,
     archivedOn,
-    'G9: "Make it Free to spend" releases from the archive day',
+    'G9: "Make it Free to Spend" releases from the archive day',
   );
   assert.equal(
     freeWith(toReleased('trip', freeDay), archivedOn),
     90_000,
-    "G9: the goal's $300 is Free to spend from the archive day",
+    "G9: the goal's $300 is Free to Spend from the archive day",
   );
   const keepDay = getHeldReleaseDay('keep', archivedOn);
   assert.equal(keepDay, null, 'G9: "Keep it held" writes no release day');
   assert.equal(
     freeWith(toReleased('trip', keepDay), archivedOn),
     60_000,
-    'G9: a kept goal still holds its $300, so Free to spend does not move',
+    'G9: a kept goal still holds its $300, so Free to Spend does not move',
   );
   const later = utc(2026, 4, 10);
   const laterDay = getLaterReleaseDay(
@@ -8388,7 +8987,7 @@ console.log('runway engine: ok');
       freeWith(toReleased('fun', endFree), lastDay + DAY_MS),
     ],
     [60_000, 70_000],
-    'G9: an ended envelope made Free to spend holds through its last day and releases the day after',
+    'G9: an ended envelope made Free to Spend holds through its last day and releases the day after',
   );
   assert.equal(
     getLaterReleaseDay({ archivedAt: null, endedAt: lastDay }, utc(2026, 5, 1)),

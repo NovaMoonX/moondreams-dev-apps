@@ -54,6 +54,8 @@
     "check:waypoint-pushes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointPushes.ts",
     "check:receipts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/receiptSplit.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/receiptReading.ts",
     "check:a-list": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/aListProjection.ts",
+    "check:owner-inbox": "node scripts/checks/ownerInbox.ts",
+    "inbox:build": "node scripts/ownerInbox/run.ts",
     "check:option-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/optionMatch.ts",
     "check:runway-engine": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayEngine.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayStartCorrection.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayGoalSeries.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayBudgetReading.ts",
     "check:runway-keys": "firebase emulators:exec --only firestore --project moondreams-dev-apps \"tsx scripts/checks/runwayKeyGuard.ts\"",

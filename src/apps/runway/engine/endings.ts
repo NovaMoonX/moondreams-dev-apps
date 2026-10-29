@@ -42,7 +42,7 @@ export function findReachedEnding(
   return result;
 }
 
-/** What happens to the money an item holds when it stops: Free to spend, or kept by the item until the person releases it. */
+/** What happens to the money an item holds when it stops: Free to Spend, or kept by the item until the person releases it. */
 export type HeldChoice = 'free' | 'keep';
 
 /** The day an item that stops on `stopsOn` (archived that day, or the day after its last day) releases what it holds, or null when the person kept it. */

@@ -3,7 +3,7 @@ import { useRef, useState } from 'react';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -11,6 +11,7 @@ import { CHECKLIST_R3_WORDS, CHECKLIST_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { countMarks } from '@apps/runway/engine/progress';
+import { getMarkCardId } from '@apps/runway/utils/cardText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   markBillPaid,
@@ -31,6 +32,7 @@ export async function markPaymentPaid(
   const encryption = await getRunwayEncryption(uid);
   await markBillPaid(uid, encryption, {
     billId,
+    cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
     dueOn: payment.dueOn,
     amountCents: payment.totalCents,
     fundedCents: payment.heldNowCents,
@@ -53,6 +55,7 @@ export async function undoPaymentPaid(
     amountCents: paid.amountCents,
     paidOn: paid.paidOn,
     fromFreeCents: paid.fromFreeCents,
+    cardId: paid.cardId,
   });
 }
 
@@ -124,11 +127,14 @@ export function useBillPaid({
 
   const mark = async () => {
     if (!payment || payment.paid) return false;
-    const unfundedCents = Math.max(0, payment.totalCents - payment.heldNowCents);
+    const unfundedCents = Math.max(
+      0,
+      payment.totalCents - payment.heldNowCents,
+    );
     if (unfundedCents > 0 && !isQuick) {
       const isConfirmed = await confirm({
         title: `Mark ${billName} paid`,
-        message: `${mask(formatCents(unfundedCents))} of it is not set aside yet and comes out of Free to spend. Later income days stop setting this payment aside.`,
+        message: `${mask(formatCents(unfundedCents))} of it is not set aside yet and comes out of Free to Spend. Later income days stop setting this payment aside.`,
         confirmText: CHECKLIST_WORDS.markPaid,
       });
       if (!isConfirmed) return false;

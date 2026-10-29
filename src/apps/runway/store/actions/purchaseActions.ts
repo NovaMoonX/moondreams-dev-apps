@@ -34,9 +34,12 @@ export interface AddPurchaseInput {
   /** Negative for a refund. */
   amountCents: Cents;
   merchant: string | null;
+  label: string | null;
   note: string | null;
   lines: PurchaseLine[];
   refundOfId: string | null;
+  /** The card it was charged to; null when it was paid in cash. */
+  paidByCardId: string | null;
 }
 
 /** Adds a purchase by hand; the plan and each envelope are read fresh in the same transaction, so a day outside tracking or an archived envelope is refused. */
@@ -58,9 +61,11 @@ export async function addPurchase(
     {
       amountCents: input.amountCents,
       merchant: input.merchant,
+      label: input.label,
       note: input.note,
       lines: input.lines,
       refundOfId: input.refundOfId,
+      paidByCardId: input.paidByCardId,
     } satisfies PurchaseSealed,
     encryption,
   );
@@ -190,9 +195,11 @@ export async function editPurchase(
       {
         amountCents: input.amountCents,
         merchant: input.merchant,
+        label: input.label,
         note: input.note,
         lines: input.lines,
         refundOfId: input.refundOfId,
+        paidByCardId: input.paidByCardId,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -236,7 +243,7 @@ export async function editPurchase(
   });
 }
 
-/** Removes a purchase (its lines go with it, so the envelopes and Free to spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. */
+/** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. */
 export async function deletePurchase(
   uid: string,
   encryption: RunwayEncryption,

@@ -266,7 +266,7 @@ A person adds an envelope with a name, an optional emoji, a priority (Must, Shou
 **Files:**
 - `src/apps/runway/engine/demands.ts`, `draft.ts`
 - `src/apps/runway/store/selectors/` (`selectDraft(dayKey)`, plan fingerprint)
-- `src/apps/runway/screens/days/IncomeDayScreen.tsx` (a `Subview`), `components/DraftLine.tsx`, `components/CoverageHeadline.tsx` (Free to spend line only for now)
+- `src/apps/runway/screens/days/IncomeDayScreen.tsx` (a `Subview`), `components/DraftLine.tsx`, `components/CoverageHeadline.tsx` (Free to Spend line only for now)
 - `src/apps/runway/screens/days/DaysScreen.tsx` (rows open the day)
 - `scripts/checks/runwayEngine.ts`
 - `scripts/seeds/runway.ts`
@@ -274,14 +274,14 @@ A person adds an envelope with a name, an optional emoji, a priority (Must, Shou
 **Context:** Read the TDD's Decision 6, Invariants 6 and 7, "Draft algorithm" (steps 0, 1, 3 to 7 and the property list; pairings and holds arrive in Issue 11), "Derived values" and the Income day row in `UX.md`'s Payday group.
 
 ### Description
-Open a coming income day and see exactly what its money does: every envelope funded in priority order, each line saying why, what is left as Free to spend, and "Not funded" with the reason when money runs short. Nothing is stored; the draft is a pure function.
+Open a coming income day and see exactly what its money does: every envelope funded in priority order, each line saying why, what is left as Free to Spend, and "Not funded" with the reason when money runs short. Nothing is stored; the draft is a pure function.
 
 ### Possible Approach
-1. `buildDraft({ days, plan, stance, state, overrides })` with the ordered steps from the TDD: day money (exact amounts only, so the stance is not yet read), demands for envelopes whose cadence selects the day, sort by tier, `dueBeforeNext`, `orderIndex`, `createdAt`, `itemId`, walk the pool first-in-first-out, record `shortBy`, a reason code and `tieBrokenBy`, and Free to spend.
+1. `buildDraft({ days, plan, stance, state, overrides })` with the ordered steps from the TDD: day money (exact amounts only, so the stance is not yet read), demands for envelopes whose cadence selects the day, sort by tier, `dueBeforeNext`, `orderIndex`, `createdAt`, `itemId`, walk the pool first-in-first-out, record `shortBy`, a reason code and `tieBrokenBy`, and Free to Spend.
 2. Lines have stable ids `${dayKey}:${itemId}` and a structured `reason` the screen words ("Dining: Should, paid from Main job"). Wording lives in `constants.ts`.
 3. `selectDraft` is a memoized `createSelector` keyed on the plan fingerprint (a hash of the resolved versions). Keep the draft free of `Date.now()`; the clock is passed in.
-4. The Income day screen shows the headline, the lines in sort order with `PriorityBadge`, "Not funded" lines with their reasons, and Free to spend. Rows on Days open it.
-5. Add the properties to the check: shuffling inputs changes nothing; line cents plus Free to spend equal the day's money; no line is negative; dropping a lower-priority demand never reduces a higher one; the same inputs give identical JSON.
+4. The Income day screen shows the headline, the lines in sort order with `PriorityBadge`, "Not funded" lines with their reasons, and Free to Spend. Rows on Days open it.
+5. Add the properties to the check: shuffling inputs changes nothing; line cents plus Free to Spend equal the day's money; no line is negative; dropping a lower-priority demand never reduces a higher one; the same inputs give identical JSON.
 
 ### CRUD & Entry-Point Requirements
 - [ ] No entity.
@@ -515,7 +515,7 @@ When the money lands, a person confirms the day with the amount that arrived and
 
 ### Possible Approach
 1. `confirmDay` is a `runTransaction`: read the day, abort with a readable message when it is not `draft`, when a hold in its draft is unresolved, or when another device already confirmed; then update the day (`status`, `arrivedOn`, `confirmedAt`) and create the `proposed` and `confirmed` records with the plan fingerprint and stance used. In this issue the confirmed lines are the proposed lines.
-2. `ConfirmSheet` asks the amount that arrived (starting at the expected figure) and the date. When the amount differs, the difference goes to Free to spend by default; choosing where it goes is Issue 14.
+2. `ConfirmSheet` asks the amount that arrived (starting at the expected figure) and the date. When the amount differs, the difference goes to Free to Spend by default; choosing where it goes is Issue 14.
 3. `markNotArrived` removes the draft from lookahead and creates no records; undo sets `draft` again. Both are transactions on the day document.
 4. After confirmation the only writable field on the day is `doneLineIds` (rules, and an emulator denial for anything else). `RecordScreen` reads the records.
 5. The Days list marks confirmed and not-arrived days and folds the older ones.
@@ -556,7 +556,7 @@ When the money or the plan differs from the draft, the person adjusts any line's
 
 ### Possible Approach
 1. Every line in `ConfirmSheet` is adjustable. `differences.ts` compares confirmed to proposed line by line and returns only the differing lines, each with an optional note.
-2. "Choose where the $100 goes" swaps the sheet's content in place (a `BackLink`, no second overlay) to the draft lines of this day; the default stays Free to spend. A shortfall asks which lines give.
+2. "Choose where the $100 goes" swaps the sheet's content in place (a `BackLink`, no second overlay) to the draft lines of this day; the default stays Free to Spend. A shortfall asks which lines give.
 3. The `confirmed` record stores the lines, the differences with notes, and where the extra went or the shortfall came from. `RecordScreen` marks only differing lines and folds unchanged ones behind one row.
 4. `BeforeAfterRow` is built in `src/components` (its props name no money concept).
 
@@ -596,7 +596,7 @@ Confirming a day opens a checklist of the bills to pay with that money. A bill c
 
 ### Possible Approach
 1. `markBillPaid` creates a `billPaid` move with the deterministic id `paid_${billId}_${yyyymmdd}` (a second tap fails harmlessly); undo creates a move with `reversesMoveId`. Moves are create-only.
-2. `progress.ts` derives each bill's funded-so-far from confirmed lines and its paid state from moves. A bill paid ahead has no demand on later days; the part not yet set aside came out of Free to spend, and the money the bill would have asked for stays in the pool.
+2. `progress.ts` derives each bill's funded-so-far from confirmed lines and its paid state from moves. A bill paid ahead has no demand on later days; the part not yet set aside came out of Free to Spend, and the money the bill would have asked for stays in the pool.
 3. `ChecklistScreen`: groups ("Bills to pay"), a checkbox per row and one for each group and for the whole list with a partial state and an "N of M" count. Ticks are `arrayUnion`/`arrayRemove` on `doneLineIds` (at most 200).
 4. The Bill screen shows funded, paid and the next due date. "Mark everything done" ticks lines; it does not mark bills paid unless the row says so.
 
@@ -658,7 +658,7 @@ A person who confirmed a day wrongly corrects it. The correction is a new record
 **Files:**
 - `src/apps/runway/screens/start/StartingOutScreen.tsx` (a `Subview`), `forms/StartingAmountsSheet.tsx`
 - `src/apps/runway/store/actions/moveActions.ts` (`recordStart`), `planActions.ts` (`setStartDate`)
-- `src/apps/runway/engine/balances.ts` (assigned, Free to spend), `selectors/` (`selectBalances`, `selectEnvelopeFigure`, `selectFreeToSpend`)
+- `src/apps/runway/engine/balances.ts` (assigned, Free to Spend), `selectors/` (`selectBalances`, `selectEnvelopeFigure`, `selectFreeToSpend`)
 - `src/apps/runway/screens/home/HomeScreen.tsx`, `FreeToSpendScreen.tsx`, `components/EnvelopeTile.tsx`, `CoverageHeadline.tsx`
 - `scripts/seeds/runway.ts`
 - `scripts/checks/runwayEngine.ts`
@@ -666,17 +666,17 @@ A person who confirmed a day wrongly corrects it. The correction is a new record
 **Context:** Read the TDD's Decision 7 (the ledger, not the closings, for now), "Balances and closings", `MoveDoc` kinds `start`, "Derived values" and Level gating; `UX.md`'s sitemap (Starting Out) and the Home rows; the README's guided setup.
 
 ### Description
-A person with no income source is walked through setup: income, what they pay, envelopes and goals, then where they stand today (money on hand, what each goal holds, what is already set aside for each bill). Home then shows Free to spend, the next income day and the most-used envelopes, reading *assigned* at this level.
+A person with no income source is walked through setup: income, what they pay, envelopes and goals, then where they stand today (money on hand, what each goal holds, what is already set aside for each bill). Home then shows Free to Spend, the next income day and the most-used envelopes, reading *assigned* at this level.
 
 ### Possible Approach
 1. Starting Out is a sequence of the existing forms plus one new step: the start date and starting amounts. `recordStart` writes `start` moves (one per holding) and `startDate`, in one batch.
 2. `balances.ts` derives each figure by summing the ledger since the starting point: start moves, confirmed lines from the effective splits, and later purchases. No stored running balance. The figure's word comes from `selectLevel`: *assigned* at Plan.
-3. Home: Free to spend (headline, tap for "in detail"), the next income day card, and envelope tiles capped for 50 envelopes with a link to the full list. First run shows Starting Out's door as the one `EmptyCard` action.
+3. Home: Free to Spend (headline, tap for "in detail"), the next income day card, and envelope tiles capped for 50 envelopes with a link to the full list. First run shows Starting Out's door as the one `EmptyCard` action.
 4. A figure shown on Home and in its detail is formatted by one function. Over-assigned money is shown, never blocked.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** the start moves and start date.
-- [ ] **Read:** Home and Free to spend in detail.
+- [ ] **Read:** Home and Free to Spend in detail.
 - [ ] **Update / Delete:** starting amounts are corrected with a `balanceCorrection` move when Track arrives (Issue 22); until then they are edited by rerunning the setup step.
 
 ### Success Criteria
@@ -825,7 +825,7 @@ Every plan change, with its note, is listed newest first, one date window at a t
 Runway chains the drafts for the coming income days, assuming each is confirmed as proposed and nothing is spent. Home says how far the plan holds. Any bill with no income before it is due gets a warning. Upcoming days beyond the next few can be opened and planned, including changes that start in the future.
 
 ### Possible Approach
-1. `lookahead(plan, startState, horizon)` builds each coming day's draft, carries bill progress, loan balances (none yet) and Free to spend into the next, and stops at `LOOKAHEAD_MONTHS` or the last income day. It reads the plan on each day's date, so changes that start in the future apply from their date.
+1. `lookahead(plan, startState, horizon)` builds each coming day's draft, carries bill progress, loan balances (none yet) and Free to Spend into the next, and stops at `LOOKAHEAD_MONTHS` or the last income day. It reads the plan on each day's date, so changes that start in the future apply from their date.
 2. The headline reads in plain words ("Your plan holds through Dec 14"). The first day that goes short is named with the item that runs out.
 3. A bill whose due date falls before any income day that could fund it gets a warning naming the bill and the date, shown on Days and on the bill.
 4. Memoize on the plan fingerprint; the lookahead for a plan with 60 bills and 25 envelopes recomputes only when the plan changes.
@@ -933,12 +933,12 @@ A person can permanently delete their plan. It asks for a recent sign-in and a t
 **Context:** Read the TDD's `PurchaseDoc`, Invariants 7, 8 and 11, "Balances and closings" (the ledger sum), `UX.md`'s Purchase row and rule 6 (over is shown, never blocked), and Security Rules Design Criteria 14.
 
 ### Description
-At Track, a person adds a purchase by hand: an amount, a date, a merchant and the envelope it comes from, or split across several, or a refund. The envelope's *left* figure goes down, Free to spend goes down by the same, and going over is shown, never blocked.
+At Track, a person adds a purchase by hand: an amount, a date, a merchant and the envelope it comes from, or split across several, or a refund. The envelope's *left* figure goes down, Free to Spend goes down by the same, and going over is shown, never blocked.
 
 ### Possible Approach
 1. `addPurchase` is a transaction that reads fresh state, refuses a date outside every tracking period with a readable message, stores the lines as chosen (`via: 'chosen'`) and writes the `PurchaseDoc` (`source: 'manual'`, `needsHome: false`).
-2. `SplitEditor` splits an amount across envelopes with `allocate`; the total always equals the amount to the cent. A refund is a negative amount that raises the envelope and Free to spend.
-3. `SpendScreen`: this month's purchases newest first from the recent window, a header action "New purchase", `SearchInput` from 8 rows. Home envelope tiles read *left* and show how far over when negative, with Free to spend dropping by the same amount.
+2. `SplitEditor` splits an amount across envelopes with `allocate`; the total always equals the amount to the cent. A refund is a negative amount that raises the envelope and Free to Spend.
+3. `SpendScreen`: this month's purchases newest first from the recent window, a header action "New purchase", `SearchInput` from 8 rows. Home envelope tiles read *left* and show how far over when negative, with Free to Spend dropping by the same amount.
 4. Spill-over, notes, links, receipts and merchant rules are later issues; the purchase document carries only the fields this issue reads.
 
 ### CRUD & Entry-Point Requirements
@@ -947,7 +947,7 @@ At Track, a person adds a purchase by hand: an amount, a date, a merchant and th
 - [ ] **Update / Delete:** Issue 25.
 
 ### Success Criteria
-- [ ] A purchase of $120 against an envelope with $100 left reads "$20 over" and Free to spend falls by $20 (check case).
+- [ ] A purchase of $120 against an envelope with $100 left reads "$20 over" and Free to Spend falls by $20 (check case).
 - [ ] A split of $100 three ways stores 3334, 3333, 3333 cents by id order and sums to 10000.
 - [ ] The Spend tab is checked at 5 and at 500 seeded purchases; only the recent window is loaded.
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
@@ -988,7 +988,7 @@ A purchase can be edited and removed (its lines go with it). Before spending, a 
 
 ### Success Criteria
 - [ ] Editing an amount changes the envelope's left figure by the difference exactly once, even if two devices edit (emulator).
-- [ ] Deleting a purchase restores the envelope and Free to spend.
+- [ ] Deleting a purchase restores the envelope and Free to Spend.
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
@@ -1079,7 +1079,7 @@ Before anyone's real plan exists, every claim in the key-protection design is te
 Cold start reads a month of entries, no matter how old the plan is. A closing stores every balance at a month's end; anything written into a closed month marks later closings stale, and the next load rebuilds them.
 
 ### Possible Approach
-1. `closing(month, previousClosing, entries)` is pure and deterministic: balances, Free to spend by source, bill progress and loan balances at month end. The balances engine reads the latest valid closing plus the ledger since.
+1. `closing(month, previousClosing, entries)` is pure and deterministic: balances, Free to Spend by source, bill progress and loan balances at month end. The balances engine reads the latest valid closing plus the ledger since.
 2. A rebuild is a transaction that re-reads the plan document so two devices cannot both rebuild different things. A closing is a rebuildable cache: it can be overwritten or deleted by the owner.
 3. Wire `dirtyFrom` into every action that writes a dated entry; a write dated in a closed month sets `dirtyFrom = min(dirtyFrom, month)` in the same transaction.
 4. Check: with and without closings the balances are identical for the scale plan, and the cold start drops under the target.
@@ -1697,7 +1697,7 @@ Money left in an envelope can be moved to another envelope or a goal; the ledger
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
-### Issue 49: Free to spend, by source
+### Issue 49: Free to Spend, by source
 
 **Prerequisites:** Issue 24
 **Target PR Size:** ~350 lines
@@ -1708,7 +1708,7 @@ Money left in an envelope can be moved to another envelope or a goal; the ledger
 **Context:** Read the TDD's pool chunks and Derived values.
 
 ### Description
-Free to spend shows how much came from each source, and a purchase can be assigned to a chosen source's money.
+Free to Spend shows how much came from each source, and a purchase can be assigned to a chosen source's money.
 
 ### Possible Approach
 1. Chunks carry `sourceId`; a purchase's `via: 'free'` line records which source it drew from.
@@ -1717,37 +1717,41 @@ Free to spend shows how much came from each source, and a purchase can be assign
 - [ ] **Read / Update:** the split and the assignment.
 
 ### Success Criteria
-- [ ] The by-source split sums to Free to spend (check case).
+- [ ] The by-source split sums to Free to Spend (check case).
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
 - [ ] Every sealed field this issue adds is read by this issue's own screens; a field for a later tier is not added early.
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
-### Issue 50: Card reserve
+### Issue 50: Credit cards: a reserve per card, paid by card, and paying a card off
 
 **Prerequisites:** Issue 24
-**Target PR Size:** ~400 lines
+**Target PR Size:** ~900 lines (widened by the owner for card-first budgeting)
 **Files:**
-- `src/apps/runway/types.ts` (`paidByCard`, `cardPayment` moves)
-- `src/apps/runway/screens/spend/CardReserveScreen.tsx`
+- `src/apps/runway/types.ts` (`CardDoc`, `paidByCardId` on purchases and bills, `cardId` on `billPaid`, `cardPayment` moves)
+- `src/apps/runway/engine/balances.ts`, `engine/closings.ts` (a reserve per card)
+- `src/apps/runway/forms/CardForm.tsx`, `forms/PayCardSheet.tsx`, Plan > Cards
+- `firestore.rules` (`cards`)
 
-**Context:** Read the TDD's `MOVE_KINDS` and Matching step 3.
+**Context:** `PRODUCT.md` "Who It Is Built For First" and "Credit Cards, In Detail"; the TDD's balances table.
 
 ### Description
-Card purchases you add fill a reserve; paying the card empties it. The reserve is shown as money already spoken for.
+A card is named by its issuer and an optional name ("Capital One Venture X"). A purchase or bill paid by a card fills that card's reserve while the cash stays put; "Pay off" lowers the cash and the reserve together, so Free to Spend does not move.
 
 ### Possible Approach
-1. A `cardPayment` move settles the reserve; purchases flagged `paidByCard` add to it. Once imports exist (Issue 51), matching step 3 turns a purchase that settles a card payment into a `cardPayment` move (see Issue 55).
+1. Cards are their own collection; a card's reserve is its start (what it owed when added) plus its charges less its payments.
+2. Matching card payments from imports (Issue 55) stays on hold with importing.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read:** purchases flagged by card, payments.
+- [ ] **Create / Read / Update / Archive:** cards on Plan > Cards.
+- [ ] **Paid by** on the purchase and bill forms; **Pay off** on the card's sheet, with an Undo.
 
 ### Success Criteria
-- [ ] The reserve never goes negative and Free to spend does not double count card purchases (check case).
+- [ ] Card purchases and card-paid bills never count twice in Free to Spend, a payoff leaves it unchanged, an overpayment draws it by the extra, and a closing equals the replay (check cases).
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
-- [ ] Every sealed field this issue adds is read by this issue's own screens; a field for a later tier is not added early.
-- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
-- [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+- [ ] `firestore.rules` gained only `cards` in the update list, verified with `check:runway-rules`.
+- [ ] The PR carries one `minor` label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; driven at 390×844 in light and dark.
+- [ ] `PRODUCT.md`, `UX.md` and `TECHNICAL.md` match what shipped.
 
 ### Issue 51: Import purchases from a CSV, with Needs a home and merchant rules
 
@@ -2137,13 +2141,13 @@ Pick how matching, plan resolution, schedule generation and the `dirtyFrom` help
 - `functions/src/apps/runway/sendReminders.ts`, `notificationText.ts`, `functions/README.md`
 - `scripts/checks/runwayNotifyText.ts`
 - `src/apps/runway/screens/more/NotificationsScreen.tsx`
-- `src/apps/runway/types.ts` (`PlanDoc.notify` keys `billDue`, `incomeToday`; sealed `notifyTimeZone`, `notifyHour`)
+- `src/apps/runway/types.ts` (`PlanDoc.notify` keys `billDue`, `incomeToday`, `cardDue`; sealed `notifyTimeZone`, `notifyHour`)
 - `firestore.rules`, `scripts/seeds/runway.ts`
 
 **Context:** Read the TDD's "Server-side Reconcile and Notifications" step 3, Invariant 14 and Decision 21.
 
 ### Description
-A person can turn on a push the day before a bill is due and on an income day. The text is fixed, with no amounts or names, and each push is sent once.
+A person can turn on a push the day before a bill is due, on an income day, and the day before a card is due while it still has money waiting (owner, card-first round: `cardDue`, needing the server-side balance from Issue 63). The text is fixed, with no amounts or names, and each push is sent once.
 
 ### Possible Approach
 1. `sendRunwayReminders` runs hourly, reads only plans with a switch on, and compares each plan's sealed `notifyTimeZone` and `notifyHour` (default 9:00 local) with its schedules.

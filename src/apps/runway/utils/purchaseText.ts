@@ -3,7 +3,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import type { Level, OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import { getLevelWords } from '@apps/runway/utils/levelText';
 
-const FREE_NAME = 'Free to spend';
+const FREE_NAME = 'Free to Spend';
 
 /** An envelope's figure with its word: assigned at Plan, and at Track what is left or how far over. */
 export function describeEnvelopeFigure(level: Level, cents: number) {
@@ -31,13 +31,13 @@ export function describeEnvelopes(
 
 export const isRefund = (purchase: OpenPurchase) => purchase.amountCents < 0;
 
-/** What a row calls a purchase: where, else the note, else the envelope it came from. While amounts are hidden a refund is named like any purchase, so the words never give its sign away. */
+/** What a row calls a purchase, in ranked order: the person's label, else the merchant, else the envelopes it came from; never the note. While amounts are hidden a refund is named like any purchase, so the words never give its sign away. */
 export function getPurchaseTitle(
   purchase: OpenPurchase,
   nameOf: (envelopeId: string) => string,
   isHidden = false,
 ): string {
-  const named = purchase.merchant?.trim() || purchase.note?.trim();
+  const named = purchase.label?.trim() || purchase.merchant?.trim();
   if (named) return named;
   const where = describeEnvelopes(purchase.lines, nameOf);
   return isRefund(purchase) && !isHidden
@@ -45,12 +45,30 @@ export function getPurchaseTitle(
     : where || 'Purchase';
 }
 
+/** What the title left out, after the day: the merchant when a label names the row, then the envelopes when either does. */
+export function getPurchaseFacts(
+  purchase: OpenPurchase,
+  envelopes: string,
+  isHidden = false,
+): string[] {
+  const label = purchase.label?.trim() || null;
+  const merchant = purchase.merchant?.trim() || null;
+  if (label === null && merchant === null) return [];
+  const where =
+    isRefund(purchase) && !isHidden ? `refund to ${envelopes}` : envelopes;
+  return [label !== null ? merchant : null, where].filter(
+    (fact): fact is string => Boolean(fact),
+  );
+}
+
 interface PurchaseFields {
   date: number;
   amountCents: number;
   merchant: string | null;
+  label: string | null;
   note: string | null;
   lines: readonly PurchaseLine[];
+  paidByCardId: string | null;
 }
 
 const money = (cents: number) => formatCents(Math.abs(cents));
@@ -69,6 +87,7 @@ export function describePurchaseEdit(
   before: OpenPurchase,
   after: PurchaseFields,
   nameOf: (envelopeId: string) => string,
+  cardNameOf: (cardId: string | null) => string,
 ): string {
   const was = (value: string | null) => value?.trim() || 'nothing';
   const shape = (lines: readonly PurchaseLine[]) =>
@@ -87,8 +106,14 @@ export function describePurchaseEdit(
     after.date !== before.date
       ? `day ${formatDateUTC(before.date)} to ${formatDateUTC(after.date)}`
       : null,
+    (after.paidByCardId ?? null) !== (before.paidByCardId ?? null)
+      ? `paid by ${cardNameOf(before.paidByCardId ?? null)} to ${cardNameOf(after.paidByCardId ?? null)}`
+      : null,
     (after.merchant?.trim() || null) !== (before.merchant?.trim() || null)
-      ? `where ${was(before.merchant)} to ${was(after.merchant)}`
+      ? `merchant ${was(before.merchant)} to ${was(after.merchant)}`
+      : null,
+    (after.label?.trim() || null) !== (before.label?.trim() || null)
+      ? `label ${was(before.label)} to ${was(after.label)}`
       : null,
     (after.note?.trim() || null) !== (before.note?.trim() || null)
       ? 'note'
