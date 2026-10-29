@@ -38,12 +38,27 @@ function SheetHead({
           isLabelDroppedWhenShort && '[@media(max-height:499px)]:hidden',
         )}
       >
-        <p className='text-muted-foreground text-sm font-medium'>{label}</p>
-        {help && (
-          <HelpTip title={helpTitle ?? label}>
-            {typeof help === 'string' ? <MaskedText>{help}</MaskedText> : help}
-          </HelpTip>
-        )}
+        <p className='text-muted-foreground text-sm font-medium'>
+          {help ? (
+            <>
+              {label.split(' ').slice(0, -1).join(' ')}{' '}
+              <span className='whitespace-nowrap'>
+                {label.split(' ').slice(-1)}
+                <span className='ml-1 inline-flex align-middle'>
+                  <HelpTip title={helpTitle ?? label}>
+                    {typeof help === 'string' ? (
+                      <MaskedText>{help}</MaskedText>
+                    ) : (
+                      help
+                    )}
+                  </HelpTip>
+                </span>
+              </span>
+            </>
+          ) : (
+            label
+          )}
+        </p>
       </div>
       {figure && (
         <p className='break-words'>

@@ -58,6 +58,32 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
    Merge, never rebase or force-push. Validate as for any push, push, and say in the status comment what conflicted and what you chose. Only where one side's behaviour had to give way, add a "Must do: check the conflict resolution in `<file>`" line to the status comment so the owner knows to look.
 5. **Stay cheap between events.** Your safety-net check-in rules stand (about 50 minutes after the last activity, then every four hours, stopping after three quiet ones). A quiet check-in re-arms without a message. Put the PR's freshness in its status comment's "Last verified" line.
 
+## Merging a run's PRs
+
+The owner merges, unless they hand the merges over. "Merge them through" (in chat or in a PR comment) lets you merge this run's open PRs down their merge order; it covers the PRs open when it was given, and a PR opened later needs its own go. Say in each status comment's Next moves that you are merging, and on whose go.
+
+For each PR, in order:
+
+1. **Gate it.** Merge only when every one holds on the current head, and never with admin rights or past a failing check:
+   - CI is green.
+   - There is no conflict with the base.
+   - Claude Approvals passes, where the repo runs it.
+   - Every `(who: owner)` decision on it is answered. A PR with an open decision is skipped, along with those after it that depend on it, and the rest go on.
+   - No owner comment or review on it is left unanswered.
+   - The last review and screenshots covered this head; otherwise run what the push needed first.
+   - A stacked PR's base has merged.
+2. **Merge it.** Mark it ready for review, then merge it the way the repo's history does (squash, the PR's title as the commit title, its number appended).
+3. **Wait for its deploy.** `firebase-hosting-merge.yml` must succeed on the merge commit before the next merge. A failed deploy stops the run: report it, and fix it if it is yours.
+4. **Keep the rest current.** Merge the new base into the remaining PRs (above), and wait for their CI on the new heads before the next merge.
+
+Stop and tell the owner when:
+- a gate can't be made to pass within the PR's own scope;
+- a conflict needs one side's behaviour to give way;
+- a deploy fails;
+- the owner says stop.
+
+After the last merge, check that each `Resolves` issue closed and that the workflows finished, then unsubscribe from the merged PRs and say what shipped in one line each.
+
 ## Improving as you go
 
 Every task feeds `docs/conventions/pipeline.md` "The pipeline improves itself": change a step when you are confident, propose it to the owner when you are not, log both, and end an orchestrated run with its short retro.
@@ -72,7 +98,7 @@ Measure the PR against its base with `git diff --shortstat <base>...HEAD -- . ':
 | **M** | ≤1,500 lines, or any visible change | `validator`; Copilot's 20-minute window (`pr-wrap-up` §3); `technical-reviewer`, plus `product-reviewer` and `design-reviewer` when anything visible changed. |
 | **L** | >1,500 lines, or touches rules, indexes, functions, a public page or a shared component | `validator`; Copilot's window; split the diff into **shards** by area (rules and data, functions, each app's UI, shared components, docs) of about 1,500 lines at most; one reviewer of the fitting kind per shard in parallel (technical for code and rules; product and design per app with visible changes); then `lead-reviewer` (opus) gets the shard map and every report, verifies each finding against the code, drops noise and does the cross-shard pass. You fix what it confirms. |
 
-A docs-only or comment-only change needs no review agents; `validator` is enough. A follow-up push reviews only what changed since the last review, at the size of that delta, unless it touches an area the last review didn't cover. When the owner says a review should have caught something, fix the agent per `docs/conventions/agents.md`.
+Reviewers that run at the same time against one emulator never share a seeded account they may write to: give each its own account (or tell all but one to only read), and tell each to list what it wrote. Two Runway passes on one account reported each other's saves as bugs (a cut line that "moved", a group count that changed). A docs-only or comment-only change needs no review agents; `validator` is enough. A follow-up push reviews only what changed since the last review, at the size of that delta, unless it touches an area the last review didn't cover. When the owner says a review should have caught something, fix the agent per `docs/conventions/agents.md`.
 
 ## The PR status comment
 
@@ -97,11 +123,14 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 - <what you would do next, or suggest the owner does: a decision to make, a device to try it on, the next issue>
 
 **Where this sits**
-| Issue | PR | State |
-|---|---|---|
-| <App> 3: … (#123) | #456 | ✅ merged |
-| <App> 4: … (#124) | this PR | 🔨 in review |
-| <App> 5: … (#125) | – | ⏭ next |
+| Merge | Issue | PR | State |
+|---|---|---|---|
+| – | <App> 3: … (#123) | #456 | ✅ merged |
+| 1st | <App> 4: … (#124) | this PR | ✅ ready |
+| 2nd | <App> 5: … (#125) | #457 | ✅ ready |
+| – | <App> 6: … (#126) | – | ⏭ next |
+
+**Merge order:** <one line on why this order: smallest and least shared first; a PR whose code another builds on before it; the one touching shared files last; or "stacked: bottom first">
 
 **Pipeline proposals** (only when there are any; `docs/conventions/pipeline.md` "The pipeline improves itself")
 - <a change to a skill, hook, agent or convention you aren't sure the owner wants: the change, the evidence, the cost either way>
@@ -116,4 +145,6 @@ Each PR you drive has one comment that starts with `<!-- pr-status -->`, which y
 **Last verified:** <sha> · CI <green/red> · base <up to date / N behind / conflicts> · review <S/M/L, who> · <date>
 ```
 
-"Where this sits" lists the app's planned issues around this one (from `ISSUES.md` and the board: the issue before, this one, the next two, and any open issue this PR blocks or is blocked by), so the owner sees the plan and the progress at once. "Must do" holds only what blocks the merge and isn't a given: never "mark it ready for review", "merge it", "approve it" or anything else every PR needs. An empty one says "Nothing: ready when you are". Anything checkable after the merge (a workflow run, a label landing) is yours: check it when the merge event wakes you and report it, never a "check after merge" line for the owner. Use the GitHub MCP tools (`add_issue_comment`, `update_issue_comment`) or `gh`, and end the comment with the attribution footer.
+"Where this sits" lists the app's planned issues around this one (from `ISSUES.md` and the board: the issue before, this one, the next two, and any open issue this PR blocks or is blocked by), so the owner sees the plan and the progress at once. When a run has several open PRs that are not stacked, the table carries a **merge order**, the same in every PR's comment: smaller and lighter first, a PR whose code another builds on before it, and the PRs that touch shared files or overlap most with the others last. After each merge, sync the rest at once (conflicts in docs and `constants.ts` are yours to resolve) and say in the next one's comment that it is current and green, so the owner can keep merging down the list.
+
+**The owner's PR comments are their feedback channel.** A comment or review left on any PR you drive (on a phone or a laptop; it persists, a chat draft does not) reaches you as a PR event: treat it as the owner's request, answer on its thread, fix and push as you would a chat message, and say in the status comment's "Since last update" what it changed. One comment that says it applies to several PRs is acted on in each. On every wake and when you take a PR over, read the comments and review threads newer than the last status comment, so feedback left while you were away is never missed. "Must do" holds only what blocks the merge and isn't a given: never "mark it ready for review", "merge it", "approve it" or anything else every PR needs. An empty one says "Nothing: ready when you are". Anything checkable after the merge (a workflow run, a label landing) is yours: check it when the merge event wakes you and report it, never a "check after merge" line for the owner. Use the GitHub MCP tools (`add_issue_comment`, `update_issue_comment`) or `gh`, and end the comment with the attribution footer.

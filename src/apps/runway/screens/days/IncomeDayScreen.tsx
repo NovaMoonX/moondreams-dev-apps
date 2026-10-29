@@ -25,6 +25,7 @@ import DraftLine from '@apps/runway/components/DraftLine';
 import {
   CONFIRM_WORDS,
   CHECKLIST_R3_WORDS,
+  DAYS_WORDS,
   DRAFT_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
@@ -49,6 +50,8 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectChangeableKey,
   selectDraft,
+  selectHistoryListedDays,
+  selectIsDayOlderThanRecent,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
   selectIsMovesLoaded,
@@ -398,9 +401,27 @@ function IncomeDayScreen({ dayKey, onClose }: IncomeDayScreenProps) {
   const listed = useAppSelector((state) => {
     const { open, confirmed } = selectListedDays(state, today);
     return (
-      [...open, ...confirmed].find((entry) => entry.dayKey === dayKey) ?? null
+      [...open, ...confirmed, ...selectHistoryListedDays(state, today)].find(
+        (entry) => entry.dayKey === dayKey,
+      ) ?? null
     );
   });
+  const isOlder = useAppSelector((state) =>
+    selectIsDayOlderThanRecent(state, dayKey),
+  );
+  const isOlderFailed = useAppSelector(
+    (state) => state.runway.historyFailedFor !== null,
+  );
+
+  if (listed === null && isOlder) {
+    return (
+      <Subview title='Income day' onClose={onClose}>
+        <p className='text-muted-foreground text-sm'>
+          {isOlderFailed ? DAYS_WORDS.failedMonth : DAYS_WORDS.loadingDay}
+        </p>
+      </Subview>
+    );
+  }
 
   if (listed?.status === 'confirmed') {
     return <ConfirmedDayView day={listed} onClose={onClose} />;

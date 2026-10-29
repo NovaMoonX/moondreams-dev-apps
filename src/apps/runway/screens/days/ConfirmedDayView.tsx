@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { FileText, Pencil } from 'lucide-react';
+import { ChevronRight, FileText, Pencil } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 
 import EmptyCard from '@/components/EmptyCard';
+import InlineNotice from '@/components/InlineNotice';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -17,21 +20,33 @@ import RecordLineRow from '@apps/runway/components/RecordLineRow';
 import {
   CONFIRM_WORDS,
   CORRECT_WORDS,
-  DRAFT_WORDS,
+  DAYS_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
-  NEEDS_LOOK_WORDS,
+  RECORD_WORDS,
 } from '@apps/runway/constants';
-import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import { formatDayTitle } from '@apps/runway/utils/dayTitle';
 import CorrectSheet from '@apps/runway/screens/days/CorrectSheet';
 import ChecklistScreen from '@apps/runway/screens/days/ChecklistScreen';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
 import {
   selectEffectiveSplit,
-  selectIsRecordsReady,
+  selectIsDayCorrectable,
+  selectIsDayRecordsReady,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
+
+const monthName = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  timeZone: 'UTC',
+});
+
+const describeBoundary = (recentFrom: number) =>
+  new Date(recentFrom).getUTCDate() === 1
+    ? monthName.format(recentFrom)
+    : formatDateShortUTC(recentFrom);
 
 interface ConfirmedDayViewProps {
   day: ListedDay;
@@ -40,9 +55,15 @@ interface ConfirmedDayViewProps {
 
 /** A confirmed day: what arrived, where it went, and a door to what was planned against it. */
 function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
-  const { isHidden } = useValuesHidden();
+  const { showDaysMonth, showTab } = useRunwayUrlState();
+  const recentFrom = useAppSelector(selectRecentFrom);
   const [isRecordOpen, setIsRecordOpen] = useState(false);
-  const isReady = useAppSelector(selectIsRecordsReady);
+  const isReady = useAppSelector((state) =>
+    selectIsDayRecordsReady(state, day.dayKey),
+  );
+  const isCorrectable = useAppSelector((state) =>
+    selectIsDayCorrectable(state, day.dayKey),
+  );
   const [isCorrecting, setIsCorrecting] = useState(false);
   const record = useAppSelector((state) =>
     selectEffectiveSplit(state, day.dayKey),
@@ -65,15 +86,15 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
       );
     }
     const { freeToSpendCents, lines } = record;
-    const otherLines = lines.filter(
-      (line) => !(billIds.has(line.itemId) && line.cents > 0),
-    );
+    const otherLines = isCorrectable
+      ? lines.filter((line) => !(billIds.has(line.itemId) && line.cents > 0))
+      : lines;
     const funded = otherLines.filter((line) => line.shortBy === 0);
     const unfunded = otherLines.filter((line) => line.shortBy > 0);
     const dayLeft = <CoverageHeadline freeCents={freeToSpendCents} />;
     return (
       <div className='space-y-4'>
-        <ChecklistScreen day={day} lines={lines} />
+        {isCorrectable && <ChecklistScreen day={day} lines={lines} />}
         {lines.length === 0 ? (
           <EmptyCard icon={<FileText className='h-5 w-5' />}>
             Nothing was set to be funded from this day.
@@ -93,14 +114,14 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
             </div>
             {unfunded.length > 0 && (
               <div className='space-y-2'>
-                <SectionDivider
-                  label={
-                    isHidden ? NEEDS_LOOK_WORDS.short : DRAFT_WORDS.notFunded
-                  }
-                />
+                <SectionDivider label={RECORD_WORDS.shortHeading} />
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {unfunded.map((line) => (
-                    <RecordLineRow key={line.lineId} line={line} />
+                    <RecordLineRow
+                      key={line.lineId}
+                      line={line}
+                      isShortSaidAbove
+                    />
                   ))}
                 </ul>
               </div>
@@ -116,15 +137,17 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
             label={CONFIRM_WORDS.recordDoor}
             onClick={() => setIsRecordOpen(true)}
           />
-          <ActionRow
-            isGrouped
-            isRoomy
-            hasChevron
-            icon={<Pencil />}
-            label={CORRECT_WORDS.door}
-            subtitle={CORRECT_WORDS.doorHint}
-            onClick={() => setIsCorrecting(true)}
-          />
+          {isCorrectable && (
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<Pencil />}
+              label={CORRECT_WORDS.door}
+              subtitle={CORRECT_WORDS.doorHint}
+              onClick={() => setIsCorrecting(true)}
+            />
+          )}
         </ActionGroup>
       </div>
     );
@@ -160,9 +183,27 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
               .join(', ')}
           </p>
         </div>
+        {!isCorrectable && recentFrom !== null && (
+          <InlineNotice tone='info'>
+            <p>{DAYS_WORDS.readOnlyNote(describeBoundary(recentFrom))}</p>
+            <Button
+              variant='secondary'
+              size='sm'
+              className="relative mt-2 gap-1 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+              onClick={() => {
+                onClose();
+                showDaysMonth(null);
+                showTab('days');
+              }}
+            >
+              {DAYS_WORDS.goToRecent}
+              <ChevronRight className='h-4 w-4' aria-hidden='true' />
+            </Button>
+          </InlineNotice>
+        )}
         {getBody()}
       </div>
-      {isCorrecting && record && (
+      {isCorrecting && isCorrectable && record && (
         <CorrectSheet
           key={record.recordId}
           dayKey={day.dayKey}

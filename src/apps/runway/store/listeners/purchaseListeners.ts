@@ -19,7 +19,7 @@ import type {
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
 
-/** The purchases dated from `from` on (and before `to` when it is given); older ones arrive with the history view. A slow open never overwrites a newer snapshot. */
+/** The purchases dated from `from` on (and before `to` when it is given); older ones are read by period. A slow open never overwrites a newer snapshot. */
 export function startPurchasesListener(
   uid: string,
   encryption: RunwayEncryption,

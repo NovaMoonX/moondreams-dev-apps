@@ -134,6 +134,14 @@ export function useRunwayUrlState() {
       history: 'replace',
     });
 
+  const [requestedDaysMonth, setRequestedDaysMonth] = useQueryState(
+    'daysMonth',
+    parseAsString,
+  );
+  const daysMonth = isMonthKey(requestedDaysMonth) ? requestedDaysMonth : null;
+  const showDaysMonth = (month: string | null) =>
+    setRequestedDaysMonth(month, { history: 'replace' });
+
   const logSpan = requestedSpan ?? DEFAULT_CHANGE_LOG_SPAN;
   const logPage = Math.min(
     MAX_CHANGE_LOG_PAGE,
@@ -267,6 +275,8 @@ export function useRunwayUrlState() {
     closeFixes,
     spendPeriod,
     showSpendPeriod,
+    daysMonth,
+    showDaysMonth,
     logSpan,
     logPage,
     logItem: requestedItem,
