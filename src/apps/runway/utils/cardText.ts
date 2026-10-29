@@ -135,19 +135,19 @@ export const getCardDueNow = (
   );
 
 /** The one due fact a card shows: "Due Nov 14", "Due in 3 days" / "Due today" inside the warning window when money waits, "Past due since Oct 14", or "Due Nov 3 · not paid by Oct 14"; null with no due day. `due` is what `getCardDueNow` found. */
+const dayOf = (date: DateOnly) =>
+  formatDateShortUTC(date).replace(/ /g, '\u00a0');
+
 export function describeCardDue(
   card: OpenCard,
   today: DateOnly,
   due: DueCard | null,
 ): string | null {
   if (due?.isPastDue) {
-    return CARD_WORDS.pastDueSince(formatDateShortUTC(due.dueOn));
+    return CARD_WORDS.pastDueSince(dayOf(due.dueOn));
   }
   if (due?.rolledFrom) {
-    return CARD_WORDS.dueRolled(
-      formatDateShortUTC(due.dueOn),
-      formatDateShortUTC(due.rolledFrom),
-    );
+    return CARD_WORDS.dueRolled(dayOf(due.dueOn), dayOf(due.rolledFrom));
   }
   // Counting down only while the warning is up, so a card already paid for reads as a plain date.
   if (due !== null) {
@@ -156,7 +156,7 @@ export function describeCardDue(
       : CARD_WORDS.dueInDays(due.inDays);
   }
   const dueOn = getNextDueOn(card.dueDay, today);
-  return dueOn === null ? null : CARD_WORDS.dueOn(formatDateShortUTC(dueOn));
+  return dueOn === null ? null : CARD_WORDS.dueOn(dayOf(dueOn));
 }
 
 /** The cards a list shows: those in use, and an archived one while it still waits to be paid so it can be paid off. */
@@ -171,7 +171,7 @@ export const getListedCards = (
 /** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", "is due today", or "was due Oct 14" when past due. */
 export const describeDueCard = (name: string, due: DueCard) => {
   const amount = formatCents(due.waitingCents);
-  const date = formatDateShortUTC(due.dueOn).replace(/ /g, '\u00a0');
+  const date = dayOf(due.dueOn);
   if (due.isPastDue) return CARD_WORDS.dueWarningPast(name, date, amount);
   return due.inDays === 0
     ? CARD_WORDS.dueTodayWarning(name, amount)
@@ -180,9 +180,7 @@ export const describeDueCard = (name: string, due: DueCard) => {
 
 /** "Not paid by Oct 14" for a warning that has moved on to the next due day, else null. */
 export const describeDueNote = (due: DueCard) =>
-  due.rolledFrom === null
-    ? null
-    : CARD_WORDS.notPaidBy(formatDateShortUTC(due.rolledFrom));
+  due.rolledFrom === null ? null : CARD_WORDS.notPaidBy(dayOf(due.rolledFrom));
 
 /** The change-log sentence for a card just added. */
 export const describeCardAdded = (name: string, owedCents: Cents) =>
