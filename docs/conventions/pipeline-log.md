@@ -4,6 +4,8 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-29 | shared | Owner: a plan for a follow-up re-output everything | Iteration plans cover only the owner's latest message | `orchestrate/SKILL.md` | changed |
+| 2026-10-29 | shared | Owner: approving every string is too much | PR bodies flag only copy that warrants a second look, with why; the full copy list is gone | `CLAUDE.md`, `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: the Cards entry point was never screenshotted, and a stale image showed a bug already fixed | Screenshots include each new screen's door in the app shell, and an image older than its screen is retaken or dropped | `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-29 | shared | Lead reviewer found a fix round on no branch: the checkout was detached, and `git push -q` piped through `tail -1` hid the refusal | Orchestrate step 4: read the push's own output, confirm the branch in `git status -sb`, and check the reviewed SHA contains every fix; agents never check out in the main checkout | `orchestrate/SKILL.md` | changed |
 | 2026-10-28 | shared | Review of the Apps option code: values held only in memory, duplicate names collapsed, the rewrite not named at the prompt | Values backed up to a file before the rewrite and resumed from it; options mapped by position, not name; the confirm prompt names the rewrite (tested: duplicates, a restore cut short, resume) | `scripts/createGithubIssues.ts` | changed |
