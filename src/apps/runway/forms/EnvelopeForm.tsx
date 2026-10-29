@@ -16,7 +16,6 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   CHANGE_WORDS,
-  ENVELOPE_ORDER_STEP,
   ENVELOPE_QUICK_PICKS,
   FORM_FLOW_WORDS,
   MAX_EMOJI_LENGTH,
@@ -25,6 +24,7 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createEnvelope } from '@apps/runway/store/actions/itemActions';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
@@ -46,6 +46,8 @@ import {
 } from '@apps/runway/forms/fundingFlow';
 import {
   selectComingDays,
+  selectGoals,
+  selectBills,
   selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
@@ -129,6 +131,8 @@ function EnvelopeForm({
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const bills = useAppSelector((state) => selectBills(state, today));
+  const goals = useAppSelector((state) => selectGoals(state, today));
   const [formData, setFormData] = useState<EnvelopeFormData>(() =>
     editing
       ? getEditingData(editing.payload)
@@ -244,16 +248,10 @@ function EnvelopeForm({
     });
     if (data.priority === null || funding === null) return null;
 
-    const tier = envelopes.filter(
-      (envelope) => envelope.version.payload.priority === data.priority,
-    );
     const orderIndex =
       editing && editing.payload.priority === data.priority
         ? editing.payload.orderIndex
-        : Math.max(
-            0,
-            ...tier.map((envelope) => envelope.version.payload.orderIndex),
-          ) + ENVELOPE_ORDER_STEP;
+        : getNextTierRank([...bills, ...envelopes, ...goals], data.priority);
     const result: EnvelopeSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,

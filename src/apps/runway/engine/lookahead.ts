@@ -61,6 +61,12 @@ export interface Lookahead {
   problems: LookaheadProblem[];
   /** The first short line on each income day, by day key. */
   shortByDay: Record<string, Extract<LookaheadProblem, { kind: 'short' }>>;
+  /** The soonest income day on which any item's own line is short, whatever its priority, with the draft it was walked from; null when every day covers everything. */
+  firstShortDay: {
+    dayKey: string;
+    on: DateOnly;
+    draft: Pick<Draft, 'lines'>;
+  } | null;
   /** The last income day when nothing follows it for a long stretch. */
   incomeEndsOn: DateOnly | null;
 }
@@ -200,17 +206,26 @@ export function lookahead(input: LookaheadInput): Lookahead {
   const walked = days.reduce<{
     carry: LookaheadCarry;
     shorts: Extract<LookaheadProblem, { kind: 'short' }>[];
+    firstShortDay: Lookahead['firstShortDay'];
   }>(
     (acc, day, index) => {
       const result = input.draftOf(day, acc.carry);
       if (!result) return acc;
       const nextOn = days[index + 1]?.on ?? input.horizon + DAY_MS;
+      const isShort = result.draft.lines.some(
+        (line) => line.pairing === null && line.shortBy > 0,
+      );
       return {
         carry: nextCarry(acc.carry, day, result.draft),
         shorts: [...acc.shorts, ...findShorts(day, nextOn, result)],
+        firstShortDay:
+          acc.firstShortDay ??
+          (isShort
+            ? { dayKey: day.dayKey, on: day.on, draft: result.draft }
+            : null),
       };
     },
-    { carry: EMPTY_CARRY, shorts: [] },
+    { carry: EMPTY_CARRY, shorts: [], firstShortDay: null },
   );
   const problems = sortProblems([
     ...findOverdue(input),
@@ -242,6 +257,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
         .reverse()
         .map((short) => [short.dayKey, short]),
     ),
+    firstShortDay: walked.firstShortDay,
     incomeEndsOn,
   };
   return result;

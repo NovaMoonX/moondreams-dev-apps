@@ -42,7 +42,7 @@ export function resolveVersion<V extends Versioned & { id: string }>(
   return result;
 }
 
-/** The version in force on `on`, else the item's earliest one that starts later (an income that has not begun). */
+/** The version in force on `on`, else the one in force on the item's earliest later start (an income that has not begun). */
 export function resolveCurrentOrNext<V extends Versioned & { id: string }>(
   versions: readonly V[],
   itemId: string,
@@ -50,14 +50,15 @@ export function resolveCurrentOrNext<V extends Versioned & { id: string }>(
 ): V | null {
   const current = resolveVersion(versions, itemId, on);
   if (current) return current;
-  const later = versions
+  const starts = versions
     .filter(
       (version) => version.itemId === itemId && version.effectiveFrom > on,
     )
-    .sort(
-      (a, b) => a.effectiveFrom - b.effectiveFrom || byCreatedAtThenId(a, b),
-    );
-  const result = later[0] ?? null;
+    .map((version) => version.effectiveFrom);
+  const result =
+    starts.length === 0
+      ? null
+      : resolveVersion(versions, itemId, Math.min(...starts));
   return result;
 }
 

@@ -26,7 +26,6 @@ import {
 } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
-  ENVELOPE_ORDER_STEP,
   FORM_FLOW_WORDS,
   CALENDAR_PERIOD_UNITS,
   HOW_OFTEN_WORDS,
@@ -44,6 +43,7 @@ import type { DraftSink } from '@apps/runway/forms/draftSink';
 import EmojiField from '@/components/EmojiField';
 import { recordHolding } from '@apps/runway/store/actions/moveActions';
 import { getPeriodIndex } from '@apps/runway/engine/calendar';
+import { getNextTierRank } from '@apps/runway/engine/priorities';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
@@ -62,6 +62,8 @@ import {
 } from '@apps/runway/forms/fundingFlow';
 import {
   selectComingDays,
+  selectEnvelopes,
+  selectBills,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GoalSealed, Priority } from '@apps/runway/types';
@@ -185,6 +187,8 @@ function GoalForm({
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const bills = useAppSelector((state) => selectBills(state, today));
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const plan = useAppSelector((state) => state.runway.plan);
   const [formData, setFormData] = useState<GoalFormData>(() =>
     editing
@@ -441,14 +445,10 @@ function GoalForm({
     if (data.priority === null || funding === null || target === null)
       return null;
 
-    const tier = goals.filter(
-      (goal) => goal.version.payload.priority === data.priority,
-    );
     const orderIndex =
       editing && editing.payload.priority === data.priority
         ? editing.payload.orderIndex
-        : Math.max(0, ...tier.map((goal) => goal.version.payload.orderIndex)) +
-          ENVELOPE_ORDER_STEP;
+        : getNextTierRank([...bills, ...envelopes, ...goals], data.priority);
     const result: GoalSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,

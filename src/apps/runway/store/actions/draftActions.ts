@@ -18,8 +18,8 @@ export interface ExistingNames {
   bills: string[];
   envelopes: string[];
   goals: string[];
-  /** The tier ranks already used, so added items sort after them. */
-  topRanks: Record<'bills' | 'envelopes' | 'goals', Record<Priority, number>>;
+  /** The highest rank used in each tier by any bill, envelope or goal, so added items sort after them. */
+  topRanks: Record<Priority, number>;
   /** The plan's starting day, when it has one. */
   startDate: number | null;
   /** How many item documents the app holds, so a plan still being read from a cold cache is not taken for an empty one. */
@@ -67,14 +67,10 @@ export async function commitStartDraft(
     addedIds: [],
     unrecordedHoldings: [],
   };
-  const ranks = {
-    bills: { ...existing.topRanks.bills },
-    envelopes: { ...existing.topRanks.envelopes },
-    goals: { ...existing.topRanks.goals },
-  };
-  const nextRank = (kind: keyof typeof ranks, priority: Priority) => {
-    ranks[kind][priority] += ENVELOPE_ORDER_STEP;
-    return ranks[kind][priority];
+  const ranks = { ...existing.topRanks };
+  const nextRank = (priority: Priority) => {
+    ranks[priority] += ENVELOPE_ORDER_STEP;
+    return ranks[priority];
   };
   const taken = {
     bills: new Set(existing.bills.map(norm)),
@@ -105,7 +101,7 @@ export async function commitStartDraft(
       }
       await createBill(uid, encryption, {
         startDate: today,
-        bill: { ...value, orderIndex: nextRank('bills', value.priority) },
+        bill: { ...value, orderIndex: nextRank(value.priority) },
       });
       taken.bills.add(norm(value.name));
       result.added += 1;
@@ -129,7 +125,7 @@ export async function commitStartDraft(
         envelope: {
           ...value,
           funding: mapFunding(value.funding),
-          orderIndex: nextRank('envelopes', value.priority),
+          orderIndex: nextRank(value.priority),
         },
       });
       taken.envelopes.add(norm(value.name));
@@ -148,7 +144,7 @@ export async function commitStartDraft(
         goal: {
           ...value,
           funding: mapFunding(value.funding),
-          orderIndex: nextRank('goals', value.priority),
+          orderIndex: nextRank(value.priority),
           ...(hasStartDay ? { startingCents: undefined } : {}),
         },
       });

@@ -1,6 +1,6 @@
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import ItemRow from '@apps/runway/components/ItemRow';
+import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   GROUP_WORDS,
@@ -20,7 +20,11 @@ interface BillRowProps {
   planStance: Stance;
   /** A one-time bill in a group: the group's monthly total leaves it out, and its row says so. */
   isOutsideTotal?: boolean;
-  onOpen: () => void;
+  /** Said in the row's one line in place of the due date. */
+  detailOverride?: string | null;
+  reorder?: ItemRowReorder;
+  isHighlighted?: boolean;
+  onOpen?: () => void;
 }
 
 interface BillSheetProps {
@@ -56,6 +60,9 @@ function BillRow({
   payment,
   planStance,
   isOutsideTotal = false,
+  detailOverride = null,
+  reorder,
+  isHighlighted = false,
   onOpen,
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
@@ -68,10 +75,12 @@ function BillRow({
     <ItemRow
       name={bill.name}
       emoji={bill.emoji}
-      detail={dueLine}
+      detail={detailOverride ?? dueLine}
       figure={amount}
       ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}
-      onOpen={onOpen}
+      onOpen={reorder ? undefined : onOpen}
+      reorder={reorder}
+      isHighlighted={isHighlighted}
     />
   );
 }

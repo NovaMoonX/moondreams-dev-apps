@@ -8,6 +8,7 @@ import {
 import { type BillProgressInput } from '@apps/runway/engine/progress';
 import {
   compareDrafts,
+  WHAT_IF_VERSION_ID,
   layerVersion,
   type DayEffect,
 } from '@apps/runway/engine/whatIf';
@@ -41,6 +42,7 @@ export type PreviewVersion = Parameters<typeof layerVersion<OpenVersion>>[1];
 /** What is layered over the real plan to see its effect: a version, an item that ends or is archived, or one income day's own payload. */
 export type PreviewChange =
   | { kind: 'version'; version: PreviewVersion }
+  | { kind: 'versions'; versions: PreviewVersion[] }
   | { kind: 'end'; itemId: string; endedAt: number }
   | { kind: 'archive'; itemId: string; archivedAt: number }
   | {
@@ -86,6 +88,19 @@ const layerPlan = (
     return {
       items,
       versions: layerVersion<OpenVersion>(versions, change.version),
+      openDays,
+    };
+  }
+  if (change.kind === 'versions') {
+    return {
+      items,
+      versions: [
+        ...versions,
+        ...change.versions.map((version, index) => ({
+          ...layerVersion<OpenVersion>([], version)[0],
+          id: `${WHAT_IF_VERSION_ID}-${index}`,
+        })),
+      ],
       openDays,
     };
   }

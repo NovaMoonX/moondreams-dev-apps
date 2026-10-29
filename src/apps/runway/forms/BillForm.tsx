@@ -27,7 +27,6 @@ import {
   CHANGE_WORDS,
   BILL_QUICK_PICKS,
   CARD_WORDS,
-  ENVELOPE_ORDER_STEP,
   FORM_FLOW_WORDS,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
@@ -39,6 +38,7 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
@@ -69,6 +69,8 @@ import {
   selectAllCards,
   selectBills,
   selectComingDays,
+  selectGoals,
+  selectEnvelopes,
   selectGroups,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -292,6 +294,8 @@ function BillForm({
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const goals = useAppSelector((state) => selectGoals(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
   const groupOptions = groups.map(({ item, version }) => ({
     value: item.id,
@@ -745,14 +749,10 @@ function BillForm({
       return null;
 
     const priority = getPriority(data);
-    const tier = bills.filter(
-      (bill) => bill.version.payload.priority === priority,
-    );
     const orderIndex =
       editing && editing.payload.priority === priority
         ? editing.payload.orderIndex
-        : Math.max(0, ...tier.map((bill) => bill.version.payload.orderIndex)) +
-          ENVELOPE_ORDER_STEP;
+        : getNextTierRank([...bills, ...envelopes, ...goals], priority);
     const { groupId, newGroup } = resolveGroup(data);
     const fundedBy: BillFundedBy = isChosen
       ? { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }

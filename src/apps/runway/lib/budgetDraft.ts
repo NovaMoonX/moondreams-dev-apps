@@ -136,6 +136,7 @@ export function toBillValue(item: BudgetBill, today: number): BillSealed {
     emoji: null,
     priority: 'should',
     orderIndex: 0,
+    groupId: null,
     amount: toRange(item.amountCents, item.highCents),
     timing: {
       kind: 'date',

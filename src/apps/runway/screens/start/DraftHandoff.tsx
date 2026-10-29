@@ -58,11 +58,7 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
       bills: bills.map(({ version }) => version.payload.name),
       envelopes: envelopes.map(({ version }) => version.payload.name),
       goals: goals.map(({ version }) => version.payload.name),
-      topRanks: {
-        bills: toTopRanks(bills),
-        envelopes: toTopRanks(envelopes),
-        goals: toTopRanks(goals),
-      },
+      topRanks: toTopRanks([...bills, ...envelopes, ...goals]),
       startDate,
       itemCount: items.length,
     };

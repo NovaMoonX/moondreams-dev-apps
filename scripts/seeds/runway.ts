@@ -312,7 +312,7 @@ async function writeSeedKeptEnvelope(
   return 4;
 }
 
-/** Items that change for a stretch or stop: Eating out at $40 for the next four income days then back to $80, Meal kit that ends in a month, an old phone plan that ended, a paused goal and an archived envelope. Each has its entries, the ended ones the `ended_` one. */
+/** Items that change for a stretch or stop (Home projects asks $1,500.00 every income day at rank 2.5 in Should, so the first coming pay runs out inside Should and Priorities draws its line there): Eating out at $40 for the next four income days then back to $80, Meal kit that ends in a month, an old phone plan that ended, a paused goal and an archived envelope. Each has its entries, the ended ones the `ended_` one. */
 async function writeSeedLifecycle(
   context: SeedContext,
   uid: string,
@@ -391,6 +391,17 @@ async function writeSeedLifecycle(
       endedAt: today - 20 * DAY_MS,
     },
     { id: 'seed-goal-car-repair', kind: 'goal', payload: pausedGoal },
+    {
+      id: 'seed-envelope-home-projects',
+      kind: 'envelope',
+      payload: {
+        name: 'Home projects',
+        emoji: '🛠️',
+        priority: 'should',
+        orderIndex: 2.5,
+        funding: funding(150_000),
+      } satisfies EnvelopeSealed,
+    },
     {
       id: 'seed-envelope-old-hobby',
       kind: 'envelope',

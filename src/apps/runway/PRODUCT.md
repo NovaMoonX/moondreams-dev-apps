@@ -40,7 +40,7 @@ Runway is one app with three levels. Nothing from a level shows until you use it
 
 | Level | What you do | What it needs | What you get |
 |---|---|---|---|
-| **Plan** | Income, bills, envelopes, goals, lookahead, changes and history (priorities view and what-ifs come later) | Nothing | A draft for every income day, what each envelope is assigned, Free to Spend, how far ahead the plan holds |
+| **Plan** | Income, bills, envelopes, goals, lookahead, changes and history, the priorities view (what-ifs come later) | Nothing | A draft for every income day, what each envelope is assigned, Free to Spend, how far ahead the plan holds |
 | **Track** | Add purchases by hand, import a CSV, attach notes, links and receipts, group purchases, check a balance | What you type or import | Envelopes that go down as you spend ("left"), check an amount, card reserves, a record of what each purchase was for |
 | **Link** *(not built yet)* | Link accounts | A link to your accounts | Purchases that arrive on their own, "safe to spend" backed by real cash |
 
@@ -107,7 +107,7 @@ An income day has a draft while it is coming, and is confirmed when the money is
 - **Drafts fund in priority order.** When money covers everything, the order changes nothing. When it does not, Wants go unfunded first, then Shoulds, and a Must is the last to be cut. Runway says exactly what went unfunded and why, and a bill funded in part shows its progress.
 - **Proposals follow priority too.** When Runway proposes a shift (Cover it, Put it to work, an overspent envelope with no spill-over chain), it takes from the lowest tier with room and sends extra money to the highest-priority thing that is behind. A Must is touched only if you pick it. Confirming less than planned is the one place a proposal reaches Musts, and only once the Wants and Shoulds have nothing left to give (see Confirming Money).
 - **Proposals wait for a tap.** The one exception is a spill-over chain you set up yourself, which applies on its own when a purchase goes over.
-- **The Priorities view.** One list of everything money goes to, grouped by tier. Move an item to another tier or reorder it within its tier. A line marks where the next income day's money runs out ("Everything above the line is funded").
+- **The Priorities view.** One list of everything money goes to, grouped by tier. Move an item to another tier or reorder it within its tier. A line marks where the soonest short income day's money runs out ("Items above the line get all they ask; the first item below may get part"). *As built:* Plan > More > Priorities; reorder by picking an item and placing it.
 - **Ties are said, not hidden.** If two items rank the same and money covers only one, the draft says which one it chose and why.
 
 ### Endings, In Detail
@@ -385,7 +385,7 @@ Every change says from when and shows, before it saves, which coming income days
 
 ## The Build Plan
 
-**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Days lists every month back to the plan's start ("Earlier months"), where a day older than the recent window opens to look up and is not corrected. Spend reaches the same way: its "Older months" period lists and edits purchases back to the month the plan started. The rest of what is built, and its limits, is under "How Runway Works" above.
+**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; hourly pay, what-ifs, accounts, importing and linking are in Next Steps; and Days lists every month back to the plan's start ("Earlier months"), where a day older than the recent window opens to look up and is not corrected. Spend reaches the same way: its "Older months" period lists and edits purchases back to the month the plan started. The rest of what is built, and its limits, is under "How Runway Works" above.
 
 ### Core MVP
 
@@ -417,7 +417,6 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Start from gross pay, with each tax and deduction a percentage or an exact amount
 - [ ] Amounts that are a percentage of what is left at their turn in priority order
 - [ ] Plan consecutive income days together in one sitting
-- [ ] The Priorities view, with order inside a tier and a line where the next income day's money runs out
 - [ ] Loans with a fixed rate: balance, rate, payment and schedule, with estimated interest worked out monthly, extra payments, and payoff as the ending
 - [ ] Endings by total amount, including a yearly limit
 - [ ] Amounts that step up on a schedule
