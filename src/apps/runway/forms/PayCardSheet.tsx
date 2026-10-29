@@ -84,9 +84,12 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const paidOn = fromDateInputValue(day) ?? null;
   // A payment before tracking started, or inside months already added up, would count nowhere.
   const floor = useAppSelector((state) =>
-    Math.max(
-      state.runway.plan?.startDate ?? 0,
-      selectClosingBase(state) === null ? 0 : (selectRecentFrom(state) ?? 0),
+    Math.min(
+      today,
+      Math.max(
+        state.runway.plan?.startDate ?? 0,
+        selectClosingBase(state) === null ? 0 : (selectRecentFrom(state) ?? 0),
+      ),
     ),
   );
   const extraCents =

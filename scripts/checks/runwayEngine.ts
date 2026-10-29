@@ -7965,6 +7965,31 @@ const version = (
     );
   });
 
+  const closedBill = decodeClosing(
+    toMonthKey(start),
+    encodeClosing(
+      buildClosing(toMonthKey(start), null, {
+        startDate: start,
+        days: [],
+        records: [],
+        moves: [rentOnCard],
+        purchases: [],
+        billIds: new Set(['rent']),
+      }),
+    ),
+  );
+  const fromClosing = deriveBalances({
+    ...base,
+    closing: withoutSpending(closedBill),
+    isCountingCards: false,
+  });
+  assert.equal(
+    fromClosing.moneyOnHandCents + fromClosing.uncountedCardCashCents,
+    deriveBalances({ ...base, moves: [...starts, rentOnCard] })
+      .moneyOnHandCents,
+    'a bill charged to a card in a closed month still comes back at Plan',
+  );
+
   const atPlan = (moves: OpenMove[]) =>
     deriveBalances({
       ...base,

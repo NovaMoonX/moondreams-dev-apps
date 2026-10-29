@@ -117,7 +117,11 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
   // People type the card's full name ("Capital One Venture X"); the issuer is already its first word.
   const getName = () => {
     const lower = issuer.toLowerCase();
-    if (issuer === '' || !typedName.toLowerCase().startsWith(lower)) {
+    if (
+      issuer === '' ||
+      typedName === (editing?.name ?? null) ||
+      !typedName.toLowerCase().startsWith(lower)
+    ) {
       return typedName;
     }
     const rest = typedName.slice(issuer.length);

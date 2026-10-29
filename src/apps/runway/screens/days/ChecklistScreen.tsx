@@ -246,15 +246,12 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         })),
         dayLines,
       );
-      const state = store.getState();
+      const { cards } = store.getState().runway;
       const chargedCards = [
         ...new Set(
-          unpaid.flatMap(({ billId, payment }) => {
-            const cardId = getMarkCardId(state, billId, payment.dueOn);
-            const card = state.runway.cards.find(
-              (entry) => entry.id === cardId,
-            );
-            return card ? [getCardName(card, state.runway.cards)] : [];
+          written.flatMap(({ cardId }) => {
+            const card = cards.find((entry) => entry.id === cardId);
+            return card ? [getCardName(card, cards)] : [];
           }),
         ),
       ];
