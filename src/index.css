@@ -305,6 +305,26 @@ html:has(
   }
 }
 
+/* Running text avoids a one-word last line and headings share their words evenly; the style longhand in the base layer so `whitespace-nowrap`, `truncate` and `text-balance` still win. */
+@layer base {
+  p,
+  li,
+  dd,
+  figcaption,
+  blockquote {
+    text-wrap-style: pretty;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    text-wrap-style: balance;
+  }
+}
+
 /* An installed app (`data-installed-app`, set from `IS_INSTALLED_APP` in main.tsx) shows no scrollbar anywhere at any width; !important so no component or library style can bring one back. Scrolling itself is untouched. */
 html[data-installed-app],
 html[data-installed-app] * {

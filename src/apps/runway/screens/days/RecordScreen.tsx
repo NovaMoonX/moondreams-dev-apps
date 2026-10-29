@@ -22,7 +22,7 @@ import {
   selectConfirmedRecord,
   selectEffectiveSplit,
   selectRecordChain,
-  selectIsRecordsReady,
+  selectIsDayRecordsReady,
   selectOpenDay,
   selectProposedRecord,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -101,7 +101,9 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
   const [isMatchedOpen, setIsMatchedOpen] = useState(false);
   const { isHidden } = useValuesHidden();
   const mask = useMaskedText();
-  const isReady = useAppSelector(selectIsRecordsReady);
+  const isReady = useAppSelector((state) =>
+    selectIsDayRecordsReady(state, dayKey),
+  );
   const day = useAppSelector((state) => selectOpenDay(state, dayKey));
   const proposed = useAppSelector((state) =>
     selectProposedRecord(state, dayKey),

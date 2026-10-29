@@ -56,6 +56,13 @@ export interface RunwayState {
   periodFor: string | null;
   /** The range key whose read failed; Spend says so, the rest of the app is unaffected. */
   periodFailedFor: string | null;
+  /** The income days and records of an older month Days shows read-only, and the window key they were read for. Kept apart from `days` and `records`, which the balances sum: an older day is already inside a closing. */
+  historyDays: OpenDay[];
+  historyRecords: OpenRecord[];
+  historyFor: string | null;
+  /** The confirmed day ids the history records were read for, as the selector joins them. */
+  historyRecordsFor: string | null;
+  historyFailedFor: string | null;
 }
 
 const initialState: RunwayState = {
@@ -86,6 +93,11 @@ const initialState: RunwayState = {
   periodPurchases: [],
   periodFor: null,
   periodFailedFor: null,
+  historyDays: [],
+  historyRecords: [],
+  historyFor: null,
+  historyRecordsFor: null,
+  historyFailedFor: null,
 };
 
 export const runwaySlice = createSlice({
@@ -167,6 +179,31 @@ export const runwaySlice = createSlice({
     setPeriodFailed: (state, action: PayloadAction<string>) => {
       state.periodFailedFor = action.payload;
     },
+    setHistoryDays: (
+      state,
+      action: PayloadAction<{ key: string; days: OpenDay[] }>,
+    ) => {
+      state.historyDays = action.payload.days;
+      state.historyFor = action.payload.key;
+      state.historyFailedFor = null;
+    },
+    setHistoryRecords: (
+      state,
+      action: PayloadAction<{ dayIds: string; records: OpenRecord[] }>,
+    ) => {
+      state.historyRecords = action.payload.records;
+      state.historyRecordsFor = action.payload.dayIds;
+    },
+    setHistoryFailed: (state, action: PayloadAction<string>) => {
+      state.historyFailedFor = action.payload;
+    },
+    clearHistory: (state) => {
+      state.historyDays = [];
+      state.historyRecords = [];
+      state.historyFor = null;
+      state.historyRecordsFor = null;
+      state.historyFailedFor = null;
+    },
     setClosing: (
       state,
       action: PayloadAction<{ closing: ClosingState | null; key: string }>,
@@ -200,6 +237,10 @@ export const {
   setPeriodPurchases,
   clearPeriodPurchases,
   setPeriodFailed,
+  setHistoryDays,
+  setHistoryRecords,
+  setHistoryFailed,
+  clearHistory,
   setClosing,
   setLoadDay,
   setFailedRebuild,

@@ -283,6 +283,32 @@ export const selectListedDays = createSelector(
   },
 );
 
+/** The confirmed days of the older month Days has open, newest first. Read-only and never summed into a balance. */
+export const selectHistoryListedDays = createSelector(
+  [selectVersions, selectOn, (state: RootState) => state.runway.historyDays],
+  (versions, today, historyDays): ListedDay[] =>
+    historyDays
+      .filter((doc) => doc.status === 'confirmed')
+      .flatMap((doc) => {
+        const described = describeDay(versions, {
+          payLineId: doc.payLineId,
+          sourceId: doc.sourceId,
+          expectedOn: doc.expectedOn,
+        });
+        return described
+          ? [
+              {
+                ...described,
+                status: doc.status,
+                isOverdue: described.on < today,
+                arrivedOn: doc.arrivedOn ?? null,
+              },
+            ]
+          : [];
+      })
+      .sort((a, b) => b.on - a.on || (a.dayKey < b.dayKey ? -1 : 1)),
+);
+
 /** The confirmed days' ids as one string, or null until the days are read; the records listener restarts when it changes. */
 export const selectConfirmedDayIds = (state: RootState): string | null =>
   selectIsDaysLoaded(state)
@@ -355,23 +381,32 @@ export const selectBillProgress = createSelector(
 export const selectIsMovesLoaded = (state: RootState) =>
   selectIsWindowLoaded(state) && state.runway.isCardsLoaded;
 
-export const selectProposedRecord = (state: RootState, dayId: string) => {
-  const result = state.runway.records.find(
-    (record): record is Extract<OpenRecord, { kind: 'proposed' }> =>
-      record.dayId === dayId && record.kind === 'proposed',
+const selectHistoryRecords = (state: RootState) => state.runway.historyRecords;
+
+/** A day's records are found in the recent window first, then in the older month Days has open; the balances never read the older ones. */
+const findRecord = <Kind extends OpenRecord['kind']>(
+  state: RootState,
+  dayId: string,
+  kind: Kind,
+) => {
+  const matches = (
+    record: OpenRecord,
+  ): record is Extract<OpenRecord, { kind: Kind }> =>
+    record.dayId === dayId && record.kind === kind;
+  return (
+    state.runway.records.find(matches) ??
+    state.runway.historyRecords.find(matches) ??
+    null
   );
-  return result ?? null;
 };
 
-export const selectConfirmedRecord = (state: RootState, dayId: string) => {
-  const result = state.runway.records.find(
-    (record): record is Extract<OpenRecord, { kind: 'confirmed' }> =>
-      record.dayId === dayId && record.kind === 'confirmed',
-  );
-  return result ?? null;
-};
+export const selectProposedRecord = (state: RootState, dayId: string) =>
+  findRecord(state, dayId, 'proposed');
 
-const selectChainsByDay = createSelector([selectRecords], (records) => {
+export const selectConfirmedRecord = (state: RootState, dayId: string) =>
+  findRecord(state, dayId, 'confirmed');
+
+const toChainsByDay = (records: readonly OpenRecord[]) => {
   const byDay = records.reduce<Map<string, OpenRecord[]>>((acc, record) => {
     acc.set(record.dayId, [...(acc.get(record.dayId) ?? []), record]);
     return acc;
@@ -380,33 +415,98 @@ const selectChainsByDay = createSelector([selectRecords], (records) => {
     [...byDay].map(([dayId, group]) => [dayId, getRecordChain(group)]),
   );
   return result;
-});
+};
+
+const selectChainsByDay = createSelector([selectRecords], toChainsByDay);
+const selectHistoryChainsByDay = createSelector(
+  [selectHistoryRecords],
+  toChainsByDay,
+);
 
 const NO_CHAIN: ReturnType<typeof getRecordChain> = [];
 
 /** A day's confirmed record followed by each correction, oldest first; the last is the split the day stands on. */
 export const selectRecordChain = (state: RootState, dayId: string) =>
-  selectChainsByDay(state).get(dayId) ?? NO_CHAIN;
+  selectChainsByDay(state).get(dayId) ??
+  selectHistoryChainsByDay(state).get(dayId) ??
+  NO_CHAIN;
 
-const selectSplitsByDay = createSelector([selectChainsByDay], (chains) => {
+const toSplitsByDay = (chains: ReturnType<typeof toChainsByDay>) => {
   const result = new Map(
     [...chains].flatMap(([dayId, chain]) =>
       chain.length === 0 ? [] : [[dayId, toSplit(chain[chain.length - 1])]],
     ),
   );
   return result;
-});
+};
+
+const selectSplitsByDay = createSelector([selectChainsByDay], toSplitsByDay);
+const selectHistorySplitsByDay = createSelector(
+  [selectHistoryChainsByDay],
+  toSplitsByDay,
+);
 
 /** The split a day stands on now: the latest correction no later one supersedes, else the confirmed record. */
 export const selectEffectiveSplit = (
   state: RootState,
   dayId: string,
-): EffectiveSplit | null => selectSplitsByDay(state).get(dayId) ?? null;
+): EffectiveSplit | null =>
+  selectSplitsByDay(state).get(dayId) ??
+  selectHistorySplitsByDay(state).get(dayId) ??
+  null;
 
+/** A day of the recent window, else one of the older month Days has open. */
 export const selectOpenDay = (
   state: RootState,
   dayId: string,
-): OpenDay | null => state.runway.days.find((day) => day.id === dayId) ?? null;
+): OpenDay | null =>
+  state.runway.days.find((day) => day.id === dayId) ??
+  state.runway.historyDays.find((day) => day.id === dayId) ??
+  null;
+
+/** True once the days and the records of the older month Days has open are read. */
+export const selectIsHistoryReady = (state: RootState, key: string) => {
+  const ids = state.runway.historyDays
+    .filter((day) => day.status === 'confirmed')
+    .map((day) => day.id)
+    .sort()
+    .join(',');
+  return (
+    state.runway.historyFor === key && state.runway.historyRecordsFor === ids
+  );
+};
+
+/** The date a day key names (its `yyyymmdd` stamp), as UTC midnight. */
+const getDayKeyDate = (dayKey: string) => {
+  const stamp = dayKey.slice(-8);
+  return Date.UTC(
+    Number(stamp.slice(0, 4)),
+    Number(stamp.slice(4, 6)) - 1,
+    Number(stamp.slice(6, 8)),
+  );
+};
+
+/** True when the key names a day before the recent window, which is read on demand and only looked at. */
+export const selectIsDayOlderThanRecent = (
+  state: RootState,
+  dayKey: string,
+) => {
+  const recentFrom = selectRecentFrom(state);
+  return recentFrom !== null && getDayKeyDate(dayKey) < recentFrom;
+};
+
+/** True for a day inside the recent window, the only days a correction is offered for. */
+export const selectIsDayCorrectable = (state: RootState, dayKey: string) => {
+  const recentFrom = selectRecentFrom(state);
+  const day = selectOpenDay(state, dayKey);
+  return recentFrom !== null && day !== null && day.expectedOn >= recentFrom;
+};
+
+/** The records of a day are read: the recent window's, or the older month's when the day is one of its days. */
+export const selectIsDayRecordsReady = (state: RootState, dayKey: string) =>
+  state.runway.historyDays.some((day) => day.id === dayKey)
+    ? selectIsHistoryReady(state, state.runway.historyFor ?? '')
+    : selectIsRecordsReady(state);
 
 export interface ResolvedEnvelope {
   item: PlanItemDoc;

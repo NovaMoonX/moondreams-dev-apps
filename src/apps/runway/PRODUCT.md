@@ -340,7 +340,7 @@ Free to Spend is the money nobody has claimed. Home shows it, and tapping it sho
 | Confirming an income day | until 14 days after its date | money that lands late can still be confirmed | the day is tagged "Waiting to be confirmed"; after 14 days it leaves the list and its money is not counted |
 | "Did not arrive" | can be put back for 14 days | | "Put this day back" disappears after that |
 | The day money arrived | today or earlier | | the date picker stops at today |
-| Correcting a confirmed day | only days in the recent window | older months are summed once and kept | Days lists confirmed days from the 1st of the month after the newest closed month (or the past 180 days on a newer plan); older ones are counted but not listed |
+| Correcting a confirmed day | only days in the recent window | older months are summed once and kept | Days lists the recent window (from the 1st of the month after the newest closed month, or the past 180 days on a newer plan); "Earlier months" opens any month back to the plan's start, read-only, and its days open but are not corrected |
 | A month closes | 15 days after it ends | stays clear of the 14 days a late day can be confirmed | nothing, unless something dated in it changes: then "Updating your history" shows until it is summed again |
 | Changing the plan | from today, a date after today (up to about ten years), one coming income day or a stretch | a change never reaches back | Next is off with a sentence in the footer |
 | Ending or archiving | a last day of today or later; archiving is from today | | the date picker stops at today |
@@ -363,7 +363,7 @@ Free to Spend is the money nobody has claimed. Home shows it, and tapping it sho
 | Thing | What you can change | What is refused |
 |---|---|---|
 | A purchase | the amount, envelopes, day, place and note, or remove it | a day before tracking last started, unless it already had that day; an envelope archived since |
-| A confirmed day | the amounts, by a correction | the date; anything once the day is older than the recent window |
+| A confirmed day | the amounts, by a correction | the date; anything once the day is older than the recent window (it opens read-only) |
 | A bill payment | mark paid, or take the mark back | the amount: a mark records the payment's planned amount, paid today |
 | Income, bills, envelopes, goals | a new version from today or later | any change dated before today |
 | What you started with | while the correction window is open | after it, a balance is fixed by correcting the day or payment it came from |
@@ -384,7 +384,7 @@ Every change says from when and shows, before it saves, which coming income days
 
 ## The Build Plan
 
-**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Days lists confirmed income days only from the months since the newest monthly closing, so an older day counts in every figure but cannot be opened or corrected until a history window is built. Spend reaches further: its "Older months" period lists and edits purchases back to the month the plan started. The rest of what is built, and its limits, is under "How Runway Works" above.
+**Where it stands.** The Core MVP below is built. What it does not do yet, so the descriptions above are not read as promises for it: adding an income source, bill, envelope or goal saves at once and shows its effect only when it is changed later (the proposals with Apply and Not now come with Cover it and Put it to work); "Add expected money" is the add form for an income or an expense; bills repeat weekly, every other week or monthly; groups, hourly pay, what-ifs, the Priorities view, accounts, importing and linking are in Next Steps; and Days lists every month back to the plan's start ("Earlier months"), where a day older than the recent window opens to look up and is not corrected. Spend reaches the same way: its "Older months" period lists and edits purchases back to the month the plan started. The rest of what is built, and its limits, is under "How Runway Works" above.
 
 ### Core MVP
 
