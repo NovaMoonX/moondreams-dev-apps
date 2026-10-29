@@ -51,8 +51,7 @@ function PosterCell({
         {date.getDate()}
       </span>
       {hasOpenings && (
-        <span className='bg-accent-foreground ring-background absolute right-0.5 bottom-0.5 flex size-3 items-center justify-center rounded-full text-[7px] leading-none shadow-sm ring-1'>
-          <span aria-hidden='true'>🎬</span>
+        <span className='bg-accent-foreground ring-background absolute bottom-1 left-1 block size-2 rounded-full shadow-sm ring-1'>
           <span className='sr-only'>
             {openings.length === 1
               ? '1 movie opening'

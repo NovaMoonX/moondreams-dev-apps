@@ -5,6 +5,7 @@ import type { Viewing } from '@apps/a-list/types';
 import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 const MAX_ROWS = 5;
+const MAX_OPENING_TITLES = 3;
 
 interface DayHoverCardProps {
   date: Date;
@@ -47,7 +48,12 @@ function DayHoverCard({ date, viewings, openings, now }: DayHoverCardProps) {
         <p className='pt-1 text-sm'>
           <span aria-hidden='true'>🎬 </span>
           <span className='font-medium'>Opening:</span>{' '}
-          {openings.map((row) => row.item.movie.title).join(', ')}
+          {openings
+            .slice(0, MAX_OPENING_TITLES)
+            .map((row) => row.item.movie.title)
+            .join(', ')}
+          {openings.length > MAX_OPENING_TITLES &&
+            ` +${openings.length - MAX_OPENING_TITLES} more`}
         </p>
       )}
     </div>

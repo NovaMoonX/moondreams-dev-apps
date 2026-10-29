@@ -97,16 +97,16 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
           </ul>
         )}
         {openings.length > 0 && (
-          <section className='bg-accent/60 space-y-3 rounded-2xl p-3'>
+          <section className='bg-accent/60 dark:bg-muted space-y-3 rounded-2xl p-3'>
             <div className='space-y-0.5'>
               <p className='text-sm font-medium'>🎬 Opening this day</p>
               <p className='text-muted-foreground text-xs'>
                 From your watchlist. Tap one to plan it.
               </p>
             </div>
-            <ul className='-mx-1 flex gap-3 overflow-x-auto px-1 pb-1'>
+            <ul className='-mx-1 flex snap-x gap-3 overflow-x-auto px-1 pb-1'>
               {openings.map((row) => (
-                <li key={row.item.movieKey} className='w-20 shrink-0'>
+                <li key={row.item.movieKey} className='w-14 shrink-0 snap-start'>
                   <Button
                     type='button'
                     variant='tertiary'
@@ -122,7 +122,7 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
                         compact
                       />
                     </span>
-                    <span className='line-clamp-2 text-xs font-medium'>
+                    <span className='line-clamp-2 text-[11px] leading-tight font-medium'>
                       {row.item.movie.title}
                     </span>
                   </Button>

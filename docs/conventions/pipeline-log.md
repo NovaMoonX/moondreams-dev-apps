@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-29 | shared | Owner: releases looked like plans in the day sheet, and an empty line sat above them; product and design reviews had been skipped because the emulators failed | Reviewers run on the harness page when the app won't start; product checks offers are told apart from records; design checks empty lines and crowded-cell marks | `orchestrate/SKILL.md`, `product-reviewer.md`, `design-reviewer.md` | changed |
 | 2026-10-29 | shared | Owner: a restarted session came back in plan mode and repeated the agreed plan | With nothing new, the plan is one line | `orchestrate/SKILL.md`, `CLAUDE.md` | changed |
 | 2026-10-29 | shared | The Stop hook asked for an L review on a branch with no commits of its own (origin/main was stale) | `pr-gate.sh` fetches the default branch and stays quiet when the branch has no commits beyond it | `.claude/hooks/pr-gate.sh` | changed |
 | 2026-10-29 | shared | Owner: the A-List release-days plan was too dense to read | A plan is a short page: what the person sees, the criteria, and only the uncertain or risky decisions; files and checks stay out | `orchestrate/SKILL.md`, `CLAUDE.md` | changed |
