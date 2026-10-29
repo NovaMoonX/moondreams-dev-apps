@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-29 | shared | Owner: the Cards entry point was never screenshotted, and a stale image showed a bug already fixed | Screenshots include each new screen's door in the app shell, and an image older than its screen is retaken or dropped | `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-29 | shared | Lead reviewer found a fix round on no branch: the checkout was detached, and `git push -q` piped through `tail -1` hid the refusal | Orchestrate step 4: read the push's own output, confirm the branch in `git status -sb`, and check the reviewed SHA contains every fix; agents never check out in the main checkout | `orchestrate/SKILL.md` | changed |
 | 2026-10-28 | shared | Review of the Apps option code: values held only in memory, duplicate names collapsed, the rewrite not named at the prompt | Values backed up to a file before the rewrite and resumed from it; options mapped by position, not name; the confirm prompt names the rewrite (tested: duplicates, a restore cut short, resume) | `scripts/createGithubIssues.ts` | changed |
 | 2026-10-28 | shared | Owner: "mark ready for review" listed as a must-do; a post-merge check handed to the owner | Status comment never lists givens; post-merge checks are the watching session's, reported after the merge event | `orchestrate/SKILL.md` | changed |
