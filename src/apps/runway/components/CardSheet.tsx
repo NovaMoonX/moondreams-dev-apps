@@ -15,11 +15,21 @@ import { formatCents } from '@/utils/moneyUtils';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { CARD_WORDS } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { archiveCard } from '@apps/runway/store/actions/cardActions';
+import {
+  archiveCard,
+  undoCardPayment,
+} from '@apps/runway/store/actions/cardActions';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { collectCardPaid, type CardPaid } from '@apps/runway/engine/progress';
+import SensitiveValue from '@/components/SensitiveValue';
+import { formatDateShortUTC } from '@/utils/formatUtils';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
+
+/** Payments the sheet lists; older ones stay in the ledger and the figures. */
+const RECENT_PAYMENTS = 5;
 
 interface CardSheetProps {
   card: OpenCard;
@@ -38,6 +48,11 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const balances = useAppSelector(selectBalances);
   const [isArchiving, setIsArchiving] = useState(false);
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
+  const moves = useAppSelector((state) => state.runway.moves);
+  const [takingBack, setTakingBack] = useState<string | null>(null);
+  const payments = [...(collectCardPaid(moves)[card.id] ?? [])]
+    .sort((a, b) => b.on - a.on || (a.moveId < b.moveId ? 1 : -1))
+    .slice(0, RECENT_PAYMENTS);
   const name = getCardName(card, cards);
 
   const handleArchive = async () => {
@@ -66,6 +81,36 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
     }
   };
 
+  const takeBack = async (payment: CardPaid) => {
+    if (!user || takingBack !== null) return;
+    const amount = formatCents(payment.cents);
+    const day = formatDateShortUTC(payment.on);
+    const isConfirmed = await confirm({
+      title: CARD_WORDS.takeBackTitle,
+      message: mask(CARD_WORDS.takeBackText(amount, day)),
+      confirmText: CARD_WORDS.takeBackConfirm,
+    });
+    if (!isConfirmed) return;
+    setTakingBack(payment.moveId);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      await undoCardPayment(user.uid, encryption, {
+        moveId: payment.moveId,
+        cardId: card.id,
+        date: payment.on,
+        amountCents: payment.cents,
+      });
+      addToast({ title: CARD_WORDS.undone(name), type: 'success' });
+    } catch (error) {
+      addToast({
+        title: CARD_WORDS.undoFailed,
+        description: getErrorMessage(error, CARD_WORDS.failed),
+        type: 'error',
+      });
+    }
+    setTakingBack(null);
+  };
+
   return (
     <FormSheet
       isOpen
@@ -77,10 +122,20 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
         <SheetHead
           label={CARD_WORDS.reserveLabel}
-          figure={formatCents(reserveCents)}
+          figure={formatCents(Math.max(0, reserveCents))}
+          fact={
+            reserveCents < 0
+              ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
+              : undefined
+          }
         />
-        <Button type='button' className='w-full' onClick={onPay}>
-          {CARD_WORDS.payOff(name)}
+        <Button
+          type='button'
+          variant={reserveCents > 0 ? 'primary' : 'secondary'}
+          className='w-full'
+          onClick={onPay}
+        >
+          {CARD_WORDS.payOffShort}
         </Button>
         <ActionGroup>
           <ActionRow
@@ -100,6 +155,44 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
             />
           )}
         </ActionGroup>
+        {payments.length > 0 && (
+          <section className='space-y-1.5'>
+            <p className='text-muted-foreground text-xs'>
+              {CARD_WORDS.paymentsTitle}
+            </p>
+            <ul className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
+              {payments.map((payment) => (
+                <li
+                  key={payment.moveId}
+                  className='flex items-center justify-between gap-3 py-1.5 pr-1.5 pl-3'
+                >
+                  <span className='min-w-0'>
+                    {formatDateShortUTC(payment.on)}
+                    {' · '}
+                    <SensitiveValue className='tabular-nums'>
+                      {formatCents(payment.cents)}
+                    </SensitiveValue>
+                  </span>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    aria-label={mask(
+                      CARD_WORDS.takeBackLabel(
+                        formatCents(payment.cents),
+                        formatDateShortUTC(payment.on),
+                      ),
+                    )}
+                    disabled={takingBack !== null}
+                    onClick={() => void takeBack(payment)}
+                  >
+                    {CARD_WORDS.takeBack}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
       </div>
     </FormSheet>
   );

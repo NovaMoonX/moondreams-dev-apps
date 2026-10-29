@@ -1486,7 +1486,17 @@ export const CARD_WORDS = {
   waiting: 'Waiting to be paid',
   nothingToPay: 'Nothing to pay',
   reserveLabel: 'Waiting to be paid',
-  payOff: (name: string) => `Pay off ${name}`,
+  payOff: (name: string) => `Pay off ${name.replace(/ (\S+)$/, '\u00a0$1')}`,
+  payOffShort: 'Pay off',
+  paidAhead: (amount: string) => `Paid ${amount} ahead`,
+  paymentsTitle: 'Recent payments',
+  takeBack: 'Take back',
+  takeBackLabel: (amount: string, day: string) =>
+    `Take back the ${amount} payment on ${day}`,
+  takeBackTitle: 'Take back this payment?',
+  takeBackText: (amount: string, day: string) =>
+    `The ${amount} paid on ${day} goes back to waiting on the card, and your cash goes back up by the same.`,
+  takeBackConfirm: 'Take it back',
   change: 'Change the card',
   archive: 'Archive',
   archiveSub: 'It stays in your history and leaves the list.',

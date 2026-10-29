@@ -64,9 +64,11 @@ function CardsScreen() {
                 detail={
                   reserveCents > 0
                     ? CARD_WORDS.waiting
-                    : CARD_WORDS.nothingToPay
+                    : reserveCents < 0
+                      ? CARD_WORDS.paidAhead(formatCents(-reserveCents))
+                      : CARD_WORDS.nothingToPay
                 }
-                figure={formatCents(reserveCents)}
+                figure={formatCents(Math.max(0, reserveCents))}
                 ariaLabel={`${name}. Open`}
                 onOpen={() => setOpen({ cardId: card.id, view: 'menu' })}
               />
