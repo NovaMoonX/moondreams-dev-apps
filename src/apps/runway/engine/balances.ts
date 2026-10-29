@@ -64,6 +64,8 @@ export interface Balances {
   reserveByCard: Record<string, Cents>;
   /** What the cards wait to be paid; an overpaid card counts as zero. */
   assignedToCardsCents: Cents;
+  /** While cards are left out: the cash that tracking would still hold, the bills charged to cards less the card payments, so a figure that adds cards back starts from real cash. Zero while they count. */
+  uncountedCardCashCents: Cents;
   /** Money on hand less everything assigned; below zero when more is assigned than is held. */
   freeToSpendCents: Cents;
   startMoneyCents: Cents;
@@ -258,6 +260,9 @@ export function deriveBalances(input: BalancesInput): Balances {
     assignedToEnvelopesCents,
     reserveByCard,
     assignedToCardsCents,
+    uncountedCardCashCents: isCountingCards
+      ? 0
+      : sumValues(allCharged) - sumValues(allCardPaid),
     freeToSpendCents:
       moneyOnHandCents -
       assignedToBillsCents -

@@ -84,7 +84,10 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
     (card) => card.archivedAt === null || (owedByCard[card.id] ?? 0) > 0,
   );
   const money =
-    moneyEdit ?? (asOf.hasMoney ? toText(asOf.moneyOnHandCents) : '');
+    moneyEdit ??
+    (asOf.hasMoney
+      ? toText(asOf.moneyOnHandCents + asOf.uncountedCardCashCents)
+      : '');
   const amounts: Record<string, string> = {
     ...Object.fromEntries(
       Object.entries(asOf.assignedByItem).map(([id, cents]) => [

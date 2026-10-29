@@ -180,7 +180,7 @@ export const isSamePayload = (a: ItemPayload, b: ItemPayload) => same(a, b);
 export function describeChange(
   before: ItemPayload,
   after: ItemPayload,
-  cardNameOf: (cardId: string | null) => string = () => 'a card',
+  cardNameOf: (cardId: string | null) => string,
 ) {
   const result = getParts(before, after, cardNameOf)
     .flatMap((part) => (part === null ? [] : [part]))

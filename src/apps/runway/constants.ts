@@ -1552,6 +1552,9 @@ export const CARD_WORDS = {
   willWaitLess: (name: string, amount: string) =>
     `${name} will wait for ${amount} less.`,
   loading: 'Getting what each card waits for.',
+  chargedTo: (card: string) => `Charged to ${card}`,
+  beforeTracking: (day: string) => `Pick ${day} or a later day.`,
+  markedAllWith: (cards: string) => `Charged to ${cards}.`,
   markedPaidWith: (bill: string, card: string) =>
     `Marked ${bill} paid with ${card}`,
   freeWaiting: 'Waiting on cards',

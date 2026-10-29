@@ -55,6 +55,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
+  CARD_WORDS,
   CHANGE_WORDS,
   GOAL_CHART_WORDS,
   HOW_OFTEN_WORDS,
@@ -104,7 +105,11 @@ import {
   type HeldChoice,
 } from '@apps/runway/engine/endings';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { selectPairedBy } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectAllCards,
+  selectPairedBy,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { formatCents } from '@/utils/moneyUtils';
 import InlineNotice from '@/components/InlineNotice';
@@ -257,6 +262,8 @@ function ItemSheet({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const mask = useMaskedText();
+  const allCards = useAppSelector(selectAllCards);
+  const versions = useAppSelector((state) => state.runway.versions);
   const paid = useBillPaid({
     billId: itemId,
     billName: version?.payload.name ?? '',
@@ -267,6 +274,10 @@ function ItemSheet({
 
   if (!version) return null;
   const payload = version.payload;
+  const paidWithCard =
+    level === 'track' && payment
+      ? getBillCardName(versions, allCards, itemId, payment.dueOn)
+      : null;
   const itemKind: ItemKind = version.kind ?? kind;
   const endedAt = header?.endedAt ?? null;
 
@@ -358,7 +369,9 @@ function ItemSheet({
     }
   };
 
-  const difference = next ? describeChange(payload, next.payload) : '';
+  const difference = next
+    ? describeChange(payload, next.payload, getCardNamer(allCards))
+    : '';
   const planned = [
     next &&
     difference !== '' &&
@@ -650,15 +663,17 @@ function ItemSheet({
             subtitle={
               paid.isPaid
                 ? undefined
-                : payment.fundedCents >= payment.totalCents
-                  ? ITEM_SHEET_WORDS.paidFromSetAside
-                  : mask(
-                      ITEM_SHEET_R2_WORDS.paidFromFreeText(
-                        formatCentsShort(
-                          payment.totalCents - payment.fundedCents,
+                : paidWithCard !== null
+                  ? CARD_WORDS.chargedTo(paidWithCard)
+                  : payment.fundedCents >= payment.totalCents
+                    ? ITEM_SHEET_WORDS.paidFromSetAside
+                    : mask(
+                        ITEM_SHEET_R2_WORDS.paidFromFreeText(
+                          formatCentsShort(
+                            payment.totalCents - payment.fundedCents,
+                          ),
                         ),
-                      ),
-                    )
+                      )
             }
             isDisabled={paid.isBusy}
             onClick={() => void (paid.isPaid ? paid.undo() : paid.mark())}

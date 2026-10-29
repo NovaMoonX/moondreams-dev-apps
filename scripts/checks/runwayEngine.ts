@@ -3715,6 +3715,7 @@ const version = (
     describeChange(
       payload(10_000) as ItemPayload,
       payload(15_000) as ItemPayload,
+      () => 'a card',
     ),
     'Funding $100.00 every income day to $150.00 every income day',
   );
@@ -3725,12 +3726,16 @@ const version = (
     ending: never,
   } as unknown as ItemPayload;
   assert.equal(
-    describeChange(legacyLine, {
-      ...legacyLine,
-      amount: exactRange(120_000),
-      pairings: [],
-      stanceOverride: null,
-    } as ItemPayload),
+    describeChange(
+      legacyLine,
+      {
+        ...legacyLine,
+        amount: exactRange(120_000),
+        pairings: [],
+        stanceOverride: null,
+      } as ItemPayload,
+      () => 'a card',
+    ),
     'Amount $1,000.00 to $1,200.00',
     'a pay line written before pairings and ranges existed can be changed',
   );
@@ -5891,6 +5896,7 @@ const version = (
         lines: [{ envelopeId: 'dining', cents: 5_500, via: 'chosen' }],
       },
       (id) => id,
+      () => 'a card',
     ),
     'Purchase changed: Safeway, amount $40.00 to $55.00.',
   );
@@ -7925,6 +7931,40 @@ const version = (
     deriveBalances({ ...base, ...ledger }),
     'cards: a closing equals the replay',
   );
+  // Where is your money now? adds what cards owe (read at Track) to the money read at the current level.
+  const lineUp = (moves: OpenMove[]) => {
+    const plan = deriveBalances({ ...base, moves, isCountingCards: false });
+    const track = deriveBalances({ ...base, moves });
+    return (
+      plan.moneyOnHandCents +
+      plan.uncountedCardCashCents -
+      plan.assignedToBillsCents -
+      plan.assignedToEnvelopesCents -
+      plan.assignedToGoalsCents -
+      track.assignedToCardsCents
+    );
+  };
+  const rentOnCard = move('paid_rent_2', 'billPaid', day(1), 'rent', {
+    amountCents: 8_000,
+    paidOn: day(1),
+    fromFreeCents: 0,
+    cardId: 'freedom',
+  });
+  [
+    [...starts, rentOnCard],
+    [
+      ...starts,
+      rentOnCard,
+      move('payf', 'cardPayment', day(3), 'freedom', { amountCents: 5_000 }),
+    ],
+  ].forEach((moves, index) => {
+    assert.equal(
+      lineUp(moves),
+      deriveBalances({ ...base, moves }).freeToSpendCents,
+      `a line-up at Plan starts from the Free to spend tracking would show (${index + 1})`,
+    );
+  });
+
   const atPlan = (moves: OpenMove[]) =>
     deriveBalances({
       ...base,

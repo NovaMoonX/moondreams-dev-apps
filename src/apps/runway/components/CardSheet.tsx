@@ -50,7 +50,11 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
   const moves = useAppSelector((state) => state.runway.moves);
   const [takingBack, setTakingBack] = useState<string | null>(null);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? 0,
+  );
   const payments = [...(collectCardPaid(moves)[card.id] ?? [])]
+    .filter((payment) => payment.on >= startDate)
     .sort((a, b) => b.on - a.on || (a.moveId < b.moveId ? 1 : -1))
     .slice(0, RECENT_PAYMENTS);
   const name = getCardName(card, cards);

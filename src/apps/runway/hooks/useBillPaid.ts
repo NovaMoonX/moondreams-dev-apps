@@ -11,7 +11,7 @@ import { CHECKLIST_R3_WORDS, CHECKLIST_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { countMarks } from '@apps/runway/engine/progress';
-import { getBillCardId } from '@apps/runway/utils/cardText';
+import { getMarkCardId } from '@apps/runway/utils/cardText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   markBillPaid,
@@ -32,11 +32,7 @@ export async function markPaymentPaid(
   const encryption = await getRunwayEncryption(uid);
   await markBillPaid(uid, encryption, {
     billId,
-    cardId: getBillCardId(
-      store.getState().runway.versions,
-      billId,
-      payment.dueOn,
-    ),
+    cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
     dueOn: payment.dueOn,
     amountCents: payment.totalCents,
     fundedCents: payment.heldNowCents,

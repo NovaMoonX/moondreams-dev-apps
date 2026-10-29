@@ -87,7 +87,7 @@ export function describePurchaseEdit(
   before: OpenPurchase,
   after: PurchaseFields,
   nameOf: (envelopeId: string) => string,
-  cardNameOf: (cardId: string | null) => string = () => 'a card',
+  cardNameOf: (cardId: string | null) => string,
 ): string {
   const was = (value: string | null) => value?.trim() || 'nothing';
   const shape = (lines: readonly PurchaseLine[]) =>

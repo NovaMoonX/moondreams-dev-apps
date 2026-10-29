@@ -32,6 +32,11 @@ import {
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard } from '@apps/runway/types';
+import {
+  selectClosingBase,
+  selectRecentFrom,
+} from '@apps/runway/store/selectors/historySelectors';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { getCardName } from '@apps/runway/utils/cardText';
 
 interface PayCardSheetProps {
@@ -77,6 +82,13 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const paidCents =
     cents !== null && cents > 0 && cents <= MAX_PURCHASE_CENTS ? cents : null;
   const paidOn = fromDateInputValue(day) ?? null;
+  // A payment before tracking started, or inside months already added up, would count nowhere.
+  const floor = useAppSelector((state) =>
+    Math.max(
+      state.runway.plan?.startDate ?? 0,
+      selectClosingBase(state) === null ? 0 : (selectRecentFrom(state) ?? 0),
+    ),
+  );
   const extraCents =
     paidCents !== null && paidCents > reserveCents
       ? paidCents - reserveCents
@@ -84,6 +96,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const getBlocker = () => {
     if (paidCents === null) return CARD_WORDS.needsAmount;
     if (paidOn === null || paidOn > today) return CARD_WORDS.needsDay;
+    if (paidOn < floor) return CARD_WORDS.beforeTracking(formatDateUTC(floor));
     return null;
   };
   const blocker = getBlocker();
@@ -194,6 +207,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
           value={day}
           onChange={setDay}
           todayValue={toDateInputValue(today)}
+          min={floor === 0 ? undefined : toDateInputValue(floor)}
           max={toDateInputValue(today)}
           disabled={isSaving}
         />

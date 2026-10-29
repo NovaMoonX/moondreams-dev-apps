@@ -1,7 +1,9 @@
-import { CARD_ISSUERS } from '@apps/runway/constants';
+import { CARD_ISSUERS, CARD_WORDS } from '@apps/runway/constants';
 import type { OpenCard, OpenVersion } from '@apps/runway/types';
 import { resolveVersion } from '@apps/runway/engine/resolve';
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
+import type { RootState } from '@/store';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 
 const issuerMatcher = createOptionMatcher({
   typos: true,
@@ -69,4 +71,22 @@ export function getBillCardName(
   const cardId = getBillCardId(versions, billId, dueOn);
   const card = cards.find((entry) => entry.id === cardId);
   return card ? getCardName(card, cards) : null;
+}
+
+/** Names a card by id for a sentence: the card's name, or "Cash or debit" for none. */
+export const getCardNamer =
+  (cards: readonly OpenCard[]) => (cardId: string | null) => {
+    const found = cards.find((card) => card.id === cardId);
+    return found ? getCardName(found, cards) : CARD_WORDS.cashOrDebit;
+  };
+
+/** The card a bill payment marked now is charged to: only while tracking, since cards are part of it. */
+export function getMarkCardId(
+  state: RootState,
+  billId: string,
+  dueOn: number,
+): string | null {
+  return selectLevel(state) === 'track'
+    ? getBillCardId(state.runway.versions, billId, dueOn)
+    : null;
 }

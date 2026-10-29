@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useStore } from 'react-redux';
 
 import { useAppSelector, type RootState } from '@/store';
-import { CARD_WORDS, CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
+import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -30,7 +30,7 @@ import {
   isSamePayload,
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
-import { getCardName } from '@apps/runway/utils/cardText';
+import { getCardNamer } from '@apps/runway/utils/cardText';
 import {
   getChangeSpan,
   INITIAL_FROM_WHEN,
@@ -136,10 +136,7 @@ export function useChangeFlow({
   const summaryText =
     candidate === null
       ? ''
-      : describeChange(current, candidate, (cardId) => {
-          const found = allCards.find((card) => card.id === cardId);
-          return found ? getCardName(found, allCards) : CARD_WORDS.cashOrDebit;
-        });
+      : describeChange(current, candidate, getCardNamer(allCards));
 
   const changeJson = isUnchanged
     ? null

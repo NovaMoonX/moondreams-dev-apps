@@ -39,7 +39,11 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import type { RecordLine } from '@apps/runway/types';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
-import { getBillCardId, getBillCardName } from '@apps/runway/utils/cardText';
+import {
+  getBillCardName,
+  getCardName,
+  getMarkCardId,
+} from '@apps/runway/utils/cardText';
 
 interface ChecklistBillRowProps {
   line: RecordLine;
@@ -233,11 +237,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         encryption,
         unpaid.map(({ billId, payment }) => ({
           billId,
-          cardId: getBillCardId(
-            store.getState().runway.versions,
-            billId,
-            payment.dueOn,
-          ),
+          cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
           dueOn: payment.dueOn,
           amountCents: payment.totalCents,
           fundedCents: payment.heldNowCents,
@@ -246,11 +246,27 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         })),
         dayLines,
       );
+      const state = store.getState();
+      const chargedCards = [
+        ...new Set(
+          unpaid.flatMap(({ billId, payment }) => {
+            const cardId = getMarkCardId(state, billId, payment.dueOn);
+            const card = state.runway.cards.find(
+              (entry) => entry.id === cardId,
+            );
+            return card ? [getCardName(card, state.runway.cards)] : [];
+          }),
+        ),
+      ];
       addToast({
         title:
           written.length === 0 && unpaid.length > 0
             ? CHECKLIST_R3_WORDS.nothingToMark
             : CHECKLIST_R3_WORDS.markedAllPaid(written.length),
+        description:
+          chargedCards.length === 0
+            ? undefined
+            : CARD_WORDS.markedAllWith(chargedCards.join(', ')),
         type: 'success',
         action:
           written.length === 0 && lineIds.length === 0
