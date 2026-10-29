@@ -7,6 +7,7 @@ import type {
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
+  GroupSealed,
   OpenVersion,
   Pairing,
   PayLineSealed,
@@ -70,8 +71,25 @@ async function openVersion(
     };
   }
   if (version.kind === 'bill') {
-    const payload = await read<BillSealed>(version.sealed);
-    return { ...base, kind: 'bill', payload };
+    const payload = await read<
+      Omit<BillSealed, 'groupId'> & { groupId?: string | null }
+    >(version.sealed);
+    return {
+      ...base,
+      kind: 'bill',
+      payload: { ...payload, groupId: payload.groupId ?? null },
+    };
+  }
+  if (version.kind === 'group') {
+    const payload = await read<GroupSealed>(version.sealed);
+    return {
+      ...base,
+      kind: 'group',
+      payload: {
+        ...payload,
+        startingPriority: payload.startingPriority ?? null,
+      },
+    };
   }
   if (version.kind === 'goal') {
     const payload = await read<GoalSealed>(version.sealed);
