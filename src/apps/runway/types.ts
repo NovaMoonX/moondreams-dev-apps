@@ -460,6 +460,9 @@ export interface PurchaseSealed {
   /** Negative for a refund. */
   amountCents: Cents;
   merchant: string | null;
+  /** The person's own name for the purchase; it titles the row before the merchant. Null on purchases saved before labels existed. */
+  label: string | null;
+  /** A memo, read on the purchase's sheet and never used as its title. */
   note: string | null;
   /** Adds up to `amountCents`. */
   lines: PurchaseLine[];

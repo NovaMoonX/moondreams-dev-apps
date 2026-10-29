@@ -82,6 +82,7 @@ export async function openPurchase(
     updatedAt: entry.updatedAt,
     amountCents: payload.amountCents,
     merchant: payload.merchant ?? null,
+    label: payload.label ?? null,
     note: payload.note ?? null,
     lines: payload.lines ?? [],
     refundOfId: payload.refundOfId ?? null,

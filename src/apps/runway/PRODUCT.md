@@ -10,6 +10,15 @@ Runway is an income-first budget planner for money that does not arrive or leave
 
 Most budgets start from a month and a bank balance. Money actually arrives in pieces, from more than one place, bills land between paychecks, and a checking balance includes money that is already spoken for: rent due Friday, the credit card bill you are about to owe. Runway starts from the money as it arrives, keeps what is spoken for apart from what you can spend, tells you how far ahead everything is covered, and never asks for a bank login to get started, so anyone can plan a budget with it on day one.
 
+## Who It Is Built For First
+
+The owner is Runway's first user, and every change is checked against how they handle money:
+
+- **Spending goes on credit cards.** Purchases and most bills are charged to several cards, each paid in full every month. A card's balance is money already spoken for, not a debt carried.
+- **One account holds the cash.** Deposits land in one account (Wealthfront cash, with buckets that each stand for an envelope or a goal) and the cards are paid from it. Runway's envelopes and goals are those buckets, so the money never has to move between accounts for the budget to stay true.
+- **The problem it solves.** Keeping a separate account per envelope and per card meant a transfer for every purchase; when the transfers lagged, nobody knew what was really free to spend, owed on a card or set aside. Runway keeps that picture without a single transfer.
+- **Typed by hand, for now.** Importing a CSV and linking banks are on hold until the owner says otherwise, so adding a purchase, a card charge or a card payment must stay quick by hand.
+
 ## How It Works
 
 1. **Add your income.** Each source of money has one or more kinds of pay under it, each with its own schedule, amount and ending.
@@ -164,7 +173,8 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 *Track level.*
 
-- **A purchase is an amount, an envelope and a date.** The date starts as today. A note is optional.
+- **A purchase is an amount, an envelope and a date.** The date starts as today. A label (your own name for it, "Sam's birthday dinner"), the merchant and a note are optional. A row is named by the label, else the merchant, else the envelope, and its line under the name shows whichever of those the name left out. The note is a memo, read when you open the purchase.
+- **See it before you save it.** Before a purchase is added, the form shows what each envelope it touches has now and will have after ("Groceries $120.00 → $82.40 left"), and when one would go over it says so as a warning, with what Free to spend drops by.
 - **Add it from where you are.** The home screen has an Add button, and every envelope has its own, already pointed at that envelope.
 - **Split a purchase.** A mixed cart can go to more than one envelope, each with its own amount.
 - **Mark a refund.** The money returns to the envelope it came from, and a split purchase returns to each envelope in the original proportions. If that envelope has been archived, or the refund matches no purchase you have (one from before tracking started), you pick the envelope and it defaults to Free to spend. Free to spend is always worked out from the current balances, so a refund after an overspend restores it with no extra step.
