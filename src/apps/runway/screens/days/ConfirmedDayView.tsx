@@ -17,6 +17,7 @@ import RecordLineRow from '@apps/runway/components/RecordLineRow';
 import {
   CONFIRM_WORDS,
   CORRECT_WORDS,
+  DAYS_WORDS,
   DRAFT_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
@@ -29,7 +30,8 @@ import ChecklistScreen from '@apps/runway/screens/days/ChecklistScreen';
 import RecordScreen from '@apps/runway/screens/days/RecordScreen';
 import {
   selectEffectiveSplit,
-  selectIsRecordsReady,
+  selectIsDayCorrectable,
+  selectIsDayRecordsReady,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
@@ -42,7 +44,12 @@ interface ConfirmedDayViewProps {
 function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
   const { isHidden } = useValuesHidden();
   const [isRecordOpen, setIsRecordOpen] = useState(false);
-  const isReady = useAppSelector(selectIsRecordsReady);
+  const isReady = useAppSelector((state) =>
+    selectIsDayRecordsReady(state, day.dayKey),
+  );
+  const isCorrectable = useAppSelector((state) =>
+    selectIsDayCorrectable(state, day.dayKey),
+  );
   const [isCorrecting, setIsCorrecting] = useState(false);
   const record = useAppSelector((state) =>
     selectEffectiveSplit(state, day.dayKey),
@@ -73,7 +80,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
     const dayLeft = <CoverageHeadline freeCents={freeToSpendCents} />;
     return (
       <div className='space-y-4'>
-        <ChecklistScreen day={day} lines={lines} />
+        {isCorrectable && <ChecklistScreen day={day} lines={lines} />}
         {lines.length === 0 ? (
           <EmptyCard icon={<FileText className='h-5 w-5' />}>
             Nothing was set to be funded from this day.
@@ -116,16 +123,23 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
             label={CONFIRM_WORDS.recordDoor}
             onClick={() => setIsRecordOpen(true)}
           />
-          <ActionRow
-            isGrouped
-            isRoomy
-            hasChevron
-            icon={<Pencil />}
-            label={CORRECT_WORDS.door}
-            subtitle={CORRECT_WORDS.doorHint}
-            onClick={() => setIsCorrecting(true)}
-          />
+          {isCorrectable && (
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<Pencil />}
+              label={CORRECT_WORDS.door}
+              subtitle={CORRECT_WORDS.doorHint}
+              onClick={() => setIsCorrecting(true)}
+            />
+          )}
         </ActionGroup>
+        {!isCorrectable && (
+          <p className='text-muted-foreground text-sm'>
+            {DAYS_WORDS.readOnlyNote}
+          </p>
+        )}
       </div>
     );
   };

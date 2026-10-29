@@ -60,7 +60,7 @@ const groupByMonth = (purchases: readonly OpenPurchase[]) =>
       : [...groups, { label, rows: [row] }];
   }, []);
 
-/** What was spent since the newest closing, newest first; earlier purchases are counted in the figures and arrive with the history view. Search covers the window in view. */
+/** The purchases of the period in view, newest first. Search covers that period. */
 function SpendScreen() {
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const allSpendPurchases = useAppSelector(selectSpendPurchases);
@@ -251,7 +251,9 @@ function SpendScreen() {
               setQuery(text);
               setShown(SPEND_PAGE_SIZE);
             }}
-            searchPlaceholder={SPEND_WORDS.search}
+            searchPlaceholder={
+              isQuickPeriod ? SPEND_WORDS.search : `Search ${periodLabel}`
+            }
             filterLabel='Filter purchases'
             activeFilters={
               filterId === null

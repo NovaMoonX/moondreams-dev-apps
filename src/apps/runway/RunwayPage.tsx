@@ -34,6 +34,8 @@ import SpendScreen from '@apps/runway/screens/spend/SpendScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectIsDaysLoaded,
+  selectHistoryListedDays,
+  selectIsDayOlderThanRecent,
   selectListedDays,
   selectSpendPurchases,
   selectIsPlanItemsLoaded,
@@ -129,6 +131,7 @@ function RunwayContent() {
     activeTab: requestedTab,
     showTab,
     openDayKey,
+    daysMonth,
     closeDay,
     moreEntry,
     closeMoreEntry,
@@ -145,8 +148,20 @@ function RunwayContent() {
   const hasOpenDay = useAppSelector((state) => {
     if (openDayKey === null) return false;
     const { open, confirmed } = selectListedDays(state, today);
-    return [...open, ...confirmed].some((day) => day.dayKey === openDayKey);
+    return [
+      ...open,
+      ...confirmed,
+      ...selectHistoryListedDays(state, today),
+    ].some((day) => day.dayKey === openDayKey);
   });
+  const isOlderDayLoading = useAppSelector(
+    (state) =>
+      openDayKey !== null &&
+      daysMonth !== null &&
+      selectIsDayOlderThanRecent(state, openDayKey) &&
+      state.runway.historyFor === null &&
+      state.runway.historyFailedFor === null,
+  );
   const level = useAppSelector(selectLevel);
   const activeTab =
     requestedTab === 'spend' && level === 'plan' ? 'home' : requestedTab;
@@ -308,7 +323,10 @@ function RunwayContent() {
   }
 
   // Screens opened from an income day sit above it, so the day is checked last.
-  if (openDayKey !== null && (hasOpenDay || !isItemsLoaded)) {
+  if (
+    openDayKey !== null &&
+    (hasOpenDay || !isItemsLoaded || isOlderDayLoading)
+  ) {
     return (
       <div>
         <IncomeDayScreen dayKey={openDayKey} onClose={closeDay} />

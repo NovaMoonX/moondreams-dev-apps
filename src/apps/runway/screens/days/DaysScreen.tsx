@@ -4,6 +4,8 @@ import { Banknote, CalendarDays } from 'lucide-react';
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
 import HelpTip from '@/components/HelpTip';
+import { PillGroup } from '@/components/PillGroup';
+import ScopeChip from '@/components/ScopeChip';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
@@ -19,7 +21,11 @@ import {
 } from '@apps/runway/constants';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
+import { getMonthStart } from '@apps/runway/engine/closings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
+import { listHistoryMonths } from '@apps/runway/utils/historyWindow';
+import EarlierDaysView from '@apps/runway/screens/days/EarlierDaysView';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import ExpectedScreen from '@apps/runway/screens/days/ExpectedScreen';
@@ -37,6 +43,12 @@ import {
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeRangeBasis } from '@apps/runway/utils/rangeText';
+
+const monthFormat = new Intl.DateTimeFormat('en-US', {
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+});
 
 const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? '' : 's'}`;
@@ -67,7 +79,24 @@ function DaysScreen() {
         cushion.billCount > 0 && plural(cushion.billCount, 'bill'),
       ].filter(Boolean)
     : [];
-  const { openDay } = useRunwayUrlState();
+  const { openDay, daysMonth, showDaysMonth } = useRunwayUrlState();
+  const recentFrom = useAppSelector(selectRecentFrom);
+  const startDate = useAppSelector(
+    (state) => state.runway.plan?.startDate ?? null,
+  );
+  const monthOptions =
+    recentFrom === null
+      ? []
+      : listHistoryMonths(startDate, recentFrom)
+          .slice(0, 120)
+          .map((month) => ({
+            value: month,
+            label: monthFormat.format(getMonthStart(month)),
+          }));
+  const earlierMonth =
+    daysMonth !== null && monthOptions.some((o) => o.value === daysMonth)
+      ? daysMonth
+      : null;
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSettledExpanded, setIsSettledExpanded] = useState(false);
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -82,7 +111,40 @@ function DaysScreen() {
       ? confirmed.slice(0, SETTLED_DAYS_PREVIEW)
       : confirmed;
 
+  const monthChip =
+    isLoaded && monthOptions.length > 0 ? (
+      <ScopeChip
+        label={
+          earlierMonth === null
+            ? DAYS_WORDS.earlierMonths
+            : monthFormat.format(getMonthStart(earlierMonth))
+        }
+        title={DAYS_WORDS.earlierMonths}
+      >
+        {(close) => (
+          <PillGroup
+            label={DAYS_WORDS.earlierMonths}
+            options={monthOptions}
+            value={earlierMonth}
+            onChange={(value) => {
+              showDaysMonth(value);
+              close();
+            }}
+          />
+        )}
+      </ScopeChip>
+    ) : null;
+
   const getBody = () => {
+    if (earlierMonth !== null) {
+      return (
+        <EarlierDaysView
+          key={earlierMonth}
+          month={earlierMonth}
+          onBack={() => showDaysMonth(null)}
+        />
+      );
+    }
     if (!isLoaded) {
       return (
         <p className='text-muted-foreground text-sm'>
@@ -171,7 +233,7 @@ function DaysScreen() {
     <div className='space-y-4'>
       <div className='flex items-center justify-between gap-2'>
         <div className='min-w-0 flex-1'>
-          {lookahead && days.length > 0 && (
+          {earlierMonth === null && lookahead && days.length > 0 && (
             <HoldsThroughLine
               lookahead={lookahead}
               help={
@@ -195,6 +257,7 @@ function DaysScreen() {
             />
           )}
         </div>
+        {monthChip}
       </div>
       {getBody()}
       {hasIncome && (

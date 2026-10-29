@@ -663,7 +663,6 @@ export const SPEND_WORDS = {
   loading: 'Getting your purchases.',
   search: 'Search purchases',
   noMatch: 'No purchase matches that.',
-  windowNote: 'Earlier purchases are counted in your figures but not listed.',
   windowFrom: 'Showing purchases from',
   all: 'All',
   amount: 'Amount',
@@ -1121,6 +1120,15 @@ export const FIX_WORDS = {
 export const DAYS_WORDS = {
   addExpected: 'Add expected money',
   addExpectedShort: 'Add money',
+  earlierMonths: 'Earlier months',
+  backToRecent: 'Back to recent days',
+  loadingMonth: 'Getting these income days.',
+  loadingDay: 'Getting this day.',
+  failedMonth: 'These income days did not load. Nothing was changed.',
+  emptyMonth: 'No income was confirmed in this month.',
+  noMatch: 'No income day matches that.',
+  readOnlyNote:
+    "To change today's figures, correct a recent day or the payment it came from.",
 } as const;
 
 export const PLAN_VIEW_EMOJI = {
@@ -1370,8 +1378,7 @@ export const CORRECT_COVER_WORDS = {
   needsCuts: 'Give some items less this time to correct the day.',
   freeRow: 'Free\u00a0to\u00a0spend',
   now: 'Now',
-  freeLead:
-    'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
+  freeLead: 'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
   coverGone:
     'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
 } as const;
