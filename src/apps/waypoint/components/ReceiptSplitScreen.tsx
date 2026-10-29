@@ -92,8 +92,8 @@ function SplitStep({ trip, currentUserId, prefill, reading, isDirtyRef, onClose 
   const { result, isComplete } = split;
 
   useEffect(() => {
-    isDirtyRef.current = split.isDirty;
-  }, [isDirtyRef, split.isDirty]);
+    isDirtyRef.current = split.isDirty || payerUid !== null;
+  }, [isDirtyRef, split.isDirty, payerUid]);
   const canSave = isComplete && payerUid !== null && title.trim() !== '' && !isSubmitting && (foreignCurrency === null || isUsdConfirmed);
   const unclaimedCount = result.unclaimedLineIds.length;
 

@@ -37,6 +37,7 @@ interface LineEditFieldsProps {
 
 function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
   const [name, setName] = useState(line.name);
+  const [canAutoFocus] = useState(() => window.matchMedia('(hover: hover) and (pointer: fine)').matches);
   const [priceText, setPriceText] = useState(line.priceCents ? centsToInputValue(line.priceCents) : '');
   const canSave = name.trim() !== '';
 
@@ -48,6 +49,8 @@ function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
           <Input
             aria-label='Item name'
             variant='outline'
+            className='h-10'
+            autoFocus={canAutoFocus}
             placeholder='Margherita pizza'
             value={name}
             onChange={(event) => setName(event.target.value)}
@@ -55,7 +58,7 @@ function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
         </div>
         <div className='space-y-1.5'>
           <Label>Price</Label>
-          <MoneyInput variant='outline' ariaLabel='Item price' placeholder='0.00' value={priceText} onChange={setPriceText} />
+          <MoneyInput variant='outline' className='h-10' ariaLabel='Item price' placeholder='0.00' value={priceText} onChange={setPriceText} />
         </div>
       </div>
       <div className='flex gap-2'>
@@ -78,7 +81,7 @@ function LineEditFields({ line, onSave, onCancel }: LineEditFieldsProps) {
 const { option } = DropdownMenuFactories;
 
 function LineRow({ line, holders, split }: LineRowProps) {
-  const { state, people, setLineClaims, updateLine, removeLine, openLine, startEditing, stopEditing } = split;
+  const { state, people, setLineClaims, setGroupClaims, updateLine, removeLine, openLine, startEditing, stopEditing } = split;
   const isOpen = state.openLineId === line.id;
   const isEditing = isOpen && state.editingLineId === line.id;
   const names = people.filter((person) => holders.includes(person.id)).map((person) => person.name);
@@ -89,6 +92,7 @@ function LineRow({ line, holders, split }: LineRowProps) {
     },
     [isOpen],
   );
+  const unitCount = line.groupId ? state.lines.filter((other) => other.groupId === line.groupId).length : 0;
   const nextUnclaimedId = state.lines.find((other) => other.id !== line.id && (state.claims[other.id] ?? []).length === 0)?.id;
 
   return (
@@ -115,7 +119,6 @@ function LineRow({ line, holders, split }: LineRowProps) {
         <div className='bg-muted/50 space-y-3 px-3 pt-1 pb-3'>
           {isEditing ? (
             <LineEditFields
-              key={line.id}
               line={line}
               onSave={(changes) => {
                 updateLine(line.id, changes);
@@ -160,9 +163,14 @@ function LineRow({ line, holders, split }: LineRowProps) {
                   variant='tertiary'
                   className='border-border size-10! shrink-0 border'
                   ariaLabel={`More for ${line.name || 'this item'}`}
-                  items={[option({ label: 'Edit item', value: 'edit' }), option({ label: 'Remove item', value: 'remove' })]}
+                  items={[
+                    ...(unitCount > 1 && holders.length > 0 ? [option({ label: `Same for all ${unitCount}`, value: 'same' })] : []),
+                    option({ label: 'Edit item', value: 'edit' }),
+                    option({ label: 'Remove item', value: 'remove' }),
+                  ]}
                   onItemSelect={(value) => {
-                    if (value === 'edit') startEditing(line.id);
+                    if (value === 'same' && line.groupId) setGroupClaims(line.groupId, holders);
+                    else if (value === 'edit') startEditing(line.id);
                     else removeLine(line.id);
                   }}
                 />
@@ -196,7 +204,7 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
   ];
 
   const billWithoutOwnTip = itemsCents + taxCents + split.feesCents - split.discountCents + receiptTipCents;
-  const hasShares = result.participants.length > 0 && itemsCents > 0;
+  const hasShares = unclaimedCount < state.lines.length && itemsCents > 0;
   const leftOut = hasShares
     ? people.filter((person) => (result.totals[person.id]?.totalCents ?? 0) === 0).map((person) => person.name)
     : [];
@@ -347,6 +355,8 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
               })}
           </ul>
         )}
+        {hasShares && (
+          <>
         <div className='flex items-center justify-between gap-3 px-[13px] text-sm'>
           <span className='text-muted-foreground'>Bill total</span>
           <span className='font-semibold whitespace-nowrap'>{formatCents(result.totalCents)}</span>
@@ -360,6 +370,8 @@ function ReceiptSplitEditor({ split }: ReceiptSplitEditorProps) {
         )}
         {leftOut.length > 0 && unclaimedCount === 0 && (
           <p className='text-muted-foreground px-[13px] text-xs'>Not in this split: {formatNames(leftOut)}.</p>
+        )}
+          </>
         )}
       </section>
     </div>

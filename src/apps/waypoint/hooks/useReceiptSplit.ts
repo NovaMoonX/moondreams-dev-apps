@@ -56,10 +56,11 @@ const toSnapshot = (state: ReceiptSplitState) =>
   ]);
 
 function getInitialState(reading: ReceiptReading | null): ReceiptSplitState {
-  const read = reading?.lines ?? [];
-  const itemized = read.flatMap((line) => itemizeLine(line.name, line.quantity, line.priceCents));
-  const entries = itemized.length > MAX_ITEMIZED_LINES ? read.map((line) => ({ name: line.quantity === 1 ? line.name : `${line.quantity}× ${line.name}`, priceCents: line.priceCents })) : itemized;
-  const lines = entries.map((entry) => ({ id: generateUuid(), ...entry }));
+  const lines = (reading?.lines ?? []).reduce<ReceiptLine[]>((acc, line) => {
+    const units = itemizeLine(line.name, line.quantity, line.priceCents, acc.length + line.quantity <= MAX_ITEMIZED_LINES);
+    const groupId = units.length > 1 ? generateUuid() : undefined;
+    return [...acc, ...units.map((unit) => ({ id: generateUuid(), ...unit, groupId }))];
+  }, []);
   return {
     lines,
     claims: {},
@@ -110,6 +111,15 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
   );
 
   const patch = (changes: Partial<ReceiptSplitState>) => setState((current) => ({ ...current, ...changes }));
+
+  const setGroupClaims = (groupId: string, uids: string[]) =>
+    setState((current) => ({
+      ...current,
+      claims: current.lines.reduce(
+        (claims, line) => (line.groupId === groupId ? { ...claims, [line.id]: uids } : claims),
+        current.claims,
+      ),
+    }));
 
   const setLineClaims = (lineId: string, uids: string[]) =>
     setState((current) => ({ ...current, claims: { ...current.claims, [lineId]: uids } }));
@@ -179,6 +189,7 @@ export function useReceiptSplit(reading: ReceiptReading | null, people: ReceiptP
     isComplete,
     patch,
     setLineClaims,
+    setGroupClaims,
     updateLine,
     openLine,
     startEditing,

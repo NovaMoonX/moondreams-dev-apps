@@ -66,7 +66,9 @@ assert.deepEqual(itemizeLine('Ramen', 2, 1890), [{ name: 'Ramen (1 of 2)', price
 assert.deepEqual(itemizeLine('Beer', 3, 1000).map((unit) => unit.priceCents), [334, 333, 333]);
 assert.deepEqual(itemizeLine('Gyoza', 1, 850), [{ name: 'Gyoza', priceCents: 850 }]);
 assert.deepEqual(itemizeLine('Ramen', 0.5, 400), [{ name: '0.5× Ramen', priceCents: 400 }]);
-assert.deepEqual(itemizeLine('Shots', 13, 1300), [{ name: '13× Shots', priceCents: 1300 }]);
+assert.deepEqual(itemizeLine('Shots', 25, 2500), [{ name: '25× Shots', priceCents: 2500 }]);
+assert.equal(itemizeLine('Shots', 24, 2400).length, 24);
+assert.deepEqual(itemizeLine('Beer', 3, 900, false), [{ name: '3× Beer', priceCents: 900 }]);
 assert.equal(sum(itemizeLine('Wings', 7, 4999).map((unit) => unit.priceCents)), 4999);
 
 // Random bills always add up to the cent

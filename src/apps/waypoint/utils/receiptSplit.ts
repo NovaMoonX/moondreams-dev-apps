@@ -3,6 +3,8 @@ export interface ReceiptLine {
   id: string;
   name: string;
   priceCents: number;
+  /** Shared by the units of one itemized quantity. */
+  groupId?: string;
 }
 
 export type TipSplit = 'EVEN' | 'PROPORTIONAL';
@@ -149,11 +151,16 @@ export function splitReceipt(input: ReceiptSplitInput): ReceiptSplitResult {
   return result;
 }
 
-export const MAX_ITEMIZED_QUANTITY = 12;
+export const MAX_ITEMIZED_QUANTITY = 24;
 
-/** A line bought in a quantity as one entry per unit ("Ramen (1 of 2)"), the price shared so the units add back up to the line. A quantity that isn't a small whole number stays one entry that says it ("0.5× Ramen"). */
-export function itemizeLine(name: string, quantity: number, priceCents: number): { name: string; priceCents: number }[] {
-  const isItemizable = Number.isInteger(quantity) && quantity >= 2 && quantity <= MAX_ITEMIZED_QUANTITY;
+/** A line bought in a quantity as one entry per unit (`isAllowed` false keeps it whole) ("Ramen (1 of 2)"), the price shared so the units add back up to the line. A quantity that isn't a whole number up to 24 stays one entry that says it ("0.5× Ramen"). */
+export function itemizeLine(
+  name: string,
+  quantity: number,
+  priceCents: number,
+  isAllowed = true,
+): { name: string; priceCents: number }[] {
+  const isItemizable = isAllowed && Number.isInteger(quantity) && quantity >= 2 && quantity <= MAX_ITEMIZED_QUANTITY;
   if (!isItemizable) {
     return [{ name: quantity === 1 ? name : `${quantity}× ${name}`, priceCents }];
   }
