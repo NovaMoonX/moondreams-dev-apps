@@ -38,7 +38,7 @@ export interface MarkBillPaidInput {
   /** The due date of the payment being paid. */
   dueOn: DateOnly;
   amountCents: Cents;
-  /** What was set aside for it already; the rest comes out of Free to spend. */
+  /** What was set aside for it already; the rest comes out of Free to Spend. */
   fundedCents: Cents;
   paidOn: DateOnly;
   /** The card it is charged to; null when it is paid in cash. */

@@ -56,7 +56,7 @@ export function describeBillProgress(payment: BillPayment) {
         ? `Paid ahead on ${formatDateUTC(paid.paidOn)}`
         : `Paid ${formatDateUTC(paid.paidOn)}`;
     return paid.fromFreeCents > 0
-      ? `${when} · ${formatCents(paid.fromFreeCents)} came from Free to spend`
+      ? `${when} · ${formatCents(paid.fromFreeCents)} came from Free to Spend`
       : when;
   }
   if (fundedCents <= 0) return null;

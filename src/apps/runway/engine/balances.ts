@@ -35,7 +35,7 @@ export interface BalancesInput {
   expectedOn?: ReadonlyMap<string, DateOnly>;
   /** Which plan items are goals, bills and envelopes, and which ids are cards. */
   kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope' | 'card'>>;
-  /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to spend from then. */
+  /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to Spend from then. */
   releasedFrom?: Readonly<Record<string, DateOnly>>;
   /** The day the figures are for, which `releasedFrom` is read against; every release counts when it is left out. */
   asOf?: DateOnly;
@@ -50,7 +50,7 @@ export interface BalancesInput {
 export interface Balances {
   /** A starting point exists. */
   isStarted: boolean;
-  /** The person said how much money they have; without it Free to spend is unknown, never zero. */
+  /** The person said how much money they have; without it Free to Spend is unknown, never zero. */
   hasMoney: boolean;
   /** The starting money, plus what arrived since, less the bills paid. */
   moneyOnHandCents: Cents;
@@ -277,7 +277,7 @@ export function deriveBalances(input: BalancesInput): Balances {
   return result;
 }
 
-/** How the Free to spend figure reads: the amount, over-assigned, or not known yet. */
+/** How the Free to Spend figure reads: the amount, over-assigned, or not known yet. */
 export type FreeToSpendFigure =
   | { kind: 'amount'; cents: Cents }
   | { kind: 'over'; cents: Cents }

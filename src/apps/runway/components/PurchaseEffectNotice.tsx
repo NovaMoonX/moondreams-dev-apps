@@ -1,3 +1,5 @@
+import { CreditCard } from 'lucide-react';
+
 import SensitiveValue from '@/components/SensitiveValue';
 import InlineNotice from '@/components/InlineNotice';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -17,10 +19,8 @@ export interface EnvelopeChange {
 
 interface PurchaseEffectNoticeProps {
   changes: readonly EnvelopeChange[];
-  /** How far Free to spend falls; negative when it rises. */
+  /** How far Free to Spend falls; negative when it rises. */
   freeDropCents: number;
-  /** What a card will wait for, when the purchase is charged to one. */
-  cardLine?: string | null;
 }
 
 const figure = (cents: number) => {
@@ -28,22 +28,16 @@ const figure = (cents: number) => {
   return `${value} ${word}`;
 };
 
-/** Before a purchase is saved, what each envelope it touches has now and will have after, and what Free to spend does when it moves. */
+/** Before a purchase is saved, what each envelope it touches has now and will have after, and what Free to Spend does when it moves. */
 function PurchaseEffectNotice({
   changes,
   freeDropCents,
-  cardLine = null,
 }: PurchaseEffectNoticeProps) {
   const { isHidden } = useValuesHidden();
   const isWorseOver = (change: EnvelopeChange) =>
     change.afterCents < 0 && change.afterCents < change.beforeCents;
   const isOver = changes.some(isWorseOver);
-  if (
-    changes.length === 0 &&
-    cardLine === null &&
-    (freeDropCents === 0 || isHidden)
-  )
-    return null;
+  if (changes.length === 0 && (freeDropCents === 0 || isHidden)) return null;
   if (isHidden && isOver) return <NeedsALookRow />;
 
   const shown = [
@@ -53,8 +47,8 @@ function PurchaseEffectNotice({
   const rest = changes.length - shown.length;
   const freeLine =
     freeDropCents > 0
-      ? `Free to spend drops by ${formatCents(freeDropCents)}.`
-      : `Free to spend goes up by ${formatCents(-freeDropCents)}.`;
+      ? `Free to Spend drops by ${formatCents(freeDropCents)}.`
+      : `Free to Spend goes up by ${formatCents(-freeDropCents)}.`;
 
   return (
     <div role='status'>
@@ -86,13 +80,23 @@ function PurchaseEffectNotice({
           <p className='text-muted-foreground mt-1'>and {rest} more</p>
         )}
         {freeDropCents !== 0 && !isHidden && <p className='mt-1'>{freeLine}</p>}
-        {cardLine && (
-          <p className='mt-1'>
-            <MaskedText>{cardLine}</MaskedText>
-          </p>
-        )}
       </InlineNotice>
     </div>
+  );
+}
+
+/** What a purchase does to a card's balance, kept apart from the envelope notice so each says one thing. */
+export function CardChargeNotice({ line }: { line: string }) {
+  return (
+    <p
+      role='status'
+      className='text-muted-foreground flex items-start gap-2 px-1 text-sm'
+    >
+      <CreditCard className='mt-0.5 size-4 shrink-0' aria-hidden='true' />
+      <span>
+        <MaskedText>{line}</MaskedText>
+      </span>
+    </p>
   );
 }
 

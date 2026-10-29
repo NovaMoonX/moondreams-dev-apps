@@ -3,7 +3,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import type { Level, OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import { getLevelWords } from '@apps/runway/utils/levelText';
 
-const FREE_NAME = 'Free to spend';
+const FREE_NAME = 'Free to Spend';
 
 /** An envelope's figure with its word: assigned at Plan, and at Track what is left or how far over. */
 export function describeEnvelopeFigure(level: Level, cents: number) {

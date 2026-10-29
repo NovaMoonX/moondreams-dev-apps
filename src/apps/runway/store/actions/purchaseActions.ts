@@ -243,7 +243,7 @@ export async function editPurchase(
   });
 }
 
-/** Removes a purchase (its lines go with it, so the envelopes and Free to spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. */
+/** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. */
 export async function deletePurchase(
   uid: string,
   encryption: RunwayEncryption,

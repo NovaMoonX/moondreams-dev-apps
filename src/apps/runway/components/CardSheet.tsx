@@ -116,8 +116,12 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
     >
       {view === 'history' ? (
         <div className='space-y-4'>
-          <BackLink onBack={() => setView('menu')} />
-          <p className='text-2xl font-semibold'>{CARD_WORDS.historyTitle}</p>
+          <div className='flex items-center gap-3'>
+            <BackLink onBack={() => setView('menu')} />
+            <p className='min-w-0 text-2xl font-semibold'>
+              {CARD_WORDS.historyTitle}
+            </p>
+          </div>
           <CardHistoryView
             cardId={card.id}
             cardName={name}

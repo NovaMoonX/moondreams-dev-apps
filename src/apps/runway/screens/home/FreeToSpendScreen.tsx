@@ -51,7 +51,7 @@ interface SumRow {
   isResult?: boolean;
 }
 
-/** Free to spend in detail: the money on hand and what has a job, so the figure can be followed to its parts. */
+/** Free to Spend in detail: the money on hand and what has a job, so the figure can be followed to its parts. */
 function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const balances = useAppSelector(selectBalances);
   const level = useAppSelector(selectLevel);

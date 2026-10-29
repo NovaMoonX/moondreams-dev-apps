@@ -333,7 +333,7 @@ export interface PlanItemDoc {
   createdAt: number;
   endedAt: DateOnly | null;
   archivedAt: number | null;
-  /** From this day what the item holds is Free to spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
+  /** From this day what the item holds is Free to Spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
   heldReleasedOn: DateOnly | null;
 }
 
@@ -439,7 +439,7 @@ export interface BillPaidSealed {
   amountCents: Cents;
   /** The day the person marked it paid. */
   paidOn: DateOnly;
-  /** The part that had not been set aside yet, which came out of Free to spend. */
+  /** The part that had not been set aside yet, which came out of Free to Spend. */
   fromFreeCents: Cents;
   /** The card it was charged to, which then owes it while the cash stays put; null (or missing on an older move) when it was paid in cash. */
   cardId?: string | null;
@@ -487,7 +487,7 @@ export type StartMove = Extract<OpenMove, { kind: 'start' }>;
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
 export type PurchaseLineVia = (typeof PURCHASE_LINE_VIAS)[number];
 
-/** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to spend. */
+/** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to Spend. */
 export interface PurchaseLine {
   envelopeId: string | null;
   /** Negative on a refund. */

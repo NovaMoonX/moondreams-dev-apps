@@ -168,7 +168,7 @@ export const sumFunded = (funded: readonly FundedDay[]) =>
 /**
  * The payments as the bill's money stands now: a payment uses at most what the bill held by the later
  * of its due date and the day it was paid, after the payments before it, and the rest came from Free to
- * spend, so a correction that lowers a day a paid payment used moves the cut to Free to spend instead of
+ * spend, so a correction that lowers a day a paid payment used moves the cut to Free to Spend instead of
  * leaving the bill below zero, and money set aside after the due date pays a late payment once.
  */
 export function settlePaid(
@@ -202,7 +202,7 @@ export function settlePaid(
   return result;
 }
 
-/** What a payment marked paid on `paidOn` would use from what the bill holds, as `settlePaid` reads it; the rest of `amountCents` comes from Free to spend. */
+/** What a payment marked paid on `paidOn` would use from what the bill holds, as `settlePaid` reads it; the rest of `amountCents` comes from Free to Spend. */
 export function getHeldForPayment(
   progress: BillProgressInput,
   payment: { dueOn: DateOnly; amountCents: Cents; paidOn: DateOnly },

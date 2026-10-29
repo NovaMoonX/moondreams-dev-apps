@@ -1261,7 +1261,7 @@ async function writeSeedConfirmedDays(
   );
 }
 
-/** The laptop plan's next payment, marked paid ahead of its due date: $50.00 of it was set aside by the confirmed day, so $39.00 came from Free to spend (planned at the bill's own optimistic end, $89.00). */
+/** The laptop plan's next payment, marked paid ahead of its due date: $50.00 of it was set aside by the confirmed day, so $39.00 came from Free to Spend (planned at the bill's own optimistic end, $89.00). */
 async function writeSeedPaidAhead(
   context: SeedContext,
   plan: string,

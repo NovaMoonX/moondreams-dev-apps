@@ -1,13 +1,16 @@
 import { collectStarted } from '@apps/runway/engine/progress';
 import { useState } from 'react';
-import { CreditCard } from 'lucide-react';
+import { CreditCard, Undo2 } from 'lucide-react';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
+import FormSheet from '@/components/FormSheet';
 import SectionDivider from '@/components/SectionDivider';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useAuth } from '@/hooks/useAuth';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -15,6 +18,7 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
+import SheetHead from '@apps/runway/components/SheetHead';
 import { CARD_WORDS } from '@apps/runway/constants';
 import { collectCardHistory, withOwedAfter } from '@apps/runway/engine/cards';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -51,7 +55,7 @@ const PAID_WORDS = {
   part: CARD_WORDS.historyPaidPart,
 } as const;
 
-/** What one card was charged and paid since tracking began, newest first by month; a charge opens its purchase and a payment can be taken back. */
+/** What one card was charged and paid since tracking began, newest first by month; a charge opens its purchase and a payment opens a sheet where it can be taken back. */
 function CardHistoryView({
   cardId,
   cardName,
@@ -71,6 +75,7 @@ function CardHistoryView({
     (state) => state.runway.plan?.startDate ?? 0,
   );
   const [takingBack, setTakingBack] = useState<string | null>(null);
+  const [openPaymentId, setOpenPaymentId] = useState<string | null>(null);
 
   const balances = useAppSelector(selectBalances);
   const entries = withOwedAfter(
@@ -137,6 +142,7 @@ function CardHistoryView({
         summary: describeCardTakenBack(cardName, payment.cents, payment.on),
       });
       addToast({ title: CARD_WORDS.undone(cardName), type: 'success' });
+      setOpenPaymentId(null);
     } catch (error) {
       addToast({
         title: CARD_WORDS.undoFailed,
@@ -190,56 +196,36 @@ function CardHistoryView({
       );
     }
     return (
-      <li key={entry.id} className='flex items-start gap-3 p-3'>
-        <span
-          className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
-          aria-hidden='true'
-        >
-          <CreditCard className='h-4 w-4' />
-        </span>
-        <span className='block min-w-0 flex-1'>
-          <span className='flex items-start justify-between gap-3'>
-            <span className='font-medium'>{PAID_WORDS[entry.covers]}</span>
-            <span className='block text-right'>
-              <span
-                className={
-                  entry.isTakenBack
-                    ? 'text-muted-foreground block font-semibold tabular-nums'
-                    : 'block font-semibold tabular-nums'
-                }
-              >
-                <SensitiveValue>{formatCents(entry.cents)}</SensitiveValue>
-              </span>
-              <span className='text-muted-foreground block text-xs tabular-nums'>
-                {isHidden ? '\u00a0' : owes}
-              </span>
-            </span>
+      <ItemRow
+        key={entry.id}
+        name={PAID_WORDS[entry.covers]}
+        leading={
+          <span
+            className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
+            aria-hidden='true'
+          >
+            <CreditCard className='h-4 w-4' />
           </span>
-          <span className='flex items-center justify-between gap-3'>
-            <span className='text-muted-foreground text-sm'>{day}</span>
-            {entry.isTakenBack ? (
-              <span className='text-muted-foreground py-1.5 text-sm'>
-                {CARD_WORDS.historyTakenBack}
-              </span>
-            ) : (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                aria-label={mask(
-                  CARD_WORDS.takeBackLabel(formatCents(entry.cents), day),
-                )}
-                disabled={takingBack !== null}
-                onClick={() => void takeBack(entry)}
-              >
-                {CARD_WORDS.takeBack}
-              </Button>
-            )}
-          </span>
-        </span>
-      </li>
+        }
+        detail={
+          entry.isTakenBack ? `${day} · ${CARD_WORDS.historyTakenBack}` : day
+        }
+        figure={formatCents(entry.cents)}
+        figureWord={owes}
+        ariaLabel={`${PAID_WORDS[entry.covers]}, ${day}. Open`}
+        onOpen={
+          entry.isTakenBack ? undefined : () => setOpenPaymentId(entry.id)
+        }
+      />
     );
   };
+
+  const openPayment = entries.find(
+    (entry): entry is Payment =>
+      entry.kind === 'payment' &&
+      entry.id === openPaymentId &&
+      !entry.isTakenBack,
+  );
 
   if (!isLoaded) {
     return (
@@ -255,6 +241,33 @@ function CardHistoryView({
   }
   return (
     <div className='space-y-4'>
+      {openPayment && (
+        <FormSheet
+          isOpen
+          isDrawerWhenShort
+          onClose={() => setOpenPaymentId(null)}
+          title={CARD_WORDS.paymentTitle}
+          actions={<ValuesEyeButton />}
+        >
+          <div className='space-y-4'>
+            <SheetHead
+              label={PAID_WORDS[openPayment.covers]}
+              figure={formatCents(openPayment.cents)}
+              fact={formatDateShortUTC(openPayment.on)}
+            />
+            <ActionGroup>
+              <ActionRow
+                isGrouped
+                isDestructive
+                icon={<Undo2 />}
+                label={CARD_WORDS.takeBackAction}
+                isDisabled={takingBack !== null}
+                onClick={() => void takeBack(openPayment)}
+              />
+            </ActionGroup>
+          </div>
+        </FormSheet>
+      )}
       {months.map((month) => (
         <section key={month.label} className='space-y-2'>
           <SectionDivider label={month.label} />

@@ -362,7 +362,7 @@ function fundPairings(
 
 /**
  * The draft for one or more income days: pairings first, then every envelope funded in priority
- * order from the day's money, what is left as Free to spend, and what ran short. Pure: the same
+ * order from the day's money, what is left as Free to Spend, and what ran short. Pure: the same
  * input gives the same output, whatever order the arrays arrive in.
  */
 export function buildDraft(input: DraftInput): Draft {

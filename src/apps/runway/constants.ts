@@ -265,7 +265,7 @@ export const MOVE_KINDS = [
 ] as const;
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
-/** How a purchase line got its envelope: the person chose it, or it is Free to spend. */
+/** How a purchase line got its envelope: the person chose it, or it is Free to Spend. */
 export const PURCHASE_LINE_VIAS = ['chosen', 'free'] as const;
 /** Envelopes one split can name; the sealed lines are not checked by rules, so the device caps them. */
 export const MAX_PURCHASE_LINES = 12;
@@ -640,7 +640,7 @@ export const TRACKING_WORDS = {
 } as const;
 
 export const HOME_WORDS = {
-  freeToSpend: 'Free to spend',
+  freeToSpend: 'Free to Spend',
   notSet: 'Not set yet',
   notSetHint: 'Say what you have on hand and Runway can work this out.',
   overAssigned: 'Over-assigned',
@@ -689,15 +689,14 @@ export const SPEND_WORDS = {
   merchant: 'Merchant',
   merchantPlaceholder: 'Safeway',
   addMerchant: 'Add a merchant',
-  unsetMerchant: 'Remove merchant',
   label: 'Label',
   labelPlaceholder: "Mom's birthday dinner",
   addLabel: 'Add a label',
-  unsetLabel: 'Remove label',
   note: 'Note',
   notePlaceholder: 'Split with Sam, paid back Friday',
   addNote: 'Add a note',
-  unsetNote: 'Remove note',
+  moreDetails: 'More about it',
+  removeDetail: 'Remove',
   markRefund: 'This is a refund',
   unmarkRefund: 'Not a refund',
   split: 'Split between envelopes',
@@ -710,7 +709,7 @@ export const SPEND_WORDS = {
   noOriginal: 'Not tied to a purchase',
   pickOriginal: 'Which purchase is it for?',
   returnsTo: 'Returns to',
-  freeToSpend: 'Free to spend',
+  freeToSpend: 'Free to Spend',
   add: 'Add',
   needsAmount: 'Enter the amount.',
   needsEnvelope: 'Pick the envelope.',
@@ -781,7 +780,7 @@ export const START_WORDS = {
   billsEmpty: 'No bills yet. The ones you add are listed here.',
   envelopesEmpty: 'No envelopes yet. The ones you add are listed here.',
   goalsEmpty: 'No goals yet. The ones you add are listed here.',
-  standEmpty: 'Not entered yet. Until you do, Free to spend reads Not set yet.',
+  standEmpty: 'Not entered yet. Until you do, Free to Spend reads Not set yet.',
   addIncome: 'Add an income source',
   addAnotherIncome: 'Add another income source',
   addBill: 'Add a bill',
@@ -869,7 +868,7 @@ export const ITEM_SHEET_WORDS = {
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
   paidFromSetAside: 'It comes out of what is set aside',
-  paidFromFree: 'not set aside yet comes out of Free to spend',
+  paidFromFree: 'not set aside yet comes out of Free to Spend',
   stopHeading: 'Stop or pause',
   lineHeading: 'This income day',
   topUpSub: 'Takes what it is short from what this day has left',
@@ -1014,7 +1013,7 @@ export const ITEM_SHEET_R2_WORDS = {
   endSub: 'It stops after the day you pick',
   archiveSub: 'Off your lists. Its history stays',
   checkSub: 'Try an amount first. Nothing changes.',
-  paidFromFreeText: (amount: string) => `${amount} comes out of Free to spend`,
+  paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
   changeAmount: 'Change amount',
   eachTime: 'Each time',
   balance: 'Balance',
@@ -1220,11 +1219,11 @@ export const CHECK_RESULT_WORDS = {
   left: 'left',
   over: (name: string) => `${name} would be over`,
   overBy: 'over',
-  free: 'Free to spend',
-  fromFree: 'It could come from Free to spend, then the lowest priority first',
+  free: 'Free to Spend',
+  fromFree: 'It could come from Free to Spend, then the lowest priority first',
   fromOthers: 'It could come from, lowest priority first',
   uncovered: (amount: string) =>
-    `${amount} is more than Free to spend and the other envelopes hold. Free to spend would go over-assigned.`,
+    `${amount} is more than Free to Spend and the other envelopes hold. Free to Spend would go over-assigned.`,
 } as const;
 
 export const ITEM_KIND_NOUNS = {
@@ -1258,7 +1257,7 @@ export const FREE_SUM_WORDS = {
   goals: 'Held for goals',
   envelopesTrack: 'Left in envelopes',
   envelopesPlan: 'Set aside in envelopes',
-  result: 'Free to spend',
+  result: 'Free to Spend',
   laterFix:
     'To fix a balance later, correct the income day or the bill payment it came from.',
 } as const;
@@ -1337,10 +1336,10 @@ export const CONFIRM_FLOW_WORDS = {
   noItemMatch: 'No item matches that.',
   whyChanged: 'Why it changed',
   amountOf: (name: string) => `What ${name} gets`,
-  coveredDay: 'Covered from Free to spend',
+  coveredDay: 'Covered from Free to Spend',
 } as const;
 
-/** Confirm money arrived, round 7 review: the gap said once, and nothing that gives Free to spend away while amounts are hidden. */
+/** Confirm money arrived, round 7 review: the gap said once, and nothing that gives Free to Spend away while amounts are hidden. */
 export const CONFIRM_COVER_WORDS = {
   coverAll: ', enough to cover it.',
   coverPart: ', which covers part of it.',
@@ -1418,7 +1417,7 @@ export const HELD_WORDS = {
   releaseNow: 'It becomes Free\u00a0to\u00a0spend.',
   releaseOn: (date: string) =>
     `It becomes Free\u00a0to\u00a0spend from ${date}.`,
-  released: (name: string) => `What ${name} held is Free to spend`,
+  released: (name: string) => `What ${name} held is Free to Spend`,
   releaseFailed: (name: string) => `${name} was not changed`,
   undo: 'Undo',
   stoppedDivider: 'Stopped, still holding money',
@@ -1507,9 +1506,8 @@ export const CARD_WORDS = {
   historyTakenBack: 'Taken back',
   historyOlder: 'Earlier charges are counted but not listed.',
   historyUnknownBill: 'A bill',
-  takeBack: 'Take back',
-  takeBackLabel: (amount: string, day: string) =>
-    `Take back the ${amount} payment on ${day}`,
+  paymentTitle: 'Payment',
+  takeBackAction: 'Take back this payment',
   takeBackTitle: 'Take back this payment?',
   takeBackText: (amount: string, day: string) =>
     `The ${amount} paid on ${day} goes back to waiting on the card, and your cash goes back up by the same.`,
@@ -1551,7 +1549,7 @@ export const CARD_WORDS = {
   payDay: 'Paid',
   payAction: 'Pay off',
   payMore: (amount: string) =>
-    `That is ${amount} more than it waits for. The extra comes out of Free to spend.`,
+    `That is ${amount} more than it waits for. The extra comes out of Free to Spend.`,
   paidToast: (amount: string, name: string) => `Paid ${amount} to ${name}`,
   paidMinimumToast: (name: string) => `Paid the minimum on ${name}`,
   paidFullToast: (name: string) => `Paid ${name} in full`,
@@ -1565,12 +1563,13 @@ export const CARD_WORDS = {
   paidBy: 'Paid by',
   paidByTitle: 'What did you pay with?',
   cashOrDebit: 'Cash or debit',
-  willWait: (name: string, amount: string) =>
-    `${name} will wait for ${amount}. Free to spend changes as if you paid cash.`,
-  willWaitMore: (name: string, amount: string) =>
-    `${name} will wait for ${amount} more.`,
-  willWaitLess: (name: string, amount: string) =>
-    `${name} will wait for ${amount} less.`,
+  addsOwed: (name: string, amount: string) =>
+    `Adds ${amount} to what you owe on ${name}.`,
+  addsOwedMore: (name: string, amount: string) =>
+    `Adds ${amount} more to what you owe on ${name}.`,
+  addsOwedLess: (name: string, amount: string) =>
+    `Takes ${amount} off what you owe on ${name}.`,
+  usualCard: (envelope: string) => `What you usually use for ${envelope}`,
   loading: 'Getting what each card waits for.',
   chargedTo: (card: string) => `Charged to ${card}`,
   comingDueTitle: 'Coming due',
@@ -1583,7 +1582,7 @@ export const CARD_WORDS = {
     `Marked ${bill} paid with ${card}`,
   freeWaiting: 'Waiting to be paid on cards',
   freeWaitingHelp:
-    "Charged to your cards and not paid yet. It's set aside now, so paying a card doesn't change Free to spend.",
+    "Charged to your cards and not paid yet. It's set aside now, so paying a card doesn't change Free to Spend.",
   freeOnHandHelp:
     "Your cash. A card purchase doesn't lower it until you pay the card.",
   dueTitle: 'What day is it due each month?',

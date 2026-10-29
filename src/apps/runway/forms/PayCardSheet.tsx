@@ -231,12 +231,14 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
             disabled={isSaving}
           />
           {isBelowFull && (
-            <RevealChip
-              icon={isMinimum ? <X className='h-4 w-4' /> : undefined}
-              onClick={() => setIsMinimum((current) => !current)}
-            >
-              {CARD_WORDS.minimumChip}
-            </RevealChip>
+            <div className='flex justify-center'>
+              <RevealChip
+                icon={isMinimum ? <X className='h-4 w-4' /> : undefined}
+                onClick={() => setIsMinimum((current) => !current)}
+              >
+                {CARD_WORDS.minimumChip}
+              </RevealChip>
+            </div>
           )}
           {extraCents > 0 &&
             (isHidden ? (

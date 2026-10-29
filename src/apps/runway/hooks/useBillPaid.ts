@@ -134,7 +134,7 @@ export function useBillPaid({
     if (unfundedCents > 0 && !isQuick) {
       const isConfirmed = await confirm({
         title: `Mark ${billName} paid`,
-        message: `${mask(formatCents(unfundedCents))} of it is not set aside yet and comes out of Free to spend. Later income days stop setting this payment aside.`,
+        message: `${mask(formatCents(unfundedCents))} of it is not set aside yet and comes out of Free to Spend. Later income days stop setting this payment aside.`,
         confirmText: CHECKLIST_WORDS.markPaid,
       });
       if (!isConfirmed) return false;

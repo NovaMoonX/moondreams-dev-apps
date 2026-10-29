@@ -253,3 +253,35 @@ export function withOwedAfter(
   }, []);
   return result;
 }
+
+const USUAL_CARD_LOOKBACK = 20;
+
+/** What the person usually pays with for an envelope: the most used of their last purchases from it, a card id or null for cash; undefined when there is no purchase to go by or the usual card is gone. Ties go to the most recent. */
+export function getUsualCardId(
+  envelopeId: string,
+  purchases: readonly OpenPurchase[],
+  cardIds: readonly string[],
+): string | null | undefined {
+  const recent = purchases
+    .filter(
+      (purchase) =>
+        purchase.amountCents > 0 &&
+        purchase.lines.some((line) => line.envelopeId === envelopeId),
+    )
+    .sort((a, b) => b.date - a.date)
+    .slice(0, USUAL_CARD_LOOKBACK)
+    .map((purchase) => purchase.paidByCardId ?? null);
+  const counts = recent.reduce<Map<string | null, number>>(
+    (acc, id) => new Map(acc).set(id, (acc.get(id) ?? 0) + 1),
+    new Map(),
+  );
+  const usual = recent.reduce<string | null | undefined>(
+    (best, id) =>
+      best === undefined || (counts.get(id) ?? 0) > (counts.get(best) ?? 0)
+        ? id
+        : best,
+    undefined,
+  );
+  if (usual === undefined || usual === null) return usual;
+  return cardIds.includes(usual) ? usual : undefined;
+}
