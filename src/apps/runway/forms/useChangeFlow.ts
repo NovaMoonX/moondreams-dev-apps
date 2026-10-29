@@ -22,6 +22,7 @@ import {
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectComingDays,
+  selectGroups,
   selectSettledKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
@@ -119,6 +120,7 @@ export function useChangeFlow({
   const store = useStore<RootState>();
   const today = todayAsUtcDate();
   const days = useAppSelector((state) => selectComingDays(state, today));
+  const groups = useAppSelector((state) => selectGroups(state, today));
   const [from, setFrom] = useState(INITIAL_FROM_WHEN);
   const [step, setStep] = useState<'form' | 'reason'>('form');
   const [note, setNote] = useState('');
@@ -139,7 +141,17 @@ export function useChangeFlow({
         : null;
   const isUnchanged = candidate !== null && isSamePayload(current, candidate);
   const summaryText =
-    candidate === null ? '' : describeChange(current, candidate);
+    candidate === null
+      ? ''
+      : describeChange(
+          current,
+          candidate,
+          (groupId) =>
+            groups.find(({ item }) => item.id === groupId)?.version.payload
+              .name ??
+            newGroup?.name ??
+            'a group',
+        );
 
   const changeJson = isUnchanged
     ? null

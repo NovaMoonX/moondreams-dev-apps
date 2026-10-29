@@ -4,7 +4,11 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
+import {
+  GROUP_WORDS,
+  ITEM_SHEET_R2_WORDS,
+  PRIORITY_LABELS,
+} from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
@@ -18,6 +22,8 @@ interface BillRowProps {
   payment: BillPayment | null;
   planStance: Stance;
   today: number;
+  /** A one-time bill in a group: the group's monthly total leaves it out, and its row says so. */
+  isOutsideTotal?: boolean;
 }
 
 const getDueLine = (payment: BillPayment | null) => {
@@ -39,11 +45,20 @@ const getProgress = (payment: BillPayment | null) => {
 };
 
 /** A bill in the plan: its name, when it is next due and its amount; it opens the bill's sheet. */
-function BillRow({ billId, bill, payment, planStance, today }: BillRowProps) {
+function BillRow({
+  billId,
+  bill,
+  payment,
+  planStance,
+  today,
+  isOutsideTotal = false,
+}: BillRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
-  const dueLine = getDueLine(payment);
+  const dueLine = isOutsideTotal
+    ? `${getDueLine(payment)} · ${GROUP_WORDS.oneTimeNote}`
+    : getDueLine(payment);
   const { schedule } = bill.timing;
   const repeat =
     schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);

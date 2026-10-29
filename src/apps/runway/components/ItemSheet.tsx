@@ -5,6 +5,7 @@ import {
   CalendarOff,
   Calculator,
   Check,
+  FolderOpen,
   HandCoins,
   CircleMinus,
   History,
@@ -27,6 +28,7 @@ import BackLink from '@/components/BackLink';
 import FoldedDateField from '@/components/FoldedDateField';
 import RevealChip from '@/components/RevealChip';
 import FormSheet from '@/components/FormSheet';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
@@ -60,6 +62,8 @@ import {
   HOW_OFTEN_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
+  FORM_FLOW_WORDS,
+  GROUP_WORDS,
   ENVELOPE_SPEND_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
@@ -71,6 +75,7 @@ import {
   RELEASE_UNDO_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_CHANGE_DAYS_AHEAD,
+  MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -95,6 +100,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveItem,
   endItem,
+  changeItem,
   releaseHeld,
   setGoalState,
   undoReleaseHeld,
@@ -104,7 +110,10 @@ import {
   type HeldChoice,
 } from '@apps/runway/engine/endings';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { selectPairedBy } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectGroups,
+  selectPairedBy,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { formatCents } from '@/utils/moneyUtils';
 import InlineNotice from '@/components/InlineNotice';
@@ -121,6 +130,10 @@ import {
   describeChange,
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
+import {
+  NEW_GROUP_ID,
+  resolveGroupChoice,
+} from '@apps/runway/utils/groupChoice';
 
 type View =
   | 'menu'
@@ -131,7 +144,8 @@ type View =
   | 'archive'
   | 'history'
   | 'purchases'
-  | 'check';
+  | 'check'
+  | 'group';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 interface ItemSheetProps {
@@ -192,6 +206,7 @@ const VIEW_NOTES: Record<View, string> = {
   balance: '',
   purchases: '',
   check: '',
+  group: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -252,6 +267,9 @@ function ItemSheet({
   const [endDate, setEndDate] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
+  const [groupChoice, setGroupChoice] = useState('');
+  const [groupText, setGroupText] = useState('');
+  const groups = useAppSelector((state) => selectGroups(state, today));
   const [isReleasing, setIsReleasing] = useState(false);
   const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
@@ -384,6 +402,78 @@ function ItemSheet({
     setIsReasonOpen(false);
     setHeldChoice(null);
     setView(nextView);
+  };
+
+  const groupOptions = groups.map(({ item, version }) => ({
+    id: item.id,
+    name: version.payload.name,
+  }));
+  const currentGroupId =
+    itemKind === 'bill' &&
+    groupOptions.some(({ id }) => id === (payload as BillSealed).groupId)
+      ? ((payload as BillSealed).groupId ?? null)
+      : null;
+  const currentGroupName =
+    groupOptions.find(({ id }) => id === currentGroupId)?.name ??
+    GROUP_WORDS.none;
+  const pickedGroup = resolveGroupChoice(groupChoice, groupText, groupOptions);
+  const isGroupUnchanged =
+    pickedGroup.groupId === currentGroupId && pickedGroup.newGroup === null;
+  const groupBlocker =
+    groupChoice === NEW_CHOICE && groupText.trim() === ''
+      ? FORM_FLOW_WORDS.nameGroup
+      : isGroupUnchanged
+        ? ''
+        : null;
+
+  const openGroup = () => {
+    goTo('group');
+    setGroupChoice(currentGroupId ?? '');
+    setGroupText('');
+  };
+
+  const saveGroup = async () => {
+    if (isSavingRef.current || !user || itemKind !== 'bill') return;
+    const bill = payload as BillSealed;
+    isSavingRef.current = true;
+    setError(null);
+    setIsSaving(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const next: BillSealed = {
+        ...bill,
+        groupId:
+          pickedGroup.groupId ?? (pickedGroup.newGroup ? NEW_GROUP_ID : null),
+      };
+      await changeItem(user.uid, encryption, {
+        itemId,
+        kind: 'bill',
+        payload: next,
+        summary: `${bill.name}: ${describeChange(
+          { ...bill, groupId: currentGroupId },
+          next,
+          (id) =>
+            groupOptions.find((option) => option.id === id)?.name ??
+            pickedGroup.name,
+        )}, from ${formatDateUTC(today)}.`,
+        note: null,
+        effectiveFrom: today,
+        newGroup: pickedGroup.newGroup,
+      });
+      addToast({
+        title:
+          pickedGroup.name === ''
+            ? GROUP_WORDS.movedOut(bill.name)
+            : GROUP_WORDS.moved(bill.name, pickedGroup.name),
+        type: 'success',
+      });
+      goTo('menu');
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, GROUP_WORDS.saveFailed));
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const getChange = (): PreviewChange | null => {
@@ -612,6 +702,16 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
+        {canChange && itemKind === 'bill' && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<FolderOpen />}
+            label={GROUP_WORDS.inGroup}
+            subtitle={currentGroupName}
+            onClick={openGroup}
+          />
+        )}
         {canChange && !quickChange && (
           <ActionRow
             isGrouped
@@ -821,6 +921,59 @@ function ItemSheet({
     </div>
   );
 
+  const groupView = (
+    <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ActionTitle>{FORM_FLOW_WORDS.groupTitle}</ActionTitle>
+      <PickOrCreate
+        label={FORM_FLOW_WORDS.group}
+        options={groupOptions.map(({ id, name }) => ({
+          value: id,
+          label: name,
+        }))}
+        choice={groupChoice}
+        newText={groupText}
+        newPillLabel={FORM_FLOW_WORDS.newGroup}
+        newPlaceholder={FORM_FLOW_WORDS.newGroupPlaceholder}
+        hasPlus={false}
+        maxLength={MAX_NAME_LENGTH}
+        clearLabel={FORM_FLOW_WORDS.clearGroup}
+        onChange={(choice, text) => {
+          setGroupChoice(choice);
+          setGroupText(text);
+        }}
+      />
+      {groupChoice === NEW_CHOICE && pickedGroup.name !== '' && (
+        <p className='text-muted-foreground text-sm'>
+          {GROUP_WORDS.willBe(pickedGroup.name)}
+        </p>
+      )}
+      <ModalFooterActions
+        note={error ?? (groupBlocker === '' ? null : groupBlocker)}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() => goTo('menu')}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || groupBlocker !== null}
+            onClick={() => void saveGroup()}
+          >
+            Save
+          </Button>
+        }
+      />
+    </div>
+  );
+
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
@@ -950,7 +1103,9 @@ function ItemSheet({
           view === 'purchases' ||
           view === 'check'
             ? browse
-            : action
+            : view === 'group'
+              ? groupView
+              : action
         }
       >
         {menu}

@@ -8501,7 +8501,11 @@ console.log('runway engine: ok');
       ],
       nov,
     ),
-    { total: exact(150_167), uncounted: 0 },
+    {
+      total: exact(150_167),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
     'G10: each schedule counts at its monthly average, rounded once',
   );
   assert.deepEqual(
@@ -8512,12 +8516,24 @@ console.log('runway engine: ok');
       ],
       nov,
     ),
-    { total: exact(9_000), uncounted: 0 },
-    'G10: a once bill counts only in the month it falls in',
+    {
+      total: exact(0),
+      uncounted: 0,
+      oneTime: {
+        count: 2,
+        range: exact(16_000),
+        dueOn: utc(2026, 11, 30),
+      },
+    },
+    'G10: a once bill is never in the usual month; it is named beside it with its earliest day',
   );
   assert.deepEqual(
     monthlyTotal([], nov),
-    { total: exact(0), uncounted: 0 },
+    {
+      total: exact(0),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
     'G10: an empty group comes to nothing',
   );
   assert.deepEqual(
@@ -8531,7 +8547,11 @@ console.log('runway engine: ok');
       ],
       nov,
     ),
-    { total: { lowCents: 19_000, highCents: 23_000 }, uncounted: 0 },
+    {
+      total: { lowCents: 19_000, highCents: 23_000 },
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
     'G10: a group with a range member shows a range',
   );
   assert.deepEqual(
@@ -8542,7 +8562,11 @@ console.log('runway engine: ok');
       ],
       nov,
     ),
-    { total: exact(120_000), uncounted: 1 },
+    {
+      total: exact(120_000),
+      uncounted: 1,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
     'G10: a bill with no regular beat is named as left out, never counted as 0 silently',
   );
   assert.deepEqual(
@@ -8560,7 +8584,11 @@ console.log('runway engine: ok');
       ],
       nov,
     ),
-    { total: exact(50_000), uncounted: 0 },
+    {
+      total: exact(50_000),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
     'G10: a bill that ended before the month or begins after it counts nothing; one ending in it still counts',
   );
 }

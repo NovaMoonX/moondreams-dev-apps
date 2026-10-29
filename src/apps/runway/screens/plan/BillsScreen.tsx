@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Receipt } from 'lucide-react';
+import { ChevronRight, Receipt } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
@@ -90,6 +90,7 @@ function BillsScreen() {
           today,
         ),
         count: members.length,
+        names: members.map(({ payload }) => payload.name),
       };
     })
     .filter(({ rows }) => needle === '' || rows.length > 0);
@@ -117,7 +118,7 @@ function BillsScreen() {
             estimatedHeight={chunk.length * ESTIMATED_ROW_HEIGHT}
           >
             <ul className='divide-border divide-y'>
-              {chunk.map(({ item, payload, payment }) => (
+              {chunk.map(({ item, payload, payment, groupId }) => (
                 <BillRow
                   key={item.id}
                   billId={item.id}
@@ -125,6 +126,9 @@ function BillsScreen() {
                   payment={payment}
                   planStance={stance}
                   today={today}
+                  isOutsideTotal={
+                    groupId !== null && payload.timing.schedule.kind === 'once'
+                  }
                 />
               ))}
             </ul>
@@ -162,47 +166,65 @@ function BillsScreen() {
         ) : (
           <>
             {sections.map(
-              ({ id, name, rows, total: { total, uncounted }, count }) => (
-                <div key={id} className='space-y-2'>
-                  <SectionDivider
-                    label={
+              ({
+                id,
+                name,
+                rows,
+                total: { total, uncounted, oneTime },
+                count,
+              }) => {
+                const hasRange =
+                  !isHidden && total.lowCents !== total.highCents;
+                return (
+                  <div key={id} className='space-y-2'>
+                    <div className='flex items-start gap-1'>
                       <Button
                         type='button'
                         variant='tertiary'
-                        size='sm'
                         aria-label={GROUP_WORDS.openLabel(name)}
-                        className="relative after:absolute after:-inset-2 after:content-['']"
+                        className='text-foreground! h-auto min-h-11 min-w-0 flex-1 items-start justify-start gap-2 rounded-xl px-2! py-1.5! text-left font-normal whitespace-normal'
                         onClick={() => setOpenGroupId(id)}
                       >
-                        {name}
-                      </Button>
-                    }
-                    trailing={
-                      <span className='text-muted-foreground flex items-center gap-1 text-sm'>
-                        <span>
-                          <SensitiveValue>
-                            {describeGroupTotal(total)}
-                          </SensitiveValue>{' '}
-                          a month
+                        <span className='block min-w-0 flex-1'>
+                          <span className='block text-base font-semibold break-words'>
+                            <span className='line-clamp-2'>{name}</span>
+                          </span>
+                          <span className='text-muted-foreground block text-sm'>
+                            <SensitiveValue>
+                              {describeGroupTotal(total)}
+                            </SensitiveValue>{' '}
+                            a month
+                          </span>
                         </span>
-                        <HelpTip title={GROUP_WORDS.basisTitle}>
-                          <p>{GROUP_WORDS.basis}</p>
-                          {uncounted > 0 && (
-                            <p>{GROUP_WORDS.uncounted(uncounted)}</p>
-                          )}
-                          {!isHidden && total.lowCents !== total.highCents && (
-                            <>
-                              <p>{GROUP_WORDS.rangeTotal}</p>
-                              <RangeBasisNote stance={stance} side='expense' />
-                            </>
-                          )}
-                        </HelpTip>
-                      </span>
-                    }
-                  />
-                  {count > 0 && rows.length > 0 && getCard(rows)}
-                </div>
-              ),
+                        <ChevronRight
+                          className='text-muted-foreground mt-1 h-4 w-4 shrink-0'
+                          aria-hidden='true'
+                        />
+                      </Button>
+                      {(hasRange || uncounted > 0 || oneTime.count > 0) && (
+                        <span className='mt-2.5 shrink-0'>
+                          <HelpTip title={GROUP_WORDS.basisTitle}>
+                            <p>{GROUP_WORDS.basis}</p>
+                            {uncounted > 0 && (
+                              <p>{GROUP_WORDS.uncounted(uncounted)}</p>
+                            )}
+                            {hasRange && (
+                              <>
+                                <p>{GROUP_WORDS.rangeTotal}</p>
+                                <RangeBasisNote
+                                  stance={stance}
+                                  side='expense'
+                                />
+                              </>
+                            )}
+                          </HelpTip>
+                        </span>
+                      )}
+                    </div>
+                    {count > 0 && rows.length > 0 && getCard(rows)}
+                  </div>
+                );
+              },
             )}
             {ungrouped.length > 0 && (
               <div className='space-y-2'>
@@ -233,6 +255,7 @@ function BillsScreen() {
           groupId={openSection.id}
           total={openSection.total}
           billCount={openSection.count}
+          memberNames={openSection.names}
           today={today}
           onClose={() => setOpenGroupId(null)}
         />

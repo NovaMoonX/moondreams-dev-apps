@@ -19,7 +19,6 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import {
   BILL_FREQUENCIES,
   BILL_FREQUENCY_LABELS,
@@ -72,10 +71,13 @@ import type {
   BillFundedBy,
   BillSealed,
   Ending,
-  GroupSealed,
   Priority,
 } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import {
+  NEW_GROUP_ID,
+  resolveGroupChoice,
+} from '@apps/runway/utils/groupChoice';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
@@ -117,6 +119,8 @@ interface BillFormProps {
   openStep?: BillStepId | null;
   /** Hands the built bill over instead of writing it, for a person who has no plan yet. */
   draft?: DraftSink<BillSealed>;
+  /** A group the new bill starts in, already answered (the add action on a group's sheet). */
+  presetGroupId?: string;
 }
 
 export type BillStepId =
@@ -145,15 +149,6 @@ const EMPTY_BILL: BillSealed = {
   stanceOverride: null,
   groupId: null,
 };
-
-/** Stands in for a group that is written with the bill, so a change to "a new group" reads as a change. */
-const NEW_GROUP_ID = '__new_group__';
-
-const groupMatcher = createOptionMatcher<{ id: string; name: string }>({
-  names: (option) => [option.name],
-  typos: false,
-  casing: { style: 'sentence', keepAcronyms: true, keepMixedCase: true },
-});
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
@@ -276,6 +271,7 @@ function BillForm({
   noun = 'bill',
   openStep = null,
   draft,
+  presetGroupId,
 }: BillFormProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -301,7 +297,7 @@ function BillForm({
           funding: 'suggested',
           dayKeys: [],
           emoji: null,
-          group: { choice: '', newText: '' },
+          group: { choice: presetGroupId ?? '', newText: '' },
         },
   );
   const [isPriorityChosen, setIsPriorityChosen] = useState(
@@ -343,27 +339,15 @@ function BillForm({
   const isDueValid =
     dueDate !== undefined && (editing !== undefined || dueDate >= today);
 
-  const resolveGroup = (
-    data: BillFormData,
-  ): { groupId: string | null; newGroup: GroupSealed | null } => {
-    const { choice, newText } = data.group;
-    if (choice === '') return { groupId: null, newGroup: null };
-    if (choice !== NEW_CHOICE) return { groupId: choice, newGroup: null };
-    if (newText.trim() === '') return { groupId: null, newGroup: null };
-    const resolved = groupMatcher.resolve(
-      newText,
+  const resolveGroup = (data: BillFormData) =>
+    resolveGroupChoice(
+      data.group.choice,
+      data.group.newText,
       groups.map(({ item, version }) => ({
         id: item.id,
         name: version.payload.name,
       })),
     );
-    if (resolved.kind === 'match')
-      return { groupId: resolved.option.id, newGroup: null };
-    return {
-      groupId: null,
-      newGroup: { name: resolved.label, startingPriority: null },
-    };
-  };
   /** The priority the person chose, else the starting priority of the group the bill joins, else the default. */
   const getPriority = (data: BillFormData): Priority => {
     if (isPriorityChosen) return data.priority;
@@ -372,13 +356,8 @@ function BillForm({
       .payload.startingPriority;
     return startsWith ?? data.priority;
   };
-  const getGroupName = (group: BillFormData['group']) => {
-    if (group.choice === NEW_CHOICE) return group.newText.trim();
-    return (
-      groups.find(({ item }) => item.id === group.choice)?.version.payload
-        .name ?? FORM_FLOW_WORDS.noGroup
-    );
-  };
+  const getGroupName = (data: BillFormData) =>
+    resolveGroup(data).name || FORM_FLOW_WORDS.noGroup;
 
   const steps: QuestionStep[] = [
     {
@@ -593,7 +572,7 @@ function BillForm({
             id: 'group',
             title: FORM_FLOW_WORDS.groupTitle,
             summaryLabel: FORM_FLOW_WORDS.group,
-            summaryValue: getGroupName(formData.group),
+            summaryValue: getGroupName(formData),
             isAnswered:
               formData.group.choice !== NEW_CHOICE ||
               formData.group.newText.trim() !== '',

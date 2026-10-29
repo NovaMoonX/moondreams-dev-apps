@@ -1242,9 +1242,11 @@ export const GROUP_WORDS = {
   monthLabel: 'Together, each month',
   openLabel: (name: string) => `${name}, open group`,
   rename: 'Rename',
+  nameLabel: 'Name',
   startingPriority: 'Starting priority',
   startingPriorityHelp:
     'A new bill in this group starts with this priority. You can still change it on the bill.',
+  startingPriorityFailed: 'The priority did not save. Nothing was changed.',
   noPriority: 'None',
   archive: 'Archive group',
   archiveTitle: (name: string) => `Archive ${name}?`,
@@ -1253,13 +1255,29 @@ export const GROUP_WORDS = {
       ? 'It has no bills right now.'
       : `Its ${count} ${count === 1 ? 'bill stays' : 'bills stay'} in your plan, without a group.`,
   archived: (name: string) => `Archived ${name}.`,
+  archivedToast: (name: string) => `Archived ${name}`,
+  addBill: 'Add a bill to this group',
+  inGroup: 'Group',
+  none: 'No group',
+  oneTimeNote: 'Not in the monthly total',
+  moved: (bill: string, group: string) => `Moved ${bill} to ${group}`,
+  movedOut: (bill: string) => `Took ${bill} out of its group`,
+  willBe: (name: string) => `It will be in ${name}.`,
+  plusOneTime: (amount: string, count: number, due: string | null) =>
+    count === 1 && due !== null
+      ? `Plus ${amount} due ${due}`
+      : `Plus ${amount} in ${count} one-time bills`,
+  members: (names: readonly string[]) =>
+    names.length <= 3
+      ? names.join(', ')
+      : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
   archiveFailed: 'The group did not archive. Nothing was changed.',
   saveFailed: 'This did not save. Nothing was changed.',
   basisTitle: 'How a month is worked out',
   rangeTotal:
     'A bill that varies counts at its low and its high amount, so the total is a range.',
   basis:
-    'Each bill counts at what it comes to in an average month. A one-time bill counts only in its month.',
+    'A usual month: each repeating bill at what it comes to in an average month. A one-time bill is not in it.',
   uncounted: (count: number) =>
     count === 1
       ? 'One bill has no regular schedule, so it is not in this total.'

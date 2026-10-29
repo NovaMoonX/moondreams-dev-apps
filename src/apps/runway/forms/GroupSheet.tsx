@@ -1,13 +1,14 @@
 import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Archive, Pencil } from 'lucide-react';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { Archive, Pencil, Receipt } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
+import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { MASK } from '@/components/SensitiveValue';
@@ -16,7 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import {
   GROUP_WORDS,
   MAX_NAME_LENGTH,
@@ -24,6 +25,8 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import SheetHead from '@apps/runway/components/SheetHead';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import BillForm from '@apps/runway/forms/BillForm';
 import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -46,6 +49,8 @@ interface GroupSheetProps {
   /** What the group's bills come to in a month, worked out by the screen that lists them. */
   total: GroupTotal;
   billCount: number;
+  /** The names of the bills in the group, as the screen lists them. */
+  memberNames: readonly string[];
   today: number;
   onClose: () => void;
 }
@@ -55,16 +60,18 @@ const startingOptions = [
   { value: 'none' as const, label: GROUP_WORDS.noPriority },
 ];
 
-/** A group's sheet: what its bills come to a month, its name, the priority a new bill in it starts with, and archiving it. */
+/** A group's sheet: what its bills come to a usual month, which they are, adding one, its name, the priority a new bill in it starts with, and archiving it. */
 function GroupSheet({
   groupId,
   total,
   billCount,
+  memberNames,
   today,
   onClose,
 }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const { isHidden } = useValuesHidden();
   const stance = useAppSelector(selectStance);
   const group = useAppSelector((state) =>
@@ -74,14 +81,15 @@ function GroupSheet({
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [priorityError, setPriorityError] = useState<string | null>(null);
+  const [isAddingBill, setIsAddingBill] = useState(false);
 
   if (!group) return null;
   const payload = group.version.payload;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
 
-  const save = async (next: GroupSealed) => {
-    if (!user) return;
-    setError(null);
+  const save = async (next: GroupSealed): Promise<string | null> => {
+    if (!user) return null;
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
@@ -93,12 +101,30 @@ function GroupSheet({
         note: null,
         effectiveFrom: today,
       });
-      setIsRenaming(false);
+      return null;
     } catch (saveError) {
-      setError(getErrorMessage(saveError, GROUP_WORDS.saveFailed));
+      return getErrorMessage(saveError, GROUP_WORDS.saveFailed);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const rename = async (next: string) => {
+    setError(null);
+    const failure = await save({ ...payload, name: next });
+    if (failure === null) setIsRenaming(false);
+    else setError(failure);
+  };
+
+  const setStartingPriority = async (choice: StartingChoice) => {
+    setPriorityError(null);
+    const failure = await save({
+      ...payload,
+      startingPriority: choice === 'none' ? null : choice,
+    });
+    setPriorityError(
+      failure === null ? null : GROUP_WORDS.startingPriorityFailed,
+    );
   };
 
   const archive = async () => {
@@ -125,6 +151,10 @@ function GroupSheet({
         },
         today,
       );
+      addToast({
+        title: GROUP_WORDS.archivedToast(payload.name),
+        type: 'success',
+      });
       onClose();
     } catch (archiveError) {
       setError(getErrorMessage(archiveError, GROUP_WORDS.archiveFailed));
@@ -135,6 +165,18 @@ function GroupSheet({
   const trimmed = name.trim();
   const canRename = trimmed !== '' && trimmed !== payload.name;
 
+  if (isAddingBill) {
+    return (
+      <BillForm
+        isOpen
+        title='Bill'
+        presetGroupId={groupId}
+        onClose={onClose}
+        onCancel={() => setIsAddingBill(false)}
+      />
+    );
+  }
+
   return (
     <FormSheet
       isOpen
@@ -142,35 +184,30 @@ function GroupSheet({
       title={payload.name}
       actions={<ValuesEyeButton />}
     >
-      <div className='space-y-4'>
+      <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
         {isRenaming ? (
           <>
             <BackLink onBack={() => setIsRenaming(false)} />
-            <Input
-              variant='outline'
-              aria-label={GROUP_WORDS.rename}
-              maxLength={MAX_NAME_LENGTH}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                {GROUP_WORDS.nameLabel}
+              </p>
+              <Input
+                variant='outline'
+                aria-label={GROUP_WORDS.nameLabel}
+                maxLength={MAX_NAME_LENGTH}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
             <ModalFooterActions
               note={error}
-              cancelAction={
-                <Button
-                  type='button'
-                  variant='secondary'
-                  onClick={() => setIsRenaming(false)}
-                  disabled={isSaving}
-                >
-                  Cancel
-                </Button>
-              }
               rightActions={
                 <Button
                   type='button'
                   loading={isSaving}
                   disabled={isSaving || !canRename}
-                  onClick={() => void save({ ...payload, name: trimmed })}
+                  onClick={() => void rename(trimmed)}
                 >
                   Save
                 </Button>
@@ -182,6 +219,9 @@ function GroupSheet({
             <SheetHead
               label={GROUP_WORDS.monthLabel}
               figure={isHidden ? MASK : describeGroupTotal(total.total)}
+              fact={
+                memberNames.length > 0 ? GROUP_WORDS.members(memberNames) : null
+              }
               help={
                 <>
                   <p>{GROUP_WORDS.basis}</p>
@@ -195,26 +235,55 @@ function GroupSheet({
               }
               helpTitle={GROUP_WORDS.basisTitle}
             />
+            {total.oneTime.count > 0 && (
+              <p className='text-muted-foreground -mt-2 text-sm'>
+                <MaskedText>
+                  {GROUP_WORDS.plusOneTime(
+                    describeGroupTotal(total.oneTime.range),
+                    total.oneTime.count,
+                    total.oneTime.dueOn === null
+                      ? null
+                      : formatDateShortUTC(total.oneTime.dueOn),
+                  )}
+                </MaskedText>
+              </p>
+            )}
             <div className='space-y-1.5'>
-              <p className='text-muted-foreground text-xs'>
-                {GROUP_WORDS.startingPriority}
-              </p>
-              <PillGroup
-                label={GROUP_WORDS.startingPriority}
-                options={startingOptions}
-                value={payload.startingPriority ?? 'none'}
-                onChange={(choice: StartingChoice) =>
-                  void save({
-                    ...payload,
-                    startingPriority: choice === 'none' ? null : choice,
-                  })
-                }
-              />
-              <p className='text-muted-foreground text-xs'>
-                {GROUP_WORDS.startingPriorityHelp}
-              </p>
+              <div className='flex items-center gap-1'>
+                <p className='text-muted-foreground text-xs'>
+                  {GROUP_WORDS.startingPriority}
+                </p>
+                <HelpTip title={GROUP_WORDS.startingPriority}>
+                  <p>{GROUP_WORDS.startingPriorityHelp}</p>
+                </HelpTip>
+              </div>
+              <div
+                aria-busy={isSaving}
+                className={isSaving ? 'pointer-events-none opacity-60' : ''}
+              >
+                <PillGroup
+                  label={GROUP_WORDS.startingPriority}
+                  options={startingOptions}
+                  value={payload.startingPriority ?? 'none'}
+                  onChange={(choice: StartingChoice) =>
+                    void setStartingPriority(choice)
+                  }
+                />
+              </div>
+              {priorityError && (
+                <p className='text-destructive text-sm' role='alert'>
+                  {priorityError}
+                </p>
+              )}
             </div>
             <ActionGroup>
+              <ActionRow
+                isGrouped
+                hasChevron
+                icon={<Receipt />}
+                label={GROUP_WORDS.addBill}
+                onClick={() => setIsAddingBill(true)}
+              />
               <ActionRow
                 isGrouped
                 hasChevron
@@ -222,6 +291,7 @@ function GroupSheet({
                 label={GROUP_WORDS.rename}
                 onClick={() => {
                   setName(payload.name);
+                  setError(null);
                   setIsRenaming(true);
                 }}
               />

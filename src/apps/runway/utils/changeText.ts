@@ -1,6 +1,10 @@
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { PRIORITY_LABELS, SCHEDULE_LABELS } from '@apps/runway/constants';
+import {
+  GROUP_WORDS,
+  PRIORITY_LABELS,
+  SCHEDULE_LABELS,
+} from '@apps/runway/constants';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { formatRange } from '@apps/runway/utils/rangeText';
@@ -21,6 +25,9 @@ export type ItemPayload =
   | GoalSealed
   | GroupSealed;
 
+/** The name of a group by its id, from the plan's groups. */
+export type GroupNamer = (groupId: string) => string;
+
 const same = (a: unknown, b: unknown) =>
   JSON.stringify(a) === JSON.stringify(b);
 
@@ -36,7 +43,11 @@ const diff = <T>(
 const pairingCount = (list: readonly unknown[]) =>
   list.length === 1 ? '1 funded' : `${list.length} funded`;
 
-const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
+const getParts = (
+  before: ItemPayload,
+  after: ItemPayload,
+  groupName: GroupNamer,
+): Part[] => {
   const base: Part[] = [
     diff('Name', before.name, after.name, (value) => value),
   ];
@@ -146,7 +157,7 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
         'Group',
         billBefore.groupId ?? null,
         billAfter.groupId ?? null,
-        (value) => (value === null ? 'none' : 'a group'),
+        (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
       ),
     ];
   }
@@ -190,8 +201,12 @@ const getParts = (before: ItemPayload, after: ItemPayload): Part[] => {
 export const isSamePayload = (a: ItemPayload, b: ItemPayload) => same(a, b);
 
 /** What differs, from and to: "Amount $1,250.00 to $1,300.00; Name Rent to Home rent". */
-export function describeChange(before: ItemPayload, after: ItemPayload) {
-  const result = getParts(before, after)
+export function describeChange(
+  before: ItemPayload,
+  after: ItemPayload,
+  groupName: GroupNamer = () => 'a group',
+) {
+  const result = getParts(before, after, groupName)
     .flatMap((part) => (part === null ? [] : [part]))
     .map(([label, from, to]) => `${label} ${from} to ${to}`)
     .join('; ');
