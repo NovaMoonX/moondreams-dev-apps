@@ -31,11 +31,16 @@ function PurchaseEffectNotice({
   freeDropCents,
 }: PurchaseEffectNoticeProps) {
   const { isHidden } = useValuesHidden();
-  const isOver = changes.some((change) => change.afterCents < 0);
-  if (changes.length === 0 && freeDropCents === 0) return null;
+  const isWorseOver = (change: EnvelopeChange) =>
+    change.afterCents < 0 && change.afterCents < change.beforeCents;
+  const isOver = changes.some(isWorseOver);
+  if (changes.length === 0 && (freeDropCents === 0 || isHidden)) return null;
   if (isHidden && isOver) return <NeedsALookRow />;
 
-  const shown = changes.slice(0, SHOWN);
+  const shown = [
+    ...changes.filter(isWorseOver),
+    ...changes.filter((change) => !isWorseOver(change)),
+  ].slice(0, SHOWN);
   const rest = changes.length - shown.length;
   const freeLine =
     freeDropCents > 0
