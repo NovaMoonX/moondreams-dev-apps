@@ -309,6 +309,10 @@ block-beta
 ```
 *Invite link is visible/copyable by any member — every join still routes through Admin approval regardless of who shared it. (Assumption, flagging it as one.)*
 
+## Split a receipt
+
+From the add-expense form (below the "What's this expense for?" question, and above "Who's this for?"), an Admin or Editor can choose "Split a receipt". It opens a full-screen subview: first a file slot ("Choose a photo of the receipt", with one line saying an AI reads it and the photo isn't kept) and, one tap away, "No photo? Add the items yourself". Then one screen with three blocks: **Who had what** (one row per item with its price and who had it; "Nobody yet" in amber until picked; each item is a two-line row with small pills under it (Everyone, then first names) that assign at once, a chevron opens Edit, "Same for all N" (units of an itemized quantity) and a red ✕ Remove with an undo; editing is a small form with Cancel and Done that closes with the row; "+ Add an item"), **Tax, tip and fees** (tax, optional service charge and discount chips, tip pills of No tip / On the receipt / 15% / 18% / 20% / Other amount, and "Split the tip" evenly or by what they ordered) and **Who owes what** (each person's total with its parts, then the bill total). Under it, "Who paid the bill?" (picked, never assumed) and the title and a pinned footer whose Add says why it is off ("2 items have nobody yet."). Leaving after picking anything asks Keep editing / Discard.
+
 ## Reusable Components
 
 | Component | Used in | Purpose |

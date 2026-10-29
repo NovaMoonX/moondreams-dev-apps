@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AIError } from 'firebase/ai';
 import { FileUp } from 'lucide-react';
 
+import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { airlinesQueryOptions, type AirlineOption } from '@/lib/airlines/airlinesQueries';
 import { airportsQueryOptions, type AirportOption } from '@/lib/airports/airportsQueries';
 import {
@@ -39,20 +40,6 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const toIsoDay = (epoch: number) => new Date(epoch).toISOString().slice(0, 10);
 
-function getFailureMessage(error: unknown) {
-  const status = error instanceof AIError ? error.customErrorData?.status : undefined;
-  if (status === 429) {
-    return 'The reader is busy right now. Give it a minute and try again, or fill it in below.';
-  }
-  if (error instanceof AIError && error.code === 'fetch-error' && status === undefined) {
-    return `We couldn't reach the reader. Check your connection and try again, or fill it in below.`;
-  }
-  if (status === 403 || status === 404) {
-    return `The confirmation reader isn't available right now. You can fill this in below.`;
-  }
-  return `We couldn't read that right now. Try a clearer photo or a PDF, or fill it in below.`;
-}
-
 /** Reads a photo, screenshot or PDF of a confirmation and fills the form around it. The person reviews and edits the fields themselves before saving. */
 function UploadAutofill<T>({ kind, trip, noun, convert, onFilled }: UploadAutofillProps<T>) {
   const queryClient = useQueryClient();
@@ -84,7 +71,10 @@ function UploadAutofill<T>({ kind, trip, noun, convert, onFilled }: UploadAutofi
       setState({ status: 'done', fileName: file.name, unread: result.unread, note: result.note ?? null });
     } catch (error) {
       console.error('Reading the confirmation failed', error, error instanceof AIError ? error.customErrorData : null);
-      setState({ status: 'failed', message: getFailureMessage(error) });
+      setState({
+        status: 'failed',
+        message: getAiReadFailureMessage(error, { subject: 'confirmation', fallback: 'fill it in below' }),
+      });
       setPickerKey((current) => current + 1);
     }
   };
