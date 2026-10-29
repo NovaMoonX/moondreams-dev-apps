@@ -1,6 +1,7 @@
 import { HardDrive, Wallet } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import EmptyCard from '@/components/EmptyCard';
 import { useAuth } from '@/hooks/useAuth';
@@ -32,6 +33,11 @@ import {
   toGoalRow,
   toIncomeRows,
 } from '@apps/runway/screens/start/startRows';
+import {
+  commitStartDraft,
+  toTopRanks,
+  type ExistingNames,
+} from '@apps/runway/store/actions/draftActions';
 import { archiveItem } from '@apps/runway/store/actions/itemActions';
 import type { HeldChoice } from '@apps/runway/engine/endings';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
@@ -44,12 +50,15 @@ import {
   selectResolvedPlan,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
+  addDraftEntries,
   clearStartDraft,
   removeDraftEntry,
   saveDraftEntry,
   saveDraftStep,
   useStartDraft,
+  EMPTY_START_DRAFT,
   type DraftKind,
+  type StartDraft,
   type StartStep,
 } from '@apps/runway/utils/startDraft';
 
@@ -220,6 +229,38 @@ function SavedStart({ uid }: { uid: string }) {
     ]);
   };
 
+  const { addToast } = useToast();
+  const items = useAppSelector((state) => state.runway.items);
+  const addBudget = async (draft: Pick<StartDraft, DraftKind>) => {
+    const existing: ExistingNames = {
+      sources: sources.map((source) => source.version.payload.name),
+      bills: bills.map(({ version }) => version.payload.name),
+      envelopes: envelopes.map(({ version }) => version.payload.name),
+      goals: goals.map(({ version }) => version.payload.name),
+      topRanks: {
+        bills: toTopRanks(bills),
+        envelopes: toTopRanks(envelopes),
+        goals: toTopRanks(goals),
+      },
+      startDate,
+      itemCount: items.length,
+    };
+    const encryption = await getRunwayEncryption(uid);
+    const { added, unrecordedHoldings } = await commitStartDraft(
+      uid,
+      encryption,
+      { ...EMPTY_START_DRAFT, ...draft },
+      existing,
+      today,
+    );
+    addToast({ title: START_WORDS.handoffSaved(added), type: 'success' });
+    if (unrecordedHoldings.length > 0)
+      addToast({
+        title: START_WORDS.handoffUnrecorded(unrecordedHoldings.join(', ')),
+        type: 'warning',
+      });
+  };
+
   const renderForm = (form: StartFormState, close: () => void) => {
     const id = form.entryId;
     if (form.name === 'income') {
@@ -296,6 +337,7 @@ function SavedStart({ uid }: { uid: string }) {
 
   return (
     <StartFlow
+      budget={{ mode: 'plan', onAdd: addBudget }}
       steps={SAVED_STEPS}
       rows={rows}
       resumeStep={getFirstOpenStep(counts, hasStart)}
@@ -458,6 +500,10 @@ function DeviceStart() {
 
   return (
     <StartFlow
+      budget={{
+        mode: 'device',
+        onAdd: async (added) => addDraftEntries(added),
+      }}
       steps={DRAFT_STEPS}
       rows={rows}
       resumeStep={draft?.step ?? 'income'}

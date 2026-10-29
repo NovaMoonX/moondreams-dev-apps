@@ -1,10 +1,13 @@
+import type { ReactNode } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 export interface Method {
   id: string;
-  emoji: string;
+  /** An emoji, or an icon for an app that keeps emoji out of its words. */
+  emoji: ReactNode;
   title: string;
   description: string;
   onPick: () => void;

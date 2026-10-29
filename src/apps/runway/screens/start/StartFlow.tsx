@@ -1,6 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import {
   CircleHelp,
+  FileText,
+  ListChecks,
   Mail,
   Pencil,
   ReceiptText,
@@ -19,7 +21,13 @@ import DetailSheet from '@/components/DetailSheet';
 import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
-import { START_HELD_WORDS, START_WORDS } from '@apps/runway/constants';
+import MethodPicker from '@/components/MethodPicker';
+import {
+  BUDGET_WORDS,
+  START_HELD_WORDS,
+  START_WORDS,
+} from '@apps/runway/constants';
+import BudgetStart from '@apps/runway/screens/start/BudgetStart';
 import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import type { HeldChoice } from '@apps/runway/engine/endings';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -30,7 +38,11 @@ import {
   type StartRow,
 } from '@apps/runway/screens/start/startRows';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import type { StartStep } from '@apps/runway/utils/startDraft';
+import type {
+  DraftKind,
+  StartDraft,
+  StartStep,
+} from '@apps/runway/utils/startDraft';
 
 export type StartKind = 'income' | 'bill' | 'envelope' | 'goal';
 export type StartFormName = StartKind | 'stand';
@@ -135,6 +147,11 @@ interface StartFlowProps {
   startOverMessage: (parts: string) => string;
   /** On the title line, such as the eye that shows or hides private figures. */
   headerAction?: ReactNode;
+  /** Offers "Start from your budget" beside starting fresh when nothing has been added yet. */
+  budget?: {
+    mode: 'plan' | 'device';
+    onAdd: (draft: Pick<StartDraft, DraftKind>) => Promise<void>;
+  };
 }
 
 /** Starting out, one short question at a time. Only the income source is required; every other step has a Later. */
@@ -156,6 +173,7 @@ function StartFlow({
   startOverMessage,
   headerAction,
   getHeldCents,
+  budget,
 }: StartFlowProps) {
   const { closeView } = useRunwayUrlState();
   const { confirm } = useActionModal();
@@ -167,6 +185,9 @@ function StartFlow({
   };
   const total = counts.income + counts.bill + counts.envelope + counts.goal;
   const [isAsking, setIsAsking] = useState(total > 0);
+  const [stage, setStage] = useState<'choose' | 'budget' | 'steps'>(
+    total === 0 && budget ? 'choose' : 'steps',
+  );
   const [step, setStep] = useState<StartStep>(
     steps.includes(resumeStep) ? resumeStep : steps[0],
   );
@@ -383,6 +404,55 @@ function StartFlow({
       )}
     </div>
   );
+
+  if (stage !== 'steps' && budget) {
+    return (
+      <Subview
+        overlay
+        title={START_WORDS.title}
+        onClose={closeView}
+        headerAction={headerAction ?? <ValuesEyeButton />}
+        onBack={() => (stage === 'budget' ? setStage('choose') : leave())}
+      >
+        {stage === 'choose' ? (
+          <div className='flex flex-1 flex-col gap-4'>
+            <h2 className='text-2xl font-semibold text-balance'>
+              {BUDGET_WORDS.chooseAsk}
+            </h2>
+            <MethodPicker
+              methods={[
+                {
+                  id: 'budget',
+                  emoji: <FileText className='h-5 w-5' />,
+                  title: BUDGET_WORDS.methodTitle,
+                  description: BUDGET_WORDS.methodBody,
+                  onPick: () => setStage('budget'),
+                },
+                {
+                  id: 'fresh',
+                  emoji: <ListChecks className='h-5 w-5' />,
+                  title: BUDGET_WORDS.freshTitle,
+                  description: BUDGET_WORDS.freshBody,
+                  isQuiet: true,
+                  onPick: () => setStage('steps'),
+                },
+              ]}
+            />
+          </div>
+        ) : (
+          <BudgetStart
+            mode={budget.mode}
+            onBack={() => setStage('choose')}
+            onAdd={async (draft) => {
+              await budget.onAdd(draft);
+              setStage('steps');
+              goTo(steps[0]);
+            }}
+          />
+        )}
+      </Subview>
+    );
+  }
 
   return (
     <Subview

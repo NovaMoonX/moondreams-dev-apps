@@ -817,6 +817,91 @@ export const START_WORDS = {
   landingButton: 'Start planning',
 } as const;
 
+/** What "Start from your budget" takes and keeps from the documents, told to the reader and enforced on its answer. */
+export const BUDGET_LIMITS = {
+  files: 5,
+  bytes: 10 * 1024 * 1024,
+  /** Characters kept from one text document or the pasted text. */
+  textChars: 40_000,
+  items: { incomes: 10, bills: 40, envelopes: 30, goals: 15 },
+  notRead: 20,
+  notReadChars: 140,
+  fileNameChars: 80,
+  /** The most one amount can hold, in cents. */
+  maxCents: 999_999_999,
+} as const;
+
+export const BUDGET_TEXT_EXTENSIONS = ['csv', 'tsv', 'txt', 'md'] as const;
+export const BUDGET_ACCEPT = '.csv,.tsv,.txt,.md,.pdf';
+export const BUDGET_PASTED_NAME = 'Pasted text';
+
+export const BUDGET_WORDS = {
+  chooseAsk: 'How do you want to start?',
+  methodTitle: 'Start from your budget',
+  methodBody:
+    'An AI reads them and suggests your income, bills, envelopes and goals. Nothing is saved until you add them.',
+  freshTitle: 'Start fresh',
+  freshBody: 'Answer a few questions, one at a time.',
+  ask: 'Bring your budget',
+  help: 'Pick up to 5 files, or paste text. An AI reads them and suggests your income, bills, envelopes and goals. Nothing is saved until you add them.',
+  tabsHint:
+    'A spreadsheet with several tabs? Export each tab as a CSV and pick them together.',
+  chooseFiles: 'Choose files',
+  chooseMore: 'Choose more files',
+  accepts: 'CSV, TSV, text, Markdown or PDF',
+  pasteLabel: 'Or paste text',
+  pastePlaceholder: 'Paste rows from a spreadsheet, or notes about your budget',
+  removeFile: (name: string) => `Remove ${name}`,
+  read: 'Read my budget',
+  needInput: 'Choose a file or paste some text first.',
+  reading: (files: number, hasText: boolean) =>
+    files === 0
+      ? 'Reading your text'
+      : `Reading ${files} ${files === 1 ? 'file' : 'files'}${hasText ? ' and your text' : ''}`,
+  tooMany: `You can pick up to ${BUDGET_LIMITS.files} files.`,
+  tooBig: `Those files are over ${BUDGET_LIMITS.bytes / 1024 / 1024} MB together. Remove one, or export a smaller range.`,
+  wrongType: (name: string) =>
+    `${name} is not a CSV, TSV, text, Markdown or PDF file.`,
+  failSubject: 'budget',
+  failFallback: 'start fresh instead',
+  nothingFound:
+    'We could not find any income, bills, envelopes or goals in that. Try another file or some pasted text, or start fresh.',
+  reviewAsk: 'Here is what we found',
+  reviewHelp:
+    'Open any one to check it or change it. Nothing is added until you say so.',
+  income: 'Income',
+  bills: 'Bills',
+  envelopes: 'Envelopes',
+  goals: 'Goals',
+  amountNotFound: 'Amount not found',
+  needDetails: (count: number) =>
+    count === 1
+      ? 'One needs a detail. Open it or remove it.'
+      : `${count} need a detail. Open them or remove them.`,
+  openToFinish: 'Open it to finish it',
+  openToChange: 'Check or change it',
+  removeOne: 'Remove',
+  leaveTitle: 'Go back?',
+  leaveMessage: 'What was read is dropped. Nothing has been added.',
+  leaveConfirm: 'Go back',
+  deviceNote:
+    'You are not signed in. These stay on this device, unencrypted, for 7 days, and are written to your plan when you sign in.',
+  addAnother: 'Add another file',
+  addAnotherBody: (left: number) =>
+    `${left} more ${left === 1 ? 'file' : 'files'} can be added. Only the new one is read.`,
+  notReadLabel: 'What we could not read',
+  notReadTitle: 'What we could not read',
+  sourcePrefix: 'From',
+  planAdd: 'Add them to my plan',
+  deviceAdd: 'Keep them on this device',
+  planFailed: 'None of this was added. Nothing was changed.',
+  notReady: 'Your plan is still opening. Try again in a moment.',
+  alsoIn: (file: string, amount: string) => `Also in ${file} as ${amount}`,
+  cutText: (file: string, chars: number) =>
+    `Only the first ${chars.toLocaleString()} characters of ${file} were read.`,
+  empty: 'Nothing is left to add.',
+} as const;
+
 export const DELETE_PLAN_PHRASE = 'delete my plan';
 
 export const DELETE_PLAN_WORDS = {
@@ -1370,8 +1455,7 @@ export const CORRECT_COVER_WORDS = {
   needsCuts: 'Give some items less this time to correct the day.',
   freeRow: 'Free\u00a0to\u00a0spend',
   now: 'Now',
-  freeLead:
-    'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
+  freeLead: 'Once this day gives back what it left, Free\u00a0to\u00a0spend is',
   coverGone:
     'Free\u00a0to\u00a0spend is now less than you chose to cover. Choose again before you correct the day.',
 } as const;

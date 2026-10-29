@@ -175,6 +175,32 @@ export const saveDraftEntry = <K extends DraftKind>(
     return { ...draft, [kind]: next };
   });
 
+/** Adds many answers at once, each under a new id, to what the device already holds. */
+export const addDraftEntries = (
+  added: Pick<StartDraft, DraftKind>,
+  step: StartStep = 'income',
+) =>
+  update((draft) => ({
+    ...draft,
+    step,
+    incomes: [
+      ...draft.incomes,
+      ...added.incomes.map(({ value }) => ({ id: generateUuid(), value })),
+    ],
+    bills: [
+      ...draft.bills,
+      ...added.bills.map(({ value }) => ({ id: generateUuid(), value })),
+    ],
+    envelopes: [
+      ...draft.envelopes,
+      ...added.envelopes.map(({ value }) => ({ id: generateUuid(), value })),
+    ],
+    goals: [
+      ...draft.goals,
+      ...added.goals.map(({ value }) => ({ id: generateUuid(), value })),
+    ],
+  }));
+
 export const removeDraftEntry = (kind: DraftKind, id: string) =>
   update((draft) => ({
     ...draft,

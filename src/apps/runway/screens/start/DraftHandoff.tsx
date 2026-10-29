@@ -15,7 +15,7 @@ import { describeCounts } from '@apps/runway/screens/start/startRows';
 import {
   commitStartDraft,
   DraftPlanNotReady,
-  EMPTY_TIER_RANKS,
+  toTopRanks,
   type ExistingNames,
 } from '@apps/runway/store/actions/draftActions';
 import {
@@ -29,21 +29,6 @@ import {
   clearStartDraft,
   type StartDraft,
 } from '@apps/runway/utils/startDraft';
-import type { Priority } from '@apps/runway/types';
-
-const toTopRanks = (
-  list: { version: { payload: { priority: Priority; orderIndex: number } } }[],
-) =>
-  list.reduce<Record<Priority, number>>(
-    (acc, { version }) => ({
-      ...acc,
-      [version.payload.priority]: Math.max(
-        acc[version.payload.priority],
-        version.payload.orderIndex,
-      ),
-    }),
-    { ...EMPTY_TIER_RANKS },
-  );
 
 /** Writes what was entered before signing in to the plan, asking first only when the plan already has items. */
 function DraftHandoff({ draft }: { draft: StartDraft }) {

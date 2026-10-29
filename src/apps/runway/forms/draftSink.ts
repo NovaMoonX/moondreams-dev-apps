@@ -5,4 +5,6 @@ export interface DraftSink<T> {
   onSave: (value: T) => void;
   /** The income sources entered so far, which "From a paycheck" offers in place of a plan's pay days. */
   sources?: { id: string; name: string }[];
+  /** A question to open first on a saved answer, for the one it still lacks. */
+  openStep?: string | null;
 }

@@ -158,3 +158,18 @@ export async function commitStartDraft(
 export const EMPTY_TIER_RANKS: Record<Priority, number> = Object.fromEntries(
   PRIORITIES.map((priority) => [priority, 0]),
 ) as Record<Priority, number>;
+
+/** The highest rank used in each priority tier of a list of items. */
+export const toTopRanks = (
+  list: { version: { payload: { priority: Priority; orderIndex: number } } }[],
+) =>
+  list.reduce<Record<Priority, number>>(
+    (acc, { version }) => ({
+      ...acc,
+      [version.payload.priority]: Math.max(
+        acc[version.payload.priority],
+        version.payload.orderIndex,
+      ),
+    }),
+    { ...EMPTY_TIER_RANKS },
+  );
