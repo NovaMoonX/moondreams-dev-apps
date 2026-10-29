@@ -8,7 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
-import { BUDGET_WORDS, START_WORDS } from '@apps/runway/constants';
+import { START_WORDS } from '@apps/runway/constants';
 import { collectStarted } from '@apps/runway/engine/progress';
 import InlineNotice from '@/components/InlineNotice';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
@@ -51,7 +51,6 @@ import {
   selectResolvedPlan,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
-  addDraftEntries,
   clearStartDraft,
   removeDraftEntry,
   saveDraftEntry,
@@ -345,7 +344,7 @@ function SavedStart({ uid }: { uid: string }) {
 
   return (
     <StartFlow
-      budget={{ mode: 'plan', onAdd: addBudget }}
+      budget={{ onAdd: addBudget }}
       steps={SAVED_STEPS}
       rows={rows}
       resumeStep={getFirstOpenStep(counts, hasStart)}
@@ -399,7 +398,6 @@ function SavedStart({ uid }: { uid: string }) {
 /** Starting out before signing in: answers are kept on this device for a week and written to the plan on sign-in. */
 function DeviceStart() {
   const { signInWithGoogle } = useAuth();
-  const { addToast } = useToast();
   const draft = useStartDraft();
   const entries = {
     incomes: draft?.incomes ?? [],
@@ -509,21 +507,7 @@ function DeviceStart() {
 
   return (
     <StartFlow
-      budget={{
-        mode: 'device',
-        onAdd: async (added) => {
-          addDraftEntries(added);
-          addToast({
-            title: BUDGET_WORDS.addedToast(
-              added.incomes.length +
-                added.bills.length +
-                added.envelopes.length +
-                added.goals.length,
-            ),
-            type: 'success',
-          });
-        },
-      }}
+      budget={{ onAdd: null }}
       steps={DRAFT_STEPS}
       rows={rows}
       resumeStep={draft?.step ?? 'income'}

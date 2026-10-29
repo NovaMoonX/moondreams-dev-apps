@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   CircleHelp,
   FileText,
@@ -22,6 +22,7 @@ import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
 import MethodPicker from '@/components/MethodPicker';
+import { useAuth } from '@/hooks/useAuth';
 import {
   BUDGET_WORDS,
   START_HELD_WORDS,
@@ -151,10 +152,20 @@ interface StartFlowProps {
   headerAction?: ReactNode;
   /** Offers "Start from your budget" beside starting fresh when nothing has been added yet. */
   budget?: {
-    mode: 'plan' | 'device';
-    onAdd: (draft: Pick<StartDraft, DraftKind>) => Promise<void>;
+    /** Null for a visitor who is signed out: the option is shown, asks them to sign in, and no reading can start. */
+    onAdd: ((draft: Pick<StartDraft, DraftKind>) => Promise<void>) | null;
   };
 }
+
+/** Where Starting out opens: the method choice when nothing is added, or the budget step when a sign-in was started from it. A signed-out visitor never opens on the budget step. */
+const getFirstStage = (
+  total: number,
+  budget: StartFlowProps['budget'],
+  method: string | null,
+): 'choose' | 'budget' | 'steps' => {
+  if (total > 0 || !budget) return 'steps';
+  return method === 'budget' && budget.onAdd ? 'budget' : 'choose';
+};
 
 /** Starting out, one short question at a time. Only the income source is required; every other step has a Later. */
 function StartFlow({
@@ -177,7 +188,15 @@ function StartFlow({
   getHeldCents,
   budget,
 }: StartFlowProps) {
-  const { closeView } = useRunwayUrlState();
+  const { closeView, startMethod, setStartMethod } = useRunwayUrlState();
+  const { signInWithGoogle } = useAuth();
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
   const { confirm } = useActionModal();
   const counts = {
     income: new Set(rows.income.map((row) => row.group ?? row.id)).size,
@@ -188,8 +207,22 @@ function StartFlow({
   const total = counts.income + counts.bill + counts.envelope + counts.goal;
   const [isAsking, setIsAsking] = useState(total > 0);
   const [stage, setStage] = useState<'choose' | 'budget' | 'steps'>(
-    total === 0 && budget ? 'choose' : 'steps',
+    getFirstStage(total, budget, startMethod),
   );
+  const changeStage = (next: 'choose' | 'budget' | 'steps') => {
+    setStage(next);
+    if (next !== 'budget') setStartMethod(null);
+  };
+  const handleBudgetPick = async () => {
+    if (budget?.onAdd) {
+      setStage('budget');
+      return;
+    }
+    setStartMethod('budget');
+    await signInWithGoogle();
+    // Signing in swaps this screen for the signed-in one, so still being here means it did not happen.
+    if (isMountedRef.current) setStartMethod(null);
+  };
   const [step, setStep] = useState<StartStep>(
     steps.includes(resumeStep) ? resumeStep : steps[0],
   );
@@ -439,10 +472,10 @@ function StartFlow({
         onBack={() => {
           if (stage !== 'budget') leave();
           else if (budgetGuards.current) budgetGuards.current.back();
-          else setStage('choose');
+          else changeStage('choose');
         }}
       >
-        {stage === 'choose' ? (
+        {stage === 'choose' || !budget.onAdd ? (
           <div className='flex flex-1 flex-col gap-4'>
             <h2 className='text-2xl font-semibold text-balance'>
               {BUDGET_WORDS.chooseAsk}
@@ -453,31 +486,32 @@ function StartFlow({
                   id: 'budget',
                   emoji: <FileText className='h-5 w-5' />,
                   title: BUDGET_WORDS.methodTitle,
-                  description: BUDGET_WORDS.methodBody,
-                  onPick: () => setStage('budget'),
+                  description: budget.onAdd
+                    ? BUDGET_WORDS.methodBody
+                    : BUDGET_WORDS.methodBodySignedOut,
+                  onPick: () => void handleBudgetPick(),
                 },
                 {
                   id: 'fresh',
                   emoji: <ListChecks className='h-5 w-5' />,
                   title: BUDGET_WORDS.freshTitle,
                   description: BUDGET_WORDS.freshBody,
-                  onPick: () => setStage('steps'),
+                  onPick: () => changeStage('steps'),
                 },
               ]}
             />
           </div>
         ) : (
           <BudgetStart
-            mode={budget.mode}
-            onBack={() => setStage('choose')}
+            onBack={() => changeStage('choose')}
             onExit={closeView}
-            onStartFresh={() => setStage('steps')}
+            onStartFresh={() => changeStage('steps')}
             onGuards={(guards) => {
               budgetGuards.current = guards;
             }}
             onAdd={async (draft) => {
-              await budget.onAdd(draft);
-              setStage('steps');
+              await budget.onAdd?.(draft);
+              changeStage('steps');
               goTo(getStepAfterAdding(draft));
             }}
           />

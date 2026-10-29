@@ -23,6 +23,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
 import SectionDivider from '@/components/SectionDivider';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useAuth } from '@/hooks/useAuth';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
@@ -401,8 +402,6 @@ const countReading = (reading: BudgetReading) =>
   reading.goals.length;
 
 interface BudgetStartProps {
-  /** Where the proposals go: a signed-in plan, or this device for someone with no account yet. */
-  mode: 'plan' | 'device';
   /** Adds what was reviewed; a rejection is shown here and the review stays open. */
   onAdd: (draft: Pick<StartDraft, DraftKind>) => Promise<void>;
   /** Leaves for the choice of how to start. */
@@ -422,13 +421,13 @@ export interface BudgetGuards {
 
 /** "Start from your budget": pick files or paste text, have an AI read them in one go, then review what it found in the same forms Starting out uses. Nothing is saved until the person adds it. */
 function BudgetStart({
-  mode,
   onAdd,
   onBack,
   onExit,
   onStartFresh,
   onGuards,
 }: BudgetStartProps) {
+  const { user } = useAuth();
   const fileRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [pasted, setPasted] = useState('');
@@ -605,6 +604,7 @@ function BudgetStart({
   };
 
   const read = async () => {
+    if (!user) return;
     const run = runRef.current + 1;
     runRef.current = run;
     setIsReading(true);
@@ -753,8 +753,6 @@ function BudgetStart({
 
   const notRead = data.notRead;
   const selectedRow = selectedProposal ? toProposalRow(selectedProposal) : null;
-  const addLabel =
-    mode === 'plan' ? BUDGET_WORDS.planAdd : BUDGET_WORDS.deviceAdd;
   const isFolded = isShort && needing > 0;
   const selectedMissing =
     selectedProposal === null
@@ -967,9 +965,6 @@ function BudgetStart({
           </Button>
         </div>
       )}
-      {mode === 'device' && (
-        <InlineNotice tone='info'>{BUDGET_WORDS.deviceNote}</InlineNotice>
-      )}
       <ModalFooterActions
         note={
           needing > 0 && !isFolded ? BUDGET_WORDS.needDetails(needing) : null
@@ -991,7 +986,9 @@ function BudgetStart({
             disabled={isAdding || proposals.length === 0 || needing > 0}
             onClick={() => void add()}
           >
-            {isFolded ? BUDGET_WORDS.needDetailsShort(needing) : addLabel}
+            {isFolded
+              ? BUDGET_WORDS.needDetailsShort(needing)
+              : BUDGET_WORDS.planAdd}
           </Button>
         }
       />

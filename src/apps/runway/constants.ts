@@ -831,6 +831,9 @@ export const BUDGET_LIMITS = {
   maxCents: 999_999_999,
 } as const;
 
+/** The ways Starting out can begin, kept in the URL as `method` so a choice survives sign-in. */
+export const START_METHODS = ['budget'] as const;
+
 export const BUDGET_TEXT_EXTENSIONS = ['csv', 'tsv', 'txt', 'md'] as const;
 export const BUDGET_ACCEPT = '.csv,.tsv,.txt,.md,.pdf';
 export const BUDGET_PASTED_NAME = 'Pasted text';
@@ -843,6 +846,8 @@ export const BUDGET_WORDS = {
   methodTitle: 'Start from your budget',
   methodBody:
     'Bring a spreadsheet, a PDF or pasted notes. An AI reads them and suggests your income, bills, envelopes and goals.',
+  methodBodySignedOut:
+    'Bring a spreadsheet, a PDF or pasted notes and an AI suggests your plan. Sign in to use it.',
   freshTitle: 'Start fresh',
   freshBody: 'Answer a few questions, one at a time.',
   ask: 'Bring your budget',
@@ -926,8 +931,6 @@ export const BUDGET_WORDS = {
   removeOne: 'Remove',
   leaveTitle: 'Go back?',
   leaveMessage: 'What was read is dropped. Nothing has been added.',
-  deviceNote:
-    'You are not signed in, so these stay on this device, unencrypted, for 7 days. They move to your plan when you sign in.',
   addedToast: (count: number) => `Added ${count} from your budget.`,
   freshInstead: 'Start fresh instead',
   stopTitle: 'Stop reading?',
@@ -944,7 +947,6 @@ export const BUDGET_WORDS = {
   notReadTitle: 'What we could not read',
   sourcePrefix: 'From',
   planAdd: 'Add to my plan',
-  deviceAdd: 'Keep on this device',
   planFailed: 'None of this was added. Nothing was changed.',
   notReady: 'Your plan is still opening. Try again in a moment.',
   cutText: (file: string, chars: number) =>

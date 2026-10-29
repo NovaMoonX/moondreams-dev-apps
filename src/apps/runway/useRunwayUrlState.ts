@@ -19,6 +19,7 @@ import {
   PLAN_SECTIONS,
   RUNWAY_TABS,
   RUNWAY_VIEWS,
+  START_METHODS,
   SETTINGS_VIEWS,
 } from '@apps/runway/constants';
 import { isMonthKey } from '@apps/runway/engine/closings';
@@ -47,6 +48,11 @@ export function useRunwayUrlState() {
   const [requestedView, setRequestedView] = useQueryState(
     'view',
     parseAsStringLiteral(RUNWAY_VIEWS),
+  );
+
+  const [requestedMethod, setRequestedMethod] = useQueryState(
+    'method',
+    parseAsStringLiteral(START_METHODS),
   );
 
   const [requestedSettingsView, setRequestedSettingsView] = useQueryState(
@@ -208,6 +214,7 @@ export function useRunwayUrlState() {
     setRequestedView(view, { history: 'replace' });
   const closeView = () => {
     setRequestedView(null, { history: 'replace' });
+    setRequestedMethod(null, { history: 'replace' });
     setRequestedCheckEnvelope(null, { history: 'replace' });
     setRequestedCheckFrom(null, { history: 'replace' });
   };
@@ -215,7 +222,7 @@ export function useRunwayUrlState() {
   /** Leaves the open full-page view for a tab in one update, so the first frame after the tap is that tab; the view's own history entry takes the plain address first, so stepping back off it lands on the screen it opened from. */
   const leaveViewForTab = (tab: RunwayTab, section?: PlanSection) => {
     const address = new URL(window.location.href);
-    ['view', 'checkEnvelope', 'checkFrom'].forEach((key) =>
+    ['view', 'method', 'checkEnvelope', 'checkFrom'].forEach((key) =>
       address.searchParams.delete(key),
     );
     window.history.replaceState(window.history.state, '', address);
@@ -229,6 +236,9 @@ export function useRunwayUrlState() {
     view: requestedView,
     openView,
     closeView,
+    startMethod: requestedMethod,
+    setStartMethod: (method: (typeof START_METHODS)[number] | null) =>
+      setRequestedMethod(method, { history: 'replace' }),
     leaveViewForTab,
     showTab,
     showSpend,
