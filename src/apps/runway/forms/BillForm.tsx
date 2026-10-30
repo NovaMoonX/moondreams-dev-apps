@@ -959,7 +959,11 @@ function BillForm({
                   <Button
                     type='button'
                     loading={isSaving}
-                    disabled={isSaving || shownBlocker !== null}
+                    disabled={
+                      isSaving ||
+                      shownBlocker !== null ||
+                      (isFirstDate && dueDate === undefined)
+                    }
                     onClick={() => {
                       if (isFirstDate) {
                         void flow.save(null);
