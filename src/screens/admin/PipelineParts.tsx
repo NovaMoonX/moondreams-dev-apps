@@ -55,7 +55,7 @@ export function EntryActions({
   const links = getEntryActions(entry);
   const canAnswer = getAnswerSlots(entry).length > 0;
   const count = links.length + (canAnswer ? 1 : 0);
-  const isClaudeOnly = !canAnswer && entry.asks.length > 0;
+  const isClaudeOnly = !canAnswer && links.length === 0 && entry.asks.length > 0;
   if (count === 0 && !isClaudeOnly) return null;
   return (
     <div className='space-y-2'>
