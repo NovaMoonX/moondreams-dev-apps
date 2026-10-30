@@ -756,7 +756,7 @@ export const SPEND_WORDS = {
   items: 'Items',
   showAllItems: 'Show all',
   showFewerItems: 'Show fewer',
-  addReceiptSub: 'A photo or screenshot, kept sealed until you remove it.',
+  addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',
   receiptPhotos: (count: number) =>
     count === 1 ? '1 photo' : `${count} photos`,
   chooseReceipts: 'Choose photos',
@@ -769,12 +769,26 @@ export const SPEND_WORDS = {
   receiptAdding: 'Adding the receipt.',
   receiptOpening: 'Opening the receipt.',
   receiptHidden: 'Show amounts to see it',
-  removeReceiptFile: 'Remove',
+  removeReceiptFile: 'Remove photo',
+  removeAllReceiptFiles: 'Remove all',
+  receiptsHeld: (count: number) =>
+    `This purchase has ${count === 1 ? '1 receipt' : `${count} receipts`}. View or remove ${count === 1 ? 'it' : 'them'} from the purchase.`,
+  receiptsLoadFailed:
+    'Receipts did not load. Reopen the purchase to try again.',
+  receiptFormat:
+    "That photo's format can't be shown here. Try a screenshot or a JPEG.",
+  receiptOffline: "You're offline. Nothing was added.",
+  receiptOfflineAfterSave:
+    "The purchase saved. You're offline, so the receipts were not added; add them from the purchase.",
+  receiptsLeftBehind: (failed: number, total: number) =>
+    `The purchase saved. ${failed} of ${total} receipt${total === 1 ? '' : 's'} did not upload; add ${failed === 1 ? 'it' : 'them'} from the purchase.`,
+  receiptsRemovedWithPurchase: (count: number) =>
+    `Its ${count} receipt${count === 1 ? ' is' : 's are'} deleted too.`,
+  receiptsLeftWithPurchase:
+    'The purchase was removed, but its receipts could not be. They are deleted with the plan.',
   receiptAdded: (count: number) =>
     count === 1 ? 'Receipt added' : 'Receipts added',
   receiptAddFailed: 'The receipt did not upload. Nothing was changed.',
-  receiptLeftBehind:
-    'The purchase saved. A receipt did not upload; add it from the purchase.',
   viewReceipt: 'View this receipt',
   downloadReceipt: 'Download',
   removeReceipt: 'Remove this receipt',
