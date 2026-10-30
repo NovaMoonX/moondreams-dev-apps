@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ExternalLink } from 'lucide-react';
 
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
@@ -13,6 +13,7 @@ import type {
 } from '@apps/a-list/types';
 import { describePurchase } from '@apps/a-list/utils/purchase';
 import { formatShowtimeForTheatre } from '@apps/a-list/utils/theatreTime';
+import DateInput from '@/components/DateInput';
 
 interface BuyTicketsPanelProps {
   viewing: Viewing;
@@ -75,8 +76,7 @@ function BuyTicketsPanel({
       {theaterPills}
       <div className='space-y-2'>
         <p className='font-medium'>📅 Which day?</p>
-        <Input
-          type='date'
+        <DateInput
           aria-label='Day to look up showtimes for'
           value={pickedDay ?? toLocalDateInputValue(viewing.showtimeAt)}
           min={toLocalDateInputValue(now)}

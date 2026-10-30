@@ -1,5 +1,4 @@
-import { Input, Label } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Label } from '@moondreamsdev/dreamer-ui/components';
 
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
@@ -15,6 +14,7 @@ import {
   type DateAnswer,
   type DateChoice,
 } from '@apps/pinch/utils/packages';
+import DateInput from '@/components/DateInput';
 
 const OPTIONS: PillOption<DateChoice>[] = [
   ...PACKAGE_DATE_CHOICES.map((choice) => ({
@@ -67,11 +67,10 @@ function PackageDateField({
         </p>
       )}
       {value.choice === 'PICK' && (
-        <Input
-          type='date'
+        <DateInput
           variant='outline'
           aria-label={`${label} date`}
-          className={join(COMPACT_INPUT_CLASS, 'min-w-0')}
+          className={COMPACT_INPUT_CLASS}
           min={toDateInputValue(MIN_EAT_BY_DATE)}
           max={toDateInputValue(MAX_EAT_BY_DATE)}
           value={value.picked}

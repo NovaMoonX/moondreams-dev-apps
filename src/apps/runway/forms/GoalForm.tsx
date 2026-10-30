@@ -86,6 +86,7 @@ import type { GoalSealed, Priority } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import DateInput from '@/components/DateInput';
 
 interface GoalFormData extends FundingFormData {
   name: string;
@@ -394,8 +395,7 @@ function GoalFormBody({
             : null,
       render: () => (
         <div className='space-y-3'>
-          <Input
-            type='date'
+          <DateInput
             variant='outline'
             aria-label={FORM_FLOW_WORDS.byWhen}
             min={toDateInputValue(today)}

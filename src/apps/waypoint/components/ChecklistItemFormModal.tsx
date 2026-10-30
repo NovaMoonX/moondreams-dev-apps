@@ -8,7 +8,6 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { CalendarDays, StickyNote } from 'lucide-react';
-import { Input } from '@moondreamsdev/dreamer-ui/components';
 import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -26,6 +25,7 @@ import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import type { ChecklistCategory, ChecklistItem, TripSpace } from '@apps/waypoint/types';
+import DateInput from '@/components/DateInput';
 
 interface ChecklistFormData {
   title: string;
@@ -265,8 +265,7 @@ export default function ChecklistItemFormModal({
                 removeLabel='Remove date'
                 onRemove={() => resetField({ dueDate: { ...due, enabled: false } })}
               >
-                <Input
-                  type='date'
+                <DateInput
                   variant='outline'
                   aria-label='Due date'
                   value={due.date}

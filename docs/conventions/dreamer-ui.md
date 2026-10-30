@@ -29,6 +29,7 @@ All components are imported from `@moondreamsdev/dreamer-ui/components`.
 
 - **Button**: Versatile button component with multiple variants, sizes, and states.
 - **Calendar**: Comprehensive calendar component supporting single date and range selection with multiple views.
+- **Date input**: never a raw `Input type='date'`; use `@/components/DateInput` (a form factory field is `createDateInputField`), which draws the format as a placeholder while empty since phones show an empty date box blank. `className` styles the input, `wrapperClassName` sizes the field (`w-44`, `flex-1`), `errorMessage` draws under it.
 - **Checkbox**: Customizable checkbox with different sizes and colors.
 - **Clickable**: Generic clickable wrapper component with hover and focus states.
 - **Form**: Flexible form component using factory pattern with built-in validation and state management.

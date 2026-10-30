@@ -4,7 +4,6 @@ import {
   Button,
   Form,
   FormFactories,
-  Input,
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
 
@@ -45,6 +44,7 @@ import {
 } from '@apps/a-list/utils/costStep';
 import { centsToInputValue } from '@/utils/moneyUtils';
 import { formatTaxRate } from '@apps/a-list/utils/tax';
+import DateInput from '@/components/DateInput';
 
 interface GoalValues {
   weeklyGoal: string;
@@ -384,8 +384,7 @@ function MembershipSettingsSubview({
         <SectionDivider label='📆 Start date' />
         <div className='space-y-1.5'>
           <Label>When did your membership start?</Label>
-          <Input
-            type='date'
+          <DateInput
             variant='outline'
             rounded='full'
             aria-label='Membership start date'
