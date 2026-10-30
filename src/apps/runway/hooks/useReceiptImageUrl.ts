@@ -11,6 +11,14 @@ import type { OpenReceiptImage } from '@apps/runway/types';
 
 const MAX_REMEMBERED_IMAGES = 24;
 const remembered = new Map<string, Promise<Blob>>();
+const owner = { uid: null as string | null };
+
+/** Drops a removed receipt's opened picture from this device's memory. */
+export function forgetReceiptImage(id: string) {
+  Array.from(remembered.keys())
+    .filter((key) => key.endsWith(`:${id}`))
+    .forEach((key) => remembered.delete(key));
+}
 
 type OpeningImage = Pick<
   OpenReceiptImage,
@@ -18,7 +26,12 @@ type OpeningImage = Pick<
 >;
 
 const openImage = (uid: string, image: OpeningImage) => {
-  const known = remembered.get(image.id);
+  if (owner.uid !== uid) {
+    remembered.clear();
+    owner.uid = uid;
+  }
+  const key = `${uid}:${image.id}`;
+  const known = remembered.get(key);
   if (known) return known;
   if (remembered.size >= MAX_REMEMBERED_IMAGES) remembered.clear();
   const opening = (async () => {
@@ -33,8 +46,8 @@ const openImage = (uid: string, image: OpeningImage) => {
     );
     return new Blob([bytes as BlobPart], { type: image.contentType });
   })();
-  remembered.set(image.id, opening);
-  opening.catch(() => remembered.delete(image.id));
+  remembered.set(key, opening);
+  opening.catch(() => remembered.delete(key));
   return opening;
 };
 
@@ -54,6 +67,10 @@ export function useReceiptImageUrl(
   const { id, purchaseId, nonce, contentType } = image;
 
   useEffect(() => {
+    if (!uid) {
+      remembered.clear();
+      owner.uid = null;
+    }
     if (!uid || !isEnabled) return;
     const run = { isCurrent: true, url: null as string | null };
     openImage(uid, { id, purchaseId, nonce, contentType })

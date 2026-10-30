@@ -40,7 +40,7 @@ export function startReceiptImagesListener(
       sequence.latest += 1;
       const current = sequence.latest;
       try {
-        const opened = await Promise.all(
+        const settled = await Promise.allSettled(
           snapshot.docs.map(async (entry) => {
             const data = entry.data() as ReceiptImageDoc;
             const payload = await read<ReceiptImageSealed>(data.sealed);
@@ -53,6 +53,11 @@ export function startReceiptImagesListener(
             } satisfies OpenReceiptImage;
           }),
         );
+        const opened = settled.flatMap((result) => {
+          if (result.status === 'fulfilled') return [result.value];
+          console.error('A receipt did not open', result.reason);
+          return [];
+        });
         if (current !== sequence.latest || run.isStopped) return;
         onChange(opened);
       } catch (error) {

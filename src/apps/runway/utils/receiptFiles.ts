@@ -13,3 +13,14 @@ export function pickReceiptFiles(files: readonly File[], heldCount: number) {
         : null;
   return { files: taken, note };
 }
+
+/** The nearest ancestor that scrolls, which is where a sheet's body keeps its position. */
+export function findScrollParent(node: HTMLElement | null) {
+  const isScrolling = (element: HTMLElement) =>
+    /auto|scroll/.test(getComputedStyle(element).overflowY);
+  const climb = (element: HTMLElement | null): HTMLElement | null =>
+    element === null || isScrolling(element)
+      ? element
+      : climb(element.parentElement);
+  return climb(node?.parentElement ?? null);
+}
