@@ -446,6 +446,7 @@ export async function seedAList(context: SeedContext): Promise<SeedResult> {
     monthlyGoal: 6,
     favoriteTheatreId: SEED_THEATRES[0].theatreId,
     ticketPriceKind: 'ADULT',
+    showReleasesOnCalendar: true,
     setupCompletedAt: setupAt,
     createdAt: setupAt,
     lastEditedAt: setupAt,
