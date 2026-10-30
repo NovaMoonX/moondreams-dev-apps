@@ -23,10 +23,15 @@ import { getActiveSince } from '@lib/appUsage/appUsage';
 import type { AppUsage } from '@lib/appUsage/appUsage';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
-import { APP_SEARCH_THRESHOLD, CARD_CLASS, SURFACE_CLASS } from './constants';
+import {
+  APP_SEARCH_THRESHOLD,
+  CARD_CLASS,
+  SURFACE_CLASS,
+  WAITING_TEXT_CLASS,
+} from './constants';
 import IconTile from './IconTile';
 import { EntryActions, StatusDot } from './PipelineParts';
-import type { PipelineEntry } from './pipelineUtils';
+import { getPartialFailureLine, type PipelineEntry } from './pipelineUtils';
 import { getUsageRows } from './usageRows';
 
 const NEEDS_YOU_PREVIEW = 2;
@@ -100,7 +105,8 @@ interface DashboardNavProps {
   isLoading: boolean;
   isUsersError: boolean;
   isPipelineLoading: boolean;
-  hasPipelineError: boolean;
+  sessionsFailed: boolean;
+  inboxFailed: boolean;
   failedAppIds: string[];
   selected: string | null;
   unsavedAppIds: string[];
@@ -120,7 +126,8 @@ function DashboardNav({
   isLoading,
   isUsersError,
   isPipelineLoading,
-  hasPipelineError,
+  sessionsFailed,
+  inboxFailed,
   failedAppIds,
   selected,
   unsavedAppIds,
@@ -168,17 +175,26 @@ function DashboardNav({
       ...(askedCount > 0 ? [`${askedCount} asked`] : []),
     ].join(' · ');
   };
-  const getAppSubtitle = (app: AppMetadata) =>
-    unsavedAppIds.includes(app.id)
-      ? `${getAppMeta(app)} · unsaved`
-      : getAppMeta(app);
+  const getAppSubtitle = (app: AppMetadata) => {
+    const meta = getAppMeta(app);
+    if (!unsavedAppIds.includes(app.id)) return meta;
+    const isMetaUsable =
+      !isLoading && !isUsersError && !failedAppIds.includes(app.id);
+    return isMetaUsable ? `${meta} · unsaved` : 'Unsaved changes';
+  };
   const getMembersSubtitle = () => {
     if (isUsersError) return "Couldn't load";
     if (isLoading) return 'Everyone who has signed in';
     return `${users.length} ${users.length === 1 ? 'person' : 'people'}`;
   };
 
-  const isPipelineUnknown = isPipelineLoading || hasPipelineError;
+  const hasPipelineError = sessionsFailed || inboxFailed;
+  const isPipelineUnknown =
+    (isPipelineLoading || hasPipelineError) && waitingEntries.length === 0;
+  const partialLine =
+    hasPipelineError && !isPipelineUnknown
+      ? getPartialFailureLine(sessionsFailed)
+      : null;
   const getPipelineFigure = (value: number) =>
     isPipelineUnknown ? '–' : value;
 
@@ -198,7 +214,12 @@ function DashboardNav({
               <CheckCircle2 className='size-5' />
             )}
           </IconTile>
-          <p className='text-sm font-medium'>{getText()}</p>
+          <div className='min-w-0'>
+            <p className='text-sm font-medium'>{getText()}</p>
+            {partialLine ? (
+              <p className='text-muted-foreground text-xs'>{partialLine}</p>
+            ) : null}
+          </div>
         </div>
       );
     }
@@ -206,7 +227,7 @@ function DashboardNav({
       <section className={join(CARD_CLASS, 'space-y-3')}>
         <div className='flex items-center gap-3'>
           <IconTile>
-            <BellRing className='size-5 text-indigo-600 dark:text-indigo-400' />
+            <BellRing className={join('size-5', WAITING_TEXT_CLASS)} />
           </IconTile>
           <h2 className='text-base font-semibold'>
             Needs you ({waitingEntries.length})
@@ -235,6 +256,9 @@ function DashboardNav({
             </li>
           ))}
         </ul>
+        {partialLine ? (
+          <p className='text-muted-foreground text-xs'>{partialLine}</p>
+        ) : null}
         <div className='flex justify-end'>
           <Button
             type='button'
@@ -357,19 +381,25 @@ function DashboardNav({
               className={join(
                 !isPipelineUnknown &&
                   pipelineSummary.waiting > 0 &&
-                  'text-indigo-600 dark:text-indigo-400',
+                  WAITING_TEXT_CLASS,
               )}
             >
               {getPipelineFigure(pipelineSummary.waiting)}
             </span>
           }
-          onOpen={{ label: 'Open the Pipeline', onClick: onSelectPipeline }}
+          onOpen={{
+            label: 'Open the Pipeline: waiting',
+            onClick: onSelectPipeline,
+          }}
         />
         <StatTile
           className={SURFACE_CLASS}
           label='Working'
           value={getPipelineFigure(pipelineSummary.working)}
-          onOpen={{ label: 'Open the Pipeline', onClick: onSelectPipeline }}
+          onOpen={{
+            label: 'Open the Pipeline: working',
+            onClick: onSelectPipeline,
+          }}
         />
       </div>
       <section className={CARD_CLASS}>

@@ -1,3 +1,4 @@
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
@@ -172,7 +173,7 @@ function MembersView({
         ) : null}
 
         {visibleMembers.length === 0 ? (
-          <p className={`${CARD_CLASS} text-muted-foreground text-sm`}>
+          <p className={join(CARD_CLASS, 'text-muted-foreground text-sm')}>
             {getEmptyText()}
           </p>
         ) : (

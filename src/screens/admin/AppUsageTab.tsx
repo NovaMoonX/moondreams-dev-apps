@@ -141,7 +141,7 @@ function AppUsageTab({
         ) : null}
 
         {visibleRows.length === 0 ? (
-          <div className={`${CARD_CLASS} flex items-center gap-3`}>
+          <div className={join(CARD_CLASS, 'flex items-center gap-3')}>
             <IconTile>
               <Users className='size-5' />
             </IconTile>
@@ -165,7 +165,10 @@ function AppUsageTab({
                   <div className='flex items-center justify-end gap-1.5'>
                     <span
                       aria-hidden='true'
-                      className={`size-1.5 rounded-full ${row.isActive ? 'bg-success' : 'bg-warning'}`}
+                      className={join(
+                        'size-1.5 rounded-full',
+                        row.isActive ? 'bg-success' : 'bg-warning',
+                      )}
                     />
                     {row.isActive ? 'Last active' : 'Quiet since'}{' '}
                     {formatDate(row.lastActiveAt)}

@@ -6,12 +6,18 @@ import { useState } from 'react';
 import StatTile from '@/components/StatTile';
 import type { PipelineState } from '@/hooks/usePipelineSync';
 
-import { CARD_CLASS, SURFACE_CLASS } from './constants';
+import {
+  CARD_CLASS,
+  SURFACE_CLASS,
+  WAITING_EDGE_CLASS,
+  WAITING_TEXT_CLASS,
+} from './constants';
 import IconTile from './IconTile';
 import PipelineSheet from './PipelineSheet';
 import { EntryActions, StatusDot } from './PipelineParts';
 import {
   formatPipelineTime,
+  getPartialFailureLine,
   type PipelineEntry,
   type PipelineGroup,
   type PipelineGroups,
@@ -59,9 +65,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
   const getErrorText = () => {
     if (sessionsFailed && inboxFailed)
       return "Sessions and pull requests couldn't load.";
-    return sessionsFailed
-      ? "Sessions couldn't load."
-      : "Pull requests couldn't load.";
+    return getPartialFailureLine(sessionsFailed);
   };
 
   const renderWaitingCard = (entry: PipelineEntry, index: number) => {
@@ -70,10 +74,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
     return (
       <li
         key={entry.key}
-        className={join(
-          CARD_CLASS,
-          'space-y-3 border-l-2 border-l-indigo-500 dark:border-l-indigo-400',
-        )}
+        className={join(CARD_CLASS, 'space-y-3', WAITING_EDGE_CLASS)}
       >
         <Button
           type='button'
@@ -145,7 +146,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
   );
 
   const isEmpty = allEntries.length === 0;
-  const isUnknown = isLoading || hasError;
+  const isUnknown = (isLoading || hasError) && isEmpty;
   const getFigure = (count: number) => (isUnknown ? '–' : count);
 
   return (
@@ -163,9 +164,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
           value={
             <span
               className={join(
-                !isUnknown &&
-                  groups.waiting.length > 0 &&
-                  'text-indigo-600 dark:text-indigo-400',
+                !isUnknown && groups.waiting.length > 0 && WAITING_TEXT_CLASS,
               )}
             >
               {getFigure(groups.waiting.length)}
@@ -189,12 +188,12 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
         />
       </div>
 
-      {isLoading ? (
+      {isLoading && isEmpty ? (
         <p className='text-muted-foreground text-sm'>Loading sessions…</p>
       ) : null}
 
       {isEmpty && !isLoading && !hasError ? (
-        <div className={`${CARD_CLASS} flex items-center gap-4`}>
+        <div className={join(CARD_CLASS, 'flex items-center gap-4')}>
           <IconTile>
             <Workflow className='size-5' />
           </IconTile>

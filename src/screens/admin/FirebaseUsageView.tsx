@@ -279,7 +279,7 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
 
   if (!query.data) {
     return (
-      <div className={`${CARD_CLASS} space-y-3`}>
+      <div className={join(CARD_CLASS, 'space-y-3')}>
         <p className='text-foreground text-sm'>{getFailureText(query.error)}</p>
         <Button
           type='button'
@@ -346,7 +346,10 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
         <section key={product} className='space-y-3'>
           <h2 className='text-foreground text-base font-semibold'>{product}</h2>
           <ul
-            className={`${CARD_CLASS} divide-border/60 divide-y py-1! sm:py-1!`}
+            className={join(
+              CARD_CLASS,
+              'divide-border/60 divide-y py-1! sm:py-1!',
+            )}
           >
             {usage.lines
               .filter((line) => line.product === product)

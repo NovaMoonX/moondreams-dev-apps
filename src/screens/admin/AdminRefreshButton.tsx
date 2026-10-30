@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react';
 
 import { ADMIN_QUERY_KEY } from '@lib/admin/adminQueries';
 
-import AdminIconButton from './AdminIconButton';
+import HeaderIconButton from '@/components/HeaderIconButton';
 
 /** Re-reads everything the dashboard shows, since none of it is live. */
 function AdminRefreshButton() {
@@ -11,7 +11,8 @@ function AdminRefreshButton() {
   const isRefreshing = useIsFetching({ queryKey: ADMIN_QUERY_KEY }) > 0;
 
   return (
-    <AdminIconButton
+    <HeaderIconButton
+      isQuiet
       icon={<RefreshCw className='size-4' />}
       label='Refresh members and usage'
       isLoading={isRefreshing}

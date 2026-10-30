@@ -260,7 +260,7 @@ function AppSettingsTab({
         <h3 className='text-foreground text-base font-semibold'>
           About this app
         </h3>
-        <div className={`${CARD_CLASS} space-y-5`}>
+        <div className={join(CARD_CLASS, 'space-y-5')}>
           <div className='grid gap-5 md:grid-cols-2'>
             <div className='space-y-2'>
               <label className='text-foreground text-sm font-medium'>
@@ -316,7 +316,7 @@ function AppSettingsTab({
         <h3 className='text-foreground text-base font-semibold'>
           Who can open it
         </h3>
-        <div className={`${CARD_CLASS} space-y-5`}>
+        <div className={join(CARD_CLASS, 'space-y-5')}>
           <div className='flex items-center justify-between gap-3'>
             <div>
               <div className='text-foreground text-sm font-medium'>
@@ -357,7 +357,7 @@ function AppSettingsTab({
           <h3 className='text-foreground text-base font-semibold'>
             Asked for access
           </h3>
-          <div className={`${CARD_CLASS} space-y-2`}>
+          <div className={join(CARD_CLASS, 'space-y-2')}>
             <p className='text-muted-foreground text-xs'>
               Give access adds them to the list below; it takes effect when you
               save.
@@ -436,7 +436,7 @@ function AppSettingsTab({
           </Button>
         </div>
 
-        <div className={`${CARD_CLASS} space-y-5`}>
+        <div className={join(CARD_CLASS, 'space-y-5')}>
           <div className='flex flex-wrap gap-2'>
             {approvedUsers.length === 0 ? (
               <span className='text-muted-foreground text-sm'>
@@ -558,10 +558,13 @@ function AppSettingsTab({
       </section>
 
       <div
-        className={`${SURFACE_CLASS} border-border/60 sticky bottom-0 z-10 -mx-4 -mb-12 flex items-center justify-between gap-3 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_-6px_rgb(0_0_0/0.12)] sm:mx-0 sm:mb-0 sm:rounded-2xl sm:border`}
+        className={join(
+          SURFACE_CLASS,
+          'border-border/60 sticky bottom-0 z-10 -mx-4 -mb-12 flex items-center justify-between gap-3 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_-6px_rgb(0_0_0/0.12)] sm:mx-0 sm:mb-0 sm:rounded-2xl sm:border',
+        )}
       >
         <p role='status' className='text-muted-foreground min-w-0 text-sm'>
-          {isDirty ? 'You have unsaved changes.' : 'Saved'}
+          {isDirty ? 'You have unsaved changes.' : 'No changes'}
         </p>
         <Button
           className={join('shrink-0 whitespace-nowrap', DISABLED_CLASS)}

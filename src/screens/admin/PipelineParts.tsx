@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { WAITING_DOT_CLASS } from './constants';
 import {
   getEntryActions,
   type PipelineEntry,
@@ -8,8 +9,7 @@ import {
 } from './pipelineUtils';
 
 const DOT_CLASS: Record<PipelineGroup, string> = {
-  waiting:
-    'bg-indigo-500 ring-4 ring-indigo-500/15 dark:bg-indigo-400 dark:ring-indigo-400/20',
+  waiting: WAITING_DOT_CLASS,
   working: 'bg-success',
   quiet: 'bg-warning',
   finished: 'bg-muted-foreground/40',

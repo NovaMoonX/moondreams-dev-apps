@@ -1,3 +1,4 @@
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { ChevronLeft } from 'lucide-react';
 import { useRef, useState } from 'react';
@@ -16,7 +17,7 @@ import { adminUsersQueryOptions } from '@lib/admin/adminQueries';
 import { ADMIN_EMAIL } from '@lib/app';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
-import AdminIconButton from './admin/AdminIconButton';
+import HeaderIconButton from '@/components/HeaderIconButton';
 import AdminRefreshButton from './admin/AdminRefreshButton';
 import AppDetail from './admin/AppDetail';
 import { isSameDraft, toDraft, type AppDraft } from './admin/appDraft';
@@ -114,7 +115,8 @@ function AdminDashboard() {
       isLoading={usersQuery.isPending || allUsage.isLoading}
       isUsersError={usersQuery.isError}
       isPipelineLoading={pipeline.isLoading}
-      hasPipelineError={pipeline.hasError}
+      sessionsFailed={pipeline.sessionsFailed}
+      inboxFailed={pipeline.inboxFailed}
       failedAppIds={allUsage.failedAppIds}
       selected={selected}
       unsavedAppIds={allApps.filter(isDirty).map((app) => app.id)}
@@ -159,7 +161,8 @@ function AdminDashboard() {
   ) : null;
 
   const homeButton = (
-    <AdminIconButton
+    <HeaderIconButton
+      isQuiet
       icon={<ChevronLeft className='size-4' />}
       label='Back to home'
       onClick={() => navigate('/')}
@@ -168,14 +171,15 @@ function AdminDashboard() {
 
   if (!isWide && selected !== null) {
     return (
-      <div className={`page ${CANVAS_CLASS} pt-20`}>
+      <div className={join('page', CANVAS_CLASS, 'pt-20')}>
         <div className='mx-auto w-full max-w-5xl space-y-4'>
           <StickyAppBar
             title=''
             className={BAR_CLASS}
             leading={
               <div className='flex min-w-0 flex-1 items-center gap-3'>
-                <AdminIconButton
+                <HeaderIconButton
+                  isQuiet
                   icon={<ChevronLeft className='size-4' />}
                   label='Back to dashboard'
                   onClick={url.goBack}
@@ -217,7 +221,7 @@ function AdminDashboard() {
   );
 
   return (
-    <div className={`page ${CANVAS_CLASS} pt-20`}>
+    <div className={join('page', CANVAS_CLASS, 'pt-20')}>
       <div className='mx-auto w-full max-w-5xl space-y-6'>
         {isWide ? (
           <header>
@@ -251,7 +255,10 @@ function AdminDashboard() {
         {isWide ? (
           <div className='grid grid-cols-[260px_1fr] gap-8'>
             <aside
-              className={`border-border/60 h-fit ${SURFACE_CLASS} rounded-2xl border p-3 shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto`}
+              className={join(
+                SURFACE_CLASS,
+                'border-border/60 h-fit rounded-2xl border p-3 shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto',
+              )}
             >
               {nav}
             </aside>

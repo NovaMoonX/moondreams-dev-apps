@@ -1,3 +1,4 @@
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import DetailSheet from '@/components/DetailSheet';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDate } from '@/utils/formatUtils';
@@ -56,7 +57,7 @@ function MemberDetailSheet({
     >
       {member ? (
         <div className='space-y-6'>
-          <div className={`${CARD_CLASS} flex items-center gap-3`}>
+          <div className={join(CARD_CLASS, 'flex items-center gap-3')}>
             <UserAvatar user={member.profile} size='md' />
             <div className='min-w-0'>
               <div className='text-foreground truncate text-sm font-medium'>
@@ -80,11 +81,11 @@ function MemberDetailSheet({
               ) : null}
             </div>
             {member.appUsage.length === 0 ? (
-              <p className={`${CARD_CLASS} text-muted-foreground text-sm`}>
+              <p className={join(CARD_CLASS, 'text-muted-foreground text-sm')}>
                 {getEmptyAppsText()}
               </p>
             ) : (
-              <ul className={`${LIST_CARD_CLASS} px-4`}>
+              <ul className={join(LIST_CARD_CLASS, 'px-4')}>
                 {member.appUsage.map((usage) => (
                   <li
                     key={usage.appId}
@@ -93,7 +94,10 @@ function MemberDetailSheet({
                     <span className='text-foreground flex min-w-0 items-center gap-2 text-sm font-medium'>
                       <span
                         aria-hidden='true'
-                        className={`size-2 shrink-0 rounded-full ${usage.isActive ? 'bg-success' : 'bg-warning'}`}
+                        className={join(
+                          'size-2 shrink-0 rounded-full',
+                          usage.isActive ? 'bg-success' : 'bg-warning',
+                        )}
                       />
                       <span className='truncate'>{usage.appName}</span>
                     </span>

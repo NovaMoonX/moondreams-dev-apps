@@ -314,3 +314,7 @@ export const stripLinks = (text: string) =>
   splitLinks(text)
     .map((part) => part.text)
     .join('');
+
+/** The muted line for a pipeline that loaded in part, naming what is missing. */
+export const getPartialFailureLine = (sessionsFailed: boolean) =>
+  `Part of the pipeline couldn't load (${sessionsFailed ? 'sessions' : 'pull requests'}).`;
