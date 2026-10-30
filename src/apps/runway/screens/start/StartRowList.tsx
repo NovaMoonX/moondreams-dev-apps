@@ -22,6 +22,8 @@ interface StartRowListProps {
   onOpen: (id: string) => void;
   /** Sits at the end of a heading, when that heading has something to change. */
   renderHeadingAction?: (group: string) => ReactNode;
+  /** The emoji shown before a heading's name. */
+  getHeadingEmoji?: (group: string) => string | null;
 }
 
 function StartRowBadge({ row }: { row: StartRow }) {
@@ -35,6 +37,7 @@ function StartRowList({
   searchLabel,
   onOpen,
   renderHeadingAction,
+  getHeadingEmoji,
 }: StartRowListProps) {
   const mask = useMaskedText();
   const [query, setQuery] = useState('');
@@ -65,6 +68,8 @@ function StartRowList({
               row.group !== shown[index - 1]?.group && (
                 <div className='bg-accent/50 flex min-h-10 items-center gap-2 py-1 pr-2 pl-3'>
                   <p className='text-muted-foreground min-w-0 flex-1 py-0.5 text-sm font-medium break-words'>
+                    {getHeadingEmoji?.(row.group) &&
+                      `${getHeadingEmoji(row.group)} `}
                     {row.group}
                   </p>
                   {renderHeadingAction?.(row.group)}

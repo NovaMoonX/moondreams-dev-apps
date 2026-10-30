@@ -83,11 +83,21 @@ export async function commitStartDraft(
   };
   const sourceIds = new Map<string, string>();
   const madeGroups: { id: string; name: string }[] = [];
-  const toGroup = (forName: string | null | undefined) =>
-    resolveGroupChoice(NEW_CHOICE, forName ?? '', [
+  const toGroup = (
+    forName: string | null | undefined,
+    forEmoji: string | null | undefined,
+  ) => {
+    const choice = resolveGroupChoice(NEW_CHOICE, forName ?? '', [
       ...existing.groups,
       ...madeGroups,
     ]);
+    return choice.newGroup === null
+      ? choice
+      : {
+          ...choice,
+          newGroup: { ...choice.newGroup, emoji: forEmoji?.trim() || null },
+        };
+  };
   const rememberGroup = (
     made: { name: string } | null,
     groupId: string | null,
@@ -111,12 +121,12 @@ export async function commitStartDraft(
       result.added += 1;
       result.addedIds.push(id);
     }
-    for (const { id, value, forName } of draft.bills) {
+    for (const { id, value, forName, forEmoji } of draft.bills) {
       if (taken.bills.has(norm(value.name))) {
         result.skipped += 1;
         continue;
       }
-      const { groupId, newGroup } = toGroup(forName);
+      const { groupId, newGroup } = toGroup(forName, forEmoji);
       const created = await createBill(uid, encryption, {
         startDate: today,
         bill: { ...value, groupId, orderIndex: nextRank(value.priority) },
@@ -135,12 +145,12 @@ export async function commitStartDraft(
       const real = sourceIds.get(id.slice('draft:'.length)) ?? null;
       return { ...funding, sourceId: real };
     };
-    for (const { id, value, forName } of draft.envelopes) {
+    for (const { id, value, forName, forEmoji } of draft.envelopes) {
       if (taken.envelopes.has(norm(value.name))) {
         result.skipped += 1;
         continue;
       }
-      const { groupId, newGroup } = toGroup(forName);
+      const { groupId, newGroup } = toGroup(forName, forEmoji);
       const created = await createEnvelope(uid, encryption, {
         startDate: today,
         envelope: {

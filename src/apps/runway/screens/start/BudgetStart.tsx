@@ -420,6 +420,7 @@ const toForRows = (
   list: Proposal[],
   other: string,
   toProposalRow: (proposal: Proposal) => StartRow,
+  getEmoji: (name: string) => string | null,
 ): StartRow[] => {
   const names = list.reduce<string[]>(
     (acc, { forName }) =>
@@ -437,7 +438,14 @@ const toForRows = (
   return [...names, other].flatMap((heading) =>
     list
       .filter((proposal) => headingOf(proposal) === heading)
-      .map((proposal) => ({ ...toProposalRow(proposal), group: heading })),
+      .map((proposal) => {
+        const row = toProposalRow(proposal);
+        return {
+          ...row,
+          group: heading,
+          emoji: row.emoji ?? (heading === other ? null : getEmoji(heading)),
+        };
+      }),
   );
 };
 
@@ -533,6 +541,7 @@ function BudgetStart({
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [forNames, setForNames] = useState<Record<string, string | null>>({});
+  const [forEmojis, setForEmojis] = useState<Record<string, string | null>>({});
   const [renaming, setRenaming] = useState<{
     name: string;
     kind: BudgetKind;
@@ -562,6 +571,7 @@ function BudgetStart({
     setReadNames([]);
     setEdited({});
     setForNames({});
+    setForEmojis({});
     setRenaming(null);
     setRemoved(new Set());
     setSelected(null);
@@ -683,6 +693,19 @@ function BudgetStart({
         : [...acc, forName],
     [],
   );
+  const readEmojis = [...data.bills, ...data.envelopes].reduce<
+    Map<string, string>
+  >(
+    (acc, { forName, forEmoji }) =>
+      forName === null || forEmoji === null || acc.has(toKey(forName))
+        ? acc
+        : acc.set(toKey(forName), forEmoji),
+    new Map(),
+  );
+  const emojiOf = (name: string) =>
+    toKey(name) in forEmojis
+      ? forEmojis[toKey(name)]
+      : (readEmojis.get(toKey(name)) ?? null);
   const setFor = (
     keys: string[],
     next: (current: string | null) => string | null,
@@ -724,8 +747,14 @@ function BudgetStart({
       },
     });
   };
-  const renameFor = (from: string, to: string) =>
+  const renameFor = (from: string, to: string, emoji: string | null) => {
+    const isJoining = forNameList.some(
+      (name) => toKey(name) === toKey(to) && toKey(name) !== toKey(from),
+    );
+    if (!isJoining)
+      setForEmojis((current) => ({ ...current, [toKey(to)]: emoji }));
     setFor(keysFor(from), () => to);
+  };
   const setValue = (
     { key, versions }: Proposal,
     value: BudgetValues[BudgetKind],
@@ -832,6 +861,7 @@ function BudgetStart({
         id: key,
         value: value as BudgetValues[K],
         forName,
+        forEmoji: forName === null ? null : emojiOf(forName),
       }));
     try {
       await onAdd({
@@ -1114,9 +1144,14 @@ function BudgetStart({
         const list = ofKind(kind);
         const rows =
           kind === 'bill'
-            ? toForRows(list, GROUP_WORDS.ungrouped, toProposalRow)
+            ? toForRows(list, GROUP_WORDS.ungrouped, toProposalRow, emojiOf)
             : kind === 'envelope'
-              ? toForRows(list, GROUP_WORDS.ungroupedEnvelopes, toProposalRow)
+              ? toForRows(
+                  list,
+                  GROUP_WORDS.ungroupedEnvelopes,
+                  toProposalRow,
+                  emojiOf,
+                )
               : kind === 'income'
                 ? toPayerRows(list, toProposalRow)
                 : list.map(toProposalRow);
@@ -1143,6 +1178,7 @@ function BudgetStart({
               rows={rows}
               searchLabel={search}
               onOpen={setSelected}
+              getHeadingEmoji={hasFor ? emojiOf : undefined}
               renderHeadingAction={
                 hasFor
                   ? (group) =>
@@ -1460,9 +1496,10 @@ function BudgetStart({
         <ForRenameSheet
           key={renaming.name}
           name={renaming.name}
+          emoji={emojiOf(renaming.name)}
           onClose={() => setRenaming(null)}
-          onDone={(name) => {
-            renameFor(renaming.name, name);
+          onDone={(name, emoji) => {
+            renameFor(renaming.name, name, emoji);
             setRenaming(null);
           }}
           onTakeOut={() => {

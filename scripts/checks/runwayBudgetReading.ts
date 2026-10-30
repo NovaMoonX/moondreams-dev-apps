@@ -5,6 +5,7 @@ import {
   getMissingStep,
   getMissingSteps,
   toBillProposal,
+  toEnvelopeProposal,
   toBillValue,
   toIncomeValue,
   toMonthlyBillValue,
@@ -710,4 +711,55 @@ assert.deepEqual(
   purposes.bills.map((entry) => entry.forName),
   ['Retirement home', null],
   'only a name that is just a savings word is dropped',
+);
+
+const emojis = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      { ...bill('a.csv', 'Rent', 100_000), forName: 'Home', forEmoji: '🏠' },
+      { ...bill('a.csv', 'Water', 5_000), forName: 'home', forEmoji: '🏡' },
+      { ...bill('a.csv', 'Gas', 4_000), forName: 'Home', forEmoji: null },
+      { ...bill('a.csv', 'Car note', 30_000), forName: 'Car', forEmoji: 'car' },
+      { ...bill('a.csv', 'Tags', 1_000), forName: 'Car', forEmoji: '🚗🚙' },
+      { ...bill('a.csv', 'Vet', 1_000), forName: 'Pets', forEmoji: '🇨🇦' },
+      { ...bill('a.csv', 'Misc', 1_000), forName: null, forEmoji: '🎉' },
+    ],
+    envelopes: [
+      {
+        sourceFile: 'a.csv',
+        name: 'Litter',
+        forName: 'Pets',
+        forEmoji: '🐾',
+        amountCents: 6_000,
+        period: 'monthly',
+      },
+    ],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: ['a.csv'] },
+);
+assert.deepEqual(
+  emojis.bills.map((entry) => [entry.forName, entry.forEmoji]),
+  [
+    ['Home', '🏠'],
+    ['Home', '🏠'],
+    ['Home', '🏠'],
+    ['Car', null],
+    ['Car', null],
+    ['Pets', '🇨🇦'],
+    [null, null],
+  ],
+  'one real emoji is kept, the first one wins per name, words and several emoji are dropped, and no name means no emoji',
+);
+assert.equal(
+  emojis.envelopes[0].forEmoji,
+  '🇨🇦',
+  'an envelope shares the emoji of the bill that named the purpose first',
+);
+assert.equal(
+  toEnvelopeProposal(emojis.envelopes[0], today).forEmoji,
+  '🇨🇦',
+  'a proposal carries its purpose emoji',
 );
