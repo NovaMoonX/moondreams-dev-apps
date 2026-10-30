@@ -876,6 +876,7 @@ export async function seedRunwayScale(
             lines: entry.lines,
             refundOfId: null,
             link: null,
+            receiptText: null,
           } satisfies PurchaseSealed,
           encryption,
         ),

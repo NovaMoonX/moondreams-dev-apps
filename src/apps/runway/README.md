@@ -27,6 +27,7 @@ Built:
 - [x] Credit cards, each with its own reserve: purchases and bills paid by card, and paying a card off in one step
 - [x] A link on a purchase, and purchases grouped into an expense ("Chicago trip") with its total
 - [x] Receipt photos on purchases, sealed on the device and kept until you remove them
+- [x] Read a receipt on tap: the amount, the store, the day and the items fill in for you to check
 
 Next:
 - [ ] Start from gross pay with taxes and deductions

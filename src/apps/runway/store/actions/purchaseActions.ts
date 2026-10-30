@@ -45,6 +45,8 @@ export interface AddPurchaseInput {
   paidByCardId: string | null;
   /** An https link to the order or receipt. */
   link: string | null;
+  /** The items read from a receipt. */
+  receiptText: string | null;
   /** The expense group it belongs to. */
   expenseId: string | null;
   /** The name of a group made with this purchase, written in the same transaction under `expenseId`. */
@@ -107,6 +109,7 @@ export async function addPurchase(
       refundOfId: input.refundOfId,
       paidByCardId: input.paidByCardId,
       link: input.link,
+      receiptText: input.receiptText,
     } satisfies PurchaseSealed,
     encryption,
   );
@@ -244,6 +247,7 @@ export async function editPurchase(
         refundOfId: input.refundOfId,
         paidByCardId: input.paidByCardId,
         link: input.link,
+        receiptText: input.receiptText,
       } satisfies PurchaseSealed,
       encryption,
     ),

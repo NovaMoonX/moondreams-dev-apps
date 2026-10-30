@@ -14,17 +14,27 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import FormSheet from '@/components/FormSheet';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { maskFigures } from '@apps/runway/utils/maskText';
+import {
+  isReceiptTotalRow,
+  splitReceiptRow,
+} from '@apps/runway/utils/receiptText';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { MAX_RECEIPTS_PER_PURCHASE, SPEND_WORDS } from '@apps/runway/constants';
+import {
+  MAX_RECEIPTS_PER_PURCHASE,
+  RECEIPT_TEXT_LINES_SHOWN,
+  RECEIPT_TEXT_MIN_HIDDEN,
+  SPEND_WORDS,
+} from '@apps/runway/constants';
 import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
 import type { OpenPurchase } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
@@ -98,6 +108,7 @@ function PurchaseScreen({
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { isHidden } = useValuesHidden();
+  const [isItemsOpen, setIsItemsOpen] = useState(false);
   const mask = (text: string) => (isHidden ? maskFigures(text) : text);
   const { openPurchase: openPurchaseInUrl } = useRunwayUrlState();
   const openPurchase = onOpen ?? openPurchaseInUrl;
@@ -187,6 +198,18 @@ function PurchaseScreen({
       : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
+  const receiptText = purchase.receiptText?.trim() || null;
+  const receiptRows = receiptText?.split('\n') ?? [];
+  const totalRow = isReceiptTotalRow(receiptRows.at(-1) ?? '')
+    ? receiptRows.slice(-1)
+    : [];
+  const bodyRows = receiptRows.slice(0, receiptRows.length - totalRow.length);
+  const hasMoreItems =
+    bodyRows.length - RECEIPT_TEXT_LINES_SHOWN >= RECEIPT_TEXT_MIN_HIDDEN;
+  const shownRows =
+    isItemsOpen || !hasMoreItems
+      ? receiptRows
+      : [...bodyRows.slice(0, RECEIPT_TEXT_LINES_SHOWN), ...totalRow];
   const link = purchase.link?.trim() || null;
   const linkHost = link === null ? null : getWebLinkHost(link);
 
@@ -385,6 +408,7 @@ function PurchaseScreen({
             fact={fact}
           />
           {(note !== null ||
+            receiptText !== null ||
             linkHost !== null ||
             purchase.lines.length > 1) && (
             <dl className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
@@ -394,6 +418,41 @@ function PurchaseScreen({
                     {SPEND_WORDS.note}
                   </dt>
                   <dd className='whitespace-pre-line'>{note}</dd>
+                </div>
+              )}
+              {receiptText !== null && (
+                <div className='space-y-0.5 p-3 break-words'>
+                  <dt className='text-muted-foreground text-xs'>
+                    {SPEND_WORDS.items}
+                  </dt>
+                  <dd className='space-y-1'>
+                    {shownRows.map((row, index) => {
+                      const { name, price } = splitReceiptRow(row);
+                      return (
+                        <div
+                          key={`${index}-${row}`}
+                          className='flex items-start justify-between gap-3'
+                        >
+                          <span className='min-w-0 break-words'>{name}</span>
+                          {price !== null && (
+                            <span className='shrink-0 whitespace-nowrap tabular-nums'>
+                              {mask(price)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </dd>
+                  {hasMoreItems && (
+                    <ShowMoreButton
+                      isOpen={isItemsOpen}
+                      onClick={() => setIsItemsOpen((current) => !current)}
+                    >
+                      {isItemsOpen
+                        ? SPEND_WORDS.showFewerItems
+                        : SPEND_WORDS.showAllItems}
+                    </ShowMoreButton>
+                  )}
                 </div>
               )}
               {link !== null && linkHost !== null && (

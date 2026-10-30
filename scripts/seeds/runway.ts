@@ -2090,6 +2090,7 @@ async function writeSeedPurchases(
     editedAt?: number;
     paidByCardId?: string;
     link?: string;
+    receiptText?: string;
     expenseId?: string;
   }[] = [
     {
@@ -2097,6 +2098,7 @@ async function writeSeedPurchases(
       daysAgo: 3,
       merchant: 'Safeway',
       note: null,
+      receiptText: 'Bananas  $2.18\nOat milk ×2  $9.98\nChicken thighs  $14.52\nSourdough  $5.49\nSalmon  $18.00\nCheese  $14.01\nTotal  $64.18',
       lines: [line(groceries, 6_418)],
       editedAt: 3_600_000,
     },
@@ -2190,6 +2192,7 @@ async function writeSeedPurchases(
             refundOfId: entry.refundOfId ?? null,
             paidByCardId: entry.paidByCardId ?? null,
             link: entry.link ?? null,
+            receiptText: entry.receiptText ?? null,
           } satisfies PurchaseSealed,
           encryption,
         ),
