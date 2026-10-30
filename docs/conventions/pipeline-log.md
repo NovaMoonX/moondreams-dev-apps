@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-30 | shared | Every new PR's `version-label` check failed once (it runs on `opened` before the label lands), then passed on the `labeled` re-run: five false wakes in one run | Proposal: have the check skip when the PR has no label yet and wait for `labeled`, or let `create_pull_request` set the label; until then a session confirms the re-run passed instead of acting | `.github/workflows/` (version label) | proposed |
 | 2026-10-30 | shared | The emulators failed in the cloud sandbox and the skill sent sessions to a harness page | The failure is the agent proxy catching firebase-tools' calls to 127.0.0.1; starting the emulators and seed with `HTTPS_PROXY` unset fixes it | `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-30 | shared | Owner: follow-up issues should land on board 3 with the right app, without anyone running a script | `issue-to-board.yml` adds each issue with an `<App> (App)` label to the board, sets Apps and Status Ready; sessions label every issue they open | `issue-to-board.yml`, `scripts/board`, `pipeline.md` | changed |
 | 2026-10-29 | shared | Owner: merging several PRs one by one; feedback on PRs across devices | A merge order for parallel PRs; a session merges down it on the owner's go; the owner's PR comments are the feedback channel | `orchestrate/SKILL.md`, `pipeline.md` | changed |
