@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, FilePen, X } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import {
   listKeptSealedFormDrafts,
   subscribeKeptFormDrafts,
@@ -14,11 +15,20 @@ import {
   FORM_DRAFT_PREFIX,
 } from '@apps/runway/constants';
 import type { DRAFT_PICK_UP_KINDS } from '@apps/runway/constants';
+import { selectHasEverHadIncome } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 type DraftKind = (typeof DRAFT_PICK_UP_KINDS)[number];
 
 const TRACK_ONLY_KINDS: readonly DraftKind[] = ['purchase', 'card'];
+const AFTER_INCOME_KINDS: readonly DraftKind[] = [
+  'bill',
+  'envelope',
+  'goal',
+  'card',
+];
+// Dismissed until the app reloads, whichever screen unmounts the row meanwhile.
+const dismissal = { isHidden: false };
 
 const PLAN_SECTION_BY_KIND = {
   bill: 'bills',
@@ -37,7 +47,8 @@ interface DraftPickUpRowProps {
 function DraftPickUpRow({ isTrack, onPickUpPurchase }: DraftPickUpRowProps) {
   const { user } = useAuth();
   const { showAddOnTab } = useRunwayUrlState();
-  const [isHidden, setIsHidden] = useState(false);
+  const [isHidden, setIsHidden] = useState(dismissal.isHidden);
+  const hasIncome = useAppSelector(selectHasEverHadIncome);
   const uid = user?.uid ?? null;
   // A string snapshot, so the store's answer compares equal until the kept set really changes.
   const keptKeys = useSyncExternalStore(subscribeKeptFormDrafts, () =>
@@ -53,7 +64,11 @@ function DraftPickUpRow({ isTrack, onPickUpPurchase }: DraftPickUpRowProps) {
           const found: DraftKind | undefined = DRAFT_PICK_UP_KEYS[key];
           return found === undefined ? [] : [found];
         })
-        .find((found) => isTrack || !TRACK_ONLY_KINDS.includes(found));
+        .find(
+          (found) =>
+            (isTrack || !TRACK_ONLY_KINDS.includes(found)) &&
+            (hasIncome || !AFTER_INCOME_KINDS.includes(found)),
+        );
 
   if (kind === undefined) return null;
 
@@ -95,7 +110,10 @@ function DraftPickUpRow({ isTrack, onPickUpPurchase }: DraftPickUpRowProps) {
         aria-label={DRAFT_PICK_UP_WORDS.dismiss}
         title={DRAFT_PICK_UP_WORDS.dismiss}
         className='text-muted-foreground! mr-1 size-10 min-w-10 shrink-0 self-center rounded-full p-0'
-        onClick={() => setIsHidden(true)}
+        onClick={() => {
+          dismissal.isHidden = true;
+          setIsHidden(true);
+        }}
       >
         <X className='h-5 w-5' aria-hidden='true' />
       </Button>

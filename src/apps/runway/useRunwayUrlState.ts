@@ -216,10 +216,15 @@ export function useRunwayUrlState() {
   ) => {
     if (section) showPlanSection(section);
     await showTab(tab);
-    // The entry under the form's own carries the request too, so Back lands on it with the form still open for its guard to ask.
+    // A kept entry under the form's own carries the request, so Back lands on it with the form still open for its guard to ask,
+    // and it steps itself away once the form closes, leaving the tab's entry clean for a later Back.
     const address = new URL(window.location.href);
     address.searchParams.set('add', kind);
-    window.history.replaceState(window.history.state, '', address);
+    window.history.pushState(
+      { ...window.history.state, keptFor: 'add' },
+      '',
+      address,
+    );
     await setRequestedAdd(kind, { history: 'replace' });
   };
 
