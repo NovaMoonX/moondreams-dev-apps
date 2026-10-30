@@ -63,9 +63,7 @@ function EnvelopesScreen() {
   );
   const isShowingTip =
     envelopes.length >= TIP_MIN_ROWS &&
-    figuresByGroup.every(
-      ({ bills, envelopes: inGroup }) => bills.length + inGroup.length === 0,
-    );
+    figuresByGroup.every(({ envelopes: inGroup }) => inGroup.length === 0);
 
   const getList = (rows: typeof envelopes) => (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>

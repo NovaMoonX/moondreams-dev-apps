@@ -85,10 +85,7 @@ function BillsScreen() {
     );
   const isShowingTip =
     bills.length >= TIP_MIN_ROWS &&
-    figuresByGroup.every(
-      ({ bills: inGroup, envelopes }) =>
-        inGroup.length + envelopes.length === 0,
-    );
+    figuresByGroup.every(({ bills: inGroup }) => inGroup.length === 0);
   const ungrouped = visible.filter(({ groupId }) => groupId === null);
   const openBill = listed.find(({ item }) => item.id === openBillId);
 
