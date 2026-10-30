@@ -2,6 +2,10 @@ import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
+import { ListX } from 'lucide-react';
+
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
@@ -14,15 +18,21 @@ interface ForRenameSheetProps {
   name: string;
   onClose: () => void;
   onDone: (name: string) => void;
+  onTakeOut: () => void;
 }
 
-/** One name field to change what a heading's bills or envelopes are for; a name another heading has joins them. */
-function ForRenameSheet({ name, onClose, onDone }: ForRenameSheetProps) {
+/** Changes a heading in the review: its name (a name another heading has joins them), or taking its bills or envelopes out of it. */
+function ForRenameSheet({
+  name,
+  onClose,
+  onDone,
+  onTakeOut,
+}: ForRenameSheetProps) {
   const [text, setText] = useState(name);
   const trimmed = text.trim();
 
   return (
-    <FormSheet isOpen onClose={onClose} title={GROUP_WORDS.rename(name)}>
+    <FormSheet isOpen onClose={onClose} title={name}>
       <form
         className='space-y-4'
         onSubmit={(event) => {
@@ -37,6 +47,16 @@ function ForRenameSheet({ name, onClose, onDone }: ForRenameSheetProps) {
           value={text}
           onChange={(event) => setText(event.target.value)}
         />
+        <ActionGroup>
+          <ActionRow
+            isGrouped
+            isDestructive
+            icon={<ListX />}
+            label={BUDGET_WORDS.takeOut}
+            subtitle={BUDGET_WORDS.takeOutNote}
+            onClick={onTakeOut}
+          />
+        </ActionGroup>
         <ModalFooterActions
           rightActions={
             <Button type='submit' disabled={trimmed === ''}>

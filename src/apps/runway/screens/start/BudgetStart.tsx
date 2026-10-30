@@ -12,18 +12,14 @@ import {
   X,
 } from 'lucide-react';
 
-import {
-  Button,
-  DropdownMenuFactories,
-  Input,
-  Textarea,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
+import { PillGroup } from '@/components/PillGroup';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
-import EllipsisDropdown from '@/components/EllipsisDropdown';
 import Field from '@/components/forms/Field';
 import HelpTip from '@/components/HelpTip';
 import InlineNotice from '@/components/InlineNotice';
@@ -99,8 +95,6 @@ import {
   DraftPlanNotReady,
 } from '@apps/runway/store/actions/draftActions';
 import type { DraftKind, StartDraft } from '@apps/runway/utils/startDraft';
-
-const { option } = DropdownMenuFactories;
 
 const KINDS: { kind: BudgetKind; label: string; search: string }[] = [
   { kind: 'income', label: BUDGET_WORDS.income, search: 'Search your income' },
@@ -539,7 +533,10 @@ function BudgetStart({
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [forNames, setForNames] = useState<Record<string, string | null>>({});
-  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<{
+    name: string;
+    kind: BudgetKind;
+  } | null>(null);
   const [form, setForm] = useState<{
     key: string;
     token: number;
@@ -1151,26 +1148,16 @@ function BudgetStart({
                   ? (group) =>
                       group === GROUP_WORDS.ungrouped ||
                       group === GROUP_WORDS.ungroupedEnvelopes ? null : (
-                        <EllipsisDropdown
+                        <Button
+                          type='button'
                           variant='tertiary'
                           size='sm'
-                          className="relative before:absolute before:-inset-1.5 before:content-['']"
-                          ariaLabel={BUDGET_WORDS.forActions(group)}
-                          items={[
-                            option({
-                              label: GROUP_WORDS.rename(group),
-                              value: 'rename',
-                            }),
-                            option({
-                              label: BUDGET_WORDS.takeOut,
-                              value: 'takeOut',
-                            }),
-                          ]}
-                          onItemSelect={(value) => {
-                            if (value === 'rename') setRenaming(group);
-                            else takeOut(kind, group);
-                          }}
-                        />
+                          className="relative px-1.5! before:absolute before:-inset-1.5 before:content-['']"
+                          aria-label={BUDGET_WORDS.forActions(group)}
+                          onClick={() => setRenaming({ name: group, kind })}
+                        >
+                          <Pencil className='h-4 w-4' aria-hidden='true' />
+                        </Button>
                       )
                   : undefined
               }
@@ -1358,6 +1345,33 @@ function BudgetStart({
               </ul>
             </div>
           )}
+          {selectedProposal &&
+            (selectedProposal.kind === 'bill' ||
+              selectedProposal.kind === 'envelope') &&
+            forNameList.length > 0 && (
+              <div className='space-y-2'>
+                <p className='text-muted-foreground text-xs'>
+                  {FORM_FLOW_WORDS.groupTitle}
+                </p>
+                <PillGroup
+                  label={FORM_FLOW_WORDS.groupTitle}
+                  options={[
+                    ...forNameList.map((name) => ({
+                      value: name,
+                      label: name,
+                    })),
+                    { value: '', label: FORM_FLOW_WORDS.clearGroup },
+                  ]}
+                  value={selectedProposal.forName ?? ''}
+                  onChange={(name) => {
+                    setFor([selectedProposal.key], () =>
+                      name === '' ? null : name,
+                    );
+                    setSelected(null);
+                  }}
+                />
+              </div>
+            )}
           <ActionGroup isRoomy={!isShort}>
             {selectedProposal && selectedCadence?.perMonthCents != null && (
               <ActionRow
@@ -1386,15 +1400,17 @@ function BudgetStart({
                   label={
                     selectedProposal.kind === 'income'
                       ? BUDGET_WORDS.changePayer
-                      : BUDGET_WORDS.changeFor
+                      : forNameList.length > 0
+                        ? BUDGET_WORDS.forSomethingElse
+                        : BUDGET_WORDS.changeFor
                   }
                   subtitle={
                     selectedProposal.kind === 'income'
                       ? (selectedProposal.value as BudgetValues['income'])
                           .sourceName
-                      : selectedProposal.forName === null
-                        ? FORM_FLOW_WORDS.noGroup
-                        : `${FORM_FLOW_WORDS.group} ${selectedProposal.forName}`
+                      : forNameList.length > 0
+                        ? undefined
+                        : FORM_FLOW_WORDS.noGroup
                   }
                   hasChevron
                   onClick={() => {
@@ -1442,11 +1458,15 @@ function BudgetStart({
       {renderForm()}
       {renaming !== null && (
         <ForRenameSheet
-          key={renaming}
-          name={renaming}
+          key={renaming.name}
+          name={renaming.name}
           onClose={() => setRenaming(null)}
           onDone={(name) => {
-            renameFor(renaming, name);
+            renameFor(renaming.name, name);
+            setRenaming(null);
+          }}
+          onTakeOut={() => {
+            takeOut(renaming.kind, renaming.name);
             setRenaming(null);
           }}
         />

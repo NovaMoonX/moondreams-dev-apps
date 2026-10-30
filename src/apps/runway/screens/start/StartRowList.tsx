@@ -38,7 +38,9 @@ function StartRowList({
     text === ''
       ? rows
       : rows.filter((row) => row.name.toLowerCase().includes(text));
-  const shown = isAll || text !== '' ? matches : matches.slice(0, ROWS_SHOWN);
+  const isGrouped = rows.some((row) => row.group !== undefined);
+  const isFolded = text === '' && !isGrouped && rows.length > ROWS_SHOWN;
+  const shown = isFolded && !isAll ? matches.slice(0, ROWS_SHOWN) : matches;
 
   if (rows.length === 0) return null;
   return (
@@ -55,7 +57,7 @@ function StartRowList({
           <li key={row.id}>
             {row.group !== undefined &&
               row.group !== shown[index - 1]?.group && (
-                <div className='bg-muted/50 flex items-center gap-2 px-3 py-1'>
+                <div className='bg-accent/50 flex min-h-10 items-center gap-2 py-1 pr-2 pl-3'>
                   <p className='text-muted-foreground min-w-0 flex-1 py-0.5 text-sm font-medium break-words'>
                     {row.group}
                   </p>
@@ -103,7 +105,7 @@ function StartRowList({
       {text !== '' && matches.length === 0 && (
         <p className='text-muted-foreground text-sm'>Nothing matches that.</p>
       )}
-      {text === '' && rows.length > ROWS_SHOWN && (
+      {isFolded && (
         <ShowMoreButton
           isOpen={isAll}
           onClick={() => setIsAll((open) => !open)}
