@@ -1,5 +1,5 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
-import { readFormDraft } from '@/lib/app/formDrafts';
+import { peekFormDraft } from '@/lib/app/formDrafts';
 import { generateUuid } from '@/utils';
 import { clipAtWord } from '@/utils/stringUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
@@ -445,4 +445,4 @@ export const getRecipeDraftKey = (
 export const readRecipeDraftTitle = (uid: string, key: string | null) =>
   key === null
     ? null
-    : (parseRecipeFormDraft(readFormDraft(uid, key))?.formData.title ?? null);
+    : (parseRecipeFormDraft(peekFormDraft(uid, key))?.formData.title ?? null);

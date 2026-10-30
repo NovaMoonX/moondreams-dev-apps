@@ -94,6 +94,7 @@ import {
   selectCollections,
   selectCookSummaries,
   selectIdeas,
+  selectAllIngredients,
   selectIngredients,
   selectIngredientsById,
   selectCollectionsById,
@@ -213,6 +214,7 @@ function RecipeForm({
   const { subview, closeSubviewIf, openSubviewFromToast } = usePinchOverlay();
   const recipe = useAppSelector(selectRecipesById).get(recipeId ?? '') ?? null;
   const ingredients = useAppSelector(selectIngredients);
+  const allIngredients = useAppSelector(selectAllIngredients);
   const ingredientsById = useAppSelector(selectIngredientsById);
   const sources = useAppSelector(selectSources);
   const sourcesById = useAppSelector(selectSourcesById);
@@ -235,29 +237,6 @@ function RecipeForm({
   );
   const upload = useImageUpload(null);
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
-  const draftKey = getRecipeDraftKey(
-    recipeId,
-    initialRead !== null || initialIdea !== null || initialChanges.length > 0,
-  );
-  const draft = useFormDraft({ key: draftKey, parse: parseRecipeFormDraft });
-  const [isCoverRemoved, setIsCoverRemoved] = useState(
-    draft.restored?.isCoverRemoved ?? false,
-  );
-  const [webCover, setWebCover] = useState<WebPhoto | null>(
-    draft.restored?.webCover ?? null,
-  );
-  const [offeredPhotos] = useState(() =>
-    initialRead
-      ? initialRead.extras.photos
-      : initialIdea
-        ? getIdeaExtras(initialIdea).photos
-        : [],
-  );
-  const [sourcePhoto, setSourcePhoto] = useState<WebPhoto | null>(null);
-  const hasChosenCover = useRef(
-    draft.restored !== null &&
-      (draft.restored.webCover !== null || draft.restored.isCoverRemoved),
-  );
   const [initialData] = useState(() =>
     initialRead
       ? {
@@ -276,15 +255,58 @@ function RecipeForm({
         ? getDataFromIdea(initialIdea, sources)
         : getInitialData(recipe, sourcesById, collections),
   );
+  const draftBase = recipe?.updatedAt ?? null;
+  const draftKey = getRecipeDraftKey(
+    recipeId,
+    initialRead !== null || initialIdea !== null || initialChanges.length > 0,
+  );
+  const draft = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseRecipeFormDraft,
+  });
+  const [isCoverRemoved, setIsCoverRemoved] = useState(
+    draft.restored?.isCoverRemoved ?? false,
+  );
+  const [webCover, setWebCover] = useState<WebPhoto | null>(
+    draft.restored?.webCover ?? null,
+  );
+  const [offeredPhotos] = useState(() =>
+    initialRead
+      ? initialRead.extras.photos
+      : initialIdea
+        ? getIdeaExtras(initialIdea).photos
+        : [],
+  );
+  const [sourcePhoto, setSourcePhoto] = useState<WebPhoto | null>(null);
+  const hasChosenCover = useRef(
+    draft.restored !== null &&
+      (draft.restored.webCover !== null || draft.restored.isCoverRemoved),
+  );
   const [formStart, setFormStart] = useState<RecipeFormData>(() => {
     const restored = draft.restored?.formData;
     if (!restored) return initialData;
     const { choice } = restored.sourceChoice;
     const isSourceKnown =
       choice === '' || choice === NEW_CHOICE || sourcesById.has(choice);
-    return isSourceKnown
-      ? restored
-      : { ...restored, sourceChoice: { choice: '', newText: '' } };
+    const ingredientIds = new Set(allIngredients.map(({ id }) => id));
+    const collectionIds = new Set(collections.map(({ id }) => id));
+    return {
+      ...restored,
+      sourceChoice: isSourceKnown
+        ? restored.sourceChoice
+        : { choice: '', newText: '' },
+      ingredients: restored.ingredients.filter(
+        (row) =>
+          row.ingredientId === '' ||
+          row.newName !== null ||
+          ingredientIds.has(row.ingredientId),
+      ),
+      collections: {
+        ...restored.collections,
+        ids: restored.collections.ids.filter((id) => collectionIds.has(id)),
+      },
+    };
   });
   const [formData, setFormData] = useState<RecipeFormData>(formStart);
   const [formKey, setFormKey] = useState(0);
@@ -301,6 +323,7 @@ function RecipeForm({
   );
   useKeepFormDraft({
     key: draftKey,
+    base: draftBase,
     value: draftValue,
     isDirty: isDraftDirty,
   });

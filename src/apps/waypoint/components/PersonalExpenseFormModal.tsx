@@ -112,11 +112,17 @@ function PersonalExpenseFormModal({
     note: initialExpense.note ?? '',
   };
   const draftKey = `waypoint:personal-expense:${initialExpense.id}`;
-  const draft = useFormDraft({ key: draftKey, parse: parsePersonalExpenseDraft });
+  const draft = useFormDraft({ key: draftKey, base: startData, parse: parsePersonalExpenseDraft });
   const [showNoteField, setShowNoteField] = useState(
     draft.restored?.showNoteField ?? Boolean(initialExpense.note),
   );
-  const [formData, setFormData] = useState<PersonalExpenseFormData>(draft.restored?.formData ?? startData);
+  const [formData, setFormData] = useState<PersonalExpenseFormData>(() => {
+    const restored = draft.restored?.formData;
+    if (!restored) return startData;
+    const { choice } = restored.category;
+    const isCategoryKnown = choice === '' || choice === NEW_CHOICE || categoryKeys.includes(choice);
+    return isCategoryKnown ? restored : { ...restored, category: startData.category };
+  });
   const [formKey, setFormKey] = useState(0);
   const isDirty =
     formData.title !== initialExpense.title ||
@@ -126,7 +132,7 @@ function PersonalExpenseFormModal({
     showNoteField !== Boolean(initialExpense.note) ||
     formData.category.choice !== getExpenseCategoryKey(initialExpense);
   useUnsavedWork(() => isDirty);
-  useKeepFormDraft({ key: draftKey, value: { formData, showNoteField }, isDirty });
+  useKeepFormDraft({ key: draftKey, base: startData, value: { formData, showNoteField }, isDirty });
 
   const startOver = () => {
     setFormData(startData);

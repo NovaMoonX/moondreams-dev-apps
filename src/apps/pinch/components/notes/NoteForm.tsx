@@ -143,7 +143,11 @@ function NoteForm({
   const draftKey = noteId
     ? `pinch:note:${noteId}`
     : `pinch:note:new:${recipeId}`;
-  const draft = useFormDraft({ key: draftKey, parse: parseNoteDraft });
+  const draft = useFormDraft({
+    key: draftKey,
+    base: startData,
+    parse: parseNoteDraft,
+  });
   const [data, setData] = useState<NoteFormData>(() => {
     const restored = draft.restored;
     if (restored === null) return startData;
@@ -199,7 +203,7 @@ function NoteForm({
       data.step !== startData.step
     : data.text.trim() !== '';
   useUnsavedWork(() => isDirty);
-  useKeepFormDraft({ key: draftKey, value: data, isDirty });
+  useKeepFormDraft({ key: draftKey, base: startData, value: data, isDirty });
   const startOver = () => {
     setData(startData);
     setFormKey((current) => current + 1);

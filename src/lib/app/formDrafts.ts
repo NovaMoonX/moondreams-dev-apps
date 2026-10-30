@@ -3,6 +3,8 @@ const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 interface StoredDraft {
   savedAt: number;
+  /** The record as the form opened it; a draft whose record has changed since is dropped. */
+  base: string;
   value: unknown;
 }
 
@@ -13,26 +15,55 @@ function isStoredDraft(parsed: unknown): parsed is StoredDraft {
     typeof parsed === 'object' &&
     parsed !== null &&
     typeof (parsed as StoredDraft).savedAt === 'number' &&
+    typeof (parsed as StoredDraft).base === 'string' &&
     'value' in parsed
   );
 }
 
-/** The value a form saved on this device for this account, or `null` when there is none or it is over a day old. */
-export function readFormDraft(uid: string, key: string): unknown {
+/** The value a form saved on this device for this account, or `null` when there is none, it is over a day old or its record has changed since. */
+export function readFormDraft(
+  uid: string,
+  key: string,
+  base: unknown,
+): unknown {
   try {
     const raw = window.localStorage.getItem(toStorageKey(uid, key));
     const parsed: unknown = raw ? JSON.parse(raw) : null;
-    if (!isStoredDraft(parsed) || Date.now() - parsed.savedAt > MAX_AGE_MS)
-      return null;
-    return parsed.value;
+    const isCurrent =
+      isStoredDraft(parsed) &&
+      Date.now() - parsed.savedAt <= MAX_AGE_MS &&
+      parsed.base === JSON.stringify(base);
+    return isCurrent ? parsed.value : null;
   } catch {
     return null;
   }
 }
 
-export function writeFormDraft(uid: string, key: string, value: unknown) {
+/** A draft's value without checking its record, for a header drawn before the form that owns it opens. */
+export function peekFormDraft(uid: string, key: string): unknown {
   try {
-    const stored: StoredDraft = { savedAt: Date.now(), value };
+    const raw = window.localStorage.getItem(toStorageKey(uid, key));
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    const isFresh =
+      isStoredDraft(parsed) && Date.now() - parsed.savedAt <= MAX_AGE_MS;
+    return isFresh ? parsed.value : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeFormDraft(
+  uid: string,
+  key: string,
+  base: unknown,
+  value: unknown,
+) {
+  try {
+    const stored: StoredDraft = {
+      savedAt: Date.now(),
+      base: JSON.stringify(base),
+      value,
+    };
     window.localStorage.setItem(toStorageKey(uid, key), JSON.stringify(stored));
   } catch {
     // A full or blocked storage only loses the safety copy; the form itself is unaffected.

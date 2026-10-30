@@ -276,8 +276,28 @@ function MealBuilder({
     mealId,
     startRecipeId,
   });
-  const draft = useFormDraft({ key: draftKey, parse: parseMealBuilderDraft });
-  const [begin] = useState(draft.restored ?? start);
+  const draftBase = {
+    updatedAt: existingPlanned?.updatedAt ?? existingMeal?.updatedAt ?? null,
+    dayKey: start.dayKey,
+    chosenType: start.chosenType,
+  };
+  const draft = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseMealBuilderDraft,
+  });
+  const [begin] = useState(() =>
+    draft.restored === null
+      ? start
+      : {
+          ...draft.restored,
+          items: draft.restored.items.filter((item) =>
+            item.kind === 'RECIPE'
+              ? recipesById.has(item.refId)
+              : ingredientsById.has(item.refId),
+          ),
+        },
+  );
   const [dayKey, setDayKey] = useState(begin.dayKey);
   const [chosenType, setChosenType] = useState<MealType | null>(
     begin.chosenType,
@@ -378,7 +398,7 @@ function MealBuilder({
     () => ({ items, source, dayKey, chosenType, name, categories }),
     [items, source, dayKey, chosenType, name, categories],
   );
-  useKeepFormDraft({ key: draftKey, value: draftValue, isDirty });
+  useKeepFormDraft({ key: draftKey, base: draftBase, value: draftValue, isDirty });
   const startOver = () => {
     setItems(start.items);
     setSource(start.source);

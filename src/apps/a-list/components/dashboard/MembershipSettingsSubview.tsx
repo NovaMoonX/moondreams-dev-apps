@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import {
   Button,
@@ -138,7 +138,11 @@ function MembershipSettingsSubview({
     ticketPriceKind: getTicketPriceKind(membership),
   }));
   const draftKey = `a-list:membership:${membership.uid}`;
-  const draft = useFormDraft({ key: draftKey, parse: parseMembershipDraft });
+  const draft = useFormDraft({
+    key: draftKey,
+    base: start,
+    parse: parseMembershipDraft,
+  });
   const [begin] = useState(draft.restored ?? start);
   const [costValues, setCostValues] = useState<CostStepValues>(
     begin.costValues,
@@ -195,9 +199,13 @@ function MembershipSettingsSubview({
   const changedFields = getChangedFields();
   const hasChanges = Object.keys(changedFields).length > 0;
   useUnsavedWork(() => hasChanges);
-  const draftValue = { costValues, goalValues, ticketPriceKind };
+  const draftValue = useMemo(
+    () => ({ costValues, goalValues, ticketPriceKind }),
+    [costValues, goalValues, ticketPriceKind],
+  );
   useKeepFormDraft({
     key: draftKey,
+    base: start,
     value: draftValue,
     isDirty: JSON.stringify(draftValue) !== JSON.stringify(start),
   });
