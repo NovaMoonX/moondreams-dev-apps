@@ -161,7 +161,7 @@ const getParts = (
         (value) => value ?? 'none',
       ),
       diff(
-        'Group',
+        GROUP_WORDS.changeLabel,
         billBefore.groupId ?? null,
         billAfter.groupId ?? null,
         (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
@@ -180,6 +180,16 @@ const getParts = (
         (value) => PRIORITY_LABELS[value],
       ),
       diff('Funding', goalBefore.funding, goalAfter.funding, describeFunding),
+      ...('groupId' in goalBefore && 'groupId' in goalAfter
+        ? [
+            diff(
+              GROUP_WORDS.changeLabel,
+              (goalBefore as EnvelopeSealed).groupId ?? null,
+              (goalAfter as EnvelopeSealed).groupId ?? null,
+              (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
+            ),
+          ]
+        : []),
       ...('targetCents' in goalBefore && 'targetCents' in goalAfter
         ? [
             diff(

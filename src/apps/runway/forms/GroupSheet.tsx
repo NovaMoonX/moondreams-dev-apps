@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Archive, Pencil, Receipt } from 'lucide-react';
+import { Archive, Pencil, Receipt, Wallet } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -18,6 +18,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import {
   GROUP_WORDS,
   MAX_NAME_LENGTH,
@@ -27,6 +28,9 @@ import {
 import SheetHead from '@apps/runway/components/SheetHead';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
+import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
+import ItemRow from '@apps/runway/components/ItemRow';
+import { useGroupFigures } from '@apps/runway/hooks/useGroupFigures';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -37,12 +41,16 @@ import {
   selectGroups,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { GroupTotal } from '@apps/runway/engine/groups';
 import type { GroupSealed, Priority } from '@apps/runway/types';
 import {
+  describeBillRepeat,
   describeGroupLead,
   describeGroupTotal,
 } from '@apps/runway/utils/billText';
+import {
+  describeCadenceLine,
+  describeFundingShort,
+} from '@apps/runway/utils/fundingText';
 import { resolveGroupRename } from '@apps/runway/utils/groupChoice';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
@@ -51,11 +59,6 @@ type StartingChoice = Priority | 'none';
 
 interface GroupSheetProps {
   groupId: string;
-  /** What the group's bills come to in a month, worked out by the screen that lists them. */
-  total: GroupTotal;
-  billCount: number;
-  /** The names of the bills in the group, as the screen lists them. */
-  memberNames: readonly string[];
   today: number;
   onClose: () => void;
 }
@@ -65,15 +68,8 @@ const startingOptions = [
   { value: 'none' as const, label: GROUP_WORDS.noPriority },
 ];
 
-/** A group's sheet: what its bills come to a usual month, which they are, adding one, its name, the priority a new bill in it starts with, and archiving it. */
-function GroupSheet({
-  groupId,
-  total,
-  billCount,
-  memberNames,
-  today,
-  onClose,
-}: GroupSheetProps) {
+/** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
+function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -91,9 +87,14 @@ function GroupSheet({
     null,
   );
   const allGroups = useAppSelector((state) => selectGroups(state, today));
-  const [isAddingBill, setIsAddingBill] = useState(false);
+  const figures = useGroupFigures(today).find(({ id }) => id === groupId);
+  const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
 
-  if (!group) return null;
+  if (!group || !figures) return null;
+  const { total, bills, envelopes, names: memberNames } = figures;
+  const billCount = bills.length;
+  const envelopeCount = envelopes.length;
+  const memberCount = billCount + envelopeCount;
   const payload = group.version.payload;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
 
@@ -161,8 +162,8 @@ function GroupSheet({
     if (!user) return;
     const isConfirmed = await confirm({
       title: GROUP_WORDS.archiveTitle(payload.name),
-      message: GROUP_WORDS.archiveBody(billCount),
-      confirmText: GROUP_WORDS.archive,
+      message: GROUP_WORDS.archiveBody(billCount, envelopeCount),
+      confirmText: GROUP_WORDS.archive(payload.name),
       destructive: true,
     });
     if (!isConfirmed) return;
@@ -175,7 +176,7 @@ function GroupSheet({
         encryption,
         {
           itemId: groupId,
-          summary: GROUP_WORDS.archived(payload.name, billCount),
+          summary: GROUP_WORDS.archived(payload.name, billCount, envelopeCount),
           note: null,
           heldChoice: null,
         },
@@ -194,16 +195,27 @@ function GroupSheet({
 
   const trimmed = name.trim();
   const canRename = trimmed !== '' && trimmed !== payload.name;
-  const lead = describeGroupLead(total, billCount);
+  const lead = describeGroupLead(total, memberCount);
 
-  if (isAddingBill) {
+  if (adding === 'bill') {
     return (
       <BillForm
         isOpen
         title='Bill'
         presetGroupId={groupId}
         onClose={onClose}
-        onCancel={() => setIsAddingBill(false)}
+        onCancel={() => setAdding(null)}
+      />
+    );
+  }
+  if (adding === 'envelope') {
+    return (
+      <EnvelopeForm
+        isOpen
+        title='Envelope'
+        presetGroupId={groupId}
+        onClose={onClose}
+        onCancel={() => setAdding(null)}
       />
     );
   }
@@ -260,7 +272,7 @@ function GroupSheet({
               }
               suffix={lead.isOneTime ? lead.rest : undefined}
               fact={
-                billCount === 0
+                memberCount === 0
                   ? GROUP_WORDS.noBills
                   : memberNames.length > 0
                     ? GROUP_WORDS.members(memberNames)
@@ -287,6 +299,55 @@ function GroupSheet({
                   )}
                 </MaskedText>
               </p>
+            )}
+            {bills.length > 0 && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>
+                  {GROUP_WORDS.billsHeading}
+                </p>
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {bills.map(({ item, version }) => (
+                    <ItemRow
+                      key={item.id}
+                      name={version.payload.name}
+                      emoji={version.payload.emoji}
+                      detail={describeBillRepeat(
+                        version.payload.timing.schedule.kind,
+                      )}
+                      figure={describeGroupTotal(version.payload.amount)}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
+            {envelopes.length > 0 && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>
+                  {GROUP_WORDS.envelopesHeading}
+                </p>
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {envelopes.map(({ item, version }) => {
+                    const { funding } = version.payload;
+                    return (
+                      <ItemRow
+                        key={item.id}
+                        name={version.payload.name}
+                        emoji={version.payload.emoji}
+                        detail={
+                          funding.amount.kind === 'exact'
+                            ? describeCadenceLine(funding.cadence)
+                            : describeFundingShort(funding)
+                        }
+                        figure={
+                          funding.amount.kind === 'exact'
+                            ? formatCents(funding.amount.cents)
+                            : null
+                        }
+                      />
+                    );
+                  })}
+                </ul>
+              </div>
             )}
             <div className='space-y-1.5'>
               <div className='flex items-center gap-1'>
@@ -316,14 +377,21 @@ function GroupSheet({
                 isGrouped
                 hasChevron
                 icon={<Receipt />}
-                label={GROUP_WORDS.addBill}
-                onClick={() => setIsAddingBill(true)}
+                label={GROUP_WORDS.addBill(payload.name)}
+                onClick={() => setAdding('bill')}
+              />
+              <ActionRow
+                isGrouped
+                hasChevron
+                icon={<Wallet />}
+                label={GROUP_WORDS.addEnvelope(payload.name)}
+                onClick={() => setAdding('envelope')}
               />
               <ActionRow
                 isGrouped
                 hasChevron
                 icon={<Pencil />}
-                label={GROUP_WORDS.rename}
+                label={GROUP_WORDS.rename(payload.name)}
                 onClick={() => {
                   setName(payload.name);
                   setError(null);
@@ -334,7 +402,7 @@ function GroupSheet({
                 isGrouped
                 isDestructive
                 icon={<Archive />}
-                label={GROUP_WORDS.archive}
+                label={GROUP_WORDS.archive(payload.name)}
                 isDisabled={isSaving}
                 onClick={() => void archive()}
               />

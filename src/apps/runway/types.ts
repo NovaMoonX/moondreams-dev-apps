@@ -288,6 +288,8 @@ export interface EnvelopeSealed {
   /** A fractional rank inside the priority tier. */
   orderIndex: number;
   funding: FundingRule;
+  /** The group that lists this envelope; a version written before envelopes had groups reads as null. */
+  groupId: string | null;
 }
 
 /** How a bill is funded: spread over the income days before it is due, or on days the person picked. */

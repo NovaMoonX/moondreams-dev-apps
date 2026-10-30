@@ -8,6 +8,8 @@ export interface QuestionStep {
   id: string;
   /** The question while it is open, in large type. */
   title: string;
+  /** An info icon on the title's line, for a question whose why isn't plain. */
+  titleHelp?: ReactNode;
   /** The caption of its folded row. */
   summaryLabel: string;
   /** What its folded row says; empty reads "Not answered yet". */

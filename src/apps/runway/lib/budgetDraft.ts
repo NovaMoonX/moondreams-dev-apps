@@ -158,6 +158,7 @@ export function toEnvelopeValue(
     emoji: null,
     priority: 'should',
     orderIndex: 0,
+    groupId: null,
     funding: {
       amount: { kind: 'exact', cents: item.amountCents ?? 0 },
       cadence:
