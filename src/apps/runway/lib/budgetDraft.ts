@@ -303,7 +303,7 @@ export function getMissingSteps(
     const { schedule } = bill.timing;
     const amount = bill.amount.lowCents <= 0 ? ['amount'] : [];
     if (schedule.kind === 'irregular') return [...amount, 'repeats'];
-    return schedule.anchor === null ? [...amount, 'due'] : amount;
+    return amount;
   }
   if (kind === 'envelope') {
     const { amount } = (value as EnvelopeSealed).funding;

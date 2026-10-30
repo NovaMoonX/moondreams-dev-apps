@@ -4708,7 +4708,7 @@ const version = (
       })),
     }) as never;
   const billsOf = (...ids: string[]) =>
-    ids.map((id) => ({ id, name: id, since: 0 }));
+    ids.map((id) => ({ id, name: id, since: 0, isUndated: false }));
 
   // A bill with no income day before it is due warns, naming the bill and the date.
   const noIncome = run(weekly.slice(0, 3), {
@@ -4752,6 +4752,23 @@ const version = (
     'a payment past the horizon is not',
   );
 
+  // A bill with no due date is listed for a person to date, and never stops the plan.
+  const undatedLook = run(weekly.slice(0, 3), {
+    bills: [
+      ...billsOf('car'),
+      { id: 'rent', name: 'Rent', since: 0, isUndated: true },
+    ],
+    payments: { car: [payment(today + 5 * DAY_MS, 2)] },
+  });
+  assert.deepEqual(undatedLook.undated, [{ billId: 'rent', name: 'Rent' }]);
+  assert.equal(undatedLook.problems.length, 0, 'an undated bill is no problem');
+  assert.equal(
+    undatedLook.holdsThrough,
+    run(weekly.slice(0, 3), { bills: billsOf('car'), payments: {} })
+      .holdsThrough,
+    'an undated bill does not shorten how far the plan holds',
+  );
+
   // An overdue unpaid bill stops "covered" and holds through nothing; one before the bill began is ignored.
   const overdue = run(weekly.slice(0, 3), {
     bills: billsOf('rent'),
@@ -4763,7 +4780,7 @@ const version = (
   assert.equal(overdue.holdsThrough, null);
   assert.equal(
     run(weekly.slice(0, 3), {
-      bills: [{ id: 'rent', name: 'rent', since: today }],
+      bills: [{ id: 'rent', name: 'rent', since: today, isUndated: false }],
       payments: { rent: [payment(today - 3 * DAY_MS, 0)] },
     }).problems.length,
     0,
@@ -10040,6 +10057,13 @@ console.log('runway engine: ok');
     ending: NO_END,
     ...extra,
   });
+
+  assert.equal(
+    monthlyTotal([member(exact(5_000), every('monthly', null))], nov).total
+      .highCents,
+    5_000,
+    'a monthly bill with no due date yet still counts in the monthly total',
+  );
 
   assert.deepEqual(
     monthlyTotal(

@@ -683,6 +683,11 @@ function BudgetStart({
       proposal.isUndecided ||
       getMissingSteps(proposal.kind, proposal.value).length > 0,
   ).length;
+  const undated = ofKind('bill').filter(
+    (proposal) =>
+      !proposal.isUndecided &&
+      (proposal.value as BudgetValues['bill']).timing.schedule.anchor === null,
+  ).length;
   const toProposalRow = (proposal: Proposal) => toRow(proposal, isHidden);
   const forNameList = [...ofKind('bill'), ...ofKind('envelope')].reduce<
     string[]
@@ -1228,7 +1233,11 @@ function BudgetStart({
       )}
       <ModalFooterActions
         note={
-          needing > 0 && !isFolded ? BUDGET_WORDS.needDetails(needing) : null
+          needing > 0 && !isFolded
+            ? BUDGET_WORDS.needDetails(needing)
+            : needing === 0 && undated > 0 && !isShort
+              ? BUDGET_WORDS.dueLaterNote(undated)
+              : null
         }
         cancelAction={
           <Button

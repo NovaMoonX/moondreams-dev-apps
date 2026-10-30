@@ -177,6 +177,8 @@ interface ItemSheetProps {
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
   quickChange?: { label: string; step: string };
+  /** Opens the change form at this question at once, as a link to "Set the due date" does. */
+  startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
   payment?: BillPayment | null;
   onMarked?: () => void;
@@ -233,6 +235,7 @@ function ItemSheet({
   fact,
   help,
   quickChange,
+  startsAtStep,
   payment = null,
   onMarked,
   onUndone,
@@ -270,8 +273,10 @@ function ItemSheet({
   const header = useAppSelector(
     (state) => state.runway.items.find((item) => item.id === itemId) ?? null,
   );
-  const [phase, setPhase] = useState<Phase>('sheet');
-  const [openStep, setOpenStep] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>(
+    startsAtStep === undefined ? 'sheet' : 'change',
+  );
+  const [openStep, setOpenStep] = useState<string | null>(startsAtStep ?? null);
   const [view, setView] = useState<View>('menu');
   const [reason, setReason] = useState('');
   const [isReasonOpen, setIsReasonOpen] = useState(false);

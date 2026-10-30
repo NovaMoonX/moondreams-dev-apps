@@ -132,7 +132,8 @@ function HomeScreen() {
     <div className='space-y-6'>
       <div className='space-y-2'>
         {dueCards.length > 0 ||
-        (lookahead !== null && lookahead.problems.length > 0) ? (
+        (lookahead !== null &&
+          lookahead.problems.length + lookahead.undated.length > 0) ? (
           <LookaheadWarnings lookahead={lookahead} dueCards={dueCards} />
         ) : lookahead ? (
           <HoldsThroughLine lookahead={lookahead} />

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
+import RevealChip from '@/components/RevealChip';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import HelpTip from '@/components/HelpTip';
@@ -123,6 +124,8 @@ interface BillFormData {
   amount: AmountDraft;
   priority: Priority;
   startDate: string;
+  /** The due date is left for later; the bill is saved with no date. */
+  isLater: boolean;
   /** Null until a due date is picked on a new bill. */
   frequency: Frequency | null;
   endKind: EndKind;
@@ -164,6 +167,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
         emoji: isNullableText,
         group: isPickOrCreate,
         paidByCardId: isNullableText,
+        isLater: isFlag,
       })
     : null;
   return draft && formData ? { ...draft, formData } : null;
@@ -290,9 +294,10 @@ const getBlocker = (
       : `Enter how much the ${noun} is.`;
   }
   const start = fromDateInputValue(data.startDate);
-  if (start === undefined) return 'Pick when it is due.';
+  if (start === undefined && !data.isLater) return 'Pick when it is due.';
   if (data.frequency === null) return 'Pick how often it repeats.';
-  if (!isEditing && start < today) return 'Pick today or a day to come.';
+  if (!isEditing && start !== undefined && start < today)
+    return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
   if (isChosen && pickedCount === 0) return 'Pick at least one income day.';
   return null;
@@ -310,6 +315,7 @@ const getEditingData = (
     priority: payload.priority,
     startDate:
       schedule.anchor === null ? '' : toDateInputValue(schedule.anchor),
+    isLater: schedule.anchor === null,
     frequency: frequency ?? (isDraft ? null : 'once'),
     endKind:
       payload.ending.onDate !== null
@@ -382,6 +388,7 @@ function BillFormBody({
           amount: EMPTY_AMOUNT_DRAFT,
           priority: 'should',
           startDate: '',
+          isLater: false,
           frequency: null,
           endKind: 'never',
           endDate: '',
@@ -418,7 +425,9 @@ function BillFormBody({
   const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
   const isDueWord = isOnce || formData.frequency === null;
-  const dueDate = fromDateInputValue(formData.startDate);
+  const dueDate = formData.isLater
+    ? undefined
+    : fromDateInputValue(formData.startDate);
   const dueDays = comingDays.filter(
     (day) => dueDate !== undefined && day.on <= dueDate,
   );
@@ -455,7 +464,10 @@ function BillFormBody({
     label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
   const isDueValid =
-    dueDate !== undefined && (editing !== undefined || dueDate >= today);
+    formData.isLater ||
+    (dueDate !== undefined && (editing !== undefined || dueDate >= today));
+  const canLater =
+    editing === undefined || editing.payload.timing.schedule.anchor === null;
 
   const resolveGroup = (data: BillFormData) =>
     resolveGroupChoice(data.group.choice, data.group.newText, groupChoices);
@@ -542,12 +554,16 @@ function BillFormBody({
       id: 'due',
       title: FORM_FLOW_WORDS.dueTitle,
       summaryLabel: FORM_FLOW_WORDS.due,
-      summaryValue: dueDate === undefined ? '' : formatDateUTC(dueDate),
+      summaryValue: formData.isLater
+        ? FORM_FLOW_WORDS.dueLaterSummary
+        : dueDate === undefined
+          ? ''
+          : formatDateUTC(dueDate),
       isAnswered: isDueValid,
       blocker:
         dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
-      render: () => (
-        <div className='space-y-1.5'>
+      render: ({ moveOn }) => (
+        <div className='space-y-2'>
           <p className='text-muted-foreground text-xs'>
             {isDueWord ? 'Due' : 'Starts'}
           </p>
@@ -560,11 +576,28 @@ function BillFormBody({
             onChange={(event) =>
               set({
                 startDate: event.target.value,
+                isLater: false,
                 frequency:
                   formData.frequency ?? (noun === 'bill' ? 'monthly' : 'once'),
               })
             }
           />
+          {canLater && !formData.isLater && (
+            <RevealChip
+              onClick={() => {
+                set({
+                  startDate: '',
+                  isLater: true,
+                  frequency:
+                    formData.frequency ??
+                    (noun === 'bill' ? 'monthly' : 'once'),
+                });
+                moveOn();
+              }}
+            >
+              {FORM_FLOW_WORDS.dueLater}
+            </RevealChip>
+          )}
         </div>
       ),
     },
@@ -818,7 +851,7 @@ function BillFormBody({
 
   const buildBill = (data: BillFormData): BillSealed | null => {
     const amount = parseAmountDraft(data.amount);
-    const anchor = fromDateInputValue(data.startDate);
+    const anchor = data.isLater ? null : fromDateInputValue(data.startDate);
     const ending = buildEnding(data);
     if (
       amount === null ||
@@ -849,7 +882,9 @@ function BillFormBody({
           kind: data.frequency,
           anchor,
           monthDays:
-            data.frequency === 'monthly' ? [new Date(anchor).getUTCDate()] : [],
+            data.frequency === 'monthly' && anchor !== null
+              ? [new Date(anchor).getUTCDate()]
+              : [],
         },
       },
       ending,
@@ -913,6 +948,8 @@ function BillFormBody({
   const quickStep = steps.find((step) => step.id === openStep) ?? null;
   const isQuick = !!editing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
+  const isFirstDate =
+    isQuick && editing?.payload.timing.schedule.anchor === null;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -974,7 +1011,11 @@ function BillFormBody({
               />
             )}
             {isQuick && quickStep ? (
-              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+              <QuickChange
+                step={quickStep}
+                onAll={() => setIsAll(true)}
+                isFirstDate={isFirstDate}
+              />
             ) : (
               <>
                 {openStep !== null && editing && (
@@ -983,7 +1024,9 @@ function BillFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && questions.hasReviewed && <ChangeSection />}
+            {editing && questions.hasReviewed && !isFirstDate && (
+              <ChangeSection />
+            )}
             <ModalFooterActions
               note={
                 error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
@@ -1011,8 +1054,16 @@ function BillFormBody({
                   <Button
                     type='button'
                     loading={isSaving}
-                    disabled={isSaving || shownBlocker !== null}
+                    disabled={
+                      isSaving ||
+                      shownBlocker !== null ||
+                      (isFirstDate && dueDate === undefined)
+                    }
                     onClick={() => {
+                      if (isFirstDate) {
+                        void flow.save(null);
+                        return;
+                      }
                       if (editing) {
                         flow.setStep('reason');
                         return;
@@ -1020,11 +1071,13 @@ function BillFormBody({
                       void handleSubmit();
                     }}
                   >
-                    {editing
-                      ? CHANGE_WORDS.review
-                      : draft?.initial
-                        ? 'Save'
-                        : 'Add'}
+                    {isFirstDate
+                      ? 'Save'
+                      : editing
+                        ? CHANGE_WORDS.review
+                        : draft?.initial
+                          ? 'Save'
+                          : 'Add'}
                   </Button>
                 )
               }

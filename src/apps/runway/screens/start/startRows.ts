@@ -2,7 +2,10 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import { SCHEDULE_LABELS } from '@apps/runway/constants';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
-import { describeBillRepeat } from '@apps/runway/utils/billText';
+import {
+  describeBillRepeat,
+  describeBillTiming,
+} from '@apps/runway/utils/billText';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
 import type {
   BillSealed,
@@ -109,8 +112,8 @@ export const toIncomeRow = (
 });
 
 const describeBillLine = (schedule: Schedule) => {
-  const start =
-    schedule.anchor === null ? '' : formatDateShortUTC(schedule.anchor);
+  if (schedule.anchor === null) return describeBillTiming(schedule);
+  const start = formatDateShortUTC(schedule.anchor);
   return schedule.kind === 'once'
     ? `Due ${start}`
     : `${describeBillRepeat(schedule.kind)} from ${start}`;

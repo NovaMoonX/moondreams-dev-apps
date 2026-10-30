@@ -15,6 +15,7 @@ import {
   cutAtWord,
   normalizeBudgetReading,
 } from '../../src/apps/runway/lib/normalizeBudgetReading.ts';
+import { describeBillTiming } from '../../src/apps/runway/utils/billText.ts';
 import { maskFigures } from '../../src/apps/runway/utils/maskText.ts';
 import { nameDocuments } from '../../src/apps/runway/lib/nameDocuments.ts';
 
@@ -713,6 +714,26 @@ assert.deepEqual(
   'only a name that is just a savings word is dropped',
 );
 
+const undatedBill = toBillValue(yearly.bills[1], today);
+const undatedSchedule = {
+  ...undatedBill.timing.schedule,
+  kind: 'monthly' as const,
+  anchor: null,
+};
+assert.ok(
+  !getMissingSteps('bill', {
+    ...undatedBill,
+    timing: { ...undatedBill.timing, schedule: undatedSchedule },
+  }).includes('due'),
+  'a bill with no due date is not sent back for one',
+);
+assert.deepEqual(
+  (['monthly', 'weekly', 'once'] as const).map((kind) =>
+    describeBillTiming({ ...undatedSchedule, kind }),
+  ),
+  ['Monthly · due date later', 'Weekly · due date later', 'Due date later'],
+  'a bill with no due date says so in one wording for every repeat',
+);
 const emojis = normalizeBudgetReading(
   {
     incomes: [],

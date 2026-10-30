@@ -43,12 +43,18 @@ type ShortProblem = Extract<LookaheadProblem, { kind: 'short' }>;
 /** One row of "Things to fix": every short line on one income day together, or one problem that is not tied to a day. */
 export type ProblemGroup =
   | { kind: 'day'; on: number; dayKey: string; shorts: ShortProblem[] }
-  | { kind: 'single'; on: number; problem: LookaheadProblem };
+  | { kind: 'single'; on: number; problem: LookaheadProblem }
+  | {
+      kind: 'undated';
+      bills: readonly { billId: string; name: string }[];
+    };
+
+export type DatedProblemGroup = Exclude<ProblemGroup, { kind: 'undated' }>;
 
 /** The problems soonest first, one group per income day that runs short: the order the summary row and the list it opens both use. */
 export function groupProblems(problems: readonly LookaheadProblem[]) {
   const sorted = [...problems].sort((a, b) => a.on - b.on);
-  const result = sorted.reduce<ProblemGroup[]>((groups, problem) => {
+  const result = sorted.reduce<DatedProblemGroup[]>((groups, problem) => {
     if (problem.kind !== 'short') {
       return [...groups, { kind: 'single', on: problem.on, problem }];
     }
@@ -99,6 +105,12 @@ function listShorts(shorts: readonly ShortProblem[], isHidden: boolean) {
 
 /** A group as a list row: the day, and what runs short on it. */
 export function describeGroupRow(group: ProblemGroup, isHidden = false) {
+  if (group.kind === 'undated') {
+    return {
+      title: FIX_WORDS.needsDate(group.bills.map(({ name }) => name)),
+      detail: FIX_WORDS.nothingSetAside(group.bills.length),
+    };
+  }
   if (group.kind === 'single') return describeProblemRow(group.problem);
   const result = {
     title: formatDateShortUTC(group.on),
@@ -109,6 +121,13 @@ export function describeGroupRow(group: ProblemGroup, isHidden = false) {
 
 /** The first group in a few words, split around its one figure so only the figure is masked: "The plan leaves Rent [$30] short on Nov 1". */
 export function describeGroupShort(group: ProblemGroup, isHidden = false) {
+  if (group.kind === 'undated') {
+    return {
+      before: FIX_WORDS.needsDate(group.bills.map(({ name }) => name)),
+      figure: null,
+      after: '',
+    };
+  }
   const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {
     const problem = group.problem;

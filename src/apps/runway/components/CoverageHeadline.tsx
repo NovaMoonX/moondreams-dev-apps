@@ -72,6 +72,12 @@ export function HoldsThroughLine({ lookahead, help }: HoldsThroughLineProps) {
             <span className='ml-1 inline-flex align-middle'>{help}</span>
           )}
         </span>
+        {lookahead.undated.length > 0 && (
+          <span className='text-muted-foreground font-normal'>
+            {' · '}
+            {ITEM_SHEET_R2_WORDS.holdsThroughUndated}
+          </span>
+        )}
       </p>
     </div>
   );

@@ -17,6 +17,7 @@ import GroupHeading from '@apps/runway/components/GroupHeading';
 import { useGroupFigures } from '@apps/runway/hooks/useGroupFigures';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
 import {
   selectBills,
@@ -87,7 +88,12 @@ function BillsScreen() {
     bills.length >= TIP_MIN_ROWS &&
     figuresByGroup.every(({ bills: inGroup }) => inGroup.length === 0);
   const ungrouped = visible.filter(({ groupId }) => groupId === null);
-  const openBill = listed.find(({ item }) => item.id === openBillId);
+  const { dueBillId, closeDueBill } = useRunwayUrlState();
+  const openBill = listed.find(({ item, payload }) =>
+    openBillId !== null
+      ? item.id === openBillId
+      : item.id === dueBillId && payload.timing.schedule.anchor === null,
+  );
 
   const getCard = (rows: typeof visible) => (
     <div className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -208,7 +214,11 @@ function BillsScreen() {
           payment={openBill.payment}
           planStance={stance}
           today={today}
-          onClose={() => setOpenBillId(null)}
+          startsAtStep={openBillId === null ? 'due' : undefined}
+          onClose={() => {
+            setOpenBillId(null);
+            closeDueBill();
+          }}
         />
       )}
       {formKey !== null && (
