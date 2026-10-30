@@ -222,7 +222,7 @@ function ItemCard({
       </div>
 
       <div>
-        <p className='text-sm leading-6'>
+        <p className='text-sm leading-6 wrap-break-word'>
           {shouldDisplayContent
             ? item.content
             : shouldMaskContent

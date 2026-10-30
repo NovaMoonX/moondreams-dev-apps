@@ -17,6 +17,7 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
+import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -42,6 +43,7 @@ import {
 import {
   selectGroups,
   selectStance,
+  selectAllPurposeEmojis,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GroupSealed, Priority } from '@apps/runway/types';
 import {
@@ -78,6 +80,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const { addToast } = useToast();
   const { isHidden } = useValuesHidden();
   const stance = useAppSelector(selectStance);
+  const purposeEmojis = useAppSelector(selectAllPurposeEmojis);
   const group = useAppSelector((state) =>
     selectGroups(state, today).find(({ item }) => item.id === groupId),
   );
@@ -390,7 +393,11 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                     <ItemRow
                       key={item.id}
                       name={version.payload.name}
-                      emoji={version.payload.emoji ?? payload.emoji}
+                      emoji={resolveItemEmoji(
+                        version.payload.emoji,
+                        version.payload.groupId,
+                        purposeEmojis,
+                      )}
                       detail={describeBillRepeat(
                         version.payload.timing.schedule.kind,
                       )}
@@ -412,7 +419,11 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                       <ItemRow
                         key={item.id}
                         name={version.payload.name}
-                        emoji={version.payload.emoji ?? payload.emoji}
+                        emoji={resolveItemEmoji(
+                          version.payload.emoji,
+                          version.payload.groupId,
+                          purposeEmojis,
+                        )}
                         detail={
                           funding.amount.kind === 'exact'
                             ? describeCadenceLine(funding.cadence)

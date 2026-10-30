@@ -3,7 +3,6 @@ import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import { useAppSelector } from '@/store';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
@@ -19,7 +18,7 @@ import {
   NEEDS_LOOK_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
-import { selectItemLooks } from '@apps/runway/store/selectors/runwaySelectors';
+import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import {
@@ -30,7 +29,6 @@ import {
 interface DraftLineProps {
   line: DraftLineData;
   name: string;
-  emoji: string | null;
   /** The item's kind; a line whose item is gone has none and opens nothing. */
   kind: ItemKind | null;
   sourceNames: Record<string, string>;
@@ -58,7 +56,6 @@ interface DraftLineProps {
 function DraftLine({
   line,
   name,
-  emoji,
   kind,
   sourceNames,
   daySourceId,
@@ -75,7 +72,7 @@ function DraftLine({
 }: DraftLineProps) {
   const [isOwnOpen, setIsOwnOpen] = useState(false);
   const { isHidden } = useValuesHidden();
-  const looks = useAppSelector(selectItemLooks);
+  const emoji = useRecordedEmoji(null, line.itemId);
   const isOpen = isOpenProp ?? isOwnOpen;
   const setIsOpen = onOpenChange ?? setIsOwnOpen;
   const reason = describeLineReason(line, sourceNames, name, daySourceId);
@@ -221,7 +218,7 @@ function DraftLine({
     <>
       <ItemRow
         name={name}
-        emoji={looks.get(line.itemId)?.emoji ?? emoji}
+        emoji={emoji}
         detail={detail.text}
         isDetailStrong={detail.isStrong && !isHidden}
         isDetailWarning={isShort && state !== 'held' && !isHidden}

@@ -11,6 +11,7 @@ import { PillGroup, type PillOption } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
+import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -76,6 +77,7 @@ function MoveLeftoverView({
   const inputs = useAppSelector(selectBalanceInputs);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const emojiOf = useLiveEmojiResolver();
   const [moveId] = useState(newTransferMoveId);
   const [amount, setAmount] = useState(() =>
     isHidden ? '' : centsToInputValue(leftCents),
@@ -93,7 +95,7 @@ function MoveLeftoverView({
       .map(({ item, version }) => ({
         id: item.id,
         name: version.payload.name,
-        emoji: version.payload.emoji,
+        emoji: emojiOf(version.payload.emoji, version.payload.groupId),
       })),
     ...goals
       .filter(({ version }) => version.payload.state !== 'paused')

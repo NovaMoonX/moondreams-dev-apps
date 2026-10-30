@@ -41,3 +41,5 @@ export async function normalizeItem(
       typeof data.lastEditedAt === 'number' ? data.lastEditedAt : Date.now(),
   };
 }
+
+export const ITEM_MAX_LENGTH = 1500;
