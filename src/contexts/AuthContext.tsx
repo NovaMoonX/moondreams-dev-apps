@@ -1,4 +1,5 @@
 import {
+  GoogleAuthProvider,
   onAuthStateChanged,
   signInWithPopup,
   signOut,
@@ -33,7 +34,13 @@ import {
   clearFirestoreLocalData,
   releaseFirestoreLocalData,
 } from '@/lib/firebase/localData';
-import { releaseDevicePush } from '@/lib/notifications/devicePush';
+import {
+  forgetAccount as forgetSavedAccount,
+  readRememberedAccounts,
+  rememberAccount,
+  type RememberedAccount,
+} from '@/lib/auth/rememberedAccounts';
+import { detachDevicePush, releaseDevicePush } from '@/lib/notifications/devicePush';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
@@ -52,6 +59,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const currentLocationRef = useRef('home');
   const previousUserIdRef = useRef<string | null | undefined>(undefined);
   const isReloadingRef = useRef(false);
+  const [rememberedAccounts, setRememberedAccounts] = useState<RememberedAccount[]>(readRememberedAccounts);
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
@@ -82,6 +90,17 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       previousUserIdRef.current = nextUserId;
+
+      if (firebaseUser) {
+        setRememberedAccounts(
+          rememberAccount({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email ?? null,
+            displayName: firebaseUser.displayName ?? null,
+            photoURL: getProviderPhotoURL(firebaseUser) ?? null,
+          }),
+        );
+      }
 
       if (firebaseUser) {
         await grantEmulatorDevAccess(firebaseUser).catch((error) =>
@@ -219,6 +238,40 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
   }, []);
 
+  const switchAccount = useCallback(async (email: string | null) => {
+    if (!navigator.onLine) {
+      throw new Error("You're offline. Switch accounts once you're back online.");
+    }
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters(
+      email ? { prompt: 'select_account', login_hint: email } : { prompt: 'select_account' },
+    );
+    // The popup opens first, inside the tap, or a browser may block it.
+    const signingIn = signInWithPopup(auth, provider);
+    const previousUid = auth.currentUser?.uid ?? null;
+    if (previousUid) {
+      // While the picker is open the old account is still signed in, so it can mark itself offline and give up this device's pushes.
+      void set(ref(realtimeDb, `status/${previousUid}`), {
+        state: 'offline',
+        currentLocation: null,
+        lastChanges: serverTimestamp(),
+      }).catch(() => undefined);
+      void detachDevicePush(previousUid);
+    }
+    try {
+      const result = await signingIn;
+      // A different account reloads from the auth listener once the saved data is cleared; the same one reloads to get its pushes back.
+      if (result.user.uid === previousUid) window.location.reload();
+    } catch (error) {
+      if (previousUid) window.location.reload();
+      throw error;
+    }
+  }, []);
+
+  const forgetAccount = useCallback((uid: string) => {
+    setRememberedAccounts(forgetSavedAccount(uid));
+  }, []);
+
   const logOut = useCallback(async () => {
     const uid = auth.currentUser?.uid;
     if (uid) {
@@ -321,6 +374,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isAdmin,
       signInWithGoogle,
       logOut,
+      rememberedAccounts,
+      switchAccount,
+      forgetAccount,
       updateDisplayName,
       updatePhotoURL,
       setCurrentLocation,
@@ -332,6 +388,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isAdmin,
       signInWithGoogle,
       logOut,
+      rememberedAccounts,
+      switchAccount,
+      forgetAccount,
       updateDisplayName,
       updatePhotoURL,
       setCurrentLocation,

@@ -5,16 +5,19 @@ import {
   Input,
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
-import { Camera, House, LogOut, Pencil, RefreshCw, ShieldCheck, UserRound } from 'lucide-react';
+import { Camera, House, LogOut, Pencil, RefreshCw, ShieldCheck, UserPlus, UserRound, Users } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
 import { resetFirestoreLocalData } from '@/lib/firebase/localData';
+import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import ChangePhotoModal from '@/ui/ChangePhotoModal';
+import DeviceAccountsModal from '@/ui/DeviceAccountsModal';
 import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
+import FallbackImage from '@components/FallbackImage';
 import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -32,7 +35,12 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     updateDisplayName,
     isAdmin,
     isDisplayNameUpdating,
+    rememberedAccounts,
+    switchAccount,
+    forgetAccount,
   } = useAuth();
+  const { addToast } = useToast();
+  const [isAccountsModalOpen, setIsAccountsModalOpen] = useState(false);
   const { option, separator, custom } = DropdownMenuFactories;
   const [nameInput, setNameInput] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -98,6 +106,42 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     setIsNameModalOpen(false);
   };
 
+  const otherAccounts = rememberedAccounts.filter((account) => account.uid !== user.uid);
+
+  const handleSwitch = (account: RememberedAccount | null) => {
+    switchAccount(account?.email ?? null).catch((error: unknown) =>
+      addToast({
+        title: "Couldn't switch accounts",
+        description: error instanceof Error ? error.message : 'Please try again.',
+        type: 'error',
+      }),
+    );
+  };
+
+  const accountItems = [
+    ...otherAccounts.map((account) =>
+      option({
+        label: `Switch to ${account.displayName?.trim() || account.email || 'another account'}`,
+        value: `switch:${account.uid}`,
+        icon: account.photoURL ? (
+          <FallbackImage
+            src={account.photoURL}
+            alt=''
+            className='size-4 rounded-full object-cover'
+            fallback={<UserRound className='size-4' />}
+          />
+        ) : (
+          <UserRound className='size-4' />
+        ),
+      }),
+    ),
+    option({ label: 'Add another account', value: 'add-account', icon: <UserPlus className='size-4' /> }),
+    ...(otherAccounts.length > 0
+      ? [option({ label: 'Accounts on this device', value: 'device-accounts', icon: <Users className='size-4' /> })]
+      : []),
+    separator(),
+  ];
+
   const navItems = [
     ...(isAdmin ? [option({ label: 'Admin', value: 'admin', icon: <ShieldCheck className='size-4' /> })] : []),
   ];
@@ -118,6 +162,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         </div>
       </div>
     )),
+    ...accountItems,
     ...navItems,
     ...(navItems.length > 0 ? [separator()] : []),
     option({ label: 'Profile', value: 'profile', icon: <UserRound className='size-4' /> }),
@@ -134,6 +179,18 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   ];
 
   const handleItemSelect = async (value: string) => {
+    if (value.startsWith('switch:')) {
+      handleSwitch(otherAccounts.find((account) => `switch:${account.uid}` === value) ?? null);
+      return;
+    }
+    if (value === 'add-account') {
+      handleSwitch(null);
+      return;
+    }
+    if (value === 'device-accounts') {
+      setIsAccountsModalOpen(true);
+      return;
+    }
     if (value === 'admin') {
       navigate('/admin');
       return;
@@ -206,6 +263,19 @@ function AuthAvatar({ className }: AuthAvatarProps) {
 
       {isProfileModalOpen && (
         <ProfileModal user={user} onClose={() => setIsProfileModalOpen(false)} />
+      )}
+
+      {isAccountsModalOpen && (
+        <DeviceAccountsModal
+          accounts={rememberedAccounts}
+          currentUid={user.uid}
+          onSwitch={(account) => {
+            setIsAccountsModalOpen(false);
+            handleSwitch(account);
+          }}
+          onForget={forgetAccount}
+          onClose={() => setIsAccountsModalOpen(false)}
+        />
       )}
 
       {isPhotoModalOpen && (
