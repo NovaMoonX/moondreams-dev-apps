@@ -72,7 +72,8 @@ shared_defs='
   def replies:
     [.[] | select(.type == "assistant" and .message.model != "<synthetic>" and .message.usage != null and .message.id != null)]
     | group_by(.message.id)
-    | map({ts: .[0].timestamp, model: .[0].message.model, usage: .[0].message.usage,
+    | map({ts: .[0].timestamp, model: .[0].message.model,
+           usage: (map(.message.usage) | reduce .[] as $u ({}; . as $acc | $u | with_entries(.value = (if (.value | type) == "number" then ([.value, ($acc[.key] // 0)] | max) else .value end)) | $acc + .)),
            tools: [.[].message.content[]? | select(.type == "tool_use")]})
     | sort_by(.ts);
   def written: (.usage.cache_creation_input_tokens // ((.usage.cache_creation.ephemeral_5m_input_tokens // 0) + (.usage.cache_creation.ephemeral_1h_input_tokens // 0)));

@@ -12,6 +12,8 @@ const PRICES: [prefix: string, price: ModelPrice][] = [
   ['claude-fable-5', { input: 10, output: 50, cacheRead: 1 }],
   ['claude-opus-5-5', { input: 4, output: 20, cacheRead: 0.2 }],
   ['claude-opus-5', { input: 5, output: 25, cacheRead: 0.5 }],
+  ['claude-opus-4-1', { input: 15, output: 75, cacheRead: 1.5 }],
+  ['claude-opus-4-2025', { input: 15, output: 75, cacheRead: 1.5 }],
   ['claude-opus-4', { input: 5, output: 25, cacheRead: 0.5 }],
   ['claude-sonnet-5', { input: 2, output: 10, cacheRead: 0.2 }],
   ['claude-sonnet-4', { input: 3, output: 15, cacheRead: 0.3 }],

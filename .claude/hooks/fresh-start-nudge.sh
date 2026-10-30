@@ -10,13 +10,14 @@ transcript=$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
 session=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null)
 [[ -n "$session" && -n "$transcript" && -f "$transcript" ]] || exit 0
 
-context=$(jq -s -r '
-  [.[] | select(.type == "assistant" and .message.model != "<synthetic>" and .message.usage != null)] | last
+# Only the newest reply matters, so read the tail rather than the whole transcript.
+context=$(tail -n 400 "$transcript" | jq -R -s -r '
+  [split("\n")[] | fromjson? | select(.type == "assistant" and .message.model != "<synthetic>" and .message.usage != null)] | last
   | if . == null then 0 else
       (.message.usage.input_tokens // 0) + (.message.usage.cache_read_input_tokens // 0)
       + (.message.usage.cache_creation_input_tokens
          // ((.message.usage.cache_creation.ephemeral_5m_input_tokens // 0) + (.message.usage.cache_creation.ephemeral_1h_input_tokens // 0)))
-    end' "$transcript" 2>/dev/null)
+    end' 2>/dev/null)
 [[ "$context" =~ ^[0-9]+$ ]] || exit 0
 
 marker="${TMPDIR:-/tmp}/fresh-start-nudge-${session//[^A-Za-z0-9_-]/}"

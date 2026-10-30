@@ -283,9 +283,11 @@ const readCost = (data: Json) => {
     app,
     contextTokens,
     calls,
+    // A very long session can outgrow the cap; its newest days are the ones worth keeping.
     rows: rows
-      .slice(0, MAX_COST_ROWS)
-      .flatMap((row: unknown) => toCostRow(row) ?? []),
+      .flatMap((row: unknown) => toCostRow(row) ?? [])
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .slice(0, MAX_COST_ROWS),
   };
 };
 
@@ -297,6 +299,9 @@ const writeCost = async (data: Json) => {
   await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const startedAt = snapshot.get('startedAt') as unknown;
+    const storedCalls = snapshot.get('calls') as unknown;
+    // Two quick turns can report out of order; the older count never replaces a newer one.
+    if (typeof storedCalls === 'number' && storedCalls > cost.calls) return;
     transaction.set(ref, {
       ...cost,
       startedAt: typeof startedAt === 'number' ? startedAt : now,
