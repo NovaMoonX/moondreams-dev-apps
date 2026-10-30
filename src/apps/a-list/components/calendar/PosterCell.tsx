@@ -4,10 +4,13 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import DayHoverCard from '@apps/a-list/components/calendar/DayHoverCard';
 import PosterSplit from '@apps/a-list/components/calendar/PosterSplit';
 import type { Viewing } from '@apps/a-list/types';
+import type { WatchlistRowData } from '@apps/a-list/utils/watchlistRows';
 
 interface PosterCellProps {
   date: Date;
   viewings: Viewing[];
+  /** Watchlist movies released this day that aren't planned yet. */
+  openings: WatchlistRowData[];
   isSelected: boolean;
   isToday: boolean;
   now: number;
@@ -25,6 +28,7 @@ function getPopoverAlignment(date: Date) {
 function PosterCell({
   date,
   viewings,
+  openings,
   isSelected,
   isToday,
   now,
@@ -32,6 +36,7 @@ function PosterCell({
   onPeekOpenChange,
 }: PosterCellProps) {
   const hasCovers = viewings.length > 0;
+  const hasOpenings = openings.length > 0;
 
   const face = (
     <span className='relative block h-full w-full overflow-hidden rounded-xl'>
@@ -45,6 +50,15 @@ function PosterCell({
       >
         {date.getDate()}
       </span>
+      {hasOpenings && (
+        <span className='bg-accent-foreground ring-background absolute bottom-1 left-1 block size-2 rounded-full shadow-sm ring-1'>
+          <span className='sr-only'>
+            {openings.length === 1
+              ? '1 movie opening'
+              : `${openings.length} movies opening`}
+          </span>
+        </span>
+      )}
       {isSelected && (
         <span className='ring-primary pointer-events-none absolute inset-0 rounded-xl ring-2 ring-inset' />
       )}
@@ -54,7 +68,7 @@ function PosterCell({
   // Popover's wrapper is an inline-block, so it is stretched to fill the cell.
   return (
     <span className='absolute inset-0 block [&>div]:block [&>div]:h-full [&>div]:w-full'>
-      {hasCovers ? (
+      {hasCovers || hasOpenings ? (
         <Popover
           hoverable
           isOpen={isPeekOpen}
@@ -65,7 +79,12 @@ function PosterCell({
           trigger={face}
           offset={4}
         >
-          <DayHoverCard date={date} viewings={viewings} now={now} />
+          <DayHoverCard
+            date={date}
+            viewings={viewings}
+            openings={openings}
+            now={now}
+          />
         </Popover>
       ) : (
         face
