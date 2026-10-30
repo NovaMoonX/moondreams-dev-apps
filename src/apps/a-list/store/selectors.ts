@@ -290,14 +290,17 @@ export const selectWatchlistRows = createSelector(
 /**
  * Release day key → watchlist movies opening that day that aren't seen, archived or planned at all,
  * from today on, Must See first. A passed showing not yet marked seen still counts as planned.
+ * Empty when the member turned releases off for the calendar.
  */
 export const selectOpeningsByDay = createSelector(
   [
     selectWatchlistRows,
     selectViewingItems,
+    selectMembership,
     (_state: RootState, now: number) => now,
   ],
-  (rows, viewings, now) => {
+  (rows, viewings, membership, now) => {
+    if (membership?.showReleasesOnCalendar === false) return {};
     const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
     const plannedKeys = new Set(
       viewings
