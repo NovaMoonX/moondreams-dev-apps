@@ -42,3 +42,11 @@ export interface UserProfile {
   customPhotoURL?: string | null;
   isAdmin?: boolean;
 }
+
+/** A member's private site settings at `userPrefs/{uid}`; only they and the admin read it. */
+export interface UserPrefs {
+  uid: string;
+  /** Oldest star first, so a new star joins the end of the starred group. */
+  starredAppIds: string[];
+  updatedAt: number;
+}
