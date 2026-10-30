@@ -11,6 +11,7 @@ import PosterCell from '@apps/a-list/components/calendar/PosterCell';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
 import {
   selectCalendarShares,
+  selectOpeningsByDay,
   selectTheatres,
   selectViewingsByDay,
 } from '@apps/a-list/store/selectors';
@@ -37,6 +38,9 @@ function CalendarScreen() {
   const viewingsByDay = useAppSelector(selectViewingsByDay);
   const theatres = useAppSelector(selectTheatres);
   const now = useNow();
+  const openingsByDay = useAppSelector((state) =>
+    selectOpeningsByDay(state, now),
+  );
   const [selectedDay, setSelectedDay] = useState(getTodayStart);
   const [peekDayKey, setPeekDayKey] = useState<string | null>(null);
   const selectedDayKey = getDayKey(selectedDay.getTime());
@@ -126,6 +130,7 @@ function CalendarScreen() {
             <PosterCell
               date={date}
               viewings={viewingsByDay[dayKey] ?? []}
+              openings={openingsByDay[dayKey] ?? []}
               isSelected={isSelected}
               isToday={isToday}
               now={now}

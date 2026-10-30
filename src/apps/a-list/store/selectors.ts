@@ -12,8 +12,11 @@ import { getFeeChips, getTaxRateChips } from '@apps/a-list/utils/chips';
 import { getDayKey, getWeekBounds } from '@apps/a-list/utils/dayKeys';
 import { getDaysUntilOpening } from '@apps/a-list/utils/opening';
 import { getSavingsSummary } from '@apps/a-list/utils/savings';
-import { buildWatchlistRows } from '@apps/a-list/utils/watchlistRows';
-import { fromDateInputValue } from '@/utils/dateInputUtils';
+import {
+  buildWatchlistRows,
+  type WatchlistRowData,
+} from '@apps/a-list/utils/watchlistRows';
+import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 
 export const selectMembership = (state: RootState) =>
   state.aList.membership.membership;
@@ -282,6 +285,47 @@ export const selectWatchlistRows = createSelector(
     (_state: RootState, now: number) => now,
   ],
   (items, viewings, now) => buildWatchlistRows(items, viewings, now),
+);
+
+/**
+ * Release day key → watchlist movies opening that day that aren't seen, archived or planned at all,
+ * from today on, Must See first. A passed showing not yet marked seen still counts as planned.
+ */
+export const selectOpeningsByDay = createSelector(
+  [
+    selectWatchlistRows,
+    selectViewingItems,
+    (_state: RootState, now: number) => now,
+  ],
+  (rows, viewings, now) => {
+    const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
+    const plannedKeys = new Set(
+      viewings
+        .filter((viewing) => viewing.status === 'PLANNED')
+        .map((viewing) => viewing.movieKey),
+    );
+    const result = rows
+      .filter(
+        (row) =>
+          !row.isSeen &&
+          !row.isArchived &&
+          !plannedKeys.has(row.item.movieKey) &&
+          row.item.movie.releaseDate !== null &&
+          row.item.movie.releaseDate >= todayDay,
+      )
+      .sort((left, right) => {
+        const byPriority =
+          WATCH_PRIORITIES.indexOf(left.item.priority) -
+          WATCH_PRIORITIES.indexOf(right.item.priority);
+        if (byPriority !== 0) return byPriority;
+        return left.item.movie.title.localeCompare(right.item.movie.title);
+      })
+      .reduce<Record<string, WatchlistRowData[]>>((byDay, row) => {
+        const dayKey = toDateInputValue(row.item.movie.releaseDate ?? 0);
+        return { ...byDay, [dayKey]: [...(byDay[dayKey] ?? []), row] };
+      }, {});
+    return result;
+  },
 );
 
 /** Unseen movies opening from today through a week out, soonest first. */
