@@ -48,9 +48,9 @@ function SegmentedControl<T extends string>({
               aria-pressed={isSelected}
               aria-label={ariaLabel}
               className={join(
-                "relative h-9 min-w-0 gap-1.5 rounded-lg px-2 text-sm font-medium transition-none after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']",
+                "relative h-9 min-w-0 gap-1.5 rounded-lg px-2 text-sm font-medium transition-none after:absolute after:inset-x-0 after:-inset-y-1 after:content-[''] focus-visible:outline-2 focus-visible:-outline-offset-2",
                 isSelected
-                  ? 'bg-background text-foreground shadow-sm'
+                  ? 'bg-background text-foreground dark:bg-foreground/15 shadow-sm'
                   : 'text-muted-foreground hover:text-foreground',
               )}
               onClick={() => onChange(optionValue)}
