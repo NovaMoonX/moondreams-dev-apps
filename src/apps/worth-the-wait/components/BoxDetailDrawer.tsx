@@ -6,10 +6,11 @@ import {
   Drawer,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
@@ -197,10 +198,25 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     setDraftItemContent('');
   };
 
+  const typedText = draftItemContent.trim();
+  const requestClose = useDiscardGuard({
+    isDirty:
+      typedText !== '' &&
+      typedText !== (itemsById[editingItemId ?? '']?.content.trim() ?? ''),
+    onClose,
+    title: 'Discard this item?',
+    message: "What you typed hasn't been added to the box.",
+  });
+
+  const isRestored = draft.restored !== null;
+  useEffect(() => {
+    if (isRestored) itemTextareaRef.current?.scrollIntoView({ block: 'center' });
+  }, [isRestored]);
+
   return (
     <Drawer
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={
         box ? (
           <div className='flex items-center gap-3 pb-2'>

@@ -64,8 +64,9 @@ export function useKeepFormDraft<T>({
   useEffect(() => {
     if (!uid || !key) return;
     if (isDirty) {
-      writeFormDraft(uid, key, JSON.parse(baseText), value);
-      hasWrittenRef.current = true;
+      if (writeFormDraft(uid, key, JSON.parse(baseText), value)) {
+        hasWrittenRef.current = true;
+      }
     } else if (hasWrittenRef.current) {
       clearFormDraft(uid, key);
     }

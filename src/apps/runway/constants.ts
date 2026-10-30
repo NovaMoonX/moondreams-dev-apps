@@ -1,3 +1,4 @@
+import { declareSealedFormDrafts } from '@lib/app/formDrafts';
 import type { RunwayTab } from '@apps/runway/types';
 
 export const PLAN_SECTIONS = [
@@ -115,8 +116,9 @@ export const RANGE_END_WORDS = {
 } as const;
 
 export const SEALED_SCHEMA_VERSION = 1;
-/** Every Runway form draft's key starts with it, so drafts are kept only sealed. */
+/** Every Runway form draft's key starts with it; declared sealed here, where every form gets it from, so no draft is ever kept readable. */
 export const FORM_DRAFT_PREFIX = 'runway:';
+declareSealedFormDrafts(FORM_DRAFT_PREFIX);
 
 export const DEFAULT_CURRENCY_CODE = 'USD';
 

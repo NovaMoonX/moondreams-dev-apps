@@ -383,9 +383,11 @@ function IncomeFormBody({
   const draftKey = draft
     ? null
     : `${FORM_DRAFT_PREFIX}income:${editing?.itemId ?? `new:${defaultFrequency ?? 'any'}`}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
   const kept = useFormDraft({
     key: draftKey,
-    base: startData,
+    base: draftBase,
     parse: parseIncomeDraft,
   });
   const [formData, setFormData] = useState<IncomeFormData>(
@@ -688,7 +690,8 @@ function IncomeFormBody({
       isEditingSource ? [sourceNameStep] : payLineSteps,
       isHidden,
     ),
-    startFolded: isEditing || !!draft?.initial || kept.restored !== null,
+    startFolded: isEditing || !!draft?.initial,
+    foldAnswered: kept.restored !== null,
     initialOpenId: draft?.openStep ?? null,
   });
 
@@ -730,7 +733,7 @@ function IncomeFormBody({
   useKeepFormDraft({
     isRestored: kept.restored !== null,
     key: draftKey,
-    base: startData,
+    base: draftBase,
     value: formData,
     isDirty: JSON.stringify(formData) !== JSON.stringify(startData),
   });

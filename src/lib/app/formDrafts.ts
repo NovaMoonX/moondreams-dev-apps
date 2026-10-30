@@ -94,8 +94,15 @@ export async function unlockSealedFormDrafts(
     storageKeys.map(async (storageKey) => {
       const parsed = readStored(storageKey);
       if (!isSealedDraft(parsed) || !isFresh(parsed.savedAt)) return;
+      const turn = writeTurns.get(storageKey) ?? 0;
       try {
         const text = await sealer.open(parsed.sealed);
+        // Cleared, replaced or signed out while it opened: what it held is no longer this draft.
+        if (
+          (writeTurns.get(storageKey) ?? 0) !== turn ||
+          sealings.get(prefix) !== sealer
+        )
+          return;
         const draft: unknown = JSON.parse(text);
         const isShaped =
           typeof draft === 'object' &&
@@ -131,12 +138,13 @@ export function readFormDraft(
   return isCurrent ? parsed.value : null;
 }
 
+/** Keeps a form's value; false when nothing could be kept (a sealed draft before its app handed over the sealer, or storage refused it). */
 export function writeFormDraft(
   uid: string,
   key: string,
   base: unknown,
   value: unknown,
-) {
+): boolean {
   const storageKey = toStorageKey(uid, key);
   const baseText = JSON.stringify(base);
   const sealing = findSealing(key);
@@ -144,14 +152,14 @@ export function writeFormDraft(
     try {
       const stored: PlainDraft = { savedAt: Date.now(), base: baseText, value };
       window.localStorage.setItem(storageKey, JSON.stringify(stored));
+      return true;
     } catch {
-      // A full or blocked storage only loses the safety copy; the form itself is unaffected.
+      return false;
     }
-    return;
   }
   const [, sealer] = sealing;
   // Without the app's sealer nothing is kept, rather than keep it readable.
-  if (sealer === null) return;
+  if (sealer === null) return false;
   opened.set(storageKey, { base: baseText, value });
   const turn = nextTurn(storageKey);
   void sealer
@@ -161,7 +169,10 @@ export function writeFormDraft(
       const stored: SealedDraft = { savedAt: Date.now(), sealed };
       window.localStorage.setItem(storageKey, JSON.stringify(stored));
     })
-    .catch(() => undefined);
+    .catch(() => {
+      console.warn(`A form draft could not be kept on this device (${key}).`);
+    });
+  return true;
 }
 
 export function clearFormDraft(uid: string, key: string) {
@@ -175,8 +186,11 @@ export function clearFormDraft(uid: string, key: string) {
   }
 }
 
-/** Removes every form draft this device kept for one account, as on sign-out. */
+/** Removes every form draft this device kept for one account and forgets every app's sealer, as on sign-out. */
 export function clearFormDrafts(uid: string) {
+  Array.from(sealings.keys()).forEach((sealedPrefix) =>
+    sealings.set(sealedPrefix, null),
+  );
   const prefix = toStorageKey(uid, '');
   Array.from(writeTurns.keys())
     .filter((storageKey) => storageKey.startsWith(prefix))

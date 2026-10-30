@@ -10,10 +10,7 @@ import {
 import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import {
-  declareSealedFormDrafts,
-  unlockSealedFormDrafts,
-} from '@lib/app/formDrafts';
+import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { FORM_DRAFT_PREFIX } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createDraftSealer } from '@apps/runway/security';
@@ -73,8 +70,6 @@ import {
   setRecords,
   setVersions,
 } from '@apps/runway/store/runwaySlice';
-
-declareSealedFormDrafts(FORM_DRAFT_PREFIX);
 
 /**
  * Opens the plan: fetches the data key, creates the plan on first open, then

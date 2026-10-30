@@ -374,9 +374,11 @@ function PurchaseFormBody({
     paidByChoice: editing ? (editing.paidByCardId ?? null) : undefined,
   }));
   const draftKey = `${FORM_DRAFT_PREFIX}purchase:${editing?.id ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? { initialData, start } : null;
   const kept = useFormDraft({
     key: draftKey,
-    base: { initialData, start },
+    base: draftBase,
     parse: (stored) => {
       const draft = parsePurchaseDraft(stored);
       if (draft === null) return null;
@@ -1303,7 +1305,8 @@ function PurchaseFormBody({
     note ? mask(note) : null;
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
-    startFolded: editing !== undefined || restored !== null,
+    startFolded: editing !== undefined,
+    foldAnswered: restored !== null,
   });
   const isAsking = !questions.hasReviewed;
 
@@ -1431,7 +1434,7 @@ function PurchaseFormBody({
   useKeepFormDraft({
     isRestored: restored !== null,
     key: draftKey,
-    base: { initialData, start },
+    base: draftBase,
     value: keptValue,
     isDirty: snapshot !== startSnapshot,
   });

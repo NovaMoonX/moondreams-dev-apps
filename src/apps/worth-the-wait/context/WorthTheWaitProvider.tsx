@@ -1,10 +1,7 @@
-import { useCallback, useEffect, useState, type PropsWithChildren } from 'react';
+import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
-import {
-  declareSealedFormDrafts,
-  unlockSealedFormDrafts,
-} from '@lib/app/formDrafts';
+import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { createDraftSealer, FORM_DRAFT_PREFIX } from '../security';
 
 import type { Box, Item, MemberUpdateSummary, PendingMember, Space } from '../types';
@@ -14,7 +11,6 @@ import {
   type WorthTheWaitContextValue,
 } from './worthTheWaitContext';
 
-declareSealedFormDrafts(FORM_DRAFT_PREFIX);
 
 interface WorthTheWaitProviderProps extends PropsWithChildren {
   space: Space | null;
@@ -62,8 +58,13 @@ export function WorthTheWaitProvider({
   const uid = user?.uid ?? null;
   const spaceEncryption = space?.encryption ?? null;
 
+  // The space arrives as a new object on every snapshot; unlock once per account and key.
+  const unlockedForRef = useRef<string | null>(null);
   useEffect(() => {
     if (!uid || !spaceEncryption) return;
+    const unlockFor = `${uid}:${spaceEncryption.keyId}:${spaceEncryption.keyVersion}`;
+    if (unlockedForRef.current === unlockFor) return;
+    unlockedForRef.current = unlockFor;
     void unlockSealedFormDrafts(uid, FORM_DRAFT_PREFIX, createDraftSealer(spaceEncryption));
   }, [uid, spaceEncryption]);
 

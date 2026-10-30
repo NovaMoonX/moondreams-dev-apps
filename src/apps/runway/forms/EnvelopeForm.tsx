@@ -167,9 +167,11 @@ function EnvelopeFormBody({
   const draftKey = draft
     ? null
     : `${FORM_DRAFT_PREFIX}envelope:${editing?.itemId ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
   const kept = useFormDraft({
     key: draftKey,
-    base: startData,
+    base: draftBase,
     parse: parseEnvelopeDraft,
   });
   const [formData, setFormData] = useState<EnvelopeFormData>(
@@ -270,8 +272,8 @@ function EnvelopeFormBody({
     note ? mask(note) : null;
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
-    startFolded:
-      editing !== undefined || !!draft?.initial || kept.restored !== null,
+    startFolded: editing !== undefined || !!draft?.initial,
+    foldAnswered: kept.restored !== null,
     initialOpenId: draft?.openStep ?? null,
   });
 
@@ -314,7 +316,7 @@ function EnvelopeFormBody({
   useKeepFormDraft({
     isRestored: kept.restored !== null,
     key: draftKey,
-    base: startData,
+    base: draftBase,
     value: formData,
     isDirty: JSON.stringify(formData) !== JSON.stringify(startData),
   });

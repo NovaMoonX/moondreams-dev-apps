@@ -1,3 +1,4 @@
+import { declareSealedFormDrafts } from '@lib/app/formDrafts';
 import {
   createAppEncryptionKey,
   createSeedAppEncryptionKey,
@@ -10,8 +11,9 @@ import {
 
 export type SpaceEncryption = AppEncryption<'worth-the-wait'>;
 
-/** Every Worth the Wait form draft's key starts with it, so drafts are kept only sealed. */
+/** Every Worth the Wait form draft's key starts with it; declared sealed here, so no draft is ever kept readable. */
 export const FORM_DRAFT_PREFIX = 'worth-the-wait:';
+declareSealedFormDrafts(FORM_DRAFT_PREFIX);
 
 export function createSpaceEncryptionKey(): SpaceEncryption {
   return createAppEncryptionKey('worth-the-wait');

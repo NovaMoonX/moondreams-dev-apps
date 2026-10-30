@@ -142,9 +142,11 @@ function CardFormBody({
   );
   const [startData] = useState(() => getInitialData(editing));
   const draftKey = `${FORM_DRAFT_PREFIX}card:${editing?.id ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
   const draft = useFormDraft({
     key: draftKey,
-    base: startData,
+    base: draftBase,
     parse: parseCardDraft,
   });
   const [formData, setFormData] = useState<CardFormData>(
@@ -342,14 +344,15 @@ function CardFormBody({
   ];
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
-    startFolded: editing !== undefined || draft.restored !== null,
+    startFolded: editing !== undefined,
+    foldAnswered: draft.restored !== null,
   });
   const isAsking = !questions.hasReviewed;
   const isDirty = JSON.stringify(formData) !== JSON.stringify(startData);
   useKeepFormDraft({
     isRestored: draft.restored !== null,
     key: draftKey,
-    base: startData,
+    base: draftBase,
     value: formData,
     isDirty,
   });
