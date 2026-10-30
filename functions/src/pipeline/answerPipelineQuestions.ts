@@ -79,6 +79,17 @@ const readItem = (raw: unknown): AnswerItem => {
   return { question, choice, note };
 };
 
+const ATTEMPT = /^[A-Za-z0-9_-]{8,64}$/;
+const SEND_AT_ONCE = 4;
+
+const readAttempt = (data: unknown) => {
+  const attempt = isObject(data) ? data.attempt : null;
+  if (typeof attempt !== 'string' || !ATTEMPT.test(attempt)) {
+    throw invalid('Bad send key.');
+  }
+  return attempt;
+};
+
 const readAnswers = (data: unknown): PrAnswers[] => {
   if (!isObject(data) || !Array.isArray(data.answers)) {
     throw invalid('Bad request.');
@@ -110,8 +121,17 @@ const readAnswers = (data: unknown): PrAnswers[] => {
 // A zero-width joiner after "@" keeps a stray name from pinging anyone.
 const defang = (value: string) => value.replace(/@/g, '@‍');
 
-const toMarker = (items: AnswerItem[]) =>
-  `<!-- pipeline-answer:${createHash('sha256').update(JSON.stringify(items)).digest('hex').slice(0, 16)} -->`;
+// The send's key is in the hash, so a retry of one send is skipped but the same answers sent again later are posted.
+const toMarker = (attempt: string, items: AnswerItem[]) =>
+  `<!-- pipeline-answer:${createHash('sha256').update(JSON.stringify({ attempt, items })).digest('hex').slice(0, 16)} -->`;
+
+const isBusy = (response: Response) =>
+  response.status === 429 ||
+  (response.status === 403 &&
+    (response.headers.has('retry-after') ||
+      response.headers.get('x-ratelimit-remaining') === '0'));
+
+const BUSY = 'GitHub is busy right now. Try again in a minute.';
 
 const toCommentBody = (items: AnswerItem[], marker: string) => {
   const lines = items.flatMap(({ question, choice, note }) => {
@@ -186,6 +206,7 @@ const readRecentComments = async (
 
 const postAnswers = async (
   token: string,
+  attempt: string,
   { prNumber, items }: PrAnswers,
 ): Promise<PrResult> => {
   const fail = (error: string): PrResult => ({
@@ -195,12 +216,13 @@ const postAnswers = async (
     postedAt: null,
     error,
   });
-  const marker = toMarker(items);
+  const marker = toMarker(attempt, items);
   try {
     const pull = await githubFetch(token, `/pulls/${prNumber}`);
     if (pull.status === 404) return fail("That pull request doesn't exist.");
     if (!pull.ok) {
       logger.warn('answerPipelineQuestions: read failed', pull.status);
+      if (isBusy(pull)) return fail(BUSY);
       return fail(
         pull.status === 401 || pull.status === 403
           ? "GitHub didn't accept the token."
@@ -239,6 +261,7 @@ const postAnswers = async (
     });
     if (!comment.ok) {
       logger.warn('answerPipelineQuestions: post failed', comment.status);
+      if (isBusy(comment)) return fail(BUSY);
       return fail(
         comment.status === 401 || comment.status === 403
           ? "The token can't comment on pull requests."
@@ -288,6 +311,7 @@ export const answerPipelineQuestions = onCall(
     }
 
     const answers = readAnswers(request.data);
+    const attempt = readAttempt(request.data);
     const token = await readSecret(
       'PIPELINE_GITHUB_TOKEN',
       AbortSignal.timeout(10_000),
@@ -299,8 +323,24 @@ export const answerPipelineQuestions = onCall(
       );
     }
 
-    const settled = await Promise.allSettled(
-      answers.map((answer) => postAnswers(token, answer)),
+    // A few at a time: a burst of new comments trips GitHub's secondary rate limit.
+    const batches = answers.reduce<PrAnswers[][]>(
+      (all, answer, index) =>
+        index % SEND_AT_ONCE === 0
+          ? [...all, [answer]]
+          : [...all.slice(0, -1), [...all[all.length - 1], answer]],
+      [],
+    );
+    const settled = await batches.reduce<
+      Promise<PromiseSettledResult<PrResult>[]>
+    >(
+      async (done, batch) => [
+        ...(await done),
+        ...(await Promise.allSettled(
+          batch.map((answer) => postAnswers(token, attempt, answer)),
+        )),
+      ],
+      Promise.resolve([]),
     );
     const results = settled.map((outcome, index): PrResult =>
       outcome.status === 'fulfilled'

@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
 
+import { generateToken } from '@/utils';
+
 import {
   sendPipelineAnswers,
   type PipelineAnswersForPr,
@@ -47,6 +49,8 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
   const [isNotSetUp, setIsNotSetUp] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const sendingRef = useRef(false);
+  // Kept after a send whose outcome is unknown, so retrying it can't post a second comment.
+  const attemptRef = useRef<string | null>(null);
 
   const slots = entries.flatMap(getAnswerSlots);
   // A sent answer shows as sent until its pull request's status comment is newer than the send.
@@ -80,8 +84,11 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     setIsSending(true);
     setSendNote(null);
     setUnsure([]);
+    const attempt = attemptRef.current ?? generateToken(24);
+    attemptRef.current = attempt;
     try {
-      const results = await sendPipelineAnswers(answers);
+      const results = await sendPipelineAnswers(answers, attempt);
+      attemptRef.current = null;
       const done = results.filter((result) => result.ok);
       const doneNumbers = new Set(done.map((result) => result.prNumber));
       const doneSlots = ready.filter((slot) => doneNumbers.has(slot.prNumber));
@@ -121,6 +128,13 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
       return results.every((result) => result.ok);
     } catch (error) {
       const code = (error as { code?: unknown }).code;
+      if (
+        code === 'functions/failed-precondition' ||
+        code === 'functions/invalid-argument' ||
+        code === 'functions/permission-denied'
+      ) {
+        attemptRef.current = null;
+      }
       if (code === 'functions/failed-precondition') {
         setIsNotSetUp(true);
         return false;
