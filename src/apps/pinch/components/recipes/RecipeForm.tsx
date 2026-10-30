@@ -62,7 +62,8 @@ import {
   isValidNutrition,
   parseMinutes,
   parseNutrition,
-  parseRecipeFormData,
+  parseRecipeFormDraft,
+  getRecipeDraftKey,
   toRecipeLine,
   type IngredientRow,
   type RecipeFormData,
@@ -172,37 +173,6 @@ const findLoadablePhoto = (photos: WebPhoto[]) =>
 const isRowValid = (row: IngredientRow) =>
   row.ingredientId !== '' && isRowAmountValid(row);
 
-interface RecipeFormDraft {
-  formData: RecipeFormData;
-  webCover: WebPhoto | null;
-  isCoverRemoved: boolean;
-}
-
-const isHttpsText = (value: unknown): value is string =>
-  typeof value === 'string' && value.startsWith('https://');
-
-function parseRecipeFormDraft(stored: unknown): RecipeFormDraft | null {
-  if (typeof stored !== 'object' || stored === null) return null;
-  const { formData, webCover, isCoverRemoved } =
-    stored as Partial<RecipeFormDraft>;
-  const parsed = parseRecipeFormData(formData);
-  const isCoverShaped =
-    webCover === null ||
-    (typeof webCover === 'object' &&
-      isHttpsText(webCover?.thumbUrl) &&
-      isHttpsText(webCover.imageUrl) &&
-      typeof webCover.title === 'string' &&
-      typeof webCover.host === 'string');
-  if (
-    parsed === null ||
-    !isCoverShaped ||
-    typeof isCoverRemoved !== 'boolean'
-  ) {
-    return null;
-  }
-  return { formData: parsed, webCover, isCoverRemoved };
-}
-
 interface RecipeFormProps {
   uid: string;
   /** The recipe being changed; null writes a new one. */
@@ -265,10 +235,10 @@ function RecipeForm({
   );
   const upload = useImageUpload(null);
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
-  const draftKey =
-    initialRead !== null || initialIdea !== null || initialChanges.length > 0
-      ? null
-      : `pinch:recipe:${recipeId ?? 'new'}`;
+  const draftKey = getRecipeDraftKey(
+    recipeId,
+    initialRead !== null || initialIdea !== null || initialChanges.length > 0,
+  );
   const draft = useFormDraft({ key: draftKey, parse: parseRecipeFormDraft });
   const [isCoverRemoved, setIsCoverRemoved] = useState(
     draft.restored?.isCoverRemoved ?? false,
@@ -463,7 +433,10 @@ function RecipeForm({
   );
 
   const isBlankByHand =
-    recipeId === null && initialRead === null && initialIdea === null;
+    recipeId === null &&
+    initialRead === null &&
+    initialIdea === null &&
+    draft.restored === null;
   const unresolvedCount = formData.ingredients.filter(
     (row) => row.ingredientId === '',
   ).length;

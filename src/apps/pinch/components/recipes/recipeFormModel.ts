@@ -1,4 +1,5 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { readFormDraft } from '@/lib/app/formDrafts';
 import { generateUuid } from '@/utils';
 import { clipAtWord } from '@/utils/stringUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
@@ -57,6 +58,7 @@ import type {
   RecipeIngredient,
   RecipeSource,
   ResolvedIngredient,
+  WebPhoto,
   Source,
   Unit,
 } from '@apps/pinch/types';
@@ -401,3 +403,46 @@ export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
     categories: getCategories({ categories: categories as DishCategory[] }),
   };
 };
+
+interface RecipeFormDraft {
+  formData: RecipeFormData;
+  webCover: WebPhoto | null;
+  isCoverRemoved: boolean;
+}
+
+const isHttpsText = (value: unknown): value is string =>
+  typeof value === 'string' && value.startsWith('https://');
+
+export function parseRecipeFormDraft(stored: unknown): RecipeFormDraft | null {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { formData, webCover, isCoverRemoved } =
+    stored as Partial<RecipeFormDraft>;
+  const parsed = parseRecipeFormData(formData);
+  const isCoverShaped =
+    webCover === null ||
+    (typeof webCover === 'object' &&
+      isHttpsText(webCover?.thumbUrl) &&
+      isHttpsText(webCover.imageUrl) &&
+      typeof webCover.title === 'string' &&
+      typeof webCover.host === 'string');
+  if (
+    parsed === null ||
+    !isCoverShaped ||
+    typeof isCoverRemoved !== 'boolean'
+  ) {
+    return null;
+  }
+  return { formData: parsed, webCover, isCoverRemoved };
+}
+
+/** Names a recipe form's on-device draft; a form started from a reading, an idea or planned changes keeps none. */
+export const getRecipeDraftKey = (
+  recipeId: string | null,
+  hasStarter: boolean,
+) => (hasStarter ? null : `pinch:recipe:${recipeId ?? 'new'}`);
+
+/** The title a recipe form's draft on this device holds, for a header drawn before the form opens. */
+export const readRecipeDraftTitle = (uid: string, key: string | null) =>
+  key === null
+    ? null
+    : (parseRecipeFormDraft(readFormDraft(uid, key))?.formData.title ?? null);
