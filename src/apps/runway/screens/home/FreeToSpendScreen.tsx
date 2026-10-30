@@ -173,7 +173,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       {isChecking ? (
         <CheckAmountBody presetEnvelopeId={checkEnvelope} />
       ) : isCheckingBalance ? (
-        <CheckBalanceBody />
+        <CheckBalanceBody onOpenDays={() => leaveViewForTab('days')} />
       ) : sheetKey !== null ? (
         <StartingAmountsSheet
           key={sheetKey}

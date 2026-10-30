@@ -856,7 +856,7 @@ export const CHECK_WORDS = {
 } as const;
 
 export const BALANCE_CHECK_WORDS = {
-  title: 'Check your balance',
+  title: 'Check balance',
   open: 'Check your balance',
   openSub: 'Compare your bank with Runway',
   question: 'What does your account hold now?',
@@ -872,11 +872,22 @@ export const BALANCE_CHECK_WORDS = {
   onCards: (amount: string) =>
     `This includes ${amount} waiting to be paid on cards, which is still in your account.`,
   causesCaption: 'What can cause it',
-  causes: [
+  lessCauses: [
     'A purchase or card payment not added yet',
-    "Money that arrived but isn't confirmed on its income day",
-    'Interest, a fee or a transfer',
+    'A fee, or a transfer out',
   ],
+  moreCauses: [
+    "Money that arrived but isn't confirmed on its income day",
+    'Interest, a refund or a transfer in',
+  ],
+  addPurchase: 'Add a purchase',
+  openDays: 'See your income days',
+  laterFix:
+    'A balance from before this can be fixed by correcting the income day or bill payment it came from.',
+  tooLarge: 'Enter what the account holds now.',
+  showToCompare: 'Show amounts to see how they compare',
+  notSet:
+    'Runway does not know what you started with yet, so there is nothing to compare. Say where things stand first.',
   loading: 'Getting your plan.',
 } as const;
 
