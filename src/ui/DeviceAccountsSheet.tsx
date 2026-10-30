@@ -1,8 +1,8 @@
-import { Button, Drawer, DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Check, Trash2, UserPlus } from 'lucide-react';
+import { Check, UserPlus } from 'lucide-react';
 
-import EllipsisDropdown from '@/components/EllipsisDropdown';
+import DeleteIconButton from '@/components/DeleteIconButton';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import UserAvatar from '@/ui/UserAvatar';
@@ -18,7 +18,7 @@ interface DeviceAccountsSheetProps {
 
 const getName = (account: RememberedAccount) => account.displayName?.trim() || account.email || 'Unnamed account';
 
-/** Google-style account chooser: tap an account to switch to it, ⋯ to remove it from this device, or add another. */
+/** Google-style account chooser: tap an account to switch to it, the trash icon to remove it from this device, or add another. */
 function DeviceAccountsSheet({ isOpen, accounts, currentUid, onSwitch, onForget, onClose }: DeviceAccountsSheetProps) {
   const { confirm } = useActionModal();
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, onClose);
@@ -58,21 +58,9 @@ function DeviceAccountsSheet({ isOpen, accounts, currentUid, onSwitch, onForget,
                   {isCurrent ? <Check className='text-primary size-5 shrink-0' aria-label='Signed in' /> : null}
                 </Button>
                 {isCurrent ? (
-                  <span className='size-8 shrink-0' />
+                  <span className='size-10 shrink-0' />
                 ) : (
-                  <EllipsisDropdown
-                    ariaLabel={`More for ${getName(account)}`}
-                    variant='tertiary'
-                    className="relative after:absolute after:-inset-1 after:content-['']"
-                    items={[
-                      DropdownMenuFactories.option({
-                        label: 'Remove from this device',
-                        value: 'remove',
-                        icon: <Trash2 className='size-4' />,
-                      }),
-                    ]}
-                    onItemSelect={() => handleForget(account)}
-                  />
+                  <DeleteIconButton label={`Remove ${getName(account)} from this device`} onClick={() => handleForget(account)} />
                 )}
               </li>
             );
