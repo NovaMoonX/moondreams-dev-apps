@@ -45,10 +45,10 @@ import {
   selectStance,
   selectAllPurposeEmojis,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { GroupTotal } from '@apps/runway/engine/groups';
 import type { GroupSealed, Priority } from '@apps/runway/types';
 import {
   describeBillRepeat,
-  describeGroupSplit,
   describeGroupLead,
   describeGroupTotal,
 } from '@apps/runway/utils/billText';
@@ -222,12 +222,16 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const trimmed = name.trim();
   const canRename = trimmed !== '' && trimmed !== payload.name;
   const lead = describeGroupLead(total, memberCount);
-  const split = describeGroupSplit(
-    billsTotal,
-    billCount,
-    envelopesTotal,
-    envelopeCount,
-  );
+  const getCaption = (
+    heading: string,
+    kindTotal: GroupTotal,
+    count: number,
+  ) => {
+    const kindLead = describeGroupLead(kindTotal, count);
+    return kindLead.amount === null || kindLead.isOneTime
+      ? heading
+      : `${heading} · ${kindLead.amount} ${kindLead.rest}`;
+  };
   const trimmedEmoji = emoji.trim();
 
   if (adding === 'bill') {
@@ -365,11 +369,6 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
               }
               helpTitle={GROUP_WORDS.basisTitle}
             />
-            {split !== null && (
-              <p className='text-muted-foreground -mt-2 text-sm'>
-                <MaskedText>{split}</MaskedText>
-              </p>
-            )}
             {total.oneTime.count > 0 && !lead.isOneTime && (
               <p className='text-muted-foreground -mt-2 text-sm'>
                 <MaskedText>
@@ -386,7 +385,13 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
             {bills.length > 0 && (
               <div className='space-y-1.5'>
                 <p className='text-muted-foreground text-xs'>
-                  {GROUP_WORDS.billsHeading}
+                  <MaskedText>
+                    {getCaption(
+                      GROUP_WORDS.billsHeading,
+                      billsTotal,
+                      billCount,
+                    )}
+                  </MaskedText>
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {bills.map(({ item, version }) => (
@@ -410,7 +415,13 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
             {envelopes.length > 0 && (
               <div className='space-y-1.5'>
                 <p className='text-muted-foreground text-xs'>
-                  {GROUP_WORDS.envelopesHeading}
+                  <MaskedText>
+                    {getCaption(
+                      GROUP_WORDS.envelopesHeading,
+                      envelopesTotal,
+                      envelopeCount,
+                    )}
+                  </MaskedText>
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {envelopes.map(({ item, version }) => {

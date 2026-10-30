@@ -1695,8 +1695,6 @@ export const GROUP_WORDS = {
     'This counts its bills only. Its envelopes are on the Envelopes list.',
   onlyEnvelopes:
     'This counts its envelopes only. Its bills are on the Bills list.',
-  split: (bills: string, envelopes: string) =>
-    `Bills ${bills} · Envelopes ${envelopes}`,
   chooseEmoji: (name: string) => `Choose an emoji for ${name}`,
   changeEmoji: (name: string) => `Change the emoji for ${name}`,
   emojiLabel: 'Emoji',
