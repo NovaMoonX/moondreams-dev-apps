@@ -1,7 +1,7 @@
 import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
@@ -20,7 +20,9 @@ function Account() {
     useAuth();
   const switchToAccount = useAccountSwitch();
   const navigate = useNavigate();
+  const location = useLocation();
   const { confirm } = useActionModal();
+  const { addToast } = useToast();
   const [nameDraft, setNameDraft] = useState<string | null>(null);
   const [isPhotoOpen, setIsPhotoOpen] = useState(false);
 
@@ -33,8 +35,12 @@ function Account() {
   const saveName = async () => {
     const nextName = nameDraft?.trim() ?? '';
     if (!nextName) return;
-    await updateDisplayName(nextName);
-    setNameDraft(null);
+    try {
+      await updateDisplayName(nextName);
+      setNameDraft(null);
+    } catch {
+      addToast({ title: "Couldn't save your name", description: 'Check your connection and try again.', type: 'error' });
+    }
   };
 
   const resetSavedData = async () => {
@@ -51,7 +57,7 @@ function Account() {
   return (
     <div className='page pt-20'>
       <div className='mx-auto w-full max-w-xl space-y-6'>
-        <SubviewHeader title='Your account' onBack={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} />
+        <SubviewHeader title='Your account' onBack={() => (location.key === 'default' ? navigate('/') : navigate(-1))} />
 
         <div className='flex flex-col items-center gap-2 text-center'>
           <UserAvatar user={user} size='lg' className='size-20! text-2xl' />
@@ -68,7 +74,7 @@ function Account() {
             title='Name'
             description={displayName}
             control={
-              <Button type='button' variant='secondary' size='sm' onClick={() => setNameDraft(displayName)}>
+              <Button type='button' variant='secondary' size='sm' onClick={() => setNameDraft(user.displayName ?? '')}>
                 Change
               </Button>
             }

@@ -19,10 +19,17 @@ type AuthAvatarProps = {
 function AuthAvatar({ className }: AuthAvatarProps) {
   const { user, loading, signInWithGoogle, logOut, isAdmin, rememberedAccounts } = useAuth();
   const switchToAccount = useAccountSwitch();
-  const [isOpen, setIsOpen] = useState(false);
+  const { pathname } = useLocation();
+  // Tied to the page it opened on, so any navigation (Back, a link elsewhere) closes the card.
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const isOpen = openPath === pathname;
+  const setIsOpen = (next: boolean | ((open: boolean) => boolean)) =>
+    setOpenPath((current) => {
+      const nextOpen = typeof next === 'function' ? next(current === pathname) : next;
+      return nextOpen ? pathname : null;
+    });
   const isPhone = useMediaQuery().isBelow('sm');
   const { dialogId, onDialogClose } = useSheetHistory(isOpen && isPhone, () => setIsOpen(false));
-  const { pathname } = useLocation();
   const navigate = useNavigate();
   const isAwayFromHome = pathname !== '/';
 
