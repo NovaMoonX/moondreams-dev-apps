@@ -47,6 +47,7 @@ read_lock() {
 }
 
 describe() {
+  [[ -n "$lock_pr" ]] || { echo "Held, but unreadable (no PR on it), set ${lock_minutes} min ago."; return; }
   echo "Held for #$lock_pr by $lock_holder, taken ${lock_minutes} min ago."
 }
 
@@ -88,6 +89,12 @@ case "$command" in
       exit 0
     fi
     read_lock
+    # Taken and released again since our read: try once more from the new tip.
+    if [[ "$lock_state" != held ]] && push_state "$message"; then
+      echo "Taken for #$pr."
+      exit 0
+    fi
+    read_lock
     [[ "$lock_state" == held ]] || die "Could not take the lock: $push_error"
     [[ "$lock_pr" == "$pr" ]] && { echo "Already held for #$pr."; exit 0; }
     describe
@@ -102,7 +109,9 @@ case "$command" in
     fi
     read_lock
     [[ "$lock_state" == held ]] || { echo "Free already."; exit 0; }
-    [[ "$lock_pr" == "$pr" ]] || die "Not held for #$pr: $(describe)"
+    # An unreadable lock names no PR, so only a stale break can clear it.
+    [[ "$lock_pr" == "$pr" || ( "$command" == break && -z "$lock_pr" ) ]] \
+      || die "Not held for #$pr: $(describe)"
     if [[ "$command" == break ]] && (( lock_minutes < STALE_MINUTES )); then
       die "Only ${lock_minutes} min old; a lock is stale after ${STALE_MINUTES}. $(describe)"
     fi
