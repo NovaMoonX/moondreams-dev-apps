@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShoppingBag, Wallet } from 'lucide-react';
+import { Layers, ShoppingBag, Wallet } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
@@ -24,6 +24,7 @@ import {
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import GroupsScreen from '@apps/runway/screens/spend/GroupsScreen';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
@@ -36,6 +37,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { useNow } from '@/hooks/useNow';
 import {
+  selectExpenses,
   selectItemLooks,
   selectIsMovesLoaded,
   selectSpendPurchases,
@@ -78,7 +80,11 @@ function SpendScreen() {
     closePurchase,
     spendPeriod,
     showSpendPeriod,
+    isGroupsOpen,
+    openGroups,
+    closeGroups,
   } = useRunwayUrlState();
+  const expenseCount = useAppSelector(selectExpenses).length;
   const today = todayAsUtcDate(useNow(60_000));
   const periodFor = useAppSelector((state) => state.runway.periodFor);
   const periodFailedFor = useAppSelector(
@@ -316,13 +322,32 @@ function SpendScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title={SPEND_WORDS.title} action={periodChip} />
+      <SectionHeader
+        title={SPEND_WORDS.title}
+        action={
+          <div className='ml-3 flex shrink-0 items-center gap-2'>
+            {expenseCount > 0 && (
+              <ShowMoreButton isHeaderAction onClick={openGroups}>
+                <Layers
+                  className='h-4 w-4 min-[360px]:hidden'
+                  aria-hidden='true'
+                />
+                <span className='max-[359px]:sr-only'>
+                  {SPEND_WORDS.groups}
+                </span>
+              </ShowMoreButton>
+            )}
+            {periodChip}
+          </div>
+        }
+      />
       {getBody()}
       <FloatingAction
         label={SPEND_WORDS.newPurchase}
         icon={<ShoppingBag className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
+      {isGroupsOpen && <GroupsScreen onClose={closeGroups} />}
       {purchaseId !== null && (
         <PurchaseScreen
           key={purchaseId}

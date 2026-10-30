@@ -25,7 +25,7 @@ Built:
 - [x] Plan changes from a date or for a stretch, with the effect shown first
 - [x] Priorities: every item in funding order, where a short pay runs out, and a way to reorder
 - [x] Credit cards, each with its own reserve: purchases and bills paid by card, and paying a card off in one step
-- [x] A link on a purchase, and purchases grouped into an expense ("Chicago trip") with its total
+- [x] A link on a purchase, and purchases grouped into an expense ("Chicago trip") with its total, listed on Spend
 - [x] Receipt photos on purchases, sealed on the device and kept until you remove them
 - [x] Read a receipt on tap: the amount, the store, the day and the items fill in for you to check
 - [x] Move what is left in an envelope to another envelope, a goal or Free to Spend, with an Undo

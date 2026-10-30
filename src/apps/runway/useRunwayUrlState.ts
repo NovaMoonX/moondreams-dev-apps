@@ -124,6 +124,13 @@ export function useRunwayUrlState() {
   const openFixes = () => setRequestedFixes(true, { history: 'replace' });
   const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
 
+  const [requestedGroups, setRequestedGroups] = useQueryState(
+    'groups',
+    parseAsBoolean,
+  );
+  const openGroups = () => setRequestedGroups(true, { history: 'replace' });
+  const closeGroups = () => setRequestedGroups(null, { history: 'replace' });
+
   const [requestedPeriod, setRequestedPeriod] = useQueryState(
     'period',
     parseAsString,
@@ -280,6 +287,9 @@ export function useRunwayUrlState() {
     isFixesOpen: requestedFixes === true,
     openFixes,
     closeFixes,
+    isGroupsOpen: requestedGroups === true,
+    openGroups,
+    closeGroups,
     spendPeriod,
     showSpendPeriod,
     daysMonth,
