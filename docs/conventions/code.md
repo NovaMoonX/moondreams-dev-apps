@@ -7,6 +7,7 @@ Part of the repo conventions (see `CLAUDE.md` "Read before you touch"). These fi
 - Use the project import aliases instead of relative paths when available.
 - Timestamp display goes through the shared date/time helpers in `src/utils/formatUtils.ts` (`formatDateTime` for a shared timestamp), never inline `Date` formatting.
 - A user or member avatar is the shared `UserAvatar` (`src/ui/UserAvatar.tsx`), not a raw `Avatar`.
+- Press and hold (with right-click and the context-menu key on a computer) is `@/hooks/useLongPress`, never a timer in a component.
 - Debounce with `@/hooks/useDebounce` (`useDebouncedValue` / `useDebouncedCallback`) and its shared `DEBOUNCE_MS` presets, never a hand-rolled `setTimeout` debounce or a per-file delay constant.
 - Component syntax is `export function ComponentName` (or `function ComponentName` + `export default ComponentName`).
 

@@ -41,6 +41,12 @@ marker_file="$git_dir/.pr-gate-last-sha"
 last_sha=$(cat "$marker_file" 2>/dev/null || true)
 [[ "$head_sha" == "$last_sha" ]] && exit 0
 
+# A stale default branch makes a fresh branch look like a huge PR; a branch with
+# no commits of its own has no PR to wrap up.
+timeout 15 git fetch -q origin "$default_branch" >/dev/null 2>&1 || true
+own_commits=$(git rev-list "origin/$default_branch..HEAD" --count 2>/dev/null) || own_commits=0
+[[ "$own_commits" -gt 0 ]] || exit 0
+
 base=$(git merge-base "origin/$default_branch" HEAD 2>/dev/null || echo "")
 [[ -n "$base" ]] || exit 0
 echo "$head_sha" > "$marker_file"

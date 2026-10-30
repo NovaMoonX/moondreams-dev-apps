@@ -4,7 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, House, Menu } from 'lucide-react';
 
-import FallbackImage from '@components/FallbackImage';
+import AppLogo from '@components/AppLogo';
 import SideSheet from '@components/SideSheet';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
@@ -14,17 +14,6 @@ import ThemeToggle from '@ui/ThemeToggle';
 interface AppNavPanelProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
-}
-
-function AppLogo({ id }: { id: string }) {
-  return (
-    <FallbackImage
-      src={`/logos/by-app/logo-${id}.svg`}
-      alt=''
-      className='ring-foreground/15 size-8 shrink-0 rounded-lg ring-1'
-      fallback={<span className='bg-muted size-8 shrink-0 rounded-lg' />}
-    />
-  );
 }
 
 const rowClassName = (isCurrent: boolean) =>
@@ -116,7 +105,7 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
                         close();
                       }}
                     >
-                      <AppLogo id={app.id} />
+                      <AppLogo appId={app.id} />
                       <span className='flex min-w-0 flex-1 flex-col'>
                         <span className='truncate'>{app.name}</span>
                         {canRestart && <span className='text-muted-foreground truncate text-xs'>Back to start</span>}
