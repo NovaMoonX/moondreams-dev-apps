@@ -171,7 +171,7 @@ export async function createEnvelope(
   uid: string,
   encryption: RunwayEncryption,
   { envelope: draftEnvelope, startDate, newGroup = null }: CreateEnvelopeInput,
-): Promise<{ envelopeId: string }> {
+): Promise<{ envelopeId: string; groupId: string | null }> {
   const now = Date.now();
   const envelopeId = generateUuid();
   const changeId = generateUuid();
@@ -232,7 +232,7 @@ export async function createEnvelope(
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();
 
-  return { envelopeId };
+  return { envelopeId, groupId: groupDocs?.groupId ?? null };
 }
 
 export interface CreateGroupInput {
@@ -303,7 +303,7 @@ export async function createBill(
   uid: string,
   encryption: RunwayEncryption,
   { bill: draftBill, startDate, newGroup = null }: CreateBillInput,
-): Promise<{ billId: string }> {
+): Promise<{ billId: string; groupId: string | null }> {
   const now = Date.now();
   const billId = generateUuid();
   const changeId = generateUuid();
@@ -364,7 +364,7 @@ export async function createBill(
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();
 
-  return { billId };
+  return { billId, groupId: groupDocs?.groupId ?? null };
 }
 
 export interface CreateGoalInput {

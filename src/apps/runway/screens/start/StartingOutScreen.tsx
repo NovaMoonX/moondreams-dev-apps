@@ -44,6 +44,7 @@ import type { HeldChoice } from '@apps/runway/engine/endings';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBills,
+  selectGroups,
   selectEnvelopes,
   selectGoals,
   selectIsPlanItemsLoaded,
@@ -104,6 +105,7 @@ function SavedStart({ uid }: { uid: string }) {
   const today = todayAsUtcDate(useNow(60_000));
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
+  const groups = useAppSelector((state) => selectGroups(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const hasStart = useAppSelector(
@@ -239,6 +241,10 @@ function SavedStart({ uid }: { uid: string }) {
       bills: bills.map(({ version }) => version.payload.name),
       envelopes: envelopes.map(({ version }) => version.payload.name),
       goals: goals.map(({ version }) => version.payload.name),
+      groups: groups.map(({ item, version }) => ({
+        id: item.id,
+        name: version.payload.name,
+      })),
       topRanks: toTopRanks([...bills, ...envelopes, ...goals]),
       startDate,
       itemCount: items.length,
