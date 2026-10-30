@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # One merge into main at a time, across every session. The lock is the
-# `merge-lock` branch: a push that creates it succeeds for exactly one caller,
-# so two sessions can never both hold it. Its commit message says who holds it.
+# `merge-lock` branch, whose last commit says "held" (with the PR, the holder
+# and the time) or "free". Taking pushes a held commit on top of a free one and
+# releasing pushes a free commit on top of the held one; neither forces, so a
+# push succeeds only if nobody moved the branch since it was read, and two
+# sessions can never both take it. Nothing is ever deleted.
 #
 #   npm run merge:lock -- status
 #   npm run merge:lock -- take <pr> <holder>   # holder: the session link, or "owner"
@@ -10,49 +13,61 @@
 #
 # The PR number is the lock's identity: whoever drives that PR may release it.
 # Exit code: 0 done (or free, for status), 2 held by someone else (status,
-# take), 1 refused or failed. Pushing the branch runs no workflow.
+# take), 1 refused or failed, including an origin that could not be read.
+# Pushing the branch runs no workflow.
 
 set -uo pipefail
 
 LOCK=merge-lock
 STALE_MINUTES=${STALE_MINUTES:-90}
+EMPTY_TREE=$(git hash-object -t tree /dev/null)
 
 die() { echo "$1" >&2; exit "${2:-1}"; }
 
-# Returns 1 only when origin answers and has no lock; an unreachable origin
-# stops the script, so a network failure never reads as a free lock.
+# Sets lock_state to none, free or held. An unreachable origin stops the
+# script, so a network failure never reads as a free lock.
 read_lock() {
+  lock_sha=''
   git ls-remote --exit-code origin "refs/heads/$LOCK" >/dev/null 2>&1
   case $? in
     0) ;;
-    2) return 1 ;;
+    2) lock_state=none; return ;;
     *) die "Could not reach origin to read the lock." ;;
   esac
   git fetch -q origin "+refs/heads/$LOCK:refs/remotes/origin/$LOCK" \
     || die "Could not fetch the lock."
   lock_sha=$(git rev-parse "refs/remotes/origin/$LOCK")
-  lock_pr=$(git log -1 --format=%B "$lock_sha" | sed -n 's/^pr: #//p' | head -1)
-  lock_holder=$(git log -1 --format=%B "$lock_sha" | sed -n 's/^holder: //p' | head -1)
-  lock_time=$(git log -1 --format=%ct "$lock_sha")
-  lock_minutes=$(( ($(date +%s) - lock_time) / 60 ))
+  local body
+  body=$(git log -1 --format=%B "$lock_sha")
+  lock_state=$(head -1 <<<"$body" | sed -n 's/^merge-lock: //p')
+  lock_pr=$(sed -n 's/^pr: #//p' <<<"$body" | head -1)
+  lock_holder=$(sed -n 's/^holder: //p' <<<"$body" | head -1)
+  lock_minutes=$(( ($(date +%s) - $(git log -1 --format=%ct "$lock_sha")) / 60 ))
+  [[ "$lock_state" == free ]] || lock_state=held
 }
 
 describe() {
   echo "Held for #$lock_pr by $lock_holder, taken ${lock_minutes} min ago."
 }
 
-# Deletes the lock only if it is still the commit we read, so a lock someone
-# else took in between is never removed.
-delete_lock() {
-  git push -q --force-with-lease="refs/heads/$LOCK:$lock_sha" origin ":refs/heads/$LOCK" \
-    || die "The lock changed while releasing it; run status again."
-  git update-ref -d "refs/remotes/origin/$LOCK" 2>/dev/null || true
+# Pushes a commit with this message on top of what was read; false when the
+# branch moved in between (or the push failed), with the reason in push_error.
+push_state() {
+  local message=$1 sha
+  if [[ -n "$lock_sha" ]]; then
+    sha=$(git commit-tree "$EMPTY_TREE" -p "$lock_sha" -m "$message")
+  else
+    sha=$(git commit-tree "$EMPTY_TREE" -m "$message")
+  fi
+  [[ -n "$sha" ]] || die "Could not build the lock commit."
+  push_error=$(git push -q origin "$sha:refs/heads/$LOCK" 2>&1)
 }
 
 command=${1:-status}
 case "$command" in
   status)
-    read_lock || { echo "Free."; exit 0; }
+    read_lock
+    [[ "$lock_state" == held ]] || { echo "Free."; exit 0; }
     describe
     exit 2
     ;;
@@ -60,37 +75,41 @@ case "$command" in
     pr=${2:-}; holder=${3:-}
     [[ "$pr" =~ ^[0-9]+$ && -n "$holder" && "$holder" != *$'\n'* ]] \
       || die "Usage: take <pr> <holder> (holder on one line)" 64
-    git fetch -q origin main || die "Could not fetch main."
-    message=$(printf 'merge-lock\n\npr: #%s\nholder: %s\ntaken: %s\n' \
+    read_lock
+    if [[ "$lock_state" == held ]]; then
+      [[ "$lock_pr" == "$pr" ]] && { echo "Already held for #$pr."; exit 0; }
+      describe
+      exit 2
+    fi
+    message=$(printf 'merge-lock: held\n\npr: #%s\nholder: %s\ntaken: %s\n' \
       "$pr" "$holder" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
-    sha=$(git commit-tree "origin/main^{tree}" -p origin/main -m "$message") \
-      || die "Could not build the lock commit."
-    if push_error=$(git push -q origin "$sha:refs/heads/$LOCK" 2>&1); then
+    if push_state "$message"; then
       echo "Taken for #$pr."
       exit 0
     fi
-    read_lock || die "The push failed and no lock is there: $push_error"
+    read_lock
+    [[ "$lock_state" == held ]] || die "Could not take the lock: $push_error"
     [[ "$lock_pr" == "$pr" ]] && { echo "Already held for #$pr."; exit 0; }
     describe
     exit 2
     ;;
-  release)
-    pr=${2:-}
-    [[ "$pr" =~ ^[0-9]+$ ]] || die "Usage: release <pr>" 64
-    read_lock || { echo "Free already."; exit 0; }
-    [[ "$lock_pr" == "$pr" ]] || die "Not yours: $(describe)"
-    delete_lock
-    echo "Released #$pr."
-    ;;
-  break)
+  release | break)
     pr=${2:-}; reason=${3:-}
-    [[ "$pr" =~ ^[0-9]+$ && -n "$reason" ]] || die "Usage: break <pr> <reason>" 64
-    read_lock || { echo "Free already."; exit 0; }
-    [[ "$lock_pr" == "$pr" ]] || die "The lock is not held for #$pr: $(describe)"
-    (( lock_minutes >= STALE_MINUTES )) \
-      || die "Only ${lock_minutes} min old; a lock is stale after ${STALE_MINUTES}. $(describe)"
-    delete_lock
-    echo "Broke the lock for #$pr ($reason)."
+    if [[ "$command" == break ]]; then
+      [[ "$pr" =~ ^[0-9]+$ && -n "$reason" ]] || die "Usage: break <pr> <reason>" 64
+    else
+      [[ "$pr" =~ ^[0-9]+$ ]] || die "Usage: release <pr>" 64
+    fi
+    read_lock
+    [[ "$lock_state" == held ]] || { echo "Free already."; exit 0; }
+    [[ "$lock_pr" == "$pr" ]] || die "Not held for #$pr: $(describe)"
+    if [[ "$command" == break ]] && (( lock_minutes < STALE_MINUTES )); then
+      die "Only ${lock_minutes} min old; a lock is stale after ${STALE_MINUTES}. $(describe)"
+    fi
+    message=$(printf 'merge-lock: free\n\nafter: #%s\n%s\n' "$pr" "${reason:+broken: $reason}")
+    push_state "$message" \
+      || die "Could not release the lock (it moved, or the push failed): $push_error"
+    [[ "$command" == break ]] && echo "Broke the lock for #$pr ($reason)." || echo "Released #$pr."
     ;;
   *)
     die "Unknown command: $command (status, take, release, break)" 64
