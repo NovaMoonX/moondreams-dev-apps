@@ -26,6 +26,7 @@ import { APP_REGISTRY_ID_MAP, orderApps } from '@lib/app';
 import { db, isUsingFirebaseEmulators } from '@lib/firebase/config';
 import {
   normalizeAppStatus,
+  type AppListing,
   type AppMetadata,
   type UserPrefs,
 } from '@lib/types/appCatalog';
@@ -101,17 +102,6 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
     );
   }
 
-  if (user !== null) {
-    queries.push(
-      query(
-        appsCollection,
-        where('status', '==', 'public'),
-        where('isRestricted', '==', true),
-        where('isRequestable', '==', true),
-      ),
-    );
-  }
-
   return queries;
 }
 
@@ -180,8 +170,8 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
         },
         (error) => {
           console.error('Failed to load app catalog:', error);
+          // One refused query keeps what the others found, so a person's own apps never vanish with it.
           if (isActive) {
-            setAllApps([]);
             markQueryResolved(index);
           }
         },
@@ -256,21 +246,28 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   }, [allApps, isAdmin, user]);
 
   const apps = useMemo(() => orderApps(visibleApps, starredAppIds), [visibleApps, starredAppIds]);
+  const [listings, setListings] = useState<{ uid: string; items: AppListing[] } | null>(null);
+  const isListingReader = uid !== null && !canSeeAllApps(isAdmin);
+
+  useEffect(() => {
+    if (!isListingReader || uid === null) return;
+    return onSnapshot(
+      collection(db, 'appListings'),
+      (snapshot) =>
+        setListings({ uid, items: snapshot.docs.map((docSnap) => docSnap.data() as AppListing) }),
+      (error) => console.error('Failed to load apps you can ask for:', error),
+    );
+  }, [isListingReader, uid]);
+
   const requestableApps = useMemo(
     () =>
-      canSeeAllApps(isAdmin) || user === null
-        ? []
-        : orderApps(
-            allApps.filter(
-              (app) =>
-                app.status === 'public' &&
-                app.isRestricted &&
-                app.isRequestable &&
-                !visibleApps.some((visible) => visible.id === app.id),
-            ),
+      isListingReader && listings !== null && listings.uid === uid
+        ? orderApps(
+            listings.items.filter((listing) => !visibleApps.some((visible) => visible.id === listing.id)),
             [],
-          ),
-    [allApps, isAdmin, user, visibleApps],
+          )
+        : [],
+    [isListingReader, listings, uid, visibleApps],
   );
 
   const updateAppMetadata = useCallback(

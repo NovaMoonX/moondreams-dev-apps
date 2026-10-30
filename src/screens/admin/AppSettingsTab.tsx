@@ -17,6 +17,8 @@ import {
   accessRequestsQueryOptions,
   clearAccessRequests,
   dismissAccessRequest,
+  isOnAccessList,
+  syncAppListing,
 } from '@lib/accessRequests/accessRequests';
 import {
   APP_STATUS_OPTIONS,
@@ -44,12 +46,7 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
   const queryClient = useQueryClient();
   const requestsQuery = useQuery(accessRequestsQueryOptions(app.id));
   const [dismissingUid, setDismissingUid] = useState<string | null>(null);
-  const isGranted = (uid: string, email: string | null) =>
-    allowedUsers.some(
-      (value) =>
-        value.toLowerCase() === uid.toLowerCase() ||
-        (email !== null && value.toLowerCase() === email.toLowerCase()),
-    );
+  const isGranted = (uid: string, email: string | null) => isOnAccessList(allowedUsers, uid, email);
   const openRequests = (requestsQuery.data ?? []).filter(
     (request) => request.dismissedAt === null && !isGranted(request.uid, request.email),
   );
@@ -195,7 +192,12 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
 
     try {
       await onSave(app.id, draft);
-      const answered = (requestsQuery.data ?? [])
+      await syncAppListing(
+        { id: app.id, name: draft.name.trim(), description: draft.description.trim(), path: app.path },
+        draft.status === 'public' && draft.isRestricted && draft.isRequestable,
+      );
+      const latestRequests = await queryClient.fetchQuery({ ...accessRequestsQueryOptions(app.id), staleTime: 0 });
+      const answered = latestRequests
         .filter((request) => isGranted(request.uid, request.email))
         .map((request) => request.uid);
       await clearAccessRequests(app.id, answered).catch((error) =>

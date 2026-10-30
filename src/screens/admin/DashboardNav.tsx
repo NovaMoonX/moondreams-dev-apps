@@ -7,7 +7,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import AppLogo from '@/components/AppLogo';
 import SearchInput from '@/components/SearchInput';
 import useNow from '@/hooks/useNow';
-import { accessRequestsQueryOptions } from '@lib/accessRequests/accessRequests';
+import { accessRequestsQueryOptions, isOnAccessList } from '@lib/accessRequests/accessRequests';
 import { getActiveSince } from '@lib/appUsage/appUsage';
 import type { AppUsage } from '@lib/appUsage/appUsage';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
@@ -100,7 +100,7 @@ function DashboardNav({
   const requestQueries = useQueries({ queries: apps.map((app) => accessRequestsQueryOptions(app.id)) });
   const getOpenRequestCount = (app: AppMetadata) =>
     (requestQueries[apps.indexOf(app)]?.data ?? []).filter(
-      (request) => request.dismissedAt === null && !app.allowedUsers.includes(request.uid),
+      (request) => request.dismissedAt === null && !isOnAccessList(app.allowedUsers, request.uid, request.email),
     ).length;
 
   const getAppMeta = (app: AppMetadata) => {

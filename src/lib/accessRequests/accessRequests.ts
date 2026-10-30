@@ -1,4 +1,6 @@
 import { collection, deleteDoc, doc, getDocs, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+
+import type { AppListing } from '@lib/types/appCatalog';
 import { queryOptions } from '@tanstack/react-query';
 
 import { ADMIN_QUERY_KEY } from '@lib/admin/adminQueries';
@@ -63,4 +65,23 @@ export function accessRequestsQueryOptions(appId: string) {
     },
     staleTime: 60_000,
   });
+}
+
+/** Publishes an app's name and description to members while it takes requests, and withdraws them when it stops. */
+export async function syncAppListing(listing: AppListing, isListed: boolean) {
+  const listingRef = doc(db, 'appListings', listing.id);
+  if (isListed) {
+    await setDoc(listingRef, listing);
+    return;
+  }
+  await deleteDoc(listingRef);
+}
+
+/** Whether an access list (uids or emails, any case) already holds this person. */
+export function isOnAccessList(allowedUsers: string[], uid: string, email: string | null) {
+  return allowedUsers.some(
+    (value) =>
+      value.trim().toLowerCase() === uid.toLowerCase() ||
+      (email !== null && value.trim().toLowerCase() === email.toLowerCase()),
+  );
 }

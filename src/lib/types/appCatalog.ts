@@ -52,3 +52,11 @@ export interface UserPrefs {
   starredAppIds: string[];
   updatedAt: number;
 }
+
+/** The public face of an app open to requests at `appListings/{appId}`: readable by every member, so it carries no access list. */
+export interface AppListing {
+  id: AppId;
+  name: string;
+  description: string;
+  path: string;
+}

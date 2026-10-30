@@ -6,10 +6,10 @@ import SectionDivider from '@/components/SectionDivider';
 import { useMyAccessRequests } from '@/hooks/useMyAccessRequests';
 import { formatDate } from '@/utils/formatUtils';
 import { cancelAccessRequest, requestAccess } from '@lib/accessRequests/accessRequests';
-import type { AppMetadata } from '@lib/types/appCatalog';
+import type { AppListing } from '@lib/types/appCatalog';
 
 interface RequestableAppsProps {
-  apps: AppMetadata[];
+  apps: AppListing[];
   person: { uid: string; email: string | null; displayName: string | null };
 }
 

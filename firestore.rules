@@ -36,12 +36,6 @@ service cloud.firestore {
         && request.auth.uid in appData.allowedUsers;
     }
 
-    function isRequestableApp(appData) {
-      return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
-        && appData.get('isRequestable', false) == true
-        && request.auth != null;
-    }
-
     function isEmailAllowedApp(appData) {
       return ('status' in appData) && appData.status == 'public' && appData.isRestricted == true
         && request.auth != null && ('email' in request.auth.token)
@@ -135,8 +129,14 @@ service cloud.firestore {
       allow read: if isUnrestrictedPublicApp(resource.data);
       allow read: if isUidAllowedApp(resource.data);
       allow read: if isEmailAllowedApp(resource.data);
-      allow read: if isRequestableApp(resource.data);
       allow create, update, delete: if isAdmin();
+    }
+
+    // What a member without access may see of an app open to requests: no access list, nothing else.
+    // The admin writes it beside the app doc and deletes it when the app stops taking requests.
+    match /appListings/{appId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // Asking for an app. A person writes only their own request, only for an app open to requests, and
@@ -145,7 +145,7 @@ service cloud.firestore {
       function isValidRequest(data) {
         return data.keys().hasOnly(['uid', 'email', 'displayName', 'requestedAt', 'dismissedAt'])
           && data.uid == uid
-          && (data.email == null || data.email is string)
+          && (data.email == null || data.email == request.auth.token.get('email', null))
           && (data.displayName == null || data.displayName is string)
           && data.requestedAt is number
           && data.dismissedAt == null;
@@ -154,7 +154,7 @@ service cloud.firestore {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow create: if isUser(uid)
         && isValidRequest(request.resource.data)
-        && get(/databases/$(database)/documents/apps/$(appId)).data.get('isRequestable', false) == true;
+        && exists(/databases/$(database)/documents/appListings/$(appId));
       allow update: if isAdmin()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dismissedAt'])
         && request.resource.data.dismissedAt is number;
