@@ -64,3 +64,47 @@ export function startPurchasesListener(
     stop();
   };
 }
+
+/** Every purchase in one expense group, whatever its date. A slow open never overwrites a newer snapshot. */
+export function startExpensePurchasesListener(
+  uid: string,
+  encryption: RunwayEncryption,
+  expenseId: string,
+  onChange: (purchases: OpenPurchase[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const sequence = { latest: 0 };
+  const run = { isStopped: false };
+  const read = createSealedReader(encryption);
+
+  const stop = onSnapshot(
+    query(
+      collection(db, 'apps', 'runway', 'plans', uid, 'purchases'),
+      where('expenseId', '==', expenseId),
+    ),
+    async (snapshot) => {
+      sequence.latest += 1;
+      const current = sequence.latest;
+      try {
+        const opened = await Promise.all(
+          snapshot.docs.map((entry) =>
+            openPurchase(
+              { ...(entry.data() as PurchaseDoc), id: entry.id },
+              read,
+            ),
+          ),
+        );
+        if (current !== sequence.latest || run.isStopped) return;
+        onChange(opened);
+      } catch (error) {
+        if (current === sequence.latest) onError(toError(error));
+      }
+    },
+    (error) => onError(toError(error)),
+  );
+
+  return () => {
+    run.isStopped = true;
+    stop();
+  };
+}

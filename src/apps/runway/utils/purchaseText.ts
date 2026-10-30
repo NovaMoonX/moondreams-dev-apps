@@ -69,6 +69,8 @@ interface PurchaseFields {
   note: string | null;
   lines: readonly PurchaseLine[];
   paidByCardId: string | null;
+  link: string | null;
+  expenseId: string | null;
 }
 
 const money = (cents: number) => formatCents(Math.abs(cents));
@@ -88,6 +90,7 @@ export function describePurchaseEdit(
   after: PurchaseFields,
   nameOf: (envelopeId: string) => string,
   cardNameOf: (cardId: string | null) => string,
+  groupNameOf: (expenseId: string | null) => string,
 ): string {
   const was = (value: string | null) => value?.trim() || 'nothing';
   const shape = (lines: readonly PurchaseLine[]) =>
@@ -117,6 +120,12 @@ export function describePurchaseEdit(
       : null,
     (after.note?.trim() || null) !== (before.note?.trim() || null)
       ? 'note'
+      : null,
+    (after.link?.trim() || null) !== (before.link?.trim() || null)
+      ? 'link'
+      : null,
+    (after.expenseId ?? null) !== (before.expenseId ?? null)
+      ? `group ${groupNameOf(before.expenseId ?? null)} to ${groupNameOf(after.expenseId ?? null)}`
       : null,
   ].filter((entry): entry is string => entry !== null);
   const kind = isRefund(before) ? 'Refund' : 'Purchase';

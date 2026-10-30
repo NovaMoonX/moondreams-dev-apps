@@ -89,6 +89,7 @@ export async function openPurchase(
     date: entry.date,
     source: entry.source,
     needsHome: entry.needsHome,
+    expenseId: entry.expenseId ?? null,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt,
     amountCents: payload.amountCents,
@@ -98,6 +99,7 @@ export async function openPurchase(
     lines: payload.lines ?? [],
     refundOfId: payload.refundOfId ?? null,
     paidByCardId: payload.paidByCardId ?? null,
+    link: payload.link ?? null,
   };
   return result;
 }

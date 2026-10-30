@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-30 | shared | The emulators failed in the cloud sandbox and the skill sent sessions to a harness page | The failure is the agent proxy catching firebase-tools' calls to 127.0.0.1; starting the emulators and seed with `HTTPS_PROXY` unset fixes it | `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: a plan for a follow-up re-output everything | Iteration plans cover only the owner's latest message | `orchestrate/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: approving every string is too much | PR bodies flag only copy that warrants a second look, with why; the full copy list is gone | `CLAUDE.md`, `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: the Cards entry point was never screenshotted, and a stale image showed a bug already fixed | Screenshots include each new screen's door in the app shell, and an image older than its screen is retaken or dropped | `pr-wrap-up/SKILL.md` | changed |

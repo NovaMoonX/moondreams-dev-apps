@@ -32,6 +32,7 @@ COLLECTIONS = {
     'closings': {'update', 'delete'},
     'moves': set(),
     'cards': {'update'},
+    'expenses': {'update', 'delete'},
 }
 
 

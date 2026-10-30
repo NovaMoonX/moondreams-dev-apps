@@ -5927,8 +5927,20 @@ const version = (
     label: null,
     note: null,
     refundOfId: null,
+    link: null,
+    expenseId: null,
     lines: [{ envelopeId: 'dining', cents: 4_000, via: 'chosen' as const }],
   };
+  assert.equal(
+    describePurchaseEdit(
+      before,
+      { ...before, link: 'https://example.com/o', expenseId: 'g' },
+      (id) => id,
+      () => 'a card',
+      (id) => (id === 'g' ? 'Chicago trip' : 'nothing'),
+    ),
+    'Purchase changed: Safeway, link; group nothing to Chicago trip.',
+  );
   assert.equal(
     describePurchaseEdit(
       before,
@@ -5939,6 +5951,7 @@ const version = (
       },
       (id) => id,
       () => 'a card',
+      () => 'a group',
     ),
     'Purchase changed: Safeway, amount $40.00 to $55.00.',
   );

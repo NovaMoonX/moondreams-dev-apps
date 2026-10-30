@@ -12,11 +12,16 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import LinkPreviewCard from '@/components/LinkPreviewCard';
 import RevealChip from '@/components/RevealChip';
-import OptionalDetailRows from '@/components/forms/OptionalDetailRows';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import OptionalDetailRows, {
+  type OptionalDetail,
+} from '@/components/forms/OptionalDetailRows';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
+import { useLinkPreview } from '@/hooks/useLinkPreview';
 import {
   useQuestionFlow,
   type QuestionControls,
@@ -26,6 +31,8 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
+import { generateUuid } from '@/utils/idUtils';
+import { getWebLinkHost, toWebLink } from '@/utils/urlUtils';
 import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import SplitEditor from '@apps/runway/components/SplitEditor';
@@ -33,6 +40,7 @@ import { isTooLong } from '@apps/runway/utils/rangeInput';
 import {
   CARD_WORDS,
   FORM_FLOW_WORDS,
+  MAX_LINK_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
   RUNWAY_SEARCH_THRESHOLD,
@@ -50,6 +58,7 @@ import {
   splitEvenly,
   toChosenLines,
 } from '@apps/runway/engine/purchases';
+import { linkPageQueryOptions } from '@apps/runway/queries/linkPageQueries';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   addPurchase,
@@ -60,6 +69,7 @@ import {
   selectAllCards,
   selectCards,
   selectEnvelopes,
+  selectExpenses,
   selectItemLooks,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -105,7 +115,7 @@ const countUsualNote = (seen: number) => {
   }
 };
 
-type ExtraKey = 'label' | 'merchant' | 'note';
+type ExtraKey = 'label' | 'merchant' | 'note' | 'link' | 'group';
 
 const EXTRAS: {
   key: ExtraKey;
@@ -139,6 +149,24 @@ const EXTRAS: {
     },
     maxLength: MAX_NOTE_LENGTH,
   },
+  {
+    key: 'link',
+    words: {
+      name: SPEND_WORDS.link,
+      placeholder: SPEND_WORDS.linkPlaceholder,
+      add: SPEND_WORDS.addLink,
+    },
+    maxLength: MAX_LINK_LENGTH,
+  },
+  {
+    key: 'group',
+    words: {
+      name: SPEND_WORDS.group,
+      placeholder: SPEND_WORDS.groupPlaceholder,
+      add: SPEND_WORDS.addGroup,
+    },
+    maxLength: MAX_NAME_LENGTH,
+  },
 ];
 
 interface PurchaseFormData {
@@ -148,6 +176,10 @@ interface PurchaseFormData {
     merchant: string | null;
     label: string | null;
     note: string | null;
+    link: string | null;
+    /** An existing group's id, `NEW_CHOICE` while naming a new one, or '' before one is picked; null while no group is added. */
+    group: string | null;
+    groupName: string;
   };
 }
 
@@ -161,6 +193,11 @@ interface PurchaseFormProps {
   /** The purchase being changed; the form then saves over it instead of adding. */
   editing?: OpenPurchase;
 }
+
+const toHttpsLink = (text: string) => {
+  const link = text.trim() === '' ? null : toWebLink(text);
+  return link?.startsWith('https://') ? link : null;
+};
 
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
@@ -184,6 +221,7 @@ function PurchaseForm({
   const looks = useAppSelector(selectItemLooks);
   const cards = useAppSelector(selectCards);
   const allCards = useAppSelector(selectAllCards);
+  const expenses = useAppSelector(selectExpenses);
   const periods = useAppSelector(
     (state) => state.runway.plan?.trackingPeriods ?? [],
   );
@@ -195,6 +233,9 @@ function PurchaseForm({
       merchant: editing?.merchant ?? null,
       label: editing?.label ?? null,
       note: editing?.note ?? null,
+      link: editing?.link ?? null,
+      group: editing?.expenseId ?? null,
+      groupName: '',
     },
   }));
   const editingLines = editing?.lines ?? [];
@@ -332,6 +373,8 @@ function PurchaseForm({
     const found = allCards.find((card) => card.id === id);
     return found ? getCardName(found, allCards) : CARD_WORDS.cashOrDebit;
   };
+  const nameOfGroup = (id: string | null) =>
+    expenses.find((expense) => expense.id === id)?.name ?? SPEND_WORDS.noGroup;
   const cardOptions = allCards.filter(
     (card) => card.archivedAt === null || card.id === paidByCardId,
   );
@@ -397,6 +440,11 @@ function PurchaseForm({
   };
   const lines = getLines();
 
+  const linkText = formData.extras.link?.trim() ?? '';
+  const linkPreview = useLinkPreview(linkText, {
+    getQueryOptions: linkPageQueryOptions,
+  });
+
   const getBlocker = () => {
     if (amount === null) return SPEND_WORDS.needsAmount;
     if (isRefund && refundable !== null && amount > refundable) {
@@ -425,6 +473,9 @@ function PurchaseForm({
     }
     if (countedFrom !== null && date < countedFrom && date !== editing?.date) {
       return `Tracking started again on ${formatDateUTC(countedFrom)}. Pick that day or later.`;
+    }
+    if (linkText !== '' && toHttpsLink(linkText) === null) {
+      return SPEND_WORDS.needsWebLink;
     }
     return null;
   };
@@ -513,6 +564,21 @@ function PurchaseForm({
     );
   };
 
+  const getGroupChoice = () => {
+    const { group, groupName } = formData.extras;
+    if (group !== NEW_CHOICE) {
+      return { expenseId: group || null, newExpenseName: null };
+    }
+    const name = groupName.trim();
+    if (name === '') return { expenseId: null, newExpenseName: null };
+    const same = expenses.find(
+      (expense) => expense.name.toLowerCase() === name.toLowerCase(),
+    );
+    return same
+      ? { expenseId: same.id, newExpenseName: null }
+      : { expenseId: generateUuid(), newExpenseName: name };
+  };
+
   const handleSave = async () => {
     if (!user || blocker !== null || lines === null || amount === null) return;
     if (date === null) return;
@@ -524,6 +590,8 @@ function PurchaseForm({
       const label = formData.extras.label?.trim() || null;
       const note = formData.extras.note?.trim() || null;
       const input = {
+        link: toHttpsLink(linkText),
+        ...getGroupChoice(),
         date,
         amountCents: isRefund ? -amount : amount,
         merchant,
@@ -542,6 +610,8 @@ function PurchaseForm({
           input.note === (editing.note?.trim() || null) &&
           input.refundOfId === editing.refundOfId &&
           input.paidByCardId === (editing.paidByCardId ?? null) &&
+          input.link === (editing.link ?? null) &&
+          input.expenseId === (editing.expenseId ?? null) &&
           JSON.stringify(input.lines) === JSON.stringify(editing.lines);
         if (!isUnchanged) {
           await editPurchase(
@@ -549,7 +619,13 @@ function PurchaseForm({
             encryption,
             editing,
             input,
-            describePurchaseEdit(editing, input, nameOf, nameOfCard),
+            describePurchaseEdit(
+              editing,
+              input,
+              nameOf,
+              nameOfCard,
+              nameOfGroup,
+            ),
           );
           addToast({
             title: isRefund ? 'Refund saved' : 'Purchase saved',
@@ -928,31 +1004,84 @@ function PurchaseForm({
             openKey={openExtra}
             onOpen={(key) => setOpenExtra(key as ExtraKey)}
             onClose={() => setOpenExtra(null)}
-            onRemove={(key) => setExtras({ [key]: null })}
-            details={EXTRAS.flatMap(({ key, words, maxLength }) => {
-              const text = extras[key];
-              if (text === null) return [];
-              return [
-                {
-                  key,
-                  label: words.name,
-                  value: mask(text.trim()),
-                  isEmpty: text.trim() === '',
-                  render: () => (
-                    <Input
-                      variant='outline'
-                      aria-label={words.name}
-                      maxLength={maxLength}
-                      placeholder={words.placeholder}
-                      value={text}
-                      onChange={(event) =>
-                        setExtras({ [key]: event.target.value })
-                      }
-                    />
-                  ),
-                },
-              ];
-            })}
+            onRemove={(key) =>
+              setExtras(
+                key === 'group'
+                  ? { group: null, groupName: '' }
+                  : { [key]: null },
+              )
+            }
+            details={EXTRAS.flatMap<OptionalDetail>(
+              ({ key, words, maxLength }) => {
+                const text = extras[key];
+                if (text === null) return [];
+                if (key === 'group') {
+                  const name =
+                    text === NEW_CHOICE
+                      ? extras.groupName.trim()
+                      : (expenses.find((expense) => expense.id === text)
+                          ?.name ?? '');
+                  return [
+                    {
+                      key,
+                      label: words.name,
+                      value: mask(name),
+                      isEmpty: name === '',
+                      render: () => (
+                        <PickOrCreate
+                          label={SPEND_WORDS.groupLabel}
+                          options={expenses.map((expense) => ({
+                            value: expense.id,
+                            label: expense.name,
+                          }))}
+                          choice={text}
+                          newText={extras.groupName}
+                          onChange={(choice, newText) =>
+                            setExtras({ group: choice, groupName: newText })
+                          }
+                          newPillLabel={SPEND_WORDS.newGroup}
+                          newPlaceholder={words.placeholder}
+                          maxLength={maxLength}
+                          hasPlus={false}
+                        />
+                      ),
+                    },
+                  ];
+                }
+                return [
+                  {
+                    key,
+                    label: words.name,
+                    value: mask(
+                      key === 'link'
+                        ? (getWebLinkHost(text) ?? text.trim())
+                        : text.trim(),
+                    ),
+                    isEmpty: text.trim() === '',
+                    render: () => (
+                      <div className='space-y-3'>
+                        <Input
+                          variant='outline'
+                          aria-label={words.name}
+                          maxLength={maxLength}
+                          placeholder={words.placeholder}
+                          value={text}
+                          {...(key === 'link'
+                            ? { type: 'url', inputMode: 'url' as const }
+                            : {})}
+                          onChange={(event) =>
+                            setExtras({ [key]: event.target.value })
+                          }
+                        />
+                        {key === 'link' && linkPreview && (
+                          <LinkPreviewCard preview={linkPreview} />
+                        )}
+                      </div>
+                    ),
+                  },
+                ];
+              },
+            )}
           />
           {EXTRAS.some(({ key }) => extras[key] === null) && (
             <div className='flex flex-wrap gap-2'>

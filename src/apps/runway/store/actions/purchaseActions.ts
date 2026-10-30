@@ -23,7 +23,10 @@ import type {
   PurchaseDoc,
   PurchaseLine,
   PurchaseSealed,
+  ExpenseDoc,
+  ExpenseSealed,
   RunwayEncryption,
+  Sealed,
 } from '@apps/runway/types';
 
 const purchaseRef = (uid: string, id: string) =>
@@ -40,7 +43,43 @@ export interface AddPurchaseInput {
   refundOfId: string | null;
   /** The card it was charged to; null when it was paid in cash. */
   paidByCardId: string | null;
+  /** An https link to the order or receipt. */
+  link: string | null;
+  /** The expense group it belongs to. */
+  expenseId: string | null;
+  /** The name of a group made with this purchase, written in the same transaction under `expenseId`. */
+  newExpenseName: string | null;
 }
+
+const sealNewExpense = (
+  input: AddPurchaseInput,
+  encryption: RunwayEncryption,
+) =>
+  input.newExpenseName === null || input.expenseId === null
+    ? null
+    : sealJson(
+        { name: input.newExpenseName, note: null } satisfies ExpenseSealed,
+        encryption,
+      );
+
+const setNewExpense = (
+  transaction: Transaction,
+  uid: string,
+  input: AddPurchaseInput,
+  sealed: Sealed | null,
+  now: number,
+) => {
+  if (sealed === null || input.expenseId === null) return;
+  transaction.set(
+    doc(db, 'apps', 'runway', 'plans', uid, 'expenses', input.expenseId),
+    {
+      id: input.expenseId,
+      createdAt: now,
+      updatedAt: now,
+      sealed,
+    } satisfies ExpenseDoc,
+  );
+};
 
 /** Adds a purchase by hand; the plan and each envelope are read fresh in the same transaction, so a day outside tracking or an archived envelope is refused. */
 export async function addPurchase(
@@ -57,6 +96,7 @@ export async function addPurchase(
   }
 
   const id = generateUuid();
+  const expenseSealed = await sealNewExpense(input, encryption);
   const sealed = await sealJson(
     {
       amountCents: input.amountCents,
@@ -66,6 +106,7 @@ export async function addPurchase(
       lines: input.lines,
       refundOfId: input.refundOfId,
       paidByCardId: input.paidByCardId,
+      link: input.link,
     } satisfies PurchaseSealed,
     encryption,
   );
@@ -82,11 +123,13 @@ export async function addPurchase(
 
     const now = Date.now();
     markLedgerWrite(transaction, uid, plan, [input.date]);
+    setNewExpense(transaction, uid, input, expenseSealed, now);
     transaction.set(purchaseRef(uid, id), {
       id,
       date: input.date,
       source: 'manual',
       needsHome: false,
+      expenseId: input.expenseId,
       createdAt: now,
       updatedAt: now,
       sealed,
@@ -190,7 +233,7 @@ export async function editPurchase(
   if (sumLines(input.lines) !== input.amountCents) {
     throw new Error('The parts do not add up to the amount.');
   }
-  const [sealed, changeSealed] = await Promise.all([
+  const [sealed, changeSealed, expenseSealed] = await Promise.all([
     sealJson(
       {
         amountCents: input.amountCents,
@@ -200,10 +243,12 @@ export async function editPurchase(
         lines: input.lines,
         refundOfId: input.refundOfId,
         paidByCardId: input.paidByCardId,
+        link: input.link,
       } satisfies PurchaseSealed,
       encryption,
     ),
     sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+    sealNewExpense(input, encryption),
   ]);
   const known = new Set(
     previous.lines.flatMap((line) =>
@@ -224,8 +269,10 @@ export async function editPurchase(
     );
     const now = Math.max(Date.now(), previous.updatedAt + 1);
     markLedgerWrite(transaction, uid, plan, [previous.date, input.date]);
+    setNewExpense(transaction, uid, input, expenseSealed, now);
     transaction.update(purchaseRef(uid, previous.id), {
       date: input.date,
+      expenseId: input.expenseId,
       updatedAt: now,
       sealed,
     });

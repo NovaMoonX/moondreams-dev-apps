@@ -5,6 +5,7 @@ import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
   DateOnly,
   OpenCard,
+  OpenExpense,
   OpenChange,
   OpenDay,
   OpenMove,
@@ -32,6 +33,8 @@ export interface RunwayState {
   cards: OpenCard[];
   /** The cards have been read once, so a card's figures are not mistaken for none. */
   isCardsLoaded: boolean;
+  /** Every expense group. */
+  expenses: OpenExpense[];
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
   /** Where the recent window began when the days, moves and purchases were read; they are the ledger since the closing only while it matches `selectHistory`. */
@@ -78,6 +81,7 @@ const initialState: RunwayState = {
   moves: [],
   cards: [],
   isCardsLoaded: false,
+  expenses: [],
   purchases: [],
   daysFrom: null,
   movesFrom: null,
@@ -144,6 +148,9 @@ export const runwaySlice = createSlice({
     ) => {
       state.records = action.payload.records;
       state.recordsFor = action.payload.dayIds;
+    },
+    setExpenses: (state, action: PayloadAction<OpenExpense[]>) => {
+      state.expenses = action.payload;
     },
     setCards: (state, action: PayloadAction<OpenCard[]>) => {
       state.cards = action.payload;
@@ -233,6 +240,7 @@ export const {
   setRecords,
   setMoves,
   setCards,
+  setExpenses,
   setPurchases,
   setPeriodPurchases,
   clearPeriodPurchases,

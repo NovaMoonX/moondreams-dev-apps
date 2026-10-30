@@ -371,6 +371,25 @@ export interface OpenCard extends CardSealed {
   archivedAt: number | null;
 }
 
+/** A named group of purchases ("Chicago trip") whose total is shown across them; it changes no balance. */
+export interface ExpenseDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+export interface ExpenseSealed {
+  name: string;
+  note: string | null;
+}
+
+export interface OpenExpense extends ExpenseSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface PlanVersionDoc {
   id: string;
   itemId: string;
@@ -520,6 +539,8 @@ export interface PurchaseSealed {
   refundOfId: string | null;
   /** The card it was charged to, whose payment it then waits for; null (or missing on an older purchase) when it was paid in cash. */
   paidByCardId?: string | null;
+  /** An https link to the order or receipt; null (or missing on an older purchase) when none was added. */
+  link: string | null;
 }
 
 /** `date` is the spending day, date-only; `createdAt` is the instant it was added. */
@@ -528,6 +549,8 @@ export interface PurchaseDoc {
   date: DateOnly;
   source: PurchaseSource;
   needsHome: boolean;
+  /** The expense group it belongs to; null (or missing on an older purchase) when none. */
+  expenseId: string | null;
   createdAt: number;
   updatedAt: number;
   sealed: Sealed;
@@ -538,6 +561,7 @@ export interface OpenPurchase extends PurchaseSealed {
   date: DateOnly;
   source: PurchaseSource;
   needsHome: boolean;
+  expenseId: string | null;
   createdAt: number;
   updatedAt: number;
 }
