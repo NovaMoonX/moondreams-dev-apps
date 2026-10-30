@@ -167,6 +167,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
         emoji: isNullableText,
         group: isPickOrCreate,
         paidByCardId: isNullableText,
+        isLater: isFlag,
       })
     : null;
   return draft && formData ? { ...draft, formData } : null;
