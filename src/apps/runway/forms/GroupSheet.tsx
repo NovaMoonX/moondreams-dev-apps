@@ -403,6 +403,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                 isDestructive
                 icon={<Archive />}
                 label={GROUP_WORDS.archive(payload.name)}
+                subtitle={GROUP_WORDS.archiveSub}
                 isDisabled={isSaving}
                 onClick={() => void archive()}
               />

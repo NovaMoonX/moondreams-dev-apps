@@ -1617,6 +1617,7 @@ export const GROUP_WORDS = {
   startingPriorityFailed: 'The priority did not save. Nothing was changed.',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,
+  archiveSub: 'Its bills and envelopes stay, with nothing set.',
   archiveTitle: (name: string) => `Stop using ${name}?`,
   archiveBody: (bills: number, envelopes: number) =>
     bills + envelopes === 0
