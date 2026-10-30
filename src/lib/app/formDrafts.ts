@@ -89,3 +89,58 @@ export function clearFormDrafts(uid: string) {
     // Nothing to clear.
   }
 }
+
+export interface KeptFormDraft {
+  key: string;
+  savedAt: number;
+  value: unknown;
+}
+
+/** One account's drafts whose key starts with `prefix`, newest first, for a row that offers to pick one up. */
+export function listFormDrafts(uid: string, prefix: string): KeptFormDraft[] {
+  try {
+    const storagePrefix = toStorageKey(uid, prefix);
+    const accountPrefix = toStorageKey(uid, '');
+    return Object.keys(window.localStorage)
+      .filter((storageKey) => storageKey.startsWith(storagePrefix))
+      .flatMap((storageKey) => {
+        const parsed: unknown = JSON.parse(
+          window.localStorage.getItem(storageKey) ?? 'null',
+        );
+        return isStoredDraft(parsed) &&
+          Date.now() - parsed.savedAt <= MAX_AGE_MS
+          ? [
+              {
+                key: storageKey.slice(accountPrefix.length),
+                savedAt: parsed.savedAt,
+                value: parsed.value,
+              },
+            ]
+          : [];
+      })
+      .sort((a, b) => b.savedAt - a.savedAt);
+  } catch {
+    return [];
+  }
+}
+
+/** Removes every draft on this device that is over a day old, whoever kept it. */
+export function sweepFormDrafts() {
+  try {
+    Object.keys(window.localStorage)
+      .filter((storageKey) => storageKey.startsWith(PREFIX))
+      .forEach((storageKey) => {
+        const parsed: unknown = JSON.parse(
+          window.localStorage.getItem(storageKey) ?? 'null',
+        );
+        if (
+          !isStoredDraft(parsed) ||
+          Date.now() - parsed.savedAt > MAX_AGE_MS
+        ) {
+          window.localStorage.removeItem(storageKey);
+        }
+      });
+  } catch {
+    // Nothing to sweep.
+  }
+}

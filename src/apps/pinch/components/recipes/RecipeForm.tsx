@@ -322,7 +322,7 @@ function RecipeForm({
     [formData, webCover, isCoverRemoved],
   );
   useKeepFormDraft({
-    key: draftKey,
+    key: getRecipeDraftKey(recipeId, false),
     base: draftBase,
     value: draftValue,
     isDirty: isDraftDirty,
