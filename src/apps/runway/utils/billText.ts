@@ -43,6 +43,23 @@ export function describeGroupLead(total: GroupTotal, memberCount: number) {
   };
 }
 
+/** A list heading's lead: its kind's monthly figure, and the purpose's whole figure (`whole`) when the purpose has the other kind too and both have a regular monthly amount, so it reads "$835 of $925 a month". */
+export function describeGroupHeadingLead(
+  kindTotal: GroupTotal,
+  total: GroupTotal,
+  count: number,
+  otherCount: number,
+) {
+  const lead = describeGroupLead(kindTotal, count);
+  const hasShare =
+    otherCount > 0 &&
+    !lead.isOneTime &&
+    lead.amount !== null &&
+    kindTotal.total.highCents > 0 &&
+    total.total.highCents > 0;
+  return { ...lead, whole: hasShare ? describeGroupTotal(total.total) : null };
+}
+
 /** The bill and envelope names a group's monthly figure stands for; every name only when none is counted (a group of one-time bills). */
 export function getGroupMemberNames(
   bills: readonly (GroupMember & { name: string })[],

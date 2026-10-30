@@ -12,7 +12,7 @@ import {
   selectPurposeEmojis,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { describeGroupLead } from '@apps/runway/utils/billText';
+import { describeGroupHeadingLead } from '@apps/runway/utils/billText';
 
 interface GroupHeadingProps {
   figures: GroupFigures;
@@ -32,7 +32,12 @@ function GroupHeading({ figures, kind, onOpen }: GroupHeadingProps) {
   const count = isBills ? figures.bills.length : figures.envelopes.length;
   const otherCount = isBills ? figures.envelopes.length : figures.bills.length;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
-  const lead = describeGroupLead(total, count);
+  const lead = describeGroupHeadingLead(
+    total,
+    figures.total,
+    count,
+    otherCount,
+  );
 
   return (
     <div className='flex items-start gap-1'>
@@ -63,7 +68,17 @@ function GroupHeading({ figures, kind, onOpen }: GroupHeadingProps) {
             <span className='block'>
               {lead.amount !== null && (
                 <>
-                  <SensitiveValue>{lead.amount}</SensitiveValue>{' '}
+                  <SensitiveValue className='whitespace-nowrap'>
+                    {lead.amount}
+                  </SensitiveValue>{' '}
+                </>
+              )}
+              {lead.whole !== null && (
+                <>
+                  {GROUP_WORDS.ofWord}{' '}
+                  <SensitiveValue className='whitespace-nowrap'>
+                    {lead.whole}
+                  </SensitiveValue>{' '}
                 </>
               )}
               {lead.rest}
@@ -78,7 +93,16 @@ function GroupHeading({ figures, kind, onOpen }: GroupHeadingProps) {
                 total={total}
                 hasRange={hasRange}
                 stance={stance}
-                only={otherCount > 0 ? kind : undefined}
+                only={
+                  otherCount > 0
+                    ? {
+                        kind,
+                        name,
+                        part: lead.whole === null ? null : lead.amount,
+                        whole: lead.whole,
+                      }
+                    : undefined
+                }
               />
             </HelpTip>
           )}
