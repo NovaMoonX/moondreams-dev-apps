@@ -33,7 +33,7 @@ function ScreenshotGallery({ items }: { items: GalleryItem[] }) {
               type='button'
               variant='tertiary'
               aria-label={`Open ${item.label} full screen`}
-              className='border-border/60 bg-muted/40 hover:bg-muted/70 h-auto w-full min-w-0 flex-col items-stretch justify-start gap-0 overflow-hidden rounded-xl border p-0 text-left font-normal'
+              className='border-border/60 bg-muted/40 hover:bg-muted/70 h-full w-full min-w-0 flex-col items-stretch justify-start gap-0 overflow-hidden rounded-xl border p-0 text-left font-normal'
               onClick={() => setOpenAt(itemIndex)}
             >
               <span

@@ -50,8 +50,32 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
   );
 
   useEffect(() => {
+    const opener = document.activeElement;
     root.current?.focus();
+    return () => {
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') {
+        const focusable = Array.from(
+          root.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const isOutside = !root.current?.contains(document.activeElement);
+        if (!first || !last) return;
+        if (isOutside || (event.shiftKey && document.activeElement === first)) {
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          first.focus();
+        } else return;
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (event.key === 'ArrowLeft') step(-1);
       else if (event.key === 'ArrowRight') step(1);
       else if (event.key === 'Escape') onDialogClose();
@@ -110,6 +134,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
         }}
         onPointerDown={(event) => {
           swipeStart.current = event.clientX;
+          didSwipe.current = false;
         }}
         onPointerUp={(event) => {
           const start = swipeStart.current;
@@ -154,7 +179,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
               rounded='full'
               aria-label='Previous'
               disabled={index === 0}
-              className='absolute top-1/2 left-2 -translate-y-1/2 bg-black/50 text-white! disabled:opacity-30'
+              className="absolute top-1/2 left-2 -translate-y-1/2 bg-black/50 text-white! before:absolute before:-inset-2 before:content-[''] disabled:opacity-30"
               onClick={() => step(-1)}
             >
               <ChevronLeft className='size-5' aria-hidden='true' />
@@ -166,7 +191,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
               rounded='full'
               aria-label='Next'
               disabled={index === count - 1}
-              className='absolute top-1/2 right-2 -translate-y-1/2 bg-black/50 text-white! disabled:opacity-30'
+              className="absolute top-1/2 right-2 -translate-y-1/2 bg-black/50 text-white! before:absolute before:-inset-2 before:content-[''] disabled:opacity-30"
               onClick={() => step(1)}
             >
               <ChevronRight className='size-5' aria-hidden='true' />

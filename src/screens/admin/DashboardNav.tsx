@@ -238,13 +238,13 @@ function DashboardNav({
             Needs you ({waitingEntries.length})
           </h2>
         </div>
-        <ul className='divide-border -mx-1 divide-y'>
+        <ul className='divide-border divide-y'>
           {waitingEntries.slice(0, NEEDS_YOU_PREVIEW).map((entry) => (
             <li key={entry.key}>
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-auto w-full min-w-0 justify-start gap-3 px-1 py-3 text-left font-normal'
+                className='h-auto w-full min-w-0 justify-start gap-3 px-0! py-3 text-left font-normal'
                 onClick={() => onAnswerEntry(entry.key)}
               >
                 <span className='bg-muted grid size-8 shrink-0 place-items-center rounded-lg'>
@@ -281,7 +281,7 @@ function DashboardNav({
             className='text-muted-foreground gap-1'
             onClick={onSelectPipeline}
           >
-            See all in Pipeline ({waitingEntries.length})
+            See all in Pipeline
             <ChevronRight className='size-4' aria-hidden='true' />
           </Button>
         </div>

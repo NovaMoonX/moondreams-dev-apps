@@ -106,17 +106,19 @@ function AnswerAllSubview({
       <ModalFooterActions
         note={getFooterNote()}
         rightActions={
-          <Button
-            type='button'
-            variant='primary'
-            className={DISABLED_CLASS}
-            disabled={
-              readyCount === 0 || answers.isSending || answers.isNotSetUp
-            }
-            onClick={() => void handleSend()}
-          >
-            {getSendLabel()}
-          </Button>
+          <span className='flex justify-end'>
+            <Button
+              type='button'
+              variant='primary'
+              className={DISABLED_CLASS}
+              disabled={
+                readyCount === 0 || answers.isSending || answers.isNotSetUp
+              }
+              onClick={() => void handleSend()}
+            >
+              {getSendLabel()}
+            </Button>
+          </span>
         }
       />
     </Subview>
