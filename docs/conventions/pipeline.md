@@ -13,6 +13,7 @@ idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate
 |---|---|---|---|---|
 | Plan an app | `.claude/skills/plan-app/SKILL.md` | the session, with `product-planner`, `design-planner`, `tech-planner` per round | session (Opus) + opus planners | never for a new app |
 | Create issues | `scripts/createGithubIssues.ts` (`npm run issues:create`) | the owner locally, or the session with MCP then the owner once | – | the roadmap already has issues (re-run is safe) |
+| Put issues on the board | `.github/workflows/issue-to-board.yml` (`scripts/board`, `check:board`) | the workflow, when an issue is opened or given an app label; a manual run sweeps every open issue | none | the issue has no `<App name> (App)` label, or two |
 | Large or multi-issue work | `.claude/skills/orchestrate/SKILL.md` | the session, delegating build chunks and checks | session + sonnet `implementer` + haiku `validator` | a few tool calls, or a change that needs the conversation's context |
 | A new app's MVP | `.claude/skills/build-app-mvp/SKILL.md` | the session, as an orchestrator | as above | – |
 | What a push needs | `.claude/hooks/pr-gate.sh` (Stop hook) | the hook, in bash, once per pushed clean HEAD | none | the branch is the default, dirty, unpushed, or the HEAD was already gated |
@@ -25,6 +26,8 @@ idea ─▶ plan-app ─▶ issues ─▶ orchestrate ─▶ push ─▶ pr-gate
 | Hint to orchestrate | `.claude/hooks/orchestrate-hint.sh` (UserPromptSubmit) | the hook | none | prompts that aren't in plan mode and name fewer than two issues |
 
 ## Why it is shaped this way
+
+- **Every issue a session opens carries its app label and its tier label** (`Runway (App)` and `Next Steps`: the label names an app as `APP_REGISTRY` does), so `issue-to-board.yml` puts it on board 3 with Apps set and Status Ready without anyone running a script. A follow-up for every app gets no app label and stays off the board until the owner places it; a new app's first issues still go through `npm run issues:create`, which adds the Apps option the workflow only reads (owner: follow-up issues were landing off the board).
 
 - **The session model holds the context; agents hold a brief.** Opus (or whatever the owner picked) plans, decides, briefs and reads every diff; Sonnet builds and reviews from a written brief; Haiku runs checks whose output is pass or fail. An agent never commits or pushes, except `stack-pr-reviewer`, whose job is to commit its fix and merge it up a stack it was handed.
 - **A hook decides in bash, not in tokens.** `pr-gate.sh` reads the diff since the last gated HEAD and the PR's size and names only the parts that push needs, so a typo fix doesn't buy a full review and a rules change can't skip its regression rows.
