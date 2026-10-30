@@ -680,6 +680,11 @@ export const START_AMOUNTS_WORDS = {
     'Saving where things stand needs a connection. Nothing was saved. Try again when you are back online.',
 } as const;
 
+/** A receipt photo's size cap after it has been shrunk, the most on one purchase, and the longer edge it is shrunk to. */
+export const RECEIPT_MAX_BYTES = 10 * 1024 * 1024;
+export const MAX_RECEIPTS_PER_PURCHASE = 10;
+export const RECEIPT_MAX_DIMENSION = 2400;
+
 export const SPEND_WORDS = {
   title: 'Purchases',
   newPurchase: 'Add a purchase',
@@ -730,6 +735,36 @@ export const SPEND_WORDS = {
   groupFailed: 'The group could not be saved. Nothing was changed.',
   groupGone: 'That group is no longer here.',
   groupLoading: 'Getting the group.',
+  receipt: 'Receipt',
+  receipts: 'Receipts',
+  addReceipt: 'Add a receipt',
+  addReceiptSub: 'A photo or screenshot, kept sealed until you remove it.',
+  receiptPhotos: (count: number) =>
+    count === 1 ? '1 photo' : `${count} photos`,
+  chooseReceipts: 'Choose photos',
+  receiptHelp:
+    'Photos or screenshots of the receipt. They are sealed on this device before they upload.',
+  receiptLimit: (max: number) => `A purchase holds up to ${max} receipts.`,
+  receiptNotImage: 'Only photos and screenshots can be added.',
+  receiptTooBig: 'That one is too large to keep, even shrunk. Try another.',
+  receiptOpenFailed: 'The receipt did not open.',
+  receiptAdding: 'Adding the receipt.',
+  receiptOpening: 'Opening the receipt.',
+  receiptHidden: 'Show amounts to see it',
+  removeReceiptFile: 'Remove',
+  receiptAdded: (count: number) =>
+    count === 1 ? 'Receipt added' : 'Receipts added',
+  receiptAddFailed: 'The receipt did not upload. Nothing was changed.',
+  receiptLeftBehind:
+    'The purchase saved. A receipt did not upload; add it from the purchase.',
+  viewReceipt: 'View this receipt',
+  downloadReceipt: 'Download',
+  removeReceipt: 'Remove this receipt',
+  removeReceiptTitle: 'Remove this receipt?',
+  removeReceiptMessage: 'The photo is deleted for good. The purchase stays.',
+  receiptRemoved: 'Receipt removed',
+  receiptRemoveFailed: 'The receipt did not remove. Nothing was changed.',
+  receiptDownloadName: 'receipt.webp',
   moreDetails: 'More about it',
   removeDetail: 'Remove',
   markRefund: 'This is a refund',

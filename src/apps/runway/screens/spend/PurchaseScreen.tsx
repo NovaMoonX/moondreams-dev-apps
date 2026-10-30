@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import { Layers, Pencil, ReceiptText, Trash2, Undo2 } from 'lucide-react';
+import { useRef, useState } from 'react';
+import {
+  ImagePlus,
+  Layers,
+  Pencil,
+  ReceiptText,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -17,11 +24,22 @@ import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { SPEND_WORDS } from '@apps/runway/constants';
+import { MAX_RECEIPTS_PER_PURCHASE, SPEND_WORDS } from '@apps/runway/constants';
 import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
 import type { OpenPurchase } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import ExpenseView from '@apps/runway/components/ExpenseView';
+import ReceiptFileInput, {
+  type ReceiptChooser,
+} from '@apps/runway/components/ReceiptFileInput';
+import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
+import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
+import { useReceiptImages } from '@apps/runway/hooks/useReceiptImages';
+import { pickReceiptFiles } from '@apps/runway/utils/receiptFiles';
+import {
+  addReceiptImages,
+  removeReceiptImagesOf,
+} from '@apps/runway/store/actions/receiptActions';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -82,6 +100,9 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
     purchase: OpenPurchase;
   } | null>(null);
   const [groupViewFor, setGroupViewFor] = useState<string | null>(null);
+  const receiptChooser = useRef<ReceiptChooser>(null);
+  const [receiptViewId, setReceiptViewId] = useState<string | null>(null);
+  const [isAddingReceipt, setIsAddingReceipt] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +110,9 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const group =
     expenses.find((entry) => entry.id === purchase?.expenseId) ?? null;
   const groupPurchases = useExpensePurchases(group?.id ?? null).purchases;
+  const receipts = useReceiptImages(purchaseId) ?? [];
+  const viewedReceipt =
+    receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
 
@@ -161,6 +185,9 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
         purchase,
         describePurchaseRemoval(purchase, nameOf),
       );
+      removeReceiptImagesOf(user.uid, purchase.id).catch((cleanupError) =>
+        console.error('A removed purchase left receipts behind', cleanupError),
+      );
       addToast({ title: 'Purchase removed', type: 'success' });
       onClose();
     } catch (removeError) {
@@ -173,6 +200,59 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
       setIsBusy(false);
     }
   };
+
+  const addReceipts = async (files: File[]) => {
+    if (!user || isAddingReceipt) return;
+    const picked = pickReceiptFiles(files, receipts.length);
+    if (picked.files.length === 0) {
+      if (picked.note) addToast({ title: picked.note, type: 'error' });
+      return;
+    }
+    setIsAddingReceipt(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const failed = await addReceiptImages(
+        user.uid,
+        encryption,
+        purchase.id,
+        picked.files,
+      );
+      addToast(
+        failed === 0
+          ? {
+              title:
+                picked.note ?? SPEND_WORDS.receiptAdded(picked.files.length),
+              type: 'success',
+            }
+          : { title: SPEND_WORDS.receiptAddFailed, type: 'error' },
+      );
+    } catch (addError) {
+      addToast({
+        title: getErrorMessage(addError, SPEND_WORDS.receiptAddFailed),
+        type: 'error',
+      });
+    }
+    setIsAddingReceipt(false);
+  };
+
+  if (viewedReceipt !== null) {
+    return (
+      <FormSheet
+        isOpen
+        isDrawerWhenShort
+        onClose={onClose}
+        title={SPEND_WORDS.receipt}
+        actions={<ValuesEyeButton />}
+      >
+        <div className='pb-4'>
+          <ReceiptViewer
+            image={viewedReceipt}
+            onBack={() => setReceiptViewId(null)}
+          />
+        </div>
+      </FormSheet>
+    );
+  }
 
   if (group !== null && groupViewFor === purchase.id) {
     return (
@@ -262,6 +342,9 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                 ))}
             </dl>
           )}
+          {receipts.length > 0 && (
+            <ReceiptsBlock images={receipts} onOpen={setReceiptViewId} />
+          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
@@ -277,6 +360,27 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                   purchase,
                 }));
               }}
+            />
+            <ActionRow
+              isGrouped
+              isRoomy
+              icon={<ImagePlus />}
+              label={SPEND_WORDS.addReceipt}
+              subtitle={
+                isAddingReceipt
+                  ? SPEND_WORDS.receiptAdding
+                  : receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                    ? SPEND_WORDS.receiptLimit(MAX_RECEIPTS_PER_PURCHASE)
+                    : SPEND_WORDS.addReceiptSub
+              }
+              isDisabled={
+                isAddingReceipt || receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+              }
+              onClick={() => receiptChooser.current?.open()}
+            />
+            <ReceiptFileInput
+              chooser={receiptChooser}
+              onFiles={(files) => void addReceipts(files)}
             />
             {group !== null && (
               <ActionRow

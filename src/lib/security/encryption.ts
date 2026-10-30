@@ -249,3 +249,22 @@ export async function decryptStringForApp<TAppId extends AppId>(
 
   return decryptValue(value, encryption.key);
 }
+
+/** Seals raw bytes (a file) with a fresh nonce; the nonce is kept beside the object, never inside it. */
+export async function encryptBytes(
+  bytes: Uint8Array,
+  rawKey: string,
+): Promise<{ bytes: Uint8Array; nonce: string }> {
+  const nonce = getCrypto().getRandomValues(new Uint8Array(IV_BYTES));
+  const sealed = await aesGcm('encrypt', fromHex(rawKey), nonce, bytes);
+  return { bytes: sealed, nonce: toBase64(nonce) };
+}
+
+/** Opens bytes sealed by `encryptBytes`; throws when the key or nonce is wrong. */
+export async function decryptBytes(
+  bytes: Uint8Array,
+  rawKey: string,
+  nonce: string,
+): Promise<Uint8Array> {
+  return aesGcm('decrypt', fromHex(rawKey), fromBase64(nonce), bytes);
+}

@@ -21,7 +21,7 @@ Items marked *Confirmed* changed something the README says or had a real alterna
 10. **Dates.** Income days, due dates, effective dates and every other calendar-day value are date-only (UTC midnight). Schedules are generated with `getUTC*` math. "Today" for the person is their local calendar day mapped to UTC midnight (`todayAsUtcDate()`).
 11. **Functions seal, the device decides.** Bank-data functions fetch, normalize, dedupe, seal and write purchases and balances. They do not apply merchant rules, match bills or match deposits. A reconcile pass on the device does that the next time the app is open, one transaction per purchase. Until then an imported purchase is `needsHome` and already comes out of Free to Spend. Next Steps adds a server-side pass that does the same matching so notifications can be sent while the app is closed (Decision 21).
 12. **Provider grants are server-only.** A provider's access grant is sealed with a second key derived from the current master key under a different label (the master key id is stored beside it), stored in a collection no client rule can read. The client only sees a link status document the server writes.
-13. **Receipt images are sealed on the device.** Image bytes are encrypted before upload and stored under an owner-only Storage path. A daily scheduled function removes images past `expiresAt`.
+13. **Receipt images are sealed on the device.** Image bytes are encrypted before upload and stored under an owner-only Storage path. They are kept until the person removes them or deletes the plan; there is no expiry and no scheduled function.
 14. **What-ifs are layered virtual versions.** An unsaved what-if exists only in memory. A saved one is stored sealed. Applying one writes ordinary versions and one change entry.
 15. **One composite index.** The change log filtered by item needs one. Everything else is a single-field query with the rest filtered on the device.
 16. **Beta access.** Runway is an access-gated app (`ProtectedRoute appId`) while it is in a beta phase.
@@ -87,7 +87,7 @@ apps/runway/
 Storage: apps/runway/receipts/{uid}/{purchaseId}/{imageId}       sealed bytes, owner-only
 ```
 
-Receipt images are a subcollection of purchases (`receiptImages`) so the scheduled function can find expired ones with one collection-group query.
+Receipt images are a subcollection of purchases (`receiptImages`), so a purchase's receipts are one listener and removing a purchase can list and remove them.
 
 ### Conventions applied
 
@@ -118,9 +118,9 @@ export const SEALED_SCHEMA_VERSION = 1;
 
 export const MAX_CHANGE_ITEM_IDS = 20;
 export const MAX_DONE_LINE_IDS = 200;
-export const RECEIPT_LIFETIME_DAYS = 365;
-export const RECEIPT_OFFER_DAYS = 30;
-export const RECEIPT_MAX_BYTES = 10 * 1024 * 1024;
+export const RECEIPT_MAX_BYTES = 10 * 1024 * 1024;          // after the photo is shrunk
+export const MAX_RECEIPTS_PER_PURCHASE = 10;
+export const RECEIPT_MAX_DIMENSION = 2400;                    // longer edge, px
 export const LOOKAHEAD_MONTHS = 12;
 ```
 
@@ -433,9 +433,7 @@ interface WhatIfDoc {
 interface ReceiptImageDoc {
   id: string; purchaseId: string;
   createdAt: number;
-  expiresAt: number | null;                 // null once kept
-  keptAt: number | null;
-  bytes: number;
+  bytes: number;                            // size of the sealed object
   sealed: Sealed;                           // { fileName, contentType, nonce for the bytes }
 }
 
@@ -768,7 +766,7 @@ Each step is one `runTransaction` that re-reads the purchase and aborts if anoth
 | Tracking | Plan → Track (new period with `from`) → Plan (period `to` set); each is a `trackingChange` move and a `levelMove` change; a purchase dated outside every period is refused |
 | Link | `linking` → `ok` ⇄ `needsReauth` → `revoked`; the server owns every transition |
 | What-if | in memory → saved (`WhatIfDoc`) → applied (`appliedAt`, versions written) or dropped (document deleted if saved, nothing otherwise) |
-| Receipt image | stored (`expiresAt = createdAt + 365 days`) → offer window (last 30 days: keep or download) → kept (`expiresAt = null`) or removed by the scheduled function (document and Storage object deleted; the text details on the purchase remain) |
+| Receipt image | added (shrunk, sealed, uploaded, then its document written) → kept until the person removes it (document, then Storage object, deleted; the purchase remains) or removes the purchase (its receipts are listed and removed after it) or deletes the plan (`deleteRunwayPlan` removes the receipts prefix) |
 | Closing | valid → stale (`dirtyFrom`, or counted from another starting day) → rebuilt; or missing → built |
 
 Moving to Track requires a start date and starting amounts; moving to Link requires a start date and the confirmed line-up, and neither happens without them.
@@ -823,7 +821,7 @@ The block lives in `firestore.rules` under `apps/runway/…`. Runway is a beta a
 4. **What may change and what may go.** `update` is allowed on the plan, `items`, `days`, `purchases` and `closings`; `delete` on `purchases` (removed with its ledger entry) and `closings` (a rebuildable cache) only. A client never deletes the plan document: `deleteRunwayPlan` does it with the Admin SDK.
 5. **Shape is the client's.** The sealed envelope's keys, key lists, types, enums, date-only values, list caps (`doneLineIds` 200, `itemIds` 20), timestamp bounds, write-once `endedAt`/`archivedAt`/`confirmedAt`, a day's draft-to-confirmed moves and a purchase's tracked span are kept by the app's actions (types, caps in `constants.ts`, transactions that re-read), not by the rules. A caller who can write the plan can write any shape into it, and the only one who can is its owner.
 6. **Server-written documents (Next Steps).** `links` and `accountBalances` will be read-only to the client. The plan's wildcard allows `create` everywhere under it, so they need the wildcard narrowed by a condition on the collection name, not a second `match` beside it, since every `allow` that matches is OR-ed.
-7. **Storage.** `apps/runway/receipts/{uid}/{purchaseId}/{imageId}` allows read, write and delete to `request.auth.uid == uid`, `request.resource.size <= 10 MiB`, and `contentType == 'application/octet-stream'` (the bytes are sealed, so no image type is ever visible to Storage).
+7. **Storage.** `apps/runway/receipts/{uid}/{purchaseId}/{imageId}` allows read and delete to `request.auth.uid == uid`, and create to it with `request.resource.size < 10 MiB + 1 KiB`, and `contentType == 'application/octet-stream'` (the bytes are sealed, so no image type is ever visible to Storage).
 8. **No unauthenticated callable surface.** Every Runway callable checks `request.auth`. The provider webhook is the one HTTPS function that does not, and it authenticates by the provider's signature.
 9. **Verified, not assumed.** `npm run check:runway-rules` reads and writes every collection as the owner, a second user and a signed-out visitor: the owner gets the operations above (and create and read under any other collection name, which the plan's wildcard allows) and nobody else gets any. When the rules moved to the beta tier, the strict rules' own matrix (2,253 cases, every write the app makes and every shape it refused) was run against both files: no case the strict rules allowed is refused now.
 
@@ -834,7 +832,6 @@ The block lives in `firestore.rules` under `apps/runway/…`. Runway is a beta a
 | Collection | Fields | Used by |
 |---|---|---|
 | `changes` | `itemIds` ARRAY_CONTAINS, `createdAt` DESC | change log filtered by one item |
-| `receiptImages` (COLLECTION_GROUP, single-field exemption) | `expiresAt` ASC | the scheduled expiry function |
 
 Everything else is a single-field query. Where the obvious query would need an index (confirmed days in a date window needs `status` plus a range on `expectedOn`; Needs a home needs `needsHome` plus an order by `date`), the query uses the one field and the device filters or sorts the rest. `npm run check:indexes` covers both entries.
 
@@ -982,7 +979,7 @@ Side effects that talk to a function (attach an account, unlink, delete the plan
 
 - `AppEncryption<'runway'>` uses the existing `createAppEncryptionKey`/`normalizeAppEncryption` types; `AppId` gains `'runway'`.
 - `sealJson(obj)` = `encryptStringForApp(JSON.stringify({ v: SEALED_SCHEMA_VERSION, ...obj }), encryption)`. `openJson` reverses it and validates `v`.
-- Bytes (receipt images) need a binary path. `src/lib/security/encryption.ts` gains general `encryptBytes(bytes, key, keyId, keyVersion)` and `decryptBytes(...)`, with no app words in names or errors, reusing `aesGcm`. The nonce is stored on `ReceiptImageDoc.sealed`.
+- Bytes (receipt images) take a binary path. `src/lib/security/encryption.ts` has general `encryptBytes(bytes, key)` (answering the sealed bytes and a fresh nonce) and `decryptBytes(bytes, key, nonce)`, with no app words, reusing `aesGcm`; Runway's `security.ts` wraps them as `sealBytes` and `openBytes`. The nonce is stored in `ReceiptImageDoc.sealed`.
 - Plain-HTTP origins already fall back to `@noble/ciphers`; the same fallback serves bytes.
 - No sealed value is ever logged, put in a URL, an error message or analytics, and the Firestore offline cache holds ciphertext only.
 
@@ -1070,9 +1067,9 @@ Invariant 13 stops a key id being dropped casually. When one must go (a suspecte
 
 ### Receipts
 
-- Images are sealed on the device, uploaded as opaque bytes, and decrypted on the device for display; thumbnails are generated on the device before sealing and sealed separately.
-- `expireRunwayReceipts` (scheduled daily) queries the `receiptImages` collection group for `expiresAt <= now`, deletes the Storage object and then the document, and leaves the purchase's text details and links. It deletes nothing that has `expiresAt == null`.
-- The keep-or-download offer is client-side from `expiresAt`: within `RECEIPT_OFFER_DAYS` of expiry, the purchase shows the offer; keeping sets `keptAt` and `expiresAt = null`, and a kept image is permanent: only the person (removing it) or deleting the plan removes it, and there is no per-plan cap. Kept images are the one part of a plan that grows without a limit, so storage use per plan is watched and a cap is added only if it matters. Downloading decrypts and saves the file.
+- Images are shrunk to 2400px (WebP) on the device, sealed, uploaded as opaque bytes, and decrypted on the device for display; a thumbnail is the same picture scaled by the browser.
+- Receipts are kept until the person removes them. There is no expiry, no `expiresAt`, no scheduled function and no collection-group index. A removed purchase's receipts are listed and removed after the purchase is gone, best effort; one left behind is still unreadable bytes and goes with the plan.
+- Downloading decrypts and saves the file. Reading the bytes in a browser (`getBytes`) needs the Storage bucket's CORS to allow the app's origin; that is a one-off console setting, not code.
 
 ### Deleting a plan
 
@@ -1186,7 +1183,6 @@ functions/src/apps/runway/
 ├── planKey.ts                      wrap, unwrap, sealForPlan
 ├── getRunwayKey.ts
 ├── deleteRunwayPlan.ts
-├── expireReceiptImages.ts
 ├── reconcile.ts                    Next Steps: server-side matching pass
 ├── sendReminders.ts                Next Steps: hourly schedule-based pushes
 ├── notificationText.ts             Next Steps: the fixed push strings
@@ -1206,7 +1202,6 @@ scripts/runway/retireMasterKey.ts   maintainer-only, Admin SDK; see Retiring a m
 |---|---|---|
 | `getRunwayKey` | callable | create or return the plan's data key |
 | `deleteRunwayPlan` | callable | remove the plan, links, grants and receipt objects |
-| `expireRunwayReceipts` | scheduled, daily | remove receipt images past `expiresAt` |
 | `verifyRunwayKeys` | scheduled, daily | prove every master key in the keyring still unwraps its canary; alert if not |
 | `reconcileRunwayPurchases` | task-triggered (Next Steps) | match new posted purchases and deposits; send `moneyArrived` and `billPaid` pushes |
 | `sendRunwayReminders` | scheduled, hourly (Next Steps) | send `billDue` and `incomeToday` pushes |
@@ -1244,7 +1239,7 @@ Per the project instruction to keep `copilot-instructions.md` current, these fol
 2. **One PWA:** the checklist says the site installs as one PWA and an app has no manifest of its own. Made.
 3. **Sealed payloads:** a document may carry one `sealed` payload beside readable fields, the key held by a callable and never persisted, a sealed payload gaining a field only in the change that reads it. Made in "Data and app patterns".
 4. **Append-only and deterministic ids:** rules deny `update`/`delete`, a duplicate create fails by id, corrections are new records. Made.
-5. **Shared security lib:** note `encryptBytes`/`decryptBytes` once they exist. **Held for Issue 47** (receipts, a Next Steps issue), which adds them: writing the note is one of that issue's success criteria.
+5. **Shared security lib:** `encryptBytes`/`decryptBytes` are named in `docs/conventions/data-contracts.md`, beside the sealed-payload rule. Made by Issue 47.
 6. **Functions and secrets:** a secret an issue binds must exist in production before merge, and `functions/README.md` mirrors `index.ts`. Already stated in "Documentation quality" and "Cloud Functions"; nothing added.
 7. **Shared primitives:** a component with no app entities goes in `src/components` from its first use. Already stated; `AmountField` and `BeforeAfterRow` are now named as examples.
 8. **Terminology:** "mini-app" is "app" in prose in `CLAUDE.md` and `copilot-instructions.md`, "New mini-app checklist" is "New app checklist", paths under `src/apps/<name>/` are unchanged, and "beta" is defined once, as an access-gated app. Made. The `build-app-mvp` skill keeps its name.

@@ -1,8 +1,10 @@
 export {
   createAppEncryptionKey,
   createSeedAppEncryptionKey,
+  decryptBytes,
   decryptStringForApp,
   decryptValue,
+  encryptBytes,
   encryptStringForApp,
   encryptValue,
   isEncryptedFieldPayload,

@@ -143,6 +143,17 @@ def main():
         check(f'unlisted update [{a}]', commit(tok, [put(other, {'x': 2})]), False)
         check(f'unlisted delete [{a}]', commit(tok, [rm(other)]), False)
 
+    admin([put(f'{base}/purchases/purchases-1', dict(id='purchases-1', createdAt=NOW, sealed=SEAL))])
+    img = f'{base}/purchases/purchases-1/receiptImages/img-1'
+    idoc = dict(id='img-1', purchaseId='purchases-1', createdAt=NOW, bytes=10, sealed=SEAL)
+    for a, tok in actors.items():
+        admin([rm(img)])
+        check(f'receipt image create [{a}]', commit(tok, [put_new(img, idoc)]), a == 'o')
+        admin([put(img, idoc)])
+        check(f'receipt image read [{a}]', get(img, tok), a == 'o')
+        check(f'receipt image update [{a}]', commit(tok, [put(img, dict(idoc, bytes=11))]), False)
+        check(f'receipt image delete [{a}]', commit(tok, [rm(img)]), a == 'o')
+
     rec = f'{base}/days/day-1/records/day-1_confirmed'
     rdoc = dict(id='day-1_confirmed', dayId='day-1', kind='confirmed', createdAt=NOW, sealed=SEAL)
     for a, tok in actors.items():

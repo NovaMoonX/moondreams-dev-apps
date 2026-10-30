@@ -390,6 +390,29 @@ export interface OpenExpense extends ExpenseSealed {
   updatedAt: number;
 }
 
+/** A receipt photo on a purchase, under `purchases/{purchaseId}/receiptImages`. The picture itself is sealed bytes in Storage; `bytes` is their size. */
+export interface ReceiptImageDoc {
+  id: string;
+  purchaseId: string;
+  createdAt: number;
+  bytes: number;
+  sealed: Sealed;
+}
+
+export interface ReceiptImageSealed {
+  fileName: string | null;
+  contentType: string;
+  /** The nonce the Storage bytes were sealed with. */
+  nonce: string;
+}
+
+export interface OpenReceiptImage extends ReceiptImageSealed {
+  id: string;
+  purchaseId: string;
+  createdAt: number;
+  bytes: number;
+}
+
 export interface PlanVersionDoc {
   id: string;
   itemId: string;

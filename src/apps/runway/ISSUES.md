@@ -1641,32 +1641,31 @@ A purchase can carry a note and a link, and belong to a named expense group ("Ch
 ### Issue 47: Receipts: sealed photos kept until you remove them
 
 **Prerequisites:** Issue 24
-**Target PR Size:** ~550 lines (split the expiry function from the client if it runs over)
+**Target PR Size:** ~700 lines
 **Files:**
 - `src/lib/security/encryption.ts` (`encryptBytes`, `decryptBytes`), `src/apps/runway/security.ts`
-- `functions/src/apps/runway/expireReceiptImages.ts`, `functions/README.md`
-- `storage.rules`, `firestore.rules`, `firestore.indexes.json` (collection-group exemption on `expiresAt`)
-- `src/apps/runway/components/ReceiptPicker.tsx`, `PurchaseScreen.tsx`
+- `storage.rules`, `firestore.rules`
+- `src/apps/runway/components/ReceiptsBlock.tsx`, `ReceiptViewer.tsx`, `PurchaseForm.tsx`, `PurchaseScreen.tsx`
 
 **Context:** Read the TDD's Decision 13, "Receipts", Security Rules Design Criteria 15 and the Receipt image lifecycle row.
 
 ### Description
-Receipt photos are sealed on the device and stored as opaque bytes. A photo expires after a year unless kept; in the last 30 days the purchase offers to keep or download it. A kept photo stays until the person removes it.
+Receipt photos are sealed on the device and stored as opaque bytes. A photo stays until the person removes it (owner decision: no expiry, no scheduled function); the purchase offers to download it at any time.
 
 ### Possible Approach
-1. Add `encryptBytes`/`decryptBytes` to the shared security lib, exported from `@lib/security`, and note them in `.github/copilot-instructions.md` beside the sealed-payload rule in the same PR.
-2. `expireRunwayReceipts` (daily) uses the collection-group query on `expiresAt`, deletes the object then the document, and never deletes `expiresAt == null`.
+1. Add `encryptBytes`/`decryptBytes` to the shared security lib, exported from `@lib/security`, and note them in `docs/conventions/data-contracts.md` beside the sealed-payload rule in the same PR.
+2. Remove deletes the document, then the object; removing a purchase removes its receipts after it, and `deleteRunwayPlan` already removes the receipts prefix.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read / Delete:** attach, view, remove. **Update:** keep.
+- [ ] **Create / Read / Delete:** attach, view, remove. **Update:** none.
 
 ### Success Criteria
 - [ ] A photo not opened with the plan key is unreadable bytes in Storage and in a dump.
-- [ ] The scheduled function deletes an expired fixture and leaves a kept one (emulator).
+- [ ] Removing a purchase removes its receipts; deleting a plan removes the receipts prefix (already so).
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
 - [ ] `encryptBytes` and `decryptBytes` have a round-trip check.
-- [ ] `.github/copilot-instructions.md` names `encryptBytes`/`decryptBytes` in `@lib/security` as the way to seal bytes (the owner's item 5, held until these exist).
+- [ ] `docs/conventions/data-contracts.md` names `encryptBytes`/`decryptBytes` in `@lib/security` as the way to seal bytes (the owner's item 5, held until these exist).
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
