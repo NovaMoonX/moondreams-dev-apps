@@ -4,6 +4,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import Subview from '@/components/Subview';
@@ -274,6 +275,7 @@ function MealBuilder({
   });
   const [openedWith] = useState(snapshot);
   const isDirty = snapshot !== openedWith;
+  useUnsavedWork(() => isDirty);
   const isShortScreen = useSyncExternalStore(
     subscribeToHeight,
     getIsShortScreen,

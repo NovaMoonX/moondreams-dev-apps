@@ -5,6 +5,7 @@ import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { Lock, StickyNote } from 'lucide-react';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -98,6 +99,7 @@ function PersonalExpenseFormModal({
     formData.note !== (initialExpense.note ?? '') ||
     showNoteField !== Boolean(initialExpense.note) ||
     formData.category.choice !== getExpenseCategoryKey(initialExpense);
+  useUnsavedWork(() => isDirty);
   const isFormComplete =
     formData.title.trim() !== '' && resolveCategory(formData.category) !== null && parseAmount(formData.amount) !== null;
   const dayOptions = useMemo(

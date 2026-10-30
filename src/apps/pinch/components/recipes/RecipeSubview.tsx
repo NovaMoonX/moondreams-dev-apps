@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import Subview from '@/components/Subview';
 import { toWebLink } from '@/utils/urlUtils';
 import {
@@ -68,6 +69,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const fromCalendar =
     subview?.kind === 'recipe' && subview.fromCalendar === true;
   const isDirtyRef = useRef(false);
+  useUnsavedWork(() => isDirtyRef.current);
   const backStepRef = useRef<(() => boolean) | null>(null);
   const isTypedRef = useRef(false);
   const isAskingRef = useRef(false);
