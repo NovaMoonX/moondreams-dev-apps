@@ -28,7 +28,11 @@ import { ADMIN_EMAIL, APP_REGISTRY, clearAppResume } from '@/lib/app';
 import { recordSiteVisit } from '@/lib/appUsage/appUsage';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
-import { clearFirestoreLocalData } from '@/lib/firebase/localData';
+import {
+  claimFirestoreLocalData,
+  clearFirestoreLocalData,
+  releaseFirestoreLocalData,
+} from '@/lib/firebase/localData';
 import { releaseDevicePush } from '@/lib/notifications/devicePush';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { resetAllState } from '@/store/actions/globalActions';
@@ -47,7 +51,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isDisplayNameUpdating, setIsDisplayNameUpdating] = useState(false);
   const currentLocationRef = useRef('home');
   const previousUserIdRef = useRef<string | null | undefined>(undefined);
-  const isSigningOutRef = useRef(false);
+  const isReloadingRef = useRef(false);
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
@@ -56,8 +60,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      // Firestore is already stopped and the page is about to reload; rendering signed out would start listeners on it.
-      if (isSigningOutRef.current) return;
+      // Firestore is already stopped and the page is about to reload; rendering now would start listeners on it.
+      if (isReloadingRef.current) return;
+      // Every account on this device shares Firestore's saved copy, and a read one account is refused
+      // can be saved as "deleted" and hide that document from the next, so each account starts clean.
+      if (firebaseUser && claimFirestoreLocalData(firebaseUser.uid)) {
+        isReloadingRef.current = true;
+        await clearFirestoreLocalData();
+        window.location.reload();
+        return;
+      }
       const nextUserId = firebaseUser?.uid ?? null;
       const previousUserId = previousUserIdRef.current;
 
@@ -219,7 +231,6 @@ export function AuthProvider({ children }: PropsWithChildren) {
             lastChanges: serverTimestamp(),
           }),
           releaseDevicePush(uid),
-          waitForPendingWrites(db),
         ]),
         new Promise((resolve) => setTimeout(resolve, RELEASE_PUSH_WAIT_MS)),
       ]);
@@ -228,10 +239,18 @@ export function AuthProvider({ children }: PropsWithChildren) {
     currentLocationRef.current = 'home';
     if (auth.currentUser) clearViewerSessions(auth.currentUser.uid);
     clearAppResume();
-    isSigningOutRef.current = true;
-    // Firestore's saved copy is shared by every account on this device: a read the next account
-    // is refused can be saved as "deleted" and keep its list empty until the copy is cleared.
-    await clearFirestoreLocalData();
+    isReloadingRef.current = true;
+    // Unsent edits stay queued for this account's next sign-in, so only a fully sent copy is cleared.
+    const hasSentEverything = await Promise.race([
+      waitForPendingWrites(db).then(() => true),
+      new Promise<boolean>((resolve) =>
+        setTimeout(() => resolve(false), RELEASE_PUSH_WAIT_MS),
+      ),
+    ]).catch(() => false);
+    if (hasSentEverything) {
+      releaseFirestoreLocalData();
+      await clearFirestoreLocalData();
+    }
     await signOut(auth).catch((error) => console.error('Sign-out error:', error));
     window.location.href = '/';
   }, []);

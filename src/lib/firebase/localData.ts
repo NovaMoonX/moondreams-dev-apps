@@ -1,9 +1,43 @@
 import { clearIndexedDbPersistence, terminate } from 'firebase/firestore';
 
-import { db } from './config';
+import { db, isUsingFirebaseEmulators } from './config';
 
 const RESET_CHANNEL = 'firestore-local-reset';
 const CLEAR_TIMEOUT_MS = 3000;
+const CACHE_OWNER_KEY = 'firestore-cache-owner';
+const SIGNED_OUT_OWNER = 'signed-out';
+
+function readCacheOwner() {
+  try {
+    return window.localStorage.getItem(CACHE_OWNER_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeCacheOwner(owner: string) {
+  try {
+    window.localStorage.setItem(CACHE_OWNER_KEY, owner);
+  } catch {
+    // Without storage the copy can't be tied to an account; Reset saved data still clears it.
+  }
+}
+
+/**
+ * Records that Firestore's saved copy belongs to this account, and says whether it was kept for
+ * someone else (another account, or a signed-out visit since a sign-out) and must be cleared first.
+ */
+export function claimFirestoreLocalData(uid: string) {
+  if (isUsingFirebaseEmulators) return false;
+  const owner = readCacheOwner();
+  writeCacheOwner(uid);
+  return owner !== null && owner !== uid;
+}
+
+/** Marks the saved copy as no longer any account's, so the next sign-in starts from a clean one. */
+export function releaseFirestoreLocalData() {
+  writeCacheOwner(SIGNED_OUT_OWNER);
+}
 
 /** Reloads this tab when another tab resets Firestore's saved data, which stops Firestore in every tab. */
 export function reloadOnFirestoreReset() {
