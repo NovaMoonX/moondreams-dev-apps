@@ -1,7 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import type { User } from 'firebase/auth';
-import { ChevronDown, LogOut, Plus, ShieldCheck } from 'lucide-react';
+import { ChevronDown, LogOut, Plus, ShieldCheck, UserRoundCog, X } from 'lucide-react';
 import { useState } from 'react';
 
 import { VersionLabel } from '@components/VersionLabel';
@@ -16,12 +16,21 @@ interface AccountPanelProps {
   onManageAccount: () => void;
   onOpenAdmin: () => void;
   onSignOut: () => void;
+  /** Draws the panel's own close button; a drawer brings its own, so it leaves this out. */
+  onClose?: () => void;
 }
 
 const getName = (account: { displayName?: string | null; email?: string | null }) =>
   account.displayName?.trim() || account.email || 'Unnamed account';
 
-/** Google-style account card: who is signed in, the other accounts on this device to switch to, add, sign out, and the way into the account page. */
+const rowClassName =
+  'bg-background hover:bg-accent/60 h-auto w-full justify-start gap-4 rounded-none px-5 py-3 text-left font-normal';
+
+// Google's blue, paired for light and dark, so the panel reads as Google's account switcher on every theme.
+/**
+ * Google-style account panel: a tinted sheet holding the signed-in account, the other accounts on
+ * this device to switch to, Add another account and Sign out as one stack of rows, then Manage your account.
+ */
 function AccountPanel({
   user,
   isAdmin,
@@ -30,18 +39,42 @@ function AccountPanel({
   onManageAccount,
   onOpenAdmin,
   onSignOut,
+  onClose,
 }: AccountPanelProps) {
   const [isListOpen, setIsListOpen] = useState(true);
   const hasOthers = otherAccounts.length > 0;
-  const rowClassName = 'h-auto w-full justify-start gap-3 rounded-none px-4 py-3 text-left font-normal';
 
   return (
-    <div className='space-y-3'>
-      <div className='border-border bg-card divide-border divide-y overflow-hidden rounded-3xl border'>
-        <div className='flex items-center gap-3 px-4 py-4'>
+    <div className='bg-muted space-y-3 rounded-[28px] p-3'>
+      <div className='relative flex min-h-10 items-center justify-center px-12'>
+        {isAdmin ? (
+          <Button type='button' variant='link' size='sm' className='gap-1.5 text-blue-600! dark:text-blue-300!' onClick={onOpenAdmin}>
+            <ShieldCheck className='size-4' aria-hidden='true' />
+            Admin dashboard
+          </Button>
+        ) : (
+          <p className='text-muted-foreground truncate text-sm'>{user.email}</p>
+        )}
+        {onClose ? (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            rounded='full'
+            aria-label='Close'
+            className='absolute top-0 right-0 size-10'
+            onClick={onClose}
+          >
+            <X className='size-5' />
+          </Button>
+        ) : null}
+      </div>
+
+      <div className='flex flex-col gap-0.5 overflow-hidden rounded-3xl'>
+        <div className='bg-background flex items-center gap-4 px-5 py-4'>
           <UserAvatar user={user} size='lg' />
           <div className='min-w-0 flex-1'>
-            <p className='text-foreground truncate text-base font-semibold'>{getName(user)}</p>
+            <p className='text-foreground truncate text-lg'>{getName(user)}</p>
             <p className='text-muted-foreground truncate text-sm'>{user.email}</p>
           </div>
           {hasOthers ? (
@@ -79,7 +112,7 @@ function AccountPanel({
           : null}
 
         <Button type='button' variant='tertiary' className={rowClassName} onClick={() => onSwitch(null)}>
-          <span className='text-primary grid size-10 shrink-0 place-items-center'>
+          <span className='grid size-10 shrink-0 place-items-center rounded-full bg-blue-600/10 text-blue-600 dark:bg-blue-300/15 dark:text-blue-300'>
             <Plus className='size-5' />
           </span>
           <span className='text-foreground text-sm font-medium'>Add another account</span>
@@ -92,19 +125,20 @@ function AccountPanel({
         </Button>
       </div>
 
-      <Button type='button' variant='outline' rounded='full' className='w-full' onClick={onManageAccount}>
-        Manage your account
+      <Button
+        type='button'
+        variant='tertiary'
+        rounded='full'
+        className='bg-background hover:bg-accent/60 h-auto w-full justify-start gap-4 px-5 py-3.5 font-normal'
+        onClick={onManageAccount}
+      >
+        <span className='grid size-10 shrink-0 place-items-center'>
+          <UserRoundCog className='size-5' />
+        </span>
+        <span className='text-foreground text-sm font-medium'>Manage your account</span>
       </Button>
 
-      {isAdmin ? (
-        <div className='flex justify-center'>
-          <Button type='button' variant='link' size='sm' className='gap-1.5' onClick={onOpenAdmin}>
-            <ShieldCheck className='size-4' aria-hidden='true' />
-            Admin dashboard
-          </Button>
-        </div>
-      ) : null}
-      <div className='text-muted-foreground text-center text-xs'>
+      <div className='text-muted-foreground pb-1 text-center text-xs'>
         <VersionLabel />
       </div>
     </div>

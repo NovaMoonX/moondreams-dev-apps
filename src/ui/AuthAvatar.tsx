@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAccountSwitch } from '@/hooks/useAccountSwitch';
+import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import AccountPanel from '@/ui/AccountPanel';
@@ -83,23 +84,21 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     navigate(path);
   };
 
-  const panel = (
-    <AccountPanel
-      user={user}
-      isAdmin={isAdmin}
-      otherAccounts={otherAccounts}
-      onSwitch={(account) => {
-        close();
-        switchToAccount(account);
-      }}
-      onManageAccount={() => goTo('/account')}
-      onOpenAdmin={() => goTo('/admin')}
-      onSignOut={() => {
-        close();
-        void logOut();
-      }}
-    />
-  );
+  const panelProps = {
+    user,
+    isAdmin,
+    otherAccounts,
+    onSwitch: (account: RememberedAccount | null) => {
+      close();
+      switchToAccount(account);
+    },
+    onManageAccount: () => goTo('/account'),
+    onOpenAdmin: () => goTo('/admin'),
+    onSignOut: () => {
+      close();
+      void logOut();
+    },
+  };
 
   const trigger = (
     <Button
@@ -134,7 +133,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         <>
           {trigger}
           <Drawer id={dialogId} isOpen={isOpen} onClose={onDialogClose} title='Account' showCloseButton>
-            <div className='pb-4'>{isOpen && panel}</div>
+            <div className='pb-4'>{isOpen && <AccountPanel {...panelProps} />}</div>
           </Drawer>
         </>
       ) : (
@@ -144,10 +143,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
           onOpenChange={setIsOpen}
           placement='bottom'
           alignment='end'
-          offset={12}
-          className='w-96 max-w-[calc(100vw-1.5rem)] p-4'
+          offset={4}
+          className='w-96 max-w-[calc(100vw-1.5rem)] rounded-[28px]! border-0! bg-transparent! p-0! shadow-xl'
         >
-          {isOpen && panel}
+          {isOpen && <AccountPanel {...panelProps} onClose={close} />}
         </Popover>
       )}
     </div>
