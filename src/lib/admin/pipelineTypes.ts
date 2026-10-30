@@ -53,6 +53,12 @@ export interface PipelineInboxPr {
   gallery: PipelineGalleryStep[] | null;
 }
 
+/** When the owner last answered each ask from the dashboard: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines. */
+export interface PipelineAnswered {
+  marks: Record<string, number>;
+  updatedAt: number;
+}
+
 export interface PipelineInbox {
   prs: PipelineInboxPr[];
   updatedAt: number;

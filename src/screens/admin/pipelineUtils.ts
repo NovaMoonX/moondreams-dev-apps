@@ -118,6 +118,13 @@ const toSafePr = (pr: PipelineInboxPr): PipelinePr => ({
   url: toHttps(pr.url),
 });
 
+/** The asks the owner hasn't answered from the dashboard since the status that raised them. */
+const getOpenItems = (
+  items: PipelineOwnerEntryItem[],
+  answered: Record<string, number>,
+) =>
+  items.filter((item) => (answered[item.id] ?? 0) < item.statusAt);
+
 const RECOMMENDED = /\s*\(recommended\)/i;
 
 const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
@@ -177,13 +184,17 @@ const toBranchWords = (branch: string | null) =>
 
 const toAsk = (line: string) => stripLinks(line).replace(/^🚩\s*/, '');
 
+const ANSWERED_LINE = 'Answered · waiting for the session';
+
 function getSubtitle(
   group: PipelineGroup | null,
   asks: string[],
   time: string,
   session: PipelineSession,
   now: number,
+  isAnswered: boolean,
 ) {
+  if (isAnswered && group !== 'working') return `${time} · You answered`;
   if (group === 'waiting') {
     const count = asks.length >= 2 ? `${asks.length} asks · ` : '';
     return `${time} · ${count}${asks[0] || 'Waiting on you'}`;
@@ -198,8 +209,10 @@ function getLead(
   session: PipelineSession,
   group: PipelineGroup | null,
   now: number,
+  isAnswered: boolean,
 ) {
   const time = formatPipelineTime(session.updatedAt, now);
+  if (isAnswered && group !== 'working') return `${ANSWERED_LINE}.`;
   if (group === 'waiting') return `Waiting since ${time}`;
   if (group === 'working') {
     const since = formatPipelineTime(
@@ -216,21 +229,32 @@ function getLead(
 function toSessionEntry(
   session: PipelineSession,
   prs: PipelineInboxPr[],
+  answered: Record<string, number>,
   now: number,
 ): PipelineEntry {
   const sessionPrs = getSessionPrs(session, prs);
   const safePrs = sessionPrs.map(toSafePr);
-  const ownerItems = toSafeItems(sessionPrs);
+  const allItems = toSafeItems(sessionPrs);
+  const ownerItems = getOpenItems(allItems, answered);
+  // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
+  const isReplied =
+    sessionPrs[0] !== undefined &&
+    (answered[`${sessionPrs[0].number}:reply`] ?? 0) >= session.updatedAt;
+  const raisedHands = isReplied ? [] : session.raisedHands;
   const asks =
-    ownerItems.length > 0
+    allItems.length > 0
       ? ownerItems.map((item) => toAsk(item.text))
-      : session.raisedHands.map(toAsk);
+      : raisedHands.map(toAsk);
+  const isAnswered =
+    asks.length === 0 &&
+    (allItems.length > 0 || session.raisedHands.length > 0);
   const baseGroup = getSessionGroup(session, now);
-  // A finished or quiet session that still holds asks is waiting on the owner.
-  const group =
-    asks.length > 0 && (baseGroup === 'finished' || baseGroup === 'quiet')
-      ? 'waiting'
-      : baseGroup;
+  const getGroup = (): PipelineGroup | null => {
+    // A finished or quiet session that still holds asks is waiting on the owner.
+    if (asks.length > 0 && baseGroup !== 'working') return 'waiting';
+    return baseGroup === 'waiting' ? 'finished' : baseGroup;
+  };
+  const group = getGroup();
   const time = formatPipelineTime(session.updatedAt, now);
   const title = sessionPrs.find((pr) => pr.status?.sessionTitle)?.status
     ?.sessionTitle;
@@ -244,10 +268,10 @@ function toSessionEntry(
     group,
     isPrOnly: false,
     time,
-    subtitle: getSubtitle(group, asks, time, session, now),
-    lead: getLead(session, group, now),
+    subtitle: getSubtitle(group, asks, time, session, now, isAnswered),
+    lead: getLead(session, group, now, isAnswered),
     asks,
-    raisedHands: session.raisedHands,
+    raisedHands,
     prs: safePrs,
     ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
@@ -256,10 +280,14 @@ function toSessionEntry(
   };
 }
 
-function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
+function toPrEntry(
+  pr: PipelineInboxPr,
+  answered: Record<string, number>,
+  now: number,
+): PipelineEntry {
   const status = pr.status;
   const safePr = toSafePr(pr);
-  const ownerItems = toSafeItems([pr]);
+  const ownerItems = getOpenItems(toSafeItems([pr]), answered);
   const asks = ownerItems.map((item) => toAsk(item.text));
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
   return {
@@ -286,6 +314,8 @@ export type AnswerSlotKind = 'question' | 'reply' | 'feedback';
 
 export interface AnswerSlot {
   id: string;
+  /** What the server records once it is sent, so the ask stops counting as waiting. */
+  mark: string | null;
   prNumber: number;
   statusAt: number;
   /** Plain text, as it is sent. */
@@ -305,6 +335,7 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
     kind: AnswerSlotKind,
   ): AnswerSlot => ({
     id: `${entry.key}:${target.number}:${kind}`,
+    mark: kind === 'reply' ? `${target.number}:reply` : null,
     prNumber: target.number,
     statusAt: target.status?.updatedAt ?? 0,
     question: kind === 'reply' ? 'Reply to what was raised' : 'Anything else',
@@ -317,6 +348,7 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
     const questions = entry.ownerItems.map(
       (item): AnswerSlot => ({
         id: item.id,
+        mark: item.id,
         prNumber: item.prNumber,
         statusAt: item.statusAt,
         question: stripLinks(item.text).slice(0, 500),
@@ -373,12 +405,13 @@ export type PipelineGroups = ReturnType<typeof buildPipeline>;
 export function buildPipeline(
   sessions: PipelineSession[],
   inbox: PipelineInbox | null,
+  answered: Record<string, number>,
   now: number,
 ) {
   const prs = inbox?.prs ?? [];
   const entries = [...sessions]
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((session) => toSessionEntry(session, prs, now))
+    .map((session) => toSessionEntry(session, prs, answered, now))
     .filter((entry) => entry.group !== null);
   const sessionUrls = new Set(
     entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
@@ -391,7 +424,8 @@ export function buildPipeline(
           (url) => url && sessionUrls.has(url),
         ),
     )
-    .map((pr) => toPrEntry(pr, now));
+    .map((pr) => toPrEntry(pr, answered, now))
+    .filter((entry) => entry.ownerItems.length > 0);
   const inGroup = (group: PipelineGroup) =>
     entries.filter((entry) => entry.group === group);
   return {

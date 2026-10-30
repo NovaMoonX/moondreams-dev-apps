@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
@@ -38,6 +39,8 @@ interface AnswerItem {
 interface PrAnswers {
   prNumber: number;
   items: AnswerItem[];
+  /** Which of the dashboard's asks these answer: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines. */
+  marks: string[];
 }
 
 interface PrResult {
@@ -117,6 +120,19 @@ const readAttempt = (data: unknown) => {
   return attempt;
 };
 
+const readMarks = (raw: unknown, prNumber: number) => {
+  if (raw === undefined) return [];
+  const mark = new RegExp(`^${prNumber}:(\\d{1,2}|reply)$`);
+  if (
+    !Array.isArray(raw) ||
+    raw.length > MAX_ITEMS ||
+    raw.some((value) => typeof value !== 'string' || !mark.test(value))
+  ) {
+    throw invalid('Bad answer marks.');
+  }
+  return Array.from(new Set(raw as string[]));
+};
+
 const readAnswers = (data: unknown): PrAnswers[] => {
   if (!isObject(data) || !Array.isArray(data.answers)) {
     throw invalid('Bad request.');
@@ -141,7 +157,11 @@ const readAnswers = (data: unknown): PrAnswers[] => {
     ) {
       throw invalid('Send between 1 and 21 answers per pull request.');
     }
-    const answer = { prNumber, items: items.map(readItem) };
+    const answer = {
+      prNumber,
+      items: items.map(readItem),
+      marks: readMarks(raw.marks, prNumber),
+    };
     if (toCommentBody(answer.items, '').length > MAX_COMMENT) {
       throw invalid(`Your answers for #${prNumber} are too long for one comment.`);
     }
@@ -232,6 +252,28 @@ const toRefusal = async (response: Response, action: string) => {
 const forgetAndRefuse = (response: Response, action: string) => {
   readSecret.forget('PIPELINE_GITHUB_TOKEN');
   return toRefusal(response, action);
+};
+
+// The dashboard stops showing an ask as waiting once it was answered after the status that raised it.
+const recordAnswered = async (answers: PrAnswers[], results: PrResult[]) => {
+  const marks = results
+    .filter((result) => result.ok && result.postedAt !== null)
+    .flatMap((result) =>
+      (answers.find((answer) => answer.prNumber === result.prNumber)?.marks ?? []).map(
+        (mark) => [mark, result.postedAt] as const,
+      ),
+    );
+  if (marks.length === 0) return;
+  try {
+    await getFirestore()
+      .doc('pipeline/answered')
+      .set(
+        { marks: Object.fromEntries(marks), updatedAt: Date.now() },
+        { merge: true },
+      );
+  } catch (error) {
+    logger.warn('answerPipelineQuestions: answered mark failed', getErrorName(error));
+  }
 };
 
 const githubFetch = (token: string, path: string, init?: RequestInit) =>
@@ -391,18 +433,17 @@ export const answerPipelineQuestions = onCall(
     const attempt = readAttempt(request.data);
     // The emulator's dashboard shows made-up pull requests, so it rehearses the send and posts nothing.
     if (isRunningInEmulator()) {
-      return {
-        isSample: true,
-        results: answers.map(
-          ({ prNumber }): PrResult => ({
-            prNumber,
-            ok: true,
-            url: null,
-            postedAt: Date.now(),
-            error: null,
-          }),
-        ),
-      };
+      const sample = answers.map(
+        ({ prNumber }): PrResult => ({
+          prNumber,
+          ok: true,
+          url: null,
+          postedAt: Date.now(),
+          error: null,
+        }),
+      );
+      await recordAnswered(answers, sample);
+      return { isSample: true, results: sample };
     }
     const token = await readSecret(
       'PIPELINE_GITHUB_TOKEN',
@@ -445,6 +486,7 @@ export const answerPipelineQuestions = onCall(
             error: "Couldn't reach GitHub.",
           },
     );
+    await recordAnswered(answers, results);
     return { isSample: false, results };
   },
 );

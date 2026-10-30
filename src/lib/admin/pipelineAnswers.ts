@@ -12,6 +12,8 @@ export interface PipelineAnswerItem {
 export interface PipelineAnswersForPr {
   prNumber: number;
   items: PipelineAnswerItem[];
+  /** The asks these answer, so the dashboard stops counting them. */
+  marks: string[];
 }
 
 export interface PipelineAnswerResult {

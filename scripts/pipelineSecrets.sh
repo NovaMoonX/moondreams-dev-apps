@@ -78,7 +78,7 @@ check_token() {
     0) echo "✓ The token can comment on pull requests" ;;
     2) echo "✗ The token can't list this repo's pull requests. Edit it: $TOKEN_PAGE → Pipeline answers → Permissions → Pull requests: Read and write → Update." >&2
        return 1 ;;
-    3) echo "• No pull request is open, so commenting couldn't be tested. The token can read the repo." ;;
+    3) echo "• No pull request is open, so commenting couldn't be tested. The token can read the repo; run npm run pipeline:secrets -- check once a pull request is open." ;;
     *) echo "✗ The token can read the repo but can't comment on pull requests." >&2
        echo "  Edit it (no new token needed): $TOKEN_PAGE → Pipeline answers → Permissions" >&2
        echo "  Set Pull requests: Read and write and Issues: Read and write, press Update, then run: npm run pipeline:secrets -- check" >&2

@@ -80,14 +80,19 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     if (ready.length === 0 || sendingRef.current) return false;
     const answers = ready.reduce<PipelineAnswersForPr[]>((all, slot) => {
       const item = toItem(slot, getDraft(slot.id));
+      const marks = slot.mark === null ? [] : [slot.mark];
       const existing = all.find((entry) => entry.prNumber === slot.prNumber);
       return existing
         ? all.map((entry) =>
             entry === existing
-              ? { ...entry, items: [...entry.items, item] }
+              ? {
+                  ...entry,
+                  items: [...entry.items, item],
+                  marks: [...entry.marks, ...marks],
+                }
               : entry,
           )
-        : [...all, { prNumber: slot.prNumber, items: [item] }];
+        : [...all, { prNumber: slot.prNumber, items: [item], marks }];
     }, []);
     sendingRef.current = true;
     setIsSending(true);

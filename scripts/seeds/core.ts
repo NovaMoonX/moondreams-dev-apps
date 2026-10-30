@@ -211,6 +211,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     },
   });
   const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
+  const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
   const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
   batch.set(context.firestore.doc('pipeline/inbox'), {
     prs: [
@@ -270,6 +271,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
           ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false }],
         },
       },
+      pinchPr,
     ],
     updatedAt: context.now - 4 * MINUTE_MS,
   });
