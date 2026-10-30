@@ -183,7 +183,6 @@ interface AnswerFieldsProps {
   onChoices: (choices: string[], other: string | null) => void;
   onOther: (other: string) => void;
   onNote: (note: string) => void;
-  /** Inside its own drawer: the free-text box is open at once instead of behind a button. */
   isExpanded?: boolean;
 }
 
@@ -448,7 +447,7 @@ const getAnswerSummary = (draft: AnswerDraft) => {
   return [...picks, ...(note === '' ? [] : [note])].join(', ');
 };
 
-/** A question as one row that names it and what you picked; the fields open in their own drawer, so the sheet under it stays short. */
+/** A question as one summary row whose fields open in a drawer over the sheet. */
 export function AnswerRow(props: AnswerFieldsProps) {
   const { slot, draft, isSent, error } = props;
   const [isOpen, setIsOpen] = useState(false);
