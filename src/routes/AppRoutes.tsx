@@ -122,6 +122,14 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'account',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: Account } = await import('@screens/Account');
+          return { Component: Account };
+        },
+      },
+      {
         path: 'unauthorized',
         HydrateFallback: Loading,
         lazy: async () => {

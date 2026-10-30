@@ -95,14 +95,18 @@ const deleteBrowserToken = async () => {
   }
 };
 
-/** Signing out hands the device on: its token leaves the person who signed out, so nothing meant for them reaches whoever uses it next. Resolves once the token is off their account; the browser's own copy is deleted afterwards without waiting. Signing in again registers a fresh token. */
-export async function releaseDevicePush(uid: string): Promise<void> {
+/** Takes this device's token off one account and keeps the browser's copy, for a switch: the next account registers the same token, so pushes follow whoever is signed in. */
+export async function detachDevicePush(uid: string): Promise<void> {
   try {
     const token = await findToken(uid);
     if (token) await unregisterDeviceToken(uid, token);
   } catch (error) {
     console.error('Push token not taken off the account', error);
   }
+}
 
+/** Signing out hands the device on: its token leaves the person who signed out, so nothing meant for them reaches whoever uses it next. Resolves once the token is off their account; the browser's own copy is deleted afterwards without waiting. Signing in again registers a fresh token. */
+export async function releaseDevicePush(uid: string): Promise<void> {
+  await detachDevicePush(uid);
   void deleteBrowserToken();
 }
