@@ -17,7 +17,6 @@ import { formatCents } from '@/utils/moneyUtils';
 import PurchaseRow from '@apps/runway/components/PurchaseRow';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { MAX_NAME_LENGTH, SPEND_WORDS } from '@apps/runway/constants';
-import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -28,15 +27,25 @@ import {
   selectExpenses,
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { OpenPurchase } from '@apps/runway/types';
 
 interface ExpenseViewProps {
   expenseId: string;
+  /** The group's purchases across every date, newest first; null until read. */
+  purchases: OpenPurchase[] | null;
+  isFailed: boolean;
   onBack: () => void;
   onOpenPurchase: (purchaseId: string) => void;
 }
 
 /** One expense group: the total across its purchases, the purchases themselves, and the ways to rename or remove it. It changes no balance. */
-function ExpenseView({ expenseId, onBack, onOpenPurchase }: ExpenseViewProps) {
+function ExpenseView({
+  expenseId,
+  purchases,
+  isFailed,
+  onBack,
+  onOpenPurchase,
+}: ExpenseViewProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -45,7 +54,6 @@ function ExpenseView({ expenseId, onBack, onOpenPurchase }: ExpenseViewProps) {
     (entry) => entry.id === expenseId,
   );
   const looks = useAppSelector(selectItemLooks);
-  const { purchases, isFailed } = useExpensePurchases(expenseId);
   const [isRenaming, setIsRenaming] = useState(false);
   const [name, setName] = useState('');
   const [isBusy, setIsBusy] = useState(false);
