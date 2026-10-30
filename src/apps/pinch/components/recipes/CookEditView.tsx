@@ -8,7 +8,6 @@ import {
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { NotebookPen } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
@@ -111,7 +110,7 @@ function CookEditView({
                 <DateInput
                   variant='outline'
                   aria-label='Day cooked'
-                  className={join(COMPACT_INPUT_CLASS, 'min-w-0')}
+                  className={COMPACT_INPUT_CLASS}
                   max={toLocalDateInputValue(now)}
                   value={date}
                   onChange={(event) => setDate(event.target.value)}
@@ -123,7 +122,7 @@ function CookEditView({
                   type='time'
                   variant='outline'
                   aria-label='Time cooked'
-                  className={join(COMPACT_INPUT_CLASS, 'min-w-0')}
+                  className={COMPACT_INPUT_CLASS}
                   value={time}
                   onChange={(event) => setTime(event.target.value)}
                 />
@@ -183,7 +182,18 @@ function CookEditView({
           ]
         : []),
     ],
-    [date, time, servings, now, cook, onAddNote, journal, isChanged, isSubmitting, uid],
+    [
+      date,
+      time,
+      servings,
+      now,
+      cook,
+      onAddNote,
+      journal,
+      isChanged,
+      isSubmitting,
+      uid,
+    ],
   );
 
   const handleSubmit = async () => {
@@ -246,7 +256,13 @@ function CookEditView({
       <Form
         id='pinch-cook'
         form={fields}
-        initialData={{ when: '', servings: '', result: '', journal: '', note: '' }}
+        initialData={{
+          when: '',
+          servings: '',
+          result: '',
+          journal: '',
+          note: '',
+        }}
         columns={1}
         onSubmit={() => {
           void handleSubmit();

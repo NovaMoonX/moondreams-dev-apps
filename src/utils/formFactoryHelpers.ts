@@ -17,13 +17,15 @@ export function createDateInputField({
   return custom({
     ...field,
     isValid: isValid as ((value: unknown) => { valid: boolean }) | undefined,
-    renderComponent: ({ value, onValueChange, disabled, name }) =>
+    renderComponent: ({ value, onValueChange, disabled, error, name }) =>
       createElement(DateInput, {
         name,
         disabled,
         placeholder,
         variant,
         rounded,
+        errorMessage: error,
+        required: field.required,
         'aria-label': field.label,
         value: typeof value === 'string' ? value : '',
         onChange: (event) => onValueChange(event.target.value),

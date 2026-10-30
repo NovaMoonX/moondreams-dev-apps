@@ -1,5 +1,4 @@
 import { Label } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { COMPACT_INPUT_CLASS } from '@/components/forms/Field';
 import { toDateInputValue } from '@/utils/dateInputUtils';
@@ -19,7 +18,8 @@ function EatByField({ value, onChange, hint, isRow = false }: EatByFieldProps) {
     <DateInput
       variant='outline'
       aria-label='Eat by'
-      className={join(COMPACT_INPUT_CLASS, 'min-w-0', isRow && 'w-44')}
+      className={COMPACT_INPUT_CLASS}
+      wrapperClassName={isRow ? 'w-44' : undefined}
       min={toDateInputValue(MIN_EAT_BY_DATE)}
       max={toDateInputValue(MAX_EAT_BY_DATE)}
       value={value}
