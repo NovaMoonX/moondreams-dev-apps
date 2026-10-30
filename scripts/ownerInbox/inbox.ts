@@ -89,11 +89,9 @@ export interface PrStatus {
 
 export interface GalleryImage {
   src: string;
-  /** From the table's column title when it says so ("Before", "After"). */
   role: 'before' | 'after' | null;
 }
 
-/** One screen (or one step of a flow) from the PR body's Screenshots section, with every image shown for it. */
 export interface GalleryStep {
   label: string;
   images: GalleryImage[];
@@ -111,7 +109,6 @@ export interface InboxPr {
   /** The session link in the PR body's attribution, for PRs whose status comment predates the session marker. */
   bodySessionUrl: string | null;
   status: PrStatus | null;
-  /** Every screenshot in the PR body, in the order the author listed them (the order a person meets the screens). */
   gallery: GalleryStep[];
 }
 
@@ -229,7 +226,7 @@ const toImageUrls = (cell: string) =>
 const toImages = (cell: string, role: GalleryImage['role']): GalleryImage[] =>
   toImageUrls(cell).map((src) => ({ src, role }));
 
-/** Words for a label: markup, links, heading hashes and emphasis marks removed, cut before escaping so a cut never lands inside `&amp;`. */
+// Cut before escaping, so the cut never lands inside `&amp;`.
 const toLabel = (text: string) =>
   toPlain(
     text
@@ -243,7 +240,6 @@ const toLabel = (text: string) =>
       .slice(0, MAX_LABEL),
   );
 
-/** A table row's cells; a pipe written `\|` stays inside its cell. */
 const toCells = (line: string) =>
   line
     .trim()
@@ -259,7 +255,6 @@ const getRole = (heading: string): GalleryImage['role'] => {
   return null;
 };
 
-/** The lines of the body's `## Screenshots` section, up to the next `##` heading. */
 const screenshotLines = (body: string) => {
   const all = lines(body);
   const start = all.findIndex((line) => /^##\s+Screenshots\b/i.test(line));
@@ -269,7 +264,6 @@ const screenshotLines = (body: string) => {
   return end === -1 ? rest : rest.slice(0, end);
 };
 
-/** A table row as steps: a first cell without a picture names the row, its other cells' titles say Before or After; a row that is only pictures gives each picture a step named by its column's title. */
 const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
   const [first = '', ...rest] = cells;
   if (toImageUrls(first).length === 0) {
@@ -295,12 +289,7 @@ const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
   });
 };
 
-/**
- * Every screenshot in a PR body's Screenshots section, one step per table row (its first cell is the
- * name, the other cells' titles say Before or After; a row of only pictures is one step per picture,
- * named by its column) or per image line outside a table, in the order written. This is the whole
- * set, unlike the status comment's line of the latest push.
- */
+/** Every screenshot in a PR body's Screenshots section, in the order written. */
 export function parseGallery(body: string | null): GalleryStep[] {
   const result = screenshotLines(body ?? '').reduce<{
     steps: GalleryStep[];

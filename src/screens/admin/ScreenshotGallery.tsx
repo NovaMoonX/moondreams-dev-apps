@@ -10,7 +10,6 @@ import type { GalleryItem } from './pipelineUtils';
 
 const ROLE_WORDS = { before: 'Before', after: 'After' } as const;
 
-/** Every screenshot of a pull request as tiles in the order the author listed them; numbered labels read as a flow. A tap opens them full screen. */
 function ScreenshotGallery({ items }: { items: GalleryItem[] }) {
   const [openAt, setOpenAt] = useState<number | null>(null);
   if (items.length === 0) return null;

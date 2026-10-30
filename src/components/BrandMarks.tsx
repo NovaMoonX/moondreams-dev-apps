@@ -2,7 +2,6 @@ interface BrandMarkProps {
   className?: string;
 }
 
-/** GitHub's mark in the text colour, for a link that leaves for GitHub. */
 export function GitHubMark({ className = 'size-4' }: BrandMarkProps) {
   return (
     <svg
@@ -16,7 +15,6 @@ export function GitHubMark({ className = 'size-4' }: BrandMarkProps) {
   );
 }
 
-/** Claude's spark in its orange, for a link that opens a Claude session. */
 export function ClaudeMark({ className = 'size-4' }: BrandMarkProps) {
   return (
     <svg

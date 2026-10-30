@@ -37,7 +37,6 @@ function SheetSection({
   );
 }
 
-/** The one place the entry's main action leads: its Claude session, or its pull request when no session reports. */
 const getOpenTarget = (entry: PipelineEntry) => {
   if (entry.url && !entry.isPrOnly) {
     return {

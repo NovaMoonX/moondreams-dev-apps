@@ -32,7 +32,6 @@ export interface PipelineGalleryImage {
   role: 'before' | 'after' | null;
 }
 
-/** One screen, or one step of a flow, from the pull request's Screenshots section. */
 export interface PipelineGalleryStep {
   label: string;
   images: PipelineGalleryImage[];
@@ -49,8 +48,7 @@ export interface PipelineInboxPr {
   ci: 'green' | 'red' | 'running' | 'none';
   bodySessionUrl: string | null;
   status: PipelineInboxStatus | null;
-  /** Optional only for the inbox document written before the gallery existed: the function always writes it, and the document is replaced whole on the next inbox run. */
-  gallery?: PipelineGalleryStep[];
+  gallery: PipelineGalleryStep[] | null;
 }
 
 export interface PipelineInbox {

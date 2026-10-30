@@ -35,7 +35,6 @@ const CI_BADGE: Record<string, { words: string; className: string }> = {
   green: { words: 'Checks passing', className: 'bg-success/10 text-success' },
 };
 
-/** A pull request's checks as a small coloured pill: red failing, amber running, green passing; nothing when it has none. */
 export function CiBadge({ ci }: { ci: string }) {
   const badge = CI_BADGE[ci];
   if (!badge) return null;

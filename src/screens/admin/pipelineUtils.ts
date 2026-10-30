@@ -37,7 +37,6 @@ export interface PipelineOwnerEntryItem {
 
 export interface GalleryItem {
   id: string;
-  /** Its place in a flow, when the author numbered the screens ("2 · Pick a day"). */
   step: number | null;
   label: string;
   shots: PipelineGalleryImage[];
@@ -60,7 +59,6 @@ export interface PipelineEntry {
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
   goodToKnow: string[];
-  /** Every screenshot of the pull requests' bodies in the order written; the status comment's line of the latest push when a body has none. */
   gallery: GalleryItem[];
   at: number;
 }
@@ -196,20 +194,17 @@ function getLead(
   now: number,
 ) {
   const time = formatPipelineTime(session.updatedAt, now);
-  const base = (() => {
-    if (group === 'waiting') return `Waiting since ${time}`;
-    if (group === 'working') {
-      const since = formatPipelineTime(
-        session.turnStartedAt ?? session.updatedAt,
-        now,
-      );
-      return `Working since ${since}${session.branch ? ` on ${session.branch}` : ''}`;
-    }
-    if (group === 'quiet')
-      return `No update for ${formatSpan(now - session.updatedAt)}. It may have stopped, or be waiting on a permission prompt.`;
-    return `Finished its turn at ${time}.`;
-  })();
-  return base;
+  if (group === 'waiting') return `Waiting since ${time}`;
+  if (group === 'working') {
+    const since = formatPipelineTime(
+      session.turnStartedAt ?? session.updatedAt,
+      now,
+    );
+    return `Working since ${since}${session.branch ? ` on ${session.branch}` : ''}`;
+  }
+  if (group === 'quiet')
+    return `No update for ${formatSpan(now - session.updatedAt)}. It may have stopped, or be waiting on a permission prompt.`;
+  return `Finished its turn at ${time}.`;
 }
 
 function toSessionEntry(

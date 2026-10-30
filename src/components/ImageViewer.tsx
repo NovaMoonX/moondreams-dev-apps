@@ -10,11 +10,9 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 export interface ViewerPicture {
   src: string;
-  /** Names the picture within its slide ("Before"); only shown when a slide has more than one. */
   label: string | null;
 }
 
-/** One screen of the viewer: a caption and the picture or pictures that belong together (a before and its after). */
 export interface ViewerSlide {
   caption: string | null;
   pictures: ViewerPicture[];
@@ -28,11 +26,7 @@ interface ImageViewerProps {
 
 const SWIPE_PX = 50;
 
-/**
- * Pictures full screen in the same tab, over whatever is open: swipe, the arrows or the arrow keys
- * step through the slides (a slide's pictures sit side by side where there is room, and switch with a
- * pill row where there is not), and a tap on the empty space, Escape or the back gesture closes only this layer.
- */
+/** Pictures full screen in the same tab, over whatever is open; closes only its own layer. */
 function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
   const [index, setIndex] = useState(startIndex);
   const [pick, setPick] = useState({ slide: startIndex, picture: 0 });
