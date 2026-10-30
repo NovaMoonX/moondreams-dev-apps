@@ -77,6 +77,9 @@ shared_defs='
            tools: [.[].message.content[]? | select(.type == "tool_use")]})
     | sort_by(.ts);
   def written: (.usage.cache_creation_input_tokens // ((.usage.cache_creation.ephemeral_5m_input_tokens // 0) + (.usage.cache_creation.ephemeral_1h_input_tokens // 0)));
+  def edited_apps:
+    [.[].tools[] | select(.name == "Edit" or .name == "Write") | (.input.file_path // "")
+     | capture("src/apps/(?<id>[a-z0-9-]{1,40})/").id?];
   def row($phase; $isHelper):
     {day: .ts[0:10], model: .model, phase: $phase, isHelper: $isHelper, calls: 1,
      input: (.usage.input_tokens // 0),
@@ -95,50 +98,49 @@ main_program="$shared_defs"'
     else "conversation" end;
   replies as $r
   | {
-      app: ([$r[].tools[] | select(.name == "Edit" or .name == "Write") | (.input.file_path // "")
-             | capture("src/apps/(?<id>[a-z0-9-]{1,40})/").id?]
-            | group_by(.) | sort_by(length) | last | (if . == null then null else .[0] end)),
+      apps: ($r | edited_apps),
       contextTokens: ($r | last | (if . == null then 0 else ((.usage.input_tokens // 0) + (.usage.cache_read_input_tokens // 0) + written) end)),
       calls: ($r | length),
       rows: [$r[] | row(phase; false)]
     }'
-helper_program="$shared_defs"'replies | map(row($phase; true))'
+helper_program="$shared_defs"'replies | {apps: edited_apps, rows: map(row($phase; true))}'
 
 (
   base="${transcript%.jsonl}"
-  helper_rows=$(
-    for file in "$base"/subagents/agent-*.jsonl; do
-      [[ -f "$file" ]] || continue
-      agent_type=$(jq -r '.agentType // empty' "${file%.jsonl}.meta.json" 2>/dev/null)
-      case "$agent_type" in
-        implementer | pr-syncer | stack-pr-reviewer) phase="building" ;;
-        validator) phase="checks" ;;
-        technical-reviewer | product-reviewer | design-reviewer | lead-reviewer) phase="review" ;;
-        product-planner | design-planner | tech-planner | Plan) phase="planning" ;;
-        *) phase="investigating" ;;
-      esac
-      jq -s -c --arg phase "$phase" "$helper_program" "$file" 2>/dev/null
-    done | jq -s -c 'add // []' 2>/dev/null
-  )
-  [[ -n "$helper_rows" ]] || helper_rows="[]"
-  cost_body=$(
-    jq -s -c "$main_program" "$transcript" 2>/dev/null | jq -c \
-      --arg key "$PIPELINE_KEY" \
-      --arg sessionId "$session_id" \
-      --arg url "$session_url" \
-      --arg branch "$branch" \
-      --argjson helpers "$helper_rows" \
-      '{data: {key: $key, kind: "cost", sessionId: $sessionId,
-        url: (if $url == "" then null else $url end),
-        branch: (if $branch == "" then null else $branch end),
-        app: .app, contextTokens: .contextTokens, calls: .calls,
-        rows: (.rows + $helpers
-          | group_by([.day, .model, .phase, .isHelper])
-          | map(.[0] + {calls: (map(.calls) | add), input: (map(.input) | add), cacheWrite5m: (map(.cacheWrite5m) | add),
-                        cacheWrite1h: (map(.cacheWrite1h) | add), cacheRead: (map(.cacheRead) | add), output: (map(.output) | add)}))}}' 2>/dev/null
-  )
-  [[ -n "$cost_body" ]] || exit 0
-  nohup curl -sS --max-time 8 -X POST -H 'Content-Type: application/json' \
-    --data "$cost_body" "$endpoint" >/dev/null 2>&1
+  # Everything that grows with the session goes through files: one argument over 128 KB fails quietly.
+  trap '' HUP
+  work=$(mktemp -d) || exit 0
+  trap 'rm -rf "$work"' EXIT
+  for file in "$base"/subagents/agent-*.jsonl; do
+    [[ -f "$file" ]] || continue
+    agent_type=$(jq -r '.agentType // empty' "${file%.jsonl}.meta.json" 2>/dev/null)
+    case "$agent_type" in
+      implementer | pr-syncer | stack-pr-reviewer) phase="building" ;;
+      validator) phase="checks" ;;
+      technical-reviewer | product-reviewer | design-reviewer | lead-reviewer) phase="review" ;;
+      product-planner | design-planner | tech-planner | Plan) phase="planning" ;;
+      *) phase="investigating" ;;
+    esac
+    jq -s -c --arg phase "$phase" "$helper_program" "$file" 2>/dev/null
+  done >"$work/helpers.jsonl"
+  jq -s -c "$main_program" "$transcript" 2>/dev/null | jq -c \
+    --arg key "$PIPELINE_KEY" \
+    --arg sessionId "$session_id" \
+    --arg url "$session_url" \
+    --arg branch "$branch" \
+    --slurpfile helpers "$work/helpers.jsonl" \
+    '{data: {key: $key, kind: "cost", sessionId: $sessionId,
+      url: (if $url == "" then null else $url end),
+      branch: (if $branch == "" then null else $branch end),
+      app: (.apps + [$helpers[].apps[]] | group_by(.) | sort_by(length) | last | (if . == null then null else .[0] end)),
+      contextTokens: .contextTokens, calls: .calls,
+      rows: (.rows + [$helpers[].rows[]]
+        | group_by([.day, .model, .phase, .isHelper])
+        | map(.[0] + {calls: (map(.calls) | add), input: (map(.input) | add), cacheWrite5m: (map(.cacheWrite5m) | add),
+                      cacheWrite1h: (map(.cacheWrite1h) | add), cacheRead: (map(.cacheRead) | add), output: (map(.output) | add)}))}}' \
+    >"$work/body.json" 2>/dev/null
+  [[ -s "$work/body.json" ]] || exit 0
+  curl -sS --max-time 8 -X POST -H 'Content-Type: application/json' \
+    --data @"$work/body.json" "$endpoint" >/dev/null 2>&1
 ) >/dev/null 2>&1 &
 exit 0
