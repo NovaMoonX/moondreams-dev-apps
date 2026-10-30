@@ -96,7 +96,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const draftKey = `${FORM_DRAFT_PREFIX}pay-card:${card.id}`;
   const kept = useFormDraft({
     key: draftKey,
-    base: initial,
+    base: null,
     parse: parsePayCardDraft,
   });
   const [amount, setAmount] = useState(kept.restored?.amount ?? initial.amount);
@@ -157,7 +157,7 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   useKeepFormDraft({
     isRestored: kept.restored !== null,
     key: draftKey,
-    base: initial,
+    base: null,
     value: keptValue,
     isDirty,
   });

@@ -44,6 +44,8 @@ interface UseKeepFormDraftOptions<T> {
   isRestored: boolean;
   value: T;
   isDirty: boolean;
+  /** Keeps the draft when the form unmounts, for a form something else can close (a reveal, a lock); the form then calls the returned `forget` when the person closes it on purpose. */
+  keepOnUnmount?: boolean;
 }
 
 /** Keeps a form's unsaved value on this device while it is dirty; closing the form (unmounting) forgets what it kept. */
@@ -53,6 +55,7 @@ export function useKeepFormDraft<T>({
   isRestored,
   value,
   isDirty,
+  keepOnUnmount = false,
 }: UseKeepFormDraftOptions<T>) {
   const baseText = JSON.stringify(base);
   const { user } = useAuth();
@@ -73,9 +76,14 @@ export function useKeepFormDraft<T>({
   }, [uid, key, baseText, value, isDirty]);
 
   useEffect(() => {
-    if (!uid || !key) return;
+    if (!uid || !key || keepOnUnmount) return;
     return () => {
       if (hasWrittenRef.current) clearFormDraft(uid, key);
     };
-  }, [uid, key]);
+  }, [uid, key, keepOnUnmount]);
+
+  const forget = () => {
+    if (uid && key && hasWrittenRef.current) clearFormDraft(uid, key);
+  };
+  return forget;
 }

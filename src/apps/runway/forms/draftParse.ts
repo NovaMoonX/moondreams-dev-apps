@@ -4,6 +4,7 @@ import {
   STANCES,
 } from '@apps/runway/constants';
 import type { FundingFormData } from '@apps/runway/forms/fundingFlow';
+import type { FromWhenValue } from '@apps/runway/utils/fromWhen';
 import type { AmountDraft } from '@apps/runway/utils/rangeInput';
 
 type Check = (value: unknown) => boolean;
@@ -54,6 +55,40 @@ export const isPickOrCreate: Check = (value) =>
     choice: isText,
     newText: isText,
   }) !== null;
+
+export const isFromWhen: Check = (value) =>
+  readDraftFields<FromWhenValue>(value, {
+    choice: isOneOf(['now', 'date', 'fromDay', 'dayOnly', 'stretch']),
+    date: isText,
+    dayKey: isText,
+    stretch: isOneOf(['count', 'until']),
+    count: isText,
+    until: isText,
+  }) !== null;
+
+/** What an edit form keeps beside its fields: the change's note and when it starts. */
+export interface KeptChange {
+  note: string;
+  from: FromWhenValue;
+}
+
+export const keptChangeChecks: { [K in keyof KeptChange]-?: Check } = {
+  note: isText,
+  from: isFromWhen,
+};
+
+/** Reads `{ formData, note, from }` back, with the form's own fields read by `parseForm`. */
+export function readKeptWithChange<T>(
+  stored: unknown,
+  parseForm: (formData: unknown) => T | null,
+): ({ formData: T } & KeptChange) | null {
+  const draft = readDraftFields<{ formData: unknown } & KeptChange>(stored, {
+    formData: () => true,
+    ...keptChangeChecks,
+  });
+  const formData = draft ? parseForm(draft.formData) : null;
+  return draft && formData !== null ? { ...draft, formData } : null;
+}
 
 /** The checks for the funding questions an envelope's and a goal's form share. */
 export const fundingFieldChecks: { [K in keyof FundingFormData]-?: Check } = {

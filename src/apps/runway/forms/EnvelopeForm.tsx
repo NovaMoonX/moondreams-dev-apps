@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
@@ -37,6 +37,7 @@ import {
   isNullableText,
   isText,
   readDraftFields,
+  readKeptWithChange,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
@@ -77,13 +78,16 @@ interface EnvelopeFormData extends FundingFormData {
   emoji: string | null;
 }
 
-const parseEnvelopeDraft = (stored: unknown) =>
+const parseEnvelopeDraftFields = (stored: unknown) =>
   readDraftFields<EnvelopeFormData>(stored, {
     ...fundingFieldChecks,
     name: isText,
     priority: isNullableOneOf(PRIORITIES),
     emoji: isNullableText,
   });
+
+const parseEnvelopeDraft = (stored: unknown) =>
+  readKeptWithChange(stored, parseEnvelopeDraftFields);
 
 interface EnvelopeFormProps {
   isOpen: boolean;
@@ -175,7 +179,7 @@ function EnvelopeFormBody({
     parse: parseEnvelopeDraft,
   });
   const [formData, setFormData] = useState<EnvelopeFormData>(
-    kept.restored ?? startData,
+    kept.restored?.formData ?? startData,
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -307,18 +311,26 @@ function EnvelopeFormBody({
     candidate,
     presetDayKey,
     onDone: onClose,
+    initialNote: kept.restored?.note,
+    initialFrom: kept.restored?.from,
   });
   const editBlocker = flow.getBlocker(blocker);
-  const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) ||
+  const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
+  const keptValue = useMemo(
+    () => ({ formData, note: flow.note, from: flow.from }),
+    [formData, flow.note, flow.from],
+  );
   useKeepFormDraft({
     isRestored: kept.restored !== null,
     key: draftKey,
     base: draftBase,
-    value: formData,
-    isDirty: JSON.stringify(formData) !== JSON.stringify(startData),
+    value: keptValue,
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty,
   });
   const startOver = () => {
     if (user && draftKey) clearFormDraft(user.uid, draftKey);

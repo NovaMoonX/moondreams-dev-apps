@@ -55,7 +55,9 @@ import {
   isPickOrCreate,
   isText,
   isTextList,
+  keptChangeChecks,
   readDraftFields,
+  type KeptChange,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
@@ -133,7 +135,7 @@ interface BillFormData {
   paidByCardId: string | null;
 }
 
-interface BillDraft {
+interface BillDraft extends KeptChange {
   formData: BillFormData;
   isPriorityChosen: boolean;
 }
@@ -142,6 +144,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
   const draft = readDraftFields<BillDraft>(stored, {
     formData: () => true,
     isPriorityChosen: isFlag,
+    ...keptChangeChecks,
   });
   const formData = draft
     ? readDraftFields<BillFormData>(draft.formData, {
@@ -859,15 +862,18 @@ function BillFormBody({
     presetDayKey,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
+    initialNote: kept.restored?.note,
+    initialFrom: kept.restored?.from,
   });
   const editBlocker = flow.getBlocker(blocker);
-  const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) ||
+  const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
   const keptValue = useMemo(
-    () => ({ formData, isPriorityChosen }),
-    [formData, isPriorityChosen],
+    () => ({ formData, isPriorityChosen, note: flow.note, from: flow.from }),
+    [formData, isPriorityChosen, flow.note, flow.from],
   );
   useKeepFormDraft({
     isRestored: kept.restored !== null,
@@ -876,7 +882,8 @@ function BillFormBody({
     value: keptValue,
     isDirty:
       JSON.stringify(formData) !== JSON.stringify(startData) ||
-      isPriorityChosen !== startsChosen,
+      isPriorityChosen !== startsChosen ||
+      isChangeDirty,
   });
   const startOver = () => {
     if (user && draftKey) clearFormDraft(user.uid, draftKey);

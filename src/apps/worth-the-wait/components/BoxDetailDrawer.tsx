@@ -61,12 +61,13 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   });
   const [draftItemContent, setDraftItemContent] = useState(draft.restored ?? '');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  useKeepFormDraft({
+  const forgetDraft = useKeepFormDraft({
     isRestored: draft.restored !== null,
     key: draftKey,
     base: null,
     value: draftItemContent,
     isDirty: editingItemId === null && draftItemContent.trim() !== '',
+    keepOnUnmount: true,
   });
   const [showRecentlyRevealedItems, setShowRecentlyRevealedItems] =
     useState(itemsDisclosureOpen);
@@ -203,7 +204,10 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     isDirty:
       typedText !== '' &&
       typedText !== (itemsById[editingItemId ?? '']?.content.trim() ?? ''),
-    onClose,
+    onClose: () => {
+      forgetDraft();
+      onClose();
+    },
     title: 'Discard this item?',
     message: "What you typed hasn't been added to the box.",
   });

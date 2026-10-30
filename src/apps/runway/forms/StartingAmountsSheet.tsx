@@ -182,7 +182,7 @@ function StartingAmountsSheet({
   }));
   const kept = useFormDraft({
     key: `${FORM_DRAFT_PREFIX}starting-amounts`,
-    base: start,
+    base: plan?.startDate ?? null,
     parse: (stored) => {
       const draft = parseStartingAmountsDraft(stored);
       if (draft === null) return null;
@@ -226,7 +226,7 @@ function StartingAmountsSheet({
   useKeepFormDraft({
     isRestored: kept.restored !== null,
     key: `${FORM_DRAFT_PREFIX}starting-amounts`,
-    base: start,
+    base: plan?.startDate ?? null,
     value: keptValue,
     isDirty: snapshot !== startSnapshot,
   });

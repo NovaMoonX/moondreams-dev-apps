@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -49,6 +49,7 @@ import {
   isNullableText,
   isText,
   readDraftFields,
+  readKeptWithChange,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
@@ -98,7 +99,7 @@ interface GoalFormData extends FundingFormData {
   emoji: string | null;
 }
 
-const parseGoalDraft = (stored: unknown) =>
+const parseGoalDraftFields = (stored: unknown) =>
   readDraftFields<GoalFormData>(stored, {
     ...fundingFieldChecks,
     name: isText,
@@ -108,6 +109,9 @@ const parseGoalDraft = (stored: unknown) =>
     current: isText,
     emoji: isNullableText,
   });
+
+const parseGoalDraft = (stored: unknown) =>
+  readKeptWithChange(stored, parseGoalDraftFields);
 
 interface GoalFormProps {
   isOpen: boolean;
@@ -241,7 +245,7 @@ function GoalFormBody({
     parse: parseGoalDraft,
   });
   const [formData, setFormData] = useState<GoalFormData>(
-    kept.restored ?? startData,
+    kept.restored?.formData ?? startData,
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -520,18 +524,26 @@ function GoalFormBody({
     candidate,
     presetDayKey,
     onDone: onClose,
+    initialNote: kept.restored?.note,
+    initialFrom: kept.restored?.from,
   });
   const editBlocker = flow.getBlocker(blocker);
-  const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) ||
+  const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
+  const keptValue = useMemo(
+    () => ({ formData, note: flow.note, from: flow.from }),
+    [formData, flow.note, flow.from],
+  );
   useKeepFormDraft({
     isRestored: kept.restored !== null,
     key: draftKey,
     base: draftBase,
-    value: formData,
-    isDirty: JSON.stringify(formData) !== JSON.stringify(startData),
+    value: keptValue,
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty,
   });
   const startOver = () => {
     if (user && draftKey) clearFormDraft(user.uid, draftKey);

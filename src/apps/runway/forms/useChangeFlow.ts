@@ -36,6 +36,7 @@ import {
   getChangeSpan,
   INITIAL_FROM_WHEN,
   type ChangeSpan,
+  type FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import type {
@@ -56,6 +57,9 @@ interface UseChangeFlowArgs {
   /** A group the person named while changing a bill, written in the same batch as the change. */
   newGroup?: GroupSealed | null;
   onDone: () => void;
+  /** A kept draft's note and "from when", when the form starts from one. */
+  initialNote?: string;
+  initialFrom?: FromWhenValue;
 }
 
 /** What one income day's own version of an envelope or goal may differ in. */
@@ -116,6 +120,8 @@ export function useChangeFlow({
   presetDayKey = null,
   newGroup = null,
   onDone,
+  initialNote = '',
+  initialFrom = INITIAL_FROM_WHEN,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -124,9 +130,9 @@ export function useChangeFlow({
   const days = useAppSelector((state) => selectComingDays(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
-  const [from, setFrom] = useState(INITIAL_FROM_WHEN);
+  const [from, setFrom] = useState(initialFrom);
   const [step, setStep] = useState<'form' | 'reason'>('form');
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState(initialNote);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
