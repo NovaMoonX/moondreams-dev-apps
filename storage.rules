@@ -49,6 +49,7 @@ service firebase.storage {
       allow read, delete: if request.auth != null && request.auth.uid == uid;
       allow create: if request.auth != null
         && request.auth.uid == uid
+        && resource == null
         && request.resource.size < 10 * 1024 * 1024 + 1024
         && request.resource.contentType == 'application/octet-stream';
     }

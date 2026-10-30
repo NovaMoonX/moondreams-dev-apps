@@ -140,6 +140,16 @@ npm run fb:invoker -- findShowtimes --dry   # prints the gcloud command without 
 
 It runs `gcloud run services update <lowercase-name> --no-invoker-iam-check --region=us-central1 --project=<.firebaserc default>` for each function and carries on if one fails. It needs `gcloud` signed in with a role that can update Cloud Run services.
 
+### Storage CORS for reading sealed files
+
+Runway's receipt photos are sealed on the device, so the app reads their bytes (`getBytes`) instead of showing a picture URL, and a browser only allows that when the bucket's CORS lists the site. It is a one-off bucket setting, kept in `storage-cors.json` (GET only, the production origins); apply it once, and again whenever that file changes:
+
+```bash
+gcloud storage buckets update gs://moondreams-dev-apps.firebasestorage.app --cors-file=storage-cors.json
+```
+
+Symptom without it: a receipt uploads, but its thumbnail never opens and the console shows a CORS error on `firebasestorage.googleapis.com`. A PR preview channel (`moondreams-dev-apps--pr…web.app`) is not listed, so receipts don't open there.
+
 ## PWAs & push notifications
 
 The site installs as **one** Progressive Web App: `index.html` links `public/manifest-main.json` (`id`/`start_url`/`scope` `/`; its installed icon is `public/logos/logo-pwa.svg`, with PNG copies `pwa-icon-192.png`, `pwa-icon-512.png` and a padded `pwa-icon-maskable-512.png` for Android and `apple-touch-icon.png` for iOS, because phones don't take an SVG icon when installing; regenerate the PNGs from the SVG if it changes), and every route, mini-apps included, uses it. Mini-apps are not installable on their own: several PWAs on one origin with nested scopes aren't supported by Chrome on Android, and a root app's scope covers every mini-app URL anyway, so people reach a mini-app from the installed hub. Don't add per-app manifests or `scope_extensions`. Because the hub is installed, its ways home (the menu's Home row, header icon, entry and error screens) stay visible everywhere. An installed window (`IS_INSTALLED_APP` in `src/utils/pwaUtils.ts`: `display-mode` standalone, minimal-ui or window-controls-overlay, or iOS `navigator.standalone`) shows no scrollbar anywhere, at any width (`data-installed-app` on `<html>`, set in `main.tsx`, hides them with `!important` in `src/index.css`); scrolling itself is unchanged. `src/ui/Layout.tsx` swaps only the tab icon and title to the current mini-app's `public/logos/by-app/logo-<app-id>.svg` (the hub keeps its light/dark logos from `index.html`).

@@ -1069,7 +1069,7 @@ Invariant 13 stops a key id being dropped casually. When one must go (a suspecte
 
 - Images are shrunk to 2400px (WebP) on the device, sealed, uploaded as opaque bytes, and decrypted on the device for display; a thumbnail is the same picture scaled by the browser.
 - Receipts are kept until the person removes them. There is no expiry, no `expiresAt`, no scheduled function and no collection-group index. A removed purchase's receipts are listed and removed after the purchase is gone, best effort; one left behind is still unreadable bytes and goes with the plan.
-- Downloading decrypts and saves the file. Reading the bytes in a browser (`getBytes`) needs the Storage bucket's CORS to allow the app's origin; that is a one-off console setting, not code.
+- Downloading decrypts and saves the file. Reading the bytes in a browser (`getBytes`) needs the Storage bucket's CORS to allow the app's origin; that is a one-off bucket setting kept in `storage-cors.json` (root README, "Storage CORS for reading sealed files").
 
 ### Deleting a plan
 
