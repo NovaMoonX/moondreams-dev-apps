@@ -22,6 +22,13 @@ import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+/** A name, or the email where two accounts on the device share that name. */
+function getAccountLabel(account: RememberedAccount, accounts: RememberedAccount[]) {
+  const name = account.displayName?.trim() || null;
+  const isShared = accounts.some((other) => other.uid !== account.uid && other.displayName?.trim() === name);
+  return (isShared || !name ? account.email : name) ?? 'another account';
+}
+
 type AuthAvatarProps = {
   className?: string;
 };
@@ -121,7 +128,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
   const accountItems = [
     ...otherAccounts.map((account) =>
       option({
-        label: `Switch to ${account.displayName?.trim() || account.email || 'another account'}`,
+        label: `Switch to ${getAccountLabel(account, otherAccounts)}`,
         value: `switch:${account.uid}`,
         icon: account.photoURL ? (
           <FallbackImage

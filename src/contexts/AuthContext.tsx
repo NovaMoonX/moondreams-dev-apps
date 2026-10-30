@@ -41,6 +41,7 @@ import {
   type RememberedAccount,
 } from '@/lib/auth/rememberedAccounts';
 import { detachDevicePush, releaseDevicePush } from '@/lib/notifications/devicePush';
+import { enablePushNotifications } from '@/lib/notifications/enablePushNotifications';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const currentLocationRef = useRef('home');
   const previousUserIdRef = useRef<string | null | undefined>(undefined);
   const isReloadingRef = useRef(false);
+  const isSwitchingRef = useRef(false);
   const [rememberedAccounts, setRememberedAccounts] = useState<RememberedAccount[]>(readRememberedAccounts);
 
   const isAdmin = useMemo(
@@ -239,6 +241,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const switchAccount = useCallback(async (email: string | null) => {
+    if (isSwitchingRef.current) return;
     if (!navigator.onLine) {
       throw new Error("You're offline. Switch accounts once you're back online.");
     }
@@ -248,22 +251,36 @@ export function AuthProvider({ children }: PropsWithChildren) {
     );
     // The popup opens first, inside the tap, or a browser may block it.
     const signingIn = signInWithPopup(auth, provider);
+    isSwitchingRef.current = true;
     const previousUid = auth.currentUser?.uid ?? null;
-    if (previousUid) {
-      // While the picker is open the old account is still signed in, so it can mark itself offline and give up this device's pushes.
-      void set(ref(realtimeDb, `status/${previousUid}`), {
-        state: 'offline',
-        currentLocation: null,
-        lastChanges: serverTimestamp(),
-      }).catch(() => undefined);
+    const statusRef = previousUid ? ref(realtimeDb, `status/${previousUid}`) : null;
+    if (previousUid && statusRef) {
+      // While the picker is open the old account is still signed in: it sends what it hasn't yet,
+      // marks itself offline and gives up this device's pushes (the server also moves the token on).
+      void waitForPendingWrites(db).catch(() => undefined);
+      void set(statusRef, { state: 'offline', currentLocation: null, lastChanges: serverTimestamp() }).catch(
+        () => undefined,
+      );
       void detachDevicePush(previousUid);
     }
+    const stayAsBefore = () => {
+      isSwitchingRef.current = false;
+      if (!previousUid || !statusRef) return;
+      void set(statusRef, {
+        state: 'online',
+        currentLocation: currentLocationRef.current,
+        lastChanges: serverTimestamp(),
+      }).catch(() => undefined);
+      void enablePushNotifications(previousUid);
+    };
     try {
       const result = await signingIn;
-      // A different account reloads from the auth listener once the saved data is cleared; the same one reloads to get its pushes back.
-      if (result.user.uid === previousUid) window.location.reload();
+      // A different account reloads from the auth listener once the saved data is cleared.
+      if (result.user.uid === previousUid) stayAsBefore();
     } catch (error) {
-      if (previousUid) window.location.reload();
+      stayAsBefore();
+      const code = (error as { code?: string }).code ?? '';
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') return;
       throw error;
     }
   }, []);

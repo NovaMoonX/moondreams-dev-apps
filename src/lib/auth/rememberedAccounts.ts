@@ -40,13 +40,13 @@ export function rememberAccount(account: Omit<RememberedAccount, 'lastUsedAt'>) 
   return next;
 }
 
-/** Drops an account from the device's list along with everything this device saved under its uid (sessions, drafts, view choices). */
+/** Drops an account from the device's list along with the keys this device saved under its uid (`…:<uid>…`: sessions, drafts, view choices). */
 export function forgetAccount(uid: string) {
   const next = readRememberedAccounts().filter((saved) => saved.uid !== uid);
   writeRememberedAccounts(next);
   try {
     Object.keys(window.localStorage)
-      .filter((key) => key.includes(uid))
+      .filter((key) => key.includes(`:${uid}`) || key.startsWith(`${uid}:`))
       .forEach((key) => window.localStorage.removeItem(key));
   } catch {
     // Nothing more this device can clear.
