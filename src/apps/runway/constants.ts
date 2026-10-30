@@ -1241,13 +1241,15 @@ export const FORM_FLOW_WORDS = {
   name: 'Name',
   priorityTitle: 'How much does it matter?',
   priority: 'How much it matters',
-  groupTitle: 'Does it belong in a group?',
-  group: 'Group',
-  noGroup: 'None',
-  newGroup: 'New group',
-  newGroupPlaceholder: 'Home, Subscriptions',
-  clearGroup: 'No group',
-  nameGroup: 'Name the group, or choose none.',
+  groupTitle: "What's it for?",
+  groupHelp:
+    "Tie together the bills and envelopes that look after the same thing, like Pets or Home, to see what it costs you each month. It doesn't change how anything is funded.",
+  group: 'For',
+  noGroup: 'Nothing set',
+  newGroup: 'Something else',
+  newGroupPlaceholder: 'Like Pets or Home',
+  clearGroup: 'Nothing',
+  nameGroup: "Name what it's for, or choose Nothing.",
   emojiTitle: 'Pick an emoji, if you like',
   emoji: 'Emoji',
   noEmoji: 'None',
@@ -1585,7 +1587,7 @@ export const ITEM_KIND_NOUNS = {
   goal: 'goal',
   payLine: 'pay',
   source: 'income source',
-  group: 'group',
+  group: 'item',
 } as const;
 
 export const EFFECT_FOLD_WORDS = {
@@ -1605,39 +1607,49 @@ export const RUNWAY_SEARCH_THRESHOLD = 5;
 
 export const GROUP_WORDS = {
   ungrouped: 'Other bills',
+  ungroupedEnvelopes: 'Other envelopes',
+  setTip:
+    'Tip: say what a bill or envelope is for, like Pets, to see what it costs each month.',
   perMonth: (amount: string) => `${amount} a month`,
   monthLabel: 'Together, each month',
-  openLabel: (name: string) => `${name}, open group`,
-  rename: 'Rename',
+  openLabel: (name: string) => `${name}, open`,
+  rename: (name: string) => `Rename ${name}`,
   nameLabel: 'Name',
   startingPriority: 'Starting priority',
   startingPriorityHelp:
-    'A new bill in this group starts with this priority; with None, it starts at Should. You can still change it on the bill.',
+    'A new bill or envelope for this starts with this priority; with None, it starts at Should. You can still change it on the bill or envelope.',
   startingPriorityFailed: 'The priority did not save. Nothing was changed.',
   noPriority: 'None',
-  archive: 'Archive group',
-  archiveTitle: (name: string) => `Archive ${name}?`,
-  archiveBody: (count: number) =>
-    count === 0
-      ? 'It has no bills right now.'
-      : `Its ${count} ${count === 1 ? 'bill stays' : 'bills stay'} in your plan, without a group.`,
-  archived: (name: string, count: number) =>
-    count === 0
-      ? `Archived ${name}.`
-      : `Archived ${name}. Its ${count} ${count === 1 ? 'bill is' : 'bills are'} now without a group.`,
-  archivedToast: (name: string) => `Archived ${name}`,
-  addBill: 'Add a bill to this group',
-  inGroup: 'Group',
-  none: 'No group',
+  archive: (name: string) => `Stop using ${name}`,
+  archiveSub: 'Its bills and envelopes stay, with nothing set.',
+  archiveTitle: (name: string) => `Stop using ${name}?`,
+  archiveBody: (bills: number, envelopes: number) =>
+    bills + envelopes === 0
+      ? 'Nothing is for it right now.'
+      : `Its ${countMembers(bills, envelopes)} stay in your plan, with nothing set.`,
+  archived: (name: string, bills: number, envelopes: number) =>
+    bills + envelopes === 0
+      ? `Stopped using ${name}.`
+      : `Stopped using ${name}. Its ${countMembers(bills, envelopes)} now have nothing set.`,
+  archivedToast: (name: string) => `Stopped using ${name}`,
+  addBill: (name: string) => `Add a bill for ${name}`,
+  addEnvelope: (name: string) => `Add an envelope for ${name}`,
+  billsHeading: 'Bills',
+  envelopesHeading: 'Envelopes',
+  changeLabel: 'For',
+  inGroup: 'For',
+  none: 'Nothing',
+  unset: 'Nothing set',
   oneTimeNote: 'Not in monthly total',
-  noBills: 'No bills yet',
-  nameTaken: (name: string) => `There's already a group called ${name}.`,
+  noBills: 'No bills or envelopes yet',
+  nameTaken: (name: string) => `You already have ${name}.`,
   oneTimeDue: (date: string) => `due ${date}`,
   oneTimeCount: (count: number) => `in ${count} one-time bills`,
   oneTimeLabel: 'Together, one-time',
-  moved: (bill: string, group: string) => `Moved ${bill} to ${group}`,
-  movedOut: (bill: string) => `Took ${bill} out of its group`,
-  willBe: (name: string) => `It will be in ${name}.`,
+  moved: (item: string, name: string) => `${item} is now for ${name}`,
+  movedOut: (item: string, name: string) => `${item} is no longer for ${name}`,
+  movedClear: (item: string) => `${item} is for nothing now`,
+  willBe: (name: string) => `It will be for ${name}.`,
   plusOneTime: (amount: string, count: number, due: string | null) =>
     count === 1 && due !== null
       ? `Plus ${amount} due ${due}`
@@ -1646,18 +1658,41 @@ export const GROUP_WORDS = {
     names.length <= 4
       ? names.join(', ')
       : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
-  archiveFailed: 'The group did not archive. Nothing was changed.',
+  archiveFailed: 'This did not stop. Nothing was changed.',
   saveFailed: 'This did not save. Nothing was changed.',
+  ofWord: 'of',
   basisTitle: 'How a month is worked out',
   rangeTotal:
-    'A bill that varies counts at its low and its high amount, so the total is a range.',
+    'A bill or envelope that varies counts at its low and its high amount, so the total is a range.',
   basis:
-    'A usual month: each repeating bill at what it comes to in an average month. A one-time bill is not in it.',
+    'A usual month: each repeating bill at what it comes to in an average month, and each envelope at what it gets in one. A one-time bill is not in it.',
+  onlyBills: (name: string, part: string | null, whole: string | null) =>
+    part === null || whole === null
+      ? `This counts bills only. Tap ${name} to see both.`
+      : `Bills come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
+  onlyEnvelopes: (name: string, part: string | null, whole: string | null) =>
+    part === null || whole === null
+      ? `This counts envelopes only. Tap ${name} to see both.`
+      : `Envelopes come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
+  chooseEmoji: (name: string) => `Choose an emoji for ${name}`,
+  changeEmoji: (name: string) => `Change the emoji for ${name}`,
+  emojiLabel: 'Emoji',
+  removeEmoji: 'Remove emoji',
   uncounted: (count: number) =>
     count === 1
-      ? 'One bill has no regular schedule, so it is not in this total.'
-      : `${count} bills have no regular schedule, so they are not in this total.`,
+      ? 'One envelope or bill has no regular amount or schedule, so it is not in this total.'
+      : `${count} envelopes or bills have no regular amount or schedule, so they are not in this total.`,
 } as const;
+
+const countMembers = (bills: number, envelopes: number) =>
+  [
+    bills > 0 ? `${bills} ${bills === 1 ? 'bill' : 'bills'}` : null,
+    envelopes > 0
+      ? `${envelopes} ${envelopes === 1 ? 'envelope' : 'envelopes'}`
+      : null,
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' and ');
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {

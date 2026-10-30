@@ -1,31 +1,23 @@
 import { useState, type CSSProperties } from 'react';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Receipt } from 'lucide-react';
+import { Receipt } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
-import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
-import SensitiveValue from '@/components/SensitiveValue';
 import { useNow } from '@/hooks/useNow';
-import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { GROUP_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
-import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
+import GroupHeading from '@apps/runway/components/GroupHeading';
+import { useGroupFigures } from '@apps/runway/hooks/useGroupFigures';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { monthlyTotal } from '@apps/runway/engine/groups';
 import BillForm from '@apps/runway/forms/BillForm';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
-import {
-  describeGroupLead,
-  getGroupMemberNames,
-} from '@apps/runway/utils/billText';
 import {
   selectBills,
   selectBillPayments,
@@ -37,10 +29,10 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 
 const ROWS_PER_CHUNK = 12;
+const TIP_MIN_ROWS = 3;
 const ESTIMATED_ROW_HEIGHT = 69;
 
 function BillsScreen() {
-  const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate(useNow(60_000));
   const isLoaded = useAppSelector(
     (state) =>
@@ -77,38 +69,24 @@ function BillsScreen() {
       .toLowerCase()
       .includes(needle);
   const visible = listed.filter(isShown);
-  const sections = groups
-    .map(({ item, version }) => {
-      const members = listed.filter((entry) => entry.groupId === item.id);
-      return {
-        id: item.id,
-        name: version.payload.name,
-        rows: members.filter(isShown),
-        total: monthlyTotal(
-          members.map(({ payload, startsOn }) => ({
-            amount: payload.amount,
-            schedule: payload.timing.schedule,
-            startsOn,
-            ending: payload.ending,
-          })),
-          today,
-        ),
-        count: members.length,
-        names: getGroupMemberNames(
-          members.map(({ payload, startsOn }) => ({
-            name: payload.name,
-            amount: payload.amount,
-            schedule: payload.timing.schedule,
-            startsOn,
-            ending: payload.ending,
-          })),
-          today,
-        ),
-      };
-    })
-    .filter(({ rows }) => needle === '' || rows.length > 0);
+  const figuresByGroup = useGroupFigures(today);
+  const sections = figuresByGroup
+    .map((figures) => ({
+      figures,
+      rows: listed
+        .filter((entry) => entry.groupId === figures.id)
+        .filter(isShown),
+    }))
+    .filter(
+      ({ figures, rows }) =>
+        rows.length > 0 ||
+        (needle === '' &&
+          figures.bills.length + figures.envelopes.length === 0),
+    );
+  const isShowingTip =
+    bills.length >= TIP_MIN_ROWS &&
+    figuresByGroup.every(({ bills: inGroup }) => inGroup.length === 0);
   const ungrouped = visible.filter(({ groupId }) => groupId === null);
-  const openSection = sections.find(({ id }) => id === openGroupId);
   const openBill = listed.find(({ item }) => item.id === openBillId);
 
   const getCard = (rows: typeof visible) => (
@@ -178,78 +156,16 @@ function BillsScreen() {
           <p className='text-muted-foreground text-sm'>No bill matches that.</p>
         ) : (
           <>
-            {sections.map(({ id, name, rows, total: groupTotal, count }) => {
-              const hasRange =
-                !isHidden &&
-                groupTotal.total.lowCents !== groupTotal.total.highCents;
-              const lead = describeGroupLead(groupTotal, count);
-              const open = () => setOpenGroupId(id);
-              return (
-                <div key={id} className='space-y-2'>
-                  <div className='flex items-start gap-1'>
-                    <div className='min-w-0 flex-1 px-2 py-1.5'>
-                      <Button
-                        type='button'
-                        variant='tertiary'
-                        aria-label={GROUP_WORDS.openLabel(name)}
-                        className='text-foreground! block h-auto min-h-6 w-full justify-start p-0! text-left text-base font-semibold whitespace-normal'
-                        onClick={open}
-                      >
-                        <span className='block break-words'>
-                          <span className='line-clamp-2'>{name}</span>
-                        </span>
-                      </Button>
-                      <div className='flex items-center gap-1'>
-                        <Button
-                          type='button'
-                          variant='tertiary'
-                          tabIndex={-1}
-                          aria-hidden='true'
-                          className='text-muted-foreground! h-auto min-h-6 min-w-0 justify-start p-0! text-left text-sm font-normal whitespace-normal'
-                          onClick={open}
-                        >
-                          <span className='block'>
-                            {lead.amount !== null && (
-                              <>
-                                <SensitiveValue>
-                                  {lead.amount}
-                                </SensitiveValue>{' '}
-                              </>
-                            )}
-                            {lead.rest}
-                          </span>
-                        </Button>
-                        {(hasRange ||
-                          groupTotal.uncounted > 0 ||
-                          groupTotal.oneTime.count > 0) && (
-                          <HelpTip title={GROUP_WORDS.basisTitle}>
-                            <GroupTotalHelp
-                              total={groupTotal}
-                              hasRange={hasRange}
-                              stance={stance}
-                            />
-                          </HelpTip>
-                        )}
-                      </div>
-                    </div>
-                    <Button
-                      type='button'
-                      variant='tertiary'
-                      tabIndex={-1}
-                      aria-hidden='true'
-                      className='h-auto min-h-11 p-0! pt-2.5 pr-3!'
-                      onClick={open}
-                    >
-                      <ChevronRight
-                        className='text-muted-foreground h-4 w-4 shrink-0'
-                        aria-hidden='true'
-                      />
-                    </Button>
-                  </div>
-                  {count > 0 && rows.length > 0 && getCard(rows)}
-                </div>
-              );
-            })}
+            {sections.map(({ figures, rows }) => (
+              <div key={figures.id} className='space-y-2'>
+                <GroupHeading
+                  figures={figures}
+                  kind='bills'
+                  onOpen={() => setOpenGroupId(figures.id)}
+                />
+                {rows.length > 0 && getCard(rows)}
+              </div>
+            ))}
             {ungrouped.length > 0 && (
               <div className='space-y-2'>
                 {sections.length > 0 && (
@@ -259,6 +175,9 @@ function BillsScreen() {
               </div>
             )}
           </>
+        )}
+        {isShowingTip && (
+          <p className='text-muted-foreground text-sm'>{GROUP_WORDS.setTip}</p>
         )}
       </div>
     );
@@ -274,12 +193,9 @@ function BillsScreen() {
         icon={<Receipt className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
-      {openSection && (
+      {openGroupId !== null && (
         <GroupSheet
-          groupId={openSection.id}
-          total={openSection.total}
-          billCount={openSection.count}
-          memberNames={openSection.names}
+          groupId={openGroupId}
           today={today}
           onClose={() => setOpenGroupId(null)}
         />

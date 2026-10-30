@@ -76,7 +76,12 @@ function QuestionSheet({ step, onDone, shouldFocus }: QuestionSheetProps) {
   };
 
   return (
-    <FormSheet isOpen onClose={onDone} title={step.title}>
+    <FormSheet
+      isOpen
+      onClose={onDone}
+      title={step.title}
+      actions={step.titleHelp}
+    >
       <div ref={bodyRef} className='space-y-4 pb-4' onKeyDown={handleKeyDown}>
         {step.render({ moveOn: onDone })}
       </div>
@@ -201,14 +206,17 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
           role='group'
           aria-labelledby={`question-${open.id}`}
         >
-          <h3
-            ref={headingRef}
-            id={`question-${open.id}`}
-            tabIndex={-1}
-            className='text-2xl leading-tight font-semibold break-words outline-none'
-          >
-            {open.title}
-          </h3>
+          <div className='flex items-start gap-1'>
+            <h3
+              ref={headingRef}
+              id={`question-${open.id}`}
+              tabIndex={-1}
+              className='min-w-0 text-2xl leading-tight font-semibold break-words outline-none'
+            >
+              {open.title}
+            </h3>
+            {open.titleHelp}
+          </div>
           {open.render({ moveOn: () => moveOnFrom(open.id) })}
         </div>
       )}

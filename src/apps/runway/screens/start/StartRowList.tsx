@@ -9,6 +9,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
 
@@ -19,6 +20,11 @@ interface StartRowListProps {
   /** What the search box is called, "Search your bills". */
   searchLabel: string;
   onOpen: (id: string) => void;
+}
+
+function StartRowBadge({ row }: { row: StartRow }) {
+  const emoji = useItemEmoji(row.emoji, row.groupId ?? null);
+  return <ItemBadge name={row.name} emoji={emoji} />;
 }
 
 /** What has been added in a step: one-line rows that each open their item, searchable from eight and folded after a few. */
@@ -61,7 +67,7 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
               )}
               onClick={() => onOpen(row.id)}
             >
-              <ItemBadge name={row.name} emoji={row.emoji} />
+              <StartRowBadge row={row} />
               <span className='min-w-24 flex-1'>
                 <span className='line-clamp-2 block text-base font-medium break-words'>
                   {row.name}

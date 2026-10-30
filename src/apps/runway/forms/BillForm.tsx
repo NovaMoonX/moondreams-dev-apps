@@ -4,6 +4,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
+import HelpTip from '@/components/HelpTip';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -695,6 +696,11 @@ function BillFormBody({
               formData.group.newText.trim() !== '',
             blocker: FORM_FLOW_WORDS.nameGroup,
             isPreAnswered: true,
+            titleHelp: (
+              <HelpTip title={FORM_FLOW_WORDS.groupTitle}>
+                <p>{FORM_FLOW_WORDS.groupHelp}</p>
+              </HelpTip>
+            ),
             render: ({ moveOn }: QuestionControls) => (
               <PickOrCreate
                 label={FORM_FLOW_WORDS.group}
