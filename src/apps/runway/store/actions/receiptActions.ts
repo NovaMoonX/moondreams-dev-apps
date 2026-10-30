@@ -24,6 +24,13 @@ import type {
   RunwayEncryption,
 } from '@apps/runway/types';
 
+const SHOWN_IMAGE_TYPES = [
+  'image/webp',
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+];
+
 export const getReceiptObjectPath = (
   uid: string,
   purchaseId: string,
@@ -53,6 +60,9 @@ export async function addReceiptImage(
     throw new Error(SPEND_WORDS.receiptNotImage);
   }
   const shrunk = await resizeImageToWebp(file, RECEIPT_MAX_DIMENSION);
+  if (!SHOWN_IMAGE_TYPES.includes(shrunk.type)) {
+    throw new Error(SPEND_WORDS.receiptFormat);
+  }
   if (shrunk.size > RECEIPT_MAX_BYTES) {
     throw new Error(SPEND_WORDS.receiptTooBig);
   }
@@ -105,13 +115,13 @@ export function addReceiptImages(
   }, Promise.resolve(0));
 }
 
-/** Removes the document, then the sealed bytes; a missing object is not an error. */
+/** Removes the sealed bytes, then the document that names them, so a failure never leaves a document without its bytes; a missing object is not an error. */
 export async function removeReceiptImage(
   uid: string,
   image: { id: string; purchaseId: string },
 ): Promise<void> {
-  await deleteDoc(doc(imagesRef(uid, image.purchaseId), image.id));
   await deleteFile(getReceiptObjectPath(uid, image.purchaseId, image.id));
+  await deleteDoc(doc(imagesRef(uid, image.purchaseId), image.id));
 }
 
 /** Removes every receipt a purchase has; used after the purchase itself is gone. */

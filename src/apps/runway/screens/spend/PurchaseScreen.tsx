@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import {
   ImagePlus,
   Layers,
@@ -34,8 +34,12 @@ import ReceiptFileInput, {
 } from '@apps/runway/components/ReceiptFileInput';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
+import { forgetReceiptImage } from '@apps/runway/hooks/useReceiptImageUrl';
 import { useReceiptImages } from '@apps/runway/hooks/useReceiptImages';
-import { pickReceiptFiles } from '@apps/runway/utils/receiptFiles';
+import {
+  findScrollParent,
+  pickReceiptFiles,
+} from '@apps/runway/utils/receiptFiles';
 import {
   addReceiptImages,
   removeReceiptImagesOf,
@@ -109,10 +113,33 @@ function PurchaseScreen({
   const [groupViewFor, setGroupViewFor] = useState<string | null>(null);
   const receiptChooser = useRef<ReceiptChooser>(null);
   const [receiptViewId, setReceiptViewId] = useState<string | null>(null);
+  const sheetBody = useRef<HTMLDivElement>(null);
+  const scrollBeforeReceipt = useRef<number | null>(null);
   const [isAddingReceipt, setIsAddingReceipt] = useState(false);
   const [openedFromGroup, setOpenedFromGroup] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const openReceipt = (imageId: string) => {
+    scrollBeforeReceipt.current =
+      findScrollParent(sheetBody.current)?.scrollTop ?? 0;
+    setReceiptViewId(imageId);
+  };
+
+  useLayoutEffect(() => {
+    const saved = scrollBeforeReceipt.current;
+    if (receiptViewId !== null || saved === null) return;
+    const restore = (triesLeft: number) => {
+      const scroller = findScrollParent(sheetBody.current);
+      if (scroller) {
+        scroller.scrollTop = saved;
+        scrollBeforeReceipt.current = null;
+      } else if (triesLeft > 0) {
+        requestAnimationFrame(() => restore(triesLeft - 1));
+      }
+    };
+    restore(10);
+  }, [receiptViewId]);
 
   const purchase =
     purchases.find((entry) => entry.id === purchaseId) ??
@@ -121,7 +148,10 @@ function PurchaseScreen({
     expenses.find((entry) => entry.id === purchase?.expenseId) ?? null;
   const groupRead = useExpensePurchases(group?.id ?? null);
   const groupPurchases = groupRead.purchases;
-  const receipts = useReceiptImages(purchaseId) ?? [];
+  const receiptsResult = useReceiptImages(purchaseId);
+  const receipts =
+    receiptsResult.status === 'loaded' ? receiptsResult.images : [];
+  const isReceiptsLoaded = receiptsResult.status === 'loaded';
   const viewedReceipt =
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
@@ -177,6 +207,9 @@ function PurchaseScreen({
           refunds.length > 0
             ? `Its ${refunds.length === 1 ? 'refund stays' : `${refunds.length} refunds stay`}, and still return${refunds.length === 1 ? 's' : ''} money.`
             : null,
+          receipts.length > 0
+            ? SPEND_WORDS.receiptsRemovedWithPurchase(receipts.length)
+            : null,
           'It stays in the change log.',
         ]
           .filter(Boolean)
@@ -196,10 +229,25 @@ function PurchaseScreen({
         purchase,
         describePurchaseRemoval(purchase, nameOf),
       );
-      removeReceiptImagesOf(user.uid, purchase.id).catch((cleanupError) =>
-        console.error('A removed purchase left receipts behind', cleanupError),
+      const hasLeftovers = await removeReceiptImagesOf(
+        user.uid,
+        purchase.id,
+      ).then(
+        () => false,
+        (cleanupError) => {
+          console.error(
+            'A removed purchase left receipts behind',
+            cleanupError,
+          );
+          return true;
+        },
       );
-      addToast({ title: 'Purchase removed', type: 'success' });
+      receipts.forEach((entry) => forgetReceiptImage(entry.id));
+      addToast(
+        hasLeftovers
+          ? { title: SPEND_WORDS.receiptsLeftWithPurchase, type: 'warning' }
+          : { title: 'Purchase removed', type: 'success' },
+      );
       onClose();
     } catch (removeError) {
       setError(
@@ -213,7 +261,11 @@ function PurchaseScreen({
   };
 
   const addReceipts = async (files: File[]) => {
-    if (!user || isAddingReceipt) return;
+    if (!user || isAddingReceipt || !isReceiptsLoaded) return;
+    if (!navigator.onLine) {
+      addToast({ title: SPEND_WORDS.receiptOffline, type: 'error' });
+      return;
+    }
     const picked = pickReceiptFiles(files, receipts.length);
     if (picked.files.length === 0) {
       if (picked.note) addToast({ title: picked.note, type: 'error' });
@@ -310,6 +362,7 @@ function PurchaseScreen({
         key={editTarget.key}
         isOpen
         editing={editTarget.purchase}
+        heldReceiptCount={receipts.length}
         onClose={() => setEditTarget(null)}
         onCancel={() => setEditTarget(null)}
       />
@@ -325,7 +378,7 @@ function PurchaseScreen({
         title={title}
         actions={<ValuesEyeButton />}
       >
-        <div className='space-y-4 pb-4'>
+        <div ref={sheetBody} className='space-y-4 pb-4'>
           <SheetHead
             label={SPEND_WORDS.detailTitle}
             figure={refund ? `+${amount}` : amount}
@@ -369,8 +422,13 @@ function PurchaseScreen({
                 ))}
             </dl>
           )}
+          {receiptsResult.status === 'failed' && (
+            <p className='text-muted-foreground text-sm'>
+              {SPEND_WORDS.receiptsLoadFailed}
+            </p>
+          )}
           {receipts.length > 0 && (
-            <ReceiptsBlock images={receipts} onOpen={setReceiptViewId} />
+            <ReceiptsBlock images={receipts} onOpen={openReceipt} />
           )}
           <ActionGroup isRoomy>
             <ActionRow
@@ -401,7 +459,9 @@ function PurchaseScreen({
                     : SPEND_WORDS.addReceiptSub
               }
               isDisabled={
-                isAddingReceipt || receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                !isReceiptsLoaded ||
+                isAddingReceipt ||
+                receipts.length >= MAX_RECEIPTS_PER_PURCHASE
               }
               onClick={() => receiptChooser.current?.open()}
             />
