@@ -225,7 +225,7 @@ const postAnswers = async (
       if (isBusy(pull)) return fail(BUSY);
       return fail(
         pull.status === 401 || pull.status === 403
-          ? "GitHub didn't accept the token."
+          ? "GitHub refused the token, or it has expired. Run npm run pipeline:secrets -- token again."
           : "Couldn't reach that pull request.",
       );
     }
@@ -264,7 +264,7 @@ const postAnswers = async (
       if (isBusy(comment)) return fail(BUSY);
       return fail(
         comment.status === 401 || comment.status === 403
-          ? "The token can't comment on pull requests."
+          ? "The token can't comment here, or it has expired. Run npm run pipeline:secrets -- token again."
           : "Couldn't post the comment.",
       );
     }
