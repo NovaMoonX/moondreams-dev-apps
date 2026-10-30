@@ -200,9 +200,9 @@ const toBase = (raw: Raw, toFile: ToFile) => ({
   own: [],
 });
 
-/** A savings, investing or priority word names a goal or a priority, never what money is for. */
+/** A name that is only a savings, investing or priority word names a goal or a priority, never what money is for ("Retirement home" still is one). */
 const NOT_A_PURPOSE =
-  /\b(saving|savings|invest|investing|investment|investments|retirement|goal|goals|must|should|want|wants)\b/i;
+  /^(additional |extra |other |more )?(saving|savings|invest|investing|investment|investments|retirement|goal|goals|must|should|want|wants)$/i;
 
 const toForName = (value: unknown) => {
   const name = toName(value);

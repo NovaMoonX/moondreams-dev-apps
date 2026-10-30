@@ -82,22 +82,18 @@ export async function commitStartDraft(
     goals: new Set(existing.goals.map(norm)),
   };
   const sourceIds = new Map<string, string>();
-  const groupIds = new Map<string, string>();
-  const toGroup = (forName: string | null | undefined) => {
-    const known = groupIds.get(norm(forName ?? ''));
-    if (known !== undefined) return { groupId: known, newGroup: null };
-    const { groupId, newGroup } = resolveGroupChoice(
-      NEW_CHOICE,
-      forName ?? '',
-      existing.groups,
-    );
-    return { groupId, newGroup };
-  };
+  const madeGroups: { id: string; name: string }[] = [];
+  const toGroup = (forName: string | null | undefined) =>
+    resolveGroupChoice(NEW_CHOICE, forName ?? '', [
+      ...existing.groups,
+      ...madeGroups,
+    ]);
   const rememberGroup = (
-    forName: string | null | undefined,
+    made: { name: string } | null,
     groupId: string | null,
   ) => {
-    if (groupId !== null && forName) groupIds.set(norm(forName), groupId);
+    if (made !== null && groupId !== null)
+      madeGroups.push({ id: groupId, name: made.name });
   };
 
   try {
@@ -126,7 +122,7 @@ export async function commitStartDraft(
         bill: { ...value, groupId, orderIndex: nextRank(value.priority) },
         newGroup,
       });
-      rememberGroup(forName, groupId ?? created.groupId);
+      rememberGroup(newGroup, created.groupId);
       taken.bills.add(norm(value.name));
       result.added += 1;
       result.addedIds.push(id);
@@ -155,7 +151,7 @@ export async function commitStartDraft(
         },
         newGroup,
       });
-      rememberGroup(forName, groupId ?? created.groupId);
+      rememberGroup(newGroup, created.groupId);
       taken.envelopes.add(norm(value.name));
       result.added += 1;
       result.addedIds.push(id);

@@ -693,3 +693,21 @@ assert.equal(
   'Housing',
   'a proposal carries its purpose name',
 );
+const purposes = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      { ...bill('a.csv', 'Mortgage', 90_000), forName: 'Retirement home' },
+      { ...bill('a.csv', 'Fees', 1_000), forName: 'Additional Savings' },
+    ],
+    envelopes: [],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: ['a.csv'] },
+);
+assert.deepEqual(
+  purposes.bills.map((entry) => entry.forName),
+  ['Retirement home', null],
+  'only a name that is just a savings word is dropped',
+);

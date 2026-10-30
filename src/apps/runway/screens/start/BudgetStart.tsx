@@ -429,7 +429,9 @@ const toForRows = (
 ): StartRow[] => {
   const names = list.reduce<string[]>(
     (acc, { forName }) =>
-      forName === null || acc.some((name) => toKey(name) === toKey(forName))
+      forName === null ||
+      toKey(forName) === toKey(other) ||
+      acc.some((name) => toKey(name) === toKey(forName))
         ? acc
         : [...acc, forName],
     [],
