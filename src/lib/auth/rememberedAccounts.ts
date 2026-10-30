@@ -1,3 +1,5 @@
+import { resizeImageToWebp } from '@/utils/imageCompression';
+
 const STORAGE_KEY = 'remembered-accounts';
 const CACHED_PHOTO_SIZE = 96;
 
@@ -7,13 +9,17 @@ export interface RememberedAccount {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
-  /** A small copy of `photoURL` saved on this device, so the photo still shows once that account is signed out. */
-  cachedPhoto: { sourceURL: string; dataURL: string } | null;
+  /** A small copy of `photoURL` saved on this device, so the photo still shows once that account is signed out; `dataURL` is `null` when its host refused the read, so it isn't asked again. */
+  cachedPhoto: { sourceURL: string; dataURL: string | null } | null;
   lastUsedAt: number;
 }
 
 function isRememberedAccount(value: unknown): value is RememberedAccount {
-  return typeof value === 'object' && value !== null && typeof (value as RememberedAccount).uid === 'string';
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as RememberedAccount).uid === 'string'
+  );
 }
 
 const withCachedPhoto = (account: RememberedAccount): RememberedAccount => ({
@@ -23,7 +29,9 @@ const withCachedPhoto = (account: RememberedAccount): RememberedAccount => ({
 
 export function readRememberedAccounts(): RememberedAccount[] {
   try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '[]');
+    const parsed: unknown = JSON.parse(
+      window.localStorage.getItem(STORAGE_KEY) ?? '[]',
+    );
     return Array.isArray(parsed)
       ? parsed
           .filter(isRememberedAccount)
@@ -38,25 +46,33 @@ export function readRememberedAccounts(): RememberedAccount[] {
 function writeRememberedAccounts(accounts: RememberedAccount[]) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(accounts));
+    return true;
   } catch {
     // Without storage the menu just offers no other accounts.
+    return false;
   }
 }
 
 /** The photo to draw for a remembered account: the saved copy when it matches the current photo, else the photo's own URL. */
 export function getRememberedPhoto(account: RememberedAccount) {
-  return account.cachedPhoto && account.cachedPhoto.sourceURL === account.photoURL
-    ? account.cachedPhoto.dataURL
+  return account.cachedPhoto?.sourceURL === account.photoURL
+    ? (account.cachedPhoto?.dataURL ?? account.photoURL)
     : account.photoURL;
 }
 
 /** Puts this account first in the device's list, refreshing its name and photo. */
-export function rememberAccount(account: Omit<RememberedAccount, 'lastUsedAt' | 'cachedPhoto'>) {
+export function rememberAccount(
+  account: Omit<RememberedAccount, 'lastUsedAt' | 'cachedPhoto'>,
+) {
   const saved = readRememberedAccounts();
   const previous = saved.find((entry) => entry.uid === account.uid);
   const others = saved.filter((entry) => entry.uid !== account.uid);
   const next = [
-    { ...account, cachedPhoto: previous?.cachedPhoto ?? null, lastUsedAt: Date.now() },
+    {
+      ...account,
+      cachedPhoto: previous?.cachedPhoto ?? null,
+      lastUsedAt: Date.now(),
+    },
     ...others,
   ];
   writeRememberedAccounts(next);
@@ -66,34 +82,40 @@ export function rememberAccount(account: Omit<RememberedAccount, 'lastUsedAt' | 
 async function readPhotoAsDataURL(url: string) {
   const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
   if (!response.ok) throw new Error(`Photo request failed: ${response.status}`);
-  const bitmap = await createImageBitmap(await response.blob());
-  const scale = Math.min(1, CACHED_PHOTO_SIZE / Math.min(bitmap.width, bitmap.height));
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  bitmap.close();
-  return canvas.toDataURL('image/jpeg', 0.85);
+  const blob = await response.blob();
+  const resized = await resizeImageToWebp(
+    new File([blob], 'photo', { type: blob.type }),
+    CACHED_PHOTO_SIZE,
+  );
+  if (resized.type !== 'image/webp')
+    throw new Error('Photo could not be decoded');
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(resized);
+  });
 }
 
-/** Saves a small copy of the account's photo on this device when it has none for that photo yet; returns the new list, or `null` when nothing changed. */
+/** Saves a small copy of the account's photo on this device when it has none for that photo yet; returns the new list, or `null` when nothing was saved. */
 export async function cacheRememberedPhoto(uid: string) {
   const account = readRememberedAccounts().find((entry) => entry.uid === uid);
   const sourceURL = account?.photoURL;
-  if (!sourceURL || account.cachedPhoto?.sourceURL === sourceURL) return null;
-  try {
-    const dataURL = await readPhotoAsDataURL(sourceURL);
-    const next = readRememberedAccounts().map((entry) =>
-      entry.uid === uid && entry.photoURL === sourceURL
-        ? { ...entry, cachedPhoto: { sourceURL, dataURL } }
-        : entry,
-    );
-    writeRememberedAccounts(next);
-    return next;
-  } catch {
-    // A photo host that refuses cross-origin reads keeps showing its live URL.
+  if (
+    !sourceURL ||
+    account.cachedPhoto?.sourceURL === sourceURL ||
+    !navigator.onLine
+  ) {
     return null;
   }
+  // A host that refuses cross-origin reads is remembered as refused, and keeps showing its live URL.
+  const dataURL = await readPhotoAsDataURL(sourceURL).catch(() => null);
+  const next = readRememberedAccounts().map((entry) =>
+    entry.uid === uid && entry.photoURL === sourceURL
+      ? { ...entry, cachedPhoto: { sourceURL, dataURL } }
+      : entry,
+  );
+  return writeRememberedAccounts(next) && dataURL ? next : null;
 }
 
 /** Drops an account from the device's list along with the keys this device saved under its uid (`…:<uid>…`: sessions, drafts, view choices). */

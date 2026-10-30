@@ -98,8 +98,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       previousUserIdRef.current = nextUserId;
       // Signed out from anywhere (another tab, an expired session): start again from Home, not the app's page.
-      if (previousUserId && !nextUserId && window.location.pathname !== '/') {
+      // A shared page reads the same signed out, so it stays.
+      const { pathname } = window.location;
+      if (previousUserId && !nextUserId && pathname !== '/' && !pathname.includes('/shared/')) {
         isReloadingRef.current = true;
+        dispatch(setCurrentUser(null));
+        setUser(null);
         window.location.assign('/');
         return;
       }
