@@ -45,6 +45,7 @@ export const completeSetup = createAsyncThunk<
       monthlyGoal: draft.monthlyGoal ?? null,
       favoriteTheatreId: draft.favoriteTheatreId ?? null,
       ticketPriceKind: 'ADULT',
+      showReleasesOnCalendar: true,
       setupCompletedAt: now,
       createdAt: now,
       lastEditedAt: now,
@@ -80,6 +81,7 @@ export type MembershipEditableFields = Pick<
   | 'weeklyGoal'
   | 'monthlyGoal'
   | 'ticketPriceKind'
+  | 'showReleasesOnCalendar'
 >;
 
 interface UpdateMembershipInput {

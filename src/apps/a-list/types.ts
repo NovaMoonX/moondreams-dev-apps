@@ -15,6 +15,8 @@ export interface MembershipProfile {
   favoriteTheatreId: string | null;
   /** Which AMC ticket price showtimes show and tickets start from; null means Adult. Documents written before it existed lack the key. */
   ticketPriceKind: TicketPriceKind | null;
+  /** Whether watchlist movies show on the calendar on the day they open; null means yes. Documents written before it existed lack the key. */
+  showReleasesOnCalendar: boolean | null;
   /** Immutable; its presence is what "Setup is done" means. */
   setupCompletedAt: number;
   createdAt: number;

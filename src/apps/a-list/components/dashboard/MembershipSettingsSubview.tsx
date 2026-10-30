@@ -55,11 +55,12 @@ interface MembershipDraft {
   costValues: CostStepValues;
   goalValues: GoalValues;
   ticketPriceKind: TicketPriceKind;
+  showReleasesOnCalendar: boolean;
 }
 
 function parseMembershipDraft(stored: unknown): MembershipDraft | null {
   if (typeof stored !== 'object' || stored === null) return null;
-  const { costValues, goalValues, ticketPriceKind } =
+  const { costValues, goalValues, ticketPriceKind, showReleasesOnCalendar } =
     stored as Partial<MembershipDraft>;
   const knownKind = TICKET_PRICE_KINDS.find((kind) => kind === ticketPriceKind);
   const isShaped =
@@ -83,6 +84,7 @@ function parseMembershipDraft(stored: unknown): MembershipDraft | null {
       monthlyGoal: goalValues.monthlyGoal,
     },
     ticketPriceKind: knownKind,
+    showReleasesOnCalendar: showReleasesOnCalendar !== false,
   };
 }
 
@@ -136,6 +138,7 @@ function MembershipSettingsSubview({
       monthlyGoal: membership.monthlyGoal?.toString() ?? '',
     },
     ticketPriceKind: getTicketPriceKind(membership),
+    showReleasesOnCalendar: membership.showReleasesOnCalendar !== false,
   }));
   const draftKey = `a-list:membership:${membership.uid}`;
   const draft = useFormDraft({
@@ -150,6 +153,9 @@ function MembershipSettingsSubview({
   const [goalValues, setGoalValues] = useState<GoalValues>(begin.goalValues);
   const [ticketPriceKind, setTicketPriceKind] = useState<TicketPriceKind>(
     begin.ticketPriceKind,
+  );
+  const [showReleasesOnCalendar, setShowReleasesOnCalendar] = useState(
+    begin.showReleasesOnCalendar,
   );
   const [formKey, setFormKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
@@ -174,13 +180,17 @@ function MembershipSettingsSubview({
       weeklyGoal: weekly.goal,
       monthlyGoal: monthly.goal,
       ticketPriceKind,
+      showReleasesOnCalendar,
+    };
+    const openedValues: MembershipEditableFields = {
+      ...openedWith,
+      ticketPriceKind: getTicketPriceKind(openedWith),
+      showReleasesOnCalendar: openedWith.showReleasesOnCalendar !== false,
     };
     const changed = Object.fromEntries(
       Object.entries(next).filter(
         ([key, value]) =>
-          (key === 'ticketPriceKind'
-            ? getTicketPriceKind(openedWith)
-            : openedWith[key as keyof MembershipEditableFields]) !== value,
+          openedValues[key as keyof MembershipEditableFields] !== value,
       ),
     ) as Partial<MembershipEditableFields>;
     // Cost, total and rate are derived from each other, so they're written as one group.
@@ -200,8 +210,13 @@ function MembershipSettingsSubview({
   const hasChanges = Object.keys(changedFields).length > 0;
   useUnsavedWork(() => hasChanges);
   const draftValue = useMemo(
-    () => ({ costValues, goalValues, ticketPriceKind }),
-    [costValues, goalValues, ticketPriceKind],
+    () => ({
+      costValues,
+      goalValues,
+      ticketPriceKind,
+      showReleasesOnCalendar,
+    }),
+    [costValues, goalValues, ticketPriceKind, showReleasesOnCalendar],
   );
   useKeepFormDraft({
     isRestored: draft.restored !== null,
@@ -214,6 +229,7 @@ function MembershipSettingsSubview({
     setCostValues(start.costValues);
     setGoalValues(start.goalValues);
     setTicketPriceKind(start.ticketPriceKind);
+    setShowReleasesOnCalendar(start.showReleasesOnCalendar);
     setFormKey((current) => current + 1);
     draft.hideNotice();
   };
@@ -413,6 +429,29 @@ function MembershipSettingsSubview({
           <p className='text-muted-foreground text-sm'>
             Tickets you add from a showtime start from this price. Tickets you
             already saved keep theirs.
+          </p>
+        </div>
+        <SectionDivider label='📅 Calendar' />
+        <div className='space-y-2'>
+          <Label>Show release days on your calendar?</Label>
+          <div className='flex flex-wrap gap-2'>
+            <Pill
+              isSelected={showReleasesOnCalendar}
+              onClick={() => setShowReleasesOnCalendar(true)}
+            >
+              Show them
+            </Pill>
+            <Pill
+              isSelected={!showReleasesOnCalendar}
+              onClick={() => setShowReleasesOnCalendar(false)}
+            >
+              Hide them
+            </Pill>
+          </div>
+          <p className='text-muted-foreground text-sm'>
+            {showReleasesOnCalendar
+              ? 'A movie on your watchlist gets a dashed gold outline on the day it opens, until you plan it.'
+              : 'Your calendar shows only what you’ve planned. The Watchlist’s Opening filter still lists what’s coming.'}
           </p>
         </div>
         <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
