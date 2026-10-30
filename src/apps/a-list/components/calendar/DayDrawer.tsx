@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 
@@ -6,6 +6,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { fromLocalDateAndTimeInputValues } from '@/utils/dateInputUtils';
 import { formatDate } from '@/utils/formatUtils';
+import RevealChip from '@/components/RevealChip';
 import { AddFlow } from '@apps/a-list/components/add/AddFlow';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import ViewingRow from '@apps/a-list/components/calendar/ViewingRow';
@@ -32,6 +33,10 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
   const [viewingId, setViewingId] = useState<string | null>(null);
   // Held, not looked up: saving the plan drops the movie from the day's openings while the form is still open.
   const [planRow, setPlanRow] = useState<WatchlistRowData | null>(null);
+  const [isOpeningsShown, setIsOpeningsShown] = useState(false);
+  const openingsRef = useRef<HTMLElement>(null);
+  const isOpeningsFolded =
+    viewings.length > 0 && openings.length > 0 && !isOpeningsShown;
   const dayStart = fromLocalDateAndTimeInputValues(dayKey, '00:00') ?? now;
 
   if (viewingId !== null) {
@@ -96,8 +101,27 @@ function DayDrawer({ dayKey, onClose }: DayDrawerProps) {
             ))}
           </ul>
         )}
-        {openings.length > 0 && (
-          <section className='bg-accent/60 dark:bg-muted space-y-3 rounded-2xl p-3'>
+        {isOpeningsFolded && (
+          <div className='flex justify-center'>
+            <RevealChip
+              icon={<span aria-hidden='true'>🎬</span>}
+              onClick={() => {
+                setIsOpeningsShown(true);
+                requestAnimationFrame(() => openingsRef.current?.focus());
+              }}
+            >
+              {openings.length === 1
+                ? 'Show 1 movie opening this day'
+                : `Show ${openings.length} movies opening this day`}
+            </RevealChip>
+          </div>
+        )}
+        {openings.length > 0 && !isOpeningsFolded && (
+          <section
+            ref={openingsRef}
+            tabIndex={-1}
+            className='bg-accent/60 dark:bg-muted space-y-3 rounded-2xl p-3 outline-none'
+          >
             <div className='space-y-0.5'>
               <p className='text-sm font-medium'>🎬 Opening this day</p>
               <p className='text-muted-foreground text-xs'>
