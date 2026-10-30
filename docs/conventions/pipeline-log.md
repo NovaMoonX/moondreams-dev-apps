@@ -5,6 +5,8 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
 | 2026-10-30 | shared | A screenshot harness (`src/__harness.tsx`) rode into a PR through `git add src` | The harness files are in `.gitignore`, so no add can pick them up | `.gitignore` | changed |
+| 2026-10-30 | shared | Owner: follow-up issues should land on board 3 with the right app, without anyone running a script | `issue-to-board.yml` adds each issue with an `<App> (App)` label to the board, sets Apps and Status Ready; sessions label every issue they open | `issue-to-board.yml`, `scripts/board`, `pipeline.md` | changed |
+| 2026-10-29 | shared | Owner: merging several PRs one by one; feedback on PRs across devices | A merge order for parallel PRs; a session merges down it on the owner's go; the owner's PR comments are the feedback channel | `orchestrate/SKILL.md`, `pipeline.md` | changed |
 | 2026-10-29 | shared | Owner: a plan for a follow-up re-output everything | Iteration plans cover only the owner's latest message | `orchestrate/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: approving every string is too much | PR bodies flag only copy that warrants a second look, with why; the full copy list is gone | `CLAUDE.md`, `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-29 | shared | Owner: the Cards entry point was never screenshotted, and a stale image showed a bug already fixed | Screenshots include each new screen's door in the app shell, and an image older than its screen is retaken or dropped | `pr-wrap-up/SKILL.md` | changed |
