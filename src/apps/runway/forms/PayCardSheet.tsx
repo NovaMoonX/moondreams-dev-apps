@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AmountHero from '@/components/AmountHero';
 import FoldedDateField from '@/components/FoldedDateField';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -13,6 +14,7 @@ import RevealChip from '@/components/RevealChip';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { store, useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -22,7 +24,13 @@ import {
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
-import { CARD_WORDS, MAX_PURCHASE_CENTS } from '@apps/runway/constants';
+import {
+  CARD_WORDS,
+  FORM_DRAFT_PREFIX,
+  MAX_PURCHASE_CENTS,
+} from '@apps/runway/constants';
+import { isFlag, isText, readDraftFields } from '@apps/runway/forms/draftParse';
+
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -56,6 +64,19 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
+interface PayCardDraft {
+  amount: string;
+  day: string;
+  isMinimum: boolean;
+}
+
+const parsePayCardDraft = (stored: unknown) =>
+  readDraftFields<PayCardDraft>(stored, {
+    amount: isText,
+    day: isText,
+    isMinimum: isFlag,
+  });
+
 /** Pays a card off: the amount it waits for, the day, and an Undo on the toast that follows. Needs a connection. */
 function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const { user } = useAuth();
@@ -72,9 +93,15 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
     amount: reserveCents > 0 ? centsToInputValue(reserveCents) : '',
     day: toDateInputValue(today),
   }));
-  const [amount, setAmount] = useState(initial.amount);
-  const [day, setDay] = useState(initial.day);
-  const [isMinimum, setIsMinimum] = useState(false);
+  const draftKey = `${FORM_DRAFT_PREFIX}pay-card:${card.id}`;
+  const kept = useFormDraft({
+    key: draftKey,
+    base: initial,
+    parse: parsePayCardDraft,
+  });
+  const [amount, setAmount] = useState(kept.restored?.amount ?? initial.amount);
+  const [day, setDay] = useState(kept.restored?.day ?? initial.day);
+  const [isMinimum, setIsMinimum] = useState(kept.restored?.isMinimum ?? false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -122,8 +149,26 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   };
   const blocker = getBlocker();
 
+  const isDirty = amount !== initial.amount || day !== initial.day || isMinimum;
+  const keptValue = useMemo(
+    () => ({ amount, day, isMinimum }),
+    [amount, day, isMinimum],
+  );
+  useKeepFormDraft({
+    isRestored: kept.restored !== null,
+    key: draftKey,
+    base: initial,
+    value: keptValue,
+    isDirty,
+  });
+  const startOver = () => {
+    setAmount(initial.amount);
+    setDay(initial.day);
+    setIsMinimum(false);
+    kept.hideNotice();
+  };
   const requestClose = useDiscardGuard({
-    isDirty: amount !== initial.amount || day !== initial.day || isMinimum,
+    isDirty,
     onClose: onCancel ?? onClose,
     isBusy: isSaving,
   });
@@ -223,6 +268,12 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-5'>
+        {kept.isNoticeShown && (
+          <DraftRestoredNotice
+            onStartOver={startOver}
+            onDismiss={kept.hideNotice}
+          />
+        )}
         <div className='space-y-3'>
           <AmountHero
             label={CARD_WORDS.payAmount}
