@@ -1,5 +1,5 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
-import { peekFormDraft } from '@/lib/app/formDrafts';
+import { readFormDraft } from '@/lib/app/formDrafts';
 import { generateUuid } from '@/utils';
 import { clipAtWord } from '@/utils/stringUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
@@ -441,8 +441,13 @@ export const getRecipeDraftKey = (
   hasStarter: boolean,
 ) => (hasStarter ? null : `pinch:recipe:${recipeId ?? 'new'}`);
 
-/** The title a recipe form's draft on this device holds, for a header drawn before the form opens. */
-export const readRecipeDraftTitle = (uid: string, key: string | null) =>
+/** The title a recipe form's draft on this device holds, for a header drawn before the form opens; checked as the form will check it. */
+export const readRecipeDraftTitle = (
+  uid: string,
+  key: string | null,
+  recipeUpdatedAt: number | null,
+) =>
   key === null
     ? null
-    : (parseRecipeFormDraft(peekFormDraft(uid, key))?.formData.title ?? null);
+    : (parseRecipeFormDraft(readFormDraft(uid, key, recipeUpdatedAt))?.formData
+        .title ?? null);

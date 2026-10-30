@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChefHat, ChevronRight, X } from 'lucide-react';
 
-import { listFormDrafts } from '@/lib/app/formDrafts';
+import { listFormDrafts, readFormDraft } from '@/lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { parseRecipeFormDraft } from '@apps/pinch/components/recipes/recipeFormModel';
 import { usePinchOverlay } from '@apps/pinch/hooks/usePinchOverlay';
@@ -23,11 +23,16 @@ function RecipeDraftRow({ uid }: RecipeDraftRowProps) {
   const [isHidden, setIsHidden] = useState(false);
 
   const kept = drafts.flatMap((stored) => {
-    const parsed = parseRecipeFormDraft(stored.value);
     const id = stored.key.slice(RECIPE_DRAFT_PREFIX.length);
     const recipeId = id === 'new' ? null : id;
-    const isRecipeHere = recipeId === null || recipesById.has(recipeId);
-    return parsed !== null && isRecipeHere
+    const recipe = recipeId === null ? null : recipesById.get(recipeId);
+    const parsed =
+      recipe === undefined
+        ? null
+        : parseRecipeFormDraft(
+            readFormDraft(uid, stored.key, recipe?.updatedAt ?? null),
+          );
+    return parsed !== null
       ? [{ recipeId, title: parsed.formData.title.trim() }]
       : [];
   })[0];

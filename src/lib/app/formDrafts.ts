@@ -39,19 +39,6 @@ export function readFormDraft(
   }
 }
 
-/** A draft's value without checking its record, for a header drawn before the form that owns it opens. */
-export function peekFormDraft(uid: string, key: string): unknown {
-  try {
-    const raw = window.localStorage.getItem(toStorageKey(uid, key));
-    const parsed: unknown = raw ? JSON.parse(raw) : null;
-    const isFresh =
-      isStoredDraft(parsed) && Date.now() - parsed.savedAt <= MAX_AGE_MS;
-    return isFresh ? parsed.value : null;
-  } catch {
-    return null;
-  }
-}
-
 export function writeFormDraft(
   uid: string,
   key: string,

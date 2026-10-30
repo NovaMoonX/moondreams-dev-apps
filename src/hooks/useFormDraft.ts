@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -44,7 +44,7 @@ interface UseKeepFormDraftOptions<T> {
   isDirty: boolean;
 }
 
-/** Keeps a form's unsaved value on this device while it is dirty; closing the form (unmounting) forgets it. */
+/** Keeps a form's unsaved value on this device while it is dirty; closing the form (unmounting) forgets what it kept. */
 export function useKeepFormDraft<T>({
   key,
   base,
@@ -55,14 +55,23 @@ export function useKeepFormDraft<T>({
   const { user } = useAuth();
   const uid = user?.uid ?? null;
 
+  // A form only removes a draft it wrote, so one that opens clean never deletes another's kept work.
+  const hasWrittenRef = useRef(false);
+
   useEffect(() => {
     if (!uid || !key) return;
-    if (isDirty) writeFormDraft(uid, key, JSON.parse(baseText), value);
-    else clearFormDraft(uid, key);
+    if (isDirty) {
+      writeFormDraft(uid, key, JSON.parse(baseText), value);
+      hasWrittenRef.current = true;
+    } else if (hasWrittenRef.current) {
+      clearFormDraft(uid, key);
+    }
   }, [uid, key, baseText, value, isDirty]);
 
   useEffect(() => {
     if (!uid || !key) return;
-    return () => clearFormDraft(uid, key);
+    return () => {
+      if (hasWrittenRef.current) clearFormDraft(uid, key);
+    };
   }, [uid, key]);
 }

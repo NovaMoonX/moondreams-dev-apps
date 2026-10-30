@@ -104,6 +104,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     readRecipeDraftTitle(
       uid,
       getRecipeDraftKey(recipeId, fromIdea !== null || fromChanges.length > 0),
+      existing?.updatedAt ?? null,
     ),
   );
   const [isTitleTouched, setIsTitleTouched] = useState(false);
