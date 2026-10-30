@@ -269,7 +269,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - **Group purchases into an expense.** A $40 flight, a $12 bag fee and a $200 hotel can be one "Chicago trip". Grouping adds a label, not a balance change. Open any purchase in it to see the group: what it comes to, from when to when, and each purchase. Removing a group keeps its purchases.
 - **Add context.** A link to an order page, a long note, photos or screenshots, on a purchase you added by hand, imported or linked.
 - **Details are kept as text.** An order number, a date and an itemized breakdown read from a receipt or order page are saved as text with the purchase.
-- **Receipt images expire after one year.** A photo or screenshot is removed a year after it was added. The note, the link and the text details stay for good. Before an image goes, Runway offers to keep it or download it. A kept image stays until you remove it.
+- **Receipt images are kept until you remove them.** A photo or screenshot stays sealed on your purchase until you remove it, or remove the purchase or the plan. You can download one at any time.
 
 ### Notifications, In Detail
 
@@ -427,7 +427,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Cover it: choose what gives when a new bill leaves a day short, lowest priority first
 - [ ] Put it to work: where new income or a raise would go
 - [x] Notes, links and expense groups on purchases at the Track level
-- [ ] Receipt photos on purchases
+- [x] Receipt photos on purchases
 - [x] Monthly envelope funding, split across the month's income days
 - [ ] Move leftover envelope money to another envelope or a goal
 - [ ] Open the plan as of a past date
@@ -471,5 +471,5 @@ Every change says from when and shows, before it saves, which coming income days
 - **Security:** Traffic uses TLS and the platform encrypts stored data. Sensitive fields are also encrypted individually (AES-256-GCM, the same payload and helpers Worth the Wait uses, with the key held by the server rather than stored beside the data), while dates, item types and flags stay readable for sorting, filtering and indexes. Which fields identify someone alone or in combination, and how the functions that import bank data write encrypted fields, are decided in the technical design. A provider's access grant is encrypted with a key held only by the server functions and kept where no client rule can read it.
 - **Bank data:** One provider at first, behind a small internal layer (a normalized transaction, a normalized balance) so another can be added later. Sign-in happens at the bank where the bank supports OAuth, and otherwise in the provider's own window. Credentials never reach Runway.
 - **Notifications:** Next Steps. Pushes carry fixed text only. A server function matches new purchases and deposits with the same engine as the device, writes each event once, and sends through the site's push service.
-- **Receipts:** A scheduled function removes images a year after they were added and leaves the text details.
+- **Receipts:** Images are kept until the person removes them; nothing expires and no scheduled function touches them.
 - **State and tooling:** Slices, listeners, actions and selectors follow the repo's existing pattern, with the app's own reducer composed into the central store.

@@ -680,6 +680,11 @@ export const START_AMOUNTS_WORDS = {
     'Saving where things stand needs a connection. Nothing was saved. Try again when you are back online.',
 } as const;
 
+/** A receipt photo's size cap after it has been shrunk, the most on one purchase, and the longer edge it is shrunk to. */
+export const RECEIPT_MAX_BYTES = 10 * 1024 * 1024;
+export const MAX_RECEIPTS_PER_PURCHASE = 10;
+export const RECEIPT_MAX_DIMENSION = 2400;
+
 export const SPEND_WORDS = {
   title: 'Purchases',
   newPurchase: 'Add a purchase',
@@ -709,7 +714,8 @@ export const SPEND_WORDS = {
   linkPlaceholder: 'Paste an order page or receipt link',
   addLink: 'Add a link',
   needsWebLink: 'Enter a web link, or remove it.',
-  groupHint: 'A group adds up its purchases, like a trip. It changes no balance.',
+  groupHint:
+    'A group adds up its purchases, like a trip. It changes no balance.',
   group: 'Group',
   groupPlaceholder: 'Chicago trip',
   addGroup: 'Add to a group',
@@ -731,6 +737,50 @@ export const SPEND_WORDS = {
   groupFailed: 'The group could not be saved. Nothing was changed.',
   groupGone: 'That group is no longer here.',
   groupLoading: 'Getting the group.',
+  receipt: 'Receipt',
+  receipts: 'Receipts',
+  addReceipt: 'Add a receipt',
+  addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',
+  receiptPhotos: (count: number) =>
+    count === 1 ? '1 photo' : `${count} photos`,
+  chooseReceipts: 'Choose photos',
+  receiptHelp:
+    'Photos or screenshots of the receipt. They are sealed on this device before they upload.',
+  receiptLimit: (max: number) => `A purchase holds up to ${max} receipts.`,
+  receiptNotImage: 'Only photos and screenshots can be added.',
+  receiptTooBig: 'That one is too large to keep, even shrunk. Try another.',
+  receiptOpenFailed: 'The receipt did not open.',
+  receiptAdding: 'Adding the receipt.',
+  receiptOpening: 'Opening the receipt.',
+  receiptHidden: 'Show amounts to see it',
+  removeReceiptFile: 'Remove photo',
+  removeAllReceiptFiles: 'Remove all',
+  receiptsHeld: (count: number) =>
+    `This purchase has ${count === 1 ? '1 receipt' : `${count} receipts`}. View or remove ${count === 1 ? 'it' : 'them'} from the purchase.`,
+  receiptsLoadFailed:
+    'Receipts did not load. Reopen the purchase to try again.',
+  receiptFormat:
+    "That photo's format can't be shown here. Try a screenshot or a JPEG.",
+  receiptOffline: "You're offline. Nothing was added.",
+  receiptOfflineAfterSave:
+    "The purchase saved. You're offline, so the receipts were not added; add them from the purchase.",
+  receiptsLeftBehind: (failed: number, total: number) =>
+    `The purchase saved. ${failed} of ${total} receipt${total === 1 ? '' : 's'} did not upload; add ${failed === 1 ? 'it' : 'them'} from the purchase.`,
+  receiptsRemovedWithPurchase: (count: number) =>
+    `Its ${count} receipt${count === 1 ? ' is' : 's are'} deleted too.`,
+  receiptsLeftWithPurchase:
+    'The purchase was removed, but its receipts could not be. They are deleted with the plan.',
+  receiptAdded: (count: number) =>
+    count === 1 ? 'Receipt added' : 'Receipts added',
+  receiptAddFailed: 'The receipt did not upload. Nothing was changed.',
+  viewReceipt: 'View this receipt',
+  downloadReceipt: 'Download',
+  removeReceipt: 'Remove this receipt',
+  removeReceiptTitle: 'Remove this receipt?',
+  removeReceiptMessage: 'The photo is deleted for good. The purchase stays.',
+  receiptRemoved: 'Receipt removed',
+  receiptRemoveFailed: 'The receipt did not remove. Nothing was changed.',
+  receiptDownloadName: 'receipt.webp',
   moreDetails: 'More about it',
   removeDetail: 'Remove',
   markRefund: 'This is a refund',
