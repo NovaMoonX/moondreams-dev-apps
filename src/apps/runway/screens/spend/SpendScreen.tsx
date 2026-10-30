@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { ShoppingBag, Wallet } from 'lucide-react';
+import { ChevronRight, Layers, ShoppingBag, Wallet } from 'lucide-react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
@@ -24,6 +26,7 @@ import {
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import GroupsScreen from '@apps/runway/screens/spend/GroupsScreen';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
@@ -36,6 +39,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { useNow } from '@/hooks/useNow';
 import {
+  selectExpenses,
   selectItemLooks,
   selectIsMovesLoaded,
   selectSpendPurchases,
@@ -78,7 +82,11 @@ function SpendScreen() {
     closePurchase,
     spendPeriod,
     showSpendPeriod,
+    isGroupsOpen,
+    openGroups,
+    closeGroups,
   } = useRunwayUrlState();
+  const expenseCount = useAppSelector(selectExpenses).length;
   const today = todayAsUtcDate(useNow(60_000));
   const periodFor = useAppSelector((state) => state.runway.periodFor);
   const periodFailedFor = useAppSelector(
@@ -279,6 +287,26 @@ function SpendScreen() {
             )}
           </FilterBar>
         )}
+        {expenseCount > 0 && (
+          <Button
+            type='button'
+            variant='tertiary'
+            onClick={openGroups}
+            className='border-border text-foreground! h-10 w-full justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+          >
+            <span className='flex items-center gap-2'>
+              <Layers
+                className='text-muted-foreground h-4 w-4'
+                aria-hidden='true'
+              />
+              {SPEND_WORDS.groups}
+            </span>
+            <span className='text-muted-foreground flex items-center gap-1'>
+              {expenseCount}
+              <ChevronRight className='h-4 w-4' aria-hidden='true' />
+            </span>
+          </Button>
+        )}
         {matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
             {purchases.length === 0
@@ -323,6 +351,7 @@ function SpendScreen() {
         icon={<ShoppingBag className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
+      {isGroupsOpen && <GroupsScreen onClose={closeGroups} />}
       {purchaseId !== null && (
         <PurchaseScreen
           key={purchaseId}

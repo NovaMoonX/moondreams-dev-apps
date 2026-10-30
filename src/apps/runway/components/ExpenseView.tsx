@@ -31,6 +31,8 @@ import type { OpenPurchase } from '@apps/runway/types';
 
 interface ExpenseViewProps {
   expenseId: string;
+  /** False where the screen's own header already gives Back. */
+  hasBackLink?: boolean;
   /** The group's purchases across every date, newest first; null until read. */
   purchases: OpenPurchase[] | null;
   isFailed: boolean;
@@ -41,6 +43,7 @@ interface ExpenseViewProps {
 /** One expense group: the total across its purchases, the purchases themselves, and the ways to rename or remove it. It changes no balance. */
 function ExpenseView({
   expenseId,
+  hasBackLink = true,
   purchases,
   isFailed,
   onBack,
@@ -62,7 +65,7 @@ function ExpenseView({
   if (expense === undefined) {
     return (
       <div className='space-y-4'>
-        <BackLink onBack={onBack} />
+        {hasBackLink && <BackLink onBack={onBack} />}
         <p className='text-muted-foreground text-sm'>{SPEND_WORDS.groupGone}</p>
       </div>
     );
@@ -126,7 +129,7 @@ function ExpenseView({
 
   return (
     <div className='space-y-4'>
-      <BackLink onBack={onBack} />
+      {hasBackLink && <BackLink onBack={onBack} />}
       <SheetHead
         label={SPEND_WORDS.groupHead}
         figure={

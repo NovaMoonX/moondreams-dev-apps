@@ -266,7 +266,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 *Track level.*
 
-- **Group purchases into an expense.** A $40 flight, a $12 bag fee and a $200 hotel can be one "Chicago trip". Grouping adds a label, not a balance change. Open any purchase in it to see the group: what it comes to, from when to when, and each purchase. Removing a group keeps its purchases.
+- **Group purchases into an expense.** A $40 flight, a $12 bag fee and a $200 hotel can be one "Chicago trip". Grouping adds a label, not a balance change. Open any purchase in it to see the group: what it comes to, from when to when, and each purchase. Removing a group keeps its purchases. Every group is listed on Spend, so one can be found without opening a purchase, and an emptied one can be removed.
 - **Add context.** A link to an order page, a long note, photos or screenshots, on a purchase you added by hand, imported or linked.
 - **Details are kept as text.** An order number, a date and an itemized breakdown read from a receipt or order page are saved as text with the purchase. Reading a receipt runs only when the person taps "Read a receipt" on a new purchase and chooses a photo; the screen says what is sent first, and a photo added as an attachment is never read.
 - **Receipt images are kept until you remove them.** A photo or screenshot stays sealed on your purchase until you remove it, or remove the purchase or the plan. You can download one at any time.

@@ -96,6 +96,8 @@ interface PurchaseScreenProps {
   onClose: () => void;
   /** The purchase as a wider read found it, for one dated outside the loaded window. */
   fallback?: OpenPurchase | null;
+  /** False when it was opened from its own group, which is already under it. */
+  hasGroupLink?: boolean;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
@@ -104,6 +106,7 @@ function PurchaseScreen({
   onOpen,
   onClose,
   fallback = null,
+  hasGroupLink = true,
 }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -350,6 +353,7 @@ function PurchaseScreen({
         }
         onOpen={setOpenedFromGroup}
         onClose={() => setOpenedFromGroup(null)}
+        hasGroupLink={false}
       />
     );
   }
@@ -528,7 +532,7 @@ function PurchaseScreen({
               chooser={receiptChooser}
               onFiles={(files) => void addReceipts(files)}
             />
-            {group !== null && (
+            {group !== null && hasGroupLink && (
               <ActionRow
                 isGrouped
                 isRoomy

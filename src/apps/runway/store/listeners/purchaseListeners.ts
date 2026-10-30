@@ -3,6 +3,7 @@ import {
   onSnapshot,
   query,
   where,
+  type QueryConstraint,
   type Unsubscribe,
 } from 'firebase/firestore';
 
@@ -65,11 +66,10 @@ export function startPurchasesListener(
   };
 }
 
-/** Every purchase in one expense group, whatever its date. A slow open never overwrites a newer snapshot. */
-export function startExpensePurchasesListener(
+function startConstrainedPurchasesListener(
   uid: string,
   encryption: RunwayEncryption,
-  expenseId: string,
+  constraint: QueryConstraint,
   onChange: (purchases: OpenPurchase[]) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
@@ -80,7 +80,7 @@ export function startExpensePurchasesListener(
   const stop = onSnapshot(
     query(
       collection(db, 'apps', 'runway', 'plans', uid, 'purchases'),
-      where('expenseId', '==', expenseId),
+      constraint,
     ),
     async (snapshot) => {
       sequence.latest += 1;
@@ -108,3 +108,34 @@ export function startExpensePurchasesListener(
     stop();
   };
 }
+
+/** Every purchase in one expense group, whatever its date. A slow open never overwrites a newer snapshot. */
+export const startExpensePurchasesListener = (
+  uid: string,
+  encryption: RunwayEncryption,
+  expenseId: string,
+  onChange: (purchases: OpenPurchase[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe =>
+  startConstrainedPurchasesListener(
+    uid,
+    encryption,
+    where('expenseId', '==', expenseId),
+    onChange,
+    onError,
+  );
+
+/** Every purchase that belongs to any expense group, whatever its date. */
+export const startGroupedPurchasesListener = (
+  uid: string,
+  encryption: RunwayEncryption,
+  onChange: (purchases: OpenPurchase[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe =>
+  startConstrainedPurchasesListener(
+    uid,
+    encryption,
+    where('expenseId', '!=', null),
+    onChange,
+    onError,
+  );
