@@ -8,6 +8,7 @@
 #   npm run merge:lock -- release <pr>
 #   npm run merge:lock -- break <pr> <reason>  # only a lock older than STALE_MINUTES
 #
+# The PR number is the lock's identity: whoever drives that PR may release it.
 # Exit code: 0 done (or free, for status), 2 held by someone else (status,
 # take), 1 refused or failed. Pushing the branch runs no workflow.
 
@@ -18,11 +19,20 @@ STALE_MINUTES=${STALE_MINUTES:-90}
 
 die() { echo "$1" >&2; exit "${2:-1}"; }
 
+# Returns 1 only when origin answers and has no lock; an unreachable origin
+# stops the script, so a network failure never reads as a free lock.
 read_lock() {
-  git fetch -q origin "+refs/heads/$LOCK:refs/remotes/origin/$LOCK" 2>/dev/null || return 1
+  git ls-remote --exit-code origin "refs/heads/$LOCK" >/dev/null 2>&1
+  case $? in
+    0) ;;
+    2) return 1 ;;
+    *) die "Could not reach origin to read the lock." ;;
+  esac
+  git fetch -q origin "+refs/heads/$LOCK:refs/remotes/origin/$LOCK" \
+    || die "Could not fetch the lock."
   lock_sha=$(git rev-parse "refs/remotes/origin/$LOCK")
-  lock_pr=$(git log -1 --format=%B "$lock_sha" | sed -n 's/^pr: #//p')
-  lock_holder=$(git log -1 --format=%B "$lock_sha" | sed -n 's/^holder: //p')
+  lock_pr=$(git log -1 --format=%B "$lock_sha" | sed -n 's/^pr: #//p' | head -1)
+  lock_holder=$(git log -1 --format=%B "$lock_sha" | sed -n 's/^holder: //p' | head -1)
   lock_time=$(git log -1 --format=%ct "$lock_sha")
   lock_minutes=$(( ($(date +%s) - lock_time) / 60 ))
 }
@@ -48,17 +58,18 @@ case "$command" in
     ;;
   take)
     pr=${2:-}; holder=${3:-}
-    [[ "$pr" =~ ^[0-9]+$ && -n "$holder" ]] || die "Usage: take <pr> <holder>" 64
+    [[ "$pr" =~ ^[0-9]+$ && -n "$holder" && "$holder" != *$'\n'* ]] \
+      || die "Usage: take <pr> <holder> (holder on one line)" 64
     git fetch -q origin main || die "Could not fetch main."
     message=$(printf 'merge-lock\n\npr: #%s\nholder: %s\ntaken: %s\n' \
       "$pr" "$holder" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
     sha=$(git commit-tree "origin/main^{tree}" -p origin/main -m "$message") \
       || die "Could not build the lock commit."
-    if git push -q origin "$sha:refs/heads/$LOCK" 2>/dev/null; then
+    if push_error=$(git push -q origin "$sha:refs/heads/$LOCK" 2>&1); then
       echo "Taken for #$pr."
       exit 0
     fi
-    read_lock || die "The push failed but no lock is there; retry."
+    read_lock || die "The push failed and no lock is there: $push_error"
     [[ "$lock_pr" == "$pr" ]] && { echo "Already held for #$pr."; exit 0; }
     describe
     exit 2
