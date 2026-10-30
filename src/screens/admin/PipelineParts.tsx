@@ -179,11 +179,15 @@ interface AnswerFieldsProps {
 const ROW_CLASS =
   'h-auto min-h-11 w-full justify-start gap-3 rounded-xl border px-3 py-2 text-left font-normal';
 
+// Inline after a no-break space, so a wrapping label carries its last word down with the tag instead of indenting it.
 function RecommendedTag() {
   return (
-    <span className='bg-muted text-muted-foreground ml-1.5 inline-block rounded-full px-1.5 py-px align-[1px] text-[11px] font-medium whitespace-nowrap'>
-      Recommended
-    </span>
+    <>
+      {'\u00a0'}
+      <span className='bg-muted text-muted-foreground rounded-full px-1.5 py-px text-[11px] font-medium whitespace-nowrap'>
+        Recommended
+      </span>
+    </>
   );
 }
 
@@ -345,8 +349,12 @@ export function AnswerFields({
                     />
                     <span className='text-foreground line-clamp-2 px-1 pb-0.5 text-xs font-medium [overflow-wrap:anywhere]'>
                       {LETTERS[index]} · {stripLinks(option.label)}
-                      {option.isRecommended ? ' · Recommended' : ''}
                     </span>
+                    {option.isRecommended ? (
+                      <span className='px-0.5 pb-1 text-left leading-none'>
+                        <RecommendedTag />
+                      </span>
+                    ) : null}
                   </Button>
                   <Button
                     type='button'
