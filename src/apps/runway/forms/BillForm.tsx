@@ -859,6 +859,8 @@ function BillForm({
   const quickStep = steps.find((step) => step.id === openStep) ?? null;
   const isQuick = !!editing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
+  const isFirstDate =
+    isQuick && editing?.payload.timing.schedule.anchor === null;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -914,7 +916,11 @@ function BillForm({
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
             {isQuick && quickStep ? (
-              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+              <QuickChange
+                step={quickStep}
+                onAll={() => setIsAll(true)}
+                isFirstDate={isFirstDate}
+              />
             ) : (
               <>
                 {openStep !== null && editing && (
@@ -923,7 +929,9 @@ function BillForm({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && questions.hasReviewed && <ChangeSection />}
+            {editing && questions.hasReviewed && !isFirstDate && (
+              <ChangeSection />
+            )}
             <ModalFooterActions
               note={
                 error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
@@ -953,6 +961,10 @@ function BillForm({
                     loading={isSaving}
                     disabled={isSaving || shownBlocker !== null}
                     onClick={() => {
+                      if (isFirstDate) {
+                        void flow.save(null);
+                        return;
+                      }
                       if (editing) {
                         flow.setStep('reason');
                         return;
@@ -960,11 +972,13 @@ function BillForm({
                       void handleSubmit();
                     }}
                   >
-                    {editing
-                      ? CHANGE_WORDS.review
-                      : draft?.initial
-                        ? 'Save'
-                        : 'Add'}
+                    {isFirstDate
+                      ? 'Save'
+                      : editing
+                        ? CHANGE_WORDS.review
+                        : draft?.initial
+                          ? 'Save'
+                          : 'Add'}
                   </Button>
                 )
               }

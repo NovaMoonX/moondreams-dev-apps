@@ -1365,6 +1365,7 @@ export const FORM_FLOW_WORDS = {
 // Lists and screens, round 2: one fact per sheet head, short action rows, the payday tick and the problems row.
 export const ITEM_SHEET_R2_WORDS = {
   changeElse: 'Change something else',
+  firstDateNote: 'Nothing is set aside for it until it has a date.',
   pauseSub: 'Nothing new goes in',
   resumeSub: 'Money goes in again from the next income day',
   endSub: 'It stops after the day you pick',

@@ -108,7 +108,7 @@ export function BillSheet({
   const repeat =
     schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);
   const getDueFact = () => {
-    if (isUndated) return BILL_WORDS.needsDueDate;
+    if (isUndated) return null;
     if (payment) return `due ${formatDateShortUTC(payment.dueOn)}`;
     return 'No payment left';
   };
