@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-30 | shared | Owner: "GitHub has PR stacks now; can we tap into that?" | Proposal, owner-approved to try next run: create a stack with `gh stack link` (bottom to top) for GitHub's Stack view and base checks, if `gh` and the extension work in the sandbox; merges stay one at a time with each deploy waited on, since `gh stack merge` lands all at once and rebases with force-pushes. Written into `orchestrate` once one run proves it | `orchestrate/SKILL.md` | proposed |
 | 2026-10-30 | shared | The emulators failed in the cloud sandbox and the skill sent sessions to a harness page | The failure is the agent proxy catching firebase-tools' calls to 127.0.0.1; starting the emulators and seed with `HTTPS_PROXY` unset fixes it | `pr-wrap-up/SKILL.md` | changed |
 | 2026-10-30 | shared | A screenshot harness (`src/__harness.tsx`) rode into a PR through `git add src` | The harness files are in `.gitignore`, so no add can pick them up | `.gitignore` | changed |
 | 2026-10-30 | shared | Owner: the inbox still showed a question already answered in chat, after I said nothing was waiting | Answering a question updates every status comment that asked it in the same turn, code change or not; the closing card's 🚩 list is read from the inbox issue | `orchestrate/SKILL.md`, `CLAUDE.md` | changed |
