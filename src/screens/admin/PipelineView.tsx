@@ -3,7 +3,6 @@ import { ChevronRight } from 'lucide-react';
 import { Fragment, useState } from 'react';
 
 import SectionDivider from '@/components/SectionDivider';
-import useNow from '@/hooks/useNow';
 import type { PipelineState } from '@/hooks/usePipelineSync';
 
 import PipelineSheet from './PipelineSheet';
@@ -15,19 +14,20 @@ import {
 
 interface PipelineViewProps {
   pipeline: PipelineState;
+  now: number;
 }
 
-function PipelineView({ pipeline }: PipelineViewProps) {
-  const now = useNow(60_000);
+function PipelineView({ pipeline, now }: PipelineViewProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
-  const { sessions, inbox, isLoading, hasError } = pipeline;
+  const { sessions, inbox, isLoading, hasError, sessionsFailed, inboxFailed } =
+    pipeline;
   const groups = buildPipeline(sessions, inbox, now);
 
   const sections = [
     { key: 'waiting', label: 'Waiting on you', entries: groups.waiting },
     { key: 'working', label: 'Working', entries: groups.working },
     { key: 'quiet', label: 'Quiet', entries: groups.quiet },
-    { key: 'idle', label: 'Idle', entries: groups.idle },
+    { key: 'finished', label: 'Finished', entries: groups.finished },
     { key: 'prs', label: 'On pull requests', entries: groups.prEntries },
   ].filter((section) => section.entries.length > 0);
   const allEntries = sections.flatMap((section) => section.entries);
@@ -43,6 +43,14 @@ function PipelineView({ pipeline }: PipelineViewProps) {
     if (sessions.length === 0)
       return 'Your Claude Code sessions show up here as soon as their reporting key is set.';
     return 'Nothing active in the last few days.';
+  };
+
+  const getErrorText = () => {
+    if (sessionsFailed && inboxFailed)
+      return "Sessions and pull requests couldn't load.";
+    return sessionsFailed
+      ? "Sessions couldn't load."
+      : "Pull requests couldn't load.";
   };
 
   const renderRow = (entry: PipelineEntry) => (
@@ -73,7 +81,7 @@ function PipelineView({ pipeline }: PipelineViewProps) {
     <div className='max-w-3xl space-y-4'>
       {hasError ? (
         <p role='status' className='text-muted-foreground text-sm'>
-          We couldn&apos;t load the pipeline just now.
+          {getErrorText()}
         </p>
       ) : null}
 

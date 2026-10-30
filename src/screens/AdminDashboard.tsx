@@ -44,7 +44,13 @@ function AdminDashboard() {
   // Live, unlike the rest of the dashboard: the sessions change while the owner watches.
   const pipeline = usePipelineSync(isAdmin);
   const now = useNow(60_000);
-  const pipelineSummary = getPipelineSummary(pipeline.sessions, now);
+  const pipelineSummary = getPipelineSummary(
+    pipeline.sessions,
+    pipeline.inbox,
+    now,
+    pipeline.isLoading,
+    pipeline.hasError,
+  );
 
   const isPipelineOpen = url.view === 'pipeline';
   const isMembersOpen = url.view === 'members';
@@ -119,7 +125,7 @@ function AdminDashboard() {
       onSelectMember={url.openMember}
     />
   );
-  const pipelineView = <PipelineView pipeline={pipeline} />;
+  const pipelineView = <PipelineView pipeline={pipeline} now={now} />;
   const firebaseUsage = <FirebaseUsageView apps={allApps} />;
   const appDetail = selectedApp ? (
     <AppDetail
