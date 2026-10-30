@@ -391,14 +391,16 @@ function ChangeEffects({
           const change = (effect.after - effect.before) / effect.before;
           const isDown = change < 0;
           return (
-            <li
-              key={`${effect.date}-${effect.change}`}
-              className='space-y-1 px-4 py-3'
-            >
+            <li key={effect.date} className='space-y-1 px-4 py-3'>
               <p className='text-muted-foreground text-xs'>
                 {formatDateShortUTC(toMs(effect.date))}
               </p>
-              <p className='line-clamp-2 text-sm'>{effect.change}</p>
+              <p className='line-clamp-2 text-sm'>{effect.changes[0]}</p>
+              {effect.changes.length > 1 && (
+                <p className='text-muted-foreground text-xs'>
+                  and {effect.changes.length - 1} more that day
+                </p>
+              )}
               <p className='text-xs'>
                 <span className='text-muted-foreground tabular-nums'>
                   {formatUsd(effect.before)} to {formatUsd(effect.after)} a

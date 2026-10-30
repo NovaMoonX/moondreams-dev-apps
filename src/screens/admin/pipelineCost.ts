@@ -243,20 +243,23 @@ interface MainThread {
 
 /** The session's own conversation, on the model it made most calls with. */
 function getMainThread(entries: Entry[]): MainThread | null {
-  const byModel = entries.filter(({ row }) => !row.isHelper).reduce<
-    Map<string, { calls: number; context: number }>
-  >((found, { row }) => {
-    const before = found.get(row.model) ?? { calls: 0, context: 0 };
-    return new Map(found).set(row.model, {
-      calls: before.calls + row.calls,
-      context:
-        before.context +
-        row.input +
-        row.cacheWrite5m +
-        row.cacheWrite1h +
-        row.cacheRead,
-    });
-  }, new Map());
+  const byModel = entries
+    .filter(({ row }) => !row.isHelper)
+    .reduce<Map<string, { calls: number; context: number }>>(
+      (found, { row }) => {
+        const before = found.get(row.model) ?? { calls: 0, context: 0 };
+        return new Map(found).set(row.model, {
+          calls: before.calls + row.calls,
+          context:
+            before.context +
+            row.input +
+            row.cacheWrite5m +
+            row.cacheWrite1h +
+            row.cacheRead,
+        });
+      },
+      new Map(),
+    );
   const [top] = [...byModel.entries()].sort((a, b) => b[1].calls - a[1].calls);
   if (!top || top[1].calls <= 0) return null;
   return {
@@ -266,8 +269,8 @@ function getMainThread(entries: Entry[]): MainThread | null {
   };
 }
 
-export const formatLongConversation = (calls: number, averageContext: number) =>
-  `Long conversation: ${calls.toLocaleString('en-US')} calls, each re-reading about ${formatTokens(averageContext)} tokens`;
+export const formatLongConversation = (calls: number, contextTokens: number) =>
+  `Long conversation: ${calls.toLocaleString('en-US')} calls so far, each now re-reading about ${formatTokens(contextTokens)} tokens`;
 
 export interface Suggestion {
   id: string;
@@ -304,7 +307,7 @@ function getLongSessionSuggestions(
           id: `long-${session.sessionId}`,
           subject: session.branch,
           url: session.url,
-          what: formatLongConversation(main.calls, main.averageContext),
+          what: formatLongConversation(session.calls, session.contextTokens),
           todo:
             savingUsd !== null && savingUsd >= 0.01
               ? `Start fresh at a natural break; a session that stayed under ${formatTokens(FRESH_CONTEXT_TOKENS)} would have cost about ${formatUsd(savingUsd)} less`
@@ -425,8 +428,9 @@ export function getTopSessions(
         usd: sumUsd(own),
         tokens: own.reduce((sum, entry) => sum + entry.tokens, 0),
         why:
-          main && main.averageContext > LONG_AVERAGE_CONTEXT_TOKENS
-            ? formatLongConversation(main.calls, main.averageContext)
+          session.contextTokens > LONG_CONTEXT_TOKENS ||
+          (main && main.averageContext > LONG_AVERAGE_CONTEXT_TOKENS)
+            ? formatLongConversation(session.calls, session.contextTokens)
             : `Mostly ${(topPhase?.label ?? 'conversation').toLowerCase()}`,
       };
     })
@@ -442,7 +446,7 @@ export interface LogRow {
   outcome: string;
 }
 
-/** The rows of `pipeline-log.md`'s table, newest first as written. */
+/** The pipeline log's table rows, newest first as written. */
 export function parsePipelineLog(markdown: string): LogRow[] {
   return markdown
     .split('\n')
@@ -468,7 +472,8 @@ export function parsePipelineLog(markdown: string): LogRow[] {
 
 export interface ChangeEffect {
   date: string;
-  change: string;
+  /** Every change logged that day, newest first: they share one before and after. */
+  changes: string[];
   before: number;
   after: number;
 }
@@ -499,19 +504,28 @@ export function getChangeEffects(
         row.date >= earliest &&
         row.date <= today,
     )
-    .flatMap((row) => {
+    .reduce<{ date: string; changes: string[] }[]>((days, row) => {
+      const last = days.at(-1);
+      return last?.date === row.date
+        ? [
+            ...days.slice(0, -1),
+            { ...last, changes: [...last.changes, row.change] },
+          ]
+        : [...days, { date: row.date, changes: [row.change] }];
+    }, [])
+    .flatMap(({ date, changes }) => {
       const before = getPerSession(
         sessions,
-        addDays(row.date, -CHANGE_WINDOW_DAYS),
-        addDays(row.date, -1),
+        addDays(date, -CHANGE_WINDOW_DAYS),
+        addDays(date, -1),
       );
       const after = getPerSession(
         sessions,
-        addDays(row.date, 1),
-        addDays(row.date, CHANGE_WINDOW_DAYS),
+        addDays(date, 1),
+        addDays(date, CHANGE_WINDOW_DAYS),
       );
       if (before === null || after === null) return [];
-      return [{ date: row.date, change: row.change, before, after }];
+      return [{ date, changes, before, after }];
     });
 }
 

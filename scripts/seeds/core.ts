@@ -190,7 +190,6 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     batch.set(context.firestore.doc(`pipelineSessions/${session.sessionId}`), session);
   });
   // Token use per session, spread over the last 30 days: Opus on the main thread, Sonnet and Haiku as helpers.
-  const DAY_MS = 24 * 60 * 60 * 1000;
   const PHASE_MODELS = [
     ['planning', 'claude-opus-5-5', 3],
     ['building', 'claude-sonnet-5-5', 10],
