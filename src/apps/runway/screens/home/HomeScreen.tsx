@@ -131,10 +131,6 @@ function HomeScreen() {
 
   return (
     <div className='space-y-6'>
-      <DraftPickUpRow
-        isTrack={isTrack}
-        onPickUpPurchase={() => setIsAddingPurchase(true)}
-      />
       <div className='space-y-2'>
         {dueCards.length > 0 ||
         (lookahead !== null && lookahead.problems.length > 0) ? (
@@ -178,6 +174,12 @@ function HomeScreen() {
           </Button>
         </div>
       </div>
+      {!isAddingPurchase && (
+        <DraftPickUpRow
+          isTrack={isTrack}
+          onPickUpPurchase={() => setIsAddingPurchase(true)}
+        />
+      )}
       {isSetupOpen && (
         <EmptyCard
           icon={<ListChecks className='h-5 w-5' />}

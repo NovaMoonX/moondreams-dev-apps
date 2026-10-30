@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   CHANGE_LOG_SPANS,
-  DRAFT_PICK_UP_KINDS,
+  ADD_REQUEST_KINDS,
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
   DEFAULT_SPEND_PERIOD,
@@ -41,7 +41,7 @@ export function useRunwayUrlState() {
 
   const [requestedAdd, setRequestedAdd] = useQueryState(
     'add',
-    parseAsStringLiteral(DRAFT_PICK_UP_KINDS),
+    parseAsStringLiteral(ADD_REQUEST_KINDS),
   );
   const clearAdd = () => setRequestedAdd(null, { history: 'replace' });
 
@@ -188,22 +188,39 @@ export function useRunwayUrlState() {
     void backLayerSeq;
     window.history.replaceState({ ...entry, runwayTabStep: true }, '');
   };
-  const showTab = (tab: RunwayTab) => {
+  const showTab = async (tab: RunwayTab) => {
     if (tab === activeTab) return;
     if (requestedFixes !== null) closeFixes();
+    if (requestedAdd !== null) clearAdd();
     if (tab === DEFAULT_RUNWAY_TAB) {
       if (window.history.state?.runwayTabStep) {
         navigate(-1);
         return;
       }
-      setRequestedTab(null, { history: 'replace' });
+      await setRequestedTab(null, { history: 'replace' });
       return;
     }
     if (activeTab === DEFAULT_RUNWAY_TAB) {
-      void setRequestedTab(tab, { history: 'push' }).then(markTabStep);
+      await setRequestedTab(tab, { history: 'push' });
+      markTabStep();
       return;
     }
-    setRequestedTab(tab, { history: 'replace' });
+    await setRequestedTab(tab, { history: 'replace' });
+  };
+
+  /** Opens a new item's form on another tab once the tab's own history entry is written, so the form's entry sits on top and Back asks before it closes. */
+  const showAddOnTab = async (
+    kind: (typeof ADD_REQUEST_KINDS)[number],
+    tab: RunwayTab,
+    section?: PlanSection,
+  ) => {
+    if (section) showPlanSection(section);
+    await showTab(tab);
+    // The entry under the form's own carries the request too, so Back lands on it with the form still open for its guard to ask.
+    const address = new URL(window.location.href);
+    address.searchParams.set('add', kind);
+    window.history.replaceState(window.history.state, '', address);
+    await setRequestedAdd(kind, { history: 'replace' });
   };
 
   const showSpend = (envelopeId: string | null) => {
@@ -214,10 +231,13 @@ export function useRunwayUrlState() {
     setRequestedSpendEnvelope(envelopeId, { history: 'replace' });
 
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
-  const showPlanSection = (section: PlanSection) =>
-    setRequestedSection(section === DEFAULT_PLAN_SECTION ? null : section, {
-      history: 'replace',
-    });
+  const showPlanSection = (section: PlanSection) => {
+    if (requestedAdd !== null && section !== requestedSection) clearAdd();
+    return setRequestedSection(
+      section === DEFAULT_PLAN_SECTION ? null : section,
+      { history: 'replace' },
+    );
+  };
 
   const openDay = (dayKey: string) =>
     setRequestedDay(dayKey, { history: 'replace' });
@@ -261,8 +281,7 @@ export function useRunwayUrlState() {
   return {
     activeTab,
     addRequest: requestedAdd,
-    requestAdd: (kind: (typeof DRAFT_PICK_UP_KINDS)[number]) =>
-      setRequestedAdd(kind, { history: 'replace' }),
+    showAddOnTab,
     clearAdd,
     view: requestedView,
     openView,

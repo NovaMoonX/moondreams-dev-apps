@@ -12,7 +12,10 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import { ITEM_SHEET_R2_WORDS, SCHEDULE_LABELS } from '@apps/runway/constants';
+import {
+  ITEM_SHEET_R2_WORDS,
+  SCHEDULE_LABELS,
+} from '@apps/runway/constants';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
@@ -250,7 +253,9 @@ function IncomeScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title='Income' />
+      <SectionHeader
+        title='Income'
+      />
       {getBody()}
       <FloatingAction
         label='Add income'

@@ -28,7 +28,11 @@ function DraftRestoredNotice({
   };
 
   return (
-    <InlineNotice tone='info' onDismiss={onDismiss} dismissLabel='Hide this note'>
+    <InlineNotice
+      tone='info'
+      onDismiss={onDismiss}
+      dismissLabel='Hide this note'
+    >
       <p>We kept what you typed before the app closed.</p>
       <Button
         type='button'

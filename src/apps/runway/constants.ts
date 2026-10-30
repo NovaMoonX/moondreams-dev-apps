@@ -132,6 +132,12 @@ export const DRAFT_PICK_UP_KINDS = [
   'purchase',
 ] as const;
 
+/** The pick-up kinds whose form opens on another tab, carried there in the address; a purchase opens on Home itself. */
+export const ADD_REQUEST_KINDS = DRAFT_PICK_UP_KINDS.filter(
+  (kind): kind is Exclude<(typeof DRAFT_PICK_UP_KINDS)[number], 'purchase'> =>
+    kind !== 'purchase',
+);
+
 export const DRAFT_PICK_UP_KEYS: Record<
   string,
   (typeof DRAFT_PICK_UP_KINDS)[number]
