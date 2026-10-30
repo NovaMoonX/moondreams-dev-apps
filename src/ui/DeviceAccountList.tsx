@@ -14,10 +14,16 @@ interface DeviceAccountListProps {
   onForget: (uid: string) => void;
 }
 
-const getName = (account: RememberedAccount) => account.displayName?.trim() || account.email || 'Unnamed account';
+const getName = (account: RememberedAccount) =>
+  account.displayName?.trim() || account.email || 'Unnamed account';
 
 /** The accounts this device remembers, as a settings section: tap one to switch to it, the trash icon to remove it from this device, or add another. */
-function DeviceAccountList({ accounts, currentUid, onSwitch, onForget }: DeviceAccountListProps) {
+function DeviceAccountList({
+  accounts,
+  currentUid,
+  onSwitch,
+  onForget,
+}: DeviceAccountListProps) {
   const { confirm } = useActionModal();
 
   const handleForget = async (account: RememberedAccount) => {
@@ -33,6 +39,7 @@ function DeviceAccountList({ accounts, currentUid, onSwitch, onForget }: DeviceA
 
   return (
     <SettingsGroup
+      isCard
       title='Accounts on this device'
       description='Switch between them from your avatar. Signing out keeps an account here until you remove it.'
     >
@@ -44,7 +51,10 @@ function DeviceAccountList({ accounts, currentUid, onSwitch, onForget }: DeviceA
             title={getName(account)}
             description='Signed in now'
             control={
-              <span className='grid size-10 place-items-center' aria-label='Signed in'>
+              <span
+                className='grid size-10 place-items-center'
+                aria-label='Signed in'
+              >
                 <Check className='text-primary size-5' aria-hidden='true' />
               </span>
             }
@@ -65,7 +75,11 @@ function DeviceAccountList({ accounts, currentUid, onSwitch, onForget }: DeviceA
           />
         ),
       )}
-      <SettingsRow icon={<Plus className='size-5' />} title='Add another account' onClick={() => onSwitch(null)} />
+      <SettingsRow
+        icon={<Plus className='size-5' />}
+        title='Add another account'
+        onClick={() => onSwitch(null)}
+      />
     </SettingsGroup>
   );
 }
