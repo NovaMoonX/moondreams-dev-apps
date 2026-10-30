@@ -2,6 +2,7 @@ import { timingSafeEqual } from 'node:crypto';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
@@ -21,8 +22,12 @@ const CIS = ['green', 'red', 'running', 'none'];
 const MAX_HANDS = 5;
 const MAX_HAND_LENGTH = 300;
 const MAX_PRS = 60;
-const MAX_TEXT = 2000;
-const MAX_ITEMS = 20;
+const MAX_TEXT = 1000;
+const MAX_ITEMS = 10;
+const MAX_URL = 500;
+const MAX_DOC_BYTES = 600_000;
+const PR_URL =
+  /^https:\/\/github\.com\/NovaMoonX\/moondreams-dev-apps\/pull\/\d+$/;
 const STALE_MS = 14 * 24 * 60 * 60 * 1000;
 const MAX_PRUNED = 20;
 
@@ -40,6 +45,19 @@ const texts = (value: unknown) =>
     .filter((item): item is string => typeof item === 'string')
     .slice(0, MAX_ITEMS)
     .map(text);
+// Every address here is drawn as a link or loaded as an image on the admin's screen.
+const httpsUrl = (value: unknown) =>
+  typeof value === 'string' &&
+  value.length <= MAX_URL &&
+  value.startsWith('https://')
+    ? value
+    : null;
+const httpsUrls = (value: unknown) =>
+  (Array.isArray(value) ? value : [])
+    .slice(0, MAX_ITEMS)
+    .flatMap((item) => httpsUrl(item) ?? []);
+const sessionUrl = (value: unknown) =>
+  typeof value === 'string' && SESSION_URL.test(value) ? value : null;
 const list = (value: unknown) =>
   (Array.isArray(value) ? value : []).slice(0, MAX_ITEMS).filter(isObject);
 const toMs = (value: unknown) => {
@@ -50,18 +68,18 @@ const toMs = (value: unknown) => {
 const toStatus = (value: unknown) => {
   if (!isObject(value)) return null;
   return {
-    sessionUrl: textOrNull(value.sessionUrl),
+    sessionUrl: sessionUrl(value.sessionUrl),
     sessionTitle: textOrNull(value.sessionTitle),
     state: textOrNull(value.state),
     ownerItems: list(value.ownerItems).map((item) => ({
       text: text(item.text),
       options: list(item.options).map((option) => ({
         label: text(option.label),
-        images: texts(option.images),
+        images: httpsUrls(option.images),
       })),
     })),
     goodToKnow: texts(value.goodToKnow),
-    screenshots: texts(value.screenshots),
+    screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),
   };
 };
@@ -69,13 +87,13 @@ const toStatus = (value: unknown) => {
 const toPr = (pr: Json) => ({
   number: typeof pr.number === 'number' ? Math.trunc(pr.number) : 0,
   title: text(pr.title),
-  url: text(pr.url),
+  url: typeof pr.url === 'string' && PR_URL.test(pr.url) ? pr.url : '',
   head: text(pr.head),
   base: text(pr.base),
   isDraft: pr.isDraft === true,
   labels: texts(pr.labels),
   ci: typeof pr.ci === 'string' && CIS.includes(pr.ci) ? pr.ci : 'none',
-  bodySessionUrl: textOrNull(pr.bodySessionUrl),
+  bodySessionUrl: sessionUrl(pr.bodySessionUrl),
   status: toStatus(pr.status),
 });
 
@@ -157,7 +175,12 @@ const writeSession = async (data: Json) => {
 
 const writeInbox = async (data: Json) => {
   if (!Array.isArray(data.prs)) throw invalid('Bad prs.');
-  const prs = data.prs.filter(isObject).slice(0, MAX_PRS).map(toPr);
+  const all = data.prs.filter(isObject).slice(0, MAX_PRS).map(toPr);
+  // Firestore refuses a document over 1 MiB, so the oldest PRs give way rather than the whole write.
+  const prs = all.filter(
+    (_, index) =>
+      JSON.stringify(all.slice(0, index + 1)).length <= MAX_DOC_BYTES,
+  );
   await getFirestore()
     .doc('pipeline/inbox')
     .set({ prs, updatedAt: Date.now() });
@@ -177,6 +200,7 @@ export const recordPipelineEvent = onCall(
       throw new HttpsError('failed-precondition', 'Pipeline reporting is off.');
     }
     if (!isKeyValid(data.key, secret)) {
+      logger.warn('recordPipelineEvent: wrong key');
       throw new HttpsError('permission-denied', 'Wrong key.');
     }
 
