@@ -1,5 +1,6 @@
 import { collection, getDocsFromServer } from 'firebase/firestore';
 
+import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { db } from '@lib/firebase/config';
 import { ENVELOPE_ORDER_STEP, PRIORITIES } from '@apps/runway/constants';
 import {
@@ -9,6 +10,7 @@ import {
   createIncome,
 } from '@apps/runway/store/actions/itemActions';
 import { recordHolding } from '@apps/runway/store/actions/moveActions';
+import { resolveGroupChoice } from '@apps/runway/utils/groupChoice';
 import type { StartDraft } from '@apps/runway/utils/startDraft';
 import type { Priority, RunwayEncryption } from '@apps/runway/types';
 
@@ -18,6 +20,8 @@ export interface ExistingNames {
   bills: string[];
   envelopes: string[];
   goals: string[];
+  /** The plan's groups, so a name a bill is for joins the one that has it. */
+  groups: { id: string; name: string }[];
   /** The highest rank used in each tier by any bill, envelope or goal, so added items sort after them. */
   topRanks: Record<Priority, number>;
   /** The plan's starting day, when it has one. */
@@ -78,6 +82,29 @@ export async function commitStartDraft(
     goals: new Set(existing.goals.map(norm)),
   };
   const sourceIds = new Map<string, string>();
+  const madeGroups: { id: string; name: string }[] = [];
+  const toGroup = (
+    forName: string | null | undefined,
+    forEmoji: string | null | undefined,
+  ) => {
+    const choice = resolveGroupChoice(NEW_CHOICE, forName ?? '', [
+      ...existing.groups,
+      ...madeGroups,
+    ]);
+    return choice.newGroup === null
+      ? choice
+      : {
+          ...choice,
+          newGroup: { ...choice.newGroup, emoji: forEmoji?.trim() || null },
+        };
+  };
+  const rememberGroup = (
+    made: { name: string } | null,
+    groupId: string | null,
+  ) => {
+    if (made !== null && groupId !== null)
+      madeGroups.push({ id: groupId, name: made.name });
+  };
 
   try {
     for (const { id, value } of draft.incomes) {
@@ -94,15 +121,18 @@ export async function commitStartDraft(
       result.added += 1;
       result.addedIds.push(id);
     }
-    for (const { id, value } of draft.bills) {
+    for (const { id, value, forName, forEmoji } of draft.bills) {
       if (taken.bills.has(norm(value.name))) {
         result.skipped += 1;
         continue;
       }
-      await createBill(uid, encryption, {
+      const { groupId, newGroup } = toGroup(forName, forEmoji);
+      const created = await createBill(uid, encryption, {
         startDate: today,
-        bill: { ...value, orderIndex: nextRank(value.priority) },
+        bill: { ...value, groupId, orderIndex: nextRank(value.priority) },
+        newGroup,
       });
+      rememberGroup(newGroup, created.groupId);
       taken.bills.add(norm(value.name));
       result.added += 1;
       result.addedIds.push(id);
@@ -115,19 +145,23 @@ export async function commitStartDraft(
       const real = sourceIds.get(id.slice('draft:'.length)) ?? null;
       return { ...funding, sourceId: real };
     };
-    for (const { id, value } of draft.envelopes) {
+    for (const { id, value, forName, forEmoji } of draft.envelopes) {
       if (taken.envelopes.has(norm(value.name))) {
         result.skipped += 1;
         continue;
       }
-      await createEnvelope(uid, encryption, {
+      const { groupId, newGroup } = toGroup(forName, forEmoji);
+      const created = await createEnvelope(uid, encryption, {
         startDate: today,
         envelope: {
           ...value,
+          groupId,
           funding: mapFunding(value.funding),
           orderIndex: nextRank(value.priority),
         },
+        newGroup,
       });
+      rememberGroup(newGroup, created.groupId);
       taken.envelopes.add(norm(value.name));
       result.added += 1;
       result.addedIds.push(id);

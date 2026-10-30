@@ -8,6 +8,7 @@ import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
+import { useRecordedEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
@@ -175,6 +176,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const { addToast } = useToast();
   const today = todayAsUtcDate(useNow(60_000));
   const items = useAppSelector((state) => state.runway.items);
+  const emojiOf = useRecordedEmojiResolver();
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const openDay = useAppSelector((state) => selectOpenDay(state, day.dayKey));
   const doneIds = openDay?.doneLineIds ?? [];
@@ -397,7 +399,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               <ItemRow
                 key={line.lineId}
                 name={line.name}
-                emoji={line.emoji}
+                emoji={emojiOf(line.emoji, line.itemId)}
                 detail={
                   (payment ? getChecklistProgress(payment) : null) ??
                   BILL_WORDS.waiting

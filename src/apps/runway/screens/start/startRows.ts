@@ -2,7 +2,10 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import { SCHEDULE_LABELS } from '@apps/runway/constants';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
-import { describeBillRepeat } from '@apps/runway/utils/billText';
+import {
+  describeBillRepeat,
+  describeBillTiming,
+} from '@apps/runway/utils/billText';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
 import type {
   BillSealed,
@@ -22,6 +25,8 @@ export interface StartRow {
   id: string;
   name: string;
   emoji: string | null;
+  /** The purpose a bill or envelope row is for, whose emoji it wears when it has none of its own. */
+  groupId?: string | null;
   /** The one muted line under the name. */
   line: string;
   /** The figure on the right, or null when the row has none. */
@@ -107,8 +112,8 @@ export const toIncomeRow = (
 });
 
 const describeBillLine = (schedule: Schedule) => {
-  const start =
-    schedule.anchor === null ? '' : formatDateShortUTC(schedule.anchor);
+  if (schedule.anchor === null) return describeBillTiming(schedule);
+  const start = formatDateShortUTC(schedule.anchor);
   return schedule.kind === 'once'
     ? `Due ${start}`
     : `${describeBillRepeat(schedule.kind)} from ${start}`;
@@ -118,6 +123,7 @@ export const toBillRow = (id: string, bill: BillSealed): StartRow => ({
   id,
   name: bill.name,
   emoji: bill.emoji,
+  groupId: bill.groupId,
   line: describeBillLine(bill.timing.schedule),
   amount: formatRowRange(bill.amount),
 });
@@ -129,6 +135,7 @@ export const toEnvelopeRow = (
   id,
   name: envelope.name,
   emoji: envelope.emoji,
+  groupId: envelope.groupId,
   line: describeFundingShort(envelope.funding),
   amount: null,
 });

@@ -67,10 +67,21 @@ export interface GoalValues {
   monthlyCents: number | null;
 }
 
-export interface BudgetIncome extends BudgetItem<IncomeValues>, IncomeValues {}
-export interface BudgetBill extends BudgetItem<BillValues>, BillValues {}
+interface ForName {
+  /** What the money takes care of ("Home", "Pets"), or null when the documents don't make it clear. */
+  forName: string | null;
+  /** One emoji the reader suggests for that purpose, or null; always null when forName is. */
+  forEmoji: string | null;
+}
+
+export interface BudgetIncome extends BudgetItem<IncomeValues>, IncomeValues {
+  /** Who pays it, or null when the documents don't say. */
+  payer: string | null;
+}
+export interface BudgetBill
+  extends BudgetItem<BillValues>, BillValues, ForName {}
 export interface BudgetEnvelope
-  extends BudgetItem<EnvelopeValues>, EnvelopeValues {}
+  extends BudgetItem<EnvelopeValues>, EnvelopeValues, ForName {}
 export interface BudgetGoal extends BudgetItem<GoalValues>, GoalValues {}
 
 export interface BudgetNotRead {
@@ -191,12 +202,81 @@ const toBase = (raw: Raw, toFile: ToFile) => ({
   own: [],
 });
 
-const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => ({
-  ...toBase(raw, toFile),
-  amountCents: toCents(raw.amountCents),
-  scheduleKind: toOneOf(raw.scheduleKind, INCOME_FREQUENCIES),
-  nextOn: toDate(raw.nextOn),
-  monthDays: Array.isArray(raw.monthDays)
+/** A name that is only a savings, investing or priority word names a goal or a priority, never what money is for ("Retirement home" still is one). */
+const NOT_A_PURPOSE =
+  /^(additional |extra |other |more )?(saving|savings|invest|investing|investment|investments|retirement|goal|goals|must|should|want|wants)$/i;
+
+const toForName = (value: unknown) => {
+  const name = toName(value);
+  return name === '' || NOT_A_PURPOSE.test(name)
+    ? null
+    : /^\p{Ll}/u.test(name)
+      ? toDisplayCase(name, { keepAcronyms: true, keepMixedCase: true })
+      : name;
+};
+
+const emojiSegmenter = new Intl.Segmenter();
+
+/** A suggested emoji when it is exactly one emoji (a flag or a joined family counts as one), else null. */
+const toForEmoji = (value: unknown, forName: string | null) => {
+  if (forName === null || typeof value !== 'string') return null;
+  const text = value.trim();
+  const isOne = [...emojiSegmenter.segment(text)].length === 1;
+  return isOne && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(text)
+    ? text
+    : null;
+};
+
+/** A kept item's purpose with its emoji, else the other's, so the emoji stays with the name it was given for. */
+const fillFor = (
+  kept: { forName: string | null; forEmoji: string | null },
+  other: { forName: string | null; forEmoji: string | null },
+) =>
+  kept.forName === null
+    ? { forName: other.forName, forEmoji: other.forEmoji }
+    : { forName: kept.forName, forEmoji: kept.forEmoji };
+
+const forNameMatcher = createOptionMatcher({ foldPlurals: true, typos: false });
+
+/** Gives every item that names the same purpose the first spelling seen ("housing" and "Housing " are one name) and the first emoji suggested for it. */
+const unifyForNames = <
+  T extends { forName: string | null; forEmoji: string | null },
+>(
+  items: T[],
+): T[] => {
+  const named = items.reduce<{ labels: string[]; items: T[] }>(
+    (state, item) => {
+      if (item.forName === null)
+        return { ...state, items: [...state.items, item] };
+      const label =
+        forNameMatcher.match(item.forName, state.labels) ?? item.forName;
+      return {
+        labels: state.labels.includes(label)
+          ? state.labels
+          : [...state.labels, label],
+        items: [...state.items, { ...item, forName: label }],
+      };
+    },
+    { labels: [], items: [] },
+  ).items;
+  const emojis = named.reduce<Map<string, string>>(
+    (acc, { forName, forEmoji }) =>
+      forName === null || forEmoji === null || acc.has(forName)
+        ? acc
+        : acc.set(forName, forEmoji),
+    new Map(),
+  );
+  return named.map((item) => ({
+    ...item,
+    forEmoji: item.forName === null ? null : (emojis.get(item.forName) ?? null),
+  }));
+};
+
+const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => {
+  const payer = toName(raw.payer) || null;
+  const scheduleKind = toOneOf(raw.scheduleKind, INCOME_FREQUENCIES);
+  const monthDay = toDayOfMonth(raw.dayOfMonth);
+  const monthDays = Array.isArray(raw.monthDays)
     ? [
         ...new Set(
           raw.monthDays
@@ -206,8 +286,20 @@ const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => ({
       ]
         .sort((a, b) => a - b)
         .slice(0, 2)
-    : [],
-});
+    : [];
+  return {
+    ...toBase(raw, toFile),
+    name: toName(raw.name) || (payer ?? ''),
+    payer,
+    amountCents: toCents(raw.amountCents),
+    scheduleKind,
+    nextOn: toDate(raw.nextOn),
+    monthDays:
+      scheduleKind === 'monthly' && monthDay !== null && monthDays.length === 0
+        ? [monthDay]
+        : monthDays,
+  };
+};
 
 const OTHER_CADENCE =
   /year|annual|quarter|semi|half-?year|bi-?monthly|twice|thrice|\d+\s*x\b|\b\w+\s+times\b|every\s+(\d+|two|three|four|five|six|nine|twelve)\s+months?/i;
@@ -261,6 +353,11 @@ const toRepeat = (raw: Raw) => {
       };
 };
 
+const toFor = (raw: Raw) => {
+  const forName = toForName(raw.forName);
+  return { forName, forEmoji: toForEmoji(raw.forEmoji, forName) };
+};
+
 const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
   const low = toCents(raw.lowCents);
   const high = toCents(raw.highCents);
@@ -269,6 +366,7 @@ const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
   const isKept = writtenCadence === null;
   return {
     ...toBase(raw, toFile),
+    ...toFor(raw),
     amountCents:
       isKept && isRange
         ? low
@@ -286,6 +384,7 @@ const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
 
 const toEnvelope = (raw: Raw, toFile: ToFile): BudgetEnvelope => ({
   ...toBase(raw, toFile),
+  ...toFor(raw),
   amountCents: toCents(raw.amountCents),
   period: toOneOf<BudgetEnvelopePeriod>(raw.period, [
     ...CALENDAR_PERIODS,
@@ -408,6 +507,30 @@ function mergeItems<T extends BudgetItem<V>, V>(
   return { items, dropped };
 }
 
+/** The same pay in two documents, each on its own day of the month with the same amount, is one pay twice a month ("ESPP" in a 15th and a 30th sheet). */
+const joinPayDays = (item: BudgetIncome): BudgetIncome => {
+  const [first, second] = item.versions.map(({ values }) => values);
+  const isPair =
+    item.versions.length === 2 &&
+    [first, second].every(
+      (values) =>
+        values.scheduleKind === 'monthly' && values.monthDays.length === 1,
+    ) &&
+    first.amountCents === second.amountCents &&
+    first.monthDays[0] !== second.monthDays[0];
+  return isPair
+    ? {
+        ...item,
+        scheduleKind: 'twiceMonthly',
+        nextOn: null,
+        monthDays: [first.monthDays[0], second.monthDays[0]].sort(
+          (a, b) => a - b,
+        ),
+        versions: [],
+      }
+    : item;
+};
+
 const CUT_LABELS = {
   incomes: 'incomes',
   bills: 'bills',
@@ -449,6 +572,7 @@ export function normalizeBudgetReading(
       isDifferent: incomeDiffers,
       fill: (kept, other) => ({
         ...kept,
+        payer: orElse(kept.payer, other.payer),
         amountCents: orElse(kept.amountCents, other.amountCents),
         scheduleKind: orElse(kept.scheduleKind, other.scheduleKind),
         nextOn: orElse(kept.nextOn, other.nextOn),
@@ -483,9 +607,10 @@ export function normalizeBudgetReading(
       isDifferent: billDiffers,
       fill: (kept, other) =>
         kept.writtenCadence !== null
-          ? kept
+          ? { ...kept, ...fillFor(kept, other) }
           : {
               ...kept,
+              ...fillFor(kept, other),
               ...(kept.amountCents === null
                 ? { amountCents: other.amountCents, highCents: other.highCents }
                 : {}),
@@ -504,6 +629,7 @@ export function normalizeBudgetReading(
       isDifferent: envelopeDiffers,
       fill: (kept, other) => ({
         ...kept,
+        ...fillFor(kept, other),
         amountCents: orElse(kept.amountCents, other.amountCents),
         period: orElse(kept.period, other.period),
       }),
@@ -577,10 +703,11 @@ export function normalizeBudgetReading(
     }),
   ].slice(0, BUDGET_LIMITS.notRead);
 
+  const unified = unifyForNames([...bills.items, ...envelopes.items]);
   return {
-    incomes: incomes.items,
-    bills: bills.items,
-    envelopes: envelopes.items,
+    incomes: incomes.items.map(joinPayDays),
+    bills: unified.slice(0, bills.items.length) as BudgetBill[],
+    envelopes: unified.slice(bills.items.length) as BudgetEnvelope[],
     goals: goals.items,
     notRead,
   };

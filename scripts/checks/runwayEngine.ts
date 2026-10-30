@@ -66,7 +66,10 @@ import {
   matchMovedDates,
   planOverrideCarry,
 } from '../../src/apps/runway/engine/moved.ts';
-import { monthlyTotal } from '../../src/apps/runway/engine/groups.ts';
+import {
+  getIncomeDaysPerMonth,
+  monthlyTotal,
+} from '../../src/apps/runway/engine/groups.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -4705,7 +4708,7 @@ const version = (
       })),
     }) as never;
   const billsOf = (...ids: string[]) =>
-    ids.map((id) => ({ id, name: id, since: 0 }));
+    ids.map((id) => ({ id, name: id, since: 0, isUndated: false }));
 
   // A bill with no income day before it is due warns, naming the bill and the date.
   const noIncome = run(weekly.slice(0, 3), {
@@ -4749,6 +4752,23 @@ const version = (
     'a payment past the horizon is not',
   );
 
+  // A bill with no due date is listed for a person to date, and never stops the plan.
+  const undatedLook = run(weekly.slice(0, 3), {
+    bills: [
+      ...billsOf('car'),
+      { id: 'rent', name: 'Rent', since: 0, isUndated: true },
+    ],
+    payments: { car: [payment(today + 5 * DAY_MS, 2)] },
+  });
+  assert.deepEqual(undatedLook.undated, [{ billId: 'rent', name: 'Rent' }]);
+  assert.equal(undatedLook.problems.length, 0, 'an undated bill is no problem');
+  assert.equal(
+    undatedLook.holdsThrough,
+    run(weekly.slice(0, 3), { bills: billsOf('car'), payments: {} })
+      .holdsThrough,
+    'an undated bill does not shorten how far the plan holds',
+  );
+
   // An overdue unpaid bill stops "covered" and holds through nothing; one before the bill began is ignored.
   const overdue = run(weekly.slice(0, 3), {
     bills: billsOf('rent'),
@@ -4760,7 +4780,7 @@ const version = (
   assert.equal(overdue.holdsThrough, null);
   assert.equal(
     run(weekly.slice(0, 3), {
-      bills: [{ id: 'rent', name: 'rent', since: today }],
+      bills: [{ id: 'rent', name: 'rent', since: today, isUndated: false }],
       payments: { rent: [payment(today - 3 * DAY_MS, 0)] },
     }).problems.length,
     0,
@@ -10038,6 +10058,13 @@ console.log('runway engine: ok');
     ...extra,
   });
 
+  assert.equal(
+    monthlyTotal([member(exact(5_000), every('monthly', null))], nov).total
+      .highCents,
+    5_000,
+    'a monthly bill with no due date yet still counts in the monthly total',
+  );
+
   assert.deepEqual(
     monthlyTotal(
       [
@@ -10137,6 +10164,151 @@ console.log('runway engine: ok');
       oneTime: { count: 0, range: exact(0), dueOn: null },
     },
     'G10: a bill that ended before the month or begins after it counts nothing; one ending in it still counts',
+  );
+  const envelope = (
+    funding: FundingRule,
+    extra: Partial<{ startsOn: number; incomeDaysPerMonth: number }> = {},
+  ) => ({
+    funding,
+    startsOn: utc(2026, 1, 1),
+    incomeDaysPerMonth: 2,
+    ...extra,
+  });
+  const cash = (cents: number) => ({ kind: 'exact' as const, cents });
+  const calendar = (
+    period: 'weekly' | 'every2Weeks' | 'twiceMonthly' | 'monthly' | 'yearly',
+    cents: number,
+  ) =>
+    envelope({
+      amount: cash(cents),
+      cadence: { kind: 'calendar', period, startsOn: null },
+    });
+  assert.deepEqual(
+    monthlyTotal([], nov, [
+      calendar('weekly', 5_200),
+      calendar('every2Weeks', 2_600),
+      calendar('twiceMonthly', 1_000),
+      calendar('monthly', 10_000),
+      calendar('yearly', 120_000),
+    ]),
+    {
+      total: exact(50_167),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G11: a calendar envelope counts at its usual month: weekly x52/12, every 2 weeks x26/12, twice a month x2, monthly x1, yearly /12, rounded once',
+  );
+  assert.deepEqual(
+    monthlyTotal(
+      [member(exact(120_000), every('monthly', utc(2026, 11, 1)))],
+      nov,
+      [
+        envelope({
+          amount: cash(3_000),
+          cadence: { kind: 'everyIncomeDay' },
+        }),
+        envelope({
+          amount: cash(2_000),
+          cadence: { kind: 'everyNth', n: 2, anchorDayKey: 'a' },
+        }),
+        envelope({
+          amount: cash(900),
+          cadence: { kind: 'chosen', dayKeys: [] },
+        }),
+        envelope({ amount: cash(900), cadence: { kind: 'none' } }),
+        envelope({
+          amount: { kind: 'percent', bps: 500, of: 'dayMoney' },
+          cadence: { kind: 'everyIncomeDay' },
+        }),
+        envelope({
+          amount: { kind: 'rest' },
+          cadence: { kind: 'everyIncomeDay' },
+        }),
+      ],
+    ),
+    {
+      total: exact(128_000),
+      uncounted: 4,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    "G11: income-day envelopes count x the usual month's income days (an Nth one divided by n); chosen, none, percent and rest are named as left out; bills and envelopes add into one total",
+  );
+  assert.deepEqual(
+    monthlyTotal([], nov, [
+      calendar('monthly', 5_000),
+      { ...calendar('monthly', 7_000), startsOn: utc(2027, 1, 1) },
+      envelope({
+        amount: cash(4_000),
+        cadence: {
+          kind: 'calendar',
+          period: 'monthly',
+          startsOn: utc(2027, 3, 1),
+        },
+      }),
+    ]),
+    {
+      total: exact(5_000),
+      uncounted: 0,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G11: an envelope, or a calendar rule, that begins after the month counts nothing',
+  );
+  assert.deepEqual(
+    monthlyTotal([], nov, [
+      envelope(
+        { amount: cash(3_000), cadence: { kind: 'everyIncomeDay' } },
+        { incomeDaysPerMonth: 0 },
+      ),
+    ]),
+    {
+      total: exact(0),
+      uncounted: 1,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G11: an income-day envelope with no regular pay to count is named as left out, never $0 silently',
+  );
+  const line = (
+    kind: Schedule['kind'],
+    extra: Partial<{
+      startsOn: number;
+      ending: typeof NO_END;
+      sourceId: string;
+    }> = {},
+  ) => ({
+    sourceId: 'job-a',
+    schedule: every(kind, utc(2026, 1, 1)),
+    startsOn: utc(2026, 1, 1),
+    ending: NO_END,
+    ...extra,
+  });
+  assert.equal(
+    getIncomeDaysPerMonth([line('twiceMonthly')], nov),
+    2,
+    'G11: a twice-a-month pay line is two income days',
+  );
+  assert.equal(
+    getIncomeDaysPerMonth(
+      [
+        line('weekly'),
+        line('monthly'),
+        line('once'),
+        line('monthly', {
+          ending: { onDate: utc(2026, 10, 5), afterCount: null },
+        }),
+      ],
+      nov,
+    ),
+    52 / 12 + 1,
+    'G11: pay lines add at their monthly beat; a one-off or ended line adds none',
+  );
+  assert.equal(
+    getIncomeDaysPerMonth(
+      [line('weekly'), line('monthly', { sourceId: 'job-b' })],
+      nov,
+      'job-b',
+    ),
+    1,
+    "G11: a rule that counts one source's pay counts only that source's income days",
   );
 }
 

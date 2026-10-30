@@ -91,6 +91,7 @@ export function computeLookahead(
     bills: inputs.bills.map(({ item, version }) => ({
       id: item.id,
       name: version.payload.name,
+      isUndated: version.payload.timing.schedule.anchor === null,
       since: Math.max(
         startOfUtcDay(item.createdAt),
         inputs.startDate ?? 0,

@@ -158,20 +158,29 @@ export interface CreateEnvelopeInput {
   envelope: EnvelopeSealed;
   /** The first day this envelope is in the plan. */
   startDate: number;
+  /** A group the person named while adding the envelope; it is written in the same batch and the envelope joins it. */
+  newGroup?: GroupSealed | null;
 }
 
 /**
- * Adds an envelope as a header, a first version and one change entry in a single batch. Items and
- * versions are created and never updated; nothing is written to `days`.
+ * Adds an envelope as a header, a first version and one change entry in a single batch, with the
+ * new group's three documents beside them when the envelope names one. Items and versions are
+ * created and never updated; nothing is written to `days`.
  */
 export async function createEnvelope(
   uid: string,
   encryption: RunwayEncryption,
-  { envelope, startDate }: CreateEnvelopeInput,
-): Promise<{ envelopeId: string }> {
+  { envelope: draftEnvelope, startDate, newGroup = null }: CreateEnvelopeInput,
+): Promise<{ envelopeId: string; groupId: string | null }> {
   const now = Date.now();
   const envelopeId = generateUuid();
   const changeId = generateUuid();
+  const groupDocs = newGroup
+    ? await buildGroupDocs(encryption, { group: newGroup, startDate }, now)
+    : null;
+  const envelope: EnvelopeSealed = groupDocs
+    ? { ...draftEnvelope, groupId: groupDocs.groupId }
+    : draftEnvelope;
   const changePayload: ChangeSealed = {
     summary: `Added ${envelope.name}, ${describeFunding(envelope.funding)}.`,
   };
@@ -210,12 +219,20 @@ export async function createEnvelope(
   };
 
   const batch = writeBatch(db);
+  if (groupDocs) {
+    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
+    batch.set(
+      itemPath(uid, 'versions', groupDocs.version.id),
+      groupDocs.version,
+    );
+    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
+  }
   batch.set(itemPath(uid, 'items', envelopeId), header);
   batch.set(itemPath(uid, 'versions', version.id), version);
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();
 
-  return { envelopeId };
+  return { envelopeId, groupId: groupDocs?.groupId ?? null };
 }
 
 export interface CreateGroupInput {
@@ -235,7 +252,7 @@ async function buildGroupDocs(
   const [groupSealed, changeSealed] = await Promise.all([
     sealJson(group, encryption),
     sealJson<ChangeSealed>(
-      { summary: `Added the group ${group.name}.` },
+      { summary: `Started using ${group.name}.` },
       encryption,
     ),
   ]);
@@ -286,7 +303,7 @@ export async function createBill(
   uid: string,
   encryption: RunwayEncryption,
   { bill: draftBill, startDate, newGroup = null }: CreateBillInput,
-): Promise<{ billId: string }> {
+): Promise<{ billId: string; groupId: string | null }> {
   const now = Date.now();
   const billId = generateUuid();
   const changeId = generateUuid();
@@ -347,7 +364,7 @@ export async function createBill(
   batch.set(itemPath(uid, 'changes', changeId), change);
   await batch.commit();
 
-  return { billId };
+  return { billId, groupId: groupDocs?.groupId ?? null };
 }
 
 export interface CreateGoalInput {
@@ -450,7 +467,7 @@ export async function changeItem(
     note: input.note,
   };
   const groupDocs =
-    input.newGroup && input.kind === 'bill'
+    input.newGroup && (input.kind === 'bill' || input.kind === 'envelope')
       ? await buildGroupDocs(
           encryption,
           { group: input.newGroup, startDate: input.effectiveFrom },
@@ -459,7 +476,10 @@ export async function changeItem(
       : null;
   const withGroup = (payload: ItemPayload): ItemPayload =>
     groupDocs
-      ? { ...(payload as BillSealed), groupId: groupDocs.groupId }
+      ? {
+          ...(payload as BillSealed | EnvelopeSealed),
+          groupId: groupDocs.groupId,
+        }
       : payload;
   const stretches: VersionStretch<ItemPayload>[] = input.stretches ?? [
     {

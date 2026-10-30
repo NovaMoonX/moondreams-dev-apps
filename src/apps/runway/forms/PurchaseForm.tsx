@@ -54,6 +54,7 @@ import {
 } from '@apps/runway/utils/receiptText';
 import { addReceiptImages } from '@apps/runway/store/actions/receiptActions';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import SplitEditor from '@apps/runway/components/SplitEditor';
 import { isTooLong } from '@apps/runway/utils/rangeInput';
 import {
@@ -323,6 +324,7 @@ function PurchaseFormBody({
   const balances = useAppSelector(selectBalances);
   const purchases = useAppSelector(selectSpendPurchases);
   const looks = useAppSelector(selectItemLooks);
+  const emojiOf = useLiveEmojiResolver();
   const cards = useAppSelector(selectCards);
   const allCards = useAppSelector(selectAllCards);
   const expenses = useAppSelector(selectExpenses);
@@ -558,7 +560,7 @@ function PurchaseFormBody({
   const liveOptions = envelopes.map(({ item, version }) => ({
     id: item.id,
     name: version.payload.name,
-    emoji: version.payload.emoji,
+    emoji: emojiOf(version.payload.emoji, version.payload.groupId),
     leftCents: (balances.assignedByItem[item.id] ?? 0) + ownCents(item.id),
   }));
   const keptOptions = [

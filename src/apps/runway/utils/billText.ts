@@ -6,20 +6,24 @@ import {
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { monthlyTotal } from '@apps/runway/engine/groups';
-import type { GroupMember, GroupTotal } from '@apps/runway/engine/groups';
+import type {
+  GroupEnvelopeMember,
+  GroupMember,
+  GroupTotal,
+} from '@apps/runway/engine/groups';
 import type { BillFundedBy, MoneyRange, Schedule } from '@apps/runway/types';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 
-/** What a group's bills come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
+/** What a group's bills and envelopes come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
 export const describeGroupTotal = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCents(range.lowCents)
     : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
 
 /** What a group's heading and sheet lead with: its monthly total, or the one-time bills when those are all it has, or that it is empty. `amount` is the private part. */
-export function describeGroupLead(total: GroupTotal, billCount: number) {
-  if (billCount === 0)
+export function describeGroupLead(total: GroupTotal, memberCount: number) {
+  if (memberCount === 0)
     return { amount: null, rest: GROUP_WORDS.noBills, isOneTime: false };
   const { oneTime } = total;
   if (total.total.highCents === 0 && oneTime.count > 0) {
@@ -39,15 +43,40 @@ export function describeGroupLead(total: GroupTotal, billCount: number) {
   };
 }
 
-/** The bill names a group's monthly figure stands for; every name only when none is counted (a group of one-time bills). */
+/** A list heading's lead: its kind's monthly figure, and the purpose's whole figure (`whole`) when the purpose has the other kind too and both have a regular monthly amount, so it reads "$835 of $925 a month". */
+export function describeGroupHeadingLead(
+  kindTotal: GroupTotal,
+  total: GroupTotal,
+  count: number,
+  otherCount: number,
+) {
+  const lead = describeGroupLead(kindTotal, count);
+  const hasShare =
+    otherCount > 0 &&
+    !lead.isOneTime &&
+    lead.amount !== null &&
+    kindTotal.total.highCents > 0 &&
+    total.total.highCents > 0;
+  return { ...lead, whole: hasShare ? describeGroupTotal(total.total) : null };
+}
+
+/** The bill and envelope names a group's monthly figure stands for; every name only when none is counted (a group of one-time bills). */
 export function getGroupMemberNames(
-  members: readonly (GroupMember & { name: string })[],
+  bills: readonly (GroupMember & { name: string })[],
+  envelopes: readonly (GroupEnvelopeMember & { name: string })[],
   today: number,
 ) {
-  const counted = members.filter(
-    (member) => monthlyTotal([member], today).total.highCents > 0,
+  const counted = [
+    ...bills.filter(
+      (member) => monthlyTotal([member], today).total.highCents > 0,
+    ),
+    ...envelopes.filter(
+      (member) => monthlyTotal([], today, [member]).total.highCents > 0,
+    ),
+  ];
+  return (counted.length > 0 ? counted : [...bills, ...envelopes]).map(
+    ({ name }) => name,
   );
-  return (counted.length > 0 ? counted : members).map(({ name }) => name);
 }
 
 export function describeBillRepeat(kind: Schedule['kind']) {
@@ -56,9 +85,14 @@ export function describeBillRepeat(kind: Schedule['kind']) {
   return result;
 }
 
-/** When a bill falls due, in the words a row and a change entry share: "Due Dec 1" or "Monthly from Dec 1". */
+/** When a bill falls due, in the words a row and a change entry share: "Due Dec 1", "Monthly from Dec 1" or, with no date yet, "Monthly · due date later". */
 export function describeBillTiming(schedule: Schedule) {
-  const start = schedule.anchor === null ? '' : formatDateUTC(schedule.anchor);
+  if (schedule.anchor === null) {
+    return schedule.kind === 'once'
+      ? 'Due date later'
+      : `${describeBillRepeat(schedule.kind)} · due date later`;
+  }
+  const start = formatDateUTC(schedule.anchor);
   if (schedule.kind === 'once') return `Due ${start}`;
   const result = `${describeBillRepeat(schedule.kind)} from ${start}`;
   return result;

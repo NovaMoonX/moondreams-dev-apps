@@ -8,11 +8,17 @@ import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import HelpTip from '@/components/HelpTip';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
-import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import {
+  useQuestionFlow,
+  type QuestionControls,
+  type QuestionStep,
+} from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
@@ -35,6 +41,7 @@ import {
   fundingFieldChecks,
   isNullableOneOf,
   isNullableText,
+  isPickOrCreate,
   isText,
   readDraftFields,
   readKeptWithChange,
@@ -53,6 +60,12 @@ import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
+  NEW_GROUP_ID,
+  getGroupChoices,
+  resolveGroupChoice,
+  toGroupAnswer,
+} from '@apps/runway/utils/groupChoice';
+import {
   buildFundingRule,
   buildFundingSteps,
   getFundingBlocker,
@@ -65,6 +78,7 @@ import {
   selectGoals,
   selectBills,
   selectEnvelopes,
+  selectGroups,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
@@ -76,6 +90,8 @@ interface EnvelopeFormData extends FundingFormData {
   priority: Priority | null;
   /** Null until the person adds one. */
   emoji: string | null;
+  /** An existing group's id, `NEW_CHOICE` while naming one, or '' for none. */
+  group: { choice: string; newText: string };
 }
 
 const parseEnvelopeDraftFields = (stored: unknown) =>
@@ -84,6 +100,7 @@ const parseEnvelopeDraftFields = (stored: unknown) =>
     name: isText,
     priority: isNullableOneOf(PRIORITIES),
     emoji: isNullableText,
+    group: isPickOrCreate,
   });
 
 const parseEnvelopeDraft = (stored: unknown) =>
@@ -103,10 +120,12 @@ interface EnvelopeFormProps {
   openStep?: EnvelopeStepId | null;
   /** Hands the built envelope over instead of writing it, for a person who has no plan yet. */
   draft?: DraftSink<EnvelopeSealed>;
+  /** A group the new envelope starts in, already answered (the add action on a group's sheet). */
+  presetGroupId?: string;
 }
 
 export type EnvelopeStepId =
-  'name' | 'often' | 'amount' | 'cadence' | 'priority' | 'emoji';
+  'name' | 'often' | 'amount' | 'cadence' | 'group' | 'priority' | 'emoji';
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
@@ -118,6 +137,7 @@ const EMPTY_ENVELOPE: EnvelopeSealed = {
   emoji: null,
   priority: 'should',
   orderIndex: 0,
+  groupId: null,
   funding: {
     amount: { kind: 'exact', cents: 0 },
     cadence: { kind: 'everyIncomeDay' },
@@ -129,6 +149,7 @@ const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => ({
   name: payload.name,
   priority: payload.priority,
   emoji: payload.emoji,
+  group: { choice: payload.groupId ?? '', newText: '' },
 });
 
 const INITIAL_DATA: EnvelopeFormData = {
@@ -136,9 +157,12 @@ const INITIAL_DATA: EnvelopeFormData = {
   name: '',
   priority: 'should',
   emoji: null,
+  group: { choice: '', newText: '' },
 };
 
 const getBlocker = (data: EnvelopeFormData, hasDays: boolean) => {
+  if (data.group.choice === NEW_CHOICE && data.group.newText.trim() === '')
+    return FORM_FLOW_WORDS.nameGroup;
   if (data.name.trim() === '') return 'Name the envelope.';
   if (data.priority === null) return 'Pick how much it matters.';
   return getFundingBlocker(data, hasDays);
@@ -154,6 +178,7 @@ function EnvelopeFormBody({
   presetDayKey,
   openStep = null,
   draft,
+  presetGroupId,
 }: EnvelopeFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -161,12 +186,35 @@ function EnvelopeFormBody({
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const groups = useAppSelector((state) => selectGroups(state, today));
+  const groupChoices = getGroupChoices(
+    groups.map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+    })),
+    draft?.forName,
+  );
+  const groupOptions = groupChoices.map(({ id, name }) => ({
+    value: id,
+    label: name,
+  }));
   const [startData] = useState<EnvelopeFormData>(() =>
     editing
       ? getEditingData(editing.payload)
       : draft?.initial
-        ? getEditingData(draft.initial)
-        : INITIAL_DATA,
+        ? {
+            ...getEditingData(draft.initial),
+            ...(draft.forName
+              ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
+              : {}),
+          }
+        : {
+            ...INITIAL_DATA,
+            group: { choice: presetGroupId ?? '', newText: '' },
+          },
+  );
+  const [isPriorityChosen, setIsPriorityChosen] = useState(
+    editing !== undefined || draft !== undefined,
   );
   const draftKey = draft
     ? null
@@ -185,6 +233,17 @@ function EnvelopeFormBody({
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<EnvelopeFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
+
+  const resolveGroup = (data: EnvelopeFormData) =>
+    resolveGroupChoice(data.group.choice, data.group.newText, groupChoices);
+  /** The priority the person chose, else the starting priority of the group the envelope joins. */
+  const getPriority = (data: EnvelopeFormData): Priority | null => {
+    if (isPriorityChosen) return data.priority;
+    const { groupId } = resolveGroup(data);
+    const startsWith = groups.find(({ item }) => item.id === groupId)?.version
+      .payload.startingPriority;
+    return startsWith ?? data.priority;
+  };
 
   const hasDays = comingDays.length > 0 || !!draft;
   const blocker = getBlocker(formData, hasDays);
@@ -231,20 +290,61 @@ function EnvelopeFormBody({
       ),
     },
     ...fundingSteps,
+    ...(draft && !draft.forName
+      ? []
+      : [
+          {
+            id: 'group',
+            title: FORM_FLOW_WORDS.groupTitle,
+            summaryLabel: FORM_FLOW_WORDS.group,
+            summaryValue:
+              resolveGroup(formData).name || FORM_FLOW_WORDS.noGroup,
+            isAnswered:
+              formData.group.choice !== NEW_CHOICE ||
+              formData.group.newText.trim() !== '',
+            blocker: FORM_FLOW_WORDS.nameGroup,
+            isPreAnswered: true,
+            titleHelp: (
+              <HelpTip title={FORM_FLOW_WORDS.groupTitle}>
+                <p>{FORM_FLOW_WORDS.groupHelp}</p>
+              </HelpTip>
+            ),
+            render: ({ moveOn }: QuestionControls) => (
+              <PickOrCreate
+                label={FORM_FLOW_WORDS.group}
+                options={groupOptions}
+                choice={formData.group.choice}
+                newText={formData.group.newText}
+                newPillLabel={FORM_FLOW_WORDS.newGroup}
+                newPlaceholder={FORM_FLOW_WORDS.newGroupPlaceholder}
+                hasPlus={false}
+                maxLength={MAX_NAME_LENGTH}
+                clearLabel={FORM_FLOW_WORDS.clearGroup}
+                onChange={(choice, newText) => {
+                  set({ group: { choice, newText } });
+                  if (choice !== '' && choice !== NEW_CHOICE) moveOn();
+                }}
+              />
+            ),
+          },
+        ]),
     {
       id: 'priority',
       title: FORM_FLOW_WORDS.priorityTitle,
       summaryLabel: FORM_FLOW_WORDS.priority,
       summaryValue:
-        formData.priority === null ? '' : PRIORITY_LABELS[formData.priority],
+        getPriority(formData) === null
+          ? ''
+          : PRIORITY_LABELS[getPriority(formData) as Priority],
       isAnswered: formData.priority !== null,
       isPreAnswered: true,
       render: ({ moveOn }) => (
         <PillGroup
           label={FORM_FLOW_WORDS.priority}
           options={priorityOptions}
-          value={formData.priority}
+          value={getPriority(formData)}
           onChange={(priority) => {
+            setIsPriorityChosen(true);
             set({ priority });
             moveOn();
           }}
@@ -287,17 +387,20 @@ function EnvelopeFormBody({
       saved: editing?.payload.funding,
       today,
     });
-    if (data.priority === null || funding === null) return null;
+    const priority = getPriority(data);
+    if (priority === null || funding === null) return null;
 
     const orderIndex =
-      editing && editing.payload.priority === data.priority
+      editing && editing.payload.priority === priority
         ? editing.payload.orderIndex
-        : getNextTierRank([...bills, ...envelopes, ...goals], data.priority);
+        : getNextTierRank([...bills, ...envelopes, ...goals], priority);
+    const { groupId, newGroup } = resolveGroup(data);
     const result: EnvelopeSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,
-      priority: data.priority,
+      priority,
       orderIndex,
+      groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       funding,
     };
     return result;
@@ -310,6 +413,7 @@ function EnvelopeFormBody({
     current: editing?.payload ?? EMPTY_ENVELOPE,
     candidate,
     presetDayKey,
+    newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from,
@@ -353,7 +457,7 @@ function EnvelopeFormBody({
     const envelope = buildEnvelope(formData);
     if (!envelope) return;
     if (draft) {
-      draft.onSave(envelope);
+      draft.onSave(envelope, resolveGroup(formData).name || null);
       onClose();
       return;
     }
@@ -366,6 +470,7 @@ function EnvelopeFormBody({
       await createEnvelope(user.uid, encryption, {
         startDate: today,
         envelope,
+        newGroup: resolveGroup(formData).newGroup,
       });
       onClose();
     } catch (saveError) {

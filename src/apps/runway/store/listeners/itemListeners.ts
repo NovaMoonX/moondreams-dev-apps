@@ -63,11 +63,17 @@ async function openVersion(
     };
   }
   if (version.kind === 'envelope') {
-    const payload = await read<EnvelopeSealed>(version.sealed);
+    const payload = await read<
+      Omit<EnvelopeSealed, 'groupId'> & { groupId?: string | null }
+    >(version.sealed);
     return {
       ...base,
       kind: 'envelope',
-      payload: { ...payload, funding: normalizeFunding(payload.funding) },
+      payload: {
+        ...payload,
+        funding: normalizeFunding(payload.funding),
+        groupId: payload.groupId ?? null,
+      },
     };
   }
   if (version.kind === 'bill') {
@@ -88,6 +94,7 @@ async function openVersion(
       payload: {
         ...payload,
         startingPriority: payload.startingPriority ?? null,
+        emoji: payload.emoji ?? null,
       },
     };
   }
