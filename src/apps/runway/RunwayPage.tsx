@@ -306,7 +306,10 @@ function RunwayContent() {
     );
   }
 
-  if (view === 'freeToSpend' || (view === 'checkAmount' && level === 'track')) {
+  if (
+    view === 'freeToSpend' ||
+    ((view === 'checkAmount' || view === 'checkBalance') && level === 'track')
+  ) {
     return (
       <div>
         <FreeToSpendScreen onClose={closeView} />

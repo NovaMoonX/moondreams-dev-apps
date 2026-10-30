@@ -1799,6 +1799,8 @@ A bank CSV becomes purchases that wait in Needs a home. Merchant rules assign re
 ### Description
 A person names their accounts, says where each goal and envelope is held, sees the line-up against each balance and can check a balance. Over-assigned money is shown.
 
+**Built so far:** the check of a balance against all the money on hand (`CheckBalanceBody`, no data, nothing saved). Accounts, where each pot is held, the line-up and a stored correction remain.
+
 ### Possible Approach
 1. Accounts are counted toward the total or left out (a brokerage), and `balanceCorrection` moves record a corrected balance.
 
