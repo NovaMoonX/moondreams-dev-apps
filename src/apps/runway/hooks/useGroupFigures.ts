@@ -19,13 +19,16 @@ export interface GroupFigures {
   name: string;
   /** What its bills and envelopes come to in a usual month: the one figure a heading and the group's sheet both show. */
   total: GroupTotal;
+  /** The same figure for its bills alone and its envelopes alone: the Bills and Envelopes headings each show their own. */
+  billsTotal: GroupTotal;
+  envelopesTotal: GroupTotal;
   bills: ResolvedBill[];
   envelopes: ResolvedEnvelope[];
   /** The names its monthly figure stands for. */
   names: string[];
 }
 
-/** Every live group with the bills and envelopes that are for it and their combined monthly total; one with an archived group sits in none. */
+/** Every live group with the bills and envelopes that are for it and their monthly totals, combined and for each kind alone; one with an archived group sits in none. */
 export function useGroupFigures(today: number): GroupFigures[] {
   const groups = useAppSelector((state) => selectGroups(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
@@ -67,6 +70,8 @@ export function useGroupFigures(today: number): GroupFigures[] {
       id: item.id,
       name: version.payload.name,
       total: monthlyTotal(billMembers, today, envelopeMembers),
+      billsTotal: monthlyTotal(billMembers, today),
+      envelopesTotal: monthlyTotal([], today, envelopeMembers),
       bills: memberBills,
       envelopes: memberEnvelopes,
       names: getGroupMemberNames(billMembers, envelopeMembers, today),

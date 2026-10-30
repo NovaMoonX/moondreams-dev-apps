@@ -94,6 +94,7 @@ async function openVersion(
       payload: {
         ...payload,
         startingPriority: payload.startingPriority ?? null,
+        emoji: payload.emoji ?? null,
       },
     };
   }

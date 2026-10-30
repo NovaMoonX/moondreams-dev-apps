@@ -25,6 +25,8 @@ export interface StartRow {
   id: string;
   name: string;
   emoji: string | null;
+  /** The purpose a bill or envelope row is for, whose emoji it wears when it has none of its own. */
+  groupId?: string | null;
   /** The one muted line under the name. */
   line: string;
   /** The figure on the right, or null when the row has none. */
@@ -121,6 +123,7 @@ export const toBillRow = (id: string, bill: BillSealed): StartRow => ({
   id,
   name: bill.name,
   emoji: bill.emoji,
+  groupId: bill.groupId,
   line: describeBillLine(bill.timing.schedule),
   amount: formatRowRange(bill.amount),
 });
@@ -132,6 +135,7 @@ export const toEnvelopeRow = (
   id,
   name: envelope.name,
   emoji: envelope.emoji,
+  groupId: envelope.groupId,
   line: describeFundingShort(envelope.funding),
   amount: null,
 });

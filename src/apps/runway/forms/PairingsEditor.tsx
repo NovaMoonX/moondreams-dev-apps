@@ -13,6 +13,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
 import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
@@ -162,6 +163,7 @@ function PairingsEditor({
   const goals = useAppSelector((state) => selectGoals(state, today));
   const items = useAppSelector((state) => state.runway.items);
   const itemNames = useAppSelector(selectItemNames);
+  const emojiOf = useLiveEmojiResolver();
   const [initialData] = useState<PairingsFormData>(() => ({
     rows: initial.length > 0 || change ? initial.map(toRow) : [blankRow(0)],
   }));
@@ -181,7 +183,10 @@ function PairingsEditor({
     ({ item, version }) => ({
       value: item.id,
       label: version.payload.name,
-      emoji: version.payload.emoji,
+      emoji: emojiOf(
+        version.payload.emoji,
+        'groupId' in version.payload ? version.payload.groupId : null,
+      ),
       kind: version.kind,
     }),
   );

@@ -43,6 +43,7 @@ import {
 import { detachDevicePush, releaseDevicePush } from '@/lib/notifications/devicePush';
 import { enablePushNotifications } from '@/lib/notifications/enablePushNotifications';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
+import { clearFormDrafts } from '@lib/app/formDrafts';
 import { resetAllState } from '@/store/actions/globalActions';
 import { useAppDispatch } from '@/store/index';
 import { setCurrentUser } from '@/store/slices/userSlice';
@@ -87,7 +88,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
         dispatch(resetAllState());
         queryClient.clear();
         clearUserInfoStore();
-        if (previousUserId) clearViewerSessions(previousUserId);
+        if (previousUserId) {
+          clearViewerSessions(previousUserId);
+          clearFormDrafts(previousUserId);
+        }
         clearAppResume();
       }
 
@@ -308,7 +312,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     }
 
     currentLocationRef.current = 'home';
-    if (auth.currentUser) clearViewerSessions(auth.currentUser.uid);
+    if (auth.currentUser) {
+      clearViewerSessions(auth.currentUser.uid);
+      clearFormDrafts(auth.currentUser.uid);
+    }
     clearAppResume();
     isReloadingRef.current = true;
     // Unsent edits stay queued for this account's next sign-in, so only a fully sent copy is cleared.

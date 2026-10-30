@@ -22,6 +22,7 @@ import CalendarScreen from '@apps/pinch/components/calendar/CalendarScreen';
 import ContainersSubview from '@apps/pinch/components/containers/ContainersSubview';
 import IdeaAddSheet from '@apps/pinch/components/ideas/IdeaAddSheet';
 import CookingResumeRow from '@apps/pinch/components/cooking/CookingResumeRow';
+import RecipeDraftRow from '@apps/pinch/components/recipes/RecipeDraftRow';
 import CookingSubview from '@apps/pinch/components/cooking/CookingSubview';
 import KitchenScreen from '@apps/pinch/components/kitchen/KitchenScreen';
 import PantrySubview from '@apps/pinch/components/pantry/PantrySubview';
@@ -414,6 +415,7 @@ function Pinch() {
         <div className='page pb-28 lg:pb-8 lg:pl-34'>
           <div className='mx-auto max-w-4xl space-y-4 py-6'>
             {subview?.kind !== 'cook' && <CookingResumeRow uid={user.uid} />}
+            {subview === null && <RecipeDraftRow uid={user.uid} />}
             <PinchSessionContext.Provider value={session}>
               {getScreen()}
             </PinchSessionContext.Provider>

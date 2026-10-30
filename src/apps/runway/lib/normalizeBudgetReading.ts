@@ -70,6 +70,8 @@ export interface GoalValues {
 interface ForName {
   /** What the money takes care of ("Home", "Pets"), or null when the documents don't make it clear. */
   forName: string | null;
+  /** One emoji the reader suggests for that purpose, or null; always null when forName is. */
+  forEmoji: string | null;
 }
 
 export interface BudgetIncome extends BudgetItem<IncomeValues>, IncomeValues {
@@ -213,11 +215,36 @@ const toForName = (value: unknown) => {
       : name;
 };
 
+const emojiSegmenter = new Intl.Segmenter();
+
+/** A suggested emoji when it is exactly one emoji (a flag or a joined family counts as one), else null. */
+const toForEmoji = (value: unknown, forName: string | null) => {
+  if (forName === null || typeof value !== 'string') return null;
+  const text = value.trim();
+  const isOne = [...emojiSegmenter.segment(text)].length === 1;
+  return isOne && /\p{Extended_Pictographic}|\p{Regional_Indicator}/u.test(text)
+    ? text
+    : null;
+};
+
+/** A kept item's purpose with its emoji, else the other's, so the emoji stays with the name it was given for. */
+const fillFor = (
+  kept: { forName: string | null; forEmoji: string | null },
+  other: { forName: string | null; forEmoji: string | null },
+) =>
+  kept.forName === null
+    ? { forName: other.forName, forEmoji: other.forEmoji }
+    : { forName: kept.forName, forEmoji: kept.forEmoji };
+
 const forNameMatcher = createOptionMatcher({ foldPlurals: true, typos: false });
 
-/** Gives every item that names the same purpose the first spelling seen ("housing" and "Housing " are one name). */
-const unifyForNames = <T extends { forName: string | null }>(items: T[]): T[] =>
-  items.reduce<{ labels: string[]; items: T[] }>(
+/** Gives every item that names the same purpose the first spelling seen ("housing" and "Housing " are one name) and the first emoji suggested for it. */
+const unifyForNames = <
+  T extends { forName: string | null; forEmoji: string | null },
+>(
+  items: T[],
+): T[] => {
+  const named = items.reduce<{ labels: string[]; items: T[] }>(
     (state, item) => {
       if (item.forName === null)
         return { ...state, items: [...state.items, item] };
@@ -232,6 +259,18 @@ const unifyForNames = <T extends { forName: string | null }>(items: T[]): T[] =>
     },
     { labels: [], items: [] },
   ).items;
+  const emojis = named.reduce<Map<string, string>>(
+    (acc, { forName, forEmoji }) =>
+      forName === null || forEmoji === null || acc.has(forName)
+        ? acc
+        : acc.set(forName, forEmoji),
+    new Map(),
+  );
+  return named.map((item) => ({
+    ...item,
+    forEmoji: item.forName === null ? null : (emojis.get(item.forName) ?? null),
+  }));
+};
 
 const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => {
   const payer = toName(raw.payer) || null;
@@ -314,6 +353,11 @@ const toRepeat = (raw: Raw) => {
       };
 };
 
+const toFor = (raw: Raw) => {
+  const forName = toForName(raw.forName);
+  return { forName, forEmoji: toForEmoji(raw.forEmoji, forName) };
+};
+
 const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
   const low = toCents(raw.lowCents);
   const high = toCents(raw.highCents);
@@ -322,7 +366,7 @@ const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
   const isKept = writtenCadence === null;
   return {
     ...toBase(raw, toFile),
-    forName: toForName(raw.forName),
+    ...toFor(raw),
     amountCents:
       isKept && isRange
         ? low
@@ -340,7 +384,7 @@ const toBill = (raw: Raw, toFile: ToFile): BudgetBill => {
 
 const toEnvelope = (raw: Raw, toFile: ToFile): BudgetEnvelope => ({
   ...toBase(raw, toFile),
-  forName: toForName(raw.forName),
+  ...toFor(raw),
   amountCents: toCents(raw.amountCents),
   period: toOneOf<BudgetEnvelopePeriod>(raw.period, [
     ...CALENDAR_PERIODS,
@@ -563,10 +607,10 @@ export function normalizeBudgetReading(
       isDifferent: billDiffers,
       fill: (kept, other) =>
         kept.writtenCadence !== null
-          ? { ...kept, forName: orElse(kept.forName, other.forName) }
+          ? { ...kept, ...fillFor(kept, other) }
           : {
               ...kept,
-              forName: orElse(kept.forName, other.forName),
+              ...fillFor(kept, other),
               ...(kept.amountCents === null
                 ? { amountCents: other.amountCents, highCents: other.highCents }
                 : {}),
@@ -585,7 +629,7 @@ export function normalizeBudgetReading(
       isDifferent: envelopeDiffers,
       fill: (kept, other) => ({
         ...kept,
-        forName: orElse(kept.forName, other.forName),
+        ...fillFor(kept, other),
         amountCents: orElse(kept.amountCents, other.amountCents),
         period: orElse(kept.period, other.period),
       }),

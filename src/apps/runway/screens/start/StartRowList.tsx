@@ -9,6 +9,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
 
@@ -21,6 +22,13 @@ interface StartRowListProps {
   onOpen: (id: string) => void;
   /** Sits at the end of a heading, when that heading has something to change. */
   renderHeadingAction?: (group: string) => ReactNode;
+  /** The emoji shown before a heading's name. */
+  getHeadingEmoji?: (group: string) => string | null;
+}
+
+function StartRowBadge({ row }: { row: StartRow }) {
+  const emoji = useItemEmoji(row.emoji, row.groupId ?? null);
+  return <ItemBadge name={row.name} emoji={emoji} />;
 }
 
 /** What has been added in a step: one-line rows that each open their item, searchable from eight and folded after a few. */
@@ -29,6 +37,7 @@ function StartRowList({
   searchLabel,
   onOpen,
   renderHeadingAction,
+  getHeadingEmoji,
 }: StartRowListProps) {
   const mask = useMaskedText();
   const [query, setQuery] = useState('');
@@ -59,6 +68,8 @@ function StartRowList({
               row.group !== shown[index - 1]?.group && (
                 <div className='bg-accent/50 flex min-h-10 items-center gap-2 py-1 pr-2 pl-3'>
                   <p className='text-muted-foreground min-w-0 flex-1 py-0.5 text-sm font-medium break-words'>
+                    {getHeadingEmoji?.(row.group) &&
+                      `${getHeadingEmoji(row.group)} `}
                     {row.group}
                   </p>
                   {renderHeadingAction?.(row.group)}
@@ -73,7 +84,7 @@ function StartRowList({
               )}
               onClick={() => onOpen(row.id)}
             >
-              <ItemBadge name={row.name} emoji={row.emoji} />
+              <StartRowBadge row={row} />
               <span className='min-w-24 flex-1'>
                 <span className='line-clamp-2 block text-base font-medium break-words'>
                   {row.name}

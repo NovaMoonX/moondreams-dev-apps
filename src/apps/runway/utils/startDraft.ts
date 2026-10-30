@@ -29,6 +29,8 @@ export interface DraftEntry<T> {
   value: T;
   /** What a bill or envelope is for, by name; the group is made when the draft is added to a plan. */
   forName?: string | null;
+  /** The emoji for the group made from forName; an existing group keeps its own. */
+  forEmoji?: string | null;
 }
 
 export type DraftKind = 'incomes' | 'bills' | 'envelopes' | 'goals';

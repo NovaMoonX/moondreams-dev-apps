@@ -1,4 +1,5 @@
 import { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import { readFormDraft } from '@/lib/app/formDrafts';
 import { generateUuid } from '@/utils';
 import { clipAtWord } from '@/utils/stringUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
@@ -8,6 +9,8 @@ import {
   MAX_RECIPE_INGREDIENTS,
   MAX_SERVING_AMOUNT,
   NUTRITION_METRICS,
+  RECIPE_LINK_LABELS,
+  UNITS,
 } from '@apps/pinch/constants';
 import type { ExtractedRecipe } from '@apps/pinch/lib/extractRecipe';
 import {
@@ -55,6 +58,7 @@ import type {
   RecipeIngredient,
   RecipeSource,
   ResolvedIngredient,
+  WebPhoto,
   Source,
   Unit,
 } from '@apps/pinch/types';
@@ -311,3 +315,139 @@ export const parseNutrition = (
   ) as unknown as NutritionValues;
   return Object.values(parsed).every((value) => value === null) ? null : parsed;
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isText = (value: unknown): value is string => typeof value === 'string';
+
+const isTextOrNull = (value: unknown) => value === null || isText(value);
+
+const isTextList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every(isText);
+
+const isIngredientRow = (value: unknown) =>
+  isRecord(value) &&
+  isText(value.id) &&
+  isText(value.ingredientId) &&
+  isText(value.amount) &&
+  UNITS.some((unit) => unit === value.unit) &&
+  typeof value.isAmountless === 'boolean' &&
+  isTextOrNull(value.note) &&
+  isTextOrNull(value.proposedName) &&
+  isTextOrNull(value.newName) &&
+  isTextOrNull(value.group);
+
+const isLinkDraft = (value: unknown) =>
+  isRecord(value) &&
+  isText(value.id) &&
+  isText(value.kind) &&
+  value.kind !== 'HOW_TO' &&
+  Object.keys(RECIPE_LINK_LABELS).includes(value.kind) &&
+  isText(value.label) &&
+  typeof value.isCustom === 'boolean' &&
+  isText(value.url);
+
+/** What a stored form value becomes when it still has exactly the shape of the recipe form's data, or null. */
+export const parseRecipeFormData = (stored: unknown): RecipeFormData | null => {
+  if (!isRecord(stored)) return null;
+  const {
+    title,
+    categories,
+    basics,
+    description,
+    ingredients,
+    steps,
+    care,
+    links,
+    sourceChoice,
+    collections,
+    nutrition,
+  } = stored;
+  const isShaped =
+    isText(title) &&
+    isTextList(categories) &&
+    isRecord(basics) &&
+    typeof basics.servings === 'number' &&
+    Number.isFinite(basics.servings) &&
+    isText(basics.prep) &&
+    isText(basics.cook) &&
+    isText(description) &&
+    Array.isArray(ingredients) &&
+    ingredients.length <= MAX_RECIPE_INGREDIENTS &&
+    ingredients.every(isIngredientRow) &&
+    isTextList(steps) &&
+    isRecord(care) &&
+    ['fridge', 'freezer', 'reheat', 'tip'].every((key) => isText(care[key])) &&
+    isRecord(links) &&
+    isRecord(links.howTo) &&
+    isText(links.howTo.id) &&
+    isTextOrNull(links.howTo.label) &&
+    isText(links.howTo.url) &&
+    Array.isArray(links.others) &&
+    links.others.every(isLinkDraft) &&
+    isRecord(sourceChoice) &&
+    isText(sourceChoice.choice) &&
+    isText(sourceChoice.newText) &&
+    isRecord(collections) &&
+    isTextList(collections.ids) &&
+    Array.isArray(collections.added) &&
+    collections.added.every(
+      (added) => isRecord(added) && isText(added.id) && isText(added.label),
+    ) &&
+    isRecord(nutrition) &&
+    NUTRITION_METRICS.every((metric) => isText(nutrition[metric]));
+  if (!isShaped) return null;
+  return {
+    ...(stored as unknown as RecipeFormData),
+    categories: getCategories({ categories: categories as DishCategory[] }),
+  };
+};
+
+interface RecipeFormDraft {
+  formData: RecipeFormData;
+  webCover: WebPhoto | null;
+  isCoverRemoved: boolean;
+}
+
+const isHttpsText = (value: unknown): value is string =>
+  typeof value === 'string' && value.startsWith('https://');
+
+export function parseRecipeFormDraft(stored: unknown): RecipeFormDraft | null {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { formData, webCover, isCoverRemoved } =
+    stored as Partial<RecipeFormDraft>;
+  const parsed = parseRecipeFormData(formData);
+  const isCoverShaped =
+    webCover === null ||
+    (typeof webCover === 'object' &&
+      isHttpsText(webCover?.thumbUrl) &&
+      isHttpsText(webCover.imageUrl) &&
+      typeof webCover.title === 'string' &&
+      typeof webCover.host === 'string');
+  if (
+    parsed === null ||
+    !isCoverShaped ||
+    typeof isCoverRemoved !== 'boolean'
+  ) {
+    return null;
+  }
+  return { formData: parsed, webCover, isCoverRemoved };
+}
+
+/** Names a recipe form's on-device draft; a form started from a reading, an idea or planned changes keeps none. */
+export const getRecipeDraftKey = (
+  recipeId: string | null,
+  hasStarter: boolean,
+) => (hasStarter ? null : `pinch:recipe:${recipeId ?? 'new'}`);
+
+/** The title a recipe form's draft on this device holds, for a header drawn before the form opens; checked as the form will check it. */
+export const readRecipeDraftTitle = (
+  uid: string,
+  key: string | null,
+  recipeUpdatedAt: number | null,
+) =>
+  key === null
+    ? null
+    : (parseRecipeFormDraft(readFormDraft(uid, key, recipeUpdatedAt))?.formData
+        .title ?? null);

@@ -1,6 +1,7 @@
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   BILL_WORDS,
@@ -71,6 +72,7 @@ function BillRow({
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const isUndated = bill.timing.schedule.anchor === null;
+  const emoji = useItemEmoji(bill.emoji, bill.groupId);
   const dueLine = isOutsideTotal
     ? `${getDueLine(payment, isUndated)} · ${GROUP_WORDS.oneTimeNote}`
     : getDueLine(payment, isUndated);
@@ -78,7 +80,7 @@ function BillRow({
   return (
     <ItemRow
       name={bill.name}
-      emoji={bill.emoji}
+      emoji={emoji}
       detail={detailOverride ?? dueLine}
       figure={amount}
       ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}

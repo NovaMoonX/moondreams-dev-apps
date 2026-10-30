@@ -1690,6 +1690,16 @@ export const GROUP_WORDS = {
     'A bill or envelope that varies counts at its low and its high amount, so the total is a range.',
   basis:
     'A usual month: each repeating bill at what it comes to in an average month, and each envelope at what it gets in one. A one-time bill is not in it.',
+  onlyBills:
+    'This counts its bills only. Its envelopes are on the Envelopes list.',
+  onlyEnvelopes:
+    'This counts its envelopes only. Its bills are on the Bills list.',
+  split: (bills: string, envelopes: string) =>
+    `Bills ${bills} · Envelopes ${envelopes}`,
+  chooseEmoji: (name: string) => `Choose an emoji for ${name}`,
+  changeEmoji: (name: string) => `Change the emoji for ${name}`,
+  emojiLabel: 'Emoji',
+  removeEmoji: 'Remove emoji',
   uncounted: (count: number) =>
     count === 1
       ? 'One envelope or bill has no regular amount or schedule, so it is not in this total.'

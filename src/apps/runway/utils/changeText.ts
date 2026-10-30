@@ -61,6 +61,12 @@ const getParts = (
         after.startingPriority,
         (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
       ),
+      diff(
+        'Emoji',
+        before.emoji ?? null,
+        after.emoji ?? null,
+        (value) => value ?? 'none',
+      ),
     ];
   }
   if (

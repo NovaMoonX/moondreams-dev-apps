@@ -178,11 +178,13 @@ export function toEnvelopeValue(
 export const toBillProposal = (item: BudgetBill, today: number) => ({
   value: toBillValue(item, today),
   forName: item.forName,
+  forEmoji: item.forEmoji,
 });
 
 export const toEnvelopeProposal = (item: BudgetEnvelope, today: number) => ({
   value: toEnvelopeValue(item, today),
   forName: item.forName,
+  forEmoji: item.forEmoji,
 });
 
 export function toGoalValue(item: BudgetGoal, today: number): GoalSealed {
