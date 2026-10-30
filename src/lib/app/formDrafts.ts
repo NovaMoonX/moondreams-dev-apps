@@ -27,6 +27,13 @@ export interface DraftSealer {
 
 const sealings = new Map<string, DraftSealer | null>();
 const opened = new Map<string, OpenedDraft>();
+const listeners = new Set<() => void>();
+const keptVersion = { current: 0 };
+
+const announceKeptChange = () => {
+  keptVersion.current += 1;
+  listeners.forEach((listener) => listener());
+};
 const writeTurns = new Map<string, number>();
 
 const toStorageKey = (uid: string, key: string) => `${PREFIX}${uid}:${key}`;
@@ -112,6 +119,7 @@ export async function unlockSealedFormDrafts(
         if (isShaped && !opened.has(storageKey)) {
           const { base, value } = draft as OpenedDraft;
           opened.set(storageKey, { base, value });
+          announceKeptChange();
         }
       } catch {
         // A draft sealed with an older key stays unread and expires.
@@ -160,7 +168,9 @@ export function writeFormDraft(
   const [, sealer] = sealing;
   // Without the app's sealer nothing is kept, rather than keep it readable.
   if (sealer === null) return false;
+  const isNew = !opened.has(storageKey);
   opened.set(storageKey, { base: baseText, value });
+  if (isNew) announceKeptChange();
   const turn = nextTurn(storageKey);
   void sealer
     .seal(JSON.stringify({ base: baseText, value }))
@@ -178,7 +188,7 @@ export function writeFormDraft(
 export function clearFormDraft(uid: string, key: string) {
   const storageKey = toStorageKey(uid, key);
   nextTurn(storageKey);
-  opened.delete(storageKey);
+  if (opened.delete(storageKey)) announceKeptChange();
   try {
     window.localStorage.removeItem(storageKey);
   } catch {
@@ -198,6 +208,7 @@ export function clearFormDrafts(uid: string) {
   Array.from(opened.keys())
     .filter((storageKey) => storageKey.startsWith(prefix))
     .forEach((storageKey) => opened.delete(storageKey));
+  announceKeptChange();
   try {
     Object.keys(window.localStorage)
       .filter((storageKey) => storageKey.startsWith(prefix))
@@ -253,4 +264,27 @@ export function sweepFormDrafts() {
   } catch {
     // Nothing to sweep.
   }
+}
+
+/** Calls `listener` whenever the set of sealed drafts kept in memory changes (opened, added or cleared); returns the unsubscribe. */
+export function subscribeKeptFormDrafts(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** Changes whenever `subscribeKeptFormDrafts` fires, for `useSyncExternalStore`. */
+export const getKeptFormDraftsVersion = () => keptVersion.current;
+
+/** The keys (without the account part) of one account's sealed drafts that are open in memory under `prefix`. */
+export function listKeptSealedFormDrafts(
+  uid: string,
+  prefix: string,
+): string[] {
+  const storagePrefix = toStorageKey(uid, prefix);
+  const accountPrefix = toStorageKey(uid, '');
+  return Array.from(opened.keys())
+    .filter((storageKey) => storageKey.startsWith(storagePrefix))
+    .map((storageKey) => storageKey.slice(accountPrefix.length));
 }
