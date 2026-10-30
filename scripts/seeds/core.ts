@@ -218,6 +218,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         day: new Date(context.now - ago * DAY_MS).toISOString().slice(0, 10),
         model,
         phase,
+        isHelper: model !== 'claude-opus-5-5',
         calls: weight * scale * 4,
         input: weight * scale * 900,
         cacheWrite5m: weight * scale * 12_000,

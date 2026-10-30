@@ -4,6 +4,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
 import StatTile from '@/components/StatTile';
+import { TabPanel, UnderlineTabs } from '@/components/UnderlineTabs';
 import type { PipelineState } from '@/hooks/usePipelineSync';
 
 import { ClaudeMark, GitHubMark } from '@/components/BrandMarks';
@@ -16,7 +17,10 @@ import {
 } from './constants';
 import IconTile from '@/ui/IconTile';
 import AnswerAllSubview from './AnswerAllSubview';
+import PipelineCostView from './PipelineCostView';
+import PipelineMapView from './PipelineMapView';
 import { SentLine, StatusDot } from './PipelineParts';
+import { useDashboardUrlState, type PipelineTab } from './useDashboardUrlState';
 import {
   formatPipelineTime,
   getAnswerSlots,
@@ -34,6 +38,14 @@ interface PipelineViewProps {
   answers: PipelineAnswers;
   onOpenEntry: (key: string) => void;
 }
+
+type PipelineTabValue = 'now' | PipelineTab;
+
+const PIPELINE_TABS: { value: PipelineTabValue; label: string }[] = [
+  { value: 'now', label: 'Now' },
+  { value: 'cost', label: 'Cost' },
+  { value: 'how', label: 'How it works' },
+];
 
 /** Waiting sessions shown before the rest fold behind "Show all". */
 const WAITING_PREVIEW = 6;
@@ -54,6 +66,8 @@ function PipelineView({
   answers,
   onOpenEntry,
 }: PipelineViewProps) {
+  const { tab, setTab } = useDashboardUrlState();
+  const activeTab: PipelineTabValue = tab ?? 'now';
   const [isAnsweringAll, setIsAnsweringAll] = useState(false);
   const [isWaitingExpanded, setIsWaitingExpanded] = useState(false);
   const { sessions, inbox, isLoading, hasError, sessionsFailed, inboxFailed } =
@@ -165,8 +179,8 @@ function PipelineView({
   const isUnknown = (isLoading || hasError) && isEmpty;
   const getFigure = (count: number) => (isUnknown ? '–' : count);
 
-  return (
-    <div className='max-w-3xl space-y-6'>
+  const nowView = (
+    <div className='space-y-6'>
       {hasError ? (
         <p role='status' className='text-muted-foreground text-sm'>
           {getErrorText()}
@@ -290,6 +304,29 @@ function PipelineView({
           answers={answers}
           onClose={() => setIsAnsweringAll(false)}
         />
+      ) : null}
+    </div>
+  );
+
+  return (
+    <div className='max-w-3xl space-y-6'>
+      <UnderlineTabs
+        value={activeTab}
+        onChange={(next) => setTab(next === 'now' ? null : next)}
+        tabs={PIPELINE_TABS}
+      />
+      <TabPanel value='now' activeValue={activeTab}>
+        {nowView}
+      </TabPanel>
+      {activeTab === 'cost' ? (
+        <TabPanel value='cost' activeValue={activeTab}>
+          <PipelineCostView />
+        </TabPanel>
+      ) : null}
+      {activeTab === 'how' ? (
+        <TabPanel value='how' activeValue={activeTab}>
+          <PipelineMapView />
+        </TabPanel>
       ) : null}
     </div>
   );

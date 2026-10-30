@@ -248,6 +248,7 @@ const toCostRow = (row: unknown) => {
     day,
     model,
     phase,
+    isHelper: row.isHelper === true,
     ...(Object.fromEntries(
       COST_COUNTS.map((field) => [field, row[field] as number]),
     ) as Record<(typeof COST_COUNTS)[number], number>),

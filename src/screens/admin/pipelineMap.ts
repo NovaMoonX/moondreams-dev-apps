@@ -1,0 +1,181 @@
+export type MapLane = 'work' | 'ship';
+
+export interface MapNode {
+  id: string;
+  lane: MapLane;
+  /** Nodes with the same step sit side by side from `sm` and share the arrow into them. */
+  step: number;
+  title: string;
+  does: string;
+  parts?: { name: string; does: string }[];
+}
+
+export interface MapEdge {
+  from: string;
+  to: string;
+  label: string;
+}
+
+export const MAP_LANES: { id: MapLane; title: string; intro: string | null }[] =
+  [
+    { id: 'work', title: 'From your ask to your answer', intro: null },
+    {
+      id: 'ship',
+      title: 'Shipping it',
+      intro: 'When a pull request is ready to merge',
+    },
+  ];
+
+// A later change to the pipeline edits these two lists and the screen follows.
+export const MAP_NODES: MapNode[] = [
+  {
+    id: 'owner',
+    lane: 'work',
+    step: 1,
+    title: 'You',
+    does: 'Ask for work from your phone and answer what the pipeline raises.',
+  },
+  {
+    id: 'session',
+    lane: 'work',
+    step: 2,
+    title: 'Claude Code session',
+    does: 'Plans the work, briefs the helpers and tells you when it needs you.',
+    parts: [
+      { name: 'Orchestrate hint', does: 'steers big jobs through the plan' },
+      { name: 'Pipeline pulse', does: 'reports working or waiting' },
+      {
+        name: 'Fresh-start nudge',
+        does: 'suggests a new chat before one gets long',
+      },
+      { name: 'PR gate', does: 'makes sure every pull request is finished' },
+    ],
+  },
+  {
+    id: 'helpers',
+    lane: 'work',
+    step: 3,
+    title: 'Helpers',
+    does: 'Smaller, cheaper workers the session hands pieces to.',
+    parts: [
+      { name: 'Implementer (Sonnet)', does: 'builds what the brief asks' },
+      { name: 'Validator (Haiku)', does: 'runs the quick checks' },
+      { name: 'Reviewers', does: 'read the change for bugs, product and look' },
+      {
+        name: 'Lead reviewer (Opus)',
+        does: 'settles the findings of a large change',
+      },
+    ],
+  },
+  {
+    id: 'pr',
+    lane: 'work',
+    step: 4,
+    title: 'Pull request',
+    does: 'Holds the change, with a status comment and screenshots.',
+  },
+  {
+    id: 'inbox',
+    lane: 'work',
+    step: 5,
+    title: 'Inbox workflow',
+    does: 'Gathers every open pull request and what it needs from you.',
+  },
+  {
+    id: 'dashboard',
+    lane: 'work',
+    step: 6,
+    title: 'This dashboard',
+    does: 'Shows what waits on you, live, and lets you answer.',
+  },
+  {
+    id: 'inboxIssue',
+    lane: 'work',
+    step: 6,
+    title: '📥 Owner inbox issue',
+    does: 'The same list on GitHub, for when you are not here.',
+  },
+  {
+    id: 'answers',
+    lane: 'work',
+    step: 7,
+    title: 'Your answers',
+    does: 'Posted as a comment on the pull request they belong to.',
+  },
+  {
+    id: 'queue',
+    lane: 'ship',
+    step: 1,
+    title: 'Merge queue',
+    does: 'One merge into main at a time, in order.',
+  },
+  {
+    id: 'deploy',
+    lane: 'ship',
+    step: 2,
+    title: 'Deploy',
+    does: 'Rules, functions and the site go live once a merge lands.',
+  },
+];
+
+export const MAP_EDGES: MapEdge[] = [
+  { from: 'owner', to: 'session', label: 'Asks for work' },
+  { from: 'session', to: 'helpers', label: 'Hands off pieces' },
+  { from: 'helpers', to: 'pr', label: 'Their work is opened as' },
+  { from: 'pr', to: 'inbox', label: 'On every push' },
+  { from: 'inbox', to: 'dashboard', label: 'Sends the list' },
+  { from: 'inbox', to: 'inboxIssue', label: 'Updates' },
+  { from: 'dashboard', to: 'answers', label: 'You reply' },
+  {
+    from: 'answers',
+    to: 'session',
+    label: 'The session picks them up and carries on',
+  },
+  { from: 'pr', to: 'queue', label: 'Ready to merge' },
+  { from: 'queue', to: 'deploy', label: 'Merged' },
+];
+
+const nodeById = new Map(MAP_NODES.map((node) => [node.id, node]));
+
+export const getMapNode = (id: string) => nodeById.get(id);
+
+/** The steps of a lane in order, each with its nodes. */
+export const getLaneSteps = (lane: MapLane) =>
+  MAP_NODES.filter((node) => node.lane === lane)
+    .reduce<MapNode[][]>((steps, node) => {
+      const index = steps.findIndex((step) => step[0]?.step === node.step);
+      if (index === -1) return [...steps, [node]];
+      return steps.map((step, at) => (at === index ? [...step, node] : step));
+    }, [])
+    .sort((a, b) => (a[0]?.step ?? 0) - (b[0]?.step ?? 0));
+
+/** What the arrow between two steps says: the labels of the edges that run from one to the other. */
+export const getArrowLabel = (from: MapNode[], to: MapNode[]) =>
+  [
+    ...new Set(
+      MAP_EDGES.filter(
+        (edge) =>
+          from.some((node) => node.id === edge.from) &&
+          to.some((node) => node.id === edge.to),
+      ).map((edge) => edge.label),
+    ),
+  ].join(' · ');
+
+/** Edges that lead back to a node earlier in the flow, drawn under the node they leave. */
+export const getReturns = (node: MapNode) =>
+  MAP_EDGES.filter((edge) => edge.from === node.id).flatMap((edge) => {
+    const target = getMapNode(edge.to);
+    if (!target || target.lane !== node.lane || target.step >= node.step)
+      return [];
+    return [{ target, label: edge.label }];
+  });
+
+/** The edge that enters a lane from another lane. */
+export const getLaneEntry = (lane: MapLane) => {
+  const first = getLaneSteps(lane)[0] ?? [];
+  return MAP_EDGES.find(
+    (edge) =>
+      first.some((node) => node.id === edge.to) &&
+      getMapNode(edge.from)?.lane !== lane,
+  );
+};

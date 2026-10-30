@@ -73,6 +73,8 @@ export interface PipelineCostRow {
   day: string;
   model: string;
   phase: PipelinePhase;
+  /** True for a helper's tokens, false for the session's own conversation. */
+  isHelper: boolean;
   calls: number;
   input: number;
   cacheWrite5m: number;

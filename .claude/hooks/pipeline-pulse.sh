@@ -76,8 +76,8 @@ shared_defs='
            tools: [.[].message.content[]? | select(.type == "tool_use")]})
     | sort_by(.ts);
   def written: (.usage.cache_creation_input_tokens // ((.usage.cache_creation.ephemeral_5m_input_tokens // 0) + (.usage.cache_creation.ephemeral_1h_input_tokens // 0)));
-  def row($phase):
-    {day: .ts[0:10], model: .model, phase: $phase, calls: 1,
+  def row($phase; $isHelper):
+    {day: .ts[0:10], model: .model, phase: $phase, isHelper: $isHelper, calls: 1,
      input: (.usage.input_tokens // 0),
      cacheWrite5m: (.usage.cache_creation.ephemeral_5m_input_tokens // (if .usage.cache_creation then 0 else written end)),
      cacheWrite1h: (.usage.cache_creation.ephemeral_1h_input_tokens // 0),
@@ -99,9 +99,9 @@ main_program="$shared_defs"'
             | group_by(.) | sort_by(length) | last | (if . == null then null else .[0] end)),
       contextTokens: ($r | last | (if . == null then 0 else ((.usage.input_tokens // 0) + (.usage.cache_read_input_tokens // 0) + written) end)),
       calls: ($r | length),
-      rows: [$r[] | row(phase)]
+      rows: [$r[] | row(phase; false)]
     }'
-helper_program="$shared_defs"'replies | map(row($phase))'
+helper_program="$shared_defs"'replies | map(row($phase; true))'
 
 (
   base="${transcript%.jsonl}"
@@ -132,7 +132,7 @@ helper_program="$shared_defs"'replies | map(row($phase))'
         branch: (if $branch == "" then null else $branch end),
         app: .app, contextTokens: .contextTokens, calls: .calls,
         rows: (.rows + $helpers
-          | group_by([.day, .model, .phase])
+          | group_by([.day, .model, .phase, .isHelper])
           | map(.[0] + {calls: (map(.calls) | add), input: (map(.input) | add), cacheWrite5m: (map(.cacheWrite5m) | add),
                         cacheWrite1h: (map(.cacheWrite1h) | add), cacheRead: (map(.cacheRead) | add), output: (map(.output) | add)}))}}' 2>/dev/null
   )
