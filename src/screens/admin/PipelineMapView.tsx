@@ -2,11 +2,14 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   ArrowDown,
+  ClipboardList,
   CornerUpLeft,
+  GitMerge,
   Inbox,
   LayoutDashboard,
   ListOrdered,
   MessageSquare,
+  RefreshCw,
   Rocket,
   User,
   Users,
@@ -19,10 +22,8 @@ import SectionDivider from '@/components/SectionDivider';
 import IconTile from '@/ui/IconTile';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 
-import raw from '@/../docs/conventions/pipeline-log.md?raw';
-
 import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
-import { parsePipelineLog } from './pipelineCost';
+import { LOG_ROWS, type LogRow } from './pipelineLog';
 import {
   getArrowLabel,
   getLaneEntry,
@@ -34,10 +35,21 @@ import {
 } from './pipelineMap';
 
 const RECENT_CHANGES = 15;
-const LOG_ROWS = parsePipelineLog(raw);
+
+const getOutcomeLabel = (outcome: LogRow['outcome']) => {
+  if (outcome === 'added') return 'Added';
+  if (outcome === 'changed') return 'Changed';
+  if (outcome === 'proposed') return 'Idea, not built yet';
+  if (outcome.startsWith('owner declined')) return 'Declined';
+  if (outcome.startsWith('owner held off')) return 'On hold';
+  return outcome.charAt(0).toUpperCase() + outcome.slice(1);
+};
 
 const ICONS: Record<string, LucideIcon> = {
   owner: User,
+  plan: ClipboardList,
+  keepCurrent: RefreshCw,
+  automerge: GitMerge,
   helpers: Users,
   inbox: Inbox,
   dashboard: LayoutDashboard,
@@ -154,11 +166,14 @@ function RecentChanges() {
               <span>
                 {formatDateShortUTC(Date.parse(`${row.date}T00:00:00Z`))}
               </span>
-              <span>
-                {row.scope} · {row.outcome}
-              </span>
+              <span>{getOutcomeLabel(row.outcome)}</span>
             </p>
-            <p className='text-sm'>{row.change}</p>
+            {row.signal ? (
+              <p className='text-muted-foreground line-clamp-2 text-xs'>
+                Why: {row.signal}
+              </p>
+            ) : null}
+            <p className='line-clamp-3 text-sm'>{row.change}</p>
           </li>
         ))}
       </ul>
@@ -181,6 +196,9 @@ function RecentChanges() {
 function PipelineMapView() {
   return (
     <div className='space-y-8'>
+      <p className='text-muted-foreground text-sm'>
+        The main path from an ask to a deploy.
+      </p>
       <div className='space-y-6'>
         {MAP_LANES.map((lane) => (
           <Lane key={lane.id} lane={lane} />

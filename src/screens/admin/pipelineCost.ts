@@ -6,6 +6,8 @@ import type {
 } from '@lib/admin/pipelineTypes';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 
+import type { LogRow } from './pipelineLog';
+
 /** A session over this many tokens of context is re-reading a lot on every call. */
 export const LONG_CONTEXT_TOKENS = 250_000;
 /** What a session that started fresh at a natural break would have stayed under. */
@@ -13,9 +15,12 @@ export const FRESH_CONTEXT_TOKENS = 150_000;
 /** The average context past which a session's "why" is its length rather than its phase. */
 export const LONG_AVERAGE_CONTEXT_TOKENS = 200_000;
 export const OPUS_BUILD_SHARE = 0.4;
-export const OPUS_BUILD_MIN_USD = 20;
 export const SCREENSHOT_SHARE = 0.25;
 export const REVIEW_SHARE = 0.35;
+/** A rule stays quiet unless its slice cost at least this much in the week. */
+export const MIN_SLICE_USD = 5;
+/** A long conversation is only worth a nudge while it is still being used. */
+export const LONG_SESSION_ACTIVE_DAYS = 2;
 export const MAX_SUGGESTIONS = 3;
 export const TOP_SESSIONS = 5;
 export const CHART_DAYS = 14;
@@ -43,6 +48,7 @@ export const formatTileUsd = (usd: number) =>
 
 /** 1.2M, 540k, 812. */
 export function formatTokens(count: number): string {
+  if (count >= 1e9) return `${(count / 1e9).toFixed(1)}B`;
   if (count >= 100 * MILLION) return `${Math.round(count / MILLION)}M`;
   if (count >= 999_500) return `${(count / MILLION).toFixed(1)}M`;
   if (count >= 1_000) return `${Math.round(count / 1_000)}k`;
@@ -80,7 +86,9 @@ export const getPhaseLabel = (phase: PipelinePhase) => PHASE_LABELS[phase];
 
 /** "Opus 5.5" from "claude-opus-5-5-20261001"; an id it can't read is shown as it is. */
 export function getModelName(model: string): string {
-  const match = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?/.exec(model);
+  const match = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2})(?!\d))?(?:-\d{8})?/.exec(
+    model,
+  );
   if (!match) return model;
   const [, family = '', major = '', minor] = match;
   const name = family.charAt(0).toUpperCase() + family.slice(1);
@@ -225,10 +233,10 @@ export function getBreakdowns(
       id: session.app ?? '',
       label: getAppName(session.app),
     })),
-    models: toSlices(entries, ({ row }) => ({
-      id: row.model,
-      label: getModelName(row.model),
-    })),
+    models: toSlices(entries, ({ row }) => {
+      const label = getModelName(row.model);
+      return { id: label, label };
+    }),
     unpricedTokens: entries
       .filter((entry) => entry.usd === null)
       .reduce((sum, entry) => sum + entry.tokens, 0),
@@ -282,15 +290,22 @@ export interface Suggestion {
   savingUsd: number | null;
 }
 
-const percent = (share: number) => `${Math.round(share * 100)}%`;
+export const percent = (share: number) =>
+  share > 0 && share < 0.01 ? '<1%' : `${Math.round(share * 100)}%`;
 
 function getLongSessionSuggestions(
   sessions: PipelineSessionCost[],
   from: string,
   to: string,
 ): Suggestion[] {
-  return sessions
-    .filter((session) => session.contextTokens > LONG_CONTEXT_TOKENS)
+  const activeSince =
+    Date.parse(`${to}T00:00:00Z`) - (LONG_SESSION_ACTIVE_DAYS - 1) * DAY_MS;
+  const [biggest] = sessions
+    .filter(
+      (session) =>
+        session.contextTokens > LONG_CONTEXT_TOKENS &&
+        session.updatedAt >= activeSince,
+    )
     .flatMap((session) => {
       const main = getMainThread(collect([session], from, to));
       if (!main) return [];
@@ -310,12 +325,14 @@ function getLongSessionSuggestions(
           what: formatLongConversation(session.calls, session.contextTokens),
           todo:
             savingUsd !== null && savingUsd >= 0.01
-              ? `Start fresh at a natural break; a session that stayed under ${formatTokens(FRESH_CONTEXT_TOKENS)} would have cost about ${formatUsd(savingUsd)} less`
+              ? `Start fresh at a natural break: about ${formatUsd(savingUsd)} less if it had restarted at ${formatTokens(FRESH_CONTEXT_TOKENS)}`
               : 'Start fresh at a natural break',
           savingUsd,
         },
       ];
-    });
+    })
+    .sort((a, b) => (b.savingUsd ?? -1) - (a.savingUsd ?? -1));
+  return biggest ? [biggest] : [];
 }
 
 /** What is worth changing, from the last 7 days: the biggest saving first, at most three. */
@@ -348,7 +365,7 @@ export function getSuggestions(
   const candidates: Suggestion[] = [
     ...getLongSessionSuggestions(sessions, from, today),
     ...(buildingUsd > 0 &&
-    opusUsd > OPUS_BUILD_MIN_USD &&
+    opusUsd >= MIN_SLICE_USD &&
     opusUsd / buildingUsd > OPUS_BUILD_SHARE
       ? [
           {
@@ -358,32 +375,33 @@ export function getSuggestions(
             what: `Opus did ${percent(opusUsd / buildingUsd)} of the building (${formatUsd(opusUsd)} this week)`,
             todo:
               opusUsd - asSonnetUsd >= 0.01
-                ? `Brief implementers (Sonnet) for long edit loops; the same work on Sonnet is about ${formatUsd(opusUsd - asSonnetUsd)} less`
-                : 'Brief implementers (Sonnet) for long edit loops',
+                ? `Long edit loops ran on Opus; an implementer on Sonnet would be about ${formatUsd(opusUsd - asSonnetUsd)} less for the same tokens`
+                : 'Long edit loops ran on Opus; an implementer on Sonnet would cost less for the same tokens',
             savingUsd: Math.max(0, opusUsd - asSonnetUsd),
           },
         ]
       : []),
-    ...(weekUsd > 0 && screenshotsUsd / weekUsd > SCREENSHOT_SHARE
+    ...(screenshotsUsd >= MIN_SLICE_USD &&
+    screenshotsUsd / weekUsd > SCREENSHOT_SHARE
       ? [
           {
             id: 'screenshots',
             subject: null,
             url: null,
-            what: `Screenshots took ${percent(screenshotsUsd / weekUsd)} of the week (${formatUsd(screenshotsUsd)})`,
-            todo: 'Take them once on the finished screen, not after every change',
+            what: `Screenshots took ${percent(screenshotsUsd / weekUsd)} of this week's cost (${formatUsd(screenshotsUsd)})`,
+            todo: 'Check the screenshot step re-shoots only the screens a push changed',
             savingUsd: null,
           },
         ]
       : []),
-    ...(weekUsd > 0 && reviewUsd / weekUsd > REVIEW_SHARE
+    ...(reviewUsd >= MIN_SLICE_USD && reviewUsd / weekUsd > REVIEW_SHARE
       ? [
           {
             id: 'review',
             subject: null,
             url: null,
-            what: `Review and checks took ${percent(reviewUsd / weekUsd)} of the week (${formatUsd(reviewUsd)})`,
-            todo: 'Review the finished change once, and keep small tweaks to the quick checks',
+            what: `Review and checks took ${percent(reviewUsd / weekUsd)} of this week's cost (${formatUsd(reviewUsd)})`,
+            todo: 'Check follow-up reviews cover only what changed since the last one',
             savingUsd: null,
           },
         ]
@@ -439,40 +457,9 @@ export function getTopSessions(
     .slice(0, TOP_SESSIONS);
 }
 
-export interface LogRow {
-  date: string;
-  scope: string;
-  change: string;
-  outcome: string;
-}
-
-/** The pipeline log's table rows, newest first as written. */
-export function parsePipelineLog(markdown: string): LogRow[] {
-  return markdown
-    .split('\n')
-    .filter((line) => /^\|\s*\d{4}-\d{2}-\d{2}\s*\|/.test(line))
-    .flatMap((line) => {
-      const cells = line
-        .trim()
-        .replace(/^\||\|$/g, '')
-        .split('|')
-        .map((cell) => cell.trim());
-      const [date, scope, , change, , outcome] = cells;
-      if (!date || !scope || !change || !outcome) return [];
-      return [
-        {
-          date,
-          scope,
-          change: change.replace(/`/g, ''),
-          outcome,
-        },
-      ];
-    });
-}
-
 export interface ChangeEffect {
   date: string;
-  /** Every change logged that day, newest first: they share one before and after. */
+  /** Every change logged that day, as written: they share one before and after. */
   changes: string[];
   before: number;
   after: number;
@@ -496,7 +483,7 @@ export function getChangeEffects(
   today: string,
 ): ChangeEffect[] {
   const earliest = addDays(today, -CHANGES_LOOKBACK_DAYS);
-  return log
+  const byDate = log
     .filter(
       (row) =>
         row.scope === 'shared' &&
@@ -504,16 +491,17 @@ export function getChangeEffects(
         row.date >= earliest &&
         row.date <= today,
     )
-    .reduce<{ date: string; changes: string[] }[]>((days, row) => {
-      const last = days.at(-1);
-      return last?.date === row.date
-        ? [
-            ...days.slice(0, -1),
-            { ...last, changes: [...last.changes, row.change] },
-          ]
-        : [...days, { date: row.date, changes: [row.change] }];
-    }, [])
-    .flatMap(({ date, changes }) => {
+    .reduce<Map<string, string[]>>(
+      (days, row) =>
+        new Map(days).set(row.date, [
+          ...(days.get(row.date) ?? []),
+          row.change,
+        ]),
+      new Map(),
+    );
+  return [...byDate.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .flatMap(([date, changes]) => {
       const before = getPerSession(
         sessions,
         addDays(date, -CHANGE_WINDOW_DAYS),
@@ -524,7 +512,7 @@ export function getChangeEffects(
         addDays(date, 1),
         addDays(date, CHANGE_WINDOW_DAYS),
       );
-      if (before === null || after === null) return [];
+      if (before === null || after === null || before <= 0) return [];
       return [{ date, changes, before, after }];
     });
 }

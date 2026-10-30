@@ -16,14 +16,7 @@ import type { PipelineSessionCost } from '@lib/admin/pipelineTypes';
 import IconTile from '@/ui/IconTile';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 
-import raw from '@/../docs/conventions/pipeline-log.md?raw';
-
-import {
-  CARD_CLASS,
-  LIST_CARD_CLASS,
-  SURFACE_CLASS,
-  WAITING_EDGE_CLASS,
-} from './constants';
+import { CARD_CLASS, LIST_CARD_CLASS, SURFACE_CLASS } from './constants';
 import {
   formatTileUsd,
   formatTokens,
@@ -36,15 +29,15 @@ import {
   getPriceTable,
   getSuggestions,
   getTopSessions,
-  parsePipelineLog,
+  percent,
   type CostTotals,
   type DayBar,
   type Slice,
   type Suggestion,
 } from './pipelineCost';
+import { LOG_ROWS } from './pipelineLog';
 import { usePipelineCost } from './usePipelineCost';
 
-const LOG_ROWS = parsePipelineLog(raw);
 const MAX_EFFECTS = 6;
 const SITE_AND_PIPELINE = 'Site and pipeline';
 const APP_NAMES = new Map(
@@ -66,10 +59,27 @@ function SectionTitle({ title, note }: { title: string; note?: string }) {
 
 function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
   return (
-    <li className={join(CARD_CLASS, WAITING_EDGE_CLASS, 'space-y-1')}>
+    <li
+      className={join(
+        CARD_CLASS,
+        'border-l-foreground/20 border-l-2',
+        'space-y-1',
+      )}
+    >
       {suggestion.subject ? (
         <p className='text-muted-foreground truncate text-xs'>
-          {suggestion.subject}
+          {suggestion.url ? (
+            <a
+              href={suggestion.url}
+              target='_blank'
+              rel='noreferrer'
+              className='underline-offset-2 hover:underline'
+            >
+              {suggestion.subject}
+            </a>
+          ) : (
+            suggestion.subject
+          )}
         </p>
       ) : null}
       <p className='text-sm font-semibold'>{suggestion.what}</p>
@@ -87,8 +97,8 @@ function Tiles({
 }) {
   const tiles: { label: string; totals: CostTotals }[] = [
     { label: 'Today', totals: totals.today },
-    { label: 'This week', totals: totals.week },
-    { label: 'This month', totals: totals.month },
+    { label: 'Last 7 days', totals: totals.week },
+    { label: 'Last 30 days', totals: totals.month },
   ];
   return (
     <div className='space-y-3'>
@@ -99,7 +109,11 @@ function Tiles({
             className={SURFACE_CLASS}
             isStacked
             label={tile.label}
-            value={formatTileUsd(tile.totals.usd)}
+            value={
+              <span className='text-base min-[360px]:text-xl'>
+                {formatTileUsd(tile.totals.usd)}
+              </span>
+            }
             detail={
               <>
                 <span className='block'>
@@ -114,13 +128,15 @@ function Tiles({
           />
         ))}
       </div>
-      <p className='text-muted-foreground flex items-center justify-center gap-1 text-xs'>
+      <p className='text-muted-foreground flex flex-wrap items-center justify-center gap-x-1 text-xs'>
         API-equivalent dollars, not a bill
         <HelpTip title='What these dollars mean'>
           Dollars here are what the tokens would cost at the list prices
           Anthropic charges developers. Your Claude Max plan spends usage, not
           money, so use them to compare days and changes, not as a bill.
         </HelpTip>
+        <span aria-hidden='true'>·</span>
+        Days end at midnight UTC.
       </p>
       {unpricedTokens > 0 ? (
         <p className='text-muted-foreground text-center text-xs'>
@@ -138,10 +154,10 @@ function DayChart({ bars, today }: { bars: DayBar[]; today: string }) {
   return (
     <section className={join(CARD_CLASS, 'space-y-3')}>
       <SectionTitle
-        title='Last 14 days'
+        title='Dollars per day'
         note={
           first
-            ? `${formatDateShortUTC(toMs(first.day))} to ${formatDateShortUTC(toMs(today))}`
+            ? `Last 14 days: ${formatDateShortUTC(toMs(first.day))} to ${formatDateShortUTC(toMs(today))}`
             : undefined
         }
       />
@@ -194,9 +210,6 @@ function DayChart({ bars, today }: { bars: DayBar[]; today: string }) {
     </section>
   );
 }
-
-const percent = (share: number) =>
-  share > 0 && share < 0.01 ? '<1%' : `${Math.round(share * 100)}%`;
 
 function SliceRows({
   slices,
@@ -266,6 +279,9 @@ function WhereItWent({
     <section className={join(CARD_CLASS, 'space-y-4')}>
       <SectionTitle title='Where it went' note='The last 30 days' />
       <SectionDivider label='By phase' />
+      <p className='text-muted-foreground -mt-2 text-xs'>
+        Conversation is replies that used no tools.
+      </p>
       <div className='flex flex-col items-center gap-3 sm:flex-row sm:gap-6'>
         <Doughnut
           size={150}
@@ -383,8 +399,8 @@ function ChangeEffects({
   return (
     <section className='space-y-3'>
       <SectionTitle
-        title='What changed and what it saved'
-        note='The average session in the week before each pipeline change, against the week after. Other things change too, so read it as a hint.'
+        title='What changed and what it did to the average session'
+        note='The average session in the week before each pipeline change, against the week after. Other things change too, and sessions still running are included, so read it as a hint.'
       />
       <ul className={LIST_CARD_CLASS}>
         {effects.map((effect) => {
@@ -395,11 +411,17 @@ function ChangeEffects({
               <p className='text-muted-foreground text-xs'>
                 {formatDateShortUTC(toMs(effect.date))}
               </p>
-              <p className='line-clamp-2 text-sm'>{effect.changes[0]}</p>
-              {effect.changes.length > 1 && (
-                <p className='text-muted-foreground text-xs'>
-                  and {effect.changes.length - 1} more that day
-                </p>
+              {effect.changes.length === 1 ? (
+                <p className='line-clamp-2 text-sm'>{effect.changes[0]}</p>
+              ) : (
+                <>
+                  <p className='text-sm font-medium'>
+                    {effect.changes.length} changes landed
+                  </p>
+                  <p className='text-muted-foreground line-clamp-2 text-xs'>
+                    For example: {effect.changes[0]}
+                  </p>
+                </>
               )}
               <p className='text-xs'>
                 <span className='text-muted-foreground tabular-nums'>
@@ -441,8 +463,9 @@ function HowItIsCounted({ sessions }: { sessions: PipelineSessionCost[] }) {
           label Claude wrote. Days are UTC.
         </p>
         <p>
-          Dollars are the tokens at list prices per million tokens. A model
-          without a price still has its tokens counted, just not its dollars.
+          Dollars are API-equivalent: the tokens at list prices per million
+          tokens. A model without a price still has its tokens counted, just not
+          its dollars.
         </p>
         {prices.length > 0 ? (
           <table className='w-full text-left text-xs tabular-nums'>
@@ -518,8 +541,9 @@ function PipelineCostView() {
           <Wallet className='size-5' />
         </IconTile>
         <p className='text-muted-foreground min-w-0 text-sm'>
-          No cost reported yet. Sessions report it at the end of each turn once{' '}
-          <code>PIPELINE_KEY</code> is set up.
+          No cost reported yet. Sessions report it at the end of each turn once
+          the pipeline key is set up (
+          <code>npm run pipeline:secrets -- key</code>).
         </p>
       </div>
     );
@@ -551,7 +575,7 @@ function PipelineCostView() {
       <ChangeEffects sessions={sessions} today={today} />
       <HowItIsCounted sessions={sessions} />
       <p className='text-muted-foreground text-center text-xs'>
-        Dollars are API-equivalent. Cost is read for the last 90 days.
+        Cost covers the last 90 days.
       </p>
     </div>
   );
