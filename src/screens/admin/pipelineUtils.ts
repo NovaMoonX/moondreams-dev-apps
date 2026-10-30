@@ -16,13 +16,6 @@ export const WAITING_KEEP_MS = 14 * DAY_MS;
 
 export type PipelineGroup = 'waiting' | 'working' | 'quiet' | 'finished';
 
-export const CI_WORDS: Record<PipelineInboxPr['ci'], string> = {
-  green: 'checks passing',
-  red: 'checks failing',
-  running: 'checks running',
-  none: 'no checks',
-};
-
 export interface PipelinePr extends Omit<PipelineInboxPr, 'url'> {
   url: string | null;
 }
@@ -139,7 +132,8 @@ const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
     })),
   );
 
-const STEP_LABEL = /^(\d+)\s*[.)·:–—-]\s*(.+)$/;
+// "2 · Pick a day", "2. Pick a day", "2) …", "2: …" or "2 - …"; never "3-day trip" or "1.5x zoom".
+const STEP_LABEL = /^(\d+)(?:\s*·\s*|[.):]\s+|\s+[–—-]\s+)(.+)$/;
 
 const toGalleryItems = (prs: PipelineInboxPr[]): GalleryItem[] =>
   prs.flatMap((pr) => {
@@ -199,11 +193,9 @@ function getSubtitle(
 function getLead(
   session: PipelineSession,
   group: PipelineGroup | null,
-  prs: PipelinePr[],
   now: number,
 ) {
   const time = formatPipelineTime(session.updatedAt, now);
-  const failing = prs.find((pr) => pr.ci === 'red');
   const base = (() => {
     if (group === 'waiting') return `Waiting since ${time}`;
     if (group === 'working') {
@@ -217,7 +209,7 @@ function getLead(
       return `No update for ${formatSpan(now - session.updatedAt)}. It may have stopped, or be waiting on a permission prompt.`;
     return `Finished its turn at ${time}.`;
   })();
-  return failing ? `${base} · checks failing on #${failing.number}` : base;
+  return base;
 }
 
 function toSessionEntry(
@@ -252,7 +244,7 @@ function toSessionEntry(
     isPrOnly: false,
     time,
     subtitle: getSubtitle(group, asks, time, session, now),
-    lead: getLead(session, group, safePrs, now),
+    lead: getLead(session, group, now),
     asks,
     raisedHands: session.raisedHands,
     prs: safePrs,
@@ -277,7 +269,7 @@ function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
     isPrOnly: true,
     time,
     subtitle: `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0] || 'Waiting on you'}`,
-    lead: `Waiting since ${time}${pr.ci === 'red' ? ` · checks failing on #${pr.number}` : ''}`,
+    lead: `Waiting since ${time}`,
     asks,
     raisedHands: [],
     prs: [safePr],

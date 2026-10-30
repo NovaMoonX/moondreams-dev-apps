@@ -4,30 +4,24 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import FallbackImage from '@/components/FallbackImage';
-import ImageViewer, { type ViewerImage } from '@/components/ImageViewer';
+import ImageViewer, { type ViewerSlide } from '@/components/ImageViewer';
 
 import type { GalleryItem } from './pipelineUtils';
 
 const ROLE_WORDS = { before: 'Before', after: 'After' } as const;
-
-const getShotWords = (item: GalleryItem, role: GalleryItem['shots'][number]['role']) =>
-  role ? `${item.label} · ${ROLE_WORDS[role]}` : item.label;
 
 /** Every screenshot of a pull request as tiles in the order the author listed them; numbered labels read as a flow. A tap opens them full screen. */
 function ScreenshotGallery({ items }: { items: GalleryItem[] }) {
   const [openAt, setOpenAt] = useState<number | null>(null);
   if (items.length === 0) return null;
 
-  const viewerImages: ViewerImage[] = items.flatMap((item) =>
-    item.shots.map((shot) => ({
+  const slides: ViewerSlide[] = items.map((item) => ({
+    caption: item.step === null ? item.label : `${item.step} · ${item.label}`,
+    pictures: item.shots.map((shot) => ({
       src: shot.src,
-      caption: getShotWords(item, shot.role),
+      label: shot.role ? ROLE_WORDS[shot.role] : null,
     })),
-  );
-  const firstIndexOf = (itemIndex: number) =>
-    items
-      .slice(0, itemIndex)
-      .reduce((total, item) => total + item.shots.length, 0);
+  }));
   const isFlow = items.filter((item) => item.step !== null).length >= 2;
 
   return (
@@ -40,7 +34,7 @@ function ScreenshotGallery({ items }: { items: GalleryItem[] }) {
               variant='tertiary'
               aria-label={`Open ${item.label} full screen`}
               className='border-border/60 bg-muted/40 hover:bg-muted/70 h-auto w-full min-w-0 flex-col items-stretch justify-start gap-0 overflow-hidden rounded-xl border p-0 text-left font-normal'
-              onClick={() => setOpenAt(firstIndexOf(itemIndex))}
+              onClick={() => setOpenAt(itemIndex)}
             >
               <span
                 className={join(
@@ -82,7 +76,7 @@ function ScreenshotGallery({ items }: { items: GalleryItem[] }) {
       </ol>
       {openAt !== null ? (
         <ImageViewer
-          images={viewerImages}
+          slides={slides}
           startIndex={openAt}
           onClose={() => setOpenAt(null)}
         />

@@ -4,6 +4,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { isRunningInEmulator } from '../emulator.js';
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
 import type { FetchLike } from '../imageSearch/types.js';
 
@@ -306,6 +307,21 @@ export const answerPipelineQuestions = onCall(
 
     const answers = readAnswers(request.data);
     const attempt = readAttempt(request.data);
+    // The emulator's dashboard shows made-up pull requests, so it rehearses the send and posts nothing.
+    if (isRunningInEmulator()) {
+      return {
+        isSample: true,
+        results: answers.map(
+          ({ prNumber }): PrResult => ({
+            prNumber,
+            ok: true,
+            url: null,
+            postedAt: Date.now(),
+            error: null,
+          }),
+        ),
+      };
+    }
     const token = await readSecret(
       'PIPELINE_GITHUB_TOKEN',
       AbortSignal.timeout(10_000),
@@ -347,6 +363,6 @@ export const answerPipelineQuestions = onCall(
             error: "Couldn't reach GitHub.",
           },
     );
-    return { results };
+    return { isSample: false, results };
   },
 );

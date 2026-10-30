@@ -26,7 +26,7 @@ export const MAX_ANSWER_NOTE = 2000;
 
 const answerPipelineQuestionsCallable = httpsCallable<
   { answers: PipelineAnswersForPr[]; attempt: string },
-  { results: PipelineAnswerResult[] }
+  { results: PipelineAnswerResult[]; isSample: boolean }
 >(functions, 'answerPipelineQuestions', { timeout: 120_000 });
 
 /** Posts each pull request's answers as one comment from the owner; a retry with the same `attempt` never posts twice. */
@@ -35,5 +35,5 @@ export async function sendPipelineAnswers(
   attempt: string,
 ) {
   const result = await answerPipelineQuestionsCallable({ answers, attempt });
-  return result.data.results;
+  return { results: result.data.results, isSample: result.data.isSample === true };
 }

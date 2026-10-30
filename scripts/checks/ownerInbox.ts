@@ -334,6 +334,33 @@ assert.deepEqual(
   'every screenshot of the body section in order: table rows by column title, image lines by their alt or the line above, and nothing from after the next heading',
 );
 assert.deepEqual(parseGallery(null), [], 'no body, no gallery');
+const nameless = parseGallery(`## Screenshots
+| Answer all | Sheet (320) | Sent |
+|---|---|---|
+| ![](https://x.test/1.png) | ![](https://x.test/2.png) | ![](https://x.test/3.png) |
+
+### Phone
+<img src='https://x.test/(4).png'>
+| Phone \\| dark | Before | After |
+|---|---|---|
+| Phone \\| dark | ![](https://x.test/(5).png) | ![](https://x.test/6.png) |
+`);
+assert.deepEqual(
+  nameless.map((step) => [step.label, step.images.map((image) => image.src.split('/').pop())]),
+  [
+    ['Answer all', ['1.png']],
+    ['Sheet (320)', ['2.png']],
+    ['Sent', ['3.png']],
+    ['Phone', ['(4).png']],
+    ['Phone | dark', ['(5).png', '6.png']],
+  ],
+  'a row of only pictures keeps every picture, named by its column; a heading is not part of a label; an escaped pipe, parentheses in a URL and a single-quoted img all hold',
+);
+assert.deepEqual(
+  nameless[4].images.map((image) => image.role),
+  ['before', 'after'],
+  'an escaped pipe does not shift the columns',
+);
 assert.deepEqual(parseGallery('## Overview\n![](https://x.test/y.png)'), [], 'only the Screenshots section counts');
 
 console.log('owner inbox: ok');

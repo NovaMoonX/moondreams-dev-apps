@@ -206,32 +206,51 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
 const MAX_STEPS = 30;
 const MAX_STEP_IMAGES = 3;
 const MAX_LABEL = 120;
-const MARKDOWN_IMAGE = /!\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g;
-const HTML_IMAGE = /<img[^>]*\bsrc="(https:\/\/[^"\s]+)"/g;
+const MARKDOWN_IMAGE =
+  /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
+const HTML_IMAGE = /<img[^>]*\bsrc=(?:"([^"\s]+)"|'([^'\s]+)'|([^\s>"']+))/gi;
+const MARKUP_TAG = /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
+
+const toImageUrls = (cell: string) =>
+  [
+    ...[...cell.matchAll(MARKDOWN_IMAGE)].map((match) => ({
+      at: match.index ?? 0,
+      src: match[1],
+    })),
+    ...[...cell.matchAll(HTML_IMAGE)].map((match) => ({
+      at: match.index ?? 0,
+      src: match[1] ?? match[2] ?? match[3],
+    })),
+  ]
+    .filter((image) => image.src.startsWith('https://'))
+    .sort((a, b) => a.at - b.at)
+    .map((image) => image.src);
 
 const toImages = (cell: string, role: GalleryImage['role']): GalleryImage[] =>
-  [...cell.matchAll(MARKDOWN_IMAGE), ...cell.matchAll(HTML_IMAGE)].map(
-    (match) => ({ src: match[1], role }),
-  );
+  toImageUrls(cell).map((src) => ({ src, role }));
 
+/** Words for a label: markup, links, heading hashes and emphasis marks removed, cut before escaping so a cut never lands inside `&amp;`. */
 const toLabel = (text: string) =>
   toPlain(
     text
       .replace(MARKDOWN_IMAGE, '')
-      .replace(/<[^>]*>/g, '')
+      .replace(MARKUP_TAG, '')
       .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
-      .replace(/[*_`]/g, '')
+      .replace(/^\s*#+\s*/, '')
+      .replace(/\*\*|__|`/g, '')
       .replace(/\s+/g, ' ')
-      .trim(),
-  ).slice(0, MAX_LABEL);
+      .trim()
+      .slice(0, MAX_LABEL),
+  );
 
+/** A table row's cells; a pipe written `\|` stays inside its cell. */
 const toCells = (line: string) =>
   line
     .trim()
     .replace(/^\|/, '')
-    .replace(/\|$/, '')
-    .split('|')
-    .map((cell) => cell.trim());
+    .replace(/(?<!\\)\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim().replace(/\\\|/g, '|'));
 
 const getRole = (heading: string): GalleryImage['role'] => {
   const word = heading.toLowerCase();
@@ -250,52 +269,64 @@ const screenshotLines = (body: string) => {
   return end === -1 ? rest : rest.slice(0, end);
 };
 
+/** A table row as steps: a first cell without a picture names the row, its other cells' titles say Before or After; a row that is only pictures gives each picture a step named by its column's title. */
+const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
+  const [first = '', ...rest] = cells;
+  if (toImageUrls(first).length === 0) {
+    const images = rest
+      .flatMap((cell, index) =>
+        toImages(cell, getRole(headings[index + 1] ?? '')),
+      )
+      .slice(0, MAX_STEP_IMAGES);
+    return images.length === 0
+      ? []
+      : [{ label: toLabel(first) || 'Screenshot', images }];
+  }
+  return cells.flatMap((cell, index) => {
+    const images = toImages(cell, getRole(headings[index] ?? ''));
+    return images.length === 0
+      ? []
+      : [
+          {
+            label: toLabel(headings[index] ?? '') || 'Screenshot',
+            images: images.slice(0, MAX_STEP_IMAGES),
+          },
+        ];
+  });
+};
+
 /**
  * Every screenshot in a PR body's Screenshots section, one step per table row (its first cell is the
- * name, the other cells' titles say Before or After) or per image line outside a table, in the order
- * written. This is the whole set, unlike the status comment's line of the latest push.
+ * name, the other cells' titles say Before or After; a row of only pictures is one step per picture,
+ * named by its column) or per image line outside a table, in the order written. This is the whole
+ * set, unlike the status comment's line of the latest push.
  */
 export function parseGallery(body: string | null): GalleryStep[] {
-  const rows = screenshotLines(body ?? '');
-  const result = rows.reduce<{
+  const result = screenshotLines(body ?? '').reduce<{
     steps: GalleryStep[];
     headings: string[];
     caption: string;
   }>(
     (acc, line) => {
-      const isRow = line.trim().startsWith('|');
-      if (isRow) {
+      if (line.trim().startsWith('|')) {
         const cells = toCells(line);
-        const isSeparator = cells.every((cell) => /^:?-{2,}:?$/.test(cell));
-        if (isSeparator) return acc;
-        const isHeader = acc.headings.length === 0;
-        if (isHeader) return { ...acc, headings: cells };
-        const [name = '', ...rest] = cells;
-        const images = rest
-          .flatMap((cell, index) =>
-            toImages(cell, getRole(acc.headings[index + 1] ?? '')),
-          )
-          .slice(0, MAX_STEP_IMAGES);
-        return images.length === 0
-          ? acc
-          : {
-              ...acc,
-              steps: [
-                ...acc.steps,
-                { label: toLabel(name) || 'Screenshot', images },
-              ],
-            };
+        if (cells.every((cell) => /^:?-{2,}:?$/.test(cell))) return acc;
+        if (acc.headings.length === 0) return { ...acc, headings: cells };
+        return {
+          ...acc,
+          steps: [...acc.steps, ...toRowSteps(cells, acc.headings)],
+        };
       }
       const images = toImages(line, null).slice(0, MAX_STEP_IMAGES);
       if (images.length > 0) {
         const alt = /!\[([^\]]*)\]/.exec(line)?.[1] ?? '';
         return {
-          ...acc,
-          headings: [],
           steps: [
             ...acc.steps,
             { label: toLabel(alt) || acc.caption || 'Screenshot', images },
           ],
+          headings: [],
+          caption: '',
         };
       }
       const words = toLabel(line);

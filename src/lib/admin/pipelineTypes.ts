@@ -49,7 +49,7 @@ export interface PipelineInboxPr {
   ci: 'green' | 'red' | 'running' | 'none';
   bodySessionUrl: string | null;
   status: PipelineInboxStatus | null;
-  /** Absent on a pull request stored before the gallery existed. */
+  /** Optional only for the inbox document written before the gallery existed: the function always writes it, and the document is replaced whole on the next inbox run. */
   gallery?: PipelineGalleryStep[];
 }
 

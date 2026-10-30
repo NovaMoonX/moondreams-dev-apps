@@ -87,7 +87,10 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     const attempt = attemptRef.current ?? generateToken(24);
     attemptRef.current = attempt;
     try {
-      const results = await sendPipelineAnswers(answers, attempt);
+      const { results, isSample } = await sendPipelineAnswers(
+        answers,
+        attempt,
+      );
       attemptRef.current = null;
       const done = results.filter((result) => result.ok);
       const doneNumbers = new Set(done.map((result) => result.prNumber));
@@ -125,6 +128,7 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
         ),
       }));
       setLastSent(done.map(({ prNumber, url }) => ({ prNumber, url })));
+      if (isSample) setSendNote('Local test: nothing was posted to GitHub.');
       return results.every((result) => result.ok);
     } catch (error) {
       const code = (error as { code?: unknown }).code;

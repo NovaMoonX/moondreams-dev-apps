@@ -29,6 +29,29 @@ const DOT_CLASS: Record<PipelineGroup, string> = {
   finished: 'bg-muted-foreground/40',
 };
 
+const CI_BADGE: Record<string, { words: string; className: string }> = {
+  red: { words: 'Checks failing', className: 'bg-destructive/10 text-destructive' },
+  running: { words: 'Checks running', className: 'bg-warning/15 text-warning-foreground dark:text-warning' },
+  green: { words: 'Checks passing', className: 'bg-success/10 text-success' },
+};
+
+/** A pull request's checks as a small coloured pill: red failing, amber running, green passing; nothing when it has none. */
+export function CiBadge({ ci }: { ci: string }) {
+  const badge = CI_BADGE[ci];
+  if (!badge) return null;
+  return (
+    <span
+      className={join(
+        'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap',
+        badge.className,
+      )}
+    >
+      <span aria-hidden='true' className='size-1.5 rounded-full bg-current' />
+      {badge.words}
+    </span>
+  );
+}
+
 export function StatusDot({ group }: { group: PipelineGroup }) {
   return (
     <span
@@ -107,7 +130,7 @@ export function NotSetUpLine() {
     <span className='inline-flex items-center gap-1'>
       <WarningLine>Answering isn&apos;t set up yet.</WarningLine>
       <HelpTip title="Answering isn't set up">
-        Add a GitHub token as PIPELINE_GITHUB_TOKEN; see the PR notes.
+        Run npm run pipeline:secrets -- token in your terminal: it opens the GitHub page for the token and saves it. Sending works a couple of minutes later.
       </HelpTip>
     </span>
   );
@@ -173,8 +196,8 @@ export function AnswerFields({
   const plain = indexed.filter(({ option }) => option.images.length === 0);
   const pictured = indexed.filter(({ option }) => option.images.length > 0);
   const previews = pictured.map(({ option, index }) => ({
-    src: option.images[0],
     caption: `${LETTERS[index]} · ${stripLinks(option.label)}`,
+    pictures: [{ src: option.images[0], label: null }],
   }));
 
   const getNoteLabel = () => {
@@ -259,7 +282,7 @@ export function AnswerFields({
           ) : null}
           {previewAt !== null ? (
             <ImageViewer
-              images={previews}
+              slides={previews}
               startIndex={previewAt}
               onClose={() => setPreviewAt(null)}
             />
