@@ -10,8 +10,9 @@ import { IS_INSTALLED_APP } from '@utils/pwaUtils';
 import './index.css';
 
 // Ensures a single Service Worker handles caching for the entire origin,
-// which installs as one app through manifest-main.json
-registerSW({ immediate: true });
+// which installs as one app through manifest-main.json.
+// Without onNeedReload the register helper reloads the page itself when an update takes over, wiping typed work.
+registerSW({ immediate: true, onNeedReload: markUpdateReady });
 document.documentElement.toggleAttribute('data-installed-app', IS_INSTALLED_APP);
 watchForAppUpdates();
 
