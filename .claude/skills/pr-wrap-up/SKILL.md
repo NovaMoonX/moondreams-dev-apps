@@ -74,7 +74,7 @@ Size the PR (S, M or L) and run the review that size gets, as `orchestrate` "Siz
 
 ## 5. Triage, fix, re-validate
 
-- Merge duplicates. Fix every real, in-scope finding. Put anything bigger in the PR body under "Follow-ups" rather than widening the PR.
+- Merge duplicates. Fix every real, in-scope finding. **A reviewer's severity is a claim: before fixing, say from the person's side what they are doing at that moment and whether the fix helps them then.** A fix that makes the app reach further (over a sheet, into a task, one more control) needs a journey that asks for it; without one, the finding is answered and dropped (owner, PR 559: an update strip was lifted over open sheets because a review called it unreachable mid-form). Put anything bigger in the PR body under "Follow-ups" rather than widening the PR.
 - Fix on the PR the finding belongs to, then merge that branch up through every branch above it (merge, never rebase or force-push), re-running `npx tsc -b --force` and `npx eslint .` on each.
 - Re-validate what you changed in the browser, and refresh the affected screenshots (step 1) and the regression check (step 2).
 - **The last fresh design pass runs on the head that ships.** A fix round that changes `src` after the last fresh design pass is re-checked by a fresh design agent on those screens, and on every screen that draws a shared part they changed, before the PR body says "reviewed": a fix measured only by its author does not close a finding, and "left" is not an outcome (the owner's goal check, round 8: three rounds ended with the fixes unreviewed).

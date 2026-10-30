@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import AmountHero from '@/components/AmountHero';
 import FoldedDateField from '@/components/FoldedDateField';
 import InlineNotice from '@/components/InlineNotice';
@@ -105,6 +106,7 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
   };
   const isDirty =
     date !== defaultDate || moneyEdit !== null || Object.keys(edits).length > 0;
+  useUnsavedWork(() => isDirty);
   const started = collectStarted(moves, startDate);
   const rows = [
     ...envelopes.map(({ item, version }) => ({

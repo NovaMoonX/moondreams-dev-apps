@@ -48,16 +48,13 @@ export function getGroupMemberNames(
   bills: readonly (GroupMember & { name: string })[],
   envelopes: readonly (GroupEnvelopeMember & { name: string })[],
   today: number,
-  incomeDaysPerMonth: number,
 ) {
   const counted = [
     ...bills.filter(
       (member) => monthlyTotal([member], today).total.highCents > 0,
     ),
     ...envelopes.filter(
-      (member) =>
-        monthlyTotal([], today, [member], incomeDaysPerMonth).total.highCents >
-        0,
+      (member) => monthlyTotal([], today, [member]).total.highCents > 0,
     ),
   ];
   return (counted.length > 0 ? counted : [...bills, ...envelopes]).map(

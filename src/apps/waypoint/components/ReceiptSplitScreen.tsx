@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import RevealChip from '@/components/RevealChip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionHeader from '@/components/SectionHeader';
@@ -274,6 +275,7 @@ function ReceiptSplitScreen({
   });
 
   const isDirtyRef = useRef(false);
+  useUnsavedWork(() => stage.step !== 'photo' && isDirtyRef.current);
 
   const requestClose = async () => {
     if (stage.step === 'photo' || !isDirtyRef.current) {

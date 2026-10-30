@@ -8,6 +8,7 @@ import {
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Plus } from 'lucide-react';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -259,6 +260,7 @@ function DetailsForm({
           )
         : 1,
   });
+  useUnsavedWork(() => draft.isDirty);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

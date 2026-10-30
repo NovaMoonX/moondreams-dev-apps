@@ -18,6 +18,8 @@ export interface GroupEnvelopeMember {
   funding: FundingRule;
   /** The first day the envelope is in the plan. */
   startsOn: number;
+  /** The income days a usual month holds for the pay its rule counts (`getIncomeDaysPerMonth`). */
+  incomeDaysPerMonth: number;
 }
 
 export interface GroupTotal {
@@ -45,32 +47,38 @@ const CALENDAR_FACTORS: Record<string, [number, number]> = {
   yearly: [1, 12],
 };
 
-/** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none. */
+/** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none; only one source's lines when `sourceId` is given. */
 export function getIncomeDaysPerMonth(
-  lines: readonly Pick<GroupMember, 'schedule' | 'startsOn' | 'ending'>[],
+  lines: readonly (Pick<GroupMember, 'schedule' | 'startsOn' | 'ending'> & {
+    sourceId: string;
+  })[],
   on: number,
+  sourceId: string | null = null,
 ): number {
   const day = new Date(on);
   const monthStart = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1);
   const nextMonth = Date.UTC(day.getUTCFullYear(), day.getUTCMonth() + 1, 1);
-  return lines.reduce((total, { schedule, startsOn, ending }) => {
-    const factor = getMonthlyFactor(schedule.kind);
-    const isLive =
-      startsOn < nextMonth &&
-      (ending.onDate === null || ending.onDate >= monthStart);
-    return factor && isLive ? total + factor[0] / factor[1] : total;
-  }, 0);
+  return lines
+    .filter((line) => sourceId === null || line.sourceId === sourceId)
+    .reduce((total, { schedule, startsOn, ending }) => {
+      const factor = getMonthlyFactor(schedule.kind);
+      const isLive =
+        startsOn < nextMonth &&
+        (ending.onDate === null || ending.onDate >= monthStart);
+      return factor && isLive ? total + factor[0] / factor[1] : total;
+    }, 0);
 }
 
 /** An envelope's fixed amount for a usual month as a ratio; null when its amount or beat is not fixed. */
-const getEnvelopeWeight = (
-  { funding }: GroupEnvelopeMember,
-  incomeDaysPerMonth: number,
-): [number, number] | null => {
+const getEnvelopeWeight = ({
+  funding,
+  incomeDaysPerMonth,
+}: GroupEnvelopeMember): [number, number] | null => {
   if (funding.amount.kind !== 'exact') return null;
   const { cadence } = funding;
   if (cadence.kind === 'calendar')
     return CALENDAR_FACTORS[cadence.period] ?? null;
+  if (incomeDaysPerMonth === 0) return null;
   if (cadence.kind === 'everyIncomeDay') return [incomeDaysPerMonth, 1];
   if (cadence.kind === 'everyNth') return [incomeDaysPerMonth, cadence.n];
   return null;
@@ -79,7 +87,7 @@ const getEnvelopeWeight = (
 /**
  * What a group's bills and envelopes come to in a usual month: each repeating bill at its monthly
  * average, each envelope with an exact amount and a regular beat at what it gets in a month
- * (`incomeDaysPerMonth` is how many income days a usual month holds), nothing for a bill that has
+ * (an income-day envelope with no regular pay to count is left out), nothing for an item that has
  * not begun or has ended by the month holding `on`. A one-time bill is not part of a usual month;
  * it is reported apart. Low and high ends add up separately and round once, so the total never
  * drifts from the parts.
@@ -88,7 +96,6 @@ export function monthlyTotal(
   members: readonly GroupMember[],
   on: number,
   envelopes: readonly GroupEnvelopeMember[] = [],
-  incomeDaysPerMonth = 0,
 ): GroupTotal {
   const day = new Date(on);
   const monthStart = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 1);
@@ -101,10 +108,13 @@ export function monthlyTotal(
     if (!isLive(member) || isOnce(member)) return [0, 1];
     return getMonthlyFactor(member.schedule.kind);
   });
+  const hasBegun = ({ startsOn, funding: { cadence } }: GroupEnvelopeMember) =>
+    startsOn < nextMonth &&
+    (cadence.kind !== 'calendar' ||
+      cadence.startsOn === null ||
+      cadence.startsOn < nextMonth);
   const envelopeWeights = envelopes.map((envelope) =>
-    envelope.startsOn < nextMonth
-      ? getEnvelopeWeight(envelope, incomeDaysPerMonth)
-      : [0, 1],
+    hasBegun(envelope) ? getEnvelopeWeight(envelope) : [0, 1],
   );
   const envelopeCents = (envelope: GroupEnvelopeMember): Cents =>
     envelope.funding.amount.kind === 'exact'

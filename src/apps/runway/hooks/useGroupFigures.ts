@@ -31,15 +31,13 @@ export function useGroupFigures(today: number): GroupFigures[] {
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
-  const incomeDaysPerMonth = getIncomeDaysPerMonth(
-    plan.flatMap(({ payLines }) =>
-      payLines.map(({ version }) => ({
-        schedule: version.payload.schedule,
-        startsOn: version.effectiveFrom,
-        ending: version.payload.ending,
-      })),
-    ),
-    today,
+  const payLines = plan.flatMap(({ item: source, payLines: lines }) =>
+    lines.map(({ version }) => ({
+      sourceId: source.id,
+      schedule: version.payload.schedule,
+      startsOn: version.effectiveFrom,
+      ending: version.payload.ending,
+    })),
   );
   return groups.map(({ item, version }) => {
     const memberBills = bills.filter(
@@ -59,24 +57,19 @@ export function useGroupFigures(today: number): GroupFigures[] {
       name: envelope.payload.name,
       funding: envelope.payload.funding,
       startsOn: envelope.effectiveFrom,
+      incomeDaysPerMonth: getIncomeDaysPerMonth(
+        payLines,
+        today,
+        envelope.payload.funding.sourceId ?? null,
+      ),
     }));
     return {
       id: item.id,
       name: version.payload.name,
-      total: monthlyTotal(
-        billMembers,
-        today,
-        envelopeMembers,
-        incomeDaysPerMonth,
-      ),
+      total: monthlyTotal(billMembers, today, envelopeMembers),
       bills: memberBills,
       envelopes: memberEnvelopes,
-      names: getGroupMemberNames(
-        billMembers,
-        envelopeMembers,
-        today,
-        incomeDaysPerMonth,
-      ),
+      names: getGroupMemberNames(billMembers, envelopeMembers, today),
     };
   });
 }

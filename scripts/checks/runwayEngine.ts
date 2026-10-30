@@ -10143,8 +10143,13 @@ console.log('runway engine: ok');
   );
   const envelope = (
     funding: FundingRule,
-    extra: Partial<{ startsOn: number }> = {},
-  ) => ({ funding, startsOn: utc(2026, 1, 1), ...extra });
+    extra: Partial<{ startsOn: number; incomeDaysPerMonth: number }> = {},
+  ) => ({
+    funding,
+    startsOn: utc(2026, 1, 1),
+    incomeDaysPerMonth: 2,
+    ...extra,
+  });
   const cash = (cents: number) => ({ kind: 'exact' as const, cents });
   const calendar = (
     period: 'weekly' | 'every2Weeks' | 'twiceMonthly' | 'monthly' | 'yearly',
@@ -10155,18 +10160,13 @@ console.log('runway engine: ok');
       cadence: { kind: 'calendar', period, startsOn: null },
     });
   assert.deepEqual(
-    monthlyTotal(
-      [],
-      nov,
-      [
-        calendar('weekly', 5_200),
-        calendar('every2Weeks', 2_600),
-        calendar('twiceMonthly', 1_000),
-        calendar('monthly', 10_000),
-        calendar('yearly', 120_000),
-      ],
-      0,
-    ),
+    monthlyTotal([], nov, [
+      calendar('weekly', 5_200),
+      calendar('every2Weeks', 2_600),
+      calendar('twiceMonthly', 1_000),
+      calendar('monthly', 10_000),
+      calendar('yearly', 120_000),
+    ]),
     {
       total: exact(50_167),
       uncounted: 0,
@@ -10201,7 +10201,6 @@ console.log('runway engine: ok');
           cadence: { kind: 'everyIncomeDay' },
         }),
       ],
-      2,
     ),
     {
       total: exact(128_000),
@@ -10211,26 +10210,48 @@ console.log('runway engine: ok');
     "G11: income-day envelopes count x the usual month's income days (an Nth one divided by n); chosen, none, percent and rest are named as left out; bills and envelopes add into one total",
   );
   assert.deepEqual(
-    monthlyTotal(
-      [],
-      nov,
-      [
-        calendar('monthly', 5_000),
-        { ...calendar('monthly', 7_000), startsOn: utc(2027, 1, 1) },
-      ],
-      0,
-    ),
+    monthlyTotal([], nov, [
+      calendar('monthly', 5_000),
+      { ...calendar('monthly', 7_000), startsOn: utc(2027, 1, 1) },
+      envelope({
+        amount: cash(4_000),
+        cadence: {
+          kind: 'calendar',
+          period: 'monthly',
+          startsOn: utc(2027, 3, 1),
+        },
+      }),
+    ]),
     {
       total: exact(5_000),
       uncounted: 0,
       oneTime: { count: 0, range: exact(0), dueOn: null },
     },
-    'G11: an envelope that begins after the month counts nothing',
+    'G11: an envelope, or a calendar rule, that begins after the month counts nothing',
+  );
+  assert.deepEqual(
+    monthlyTotal([], nov, [
+      envelope(
+        { amount: cash(3_000), cadence: { kind: 'everyIncomeDay' } },
+        { incomeDaysPerMonth: 0 },
+      ),
+    ]),
+    {
+      total: exact(0),
+      uncounted: 1,
+      oneTime: { count: 0, range: exact(0), dueOn: null },
+    },
+    'G11: an income-day envelope with no regular pay to count is named as left out, never $0 silently',
   );
   const line = (
     kind: Schedule['kind'],
-    extra: Partial<{ startsOn: number; ending: typeof NO_END }> = {},
+    extra: Partial<{
+      startsOn: number;
+      ending: typeof NO_END;
+      sourceId: string;
+    }> = {},
   ) => ({
+    sourceId: 'job-a',
     schedule: every(kind, utc(2026, 1, 1)),
     startsOn: utc(2026, 1, 1),
     ending: NO_END,
@@ -10255,6 +10276,15 @@ console.log('runway engine: ok');
     ),
     52 / 12 + 1,
     'G11: pay lines add at their monthly beat; a one-off or ended line adds none',
+  );
+  assert.equal(
+    getIncomeDaysPerMonth(
+      [line('weekly'), line('monthly', { sourceId: 'job-b' })],
+      nov,
+      'job-b',
+    ),
+    1,
+    "G11: a rule that counts one source's pay counts only that source's income days",
   );
 }
 

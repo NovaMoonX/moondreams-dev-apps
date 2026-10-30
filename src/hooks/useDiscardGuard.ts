@@ -1,6 +1,8 @@
-import { useRef } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+
+import { holdUnsavedWork } from '@lib/app/unsavedWork';
 
 interface UseDiscardGuardOptions {
   /** The form holds something the person typed or chose since it opened. */
@@ -28,6 +30,11 @@ export function useDiscardGuard({
 }: UseDiscardGuardOptions) {
   const { confirm } = useActionModal();
   const isAskingRef = useRef(false);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    return holdUnsavedWork();
+  }, [isDirty]);
 
   const requestClose = async () => {
     if (isBusy || isAskingRef.current) return;
