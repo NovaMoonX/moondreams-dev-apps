@@ -320,8 +320,9 @@ export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
 /** The most characters of items kept from a read receipt. */
 export const MAX_RECEIPT_TEXT_LENGTH = 2000;
-/** Lines of a read receipt's items a purchase's sheet shows before "Show all". */
+/** Lines of a read receipt's items a purchase's sheet shows before "Show all", which is offered only when it would hide at least `RECEIPT_TEXT_MIN_HIDDEN`. */
 export const RECEIPT_TEXT_LINES_SHOWN = 6;
+export const RECEIPT_TEXT_MIN_HIDDEN = 3;
 export const MAX_LINK_LENGTH = 2000;
 /** How long a pasted order link's page is waited for before the preview is skipped. */
 export const LINK_LOOKUP_TIMEOUT_MS = 6000;
@@ -754,14 +755,15 @@ export const SPEND_WORDS = {
   addReceipt: 'Add a receipt',
   readReceipt: 'Read a receipt',
   readReceiptSends:
-    'Runway sends this photo to an AI service to read the total, the store, the day and the items. Nothing is saved until you add the purchase.',
+    "Runway sends this photo to an AI service to read the total, the store, the day and the items. Nothing is saved until you add the purchase. The photo is kept as the purchase's receipt.",
   readReceiptChoose: 'Choose a photo',
+  readReceiptChooseAnother: 'Choose another photo',
   readReceiptReading: 'Reading the receipt…',
-  readReceiptDone:
-    'Read from the receipt. Check the amount, the store and the day.',
   readReceiptEmpty:
     'Nothing could be read from that photo. Try a clearer one, or type it in.',
   items: 'Items',
+  itemCount: (count: number) => (count === 1 ? '1 item' : `${count} items`),
+  itemsHint: 'One item to a line, with its price after two spaces.',
   showAllItems: 'Show all',
   showFewerItems: 'Show fewer',
   addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',

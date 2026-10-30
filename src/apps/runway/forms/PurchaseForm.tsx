@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ImagePlus, Search } from 'lucide-react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -43,7 +43,12 @@ import ReceiptFileInput, {
 } from '@apps/runway/components/ReceiptFileInput';
 import { ReceiptTile } from '@apps/runway/components/ReceiptsBlock';
 import { pickReceiptFiles } from '@apps/runway/utils/receiptFiles';
-import { formatReceiptItems } from '@apps/runway/utils/receiptText';
+import {
+  countReceiptItems,
+  describeReceiptRead,
+  formatReceiptItems,
+  getForeignCurrency,
+} from '@apps/runway/utils/receiptText';
 import { addReceiptImages } from '@apps/runway/store/actions/receiptActions';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import SplitEditor from '@apps/runway/components/SplitEditor';
@@ -53,6 +58,7 @@ import {
   FORM_FLOW_WORDS,
   MAX_LINK_LENGTH,
   MAX_RECEIPTS_PER_PURCHASE,
+  MAX_RECEIPT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
   RUNWAY_SEARCH_THRESHOLD,
@@ -128,7 +134,7 @@ const countUsualNote = (seen: number) => {
 };
 
 type TextExtraKey = 'label' | 'merchant' | 'note' | 'link' | 'group';
-type ExtraKey = TextExtraKey | 'receipt';
+type ExtraKey = TextExtraKey | 'receipt' | 'items';
 
 interface PickedReceipt {
   file: File;
@@ -321,7 +327,12 @@ function PurchaseForm({
     isBusy: boolean;
     message: string | null;
   }>({ isBusy: false, message: null });
-  const [didRead, setDidRead] = useState(false);
+  const [readNotice, setReadNotice] = useState<string | null>(null);
+  const [readFile, setReadFile] = useState<File | null>(null);
+  const readApplied = useRef<{
+    amount: string | null;
+    merchant: string | null;
+  }>({ amount: null, merchant: null });
   const receiptUrls = useRef(new Set<string>());
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -342,18 +353,50 @@ function PurchaseForm({
     });
   };
 
+  const toPicked = (files: File[]) =>
+    files.map((file) => {
+      const url = URL.createObjectURL(file);
+      receiptUrls.current.add(url);
+      return { file, url };
+    });
+
   const addReceiptFiles = (files: File[]) => {
     const picked = pickReceiptFiles(
       files,
       heldReceiptCount + (pickedReceipts?.length ?? 0),
     );
-    const added = picked.files.map((file) => {
-      const url = URL.createObjectURL(file);
-      receiptUrls.current.add(url);
-      return { file, url };
-    });
+    const added = toPicked(picked.files);
     setReceiptNote(picked.note);
     setPickedReceipts((current) => [...(current ?? []), ...added]);
+  };
+
+  const replaceReadPhoto = (file: File) => {
+    const stale = (pickedReceipts ?? []).filter(
+      (entry) => entry.file === readFile,
+    );
+    dropReceipts(stale);
+    const picked = pickReceiptFiles(
+      [file],
+      heldReceiptCount + (pickedReceipts?.length ?? 0) - stale.length,
+    );
+    const added = toPicked(picked.files);
+    setReceiptNote(picked.note);
+    setReadFile(picked.files[0] ?? null);
+    setPickedReceipts((current) => [
+      ...(current ?? []).filter((entry) => entry.file !== readFile),
+      ...added,
+    ]);
+  };
+
+  const dropReadPhoto = () => {
+    const rest = (pickedReceipts ?? []).filter(
+      (entry) => entry.file !== readFile,
+    );
+    dropReceipts(
+      (pickedReceipts ?? []).filter((entry) => entry.file === readFile),
+    );
+    setPickedReceipts(rest.length === 0 ? null : rest);
+    setReadFile(null);
   };
 
   const countedFrom = getCountedFrom(periods);
@@ -611,6 +654,11 @@ function PurchaseForm({
     if (!isRefund)
       setReturnTo((isSplit ? splitIds[0] : envelopeId) ?? FREE_VALUE);
     else if (returnTo !== FREE_VALUE) setEnvelopeId(returnTo);
+    if (!isRefund && readNotice !== null) {
+      setFormData((current) => ({ ...current, receiptText: null }));
+      dropReadPhoto();
+      setReadNotice(null);
+    }
     setIsRefund((current) => !current);
     setIsSplit(false);
     setOriginalId(null);
@@ -704,7 +752,7 @@ function PurchaseForm({
         lines,
         refundOfId: isRefund ? originalId : null,
         paidByCardId: cardId,
-        receiptText: formData.receiptText,
+        receiptText: formData.receiptText?.trim() || null,
       };
       if (editing) {
         const isUnchanged =
@@ -1117,8 +1165,12 @@ function PurchaseForm({
       }
       if (!isMounted.current) return;
       const total = result.totalCents;
+      const foreignCurrency = getForeignCurrency(result);
       const hasTotal =
-        total !== null && total > 0 && total <= MAX_PURCHASE_CENTS;
+        foreignCurrency === null &&
+        total !== null &&
+        total > 0 &&
+        total <= MAX_PURCHASE_CENTS;
       const readDay =
         result.date === null ? null : (fromDateInputValue(result.date) ?? null);
       const usableDay =
@@ -1131,21 +1183,49 @@ function PurchaseForm({
           : null;
       const merchant =
         result.merchant?.trim().slice(0, MAX_NAME_LENGTH) || null;
+      const typedAmount =
+        formData.amount !== '' &&
+        formData.amount !== readApplied.current.amount;
+      const typedStore =
+        (formData.extras.merchant ?? '') !== '' &&
+        formData.extras.merchant !== readApplied.current.merchant;
+      const fillsAmount = hasTotal && !typedAmount;
+      const fillsStore = merchant !== null && !typedStore;
+      const nextAmount = fillsAmount
+        ? (total / 100).toFixed(2)
+        : formData.amount;
+      readApplied.current = {
+        amount: fillsAmount ? nextAmount : readApplied.current.amount,
+        merchant: fillsStore ? merchant : readApplied.current.merchant,
+      };
       setFormData((current) => ({
         ...current,
-        amount: hasTotal ? (total / 100).toFixed(2) : current.amount,
+        amount: fillsAmount ? nextAmount : current.amount,
         date: usableDay === null ? current.date : toDateInputValue(usableDay),
         receiptText,
         extras: {
           ...current.extras,
-          merchant: merchant ?? current.extras.merchant,
+          merchant: fillsStore ? merchant : current.extras.merchant,
         },
       }));
-      addReceiptFiles([file]);
-      setDidRead(true);
+      replaceReadPhoto(file);
+      setReadNotice(
+        describeReceiptRead({
+          hasTotal: fillsAmount,
+          hasStore: fillsStore,
+          hasDay: usableDay !== null,
+          itemCount: receiptText === null ? 0 : countReceiptItems(receiptText),
+          foreignCurrency,
+          isTotalMissing:
+            foreignCurrency === null && !hasTotal && formData.amount === '',
+          isDayRefused: result.date !== null && usableDay === null,
+          keptAmount: hasTotal && typedAmount,
+          keptStore: merchant !== null && typedStore,
+        }),
+      );
       setReading({ isBusy: false, message: null });
       setView('form');
-      if (hasTotal && questions.open?.id === 'amount') {
+      if (fillsAmount && questions.open?.id === 'amount') {
         questions.moveOnFrom('amount');
       }
     } catch (readError) {
@@ -1172,8 +1252,8 @@ function PurchaseForm({
 
   const formBody = (
     <div className='space-y-5'>
-      {didRead && !isRefund && (
-        <InlineNotice tone='info'>{SPEND_WORDS.readReceiptDone}</InlineNotice>
+      {readNotice !== null && !isRefund && (
+        <InlineNotice tone='info'>{readNotice}</InlineNotice>
       )}
       <QuestionFlow flow={questions} />
       {questions.hasReviewed && (
@@ -1189,6 +1269,10 @@ function PurchaseForm({
             onOpen={(key) => setOpenExtra(key as ExtraKey)}
             onClose={() => setOpenExtra(null)}
             onRemove={(key) => {
+              if (key === 'items') {
+                setFormData((current) => ({ ...current, receiptText: null }));
+                return;
+              }
               if (key === 'receipt') {
                 dropReceipts(pickedReceipts ?? []);
                 setPickedReceipts(null);
@@ -1276,6 +1360,38 @@ function PurchaseForm({
                   },
                 ];
               }),
+              ...(formData.receiptText === null
+                ? []
+                : [
+                    {
+                      key: 'items',
+                      label: SPEND_WORDS.items,
+                      value: SPEND_WORDS.itemCount(
+                        countReceiptItems(formData.receiptText),
+                      ),
+                      isEmpty: formData.receiptText.trim() === '',
+                      render: () => (
+                        <div className='space-y-3'>
+                          <p className='text-muted-foreground text-xs'>
+                            {SPEND_WORDS.itemsHint}
+                          </p>
+                          <Textarea
+                            variant='outline'
+                            rows={8}
+                            aria-label={SPEND_WORDS.items}
+                            maxLength={MAX_RECEIPT_TEXT_LENGTH}
+                            value={formData.receiptText ?? ''}
+                            onChange={(event) =>
+                              setFormData((current) => ({
+                                ...current,
+                                receiptText: event.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      ),
+                    },
+                  ]),
               ...(pickedReceipts === null
                 ? []
                 : [
@@ -1554,6 +1670,7 @@ function PurchaseForm({
           </p>
           <ReceiptFileInput
             chooser={readChooser}
+            isMultiple={false}
             onFiles={(files) => void readReceiptFiles(files)}
           />
           {reading.isBusy && (
@@ -1562,9 +1679,7 @@ function PurchaseForm({
             </p>
           )}
           {reading.message !== null && (
-            <p className='text-destructive text-sm break-words' role='alert'>
-              {reading.message}
-            </p>
+            <InlineNotice tone='warning'>{reading.message}</InlineNotice>
           )}
           <ModalFooterActions
             cancelAction={
@@ -1584,7 +1699,9 @@ function PurchaseForm({
                 disabled={reading.isBusy}
                 onClick={() => readChooser.current?.open()}
               >
-                {SPEND_WORDS.readReceiptChoose}
+                {reading.message === null
+                  ? SPEND_WORDS.readReceiptChoose
+                  : SPEND_WORDS.readReceiptChooseAnother}
               </Button>
             }
           />
