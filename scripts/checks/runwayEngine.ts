@@ -5937,9 +5937,19 @@ const version = (
       { ...before, link: 'https://example.com/o', expenseId: 'g' },
       (id) => id,
       () => 'a card',
-      (id) => (id === 'g' ? 'Chicago trip' : 'nothing'),
+      (id) => (id === 'g' ? 'Chicago trip' : 'Sam'),
     ),
-    'Purchase changed: Safeway, link; group nothing to Chicago trip.',
+    'Purchase changed: Safeway, link; added to Chicago trip.',
+  );
+  assert.equal(
+    describePurchaseEdit(
+      { ...before, expenseId: 'g' },
+      { ...before, expenseId: null },
+      (id) => id,
+      () => 'a card',
+      (id) => (id === 'g' ? 'Chicago trip' : 'Sam'),
+    ),
+    'Purchase changed: Safeway, taken out of Chicago trip.',
   );
   assert.equal(
     describePurchaseEdit(
