@@ -27,6 +27,17 @@ export interface PipelineInboxStatus {
   updatedAt: number;
 }
 
+export interface PipelineGalleryImage {
+  src: string;
+  role: 'before' | 'after' | null;
+}
+
+/** One screen, or one step of a flow, from the pull request's Screenshots section. */
+export interface PipelineGalleryStep {
+  label: string;
+  images: PipelineGalleryImage[];
+}
+
 export interface PipelineInboxPr {
   number: number;
   title: string;
@@ -38,6 +49,8 @@ export interface PipelineInboxPr {
   ci: 'green' | 'red' | 'running' | 'none';
   bodySessionUrl: string | null;
   status: PipelineInboxStatus | null;
+  /** Absent on a pull request stored before the gallery existed. */
+  gallery?: PipelineGalleryStep[];
 }
 
 export interface PipelineInbox {

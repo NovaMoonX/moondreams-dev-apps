@@ -1,13 +1,13 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { ClaudeMark, GitHubMark } from '@/components/BrandMarks';
 import DetailSheet from '@/components/DetailSheet';
-import ExternalLinkText from '@/components/ExternalLinkText';
 
 import { DISABLED_CLASS } from './constants';
+import ScreenshotGallery from './ScreenshotGallery';
 import {
   AnswerFields,
-  ImageRow,
   LinkedText,
   NotSetUpLine,
   SentLine,
@@ -18,8 +18,6 @@ import {
 import {
   CI_WORDS,
   getAnswerSlots,
-  getEntryActions,
-  getEntryPrUrl,
   getPrError,
   type PipelineEntry,
 } from './pipelineUtils';
@@ -53,81 +51,50 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
   const slotPrs = new Set(slots.map((slot) => slot.prNumber));
   const entryReady = answers.getReadyCount(slots);
   const elsewhereReady = answers.getReadyCount() - entryReady;
-  const optionImages = new Set(
-    entry?.ownerItems.flatMap((item) =>
-      item.options.flatMap((option) => option.images.slice(0, 1)),
-    ) ?? [],
-  );
-  const screenshots = (entry?.screenshots ?? []).filter(
-    (src) => !optionImages.has(src),
-  );
-
-  const renderFooter = (current: PipelineEntry) => {
-    const links = getEntryActions(current);
-    const prUrl = getEntryPrUrl(current);
+  const renderFooter = () => {
     const sent = answers.lastSent.filter((pr) => slotPrs.has(pr.prNumber));
-    if (slots.length === 0 && links.length === 0 && !prUrl) return undefined;
+    if (slots.length === 0) return undefined;
     return (
       <div className='space-y-2 px-4 sm:px-0'>
-        {slots.length > 0 ? (
-          <>
-            <Button
-              type='button'
-              variant='primary'
-              className={join('w-full', DISABLED_CLASS)}
-              disabled={
-                entryReady === 0 || answers.isSending || answers.isNotSetUp
-              }
-              onClick={() => void answers.send(slots)}
-            >
-              {answers.isSending ? 'Sending…' : 'Send answers'}
-            </Button>
+        <div className='flex items-center justify-between gap-3'>
+          <p
+            role='status'
+            className='text-muted-foreground min-w-0 text-xs [overflow-wrap:anywhere]'
+          >
             {answers.isNotSetUp ? (
-              <p role='status'>
-                <NotSetUpLine />
-              </p>
+              <NotSetUpLine />
             ) : entryReady === 0 && !answers.isSending && !isAllSent ? (
-              <p role='status' className='text-muted-foreground text-xs'>
-                Pick an option or add a note first
-              </p>
+              'Pick an option or add a note first'
             ) : null}
-            {answers.sendNote ? (
-              <p role='alert'>
-                <WarningLine>{answers.sendNote}</WarningLine>
-              </p>
-            ) : null}
-            {answers.unsure.length > 0 ? (
-              <p role='alert'>
-                <UnsureLine prs={answers.unsure} />
-              </p>
-            ) : null}
-            <SentLine sent={sent} />
-            {elsewhereReady > 0 ? (
-              <p className='text-muted-foreground text-xs'>
-                {elsewhereReady} {elsewhereReady === 1 ? 'answer' : 'answers'}{' '}
-                ready to send from other sessions
-              </p>
-            ) : null}
-          </>
+          </p>
+          <Button
+            type='button'
+            variant='primary'
+            className={join('shrink-0', DISABLED_CLASS)}
+            disabled={
+              entryReady === 0 || answers.isSending || answers.isNotSetUp
+            }
+            onClick={() => void answers.send(slots)}
+          >
+            {answers.isSending ? 'Sending…' : 'Send answers'}
+          </Button>
+        </div>
+        {answers.sendNote ? (
+          <p role='alert'>
+            <WarningLine>{answers.sendNote}</WarningLine>
+          </p>
         ) : null}
-        {links.length > 0 || prUrl ? (
-          <div className='grid grid-cols-2 gap-2'>
-            {[
-              ...links,
-              ...(prUrl ? [{ label: 'Open the PR', href: prUrl }] : []),
-            ].map((action) => (
-              <Button
-                key={action.label}
-                href={action.href}
-                target='_blank'
-                rel='noreferrer'
-                variant='outline'
-                className='w-full px-2 text-xs whitespace-nowrap min-[380px]:px-4 min-[380px]:text-sm'
-              >
-                {action.label}
-              </Button>
-            ))}
-          </div>
+        {answers.unsure.length > 0 ? (
+          <p role='alert'>
+            <UnsureLine prs={answers.unsure} />
+          </p>
+        ) : null}
+        <SentLine sent={sent} />
+        {elsewhereReady > 0 ? (
+          <p className='text-muted-foreground text-xs'>
+            {elsewhereReady} {elsewhereReady === 1 ? 'answer' : 'answers'} ready
+            to send from other sessions
+          </p>
         ) : null}
       </div>
     );
@@ -138,15 +105,54 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
       isOpen={entry !== null}
       onClose={onClose}
       title={entry?.name ?? 'Session'}
-      footer={entry ? renderFooter(entry) : undefined}
+      footer={entry ? renderFooter() : undefined}
     >
       {entry ? (
-        <div className='space-y-5'>
-          <div className='flex items-start gap-2'>
-            <span className='flex pt-1.5'>
-              <StatusDot group={entry.group ?? 'finished'} />
-            </span>
-            <p className='text-muted-foreground text-sm'>{entry.lead}</p>
+        <div className='min-w-0 space-y-5 [overflow-wrap:anywhere]'>
+          <div className='space-y-2'>
+            <p className='text-muted-foreground flex items-start gap-2 text-sm'>
+              <span className='flex pt-1.5'>
+                <StatusDot group={entry.group ?? 'finished'} />
+              </span>
+              {entry.lead}
+            </p>
+            <ul className='text-muted-foreground flex flex-wrap gap-x-4 gap-y-1.5 text-xs'>
+              {entry.prs.map((pr) => (
+                <li key={pr.number} className='min-w-0'>
+                  {pr.url ? (
+                    <a
+                      href={pr.url}
+                      target='_blank'
+                      rel='noreferrer'
+                      className='hover:text-foreground inline-flex min-w-0 items-center gap-1.5 hover:underline'
+                    >
+                      <GitHubMark className='size-3.5 shrink-0' />
+                      <span className='truncate'>
+                        #{pr.number} · {pr.isDraft ? 'Draft' : 'Ready'} ·{' '}
+                        {CI_WORDS[pr.ci]}
+                      </span>
+                    </a>
+                  ) : (
+                    <span>
+                      #{pr.number} · {pr.isDraft ? 'Draft' : 'Ready'}
+                    </span>
+                  )}
+                </li>
+              ))}
+              {entry.url && !entry.isPrOnly ? (
+                <li>
+                  <a
+                    href={entry.url}
+                    target='_blank'
+                    rel='noreferrer'
+                    className='hover:text-foreground inline-flex items-center gap-1.5 hover:underline'
+                  >
+                    <ClaudeMark className='size-3.5 shrink-0' />
+                    Open the session
+                  </a>
+                </li>
+              ) : null}
+            </ul>
           </div>
 
           {slots.length > 0 ? (
@@ -193,28 +199,9 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
             </SheetSection>
           ) : null}
 
-          {entry.prs.length > 0 ? (
-            <SheetSection title='Pull requests'>
-              <ul className='space-y-2'>
-                {entry.prs.map((pr) => (
-                  <li key={pr.number} className='min-w-0'>
-                    {pr.url ? (
-                      <ExternalLinkText
-                        href={pr.url}
-                        label={`#${pr.number} ${pr.title}`}
-                      />
-                    ) : (
-                      <p className='text-foreground text-sm'>
-                        #{pr.number} {pr.title}
-                      </p>
-                    )}
-                    <p className='text-muted-foreground text-xs'>
-                      {pr.isDraft ? 'Draft' : 'Ready for review'} ·{' '}
-                      {CI_WORDS[pr.ci]}
-                    </p>
-                  </li>
-                ))}
-              </ul>
+          {entry.gallery.length > 0 ? (
+            <SheetSection title='Screenshots'>
+              <ScreenshotGallery items={entry.gallery} />
             </SheetSection>
           ) : null}
 
@@ -230,14 +217,6 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
                   </li>
                 ))}
               </ul>
-            </SheetSection>
-          ) : null}
-
-          {screenshots.length > 0 ? (
-            <SheetSection title='Latest screenshots'>
-              <ImageRow
-                cards={screenshots.map((src) => ({ src, label: null }))}
-              />
             </SheetSection>
           ) : null}
         </div>

@@ -158,6 +158,24 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       ],
       minutesAgo: 6,
     },
+    {
+      sessionId: 'session_seedWaitingTwo',
+      branch: 'claude/pinch-meal-plan',
+      state: 'waiting',
+      raisedHands: ['Should the meal plan repeat weekly by default?'],
+      minutesAgo: 25,
+    },
+    {
+      sessionId: 'session_seedWaitingThree',
+      branch: 'claude/waypoint-packing',
+      state: 'waiting',
+      raisedHands: [
+        'Packing lists copy to the next trip, or start empty?',
+        'Add the `MAPS_KEY` secret before merging.',
+        'The empty state says "Nothing to pack yet", fine?',
+      ],
+      minutesAgo: 70,
+    },
     { sessionId: 'session_seedWorking', branch: 'claude/pinch-voice', state: 'working', raisedHands: [], minutesAgo: 2 },
     { sessionId: 'session_seedQuiet', branch: 'claude/a-list-calendar', state: 'working', raisedHands: [], minutesAgo: 95 },
     { sessionId: 'session_seedIdle', branch: 'claude/waypoint-expenses', state: 'idle', raisedHands: [], minutesAgo: 300 },
@@ -181,6 +199,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     labels: ['minor'],
     ci: 'green',
     bodySessionUrl: sessionUrl,
+    gallery: [] as { label: string; images: { src: string; role: 'before' | 'after' | null }[] }[],
     status: {
       sessionUrl,
       sessionTitle,
@@ -211,6 +230,27 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
           goodToKnow: ['The undo sheet was only checked at 390px.'],
           screenshots: ['https://placehold.co/390x844.png?text=History'],
         },
+        gallery: [
+          {
+            label: '1 · Open a card',
+            images: [
+              { src: 'https://placehold.co/390x844.png?text=Card+before', role: 'before' as const },
+              { src: 'https://placehold.co/390x844.png?text=Card+after', role: 'after' as const },
+            ],
+          },
+          {
+            label: '2 · History opens',
+            images: [{ src: 'https://placehold.co/390x844.png?text=History', role: null }],
+          },
+          {
+            label: '3 · Undo a move',
+            images: [{ src: 'https://placehold.co/390x844.png?text=Undo', role: null }],
+          },
+          {
+            label: '4 · Undone',
+            images: [{ src: 'https://placehold.co/390x844.png?text=Undone', role: null }],
+          },
+        ],
       },
       {
         ...orphanPr,

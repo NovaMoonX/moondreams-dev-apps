@@ -30,9 +30,8 @@ import {
   WAITING_TEXT_CLASS,
 } from './constants';
 import IconTile from '@/ui/IconTile';
-import { EntryActions, StatusDot } from './PipelineParts';
+import { ClaudeMark, GitHubMark } from '@/components/BrandMarks';
 import {
-  getAnswerSlots,
   getPartialFailureLine,
   type PipelineEntry,
 } from './pipelineUtils';
@@ -204,12 +203,6 @@ function DashboardNav({
   const getPipelineFigure = (value: number) =>
     isPipelineUnknown ? '–' : value;
 
-  // The one solid button leads with the first entry that can be answered here.
-  const leadKey = (
-    waitingEntries.find((entry) => getAnswerSlots(entry).length > 0) ??
-    waitingEntries[0]
-  )?.key;
-
   const renderNeedsYou = () => {
     if (isPipelineUnknown || waitingEntries.length === 0) {
       const getText = () => {
@@ -245,30 +238,35 @@ function DashboardNav({
             Needs you ({waitingEntries.length})
           </h2>
         </div>
-        <ul className='divide-border divide-y'>
+        <ul className='divide-border -mx-1 divide-y'>
           {waitingEntries.slice(0, NEEDS_YOU_PREVIEW).map((entry) => (
-            <li key={entry.key} className='space-y-3 py-3 first:pt-0'>
+            <li key={entry.key}>
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-auto w-full justify-start gap-3 px-0! py-0 text-left font-normal'
-                onClick={onSelectPipeline}
+                className='h-auto w-full min-w-0 justify-start gap-3 px-1 py-3 text-left font-normal'
+                onClick={() => onAnswerEntry(entry.key)}
               >
-                <span className='min-w-0 flex-1 space-y-1'>
-                  <span className='text-foreground flex items-center gap-2 text-sm font-semibold'>
-                    <StatusDot group='waiting' />
-                    <span className='truncate'>{entry.name}</span>
+                <span className='bg-muted grid size-8 shrink-0 place-items-center rounded-lg'>
+                  {entry.isPrOnly ? (
+                    <GitHubMark className='size-4' />
+                  ) : (
+                    <ClaudeMark className='size-4' />
+                  )}
+                </span>
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block truncate text-sm font-semibold'>
+                    {entry.name}
                   </span>
-                  <span className='text-muted-foreground line-clamp-2 text-xs'>
-                    {entry.subtitle}
+                  <span className='text-muted-foreground block truncate text-xs'>
+                    {entry.asks[0] || 'Waiting on you'}
                   </span>
                 </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
               </Button>
-              <EntryActions
-                entry={entry}
-                isFilled={entry.key === leadKey}
-                onAnswer={() => onAnswerEntry(entry.key)}
-              />
             </li>
           ))}
         </ul>

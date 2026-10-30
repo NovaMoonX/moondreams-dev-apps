@@ -6,15 +6,17 @@ import { useState } from 'react';
 import StatTile from '@/components/StatTile';
 import type { PipelineState } from '@/hooks/usePipelineSync';
 
+import { ClaudeMark, GitHubMark } from '@/components/BrandMarks';
+
 import {
   CARD_CLASS,
+  LIST_CARD_CLASS,
   SURFACE_CLASS,
-  WAITING_EDGE_CLASS,
   WAITING_TEXT_CLASS,
 } from './constants';
 import IconTile from '@/ui/IconTile';
 import AnswerAllSubview from './AnswerAllSubview';
-import { EntryActions, SentLine, StatusDot } from './PipelineParts';
+import { SentLine, StatusDot } from './PipelineParts';
 import {
   formatPipelineTime,
   getAnswerSlots,
@@ -33,6 +35,9 @@ interface PipelineViewProps {
   onOpenEntry: (key: string) => void;
 }
 
+/** Waiting sessions shown before the rest fold behind "Show all". */
+const WAITING_PREVIEW = 6;
+
 const QUIET_SECTIONS: {
   key: Exclude<PipelineGroup, 'waiting'>;
   label: string;
@@ -50,6 +55,7 @@ function PipelineView({
   onOpenEntry,
 }: PipelineViewProps) {
   const [isAnsweringAll, setIsAnsweringAll] = useState(false);
+  const [isWaitingExpanded, setIsWaitingExpanded] = useState(false);
   const { sessions, inbox, isLoading, hasError, sessionsFailed, inboxFailed } =
     pipeline;
 
@@ -59,11 +65,6 @@ function PipelineView({
     ...groups.quiet,
     ...groups.finished,
   ];
-  // With no Answer all, the one solid button leads with the first entry that can be answered here.
-  const leadKey = (
-    groups.waiting.find((entry) => getAnswerSlots(entry).length > 0) ??
-    groups.waiting[0]
-  )?.key;
   const latestUpdate = Math.max(
     0,
     inbox?.updatedAt ?? 0,
@@ -82,49 +83,42 @@ function PipelineView({
     return getPartialFailureLine(sessionsFailed);
   };
 
-  const renderWaitingCard = (entry: PipelineEntry) => {
+  const renderWaitingRow = (entry: PipelineEntry) => {
     const [firstAsk = ''] = entry.asks;
-    const moreCount = entry.asks.length - 1;
+    const askCount = entry.asks.length;
     return (
-      <li
-        key={entry.key}
-        className={join(CARD_CLASS, 'space-y-3', WAITING_EDGE_CLASS)}
-      >
+      <li key={entry.key}>
         <Button
           type='button'
           variant='tertiary'
-          className='h-auto w-full justify-start gap-3 px-0! py-0 text-left font-normal'
+          className='h-auto w-full min-w-0 justify-start gap-3 rounded-none px-4 py-3 text-left font-normal'
           onClick={() => onOpenEntry(entry.key)}
         >
-          <span className='min-w-0 flex-1 space-y-1'>
-            <span className='text-foreground block truncate text-base font-semibold'>
+          <IconTile>
+            {entry.isPrOnly ? (
+              <GitHubMark className='size-5' />
+            ) : (
+              <ClaudeMark className='size-5' />
+            )}
+          </IconTile>
+          <span className='min-w-0 flex-1'>
+            <span className='text-foreground block truncate text-sm font-semibold'>
               {entry.name}
             </span>
-            <span className='text-muted-foreground flex items-center gap-2 text-xs'>
-              <StatusDot group='waiting' />
-              Waiting since {entry.time}
+            <span className='text-muted-foreground block truncate text-xs'>
+              {firstAsk || 'Waiting on you'}
             </span>
-            {firstAsk ? (
-              <span className='text-foreground line-clamp-2 pt-1 text-sm'>
-                {firstAsk}
-              </span>
-            ) : null}
-            {moreCount > 0 ? (
-              <span className='text-muted-foreground block text-xs font-medium'>
-                +{moreCount} more
-              </span>
-            ) : null}
+            <span className='text-muted-foreground flex items-center gap-1.5 pt-0.5 text-xs'>
+              <StatusDot group='waiting' />
+              {entry.time}
+              {askCount >= 2 ? ` · ${askCount} asks` : ''}
+            </span>
           </span>
           <ChevronRight
             className='text-muted-foreground size-4 shrink-0'
             aria-hidden='true'
           />
         </Button>
-        <EntryActions
-          entry={entry}
-          isFilled={answerCount === 0 && entry.key === leadKey}
-          onAnswer={() => onOpenEntry(entry.key)}
-        />
       </li>
     );
   };
@@ -227,19 +221,45 @@ function PipelineView({
 
       {groups.waiting.length > 0 ? (
         <section className='space-y-3'>
-          {renderSectionTitle('Waiting on you', groups.waiting.length)}
-          {answerCount > 0 ? (
+          <div className='flex items-center justify-between gap-3'>
+            <div className='flex items-baseline gap-2'>
+              <h2 className='text-base font-semibold'>Waiting on you</h2>
+              <span className='text-muted-foreground text-sm tabular-nums'>
+                {groups.waiting.length}
+              </span>
+            </div>
+            {answerCount > 0 ? (
+              <Button
+                type='button'
+                variant='outline'
+                size='sm'
+                className="relative before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                onClick={() => setIsAnsweringAll(true)}
+              >
+                Answer all ({answerCount})
+              </Button>
+            ) : null}
+          </div>
+          <SentLine sent={answers.lastSent} />
+          <ul className={LIST_CARD_CLASS}>
+            {(isWaitingExpanded
+              ? groups.waiting
+              : groups.waiting.slice(0, WAITING_PREVIEW)
+            ).map(renderWaitingRow)}
+          </ul>
+          {groups.waiting.length > WAITING_PREVIEW ? (
             <Button
               type='button'
-              variant='primary'
-              className='w-full sm:w-auto'
-              onClick={() => setIsAnsweringAll(true)}
+              variant='tertiary'
+              size='sm'
+              className='mx-auto flex'
+              onClick={() => setIsWaitingExpanded((current) => !current)}
             >
-              Answer all ({answerCount})
+              {isWaitingExpanded
+                ? 'Show fewer'
+                : `Show all ${groups.waiting.length}`}
             </Button>
           ) : null}
-          <SentLine sent={answers.lastSent} />
-          <ul className='space-y-3'>{groups.waiting.map(renderWaitingCard)}</ul>
         </section>
       ) : null}
 

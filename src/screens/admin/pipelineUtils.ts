@@ -1,4 +1,5 @@
 import type {
+  PipelineGalleryImage,
   PipelineInbox,
   PipelineInboxPr,
   PipelineOwnerItem,
@@ -41,6 +42,14 @@ export interface PipelineOwnerEntryItem {
   options: PipelineOption[];
 }
 
+export interface GalleryItem {
+  id: string;
+  /** Its place in a flow, when the author numbered the screens ("2 · Pick a day"). */
+  step: number | null;
+  label: string;
+  shots: PipelineGalleryImage[];
+}
+
 export interface PipelineEntry {
   key: string;
   name: string;
@@ -58,7 +67,8 @@ export interface PipelineEntry {
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
   goodToKnow: string[];
-  screenshots: string[];
+  /** Every screenshot of the pull requests' bodies in the order written; the status comment's line of the latest push when a body has none. */
+  gallery: GalleryItem[];
   at: number;
 }
 
@@ -128,6 +138,35 @@ const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
       })),
     })),
   );
+
+const STEP_LABEL = /^(\d+)\s*[.)·:–—-]\s*(.+)$/;
+
+const toGalleryItems = (prs: PipelineInboxPr[]): GalleryItem[] =>
+  prs.flatMap((pr) => {
+    const steps = (pr.gallery ?? []).flatMap((step, index) => {
+      const shots = step.images.filter((image) =>
+        image.src.startsWith('https://'),
+      );
+      const numbered = STEP_LABEL.exec(step.label);
+      return shots.length === 0
+        ? []
+        : [
+            {
+              id: `${pr.number}:${index}`,
+              step: numbered ? Number(numbered[1]) : null,
+              label: numbered ? numbered[2] : step.label,
+              shots,
+            },
+          ];
+    });
+    if (steps.length > 0) return steps;
+    return onlyHttps(pr.status?.screenshots ?? []).map((src, index) => ({
+      id: `${pr.number}:status-${index}`,
+      step: null,
+      label: 'Screenshot',
+      shots: [{ src, role: null }],
+    }));
+  });
 
 const toSentence = (text: string) =>
   text.trim().replace(/^./, (first) => first.toUpperCase());
@@ -219,9 +258,7 @@ function toSessionEntry(
     prs: safePrs,
     ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
-    screenshots: onlyHttps(
-      unique(sessionPrs.flatMap((pr) => pr.status?.screenshots ?? [])),
-    ),
+    gallery: toGalleryItems(sessionPrs),
     at: session.updatedAt,
   };
 }
@@ -246,7 +283,7 @@ function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
     prs: [safePr],
     ownerItems,
     goodToKnow: status?.goodToKnow ?? [],
-    screenshots: onlyHttps(status?.screenshots ?? []),
+    gallery: toGalleryItems([pr]),
     at: status?.updatedAt ?? 0,
   };
 }

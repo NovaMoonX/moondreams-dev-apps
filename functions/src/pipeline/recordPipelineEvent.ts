@@ -84,6 +84,36 @@ const toStatus = (value: unknown) => {
   };
 };
 
+const MAX_STEPS = 30;
+const MAX_STEP_IMAGES = 3;
+const ROLES = ['before', 'after'];
+
+const toGallery = (value: unknown) =>
+  (Array.isArray(value) ? value : [])
+    .slice(0, MAX_STEPS)
+    .filter(isObject)
+    .map((step) => ({
+      label: text(step.label).slice(0, 120),
+      images: (Array.isArray(step.images) ? step.images : [])
+        .slice(0, MAX_STEP_IMAGES)
+        .filter(isObject)
+        .flatMap((image) => {
+          const src = httpsUrl(image.src);
+          return src === null
+            ? []
+            : [
+                {
+                  src,
+                  role:
+                    typeof image.role === 'string' && ROLES.includes(image.role)
+                      ? image.role
+                      : null,
+                },
+              ];
+        }),
+    }))
+    .filter((step) => step.images.length > 0);
+
 const toPr = (pr: Json) => ({
   number: typeof pr.number === 'number' ? Math.trunc(pr.number) : 0,
   title: text(pr.title),
@@ -95,6 +125,7 @@ const toPr = (pr: Json) => ({
   ci: typeof pr.ci === 'string' && CIS.includes(pr.ci) ? pr.ci : 'none',
   bodySessionUrl: sessionUrl(pr.bodySessionUrl),
   status: toStatus(pr.status),
+  gallery: toGallery(pr.gallery),
 });
 
 const isKeyValid = (given: unknown, expected: string) => {

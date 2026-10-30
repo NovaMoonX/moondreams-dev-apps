@@ -87,6 +87,18 @@ export interface PrStatus {
   updatedAt: string;
 }
 
+export interface GalleryImage {
+  src: string;
+  /** From the table's column title when it says so ("Before", "After"). */
+  role: 'before' | 'after' | null;
+}
+
+/** One screen (or one step of a flow) from the PR body's Screenshots section, with every image shown for it. */
+export interface GalleryStep {
+  label: string;
+  images: GalleryImage[];
+}
+
 export interface InboxPr {
   number: number;
   title: string;
@@ -99,6 +111,8 @@ export interface InboxPr {
   /** The session link in the PR body's attribution, for PRs whose status comment predates the session marker. */
   bodySessionUrl: string | null;
   status: PrStatus | null;
+  /** Every screenshot in the PR body, in the order the author listed them (the order a person meets the screens). */
+  gallery: GalleryStep[];
 }
 
 const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
@@ -186,6 +200,110 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     screenshots: screenshots ?? [],
     updatedAt,
   };
+}
+
+
+const MAX_STEPS = 30;
+const MAX_STEP_IMAGES = 3;
+const MAX_LABEL = 120;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\((https:\/\/[^\s)]+)\)/g;
+const HTML_IMAGE = /<img[^>]*\bsrc="(https:\/\/[^"\s]+)"/g;
+
+const toImages = (cell: string, role: GalleryImage['role']): GalleryImage[] =>
+  [...cell.matchAll(MARKDOWN_IMAGE), ...cell.matchAll(HTML_IMAGE)].map(
+    (match) => ({ src: match[1], role }),
+  );
+
+const toLabel = (text: string) =>
+  toPlain(
+    text
+      .replace(MARKDOWN_IMAGE, '')
+      .replace(/<[^>]*>/g, '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  ).slice(0, MAX_LABEL);
+
+const toCells = (line: string) =>
+  line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map((cell) => cell.trim());
+
+const getRole = (heading: string): GalleryImage['role'] => {
+  const word = heading.toLowerCase();
+  if (word.includes('before')) return 'before';
+  if (word.includes('after')) return 'after';
+  return null;
+};
+
+/** The lines of the body's `## Screenshots` section, up to the next `##` heading. */
+const screenshotLines = (body: string) => {
+  const all = lines(body);
+  const start = all.findIndex((line) => /^##\s+Screenshots\b/i.test(line));
+  if (start === -1) return [];
+  const rest = all.slice(start + 1);
+  const end = rest.findIndex((line) => /^##\s/.test(line));
+  return end === -1 ? rest : rest.slice(0, end);
+};
+
+/**
+ * Every screenshot in a PR body's Screenshots section, one step per table row (its first cell is the
+ * name, the other cells' titles say Before or After) or per image line outside a table, in the order
+ * written. This is the whole set, unlike the status comment's line of the latest push.
+ */
+export function parseGallery(body: string | null): GalleryStep[] {
+  const rows = screenshotLines(body ?? '');
+  const result = rows.reduce<{
+    steps: GalleryStep[];
+    headings: string[];
+    caption: string;
+  }>(
+    (acc, line) => {
+      const isRow = line.trim().startsWith('|');
+      if (isRow) {
+        const cells = toCells(line);
+        const isSeparator = cells.every((cell) => /^:?-{2,}:?$/.test(cell));
+        if (isSeparator) return acc;
+        const isHeader = acc.headings.length === 0;
+        if (isHeader) return { ...acc, headings: cells };
+        const [name = '', ...rest] = cells;
+        const images = rest
+          .flatMap((cell, index) =>
+            toImages(cell, getRole(acc.headings[index + 1] ?? '')),
+          )
+          .slice(0, MAX_STEP_IMAGES);
+        return images.length === 0
+          ? acc
+          : {
+              ...acc,
+              steps: [
+                ...acc.steps,
+                { label: toLabel(name) || 'Screenshot', images },
+              ],
+            };
+      }
+      const images = toImages(line, null).slice(0, MAX_STEP_IMAGES);
+      if (images.length > 0) {
+        const alt = /!\[([^\]]*)\]/.exec(line)?.[1] ?? '';
+        return {
+          ...acc,
+          headings: [],
+          steps: [
+            ...acc.steps,
+            { label: toLabel(alt) || acc.caption || 'Screenshot', images },
+          ],
+        };
+      }
+      const words = toLabel(line);
+      return { ...acc, headings: [], caption: words || acc.caption };
+    },
+    { steps: [], headings: [], caption: '' },
+  );
+  return result.steps.slice(0, MAX_STEPS);
 }
 
 interface Session {
@@ -332,7 +450,14 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
     ]),
   );
   const allShots = session.prs.flatMap((pr) =>
-    (pr.status?.screenshots ?? []).map(
+    (pr.gallery.length > 0
+      ? pr.gallery.flatMap((step) =>
+          step.images
+            .filter((image) => image.role !== 'before')
+            .map((image) => image.src),
+        )
+      : (pr.status?.screenshots ?? [])
+    ).map(
       (src) =>
         `<a href="${pr.url}"><img src="${src}" width="120" alt="#${pr.number}"></a>`,
     ),

@@ -5,17 +5,15 @@ import { useState, type ReactNode } from 'react';
 
 import FallbackImage from '@/components/FallbackImage';
 import HelpTip from '@/components/HelpTip';
+import ImageViewer from '@/components/ImageViewer';
 import NoteTextField from '@/components/NoteTextField';
 import { MAX_ANSWER_NOTE } from '@lib/admin/pipelineAnswers';
 
 import { WAITING_DOT_CLASS } from './constants';
 import {
-  getAnswerSlots,
-  getEntryActions,
   splitLinks,
   stripLinks,
   type AnswerSlot,
-  type PipelineEntry,
   type PipelineGroup,
 } from './pipelineUtils';
 import {
@@ -40,62 +38,6 @@ export function StatusDot({ group }: { group: PipelineGroup }) {
   );
 }
 
-/** The owner's next steps for an entry as buttons: they share a row when the labels fit and stack on the narrowest phones. */
-export function EntryActions({
-  entry,
-  isFilled,
-  onAnswer,
-}: {
-  entry: PipelineEntry;
-  /** Only the one action the screen leads with is solid; the rest are outlined. */
-  isFilled: boolean;
-  /** Opens the entry's questions ready to answer. */
-  onAnswer: () => void;
-}) {
-  const links = getEntryActions(entry);
-  const canAnswer = getAnswerSlots(entry).length > 0;
-  const count = links.length + (canAnswer ? 1 : 0);
-  const isClaudeOnly = !canAnswer && links.length === 0 && entry.asks.length > 0;
-  if (count === 0 && !isClaudeOnly) return null;
-  return (
-    <div className='space-y-2'>
-      <div
-        className={join('grid gap-2', count > 1 && 'min-[380px]:grid-cols-2')}
-      >
-        {canAnswer ? (
-          <Button
-            type='button'
-            variant={isFilled ? 'primary' : 'outline'}
-            className='w-full whitespace-nowrap'
-            onClick={onAnswer}
-          >
-            Answer
-          </Button>
-        ) : null}
-        {links.map((action, index) => (
-          <Button
-            key={action.label}
-            href={action.href}
-            target='_blank'
-            rel='noreferrer'
-            variant={
-              isFilled && !canAnswer && index === 0 ? 'primary' : 'outline'
-            }
-            className='w-full whitespace-nowrap'
-          >
-            {action.label}
-          </Button>
-        ))}
-      </div>
-      {isClaudeOnly ? (
-        <p className='text-muted-foreground text-xs'>
-          Answer this one in Claude
-        </p>
-      ) : null}
-    </div>
-  );
-}
-
 export function LinkedText({ text }: { text: string }) {
   return (
     <>
@@ -106,7 +48,7 @@ export function LinkedText({ text }: { text: string }) {
             href={part.href}
             target='_blank'
             rel='noreferrer'
-            className='text-primary hover:underline'
+            className='text-primary [overflow-wrap:anywhere] hover:underline'
           >
             {part.text}
           </a>
@@ -115,41 +57,6 @@ export function LinkedText({ text }: { text: string }) {
         ),
       )}
     </>
-  );
-}
-
-interface ImageCard {
-  src: string;
-  label: string | null;
-}
-
-export function ImageRow({ cards }: { cards: ImageCard[] }) {
-  if (cards.length === 0) return null;
-  return (
-    <ul className='-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1'>
-      {cards.map((card, index) => (
-        <li key={`${card.src}-${index}`} className='w-40 shrink-0 snap-start'>
-          <a
-            href={card.src}
-            target='_blank'
-            rel='noreferrer'
-            className='block space-y-1.5'
-            aria-label={card.label ?? 'Open screenshot full size'}
-          >
-            <FallbackImage
-              src={card.src}
-              alt=''
-              className='border-border h-28 w-full rounded-lg border object-cover'
-            />
-            {card.label ? (
-              <span className='text-foreground line-clamp-2 text-xs'>
-                {card.label}
-              </span>
-            ) : null}
-          </a>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -253,6 +160,7 @@ export function AnswerFields({
   onNote,
 }: AnswerFieldsProps) {
   const [isNoteOpen, setIsNoteOpen] = useState(false);
+  const [previewAt, setPreviewAt] = useState<number | null>(null);
   const options = slot.options.slice(0, LETTERS.length);
   const chosen = options.findIndex(
     (option) => getChoiceText(option.label) === draft.choice,
@@ -264,6 +172,10 @@ export function AnswerFields({
   const indexed = options.map((option, index) => ({ option, index }));
   const plain = indexed.filter(({ option }) => option.images.length === 0);
   const pictured = indexed.filter(({ option }) => option.images.length > 0);
+  const previews = pictured.map(({ option, index }) => ({
+    src: option.images[0],
+    caption: `${LETTERS[index]} · ${stripLinks(option.label)}`,
+  }));
 
   const getNoteLabel = () => {
     if (slot.isReply) return 'Your reply';
@@ -272,7 +184,7 @@ export function AnswerFields({
 
   return (
     <div className='space-y-2'>
-      <p className='text-foreground text-sm font-medium'>
+      <p className='text-foreground text-sm font-medium [overflow-wrap:anywhere]'>
         <LinkedText text={slot.text} />
       </p>
       {isSent ? (
@@ -308,21 +220,15 @@ export function AnswerFields({
             </div>
           ) : null}
           {pictured.length > 0 ? (
-            <ul
-              aria-label='Your choice'
-              className='-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1'
-            >
-              {pictured.map(({ option, index }) => (
-                <li
-                  key={`${option.label}-${index}`}
-                  className='relative w-40 shrink-0 snap-start'
-                >
+            <ul aria-label='Your choice' className='grid grid-cols-2 gap-3'>
+              {pictured.map(({ option, index }, pictureIndex) => (
+                <li key={`${option.label}-${index}`} className='relative min-w-0'>
                   <Button
                     type='button'
                     variant='tertiary'
                     aria-pressed={index === chosen}
                     className={join(
-                      'h-auto w-full flex-col items-stretch justify-start gap-1.5 rounded-xl border p-1.5 text-left font-normal',
+                      'h-auto w-full min-w-0 flex-col items-stretch justify-start gap-1.5 rounded-xl border p-1.5 text-left font-normal',
                       getEdgeClass(index === chosen),
                     )}
                     onClick={() => toggle(index)}
@@ -330,24 +236,33 @@ export function AnswerFields({
                     <FallbackImage
                       src={option.images[0]}
                       alt=''
-                      className='h-28 w-full rounded-lg object-cover'
+                      className='h-28 w-full rounded-lg object-cover object-top'
                     />
-                    <span className='text-foreground line-clamp-2 px-1 pb-0.5 text-xs font-medium'>
+                    <span className='text-foreground line-clamp-2 px-1 pb-0.5 text-xs font-medium [overflow-wrap:anywhere]'>
                       {LETTERS[index]} · {stripLinks(option.label)}
                     </span>
                   </Button>
-                  <a
-                    href={option.images[0]}
-                    target='_blank'
-                    rel='noreferrer'
-                    aria-label={`Open ${LETTERS[index]} full size`}
-                    className="bg-background/85 text-foreground absolute top-2.5 right-2.5 flex size-7 items-center justify-center rounded-full shadow-sm after:absolute after:-inset-2 after:content-['']"
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='icon'
+                    rounded='full'
+                    aria-label={`View ${LETTERS[index]} full screen`}
+                    className="bg-background/85 text-foreground absolute top-2.5 right-2.5 size-7 min-w-7 p-0 shadow-sm after:absolute after:-inset-2 after:content-['']"
+                    onClick={() => setPreviewAt(pictureIndex)}
                   >
                     <Maximize2 className='size-3.5' aria-hidden='true' />
-                  </a>
+                  </Button>
                 </li>
               ))}
             </ul>
+          ) : null}
+          {previewAt !== null ? (
+            <ImageViewer
+              images={previews}
+              startIndex={previewAt}
+              onClose={() => setPreviewAt(null)}
+            />
           ) : null}
           {isNoteShown ? (
             <NoteTextField

@@ -12,6 +12,7 @@ import {
   STATUS_MARKER,
   buildInbox,
   findSessionLink,
+  parseGallery,
   parseStatus,
   summarizeCi,
   type CheckRun,
@@ -111,6 +112,7 @@ const readPr = async (pull: ApiPull): Promise<InboxPr> => {
     ci: await getCi(pull.head.sha),
     bodySessionUrl: findSessionLink(pull.body),
     status: status ? parseStatus(status.body, status.updated_at) : null,
+    gallery: parseGallery(pull.body),
   };
 };
 
@@ -169,15 +171,17 @@ const writeInbox = async (body: string) => {
   console.log(`Created #${created.number}`);
 };
 
-type SavedPr = Omit<InboxPr, 'status'> & {
+type SavedPr = Omit<InboxPr, 'status' | 'gallery'> & {
+  body?: string | null;
   statusBody: string | null;
   statusUpdatedAt: string;
 };
 
 const readSaved = (path: string): InboxPr[] =>
   (JSON.parse(readFileSync(path, 'utf8')) as SavedPr[]).map(
-    ({ statusBody, statusUpdatedAt, ...pr }) => ({
+    ({ body, statusBody, statusUpdatedAt, ...pr }) => ({
       ...pr,
+      gallery: parseGallery(body ?? null),
       status: statusBody ? parseStatus(statusBody, statusUpdatedAt) : null,
     }),
   );
@@ -213,6 +217,7 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
     })),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
   },
+  gallery: pr.gallery.map((step) => ({ ...step, label: fromPlain(step.label) })),
 });
 
 const reportToPipeline = async (list: InboxPr[]) => {

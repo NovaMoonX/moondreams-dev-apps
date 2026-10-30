@@ -106,7 +106,10 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       size='sm'
       aria-label='Your account'
       aria-expanded={isOpen}
-      className={join('gap-2', className)}
+      className={join(
+        "gap-2 max-sm:relative max-sm:min-w-0 max-sm:px-0 max-sm:after:absolute max-sm:after:-inset-1.5 max-sm:after:content-['']",
+        className,
+      )}
       onClick={() => setIsOpen((open) => !open)}
     >
       <UserAvatar user={user} size='sm' />
