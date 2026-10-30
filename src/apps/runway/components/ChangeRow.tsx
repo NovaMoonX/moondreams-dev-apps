@@ -1,5 +1,6 @@
 import { FileText, Undo2 } from 'lucide-react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import InlineNotice from '@/components/InlineNotice';
@@ -52,6 +53,18 @@ function ChangeRow({
         <span className='text-muted-foreground text-xs'>
           {formatDateTime(change.createdAt)}
         </span>
+        {move !== null && !isUndone && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="relative ml-auto gap-1 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            onClick={() => void takeBack()}
+          >
+            <Undo2 className='h-3.5 w-3.5' aria-hidden='true' />
+            {MOVE_WORDS.undoShort}
+          </Button>
+        )}
       </div>
       {change.isUnreadable ? (
         <InlineNotice tone='info'>
@@ -74,18 +87,6 @@ function ChangeRow({
       )}
       {isUndone && (
         <p className='text-muted-foreground text-sm'>{MOVE_WORDS.undoneRow}</p>
-      )}
-      {move !== null && !isUndone && (
-        <ActionChips
-          actions={[
-            {
-              key: 'undo',
-              icon: <Undo2 className='h-4 w-4' />,
-              label: MOVE_WORDS.undoThis,
-              onClick: () => void takeBack(),
-            },
-          ]}
-        />
       )}
       {confirmedDayKey !== null && (
         <ActionChips

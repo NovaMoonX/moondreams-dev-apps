@@ -1203,6 +1203,7 @@ export const MOVE_WORDS = {
   moveAllHidden: 'Move all of it',
   freeToSpendNow: 'Free to Spend',
   undo: 'Undo',
+  undoShort: 'Undo',
   undoThis: 'Undo this move',
   undoTitle: 'Undo this move?',
   undoneRow: 'Undone',
