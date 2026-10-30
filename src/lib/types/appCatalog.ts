@@ -29,6 +29,8 @@ export interface AppMetadata {
   description: string;
   status: AppStatus;
   isRestricted: boolean;
+  /** A restricted app people without access can see on Home and ask for. Stored `boolean | null`; missing reads as false. */
+  isRequestable: boolean;
   allowedUsers: string[];
   createdAt?: string;
   updatedAt?: string;
@@ -49,4 +51,12 @@ export interface UserPrefs {
   /** Oldest star first, so a new star joins the end of the starred group. */
   starredAppIds: string[];
   updatedAt: number;
+}
+
+/** The public face of an app open to requests at `appListings/{appId}`: readable by every member, so it carries no access list. */
+export interface AppListing {
+  id: AppId;
+  name: string;
+  description: string;
+  path: string;
 }

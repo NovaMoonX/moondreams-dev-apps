@@ -160,6 +160,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
                 path: app.path,
                 status: 'draft',
                 isRestricted: false,
+                isRequestable: false,
                 allowedUsers: [],
                 createdAt: app.createdAt
                   ? new Date(app.createdAt).toISOString()

@@ -1,11 +1,13 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
+import { useQueries } from '@tanstack/react-query';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import AppLogo from '@/components/AppLogo';
 import SearchInput from '@/components/SearchInput';
 import useNow from '@/hooks/useNow';
+import { accessRequestsQueryOptions, isOnAccessList } from '@lib/accessRequests/accessRequests';
 import { getActiveSince } from '@lib/appUsage/appUsage';
 import type { AppUsage } from '@lib/appUsage/appUsage';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
@@ -95,11 +97,22 @@ function DashboardNav({
       app.id.toLowerCase().includes(normalizedSearch),
   );
 
+  const requestQueries = useQueries({ queries: apps.map((app) => accessRequestsQueryOptions(app.id)) });
+  const getOpenRequestCount = (app: AppMetadata) =>
+    (requestQueries[apps.indexOf(app)]?.data ?? []).filter(
+      (request) => request.dismissedAt === null && !isOnAccessList(app.allowedUsers, request.uid, request.email),
+    ).length;
+
   const getAppMeta = (app: AppMetadata) => {
     if (isLoading) return ['…'];
     if (isUsersError || failedAppIds.includes(app.id)) return ["Couldn't load"];
     const rows = getUsageRows(usageByAppId[app.id], profilesByUid, activeSince);
-    return [`${rows.length} started`, `${rows.filter((row) => row.isActive).length} active`];
+    const askedCount = getOpenRequestCount(app);
+    return [
+      `${rows.length} started`,
+      `${rows.filter((row) => row.isActive).length} active`,
+      ...(askedCount > 0 ? [`${askedCount} asked`] : []),
+    ];
   };
   const getAppSubtitle = (app: AppMetadata) => {
     const path = `/${app.path.replace(/^\//, '') || app.id}`;

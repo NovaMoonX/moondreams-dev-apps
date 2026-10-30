@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-30 | shared | A screenshot harness (`src/__harness.tsx`) rode into a PR through `git add src` | The harness files are in `.gitignore`, so no add can pick them up | `.gitignore` | changed |
 | 2026-10-30 | shared | Owner: the inbox still showed a question already answered in chat, after I said nothing was waiting | Answering a question updates every status comment that asked it in the same turn, code change or not; the closing card's 🚩 list is read from the inbox issue | `orchestrate/SKILL.md`, `CLAUDE.md` | changed |
 | 2026-10-30 | shared | Owner: a press and hold was built inside Home's tile, though a phone-first site will want it everywhere | Shared-first now covers what other apps are likely to need, not only what one already does; the technical reviewer flags gestures, timers and storage helpers written inside a component | `CLAUDE.md`, `code.md`, `technical-reviewer.md` | changed |
 | 2026-10-30 | shared | Owner: the account page's accounts section didn't line up with the sections around it | A settings page uses `SettingsRow` in every section (`onClick` for a tappable row); the design reviewer measures each row's icon and control edges | `design-ux.md`, `design-reviewer.md`, `SettingsRow` | changed |

@@ -26,6 +26,7 @@ import { APP_REGISTRY_ID_MAP, orderApps } from '@lib/app';
 import { db, isUsingFirebaseEmulators } from '@lib/firebase/config';
 import {
   normalizeAppStatus,
+  type AppListing,
   type AppMetadata,
   type UserPrefs,
 } from '@lib/types/appCatalog';
@@ -48,6 +49,7 @@ function normalizeAppMetadata(
     description: data.description?.trim() || registryEntry?.description || '',
     status: normalizeAppStatus(data.status ?? 'draft'),
     isRestricted: Boolean(data.isRestricted),
+    isRequestable: data.isRequestable === true,
     allowedUsers: Array.isArray(data.allowedUsers)
       ? data.allowedUsers.map(String)
       : [],
@@ -168,8 +170,8 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
         },
         (error) => {
           console.error('Failed to load app catalog:', error);
+          // One refused query keeps what the others found, so a person's own apps never vanish with it.
           if (isActive) {
-            setAllApps([]);
             markQueryResolved(index);
           }
         },
@@ -244,6 +246,29 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   }, [allApps, isAdmin, user]);
 
   const apps = useMemo(() => orderApps(visibleApps, starredAppIds), [visibleApps, starredAppIds]);
+  const [listings, setListings] = useState<{ uid: string; items: AppListing[] } | null>(null);
+  const isListingReader = uid !== null && !canSeeAllApps(isAdmin);
+
+  useEffect(() => {
+    if (!isListingReader || uid === null) return;
+    return onSnapshot(
+      collection(db, 'appListings'),
+      (snapshot) =>
+        setListings({ uid, items: snapshot.docs.map((docSnap) => docSnap.data() as AppListing) }),
+      (error) => console.error('Failed to load apps you can ask for:', error),
+    );
+  }, [isListingReader, uid]);
+
+  const requestableApps = useMemo(
+    () =>
+      isListingReader && listings !== null && listings.uid === uid
+        ? orderApps(
+            listings.items.filter((listing) => !visibleApps.some((visible) => visible.id === listing.id)),
+            [],
+          )
+        : [],
+    [isListingReader, listings, uid, visibleApps],
+  );
 
   const updateAppMetadata = useCallback(
     async (appId: string, payload: Partial<AppMetadata>) => {
@@ -272,6 +297,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   const value = useMemo<AppCatalogContextValue>(
     () => ({
       apps,
+      requestableApps,
       starredAppIds,
       setAppStarred,
       allApps,
@@ -279,7 +305,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
       loading,
       updateAppMetadata,
     }),
-    [apps, starredAppIds, setAppStarred, allApps, appPathMap, loading, updateAppMetadata],
+    [apps, requestableApps, starredAppIds, setAppStarred, allApps, appPathMap, loading, updateAppMetadata],
   );
 
   return (
