@@ -1,3 +1,4 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
@@ -19,7 +20,7 @@ import {
 } from '@lib/admin/firebaseUsageQueries';
 import type { AppMetadata } from '@lib/types/appCatalog';
 
-import { CARD_CLASS } from './constants';
+import { CARD_CLASS, SURFACE_CLASS } from './constants';
 
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
@@ -278,9 +279,18 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
 
   if (!query.data) {
     return (
-      <p className={`${CARD_CLASS} text-foreground text-sm`}>
-        {getFailureText(query.error)}
-      </p>
+      <div className={`${CARD_CLASS} space-y-3`}>
+        <p className='text-foreground text-sm'>{getFailureText(query.error)}</p>
+        <Button
+          type='button'
+          variant='outline'
+          size='sm'
+          loading={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          Try again
+        </Button>
+      </div>
     );
   }
 
@@ -295,6 +305,7 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
     <div className='max-w-3xl space-y-6'>
       <div className='grid grid-cols-2 gap-3'>
         <StatTile
+          className={SURFACE_CLASS}
           label='Estimated this month'
           value={formatCost(usage.projectedCostUsd)}
           help={
@@ -308,6 +319,7 @@ function FirebaseUsageView({ apps }: FirebaseUsageViewProps) {
           }
         />
         <StatTile
+          className={SURFACE_CLASS}
           label='So far this month'
           value={formatCost(usage.monthToDateCostUsd)}
         />

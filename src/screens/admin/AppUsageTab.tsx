@@ -1,4 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -16,9 +17,13 @@ import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
 import {
   CARD_CLASS,
+  LIST_CARD_CLASS,
+  SURFACE_CLASS,
   USAGE_PREVIEW_ROWS,
   USAGE_SEARCH_THRESHOLD,
 } from './constants';
+import CountedNote from './CountedNote';
+import IconTile from './IconTile';
 import { getUsageRows } from './usageRows';
 
 type UsageFilter = 'started' | 'active';
@@ -85,8 +90,13 @@ function AppUsageTab({
   return (
     <div className='space-y-6'>
       <div className='grid grid-cols-2 gap-3'>
-        <StatTile label='Started using' value={getCount(startedRows.length)} />
         <StatTile
+          className={SURFACE_CLASS}
+          label='Started using'
+          value={getCount(startedRows.length)}
+        />
+        <StatTile
+          className={SURFACE_CLASS}
           label='Active'
           value={getCount(activeRows.length)}
           help={
@@ -103,12 +113,17 @@ function AppUsageTab({
         <div className='space-y-1'>
           <h3 className='text-foreground text-base font-semibold'>Members</h3>
           <p className='text-muted-foreground text-sm'>
-            Who has opened {app.name}, newest first.
+            Who has opened {app.name},{' '}
+            {filter === 'active'
+              ? 'most recently active first'
+              : 'newest first'}
+            .
           </p>
         </div>
 
         <PillGroup<UsageFilter>
           label='Show members'
+          isThin
           value={filter}
           onChange={setFilter}
           options={[
@@ -127,16 +142,13 @@ function AppUsageTab({
 
         {visibleRows.length === 0 ? (
           <div className={`${CARD_CLASS} flex items-center gap-3`}>
-            <span
-              aria-hidden='true'
-              className='bg-muted text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl'
-            >
+            <IconTile>
               <Users className='size-5' />
-            </span>
+            </IconTile>
             <p className='text-muted-foreground text-sm'>{getEmptyMessage()}</p>
           </div>
         ) : (
-          <ul className='bg-card border-border/60 divide-border/60 divide-y rounded-2xl border px-4 shadow-sm'>
+          <ul className={join(LIST_CARD_CLASS, 'px-4')}>
             {visibleRows.map((row) => (
               <li key={row.uid} className='flex items-center gap-3 py-3'>
                 <UserAvatar user={row.profile} size='sm' />
@@ -175,14 +187,11 @@ function AppUsageTab({
           </Button>
         ) : null}
 
-        <details className='text-muted-foreground text-xs'>
-          <summary className='cursor-pointer py-1'>How this is counted</summary>
-          <p className='pt-1'>
-            Members show up the first time they open {app.name} after tracking
-            began, dated from their oldest data there. Anyone who hasn&apos;t
-            been back yet isn&apos;t counted.
-          </p>
-        </details>
+        <CountedNote>
+          Members show up the first time they open {app.name} after tracking
+          began, dated from their oldest data there. Anyone who hasn&apos;t been
+          back yet isn&apos;t counted.
+        </CountedNote>
       </section>
     </div>
   );

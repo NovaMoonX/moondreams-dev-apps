@@ -1,11 +1,13 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Workflow } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useState } from 'react';
 
 import StatTile from '@/components/StatTile';
 import type { PipelineState } from '@/hooks/usePipelineSync';
 
-import { CARD_CLASS } from './constants';
+import { CARD_CLASS, SURFACE_CLASS } from './constants';
+import IconTile from './IconTile';
 import PipelineSheet from './PipelineSheet';
 import { EntryActions, StatusDot } from './PipelineParts';
 import {
@@ -62,11 +64,17 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
       : "Pull requests couldn't load.";
   };
 
-  const renderWaitingCard = (entry: PipelineEntry) => {
+  const renderWaitingCard = (entry: PipelineEntry, index: number) => {
     const [firstAsk = ''] = entry.asks;
     const moreCount = entry.asks.length - 1;
     return (
-      <li key={entry.key} className={`${CARD_CLASS} space-y-3`}>
+      <li
+        key={entry.key}
+        className={join(
+          CARD_CLASS,
+          'space-y-3 border-l-2 border-l-indigo-500 dark:border-l-indigo-400',
+        )}
+      >
         <Button
           type='button'
           variant='tertiary'
@@ -97,7 +105,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
             aria-hidden='true'
           />
         </Button>
-        <EntryActions entry={entry} />
+        <EntryActions entry={entry} isFilled={index === 0} />
       </li>
     );
   };
@@ -137,6 +145,8 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
   );
 
   const isEmpty = allEntries.length === 0;
+  const isUnknown = isLoading || hasError;
+  const getFigure = (count: number) => (isUnknown ? '–' : count);
 
   return (
     <div className='max-w-3xl space-y-6'>
@@ -146,25 +156,48 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
         </p>
       ) : null}
 
+      <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
+        <StatTile
+          className={SURFACE_CLASS}
+          label='Waiting'
+          value={
+            <span
+              className={join(
+                !isUnknown &&
+                  groups.waiting.length > 0 &&
+                  'text-indigo-600 dark:text-indigo-400',
+              )}
+            >
+              {getFigure(groups.waiting.length)}
+            </span>
+          }
+        />
+        <StatTile
+          className={SURFACE_CLASS}
+          label='Working'
+          value={getFigure(groups.working.length)}
+        />
+        <StatTile
+          className={SURFACE_CLASS}
+          label='Quiet'
+          value={getFigure(groups.quiet.length)}
+        />
+        <StatTile
+          className={SURFACE_CLASS}
+          label='Finished'
+          value={getFigure(groups.finished.length)}
+        />
+      </div>
+
       {isLoading ? (
         <p className='text-muted-foreground text-sm'>Loading sessions…</p>
-      ) : (
-        <div className='grid grid-cols-2 gap-3 sm:grid-cols-4'>
-          <StatTile label='Waiting' value={groups.waiting.length} />
-          <StatTile label='Working' value={groups.working.length} />
-          <StatTile label='Quiet' value={groups.quiet.length} />
-          <StatTile label='Finished' value={groups.finished.length} />
-        </div>
-      )}
+      ) : null}
 
       {isEmpty && !isLoading && !hasError ? (
         <div className={`${CARD_CLASS} flex items-center gap-4`}>
-          <span
-            className='bg-muted grid size-10 shrink-0 place-items-center rounded-xl'
-            aria-hidden='true'
-          >
-            <Workflow className='text-muted-foreground size-5' />
-          </span>
+          <IconTile>
+            <Workflow className='size-5' />
+          </IconTile>
           <div className='min-w-0'>
             <p className='text-sm font-medium'>Nothing in the pipeline yet</p>
             <p className='text-muted-foreground text-sm'>{getEmptyLine()}</p>
@@ -183,7 +216,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
         (section) => (
           <section key={section.key} className={CARD_CLASS}>
             {renderSectionTitle(section.label, groups[section.key].length)}
-            <ul className='divide-border mt-1 divide-y'>
+            <ul className='divide-border mt-1 -mb-3 divide-y'>
               {groups[section.key].map((entry) =>
                 renderRow(entry, section.key),
               )}

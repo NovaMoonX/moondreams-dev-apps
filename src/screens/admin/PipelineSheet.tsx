@@ -108,7 +108,7 @@ function PipelineSheet({ entry, onClose }: PipelineSheetProps) {
         entry && getEntryActions(entry).length > 0 ? (
           <div>
             <div className='px-4 sm:px-0'>
-              <EntryActions entry={entry} />
+              <EntryActions entry={entry} isFilled />
             </div>
           </div>
         ) : undefined

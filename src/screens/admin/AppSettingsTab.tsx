@@ -7,6 +7,7 @@ import {
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMemo, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
@@ -28,7 +29,12 @@ import {
 } from '@lib/types/appCatalog';
 
 import { type AppDraft } from './appDraft';
-import { AVAILABLE_USERS_PREVIEW, CARD_CLASS } from './constants';
+import {
+  AVAILABLE_USERS_PREVIEW,
+  CARD_CLASS,
+  DISABLED_CLASS,
+  SURFACE_CLASS,
+} from './constants';
 
 interface AppSettingsTabProps {
   app: AppMetadata;
@@ -400,6 +406,7 @@ function AppSettingsTab({
                     <Button
                       variant='secondary'
                       size='sm'
+                      className={DISABLED_CLASS}
                       onClick={() => addUserToAccessList(request.uid)}
                       disabled={!isRestricted}
                     >
@@ -421,6 +428,7 @@ function AppSettingsTab({
           <Button
             variant='destructive'
             size='sm'
+            className={DISABLED_CLASS}
             onClick={clearList}
             disabled={!isRestricted}
           >
@@ -461,6 +469,7 @@ function AppSettingsTab({
             </div>
             <div className='mb-3'>
               <Input
+                className='placeholder:text-muted-foreground disabled:placeholder:text-muted-foreground disabled:opacity-100'
                 value={searchTerm}
                 onChange={(event) => {
                   setSearchTerm(event.target.value);
@@ -528,6 +537,7 @@ function AppSettingsTab({
                     <Button
                       variant='secondary'
                       size='sm'
+                      className={DISABLED_CLASS}
                       onClick={() => addUserToAccessList(profile.uid)}
                       disabled={!isRestricted}
                     >
@@ -547,12 +557,14 @@ function AppSettingsTab({
         </div>
       </section>
 
-      <div className='bg-card/90 border-border/60 sticky bottom-2 z-10 flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 shadow-md backdrop-blur'>
+      <div
+        className={`${SURFACE_CLASS} border-border/60 sticky bottom-0 z-10 -mx-4 -mb-12 flex items-center justify-between gap-3 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_-6px_rgb(0_0_0/0.12)] sm:mx-0 sm:mb-0 sm:rounded-2xl sm:border`}
+      >
         <p role='status' className='text-muted-foreground min-w-0 text-sm'>
-          {isDirty ? 'You have unsaved changes.' : 'Everything is saved.'}
+          {isDirty ? 'You have unsaved changes.' : 'Saved'}
         </p>
         <Button
-          className='shrink-0 whitespace-nowrap'
+          className={join('shrink-0 whitespace-nowrap', DISABLED_CLASS)}
           onClick={saveChanges}
           disabled={isSaving || !isDirty}
         >

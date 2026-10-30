@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router-dom';
 
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import AppLogo from '@/components/AppLogo';
-import HeaderIconButton from '@/components/HeaderIconButton';
 import SectionHeader from '@/components/SectionHeader';
 import StickyAppBar from '@/components/StickyAppBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -17,9 +16,11 @@ import { adminUsersQueryOptions } from '@lib/admin/adminQueries';
 import { ADMIN_EMAIL } from '@lib/app';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
+import AdminIconButton from './admin/AdminIconButton';
 import AdminRefreshButton from './admin/AdminRefreshButton';
 import AppDetail from './admin/AppDetail';
 import { isSameDraft, toDraft, type AppDraft } from './admin/appDraft';
+import { CANVAS_CLASS, SURFACE_CLASS } from './admin/constants';
 import DashboardNav from './admin/DashboardNav';
 import FirebaseUsageView from './admin/FirebaseUsageView';
 import MembersView from './admin/MembersView';
@@ -29,6 +30,9 @@ import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
 
 const NO_USERS: UserProfile[] = [];
+
+/** An opaque bar in the canvas colour, so scrolled content never shows through it. */
+const BAR_CLASS = 'bg-muted! dark:bg-background!';
 
 function AdminDashboard() {
   const { user, isAdmin } = useAuth();
@@ -48,11 +52,7 @@ function AdminDashboard() {
   const pipeline = usePipelineSync(isAdmin);
   const now = useNow(60_000);
   const pipelineGroups = buildPipeline(pipeline.sessions, pipeline.inbox, now);
-  const pipelineSummary = getPipelineSummary(
-    pipelineGroups,
-    pipeline.isLoading,
-    pipeline.hasError,
-  );
+  const pipelineSummary = getPipelineSummary(pipelineGroups);
 
   const isMembersOpen = url.view === 'members';
   const isFirebaseOpen = url.view === 'firebase';
@@ -113,6 +113,8 @@ function AdminDashboard() {
       usageByAppId={allUsage.byAppId}
       isLoading={usersQuery.isPending || allUsage.isLoading}
       isUsersError={usersQuery.isError}
+      isPipelineLoading={pipeline.isLoading}
+      hasPipelineError={pipeline.hasError}
       failedAppIds={allUsage.failedAppIds}
       selected={selected}
       unsavedAppIds={allApps.filter(isDirty).map((app) => app.id)}
@@ -157,7 +159,7 @@ function AdminDashboard() {
   ) : null;
 
   const homeButton = (
-    <HeaderIconButton
+    <AdminIconButton
       icon={<ChevronLeft className='size-4' />}
       label='Back to home'
       onClick={() => navigate('/')}
@@ -166,13 +168,14 @@ function AdminDashboard() {
 
   if (!isWide && selected !== null) {
     return (
-      <div className='page bg-muted/40 pt-20'>
+      <div className={`page ${CANVAS_CLASS} pt-20`}>
         <div className='mx-auto w-full max-w-5xl space-y-4'>
           <StickyAppBar
             title=''
+            className={BAR_CLASS}
             leading={
               <div className='flex min-w-0 flex-1 items-center gap-3'>
-                <HeaderIconButton
+                <AdminIconButton
                   icon={<ChevronLeft className='size-4' />}
                   label='Back to dashboard'
                   onClick={url.goBack}
@@ -214,7 +217,7 @@ function AdminDashboard() {
   );
 
   return (
-    <div className='page bg-muted/40 pt-20'>
+    <div className={`page ${CANVAS_CLASS} pt-20`}>
       <div className='mx-auto w-full max-w-5xl space-y-6'>
         {isWide ? (
           <header>
@@ -232,6 +235,7 @@ function AdminDashboard() {
           <>
             <StickyAppBar
               title='Dashboard'
+              className={BAR_CLASS}
               titleRef={titleRef}
               leading={homeButton}
               trailing={<AdminRefreshButton />}
@@ -246,7 +250,9 @@ function AdminDashboard() {
 
         {isWide ? (
           <div className='grid grid-cols-[260px_1fr] gap-8'>
-            <aside className='border-border/60 bg-card h-fit rounded-2xl border p-3 shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto'>
+            <aside
+              className={`border-border/60 h-fit ${SURFACE_CLASS} rounded-2xl border p-3 shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto`}
+            >
               {nav}
             </aside>
             <div className='min-w-0'>

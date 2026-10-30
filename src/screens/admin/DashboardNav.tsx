@@ -23,17 +23,19 @@ import { getActiveSince } from '@lib/appUsage/appUsage';
 import type { AppUsage } from '@lib/appUsage/appUsage';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
-import { APP_SEARCH_THRESHOLD, CARD_CLASS } from './constants';
+import { APP_SEARCH_THRESHOLD, CARD_CLASS, SURFACE_CLASS } from './constants';
+import IconTile from './IconTile';
 import { EntryActions, StatusDot } from './PipelineParts';
 import type { PipelineEntry } from './pipelineUtils';
 import { getUsageRows } from './usageRows';
+
+const NEEDS_YOU_PREVIEW = 2;
 
 interface NavRowProps {
   /** An app's logo or a soft icon tile, before the title. */
   leading: ReactNode;
   title: string;
   subtitle: string;
-  meta: string[];
   /** A count that needs the owner, shown as the one solid pill on the row. */
   badge?: number;
   isSelected: boolean;
@@ -45,7 +47,6 @@ function NavRow({
   leading,
   title,
   subtitle,
-  meta,
   badge = 0,
   isSelected,
   isWide,
@@ -77,15 +78,6 @@ function NavRow({
           {subtitle}
         </span>
       </span>
-      {meta.length > 0 ? (
-        <span className='text-muted-foreground shrink-0 text-right text-xs whitespace-nowrap'>
-          {meta.map((line) => (
-            <span key={line} className='block'>
-              {line}
-            </span>
-          ))}
-        </span>
-      ) : null}
       {badge > 0 ? (
         <span className='bg-primary text-primary-foreground min-w-5 shrink-0 rounded-full px-1.5 text-center text-xs font-semibold tabular-nums'>
           {badge}
@@ -101,28 +93,19 @@ function NavRow({
   );
 }
 
-function IconTile({ children }: { children: ReactNode }) {
-  return (
-    <span
-      className='bg-muted text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl'
-      aria-hidden='true'
-    >
-      {children}
-    </span>
-  );
-}
-
 interface DashboardNavProps {
   apps: AppMetadata[];
   users: UserProfile[];
   usageByAppId: Record<string, AppUsage[] | undefined>;
   isLoading: boolean;
   isUsersError: boolean;
+  isPipelineLoading: boolean;
+  hasPipelineError: boolean;
   failedAppIds: string[];
   selected: string | null;
   unsavedAppIds: string[];
   isWide: boolean;
-  pipelineSummary: { waiting: number; working: number; text: string };
+  pipelineSummary: { waiting: number; working: number };
   waitingEntries: PipelineEntry[];
   onSelectPipeline: () => void;
   onSelectMembers: () => void;
@@ -136,6 +119,8 @@ function DashboardNav({
   usageByAppId,
   isLoading,
   isUsersError,
+  isPipelineLoading,
+  hasPipelineError,
   failedAppIds,
   selected,
   unsavedAppIds,
@@ -173,46 +158,47 @@ function DashboardNav({
     ).length;
 
   const getAppMeta = (app: AppMetadata) => {
-    if (isLoading) return ['…'];
-    if (isUsersError || failedAppIds.includes(app.id)) return ["Couldn't load"];
+    if (isLoading) return '…';
+    if (isUsersError || failedAppIds.includes(app.id)) return "Couldn't load";
     const rows = getUsageRows(usageByAppId[app.id], profilesByUid, activeSince);
     const askedCount = getOpenRequestCount(app);
     return [
       `${rows.length} started`,
       `${rows.filter((row) => row.isActive).length} active`,
       ...(askedCount > 0 ? [`${askedCount} asked`] : []),
-    ];
+    ].join(' · ');
   };
-  const getAppSubtitle = (app: AppMetadata) => {
-    const path = `/${app.path.replace(/^\//, '') || app.id}`;
-    return unsavedAppIds.includes(app.id) ? `${path} · unsaved` : path;
-  };
+  const getAppSubtitle = (app: AppMetadata) =>
+    unsavedAppIds.includes(app.id)
+      ? `${getAppMeta(app)} · unsaved`
+      : getAppMeta(app);
   const getMembersSubtitle = () => {
     if (isUsersError) return "Couldn't load";
     if (isLoading) return 'Everyone who has signed in';
     return `${users.length} ${users.length === 1 ? 'person' : 'people'}`;
   };
 
-  const getActiveAppCount = () =>
-    apps.filter((app) =>
-      getUsageRows(usageByAppId[app.id], profilesByUid, activeSince).some(
-        (row) => row.isActive,
-      ),
-    ).length;
-  const getFigure = (value: number) => (isLoading ? '…' : value);
+  const isPipelineUnknown = isPipelineLoading || hasPipelineError;
+  const getPipelineFigure = (value: number) =>
+    isPipelineUnknown ? '–' : value;
 
   const renderNeedsYou = () => {
-    if (waitingEntries.length === 0) {
+    if (isPipelineUnknown || waitingEntries.length === 0) {
+      const getText = () => {
+        if (hasPipelineError) return "Couldn't load the pipeline";
+        if (isPipelineLoading) return 'Checking the pipeline…';
+        return 'Nothing waiting on you';
+      };
       return (
         <div className={join(CARD_CLASS, 'flex items-center gap-3')}>
           <IconTile>
-            <CheckCircle2 className='size-5' />
+            {isPipelineUnknown ? (
+              <Workflow className='size-5' />
+            ) : (
+              <CheckCircle2 className='size-5' />
+            )}
           </IconTile>
-          <p className='text-sm font-medium'>
-            {pipelineSummary.text === "Couldn't load"
-              ? "Couldn't load the pipeline"
-              : 'Nothing waiting on you'}
-          </p>
+          <p className='text-sm font-medium'>{getText()}</p>
         </div>
       );
     }
@@ -220,14 +206,14 @@ function DashboardNav({
       <section className={join(CARD_CLASS, 'space-y-3')}>
         <div className='flex items-center gap-3'>
           <IconTile>
-            <BellRing className='text-primary size-5' />
+            <BellRing className='size-5 text-indigo-600 dark:text-indigo-400' />
           </IconTile>
           <h2 className='text-base font-semibold'>
             Needs you ({waitingEntries.length})
           </h2>
         </div>
         <ul className='divide-border divide-y'>
-          {waitingEntries.slice(0, 3).map((entry) => (
+          {waitingEntries.slice(0, NEEDS_YOU_PREVIEW).map((entry, index) => (
             <li key={entry.key} className='space-y-3 py-3 first:pt-0'>
               <Button
                 type='button'
@@ -235,28 +221,32 @@ function DashboardNav({
                 className='h-auto w-full justify-start gap-3 px-0! py-0 text-left font-normal'
                 onClick={onSelectPipeline}
               >
-                <span className='min-w-0 flex-1'>
-                  <span className='text-foreground block truncate text-sm font-semibold'>
-                    {entry.name}
-                  </span>
-                  <span className='text-muted-foreground flex items-center gap-2 text-xs'>
+                <span className='min-w-0 flex-1 space-y-1'>
+                  <span className='text-foreground flex items-center gap-2 text-sm font-semibold'>
                     <StatusDot group='waiting' />
-                    <span className='min-w-0 truncate'>{entry.subtitle}</span>
+                    <span className='truncate'>{entry.name}</span>
+                  </span>
+                  <span className='text-muted-foreground line-clamp-2 text-xs'>
+                    {entry.subtitle}
                   </span>
                 </span>
               </Button>
-              <EntryActions entry={entry} />
+              <EntryActions entry={entry} isFilled={index === 0} />
             </li>
           ))}
         </ul>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='w-full'
-          onClick={onSelectPipeline}
-        >
-          See all in Pipeline
-        </Button>
+        <div className='flex justify-end'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='text-muted-foreground gap-1'
+            onClick={onSelectPipeline}
+          >
+            See all in Pipeline ({waitingEntries.length})
+            <ChevronRight className='size-4' aria-hidden='true' />
+          </Button>
+        </div>
       </section>
     );
   };
@@ -270,9 +260,8 @@ function DashboardNav({
           </IconTile>
         }
         title='Pipeline'
-        subtitle={pipelineSummary.text}
-        meta={[]}
-        badge={pipelineSummary.waiting}
+        subtitle='Sessions and PRs'
+        badge={isWide ? pipelineSummary.waiting : 0}
         isSelected={selected === 'pipeline'}
         isWide={isWide}
         onClick={onSelectPipeline}
@@ -285,7 +274,6 @@ function DashboardNav({
         }
         title='Members'
         subtitle={getMembersSubtitle()}
-        meta={[]}
         isSelected={selected === 'members'}
         isWide={isWide}
         onClick={onSelectMembers}
@@ -297,8 +285,7 @@ function DashboardNav({
           </IconTile>
         }
         title='Firebase usage'
-        subtitle='Free amounts and estimated cost'
-        meta={[]}
+        subtitle='Free amounts and cost'
         isSelected={selected === 'firebase'}
         isWide={isWide}
         onClick={onSelectFirebase}
@@ -327,7 +314,6 @@ function DashboardNav({
               leading={<AppLogo appId={app.id} />}
               title={app.name || app.id}
               subtitle={getAppSubtitle(app)}
-              meta={getAppMeta(app)}
               isSelected={selected === app.id}
               isWide={isWide}
               onClick={() => onSelectApp(app.id)}
@@ -363,13 +349,28 @@ function DashboardNav({
     <nav aria-label='Dashboard' className='space-y-6'>
       {renderNeedsYou()}
       <div className='grid grid-cols-2 gap-3'>
-        <StatTile label='Waiting' value={pipelineSummary.waiting} />
-        <StatTile label='Working' value={pipelineSummary.working} />
         <StatTile
-          label='Members'
-          value={isUsersError ? '–' : getFigure(users.length)}
+          className={SURFACE_CLASS}
+          label='Waiting'
+          value={
+            <span
+              className={join(
+                !isPipelineUnknown &&
+                  pipelineSummary.waiting > 0 &&
+                  'text-indigo-600 dark:text-indigo-400',
+              )}
+            >
+              {getPipelineFigure(pipelineSummary.waiting)}
+            </span>
+          }
+          onOpen={{ label: 'Open the Pipeline', onClick: onSelectPipeline }}
         />
-        <StatTile label='Active apps' value={getFigure(getActiveAppCount())} />
+        <StatTile
+          className={SURFACE_CLASS}
+          label='Working'
+          value={getPipelineFigure(pipelineSummary.working)}
+          onOpen={{ label: 'Open the Pipeline', onClick: onSelectPipeline }}
+        />
       </div>
       <section className={CARD_CLASS}>
         {renderTitle('Workspace')}

@@ -3,7 +3,7 @@ import UserAvatar from '@/ui/UserAvatar';
 import { formatDate } from '@/utils/formatUtils';
 import type { UserProfile } from '@lib/types/appCatalog';
 
-import { CARD_CLASS } from './constants';
+import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
 
 export interface MemberAppUsage {
   appId: string;
@@ -84,7 +84,7 @@ function MemberDetailSheet({
                 {getEmptyAppsText()}
               </p>
             ) : (
-              <ul className='bg-card border-border/60 divide-border/60 divide-y rounded-2xl border px-4 shadow-sm'>
+              <ul className={`${LIST_CARD_CLASS} px-4`}>
                 {member.appUsage.map((usage) => (
                   <li
                     key={usage.appId}

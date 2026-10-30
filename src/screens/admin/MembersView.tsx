@@ -13,7 +13,13 @@ import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
 import StatTile from '@/components/StatTile';
 
-import { CARD_CLASS, MEMBER_SEARCH_THRESHOLD } from './constants';
+import CountedNote from './CountedNote';
+import {
+  CARD_CLASS,
+  LIST_CARD_CLASS,
+  MEMBER_SEARCH_THRESHOLD,
+  SURFACE_CLASS,
+} from './constants';
 import MemberDetailSheet from './MemberDetailSheet';
 import { useAllAppUsage } from './useAllAppUsage';
 
@@ -128,8 +134,13 @@ function MembersView({
   return (
     <div className='max-w-3xl space-y-6'>
       <div className='grid grid-cols-2 gap-3'>
-        <StatTile label='Members' value={getTileCount(users.length)} />
         <StatTile
+          className={SURFACE_CLASS}
+          label='Members'
+          value={getTileCount(users.length)}
+        />
+        <StatTile
+          className={SURFACE_CLASS}
           label='Visited this week'
           value={getTileCount(visitedThisWeek)}
         />
@@ -165,7 +176,7 @@ function MembersView({
             {getEmptyText()}
           </p>
         ) : (
-          <ul className='bg-card border-border/60 divide-border/60 divide-y overflow-hidden rounded-2xl border shadow-sm'>
+          <ul className={LIST_CARD_CLASS}>
             {visibleMembers.map((member) => (
               <li key={member.profile.uid}>
                 <Button
@@ -201,13 +212,10 @@ function MembersView({
           </ul>
         )}
 
-        <details className='text-muted-foreground text-xs'>
-          <summary className='cursor-pointer py-1'>How this is counted</summary>
-          <p className='pt-1'>
-            Visits and app opens are counted from when tracking began, and a
-            member&apos;s last visit is their newest site visit or app open.
-          </p>
-        </details>
+        <CountedNote>
+          Visits and app opens are counted from when tracking began, and a
+          member&apos;s last visit is their newest site visit or app open.
+        </CountedNote>
       </section>
 
       <MemberDetailSheet

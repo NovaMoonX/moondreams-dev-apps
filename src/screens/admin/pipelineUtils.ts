@@ -283,25 +283,9 @@ export function buildPipeline(
   };
 }
 
-/** The nav row's sub-line and the counts, from the same groups the view lists. */
-export function getPipelineSummary(
-  groups: PipelineGroups,
-  isLoading: boolean,
-  hasError: boolean,
-) {
-  if (hasError) return { waiting: 0, working: 0, text: "Couldn't load" };
-  if (isLoading) return { waiting: 0, working: 0, text: 'Loading…' };
-  const waiting = groups.waiting.length;
-  const working = groups.working.length;
-  const parts = [
-    ...(waiting > 0 ? [`${waiting} waiting`] : []),
-    ...(working > 0 ? [`${working} working`] : []),
-  ];
-  return {
-    waiting,
-    working,
-    text: parts.length > 0 ? parts.join(' · ') : 'Nothing waiting',
-  };
+/** The waiting and working counts, from the same groups the view lists. */
+export function getPipelineSummary(groups: PipelineGroups) {
+  return { waiting: groups.waiting.length, working: groups.working.length };
 }
 
 const LINK_SPLIT = /(\[[^\]]*\]\(https:\/\/[^\s)]+\))/;
