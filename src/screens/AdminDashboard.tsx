@@ -24,7 +24,7 @@ import DashboardNav from './admin/DashboardNav';
 import FirebaseUsageView from './admin/FirebaseUsageView';
 import MembersView from './admin/MembersView';
 import PipelineView from './admin/PipelineView';
-import { getPipelineSummary } from './admin/pipelineUtils';
+import { buildPipeline, getPipelineSummary } from './admin/pipelineUtils';
 import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
 
@@ -37,29 +37,32 @@ function AdminDashboard() {
   const titleRef = useRef<HTMLHeadingElement>(null);
   const isWide = useMediaQuery().isAtLeast('lg');
   const url = useDashboardUrlState();
-  const usersQuery = useQuery({ ...adminUsersQueryOptions(), enabled: isAdmin });
+  const usersQuery = useQuery({
+    ...adminUsersQueryOptions(),
+    enabled: isAdmin,
+  });
   const allUsage = useAllAppUsage(allApps);
   const [drafts, setDrafts] = useState<Record<string, AppDraft>>({});
   const users = usersQuery.data ?? NO_USERS;
   // Live, unlike the rest of the dashboard: the sessions change while the owner watches.
   const pipeline = usePipelineSync(isAdmin);
   const now = useNow(60_000);
+  const pipelineGroups = buildPipeline(pipeline.sessions, pipeline.inbox, now);
   const pipelineSummary = getPipelineSummary(
-    pipeline.sessions,
-    pipeline.inbox,
-    now,
+    pipelineGroups,
     pipeline.isLoading,
     pipeline.hasError,
   );
 
-  const isPipelineOpen = url.view === 'pipeline';
   const isMembersOpen = url.view === 'members';
   const isFirebaseOpen = url.view === 'firebase';
-  // A phone with no app chosen shows the list, but the wide layout's main view is never empty.
+  const chosenApp = allApps.find((app) => app.id === url.app);
+  // A phone with nothing chosen shows the list, but the wide layout's main view is never empty: it opens on what waits on the owner.
+  const isPipelineOpen =
+    url.view === 'pipeline' ||
+    (isWide && !isMembersOpen && !isFirebaseOpen && !chosenApp);
   const selectedApp =
-    isPipelineOpen || isMembersOpen || isFirebaseOpen
-      ? undefined
-      : (allApps.find((app) => app.id === url.app) ?? (isWide ? allApps[0] : undefined));
+    isPipelineOpen || isMembersOpen || isFirebaseOpen ? undefined : chosenApp;
   const getSelected = () => {
     if (isPipelineOpen) return 'pipeline';
     if (isMembersOpen) return 'members';
@@ -74,15 +77,21 @@ function AdminDashboard() {
   };
 
   const getDraft = (app: AppMetadata) => drafts[app.id] ?? toDraft(app);
-  const isDirty = (app: AppMetadata) => !isSameDraft(getDraft(app), toDraft(app));
+  const isDirty = (app: AppMetadata) =>
+    !isSameDraft(getDraft(app), toDraft(app));
   useUnsavedWork(() => allApps.some(isDirty));
 
   const handleDraftChange = (app: AppMetadata, patch: Partial<AppDraft>) =>
-    setDrafts((current) => ({ ...current, [app.id]: { ...(current[app.id] ?? toDraft(app)), ...patch } }));
+    setDrafts((current) => ({
+      ...current,
+      [app.id]: { ...(current[app.id] ?? toDraft(app)), ...patch },
+    }));
 
   const handleSaved = (appId: string) =>
     setDrafts((current) =>
-      Object.fromEntries(Object.entries(current).filter(([id]) => id !== appId)),
+      Object.fromEntries(
+        Object.entries(current).filter(([id]) => id !== appId),
+      ),
     );
 
   const getPhoneDetail = () => {
@@ -109,6 +118,7 @@ function AdminDashboard() {
       unsavedAppIds={allApps.filter(isDirty).map((app) => app.id)}
       isWide={isWide}
       pipelineSummary={pipelineSummary}
+      waitingEntries={pipelineGroups.waiting}
       onSelectPipeline={() => url.showPipeline({ isStep })}
       onSelectMembers={() => url.showMembers({ isStep })}
       onSelectFirebase={() => url.showFirebase({ isStep })}
@@ -125,7 +135,9 @@ function AdminDashboard() {
       onSelectMember={url.openMember}
     />
   );
-  const pipelineView = <PipelineView pipeline={pipeline} now={now} />;
+  const pipelineView = (
+    <PipelineView pipeline={pipeline} groups={pipelineGroups} now={now} />
+  );
   const firebaseUsage = <FirebaseUsageView apps={allApps} />;
   const appDetail = selectedApp ? (
     <AppDetail
@@ -145,20 +157,35 @@ function AdminDashboard() {
   ) : null;
 
   const homeButton = (
-    <HeaderIconButton icon={<ChevronLeft className='size-4' />} label='Back to home' onClick={() => navigate('/')} />
+    <HeaderIconButton
+      icon={<ChevronLeft className='size-4' />}
+      label='Back to home'
+      onClick={() => navigate('/')}
+    />
   );
 
   if (!isWide && selected !== null) {
     return (
-      <div className='page pt-20'>
+      <div className='page bg-muted/40 pt-20'>
         <div className='mx-auto w-full max-w-5xl space-y-4'>
           <StickyAppBar
             title=''
             leading={
               <div className='flex min-w-0 flex-1 items-center gap-3'>
-                <HeaderIconButton icon={<ChevronLeft className='size-4' />} label='Back to dashboard' onClick={url.goBack} />
-                {selectedApp ? <AppLogo appId={selectedApp.id} className='size-8 rounded-lg' /> : null}
-                <h1 className='min-w-0 flex-1 truncate text-xl font-semibold tracking-tight'>{getDetailTitle()}</h1>
+                <HeaderIconButton
+                  icon={<ChevronLeft className='size-4' />}
+                  label='Back to dashboard'
+                  onClick={url.goBack}
+                />
+                {selectedApp ? (
+                  <AppLogo
+                    appId={selectedApp.id}
+                    className='size-8 rounded-lg'
+                  />
+                ) : null}
+                <h1 className='min-w-0 flex-1 truncate text-xl font-semibold tracking-tight'>
+                  {getDetailTitle()}
+                </h1>
               </div>
             }
             trailing={<AdminRefreshButton />}
@@ -169,16 +196,25 @@ function AdminDashboard() {
     );
   }
 
-  const email = <p className='text-muted-foreground mt-1 truncate text-sm'>{ADMIN_EMAIL}</p>;
-  const eyebrow = <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>Admin</p>;
+  const email = (
+    <p className='text-muted-foreground mt-1 truncate text-sm'>{ADMIN_EMAIL}</p>
+  );
+  const eyebrow = (
+    <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
+      Admin
+    </p>
+  );
   const title = (
-    <h1 ref={titleRef} className='text-foreground min-w-0 truncate text-3xl font-semibold tracking-tight sm:text-4xl'>
+    <h1
+      ref={titleRef}
+      className='text-foreground min-w-0 truncate text-3xl font-semibold tracking-tight sm:text-4xl'
+    >
       Dashboard
     </h1>
   );
 
   return (
-    <div className='page pt-20'>
+    <div className='page bg-muted/40 pt-20'>
       <div className='mx-auto w-full max-w-5xl space-y-6'>
         {isWide ? (
           <header>
@@ -194,7 +230,12 @@ function AdminDashboard() {
           </header>
         ) : (
           <>
-            <StickyAppBar title='Dashboard' titleRef={titleRef} leading={homeButton} trailing={<AdminRefreshButton />} />
+            <StickyAppBar
+              title='Dashboard'
+              titleRef={titleRef}
+              leading={homeButton}
+              trailing={<AdminRefreshButton />}
+            />
             <header className='-mt-4'>
               {eyebrow}
               <div className='mt-2'>{title}</div>
@@ -205,7 +246,7 @@ function AdminDashboard() {
 
         {isWide ? (
           <div className='grid grid-cols-[260px_1fr] gap-8'>
-            <aside className='border-border bg-card h-fit rounded-2xl border p-3 lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto'>
+            <aside className='border-border/60 bg-card h-fit rounded-2xl border p-3 shadow-sm lg:sticky lg:top-24 lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto'>
               {nav}
             </aside>
             <div className='min-w-0'>
@@ -225,7 +266,9 @@ function AdminDashboard() {
                   {firebaseUsage}
                 </div>
               ) : (
-                (appDetail ?? <p className='text-muted-foreground text-sm'>No apps yet.</p>)
+                (appDetail ?? (
+                  <p className='text-muted-foreground text-sm'>No apps yet.</p>
+                ))
               )}
             </div>
           </div>

@@ -1,11 +1,11 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-
 import DetailSheet from '@/components/DetailSheet';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import FallbackImage from '@/components/FallbackImage';
 
+import { EntryActions, StatusDot } from './PipelineParts';
 import {
   CI_WORDS,
+  getEntryActions,
   splitLinks,
   stripLinks,
   type PipelineEntry,
@@ -77,9 +77,7 @@ function SheetSection({
 }) {
   return (
     <section className='space-y-2'>
-      <h3 className='text-foreground/60 text-[10px] font-medium tracking-[0.2em] uppercase'>
-        {title}
-      </h3>
+      <h3 className='text-foreground text-base font-semibold'>{title}</h3>
       {children}
     </section>
   );
@@ -92,7 +90,6 @@ interface PipelineSheetProps {
 
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
 function PipelineSheet({ entry, onClose }: PipelineSheetProps) {
-  const footerUrl = entry?.url ?? entry?.prs[0]?.url ?? null;
   const optionImages = new Set(
     entry?.ownerItems.flatMap((item) =>
       item.options.flatMap((option) => option.images.slice(0, 1)),
@@ -108,23 +105,23 @@ function PipelineSheet({ entry, onClose }: PipelineSheetProps) {
       onClose={onClose}
       title={entry?.name ?? 'Session'}
       footer={
-        footerUrl ? (
-          <Button
-            href={footerUrl}
-            target='_blank'
-            rel='noreferrer'
-            className='w-full'
-          >
-            {entry?.url ? 'Open in Claude' : 'Open the pull request'}
-          </Button>
+        entry && getEntryActions(entry).length > 0 ? (
+          <div>
+            <div className='px-4 sm:px-0'>
+              <EntryActions entry={entry} />
+            </div>
+          </div>
         ) : undefined
       }
     >
       {entry ? (
         <div className='space-y-5'>
-          <p className='text-muted-foreground line-clamp-2 text-sm'>
-            {entry.lead}
-          </p>
+          <div className='flex items-start gap-2'>
+            <span className='flex pt-1.5'>
+              <StatusDot group={entry.group ?? 'finished'} />
+            </span>
+            <p className='text-muted-foreground text-sm'>{entry.lead}</p>
+          </div>
 
           {entry.ownerItems.length > 0 ? (
             <SheetSection title='Needs you'>

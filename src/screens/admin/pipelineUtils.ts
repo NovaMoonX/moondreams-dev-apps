@@ -11,6 +11,7 @@ const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
 export const QUIET_AFTER_MS = 20 * MINUTE_MS;
 export const IDLE_KEEP_MS = 3 * DAY_MS;
+export const WAITING_KEEP_MS = 14 * DAY_MS;
 
 export type PipelineGroup = 'waiting' | 'working' | 'quiet' | 'finished';
 
@@ -40,8 +41,14 @@ export interface PipelineEntry {
   name: string;
   url: string | null;
   group: PipelineGroup | null;
+  /** True for a pull request with no session reporting. */
+  isPrOnly: boolean;
+  /** When it last reported, in the viewer's time. */
+  time: string;
   subtitle: string;
   lead: string;
+  /** What it asks of the owner, one plain line each. */
+  asks: string[];
   raisedHands: string[];
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
@@ -79,8 +86,9 @@ export function getSessionGroup(
   now: number,
 ): PipelineGroup | null {
   const age = now - session.updatedAt;
+  if (session.state === 'waiting')
+    return age > WAITING_KEEP_MS ? null : 'waiting';
   if (age > IDLE_KEEP_MS) return null;
-  if (session.state === 'waiting') return 'waiting';
   if (session.state === 'working')
     return age >= QUIET_AFTER_MS ? 'quiet' : 'working';
   return 'finished';
@@ -111,26 +119,23 @@ const toSafeItems = (items: PipelineOwnerItem[]): PipelineOwnerEntryItem[] =>
     })),
   }));
 
+const toAsk = (line: string) => stripLinks(line).replace(/^🚩\s*/, '');
+
 function getSubtitle(
-  session: PipelineSession,
   group: PipelineGroup | null,
+  asks: string[],
+  time: string,
+  session: PipelineSession,
   now: number,
 ) {
-  const time = formatPipelineTime(session.updatedAt, now);
   if (group === 'waiting') {
-    const [first = ''] = session.raisedHands.map((line) =>
-      stripLinks(line).replace(/^🚩\s*/, ''),
-    );
-    const asks =
-      session.raisedHands.length >= 2
-        ? `${session.raisedHands.length} asks · `
-        : '';
-    return `${time} · ${asks}${first || 'Waiting on you'}`;
+    const count = asks.length >= 2 ? `${asks.length} asks · ` : '';
+    return `${time} · ${count}${asks[0] || 'Waiting on you'}`;
   }
   if (group === 'working')
     return `Working since ${formatPipelineTime(session.turnStartedAt ?? session.updatedAt, now)}`;
   if (group === 'quiet') return `No update since ${time}`;
-  return `No questions · ${time}`;
+  return `Finished at ${time}`;
 }
 
 function getLead(
@@ -152,7 +157,7 @@ function getLead(
     }
     if (group === 'quiet')
       return `No update for ${formatSpan(now - session.updatedAt)}. It may have stopped, or be waiting on a permission prompt.`;
-    return `Finished its turn at ${time} without a question.`;
+    return `Finished its turn at ${time}.`;
   })();
   return failing ? `${base} · checks failing on #${failing.number}` : base;
 }
@@ -164,7 +169,20 @@ function toSessionEntry(
 ): PipelineEntry {
   const sessionPrs = getSessionPrs(session, prs);
   const safePrs = sessionPrs.map(toSafePr);
-  const group = getSessionGroup(session, now);
+  const ownerItems = toSafeItems(
+    sessionPrs.flatMap((pr) => pr.status?.ownerItems ?? []),
+  );
+  const asks =
+    ownerItems.length > 0
+      ? ownerItems.map((item) => toAsk(item.text))
+      : session.raisedHands.map(toAsk);
+  const baseGroup = getSessionGroup(session, now);
+  // A finished or quiet session that still holds asks is waiting on the owner.
+  const group =
+    asks.length > 0 && (baseGroup === 'finished' || baseGroup === 'quiet')
+      ? 'waiting'
+      : baseGroup;
+  const time = formatPipelineTime(session.updatedAt, now);
   const title = sessionPrs.find((pr) => pr.status?.sessionTitle)?.status
     ?.sessionTitle;
   const branchName = session.branch?.replace(/^claude\//, '');
@@ -173,13 +191,14 @@ function toSessionEntry(
     name: title || branchName || 'Session',
     url: toHttps(session.url),
     group,
-    subtitle: getSubtitle(session, group, now),
+    isPrOnly: false,
+    time,
+    subtitle: getSubtitle(group, asks, time, session, now),
     lead: getLead(session, group, safePrs, now),
+    asks,
     raisedHands: session.raisedHands,
     prs: safePrs,
-    ownerItems: toSafeItems(
-      sessionPrs.flatMap((pr) => pr.status?.ownerItems ?? []),
-    ),
+    ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
     screenshots: onlyHttps(
       unique(sessionPrs.flatMap((pr) => pr.status?.screenshots ?? [])),
@@ -191,23 +210,47 @@ function toSessionEntry(
 function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
   const status = pr.status;
   const safePr = toSafePr(pr);
+  const ownerItems = toSafeItems(status?.ownerItems ?? []);
+  const asks = ownerItems.map((item) => toAsk(item.text));
+  const time = formatPipelineTime(status?.updatedAt ?? 0, now);
   return {
     key: `pr-${pr.number}`,
     name: status?.sessionTitle || pr.title,
     url: toHttps(status?.sessionUrl ?? pr.bodySessionUrl),
-    group: null,
-    subtitle: `${pr.isDraft ? 'Draft' : 'Ready for review'} · ${CI_WORDS[pr.ci]} · #${pr.number}`,
-    lead: `Waiting since ${formatPipelineTime(status?.updatedAt ?? 0, now)}${pr.ci === 'red' ? ` · checks failing on #${pr.number}` : ''}`,
+    group: 'waiting',
+    isPrOnly: true,
+    time,
+    subtitle: `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0] || 'Waiting on you'}`,
+    lead: `Waiting since ${time}${pr.ci === 'red' ? ` · checks failing on #${pr.number}` : ''}`,
+    asks,
     raisedHands: [],
     prs: [safePr],
-    ownerItems: toSafeItems(status?.ownerItems ?? []),
+    ownerItems,
     goodToKnow: status?.goodToKnow ?? [],
     screenshots: onlyHttps(status?.screenshots ?? []),
     at: status?.updatedAt ?? 0,
   };
 }
 
-/** The sessions grouped for the view, newest first, plus the pull requests that need the owner with no session reporting. */
+export interface PipelineAction {
+  label: string;
+  href: string;
+}
+
+/** The owner's next steps for an entry: answer in the session, then open its pull request. */
+export function getEntryActions(entry: PipelineEntry): PipelineAction[] {
+  const prUrl = entry.prs.find((pr) => pr.url !== null)?.url ?? null;
+  const answer =
+    entry.url && !entry.isPrOnly
+      ? [{ label: 'Answer in Claude', href: entry.url }]
+      : [];
+  const open = prUrl ? [{ label: 'Open the PR', href: prUrl }] : [];
+  return [...answer, ...open];
+}
+
+export type PipelineGroups = ReturnType<typeof buildPipeline>;
+
+/** The sessions grouped for the view, newest first; waiting also holds the pull requests that need the owner with no session reporting. */
 export function buildPipeline(
   sessions: PipelineSession[],
   inbox: PipelineInbox | null,
@@ -216,9 +259,10 @@ export function buildPipeline(
   const prs = inbox?.prs ?? [];
   const entries = [...sessions]
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((session) => toSessionEntry(session, prs, now));
+    .map((session) => toSessionEntry(session, prs, now))
+    .filter((entry) => entry.group !== null);
   const sessionUrls = new Set(
-    sessions.flatMap((session) => (session.url === null ? [] : [session.url])),
+    entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
   );
   const prEntries = prs
     .filter((pr) => (pr.status?.ownerItems.length ?? 0) > 0)
@@ -232,26 +276,22 @@ export function buildPipeline(
   const inGroup = (group: PipelineGroup) =>
     entries.filter((entry) => entry.group === group);
   return {
-    waiting: inGroup('waiting'),
+    waiting: [...inGroup('waiting'), ...prEntries].sort((a, b) => b.at - a.at),
     working: inGroup('working'),
     quiet: inGroup('quiet'),
     finished: inGroup('finished'),
-    prEntries,
   };
 }
 
-/** The nav row's sub-line and count, from the same groups the view lists. */
+/** The nav row's sub-line and the counts, from the same groups the view lists. */
 export function getPipelineSummary(
-  sessions: PipelineSession[],
-  inbox: PipelineInbox | null,
-  now: number,
+  groups: PipelineGroups,
   isLoading: boolean,
   hasError: boolean,
 ) {
-  if (hasError) return { waiting: 0, text: "Couldn't load" };
-  if (isLoading) return { waiting: 0, text: 'Loading…' };
-  const groups = buildPipeline(sessions, inbox, now);
-  const waiting = groups.waiting.length + groups.prEntries.length;
+  if (hasError) return { waiting: 0, working: 0, text: "Couldn't load" };
+  if (isLoading) return { waiting: 0, working: 0, text: 'Loading…' };
+  const waiting = groups.waiting.length;
   const working = groups.working.length;
   const parts = [
     ...(waiting > 0 ? [`${waiting} waiting`] : []),
@@ -259,6 +299,7 @@ export function getPipelineSummary(
   ];
   return {
     waiting,
+    working,
     text: parts.length > 0 ? parts.join(' · ') : 'Nothing waiting',
   };
 }

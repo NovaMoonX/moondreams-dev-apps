@@ -19,7 +19,8 @@ export interface PipelineState {
 interface RawState {
   sessions: PipelineSession[];
   inbox: PipelineInbox | null;
-  isLoading: boolean;
+  sessionsLoaded: boolean;
+  inboxLoaded: boolean;
   sessionsFailed: boolean;
   inboxFailed: boolean;
 }
@@ -27,7 +28,8 @@ interface RawState {
 const INITIAL: RawState = {
   sessions: [],
   inbox: null,
-  isLoading: true,
+  sessionsLoaded: false,
+  inboxLoaded: false,
   sessionsFailed: false,
   inboxFailed: false,
 };
@@ -43,7 +45,7 @@ export function usePipelineSync(isEnabled: boolean): PipelineState {
         setState((current) => ({
           ...current,
           sessions,
-          isLoading: false,
+          sessionsLoaded: true,
           sessionsFailed: false,
         })),
       (error) => {
@@ -51,17 +53,27 @@ export function usePipelineSync(isEnabled: boolean): PipelineState {
         setState((current) => ({
           ...current,
           sessions: [],
-          isLoading: false,
+          sessionsLoaded: true,
           sessionsFailed: true,
         }));
       },
     );
     const stopInbox = startPipelineInboxListener(
       (inbox) =>
-        setState((current) => ({ ...current, inbox, inboxFailed: false })),
+        setState((current) => ({
+          ...current,
+          inbox,
+          inboxLoaded: true,
+          inboxFailed: false,
+        })),
       (error) => {
         console.error('Pipeline inbox listener failed', error);
-        setState((current) => ({ ...current, inbox: null, inboxFailed: true }));
+        setState((current) => ({
+          ...current,
+          inbox: null,
+          inboxLoaded: true,
+          inboxFailed: true,
+        }));
       },
     );
     return () => {
@@ -70,5 +82,12 @@ export function usePipelineSync(isEnabled: boolean): PipelineState {
     };
   }, [isEnabled]);
 
-  return { ...state, hasError: state.sessionsFailed || state.inboxFailed };
+  return {
+    sessions: state.sessions,
+    inbox: state.inbox,
+    sessionsFailed: state.sessionsFailed,
+    inboxFailed: state.inboxFailed,
+    isLoading: !state.sessionsLoaded || !state.inboxLoaded,
+    hasError: state.sessionsFailed || state.inboxFailed,
+  };
 }

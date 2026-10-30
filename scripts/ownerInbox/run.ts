@@ -189,12 +189,38 @@ const pipelineUrl =
   process.env.PIPELINE_URL ??
   'https://us-central1-moondreams-dev-apps.cloudfunctions.net/recordPipelineEvent';
 
+/** Undoes `toPlain`'s escaping, which the issue needs and the dashboard (React escapes for itself) doesn't. */
+const fromPlain = (text: string) =>
+  text
+    .replace(/@\u200b/g, '@')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+
+const toPipelinePr = (pr: InboxPr): InboxPr => ({
+  ...pr,
+  title: fromPlain(pr.title),
+  status: pr.status && {
+    ...pr.status,
+    sessionTitle: pr.status.sessionTitle && fromPlain(pr.status.sessionTitle),
+    state: pr.status.state && fromPlain(pr.status.state),
+    ownerItems: pr.status.ownerItems.map((item) => ({
+      text: fromPlain(item.text),
+      options: item.options.map((option) => ({
+        ...option,
+        label: fromPlain(option.label),
+      })),
+    })),
+    goodToKnow: pr.status.goodToKnow.map(fromPlain),
+  },
+});
+
 const reportToPipeline = async (list: InboxPr[]) => {
   const response = await fetch(pipelineUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      data: { key: pipelineKey, kind: 'inbox', prs: list },
+      data: { key: pipelineKey, kind: 'inbox', prs: list.map(toPipelinePr) },
     }),
     signal: AbortSignal.timeout(20_000),
   });
