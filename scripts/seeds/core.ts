@@ -67,6 +67,20 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  // Two people asking for apps they don't use yet, so the admin's "Asked for access" list has rows.
+  [
+    { appId: 'nine-lives', fixture: FIXTURE_USERS.partnerOne, daysAgo: 3 },
+    { appId: 'waypoint', fixture: FIXTURE_USERS.partnerTwo, daysAgo: 1 },
+  ].forEach(({ appId, fixture, daysAgo }) => {
+    batch.set(context.firestore.collection('apps').doc(appId).collection('accessRequests').doc(fixture.uid), {
+      uid: fixture.uid,
+      email: fixture.email,
+      displayName: fixture.displayName,
+      requestedAt: context.now - daysAgo * 86_400_000,
+      dismissedAt: null,
+    });
+  });
+
   APP_REGISTRY.forEach((app) => {
     const appRef = context.firestore.collection('apps').doc(app.id);
     const createdAt = app.createdAt
@@ -82,6 +96,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         path: app.path,
         status: 'public',
         isRestricted: false,
+        isRequestable: false,
         allowedUsers: [],
         createdAt,
         updatedAt: new Date(context.now).toISOString(),

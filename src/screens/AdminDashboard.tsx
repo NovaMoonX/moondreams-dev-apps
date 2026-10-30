@@ -1,10 +1,13 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
+import AppLogo from '@/components/AppLogo';
+import HeaderIconButton from '@/components/HeaderIconButton';
 import SectionHeader from '@/components/SectionHeader';
-import { SubviewHeader } from '@/components/Subview';
+import StickyAppBar from '@/components/StickyAppBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import NavButton from '@/ui/NavButton';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { adminUsersQueryOptions } from '@lib/admin/adminQueries';
@@ -25,6 +28,8 @@ const NO_USERS: UserProfile[] = [];
 function AdminDashboard() {
   const { user, isAdmin } = useAuth();
   const { allApps, updateAppMetadata } = useAppCatalog();
+  const navigate = useNavigate();
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const isWide = useMediaQuery().isAtLeast('lg');
   const url = useDashboardUrlState();
   const usersQuery = useQuery({ ...adminUsersQueryOptions(), enabled: isAdmin });
@@ -116,44 +121,64 @@ function AdminDashboard() {
     />
   ) : null;
 
+  const homeButton = (
+    <HeaderIconButton icon={<ChevronLeft className='size-4' />} label='Back to home' onClick={() => navigate('/')} />
+  );
+
   if (!isWide && selected !== null) {
     return (
       <div className='page pt-20'>
         <div className='mx-auto w-full max-w-5xl space-y-4'>
-          <div className='flex items-center gap-2'>
-            <SubviewHeader
-              title={getDetailTitle()}
-              onBack={url.goBack}
-              className='mb-0 min-w-0 flex-1'
-            />
-            <AdminRefreshButton />
-          </div>
+          <StickyAppBar
+            title=''
+            leading={
+              <div className='flex min-w-0 flex-1 items-center gap-3'>
+                <HeaderIconButton icon={<ChevronLeft className='size-4' />} label='Back to dashboard' onClick={url.goBack} />
+                {selectedApp ? <AppLogo appId={selectedApp.id} className='size-8 rounded-lg' /> : null}
+                <h1 className='min-w-0 flex-1 truncate text-xl font-semibold tracking-tight'>{getDetailTitle()}</h1>
+              </div>
+            }
+            trailing={<AdminRefreshButton />}
+          />
           {getPhoneDetail()}
         </div>
       </div>
     );
   }
 
+  const email = <p className='text-muted-foreground mt-1 truncate text-sm'>{ADMIN_EMAIL}</p>;
+  const eyebrow = <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>Admin</p>;
+  const title = (
+    <h1 ref={titleRef} className='text-foreground min-w-0 truncate text-3xl font-semibold tracking-tight sm:text-4xl'>
+      Dashboard
+    </h1>
+  );
+
   return (
     <div className='page pt-20'>
       <div className='mx-auto w-full max-w-5xl space-y-6'>
-        <header className='flex items-center justify-between gap-4'>
-          <div className='min-w-0'>
-            <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-              Admin
-            </p>
-            <h1 className='text-foreground mt-2 text-3xl font-semibold tracking-tight sm:text-4xl'>
-              Dashboard
-            </h1>
-            <p className='text-muted-foreground mt-1 truncate text-sm'>{ADMIN_EMAIL}</p>
-          </div>
-          <div className='flex shrink-0 gap-2'>
-            <AdminRefreshButton />
-            <NavButton href='/' variant='outline'>
-              Back
-            </NavButton>
-          </div>
-        </header>
+        {isWide ? (
+          <header>
+            {eyebrow}
+            <div className='mt-2 flex items-center gap-3'>
+              {homeButton}
+              {title}
+              <span className='ml-auto'>
+                <AdminRefreshButton />
+              </span>
+            </div>
+            {email}
+          </header>
+        ) : (
+          <>
+            <StickyAppBar title='Dashboard' titleRef={titleRef} leading={homeButton} trailing={<AdminRefreshButton />} />
+            <header className='-mt-4'>
+              {eyebrow}
+              <div className='mt-2'>{title}</div>
+              {email}
+            </header>
+          </>
+        )}
 
         {isWide ? (
           <div className='grid grid-cols-[260px_1fr] gap-8'>

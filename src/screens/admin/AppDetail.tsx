@@ -1,3 +1,4 @@
+import AppLogo from '@/components/AppLogo';
 import SectionDivider from '@/components/SectionDivider';
 import { TabPanel, UnderlineTabs } from '@/components/UnderlineTabs';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
@@ -61,9 +62,12 @@ function AppDetail({
   if (isWide) {
     return (
       <div className='max-w-3xl space-y-6'>
-        <div>
-          <h2 className='text-foreground text-2xl font-semibold'>{app.name}</h2>
-          <p className='text-muted-foreground text-sm'>/{app.path.replace(/^\//, '') || app.id}</p>
+        <div className='flex items-center gap-3'>
+          <AppLogo appId={app.id} className='size-12 rounded-xl' />
+          <div className='min-w-0'>
+            <h2 className='text-foreground text-2xl font-semibold'>{app.name}</h2>
+            <p className='text-muted-foreground text-sm'>/{app.path.replace(/^\//, '') || app.id}</p>
+          </div>
         </div>
         <section className='space-y-4'>
           <SectionDivider label='Usage' />
