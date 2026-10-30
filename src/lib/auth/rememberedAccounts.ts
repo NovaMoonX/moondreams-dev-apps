@@ -38,7 +38,8 @@ const hasCurrentPhotoCopy = (account: RememberedAccount) => {
   const cached = account.cachedPhoto;
   if (!cached || cached.sourceURL !== account.photoURL) return false;
   if (cached.dataURL) return true;
-  return Date.now() - (cached.failedAt ?? 0) < REFUSED_PHOTO_RETRY_MS;
+  const age = Date.now() - (cached.failedAt ?? 0);
+  return age >= 0 && age < REFUSED_PHOTO_RETRY_MS;
 };
 
 export function readRememberedAccounts(): RememberedAccount[] {
