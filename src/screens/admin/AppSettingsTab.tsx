@@ -6,10 +6,20 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
+import { formatDate } from '@/utils/formatUtils';
+import {
+  accessRequestKeys,
+  accessRequestsQueryOptions,
+  clearAccessRequests,
+  dismissAccessRequest,
+  isOnAccessList,
+  syncAppListing,
+} from '@lib/accessRequests/accessRequests';
 import {
   APP_STATUS_OPTIONS,
   type AppMetadata,
@@ -31,7 +41,15 @@ interface AppSettingsTabProps {
 }
 
 function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onSaved }: AppSettingsTabProps) {
-  const { name, description, status, isRestricted, allowedUsers } = draft;
+  const { name, description, status, isRestricted, isRequestable, allowedUsers } = draft;
+  const setIsRequestable = (value: boolean) => onDraftChange({ isRequestable: value });
+  const queryClient = useQueryClient();
+  const requestsQuery = useQuery(accessRequestsQueryOptions(app.id));
+  const [dismissingUid, setDismissingUid] = useState<string | null>(null);
+  const isGranted = (uid: string, email: string | null) => isOnAccessList(allowedUsers, uid, email);
+  const openRequests = (requestsQuery.data ?? []).filter(
+    (request) => request.dismissedAt === null && !isGranted(request.uid, request.email),
+  );
   const setName = (value: string) => onDraftChange({ name: value });
   const setDescription = (value: string) => onDraftChange({ description: value });
   const setStatus = (value: AppStatus) => onDraftChange({ status: value });
@@ -174,6 +192,18 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
 
     try {
       await onSave(app.id, draft);
+      await syncAppListing(
+        { id: app.id, name: draft.name.trim(), description: draft.description.trim(), path: app.path },
+        draft.status === 'public' && draft.isRestricted && draft.isRequestable,
+      );
+      const latestRequests = await queryClient.fetchQuery({ ...accessRequestsQueryOptions(app.id), staleTime: 0 });
+      const answered = latestRequests
+        .filter((request) => isGranted(request.uid, request.email))
+        .map((request) => request.uid);
+      await clearAccessRequests(app.id, answered).catch((error) =>
+        console.error('Failed to clear answered access requests:', error),
+      );
+      void queryClient.invalidateQueries({ queryKey: accessRequestKeys.forApp(app.id) });
       onSaved();
     } catch (error) {
       console.error('Failed to save app metadata:', error);
@@ -240,6 +270,75 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
         </div>
         <AppToggle checked={isRestricted} onCheckedChange={setIsRestricted} />
       </div>
+
+      <div className='flex items-center justify-between gap-3'>
+        <div>
+          <div className='text-foreground text-sm font-medium'>Let people ask for access</div>
+          <div className='text-muted-foreground text-xs'>
+            Members without access see it on Home and can ask. Asking never gives access by itself.
+          </div>
+        </div>
+        <AppToggle
+          checked={isRestricted && isRequestable}
+          onCheckedChange={setIsRequestable}
+          disabled={!isRestricted}
+          aria-label='Let people ask for access'
+        />
+      </div>
+
+      {openRequests.length > 0 ? (
+        <div className='space-y-2'>
+          <div className='text-foreground text-sm font-medium'>Asked for access</div>
+          <p className='text-muted-foreground text-xs'>
+            Give access adds them to the list below; it takes effect when you save.
+          </p>
+          <div className='divide-border divide-y'>
+            {openRequests.map((request) => (
+              <div key={request.uid} className='flex items-center justify-between gap-3 py-2'>
+                <div className='flex min-w-0 items-center gap-3'>
+                  <UserAvatar user={request} size='sm' />
+                  <div className='min-w-0'>
+                    <div className='text-foreground truncate text-sm'>
+                      {request.displayName ?? request.email ?? 'Someone'}
+                    </div>
+                    <div className='text-muted-foreground truncate text-xs'>
+                      Asked {formatDate(request.requestedAt)}
+                    </div>
+                  </div>
+                </div>
+                <div className='flex shrink-0 gap-2'>
+                  <Button
+                    variant='tertiary'
+                    size='sm'
+                    loading={dismissingUid === request.uid}
+                    onClick={async () => {
+                      setDismissingUid(request.uid);
+                      try {
+                        await dismissAccessRequest(app.id, request.uid);
+                        await queryClient.invalidateQueries({ queryKey: accessRequestKeys.forApp(app.id) });
+                      } catch (error) {
+                        console.error('Failed to answer access request:', error);
+                      } finally {
+                        setDismissingUid(null);
+                      }
+                    }}
+                  >
+                    Not now
+                  </Button>
+                  <Button
+                    variant='secondary'
+                    size='sm'
+                    onClick={() => addUserToAccessList(request.uid)}
+                    disabled={!isRestricted}
+                  >
+                    Give access
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <div className='space-y-3'>
         <div className='flex items-center justify-between'>

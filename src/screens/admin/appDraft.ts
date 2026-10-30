@@ -5,6 +5,7 @@ export interface AppDraft {
   description: string;
   status: AppStatus;
   isRestricted: boolean;
+  isRequestable: boolean;
   allowedUsers: string[];
 }
 
@@ -14,6 +15,7 @@ export function toDraft(app: AppMetadata): AppDraft {
     description: app.description ?? '',
     status: normalizeAppStatus(app.status ?? 'draft'),
     isRestricted: app.isRestricted ?? false,
+    isRequestable: app.isRequestable,
     allowedUsers: app.allowedUsers ?? [],
   };
 }
@@ -27,6 +29,7 @@ export function isSameDraft(a: AppDraft, b: AppDraft) {
     a.description.trim() === b.description.trim() &&
     a.status === b.status &&
     a.isRestricted === b.isRestricted &&
+    a.isRequestable === b.isRequestable &&
     sortedA.length === sortedB.length &&
     sortedA.every((value, index) => value === sortedB[index])
   );

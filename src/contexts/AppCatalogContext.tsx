@@ -1,8 +1,11 @@
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
   doc,
   onSnapshot,
   query,
+  setDoc,
   updateDoc,
   where,
 } from 'firebase/firestore';
@@ -19,11 +22,13 @@ import {
   type AppCatalogContextValue,
 } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
-import { APP_REGISTRY_ID_MAP } from '@lib/app';
+import { APP_REGISTRY_ID_MAP, orderApps } from '@lib/app';
 import { db, isUsingFirebaseEmulators } from '@lib/firebase/config';
 import {
   normalizeAppStatus,
+  type AppListing,
   type AppMetadata,
+  type UserPrefs,
 } from '@lib/types/appCatalog';
 import { User } from 'firebase/auth';
 
@@ -44,6 +49,7 @@ function normalizeAppMetadata(
     description: data.description?.trim() || registryEntry?.description || '',
     status: normalizeAppStatus(data.status ?? 'draft'),
     isRestricted: Boolean(data.isRestricted),
+    isRequestable: data.isRequestable === true,
     allowedUsers: Array.isArray(data.allowedUsers)
       ? data.allowedUsers.map(String)
       : [],
@@ -109,6 +115,13 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   const { user, isAdmin } = useAuth();
   const [allApps, setAllApps] = useState<AppMetadata[]>([]);
   const [resolvedQueryKey, setResolvedQueryKey] = useState<string | null>(null);
+  const [starred, setStarred] = useState<{ uid: string; ids: string[] } | null>(null);
+  const uid = user?.uid ?? null;
+  const starredUid = starred?.uid ?? null;
+  const starredAppIds = useMemo(
+    () => (starred !== null && starred.uid === uid ? starred.ids : []),
+    [starred, uid],
+  );
 
   const queryKey = getQueryKey(user, isAdmin);
   // True until every query for this user has resolved at least once — not
@@ -116,7 +129,9 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   // An app that works signed out (Runway's start) has no use for the catalog, which the rules refuse a visitor.
   const isSkipped =
     user === null && window.location.pathname.startsWith('/runway');
-  const loading = !isSkipped && resolvedQueryKey !== queryKey;
+  // Stars set the order, so the list waits for them rather than reshuffling once they arrive.
+  const isStarredPending = user !== null && starredUid !== user.uid;
+  const loading = !isSkipped && (resolvedQueryKey !== queryKey || isStarredPending);
 
   useEffect(() => {
     if (isSkipped) return;
@@ -155,8 +170,8 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
         },
         (error) => {
           console.error('Failed to load app catalog:', error);
+          // One refused query keeps what the others found, so a person's own apps never vanish with it.
           if (isActive) {
-            setAllApps([]);
             markQueryResolved(index);
           }
         },
@@ -169,7 +184,38 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
     };
   }, [isAdmin, user, isSkipped]);
 
-  const apps = useMemo(() => {
+  useEffect(() => {
+    if (uid === null) return;
+    return onSnapshot(
+      doc(db, 'userPrefs', uid),
+      (snapshot) => {
+        const data = snapshot.data() as Partial<UserPrefs> | undefined;
+        setStarred({ uid, ids: Array.isArray(data?.starredAppIds) ? data.starredAppIds.map(String) : [] });
+      },
+      (error) => {
+        console.error('Failed to load starred apps:', error);
+        setStarred({ uid, ids: [] });
+      },
+    );
+  }, [uid]);
+
+  const setAppStarred = useCallback(
+    async (appId: string, isStarred: boolean) => {
+      if (uid === null) return;
+      await setDoc(
+        doc(db, 'userPrefs', uid),
+        {
+          uid,
+          starredAppIds: isStarred ? arrayUnion(appId) : arrayRemove(appId),
+          updatedAt: Date.now(),
+        },
+        { merge: true },
+      );
+    },
+    [uid],
+  );
+
+  const visibleApps = useMemo(() => {
     if (canSeeAllApps(isAdmin)) {
       return allApps;
     }
@@ -199,6 +245,31 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
     });
   }, [allApps, isAdmin, user]);
 
+  const apps = useMemo(() => orderApps(visibleApps, starredAppIds), [visibleApps, starredAppIds]);
+  const [listings, setListings] = useState<{ uid: string; items: AppListing[] } | null>(null);
+  const isListingReader = uid !== null && !canSeeAllApps(isAdmin);
+
+  useEffect(() => {
+    if (!isListingReader || uid === null) return;
+    return onSnapshot(
+      collection(db, 'appListings'),
+      (snapshot) =>
+        setListings({ uid, items: snapshot.docs.map((docSnap) => docSnap.data() as AppListing) }),
+      (error) => console.error('Failed to load apps you can ask for:', error),
+    );
+  }, [isListingReader, uid]);
+
+  const requestableApps = useMemo(
+    () =>
+      isListingReader && listings !== null && listings.uid === uid
+        ? orderApps(
+            listings.items.filter((listing) => !visibleApps.some((visible) => visible.id === listing.id)),
+            [],
+          )
+        : [],
+    [isListingReader, listings, uid, visibleApps],
+  );
+
   const updateAppMetadata = useCallback(
     async (appId: string, payload: Partial<AppMetadata>) => {
       if (!isAdmin) {
@@ -226,12 +297,15 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   const value = useMemo<AppCatalogContextValue>(
     () => ({
       apps,
+      requestableApps,
+      starredAppIds,
+      setAppStarred,
       allApps,
       appPathMap,
       loading,
       updateAppMetadata,
     }),
-    [apps, allApps, appPathMap, loading, updateAppMetadata],
+    [apps, requestableApps, starredAppIds, setAppStarred, allApps, appPathMap, loading, updateAppMetadata],
   );
 
   return (
