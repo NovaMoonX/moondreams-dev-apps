@@ -1,4 +1,11 @@
-import { useCallback, useState, type PropsWithChildren } from 'react';
+import { useCallback, useEffect, useState, type PropsWithChildren } from 'react';
+
+import { useAuth } from '@/hooks/useAuth';
+import {
+  declareSealedFormDrafts,
+  unlockSealedFormDrafts,
+} from '@lib/app/formDrafts';
+import { createDraftSealer, FORM_DRAFT_PREFIX } from '../security';
 
 import type { Box, Item, MemberUpdateSummary, PendingMember, Space } from '../types';
 import { useActiveAction } from '../hooks/useActiveAction';
@@ -6,6 +13,8 @@ import {
   WorthTheWaitContext,
   type WorthTheWaitContextValue,
 } from './worthTheWaitContext';
+
+declareSealedFormDrafts(FORM_DRAFT_PREFIX);
 
 interface WorthTheWaitProviderProps extends PropsWithChildren {
   space: Space | null;
@@ -49,6 +58,15 @@ export function WorthTheWaitProvider({
   markMemberUpdatesAsSeen,
   forceOpenPendingApprovalModal,
 }: WorthTheWaitProviderProps) {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const spaceEncryption = space?.encryption ?? null;
+
+  useEffect(() => {
+    if (!uid || !spaceEncryption) return;
+    void unlockSealedFormDrafts(uid, FORM_DRAFT_PREFIX, createDraftSealer(spaceEncryption));
+  }, [uid, spaceEncryption]);
+
   const { activeAction, dismissPresentedAction, presentedAction } =
     useActiveAction(space?.id ?? '');
   const [selectedBoxId, setSelectedBoxId] = useState<string | null>(null);

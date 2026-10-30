@@ -115,6 +115,8 @@ export const RANGE_END_WORDS = {
 } as const;
 
 export const SEALED_SCHEMA_VERSION = 1;
+/** Every Runway form draft's key starts with it, so drafts are kept only sealed. */
+export const FORM_DRAFT_PREFIX = 'runway:';
 
 export const DEFAULT_CURRENCY_CODE = 'USD';
 
