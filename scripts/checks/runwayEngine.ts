@@ -5928,6 +5928,7 @@ const version = (
     note: null,
     refundOfId: null,
     link: null,
+    receiptText: null,
     expenseId: null,
     lines: [{ envelopeId: 'dining', cents: 4_000, via: 'chosen' as const }],
   };
@@ -5940,6 +5941,16 @@ const version = (
       (id) => (id === 'g' ? 'Chicago trip' : 'Sam'),
     ),
     'Purchase changed: Safeway, link; added to Chicago trip.',
+  );
+  assert.equal(
+    describePurchaseEdit(
+      before,
+      { ...before, receiptText: 'Milk  $3.00' },
+      (id) => id,
+      () => 'a card',
+      () => 'Sam',
+    ),
+    'Purchase changed: Safeway, items.',
   );
   assert.equal(
     describePurchaseEdit(

@@ -310,6 +310,10 @@ export const CLOSING_VERSION = 3;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
+/** The most characters of items kept from a read receipt. */
+export const MAX_RECEIPT_TEXT_LENGTH = 2000;
+/** Lines of a read receipt's items a purchase's sheet shows before "Show all". */
+export const RECEIPT_TEXT_LINES_SHOWN = 6;
 export const MAX_LINK_LENGTH = 2000;
 /** How long a pasted order link's page is waited for before the preview is skipped. */
 export const LINK_LOOKUP_TIMEOUT_MS = 6000;
@@ -714,7 +718,8 @@ export const SPEND_WORDS = {
   linkPlaceholder: 'Paste an order page or receipt link',
   addLink: 'Add a link',
   needsWebLink: 'Enter a web link, or remove it.',
-  groupHint: 'A group adds up its purchases, like a trip. It changes no balance.',
+  groupHint:
+    'A group adds up its purchases, like a trip. It changes no balance.',
   group: 'Group',
   groupPlaceholder: 'Chicago trip',
   addGroup: 'Add to a group',
@@ -739,6 +744,18 @@ export const SPEND_WORDS = {
   receipt: 'Receipt',
   receipts: 'Receipts',
   addReceipt: 'Add a receipt',
+  readReceipt: 'Read a receipt',
+  readReceiptSends:
+    'Runway sends this photo to an AI service to read the total, the store, the day and the items. Nothing is saved until you add the purchase.',
+  readReceiptChoose: 'Choose a photo',
+  readReceiptReading: 'Reading the receipt…',
+  readReceiptDone:
+    'Read from the receipt. Check the amount, the store and the day.',
+  readReceiptEmpty:
+    'Nothing could be read from that photo. Try a clearer one, or type it in.',
+  items: 'Items',
+  showAllItems: 'Show all',
+  showFewerItems: 'Show fewer',
   addReceiptSub: 'A photo or screenshot, kept sealed until you remove it.',
   receiptPhotos: (count: number) =>
     count === 1 ? '1 photo' : `${count} photos`,
