@@ -11,19 +11,23 @@ export function reloadOnFirestoreReset() {
   new BroadcastChannel(RESET_CHANNEL).onmessage = () => window.location.reload();
 }
 
-/** Clears the Firestore data this device saves and reloads every open tab; nothing on the server changes. */
-export async function resetFirestoreLocalData() {
+/** Stops Firestore and deletes the data this device saved for it, asking other tabs to reload; the caller must reload too. */
+export async function clearFirestoreLocalData() {
   await terminate(db).catch(() => undefined);
   // A tab holding the database open can stall the delete, so don't wait on it forever.
   await Promise.race([
     clearIndexedDbPersistence(db).catch(() => undefined),
     new Promise((resolve) => setTimeout(resolve, CLEAR_TIMEOUT_MS)),
   ]);
-
   if (typeof BroadcastChannel !== 'undefined') {
     const channel = new BroadcastChannel(RESET_CHANNEL);
     channel.postMessage('reset');
     channel.close();
   }
+}
+
+/** Clears the Firestore data this device saves and reloads every open tab; nothing on the server changes. */
+export async function resetFirestoreLocalData() {
+  await clearFirestoreLocalData();
   window.location.reload();
 }

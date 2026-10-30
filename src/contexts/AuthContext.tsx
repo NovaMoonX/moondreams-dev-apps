@@ -12,7 +12,7 @@ import {
   serverTimestamp,
   set,
 } from 'firebase/database';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, waitForPendingWrites } from 'firebase/firestore';
 import {
   type PropsWithChildren,
   useCallback,
@@ -28,6 +28,7 @@ import { ADMIN_EMAIL, APP_REGISTRY, clearAppResume } from '@/lib/app';
 import { recordSiteVisit } from '@/lib/appUsage/appUsage';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
 import { ensureDocExists } from '@/lib/firebase';
+import { clearFirestoreLocalData } from '@/lib/firebase/localData';
 import { releaseDevicePush } from '@/lib/notifications/devicePush';
 import { clearViewerSessions } from '@/utils/viewerSessionUtils';
 import { resetAllState } from '@/store/actions/globalActions';
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [isDisplayNameUpdating, setIsDisplayNameUpdating] = useState(false);
   const currentLocationRef = useRef('home');
   const previousUserIdRef = useRef<string | null | undefined>(undefined);
+  const isSigningOutRef = useRef(false);
 
   const isAdmin = useMemo(
     () => user?.email?.toLowerCase() === ADMIN_EMAIL.toLowerCase(),
@@ -54,6 +56,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      // Firestore is already stopped and the page is about to reload; rendering signed out would start listeners on it.
+      if (isSigningOutRef.current) return;
       const nextUserId = firebaseUser?.uid ?? null;
       const previousUserId = previousUserIdRef.current;
 
@@ -215,6 +219,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             lastChanges: serverTimestamp(),
           }),
           releaseDevicePush(uid),
+          waitForPendingWrites(db),
         ]),
         new Promise((resolve) => setTimeout(resolve, RELEASE_PUSH_WAIT_MS)),
       ]);
@@ -223,8 +228,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     currentLocationRef.current = 'home';
     if (auth.currentUser) clearViewerSessions(auth.currentUser.uid);
     clearAppResume();
+    isSigningOutRef.current = true;
+    // Firestore's saved copy is shared by every account on this device: a read the next account
+    // is refused can be saved as "deleted" and keep its list empty until the copy is cleared.
+    await clearFirestoreLocalData();
+    await signOut(auth).catch((error) => console.error('Sign-out error:', error));
     window.location.href = '/';
-    await signOut(auth);
   }, []);
 
   const updateDisplayName = useCallback(async (displayName: string) => {
