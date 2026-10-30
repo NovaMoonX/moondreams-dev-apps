@@ -365,7 +365,7 @@ export function AnswerFields({
                       alt=''
                       className='h-28 w-full rounded-lg object-cover object-top'
                     />
-                    <span className='text-foreground line-clamp-2 px-1 pb-0.5 text-xs font-medium [overflow-wrap:anywhere]'>
+                    <span className='text-foreground line-clamp-2 px-1 pr-8 pb-0.5 text-xs font-medium [overflow-wrap:anywhere]'>
                       {LETTERS[index]} · {stripLinks(option.label)}
                     </span>
                     {option.isRecommended ? (
@@ -437,7 +437,7 @@ export function AnswerFields({
 const ROW_WORDS = {
   question: { sheet: 'Answer', empty: 'Not answered yet' },
   reply: { sheet: 'Reply', empty: 'Not answered yet' },
-  feedback: { sheet: 'Anything else?', empty: "Optional: feedback that isn't an answer" },
+  feedback: { sheet: 'Anything else?', empty: 'Optional' },
 };
 
 const getAnswerSummary = (draft: AnswerDraft) => {
