@@ -14,13 +14,14 @@ import type { AppMetadata } from '@lib/types/appCatalog';
 import AppCard from './home/AppCard';
 import AppInfoDrawer from './home/AppInfoDrawer';
 import AppTile from './home/AppTile';
+import RequestableApps from './home/RequestableApps';
 
 /** Below this many apps, starring only moves an app to the front; from here the list splits under headings. */
 const STARRED_SECTION_MIN_APPS = 5;
 
 function Home() {
   const { user } = useAuth();
-  const { apps, loading, starredAppIds, setAppStarred } = useAppCatalog();
+  const { apps, requestableApps, loading, starredAppIds, setAppStarred } = useAppCatalog();
   const navigate = useNavigate();
   const isWide = useMediaQuery().isAtLeast('sm');
   const [isShowingDetails, setIsShowingDetails] = useLocalStoragePreference('home:show-app-details', false);
@@ -38,6 +39,10 @@ function Home() {
 
   // Starring only matters once there is something to put first.
   const isHintShown = isGrid && user !== null && apps.length > 1 && starredApps.length === 0;
+
+  const requestablePerson = user
+    ? { uid: user.uid, email: user.email ?? null, displayName: user.displayName ?? null }
+    : null;
 
   const getHref = (app: AppMetadata) => getAppResumePath(user?.uid ?? null, app.id, app.path);
   const toggleStar = (appId: string) =>
@@ -68,10 +73,17 @@ function Home() {
             Loading apps...
           </div>
         ) : apps.length === 0 ? (
-          <div className='border-border bg-card text-foreground/70 mx-auto mt-12 max-w-2xl rounded-3xl border px-5 py-4 text-center text-sm'>
-            {user
-              ? 'No apps available for your account.'
-              : 'No apps generally available. Please sign in to see apps available for your account.'}
+          <div className='mx-auto mt-12 max-w-2xl space-y-8 text-left'>
+            <div className='border-border bg-card text-foreground/70 rounded-3xl border px-5 py-4 text-center text-sm'>
+              {user
+                ? requestableApps.length > 0
+                  ? 'No apps on your account yet. Ask for one below.'
+                  : 'No apps available for your account.'
+                : 'No apps generally available. Please sign in to see apps available for your account.'}
+            </div>
+            {requestablePerson !== null && requestableApps.length > 0 ? (
+              <RequestableApps apps={requestableApps} person={requestablePerson} />
+            ) : null}
           </div>
         ) : (
           <section className='mt-12 space-y-4 text-left'>
@@ -125,6 +137,9 @@ function Home() {
                 )}
               </div>
             ))}
+            {requestablePerson !== null && requestableApps.length > 0 ? (
+              <RequestableApps apps={requestableApps} person={requestablePerson} />
+            ) : null}
           </section>
         )}
       </div>

@@ -48,6 +48,7 @@ function normalizeAppMetadata(
     description: data.description?.trim() || registryEntry?.description || '',
     status: normalizeAppStatus(data.status ?? 'draft'),
     isRestricted: Boolean(data.isRestricted),
+    isRequestable: data.isRequestable === true,
     allowedUsers: Array.isArray(data.allowedUsers)
       ? data.allowedUsers.map(String)
       : [],
@@ -96,6 +97,17 @@ function buildAppQueries(user: User | null, isAdmin: boolean) {
         where('status', '==', 'public'),
         where('isRestricted', '==', true),
         where('allowedUsers', 'array-contains', user.email),
+      ),
+    );
+  }
+
+  if (user !== null) {
+    queries.push(
+      query(
+        appsCollection,
+        where('status', '==', 'public'),
+        where('isRestricted', '==', true),
+        where('isRequestable', '==', true),
       ),
     );
   }
@@ -244,6 +256,22 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   }, [allApps, isAdmin, user]);
 
   const apps = useMemo(() => orderApps(visibleApps, starredAppIds), [visibleApps, starredAppIds]);
+  const requestableApps = useMemo(
+    () =>
+      canSeeAllApps(isAdmin) || user === null
+        ? []
+        : orderApps(
+            allApps.filter(
+              (app) =>
+                app.status === 'public' &&
+                app.isRestricted &&
+                app.isRequestable &&
+                !visibleApps.some((visible) => visible.id === app.id),
+            ),
+            [],
+          ),
+    [allApps, isAdmin, user, visibleApps],
+  );
 
   const updateAppMetadata = useCallback(
     async (appId: string, payload: Partial<AppMetadata>) => {
@@ -272,6 +300,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   const value = useMemo<AppCatalogContextValue>(
     () => ({
       apps,
+      requestableApps,
       starredAppIds,
       setAppStarred,
       allApps,
@@ -279,7 +308,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
       loading,
       updateAppMetadata,
     }),
-    [apps, starredAppIds, setAppStarred, allApps, appPathMap, loading, updateAppMetadata],
+    [apps, requestableApps, starredAppIds, setAppStarred, allApps, appPathMap, loading, updateAppMetadata],
   );
 
   return (

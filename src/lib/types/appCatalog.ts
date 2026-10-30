@@ -29,6 +29,8 @@ export interface AppMetadata {
   description: string;
   status: AppStatus;
   isRestricted: boolean;
+  /** A restricted app people without access can see on Home and ask for. Stored `boolean | null`; missing reads as false. */
+  isRequestable: boolean;
   allowedUsers: string[];
   createdAt?: string;
   updatedAt?: string;

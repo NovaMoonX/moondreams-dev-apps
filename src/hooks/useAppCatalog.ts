@@ -5,6 +5,8 @@ import type { AppMetadata } from '@lib/types/appCatalog';
 export type AppCatalogContextValue = {
   /** What this person can open, starred first. */
   apps: AppMetadata[];
+  /** Restricted apps this person doesn't have yet but may ask for. */
+  requestableApps: AppMetadata[];
   starredAppIds: string[];
   setAppStarred: (appId: string, isStarred: boolean) => Promise<void>;
   allApps: AppMetadata[];

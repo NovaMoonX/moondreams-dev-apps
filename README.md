@@ -14,7 +14,7 @@ A collection of mini-apps built to fit whatever felt useful, fun, or simply inte
 - 🧂 **Pinch** — Bring in recipes from a chat, a photo or a link, plan your week and get a shopping list, with what it costs.
 - 🛫 **Runway** — An income-first budget planner for money that does not arrive or leave on a tidy schedule: draft where each income day should go, look ahead to see how far the plan holds, and change it when life changes.
 
-On a phone, Home shows your apps like a home screen; press and hold one to read about it or star it, and starred apps come first on Home and in the menu. The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
+On a phone, Home shows your apps like a home screen; press and hold one to read about it or star it, and starred apps come first on Home and in the menu. Apps you don't have yet but can ask for are listed under "Ask for access". The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
 
 ## Quick start
 
