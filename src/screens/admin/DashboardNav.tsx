@@ -1,8 +1,9 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 
+import AppLogo from '@/components/AppLogo';
 import SearchInput from '@/components/SearchInput';
 import useNow from '@/hooks/useNow';
 import { getActiveSince } from '@lib/appUsage/appUsage';
@@ -13,6 +14,8 @@ import { APP_SEARCH_THRESHOLD } from './constants';
 import { getUsageRows } from './usageRows';
 
 interface NavRowProps {
+  /** An app's logo, before the title. */
+  leading?: ReactNode;
   title: string;
   subtitle: string;
   meta: string[];
@@ -21,7 +24,7 @@ interface NavRowProps {
   onClick: () => void;
 }
 
-function NavRow({ title, subtitle, meta, isSelected, isWide, onClick }: NavRowProps) {
+function NavRow({ leading = null, title, subtitle, meta, isSelected, isWide, onClick }: NavRowProps) {
   return (
     <Button
       type='button'
@@ -34,6 +37,7 @@ function NavRow({ title, subtitle, meta, isSelected, isWide, onClick }: NavRowPr
       )}
       onClick={onClick}
     >
+      {leading}
       <span className='min-w-0 flex-1'>
         <span className={join('text-foreground block truncate text-sm', isSelected && 'font-semibold')}>{title}</span>
         <span className='text-muted-foreground block truncate text-xs'>{subtitle}</span>
@@ -149,6 +153,7 @@ function DashboardNav({
             {visibleApps.map((app) => (
               <div key={app.id}>
                 <NavRow
+                  leading={<AppLogo appId={app.id} />}
                   title={app.name || app.id}
                   subtitle={getAppSubtitle(app)}
                   meta={getAppMeta(app)}

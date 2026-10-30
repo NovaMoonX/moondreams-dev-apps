@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
+import AppLogo from '@/components/AppLogo';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { APP_DESCRIPTION, APP_TITLE, getAppResumePath } from '@lib/app';
@@ -48,11 +49,7 @@ function Home() {
                 className='group border-border bg-card hover:border-primary/40 flex flex-col gap-4 rounded-3xl border p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md'
               >
                 <div className='flex items-center gap-4'>
-                  <img
-                    src={`/logos/by-app/logo-${app.id}.svg`}
-                    alt=''
-                    className='h-16 w-16 shrink-0 rounded-2xl shadow-sm'
-                  />
+                  <AppLogo appId={app.id} className='size-16 rounded-2xl shadow-sm' />
                   <h2 className='text-foreground min-w-0 flex-1 text-xl font-semibold tracking-tight'>
                     {app.name}
                   </h2>
