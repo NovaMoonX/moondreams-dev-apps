@@ -47,6 +47,20 @@ const rest = async <T>(path: string): Promise<T> => {
   return (await response.json()) as T;
 };
 
+interface GraphqlReply<T> {
+  data?: T;
+  errors?: { message: string }[];
+}
+
+// A gateway error answers in HTML, so an unreadable reply becomes an error carrying its status.
+const readReply = <T>(status: number, text: string): GraphqlReply<T> => {
+  try {
+    return JSON.parse(text) as GraphqlReply<T>;
+  } catch {
+    return { errors: [{ message: `${status} ${text.slice(0, 200)}` }] };
+  }
+};
+
 const graphql = async <T>(
   query: string,
   variables: Record<string, unknown>,
@@ -59,16 +73,7 @@ const graphql = async <T>(
     },
     body: JSON.stringify({ query, variables }),
   });
-  const text = await response.text();
-  const body = (() => {
-    try {
-      return JSON.parse(text) as { data?: T; errors?: { message: string }[] };
-    } catch {
-      return {
-        errors: [{ message: `${response.status} ${text.slice(0, 200)}` }],
-      };
-    }
-  })();
+  const body = readReply<T>(response.status, await response.text());
   if (!response.ok || body.errors?.length) {
     throw new Error(
       body.errors?.map((error) => error.message).join('; ') ??
