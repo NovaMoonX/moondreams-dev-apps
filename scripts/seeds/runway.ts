@@ -40,6 +40,7 @@ import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
   CardDoc,
   CardPaymentSealed,
+  TransferSealed,
   CardSealed,
   ExpenseDoc,
   ExpenseSealed,
@@ -729,7 +730,7 @@ async function writeSeedCards(
   return cards.length + 4;
 }
 
-/** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside. One change and five holdings. */
+/** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside, and $42.00 moved from Groceries to the Vacation fund three days ago. Two changes and six moves. */
 async function writeSeedStart(
   context: SeedContext,
   uid: string,
@@ -782,7 +783,38 @@ async function writeSeedStart(
       batch.set(context.firestore.doc(`${plan}/moves/${id}`), move);
     }),
   );
-  return 1 + holdings.length;
+  const movedOn = startOfUtcDay(context.now) - 3 * DAY_MS;
+  const transferId = 'transfer_seed-groceries-to-vacation';
+  const transfer: TransferSealed = {
+    fromId: 'seed-envelope-groceries',
+    toId: 'seed-goal-vacation',
+    cents: 4_200,
+    note: null,
+  };
+  batch.set(context.firestore.doc(`${plan}/moves/${transferId}`), {
+    id: transferId,
+    kind: 'transfer',
+    date: movedOn,
+    refId: transfer.fromId,
+    reversesMoveId: null,
+    createdAt: movedOn + 10 * 3_600_000,
+    sealed: await sealJson(transfer, encryption),
+  } satisfies MoveDoc);
+  batch.set(context.firestore.doc(`${plan}/changes/seed-change-transfer`), {
+    id: 'seed-change-transfer',
+    kind: 'moveChange',
+    createdAt: movedOn + 10 * 3_600_000,
+    effectiveFrom: null,
+    itemIds: [transfer.fromId, transfer.toId ?? ''],
+    sealed: await sealJson(
+      {
+        summary: 'Moved $42.00 from Groceries to Vacation fund.',
+        note: null,
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  });
+  return 3 + holdings.length;
 }
 
 /** One source with two pay lines, sealed the way the app seals them: a paycheck every other week that ends after six, and a bonus that arrives once. */
@@ -2098,7 +2130,8 @@ async function writeSeedPurchases(
       daysAgo: 3,
       merchant: 'Safeway',
       note: null,
-      receiptText: 'Bananas  $2.18\nOat milk ×2  $9.98\nChicken thighs  $14.52\nSourdough  $5.49\nSalmon  $18.00\nCheese  $14.01\nTotal  $64.18',
+      receiptText:
+        'Bananas  $2.18\nOat milk ×2  $9.98\nChicken thighs  $14.52\nSourdough  $5.49\nSalmon  $18.00\nCheese  $14.01\nTotal  $64.18',
       lines: [line(groceries, 6_418)],
       editedAt: 3_600_000,
     },

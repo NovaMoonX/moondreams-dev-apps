@@ -163,7 +163,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
   - only the days you choose, such as one a few months away
 
   Any single income day can override the rule: add to an envelope, skip it, or change the amount, in the draft or in lookahead.
-- **Money stays where you put it.** What is left in an envelope stays in it. Moving leftover money to another envelope or a goal is one tap.
+- **Money stays where you put it.** What is left in an envelope stays in it. Moving leftover money to another envelope, a goal or Free to Spend is one tap on the envelope's sheet ("Move what's left"), with an Undo, also offered later on the move's History entry; money on hand never changes, since Runway only changes which bucket holds the money and never moves real money. Covering an overspent envelope or moving to Free to Spend does change Free to Spend, and the view says so before the move.
 - **Bills and envelopes are different.** Something with a due date and an amount is a bill. Spending with no due date is an envelope.
 - **Draft and confirm.** A draft is a suggestion. It funds in priority order, with bills due before the next income day first within their tier. You can move any amount, fund a reserve, or send cash somewhere else before you confirm. Confirming an income day is what fills its envelopes. See Income Days.
 - **Lookahead.** Every coming income day has its own draft. You can adjust one weeks out and Runway shows what that does to the bills in between.
@@ -429,7 +429,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [x] Notes, links and expense groups on purchases at the Track level
 - [x] Receipt photos on purchases
 - [x] Monthly envelope funding, split across the month's income days
-- [ ] Move leftover envelope money to another envelope or a goal
+- [x] Move leftover envelope money to another envelope, a goal or Free to Spend
 - [ ] Open the plan as of a past date
 - [ ] Group bills and expected expenses (Subscriptions, Housing, Car), with a monthly total and a starting priority per group
 - [ ] Irregular income with no schedule, and a rough monthly expectation for lookahead

@@ -424,10 +424,24 @@ export interface PlanVersionDoc {
   sealed: Sealed;
 }
 
+/** The move of money a `moveChange` entry records, kept so its History row can take it back; an entry that takes one back carries the same ids with `isUndo` set. */
+export interface ChangeMove {
+  moveId: string;
+  date: DateOnly;
+  fromId: string;
+  toId: string | null;
+  cents: Cents;
+  note: string | null;
+  /** The sentence that says what taking it back restores, for the confirm, the toast and the log. */
+  undoText: string;
+  isUndo: boolean;
+}
+
 export interface ChangeSealed {
   summary: string;
   /** The person's reason; a change written before notes existed has none. */
   note?: string | null;
+  move?: ChangeMove | null;
 }
 
 export interface ChangeDoc {
@@ -448,6 +462,7 @@ export interface OpenChange {
   itemIds: string[];
   summary: string;
   note: string | null;
+  move: ChangeMove | null;
   isUnreadable: boolean;
 }
 
@@ -505,6 +520,14 @@ export interface CardPaymentSealed {
   covers?: CardPaymentCovers;
 }
 
+/** Money moved between buckets: `refId` is `fromId`, `toId` null is Free to Spend. A move that names it in `reversesMoveId` takes it back. */
+export interface TransferSealed {
+  fromId: string;
+  toId: string | null;
+  cents: Cents;
+  note: string | null;
+}
+
 export type CardPaymentCovers = 'full' | 'minimum' | 'part';
 
 export type StartHolding = (typeof START_HOLDINGS)[number];
@@ -532,7 +555,8 @@ export type OpenMove =
   | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
   | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
   | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed })
-  | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed });
+  | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed })
+  | (OpenMoveBase & { kind: 'transfer'; payload: TransferSealed });
 
 export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
 export type StartMove = Extract<OpenMove, { kind: 'start' }>;
@@ -611,6 +635,8 @@ export interface ClosingSealed {
   charged: Record<string, Cents>;
   /** `[day, cents, moveId]` for each card payment not undone. */
   cardPaid: Record<string, [number, Cents, string][]>;
+  /** `[day, fromId, toId, cents, moveId]` for each transfer not undone; a null `toId` is Free to Spend. */
+  transfers: [number, string, string | null, Cents, string][];
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

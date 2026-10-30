@@ -46,6 +46,11 @@ function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
       </p>
     );
   }
+  const undoneMoveIds = new Set(
+    state.changes.flatMap((change) =>
+      change.move?.isUndo ? [change.move.moveId] : [],
+    ),
+  );
   const shown = isAll
     ? state.changes
     : state.changes.slice(0, ITEM_HISTORY_PREVIEW);
@@ -58,6 +63,7 @@ function ItemHistoryView({ itemId }: ItemHistoryViewProps) {
             change={change}
             confirmedDayKey={null}
             onOpenRecord={() => undefined}
+            undoneMoveIds={undoneMoveIds}
           />
         ))}
         {isCut && (isAll || state.changes.length <= ITEM_HISTORY_PREVIEW) && (

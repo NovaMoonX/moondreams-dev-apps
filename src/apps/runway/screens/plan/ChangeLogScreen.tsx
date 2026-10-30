@@ -91,6 +91,15 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
           ),
     [changes, isLoaded, needle],
   );
+  const undoneMoveIds = useMemo(
+    () =>
+      new Set(
+        changes.flatMap((change) =>
+          change.move?.isUndo ? [change.move.moveId] : [],
+        ),
+      ),
+    [changes],
+  );
   const itemOptions = [
     { value: ALL_ITEMS, label: 'All items' },
     ...itemNames.map((item) => ({ value: item.id, label: item.name })),
@@ -137,6 +146,7 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
               change={change}
               confirmedDayKey={findConfirmedDay(change, confirmed)}
               onOpenRecord={setRecordKey}
+              undoneMoveIds={undoneMoveIds}
             />
           ))}
         </ul>

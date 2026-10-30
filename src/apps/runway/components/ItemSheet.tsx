@@ -7,6 +7,7 @@ import {
   Check,
   FolderOpen,
   HandCoins,
+  ArrowRightLeft,
   CircleMinus,
   History,
   Link2,
@@ -49,6 +50,7 @@ import {
 import GoalBalanceView, {
   GoalBalanceDoor,
 } from '@apps/runway/components/GoalBalanceView';
+import MoveLeftoverView from '@apps/runway/components/MoveLeftoverView';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
@@ -78,6 +80,7 @@ import {
   MAX_CHANGE_DAYS_AHEAD,
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
+  MOVE_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
@@ -150,7 +153,8 @@ type View =
   | 'history'
   | 'purchases'
   | 'check'
-  | 'group';
+  | 'group'
+  | 'move';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 interface ItemSheetProps {
@@ -212,6 +216,7 @@ const VIEW_NOTES: Record<View, string> = {
   purchases: '',
   check: '',
   group: '',
+  move: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -756,6 +761,15 @@ function ItemSheet({
             onClick={() => openChange('often')}
           />
         )}
+        {canChange && isTrackEnvelope && isArchivable && heldCents > 0 && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<ArrowRightLeft />}
+            label={MOVE_WORDS.open}
+            onClick={() => goTo('move')}
+          />
+        )}
         {hasBillRow && payment && (
           <ActionRow
             isGrouped
@@ -921,16 +935,18 @@ function ItemSheet({
 
   const browse = (
     <div className='flex flex-1 flex-col gap-4'>
-      <BackLink onBack={() => goTo('menu')} />
-      <p className='text-2xl font-semibold'>
-        {view === 'balance'
-          ? GOAL_CHART_WORDS.title
-          : view === 'history'
-            ? ITEM_VIEW_WORDS.historyTitle
-            : view === 'check'
-              ? CHECK_WORDS.title
-              : ITEM_VIEW_WORDS.purchasesTitle}
-      </p>
+      <div className='flex items-center gap-1'>
+        <BackLink isChevronOnly onBack={() => goTo('menu')} />
+        <p className='min-w-0 text-2xl font-semibold'>
+          {view === 'balance'
+            ? GOAL_CHART_WORDS.title
+            : view === 'history'
+              ? ITEM_VIEW_WORDS.historyTitle
+              : view === 'check'
+                ? CHECK_WORDS.title
+                : ITEM_VIEW_WORDS.purchasesTitle}
+        </p>
+      </div>
       {view === 'balance' && goal ? (
         <GoalBalanceView goalId={itemId} goal={goal} today={today} />
       ) : view === 'history' ? (
@@ -1000,6 +1016,16 @@ function ItemSheet({
         }
       />
     </div>
+  );
+
+  const moveView = (
+    <MoveLeftoverView
+      envelopeId={itemId}
+      name={payload.name}
+      leftCents={heldCents}
+      today={today}
+      onBack={() => goTo('menu')}
+    />
   );
 
   const action = (
@@ -1133,7 +1159,9 @@ function ItemSheet({
             ? browse
             : view === 'group'
               ? groupView
-              : action
+              : view === 'move'
+                ? moveView
+                : action
         }
       >
         {menu}

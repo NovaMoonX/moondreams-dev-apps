@@ -22,6 +22,8 @@ import {
   collectFunded,
   collectPaid,
   collectStarted,
+  collectTransferEntries,
+  sumTransfers,
   settlePaid,
 } from './progress';
 
@@ -169,12 +171,18 @@ export function deriveBalances(input: BalancesInput): Balances {
       }, {}),
   );
 
+  const transfers = sumTransfers([
+    ...(base?.transfers ?? []),
+    ...collectTransferEntries(input.moves, startDate),
+  ]);
+
   const isCard = (id: string) => input.kinds[id] === 'card';
   const itemIds = new Set(
     [
       ...Object.keys(given),
       ...Object.keys(started.byItem),
       ...Object.keys(spentByItem),
+      ...Object.keys(transfers),
     ].filter((id) => !isCard(id)),
   );
   const assignedByItem = Object.fromEntries(
@@ -183,7 +191,8 @@ export function deriveBalances(input: BalancesInput): Balances {
       (started.byItem[id] ?? 0) +
         (given[id] ?? 0) -
         (consumed[id] ?? 0) -
-        (spentByItem[id] ?? 0),
+        (spentByItem[id] ?? 0) +
+        (transfers[id] ?? 0),
     ]),
   );
   const isReleased = (id: string) =>
@@ -300,7 +309,8 @@ export function deriveBalancesBefore(
     input.moves.flatMap((move) =>
       !move.reversesMoveId &&
       ((move.kind === 'billPaid' && move.payload.paidOn >= day) ||
-        (move.kind === 'cardPayment' && move.date >= day))
+        (move.kind === 'cardPayment' && move.date >= day) ||
+        (move.kind === 'transfer' && move.date >= day))
         ? [move.id]
         : [],
     ),
