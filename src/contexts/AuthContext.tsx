@@ -35,6 +35,7 @@ import {
   releaseFirestoreLocalData,
 } from '@/lib/firebase/localData';
 import {
+  cacheRememberedPhoto,
   forgetAccount as forgetSavedAccount,
   readRememberedAccounts,
   rememberAccount,
@@ -96,6 +97,16 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       previousUserIdRef.current = nextUserId;
+      // Signed out from anywhere (another tab, an expired session): start again from Home, not the app's page.
+      // A shared page reads the same signed out, so it stays.
+      const { pathname } = window.location;
+      if (previousUserId && !nextUserId && pathname !== '/' && !pathname.includes('/shared/')) {
+        isReloadingRef.current = true;
+        dispatch(setCurrentUser(null));
+        setUser(null);
+        window.location.assign('/');
+        return;
+      }
 
       if (firebaseUser) {
         setRememberedAccounts(
@@ -105,6 +116,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
             displayName: firebaseUser.displayName ?? null,
             photoURL: getProviderPhotoURL(firebaseUser) ?? null,
           }),
+        );
+        void cacheRememberedPhoto(firebaseUser.uid).then(
+          (accounts) => accounts && setRememberedAccounts(accounts),
         );
       }
 

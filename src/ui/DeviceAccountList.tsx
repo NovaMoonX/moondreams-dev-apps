@@ -4,7 +4,10 @@ import { Check, Plus } from 'lucide-react';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
-import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
+import {
+  getRememberedPhoto,
+  type RememberedAccount,
+} from '@/lib/auth/rememberedAccounts';
 import UserAvatar from '@/ui/UserAvatar';
 
 interface DeviceAccountListProps {
@@ -47,7 +50,13 @@ function DeviceAccountList({
         account.uid === currentUid ? (
           <SettingsRow
             key={account.uid}
-            icon={<UserAvatar user={account} size='sm' className='size-10!' />}
+            icon={
+              <UserAvatar
+                user={{ ...account, photoURL: getRememberedPhoto(account) }}
+                size='sm'
+                className='size-10!'
+              />
+            }
             title={getName(account)}
             description='Signed in now'
             control={
@@ -62,7 +71,13 @@ function DeviceAccountList({
         ) : (
           <SettingsRow
             key={account.uid}
-            icon={<UserAvatar user={account} size='sm' className='size-10!' />}
+            icon={
+              <UserAvatar
+                user={{ ...account, photoURL: getRememberedPhoto(account) }}
+                size='sm'
+                className='size-10!'
+              />
+            }
             title={getName(account)}
             description={account.email}
             onClick={() => onSwitch(account)}
