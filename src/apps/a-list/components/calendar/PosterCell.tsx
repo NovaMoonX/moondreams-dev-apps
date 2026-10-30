@@ -41,6 +41,20 @@ function PosterCell({
   const face = (
     <span className='relative block h-full w-full overflow-hidden rounded-xl'>
       {hasCovers && <PosterSplit viewings={viewings} />}
+      {hasOpenings && (
+        <span
+          className={join(
+            'pointer-events-none absolute inset-0 rounded-xl border-2 border-dashed border-(--a-list-release)',
+            !hasCovers && 'bg-accent/70',
+          )}
+        >
+          <span className='sr-only'>
+            {openings.length === 1
+              ? '1 movie opening'
+              : `${openings.length} movies opening`}
+          </span>
+        </span>
+      )}
       <span
         className={join(
           'absolute top-1 left-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-semibold',
@@ -50,15 +64,6 @@ function PosterCell({
       >
         {date.getDate()}
       </span>
-      {hasOpenings && (
-        <span className='border-accent-foreground/70 pointer-events-none absolute inset-0 rounded-xl border-2 border-dashed'>
-          <span className='sr-only'>
-            {openings.length === 1
-              ? '1 movie opening'
-              : `${openings.length} movies opening`}
-          </span>
-        </span>
-      )}
       {isSelected && (
         <span className='ring-primary pointer-events-none absolute inset-0 rounded-xl ring-2 ring-inset' />
       )}

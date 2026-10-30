@@ -12,6 +12,7 @@ html.a-list-theme {
   --color-accent: var(--color-amber-100);
   --color-accent-foreground: var(--color-amber-900);
   --color-border: var(--color-stone-200);
+  --a-list-release: var(--color-amber-500);
 }
 
 /* A subview is a card with a thin gold hairline on a deep red backdrop. */
@@ -39,6 +40,7 @@ html.a-list-theme.dark {
   --color-accent: var(--color-amber-950);
   --color-accent-foreground: var(--color-amber-100);
   --color-border: var(--color-zinc-800);
+  --a-list-release: var(--color-amber-400);
 }
 
 /* A click leaves a button focused, and the library's focus: outline and ring flash on it.

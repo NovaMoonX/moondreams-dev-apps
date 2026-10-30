@@ -450,8 +450,8 @@ function MembershipSettingsSubview({
           </div>
           <p className='text-muted-foreground text-sm'>
             {showReleasesOnCalendar
-              ? 'A movie on your watchlist gets a dashed gold outline on the day it opens, until you plan it.'
-              : 'Your calendar shows only what you’ve planned. The Watchlist’s Opening filter still lists what’s coming.'}
+              ? 'The day a movie on your watchlist opens gets a dashed gold outline, until you plan it.'
+              : 'Your calendar shows only what you’ve planned. The Watchlist still shows what opens this week.'}
           </p>
         </div>
         <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
