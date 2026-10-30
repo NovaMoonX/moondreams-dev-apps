@@ -33,7 +33,7 @@ function AppInfoDrawer({ app, isStarred, onOpen, onToggleStar, onClose }: AppInf
                 {isStarred ? 'Unstar' : 'Star it'}
               </Button>
             ) : null}
-            {onToggleStar ? (
+            {onToggleStar && !isStarred ? (
               <p className='text-muted-foreground text-center text-xs'>
                 Starred apps come first, here and in the menu.
               </p>

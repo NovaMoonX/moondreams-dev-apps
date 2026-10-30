@@ -36,6 +36,9 @@ function Home() {
         ]
       : [{ label: null, apps }];
 
+  // Starring only matters once there is something to put first.
+  const isHintShown = isGrid && user !== null && apps.length > 1 && starredApps.length === 0;
+
   const getHref = (app: AppMetadata) => getAppResumePath(user?.uid ?? null, app.id, app.path);
   const toggleStar = (appId: string) =>
     setAppStarred(appId, !starredAppIds.includes(appId)).catch((error) =>
@@ -72,9 +75,10 @@ function Home() {
           </div>
         ) : (
           <section className='mt-12 space-y-4 text-left'>
-            {isGrid || !isWide ? (
+            {!isWide ? (
               <SectionHeader
                 title='Your apps'
+                subtitle={isHintShown ? 'Press and hold an app to star it, or turn on Details.' : undefined}
                 action={
                   isWide ? null : (
                     <div className='flex items-center gap-2'>
@@ -82,6 +86,7 @@ function Home() {
                       <AppToggle
                         size='sm'
                         aria-label='Show details'
+                        className="after:absolute after:-inset-x-2.5 after:-inset-y-2.5 after:content-['']"
                         checked={isShowingDetails}
                         onCheckedChange={setIsShowingDetails}
                       />
@@ -120,9 +125,6 @@ function Home() {
                 )}
               </div>
             ))}
-            {isGrid && user && starredAppIds.length === 0 ? (
-              <p className='text-muted-foreground text-center text-xs'>Press and hold an app to star it.</p>
-            ) : null}
           </section>
         )}
       </div>

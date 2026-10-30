@@ -115,6 +115,7 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   const [resolvedQueryKey, setResolvedQueryKey] = useState<string | null>(null);
   const [starred, setStarred] = useState<{ uid: string; ids: string[] } | null>(null);
   const uid = user?.uid ?? null;
+  const starredUid = starred?.uid ?? null;
   const starredAppIds = useMemo(
     () => (starred !== null && starred.uid === uid ? starred.ids : []),
     [starred, uid],
@@ -126,7 +127,9 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
   // An app that works signed out (Runway's start) has no use for the catalog, which the rules refuse a visitor.
   const isSkipped =
     user === null && window.location.pathname.startsWith('/runway');
-  const loading = !isSkipped && resolvedQueryKey !== queryKey;
+  // Stars set the order, so the list waits for them rather than reshuffling once they arrive.
+  const isStarredPending = user !== null && starredUid !== user.uid;
+  const loading = !isSkipped && (resolvedQueryKey !== queryKey || isStarredPending);
 
   useEffect(() => {
     if (isSkipped) return;
@@ -187,7 +190,10 @@ export function AppCatalogProvider({ children }: PropsWithChildren) {
         const data = snapshot.data() as Partial<UserPrefs> | undefined;
         setStarred({ uid, ids: Array.isArray(data?.starredAppIds) ? data.starredAppIds.map(String) : [] });
       },
-      (error) => console.error('Failed to load starred apps:', error),
+      (error) => {
+        console.error('Failed to load starred apps:', error);
+        setStarred({ uid, ids: [] });
+      },
     );
   }, [uid]);
 

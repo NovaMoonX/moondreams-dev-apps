@@ -14,7 +14,7 @@ interface AppTileProps {
   onShowInfo: () => void;
 }
 
-/** A phone home-screen tile: the logo and name open the app, and pressing and holding shows its details. */
+/** A phone home-screen tile: the logo and name open the app, and pressing and holding (or the context-menu key) shows its details. */
 function AppTile({ app, href, isStarred, onShowInfo }: AppTileProps) {
   const holdTimerRef = useRef<number | null>(null);
   const didHoldRef = useRef(false);
@@ -30,9 +30,11 @@ function AppTile({ app, href, isStarred, onShowInfo }: AppTileProps) {
       state={{ resumed: true }}
       aria-label={`Open ${app.name}`}
       className='flex flex-col items-center gap-1.5 rounded-2xl p-1 text-center select-none [-webkit-touch-callout:none]'
-      onPointerDown={() => {
+      onPointerDown={(event) => {
         didHoldRef.current = false;
         cancelHold();
+        // A mouse has right-click for this, so a slow click still opens the app.
+        if (event.pointerType === 'mouse') return;
         holdTimerRef.current = window.setTimeout(() => {
           didHoldRef.current = true;
           onShowInfo();
@@ -48,6 +50,7 @@ function AppTile({ app, href, isStarred, onShowInfo }: AppTileProps) {
       }}
       onClick={(event) => {
         if (didHoldRef.current) event.preventDefault();
+        didHoldRef.current = false;
       }}
     >
       <span className='relative'>
