@@ -111,7 +111,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     >
       <UserAvatar user={user} size='sm' />
       <span className='hidden sm:inline'>{displayName}</span>
-      <ChevronDown className='h-4 w-4' />
+      {isPhone ? null : <ChevronDown className='h-4 w-4' />}
     </Button>
   );
 
