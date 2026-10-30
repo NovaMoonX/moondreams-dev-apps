@@ -108,8 +108,7 @@ function PipelineView({
             <span className='text-muted-foreground block truncate text-xs'>
               {firstAsk || 'Waiting on you'}
             </span>
-            <span className='text-muted-foreground flex items-center gap-1.5 pt-0.5 text-xs'>
-              <StatusDot group='waiting' />
+            <span className='text-muted-foreground block truncate pt-0.5 text-xs'>
               {entry.time}
               {askCount >= 2 ? ` · ${askCount} asks` : ''}
             </span>
@@ -128,12 +127,14 @@ function PipelineView({
       <Button
         type='button'
         variant='tertiary'
-        className='h-auto w-full justify-start gap-3 px-0! py-3 text-left font-normal'
+        className='h-auto w-full min-w-0 justify-start gap-3 rounded-none px-4 py-3 text-left font-normal'
         onClick={() => onOpenEntry(entry.key)}
       >
-        <StatusDot group={group} />
+        <span className='grid size-10 shrink-0 place-items-center'>
+          <StatusDot group={group} />
+        </span>
         <span className='min-w-0 flex-1'>
-          <span className='text-foreground block truncate text-sm font-medium'>
+          <span className='text-foreground block truncate text-sm font-semibold'>
             {entry.name}
           </span>
           <span className='text-muted-foreground block truncate text-xs'>
@@ -149,7 +150,7 @@ function PipelineView({
   );
 
   const renderSectionTitle = (label: string, count: number) => (
-    <div className='flex items-baseline justify-between gap-3'>
+    <div className='flex items-baseline gap-2'>
       <h2 className='text-base font-semibold'>{label}</h2>
       <span className='text-muted-foreground text-sm tabular-nums'>
         {count}
@@ -231,9 +232,10 @@ function PipelineView({
             {answerCount > 0 ? (
               <Button
                 type='button'
-                variant='outline'
+                variant='secondary'
                 size='sm'
-                className="relative before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                rounded='full'
+                className="relative px-3 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
                 onClick={() => setIsAnsweringAll(true)}
               >
                 Answer all ({answerCount})
@@ -265,9 +267,9 @@ function PipelineView({
 
       {QUIET_SECTIONS.filter((section) => groups[section.key].length > 0).map(
         (section) => (
-          <section key={section.key} className={CARD_CLASS}>
+          <section key={section.key} className='space-y-3'>
             {renderSectionTitle(section.label, groups[section.key].length)}
-            <ul className='divide-border mt-1 -mb-3 divide-y'>
+            <ul className={LIST_CARD_CLASS}>
               {groups[section.key].map((entry) =>
                 renderRow(entry, section.key),
               )}
