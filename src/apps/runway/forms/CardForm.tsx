@@ -8,22 +8,37 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
 import { PillGroup } from '@/components/PillGroup';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import QuestionFlow from '@/components/QuestionFlow';
 import RevealChip from '@/components/RevealChip';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAppSelector } from '@/store';
+import { clearFormDraft } from '@lib/app/formDrafts';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   CARD_ISSUERS,
   CARD_WORDS,
+  FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
   MAX_NAME_LENGTH,
   MAX_PURCHASE_CENTS,
 } from '@apps/runway/constants';
+import {
+  isFlag,
+  isNullableOneOf,
+  isText,
+  isWholeNumber,
+  readDraftFields,
+} from '@apps/runway/forms/draftParse';
+import {
+  withStartOver,
+  type StartOverProps,
+} from '@apps/runway/forms/withStartOver';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createCard, updateCard } from '@apps/runway/store/actions/cardActions';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
@@ -68,6 +83,21 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
+const parseCardDraft = (stored: unknown) => {
+  const data = readDraftFields<CardFormData>(stored, {
+    issuerPick: isNullableOneOf([...CARD_ISSUERS, OTHER_VALUE]),
+    otherIssuer: isText,
+    name: isText,
+    hasNoName: isFlag,
+    owed: isText,
+    dueDay: (value) =>
+      value === null ||
+      (isWholeNumber(value) && DUE_DAYS.includes(value as number)),
+    hasNoDueDay: isFlag,
+  });
+  return data;
+};
+
 const getInitialData = (editing: OpenCard | undefined): CardFormData => {
   if (!editing) {
     return {
@@ -93,7 +123,13 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
 };
 
 /** Adds a card, or changes who issues it, what it is called and the day it is due. Adding can also say what it owed on the starting day. */
-function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
+function CardFormBody({
+  isOpen,
+  onClose,
+  onCancel,
+  editing,
+  onStartOver,
+}: CardFormProps & StartOverProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const mask = useMaskedText();
@@ -105,7 +141,17 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
     (state) => state.runway.plan?.startDate ?? null,
   );
   const [startData] = useState(() => getInitialData(editing));
-  const [formData, setFormData] = useState<CardFormData>(startData);
+  const draftKey = `${FORM_DRAFT_PREFIX}card:${editing?.id ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
+  const draft = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseCardDraft,
+  });
+  const [formData, setFormData] = useState<CardFormData>(
+    draft.restored ?? startData,
+  );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -299,9 +345,21 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined,
+    foldAnswered: draft.restored !== null,
   });
   const isAsking = !questions.hasReviewed;
   const isDirty = JSON.stringify(formData) !== JSON.stringify(startData);
+  useKeepFormDraft({
+    isRestored: draft.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: formData,
+    isDirty,
+  });
+  const startOver = () => {
+    if (user) clearFormDraft(user.uid, draftKey);
+    onStartOver();
+  };
   const requestClose = useDiscardGuard({
     isDirty,
     onClose: onCancel ?? onClose,
@@ -405,6 +463,12 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-5'>
+        {draft.isNoticeShown && (
+          <DraftRestoredNotice
+            onStartOver={startOver}
+            onDismiss={draft.hideNotice}
+          />
+        )}
         <QuestionFlow flow={questions} />
         <ModalFooterActions
           note={error ?? maskNote(isAsking ? questions.blocker : blocker)}
@@ -443,5 +507,7 @@ function CardForm({ isOpen, onClose, onCancel, editing }: CardFormProps) {
     </FormSheet>
   );
 }
+
+const CardForm = withStartOver(CardFormBody);
 
 export default CardForm;

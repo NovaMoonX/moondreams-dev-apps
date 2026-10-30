@@ -1,3 +1,4 @@
+import { declareSealedFormDrafts } from '@lib/app/formDrafts';
 import {
   createAppEncryptionKey,
   createSeedAppEncryptionKey,
@@ -9,6 +10,10 @@ import {
 } from '@lib/security';
 
 export type SpaceEncryption = AppEncryption<'worth-the-wait'>;
+
+/** Every Worth the Wait form draft's key starts with it; declared sealed here, so no draft is ever kept readable. */
+export const FORM_DRAFT_PREFIX = 'worth-the-wait:';
+declareSealedFormDrafts(FORM_DRAFT_PREFIX);
 
 export function createSpaceEncryptionKey(): SpaceEncryption {
   return createAppEncryptionKey('worth-the-wait');
@@ -34,4 +39,16 @@ export async function decryptStringForSpace(
   encryption: SpaceEncryption | null | undefined,
 ): Promise<string> {
   return decryptStringForApp(value, encryption);
+}
+
+/** Seals and opens a form's draft kept on this device, with the space's key. */
+export function createDraftSealer(encryption: SpaceEncryption) {
+  return {
+    seal: async (text: string) => {
+      const sealed = await encryptStringForSpace(text, encryption);
+      if (typeof sealed === 'string') throw new Error('A draft was not sealed.');
+      return sealed;
+    },
+    open: (sealed: object) => decryptStringForSpace(sealed, encryption),
+  };
 }

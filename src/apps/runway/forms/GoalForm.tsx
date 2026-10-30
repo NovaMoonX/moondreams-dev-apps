@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField from '@/components/AmountField';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
 import SuggestionChips from '@/components/SuggestionChips';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -13,8 +14,10 @@ import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import RevealChip from '@/components/RevealChip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
+import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -26,6 +29,7 @@ import {
 } from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
+  FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
   CALENDAR_PERIOD_UNITS,
   HOW_OFTEN_WORDS,
@@ -39,7 +43,19 @@ import {
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createGoal } from '@apps/runway/store/actions/itemActions';
+import {
+  fundingFieldChecks,
+  isNullableOneOf,
+  isNullableText,
+  isText,
+  readDraftFields,
+  readKeptWithChange,
+} from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
+import {
+  withStartOver,
+  type StartOverProps,
+} from '@apps/runway/forms/withStartOver';
 import EmojiField from '@/components/EmojiField';
 import { recordHolding } from '@apps/runway/store/actions/moveActions';
 import { getPeriodIndex } from '@apps/runway/engine/calendar';
@@ -82,6 +98,20 @@ interface GoalFormData extends FundingFormData {
   /** Null until the person adds one. */
   emoji: string | null;
 }
+
+const parseGoalDraftFields = (stored: unknown) =>
+  readDraftFields<GoalFormData>(stored, {
+    ...fundingFieldChecks,
+    name: isText,
+    priority: isNullableOneOf(PRIORITIES),
+    target: isText,
+    date: isNullableText,
+    current: isText,
+    emoji: isNullableText,
+  });
+
+const parseGoalDraft = (stored: unknown) =>
+  readKeptWithChange(stored, parseGoalDraftFields);
 
 interface GoalFormProps {
   isOpen: boolean;
@@ -173,7 +203,8 @@ const getBlocker = (
   return getFundingBlocker(data, hasDays);
 };
 
-function GoalForm({
+function GoalFormBody({
+  onStartOver,
   isOpen,
   onClose,
   onCancel,
@@ -182,7 +213,7 @@ function GoalForm({
   presetDayKey,
   openStep = null,
   draft,
-}: GoalFormProps) {
+}: GoalFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
@@ -190,7 +221,7 @@ function GoalForm({
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const plan = useAppSelector((state) => state.runway.plan);
-  const [formData, setFormData] = useState<GoalFormData>(() =>
+  const [startData] = useState<GoalFormData>(() =>
     editing
       ? getEditingData(editing.payload)
       : draft?.initial
@@ -203,7 +234,19 @@ function GoalForm({
           }
         : INITIAL_DATA,
   );
-  const [startData] = useState(formData);
+  const draftKey = draft
+    ? null
+    : `${FORM_DRAFT_PREFIX}goal:${editing?.itemId ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
+  const kept = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseGoalDraft,
+  });
+  const [formData, setFormData] = useState<GoalFormData>(
+    kept.restored?.formData ?? startData,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<GoalFormData>) =>
@@ -422,6 +465,7 @@ function GoalForm({
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
+    foldAnswered: kept.restored !== null,
     initialOpenId: draft?.openStep ?? null,
     onAdvance: (fromId) => {
       const suggestion = getSuggestion(formData);
@@ -480,12 +524,31 @@ function GoalForm({
     candidate,
     presetDayKey,
     onDone: onClose,
+    initialNote: kept.restored?.note,
+    initialFrom: kept.restored?.from,
   });
   const editBlocker = flow.getBlocker(blocker);
-  const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) ||
+  const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
+  const keptValue = useMemo(
+    () => ({ formData, note: flow.note, from: flow.from }),
+    [formData, flow.note, flow.from],
+  );
+  useKeepFormDraft({
+    isRestored: kept.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: keptValue,
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty,
+  });
+  const startOver = () => {
+    if (user && draftKey) clearFormDraft(user.uid, draftKey);
+    onStartOver();
+  };
   const requestClose = useDiscardGuard({
     isDirty,
     onClose: onCancel ?? onClose,
@@ -570,6 +633,12 @@ function GoalForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
+            {kept.isNoticeShown && (
+              <DraftRestoredNotice
+                onStartOver={startOver}
+                onDismiss={kept.hideNotice}
+              />
+            )}
             {isQuick && quickStep ? (
               <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
             ) : (
@@ -632,5 +701,7 @@ function GoalForm({
     </FormSheet>
   );
 }
+
+const GoalForm = withStartOver(GoalFormBody);
 
 export default GoalForm;
