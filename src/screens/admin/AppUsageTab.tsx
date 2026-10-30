@@ -23,7 +23,7 @@ import {
   USAGE_SEARCH_THRESHOLD,
 } from './constants';
 import CountedNote from './CountedNote';
-import IconTile from './IconTile';
+import IconTile from '@/ui/IconTile';
 import { getUsageRows } from './usageRows';
 
 type UsageFilter = 'started' | 'active';

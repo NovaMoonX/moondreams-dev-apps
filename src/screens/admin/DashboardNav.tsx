@@ -29,9 +29,13 @@ import {
   SURFACE_CLASS,
   WAITING_TEXT_CLASS,
 } from './constants';
-import IconTile from './IconTile';
+import IconTile from '@/ui/IconTile';
 import { EntryActions, StatusDot } from './PipelineParts';
-import { getPartialFailureLine, type PipelineEntry } from './pipelineUtils';
+import {
+  getAnswerSlots,
+  getPartialFailureLine,
+  type PipelineEntry,
+} from './pipelineUtils';
 import { getUsageRows } from './usageRows';
 
 const NEEDS_YOU_PREVIEW = 2;
@@ -114,6 +118,7 @@ interface DashboardNavProps {
   pipelineSummary: { waiting: number; working: number };
   waitingEntries: PipelineEntry[];
   onSelectPipeline: () => void;
+  onAnswerEntry: (key: string) => void;
   onSelectMembers: () => void;
   onSelectFirebase: () => void;
   onSelectApp: (appId: string) => void;
@@ -135,6 +140,7 @@ function DashboardNav({
   pipelineSummary,
   waitingEntries,
   onSelectPipeline,
+  onAnswerEntry,
   onSelectMembers,
   onSelectFirebase,
   onSelectApp,
@@ -198,6 +204,12 @@ function DashboardNav({
   const getPipelineFigure = (value: number) =>
     isPipelineUnknown ? '–' : value;
 
+  // The one solid button leads with the first entry that can be answered here.
+  const leadKey = (
+    waitingEntries.find((entry) => getAnswerSlots(entry).length > 0) ??
+    waitingEntries[0]
+  )?.key;
+
   const renderNeedsYou = () => {
     if (isPipelineUnknown || waitingEntries.length === 0) {
       const getText = () => {
@@ -234,7 +246,7 @@ function DashboardNav({
           </h2>
         </div>
         <ul className='divide-border divide-y'>
-          {waitingEntries.slice(0, NEEDS_YOU_PREVIEW).map((entry, index) => (
+          {waitingEntries.slice(0, NEEDS_YOU_PREVIEW).map((entry) => (
             <li key={entry.key} className='space-y-3 py-3 first:pt-0'>
               <Button
                 type='button'
@@ -252,7 +264,11 @@ function DashboardNav({
                   </span>
                 </span>
               </Button>
-              <EntryActions entry={entry} isFilled={index === 0} />
+              <EntryActions
+                entry={entry}
+                isFilled={entry.key === leadKey}
+                onAnswer={() => onAnswerEntry(entry.key)}
+              />
             </li>
           ))}
         </ul>

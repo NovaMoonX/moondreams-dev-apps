@@ -12,21 +12,25 @@ import {
   WAITING_EDGE_CLASS,
   WAITING_TEXT_CLASS,
 } from './constants';
-import IconTile from './IconTile';
-import PipelineSheet from './PipelineSheet';
-import { EntryActions, StatusDot } from './PipelineParts';
+import IconTile from '@/ui/IconTile';
+import AnswerAllSubview from './AnswerAllSubview';
+import { EntryActions, SentLine, StatusDot } from './PipelineParts';
 import {
   formatPipelineTime,
+  getAnswerSlots,
   getPartialFailureLine,
   type PipelineEntry,
   type PipelineGroup,
   type PipelineGroups,
 } from './pipelineUtils';
+import type { PipelineAnswers } from './usePipelineAnswers';
 
 interface PipelineViewProps {
   pipeline: PipelineState;
   groups: PipelineGroups;
   now: number;
+  answers: PipelineAnswers;
+  onOpenEntry: (key: string) => void;
 }
 
 const QUIET_SECTIONS: {
@@ -38,8 +42,14 @@ const QUIET_SECTIONS: {
   { key: 'finished', label: 'Finished' },
 ];
 
-function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
-  const [openKey, setOpenKey] = useState<string | null>(null);
+function PipelineView({
+  pipeline,
+  groups,
+  now,
+  answers,
+  onOpenEntry,
+}: PipelineViewProps) {
+  const [isAnsweringAll, setIsAnsweringAll] = useState(false);
   const { sessions, inbox, isLoading, hasError, sessionsFailed, inboxFailed } =
     pipeline;
 
@@ -49,7 +59,6 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
     ...groups.quiet,
     ...groups.finished,
   ];
-  const openEntry = allEntries.find((entry) => entry.key === openKey) ?? null;
   const latestUpdate = Math.max(
     0,
     inbox?.updatedAt ?? 0,
@@ -80,7 +89,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
           type='button'
           variant='tertiary'
           className='h-auto w-full justify-start gap-3 px-0! py-0 text-left font-normal'
-          onClick={() => setOpenKey(entry.key)}
+          onClick={() => onOpenEntry(entry.key)}
         >
           <span className='min-w-0 flex-1 space-y-1'>
             <span className='text-foreground block truncate text-base font-semibold'>
@@ -106,7 +115,11 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
             aria-hidden='true'
           />
         </Button>
-        <EntryActions entry={entry} isFilled={index === 0} />
+        <EntryActions
+          entry={entry}
+          isFilled={index === 0 && answerCount === 0}
+          onAnswer={() => onOpenEntry(entry.key)}
+        />
       </li>
     );
   };
@@ -117,7 +130,7 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
         type='button'
         variant='tertiary'
         className='h-auto w-full justify-start gap-3 px-0! py-3 text-left font-normal'
-        onClick={() => setOpenKey(entry.key)}
+        onClick={() => onOpenEntry(entry.key)}
       >
         <StatusDot group={group} />
         <span className='min-w-0 flex-1'>
@@ -145,6 +158,9 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
     </div>
   );
 
+  const answerCount = groups.waiting
+    .flatMap(getAnswerSlots)
+    .filter((slot) => !answers.isSent(slot)).length;
   const isEmpty = allEntries.length === 0;
   const isUnknown = (isLoading || hasError) && isEmpty;
   const getFigure = (count: number) => (isUnknown ? '–' : count);
@@ -207,6 +223,17 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
       {groups.waiting.length > 0 ? (
         <section className='space-y-3'>
           {renderSectionTitle('Waiting on you', groups.waiting.length)}
+          {answerCount > 0 ? (
+            <Button
+              type='button'
+              variant='primary'
+              className='w-full sm:w-auto'
+              onClick={() => setIsAnsweringAll(true)}
+            >
+              Answer all ({answerCount})
+            </Button>
+          ) : null}
+          <SentLine sent={answers.lastSent} />
           <ul className='space-y-3'>{groups.waiting.map(renderWaitingCard)}</ul>
         </section>
       ) : null}
@@ -230,7 +257,13 @@ function PipelineView({ pipeline, groups, now }: PipelineViewProps) {
         </p>
       ) : null}
 
-      <PipelineSheet entry={openEntry} onClose={() => setOpenKey(null)} />
+      {isAnsweringAll ? (
+        <AnswerAllSubview
+          entries={groups.waiting}
+          answers={answers}
+          onClose={() => setIsAnsweringAll(false)}
+        />
+      ) : null}
     </div>
   );
 }

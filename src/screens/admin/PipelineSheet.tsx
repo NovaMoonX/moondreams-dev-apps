@@ -1,72 +1,23 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import DetailSheet from '@/components/DetailSheet';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import FallbackImage from '@/components/FallbackImage';
 
-import { EntryActions, StatusDot } from './PipelineParts';
+import {
+  AnswerFields,
+  ImageRow,
+  LinkedText,
+  SentLine,
+  StatusDot,
+} from './PipelineParts';
 import {
   CI_WORDS,
+  getAnswerSlots,
   getEntryActions,
-  splitLinks,
-  stripLinks,
+  getEntryPrUrl,
   type PipelineEntry,
 } from './pipelineUtils';
-
-function LinkedText({ text }: { text: string }) {
-  return (
-    <>
-      {splitLinks(text).map((part, index) =>
-        part.href ? (
-          <a
-            key={index}
-            href={part.href}
-            target='_blank'
-            rel='noreferrer'
-            className='text-primary hover:underline'
-          >
-            {part.text}
-          </a>
-        ) : (
-          <span key={index}>{part.text}</span>
-        ),
-      )}
-    </>
-  );
-}
-
-interface ImageCard {
-  src: string;
-  label: string | null;
-}
-
-function ImageRow({ cards }: { cards: ImageCard[] }) {
-  if (cards.length === 0) return null;
-  return (
-    <ul className='-mx-1 flex snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-1'>
-      {cards.map((card, index) => (
-        <li key={`${card.src}-${index}`} className='w-40 shrink-0 snap-start'>
-          <a
-            href={card.src}
-            target='_blank'
-            rel='noreferrer'
-            className='block space-y-1.5'
-            aria-label={card.label ?? 'Open screenshot full size'}
-          >
-            <FallbackImage
-              src={card.src}
-              alt=''
-              className='border-border h-28 w-full rounded-lg border object-cover'
-            />
-            {card.label ? (
-              <span className='text-foreground line-clamp-2 text-xs'>
-                {card.label}
-              </span>
-            ) : null}
-          </a>
-        </li>
-      ))}
-    </ul>
-  );
-}
+import type { PipelineAnswers } from './usePipelineAnswers';
 
 function SheetSection({
   title,
@@ -86,10 +37,15 @@ function SheetSection({
 interface PipelineSheetProps {
   entry: PipelineEntry | null;
   onClose: () => void;
+  answers: PipelineAnswers;
 }
 
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
-function PipelineSheet({ entry, onClose }: PipelineSheetProps) {
+function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
+  const slots = entry ? getAnswerSlots(entry) : [];
+  const slotPrs = new Set(slots.map((slot) => slot.prNumber));
+  const entryReady = answers.getReadyCount(slots);
+  const elsewhereReady = answers.getReadyCount() - entryReady;
   const optionImages = new Set(
     entry?.ownerItems.flatMap((item) =>
       item.options.flatMap((option) => option.images.slice(0, 1)),
@@ -99,20 +55,67 @@ function PipelineSheet({ entry, onClose }: PipelineSheetProps) {
     (src) => !optionImages.has(src),
   );
 
+  const renderFooter = (current: PipelineEntry) => {
+    const links = getEntryActions(current);
+    const prUrl = getEntryPrUrl(current);
+    const sent = answers.lastSent.filter((pr) => slotPrs.has(pr.prNumber));
+    if (slots.length === 0 && links.length === 0 && !prUrl) return undefined;
+    return (
+      <div className='space-y-2 px-4 sm:px-0'>
+        {slots.length > 0 ? (
+          <>
+            <Button
+              type='button'
+              variant='primary'
+              className='w-full'
+              disabled={entryReady === 0 || answers.isSending}
+              onClick={() => void answers.send(slots)}
+            >
+              {answers.isSending ? 'Sending…' : 'Send answers'}
+            </Button>
+            {answers.sendNote ? (
+              <p role='alert' className='text-destructive text-sm'>
+                {answers.sendNote}
+              </p>
+            ) : null}
+            <SentLine sent={sent} />
+            {elsewhereReady > 0 ? (
+              <p className='text-muted-foreground text-xs'>
+                {elsewhereReady} {elsewhereReady === 1 ? 'answer' : 'answers'}{' '}
+                ready to send from other sessions
+              </p>
+            ) : null}
+          </>
+        ) : null}
+        {links.length > 0 || prUrl ? (
+          <div className='grid gap-2 min-[380px]:grid-cols-2'>
+            {[
+              ...links,
+              ...(prUrl ? [{ label: 'Open the PR', href: prUrl }] : []),
+            ].map((action) => (
+              <Button
+                key={action.label}
+                href={action.href}
+                target='_blank'
+                rel='noreferrer'
+                variant='outline'
+                className='w-full whitespace-nowrap'
+              >
+                {action.label}
+              </Button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
   return (
     <DetailSheet
       isOpen={entry !== null}
       onClose={onClose}
       title={entry?.name ?? 'Session'}
-      footer={
-        entry && getEntryActions(entry).length > 0 ? (
-          <div>
-            <div className='px-4 sm:px-0'>
-              <EntryActions entry={entry} isFilled />
-            </div>
-          </div>
-        ) : undefined
-      }
+      footer={entry ? renderFooter(entry) : undefined}
     >
       {entry ? (
         <div className='space-y-5'>
@@ -123,35 +126,30 @@ function PipelineSheet({ entry, onClose }: PipelineSheetProps) {
             <p className='text-muted-foreground text-sm'>{entry.lead}</p>
           </div>
 
-          {entry.ownerItems.length > 0 ? (
+          {slots.length > 0 ? (
             <SheetSection title='Needs you'>
-              <ul className='space-y-4'>
-                {entry.ownerItems.map((item, itemIndex) => (
-                  <li key={`${item.text}-${itemIndex}`} className='space-y-2'>
-                    <p className='text-foreground text-sm font-medium'>
-                      <LinkedText text={item.text} />
-                    </p>
-                    {item.options.map((option, optionIndex) =>
-                      option.images.length === 0 ? (
-                        <p
-                          key={`${option.label}-${optionIndex}`}
-                          className='text-foreground text-sm'
-                        >
-                          <LinkedText text={option.label} />
-                        </p>
-                      ) : null,
-                    )}
-                    <ImageRow
-                      cards={item.options.flatMap((option) =>
-                        option.images.length === 0
-                          ? []
-                          : [
-                              {
-                                src: option.images[0],
-                                label: stripLinks(option.label),
-                              },
-                            ],
-                      )}
+              {entry.ownerItems.length === 0 ? (
+                <ul className='space-y-2'>
+                  {entry.raisedHands.map((line, index) => (
+                    <li
+                      key={`${line}-${index}`}
+                      className='text-foreground text-sm'
+                    >
+                      <LinkedText text={line} />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <ul className='space-y-5'>
+                {slots.map((slot) => (
+                  <li key={slot.id}>
+                    <AnswerFields
+                      slot={slot}
+                      draft={answers.getDraft(slot.id)}
+                      isSent={answers.isSent(slot)}
+                      error={answers.errors[slot.prNumber] ?? null}
+                      onChoice={(choice) => answers.setChoice(slot.id, choice)}
+                      onNote={(note) => answers.setNote(slot.id, note)}
                     />
                   </li>
                 ))}

@@ -23,6 +23,7 @@ export { registerAppUsage } from './appUsage/registerAppUsage.js';
 export { getFirebaseUsage } from './firebaseUsage/getFirebaseUsage.js';
 export { fetchLinkMetadata } from './linkMetadata/fetchLinkMetadata.js';
 export { fetchPageContent } from './linkMetadata/fetchPageContent.js';
+export { answerPipelineQuestions } from './pipeline/answerPipelineQuestions.js';
 export { recordPipelineEvent } from './pipeline/recordPipelineEvent.js';
 export { claimDeviceToken } from './notifications/claimDeviceToken.js';
 export { sendScheduledReminders } from './notifications/sendScheduledReminders.js';

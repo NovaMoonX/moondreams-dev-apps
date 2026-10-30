@@ -25,8 +25,10 @@ import { CANVAS_CLASS, SURFACE_CLASS } from './admin/constants';
 import DashboardNav from './admin/DashboardNav';
 import FirebaseUsageView from './admin/FirebaseUsageView';
 import MembersView from './admin/MembersView';
+import PipelineSheet from './admin/PipelineSheet';
 import PipelineView from './admin/PipelineView';
 import { buildPipeline, getPipelineSummary } from './admin/pipelineUtils';
+import { usePipelineAnswers } from './admin/usePipelineAnswers';
 import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
 
@@ -54,6 +56,16 @@ function AdminDashboard() {
   const now = useNow(60_000);
   const pipelineGroups = buildPipeline(pipeline.sessions, pipeline.inbox, now);
   const pipelineSummary = getPipelineSummary(pipelineGroups);
+  const pipelineAnswers = usePipelineAnswers(pipelineGroups.waiting);
+  const [openEntryKey, setOpenEntryKey] = useState<string | null>(null);
+  const openEntry =
+    pipelineGroups.waiting.find((entry) => entry.key === openEntryKey) ??
+    [
+      ...pipelineGroups.working,
+      ...pipelineGroups.quiet,
+      ...pipelineGroups.finished,
+    ].find((entry) => entry.key === openEntryKey) ??
+    null;
 
   const isMembersOpen = url.view === 'members';
   const isFirebaseOpen = url.view === 'firebase';
@@ -124,6 +136,7 @@ function AdminDashboard() {
       pipelineSummary={pipelineSummary}
       waitingEntries={pipelineGroups.waiting}
       onSelectPipeline={() => url.showPipeline({ isStep })}
+      onAnswerEntry={setOpenEntryKey}
       onSelectMembers={() => url.showMembers({ isStep })}
       onSelectFirebase={() => url.showFirebase({ isStep })}
       onSelectApp={(appId) => url.showApp(appId, { isStep })}
@@ -140,7 +153,13 @@ function AdminDashboard() {
     />
   );
   const pipelineView = (
-    <PipelineView pipeline={pipeline} groups={pipelineGroups} now={now} />
+    <PipelineView
+      pipeline={pipeline}
+      groups={pipelineGroups}
+      now={now}
+      answers={pipelineAnswers}
+      onOpenEntry={setOpenEntryKey}
+    />
   );
   const firebaseUsage = <FirebaseUsageView apps={allApps} />;
   const appDetail = selectedApp ? (
@@ -159,6 +178,14 @@ function AdminDashboard() {
       isWide={isWide}
     />
   ) : null;
+
+  const pipelineSheet = (
+    <PipelineSheet
+      entry={openEntry}
+      onClose={() => setOpenEntryKey(null)}
+      answers={pipelineAnswers}
+    />
+  );
 
   const homeButton = (
     <HeaderIconButton
@@ -199,6 +226,7 @@ function AdminDashboard() {
           />
           {getPhoneDetail()}
         </div>
+        {pipelineSheet}
       </div>
     );
   }
@@ -289,6 +317,7 @@ function AdminDashboard() {
           nav
         )}
       </div>
+      {pipelineSheet}
     </div>
   );
 }

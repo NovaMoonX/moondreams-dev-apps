@@ -32,6 +32,11 @@ export interface PipelineOption {
 }
 
 export interface PipelineOwnerEntryItem {
+  /** The pull request it was raised on and its place in that pull request's list. */
+  id: string;
+  prNumber: number;
+  /** When that pull request's status last changed: an answer sent before this has been read. */
+  statusAt: number;
   text: string;
   options: PipelineOption[];
 }
@@ -110,14 +115,19 @@ const toSafePr = (pr: PipelineInboxPr): PipelinePr => ({
   url: toHttps(pr.url),
 });
 
-const toSafeItems = (items: PipelineOwnerItem[]): PipelineOwnerEntryItem[] =>
-  items.map((item) => ({
-    text: item.text,
-    options: item.options.map((option) => ({
-      label: option.label,
-      images: onlyHttps(option.images),
+const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
+  prs.flatMap((pr) =>
+    (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => ({
+      id: `${pr.number}:${index}`,
+      prNumber: pr.number,
+      statusAt: pr.status?.updatedAt ?? 0,
+      text: item.text,
+      options: item.options.map((option) => ({
+        label: option.label,
+        images: onlyHttps(option.images),
+      })),
     })),
-  }));
+  );
 
 const toAsk = (line: string) => stripLinks(line).replace(/^🚩\s*/, '');
 
@@ -169,9 +179,7 @@ function toSessionEntry(
 ): PipelineEntry {
   const sessionPrs = getSessionPrs(session, prs);
   const safePrs = sessionPrs.map(toSafePr);
-  const ownerItems = toSafeItems(
-    sessionPrs.flatMap((pr) => pr.status?.ownerItems ?? []),
-  );
+  const ownerItems = toSafeItems(sessionPrs);
   const asks =
     ownerItems.length > 0
       ? ownerItems.map((item) => toAsk(item.text))
@@ -210,7 +218,7 @@ function toSessionEntry(
 function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
   const status = pr.status;
   const safePr = toSafePr(pr);
-  const ownerItems = toSafeItems(status?.ownerItems ?? []);
+  const ownerItems = toSafeItems([pr]);
   const asks = ownerItems.map((item) => toAsk(item.text));
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
   return {
@@ -232,21 +240,61 @@ function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
   };
 }
 
+export interface AnswerSlot {
+  id: string;
+  prNumber: number;
+  statusAt: number;
+  /** Plain text, as it is sent. */
+  question: string;
+  /** The question as the owner reads it, links and all. */
+  text: string;
+  options: PipelineOption[];
+  /** No question was asked: a note answers the 🚩 lines as a whole. */
+  isReply: boolean;
+}
+
+/** What the owner can answer on an entry: each question, or one reply on the first pull request when only 🚩 lines were raised. */
+export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
+  if (entry.ownerItems.length > 0) {
+    return entry.ownerItems.map((item) => ({
+      id: item.id,
+      prNumber: item.prNumber,
+      statusAt: item.statusAt,
+      question: stripLinks(item.text).slice(0, 500),
+      text: item.text,
+      options: item.options,
+      isReply: false,
+    }));
+  }
+  const [pr] = entry.prs;
+  if (!pr || entry.raisedHands.length === 0) return [];
+  return [
+    {
+      id: `${pr.number}:reply`,
+      prNumber: pr.number,
+      statusAt: pr.status?.updatedAt ?? 0,
+      question: 'Reply to what was raised',
+      text: `Reply on #${pr.number}`,
+      options: [],
+      isReply: true,
+    },
+  ];
+}
+
 export interface PipelineAction {
   label: string;
   href: string;
 }
 
-/** The owner's next steps for an entry: answer in the session, then open its pull request. */
+/** The session to answer in, when the entry has one. */
 export function getEntryActions(entry: PipelineEntry): PipelineAction[] {
-  const prUrl = entry.prs.find((pr) => pr.url !== null)?.url ?? null;
-  const answer =
-    entry.url && !entry.isPrOnly
-      ? [{ label: 'Answer in Claude', href: entry.url }]
-      : [];
-  const open = prUrl ? [{ label: 'Open the PR', href: prUrl }] : [];
-  return [...answer, ...open];
+  return entry.url && !entry.isPrOnly
+    ? [{ label: 'Answer in Claude', href: entry.url }]
+    : [];
 }
+
+export const getEntryPrUrl = (entry: PipelineEntry) =>
+  entry.prs.find((pr) => pr.url !== null)?.url ?? null;
 
 export type PipelineGroups = ReturnType<typeof buildPipeline>;
 
