@@ -195,6 +195,7 @@ function GroupsScreen({ onClose }: GroupsScreenProps) {
           }
           onOpen={setPurchaseId}
           onClose={() => setPurchaseId(null)}
+          hasGroupLink={false}
         />
       )}
     </>

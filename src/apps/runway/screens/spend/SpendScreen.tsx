@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Layers, ShoppingBag, Wallet } from 'lucide-react';
+import { ChevronRight, Layers, ShoppingBag, Wallet } from 'lucide-react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
@@ -285,6 +287,26 @@ function SpendScreen() {
             )}
           </FilterBar>
         )}
+        {expenseCount > 0 && (
+          <Button
+            type='button'
+            variant='tertiary'
+            onClick={openGroups}
+            className='border-border text-foreground! h-10 w-full justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+          >
+            <span className='flex items-center gap-2'>
+              <Layers
+                className='text-muted-foreground h-4 w-4'
+                aria-hidden='true'
+              />
+              {SPEND_WORDS.groups}
+            </span>
+            <span className='text-muted-foreground flex items-center gap-1'>
+              {expenseCount}
+              <ChevronRight className='h-4 w-4' aria-hidden='true' />
+            </span>
+          </Button>
+        )}
         {matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
             {purchases.length === 0
@@ -322,25 +344,7 @@ function SpendScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title={SPEND_WORDS.title}
-        action={
-          <div className='ml-3 flex shrink-0 items-center gap-2'>
-            {expenseCount > 0 && (
-              <ShowMoreButton isHeaderAction onClick={openGroups}>
-                <Layers
-                  className='h-4 w-4 min-[360px]:hidden'
-                  aria-hidden='true'
-                />
-                <span className='max-[359px]:sr-only'>
-                  {SPEND_WORDS.groups}
-                </span>
-              </ShowMoreButton>
-            )}
-            {periodChip}
-          </div>
-        }
-      />
+      <SectionHeader title={SPEND_WORDS.title} action={periodChip} />
       {getBody()}
       <FloatingAction
         label={SPEND_WORDS.newPurchase}
