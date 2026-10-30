@@ -37,6 +37,7 @@ import {
   type CreateIncomeInput,
 } from '@apps/runway/store/actions/itemActions';
 import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
+import { toGroupAnswer } from '@apps/runway/utils/groupChoice';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
@@ -335,7 +336,13 @@ function IncomeForm({
     editing
       ? getEditingData(editing)
       : draft?.initial
-        ? getDraftData(draft.initial)
+        ? {
+            ...getDraftData(draft.initial),
+            source: toGroupAnswer(
+              draft.initial.sourceName,
+              draft.sources ?? [],
+            ),
+          }
         : {
             source: { choice: '', newText: '' },
             payName: '',
@@ -381,12 +388,27 @@ function IncomeForm({
         })
       : set({ frequency });
 
+  const sourceChoices = [
+    ...(draft?.sources ?? []),
+    ...resolved
+      .map((source) => ({
+        id: source.item.id,
+        name: source.version.payload.name,
+      }))
+      .filter(
+        ({ name }) =>
+          !(draft?.sources ?? []).some(
+            (entry) =>
+              entry.name.trim().toLowerCase() === name.trim().toLowerCase(),
+          ),
+      ),
+  ];
   const sourceNames = Object.fromEntries(
-    resolved.map((source) => [source.item.id, source.version.payload.name]),
+    sourceChoices.map(({ id, name }) => [id, name]),
   );
-  const sourceOptions = resolved.map((source) => ({
-    value: source.item.id,
-    label: source.version.payload.name,
+  const sourceOptions = sourceChoices.map(({ id, name }) => ({
+    value: id,
+    label: name,
   }));
   const sourceName = getSourceName(formData, sourceNames);
   const isEditing = editing !== undefined;
@@ -718,7 +740,7 @@ function IncomeForm({
     const existingSource =
       data.source.choice !== NEW_CHOICE && data.source.choice !== '';
     const input: CreateIncomeInput = {
-      sourceId: existingSource ? data.source.choice : null,
+      sourceId: existingSource && !draft ? data.source.choice : null,
       sourceName: getSourceName(data, sourceNames),
       payLineName: data.payName.trim() || DEFAULT_PAY_LINE_NAME,
       amount,

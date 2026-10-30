@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -19,10 +19,17 @@ interface StartRowListProps {
   /** What the search box is called, "Search your bills". */
   searchLabel: string;
   onOpen: (id: string) => void;
+  /** Sits at the end of a heading, when that heading has something to change. */
+  renderHeadingAction?: (group: string) => ReactNode;
 }
 
 /** What has been added in a step: one-line rows that each open their item, searchable from eight and folded after a few. */
-function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
+function StartRowList({
+  rows,
+  searchLabel,
+  onOpen,
+  renderHeadingAction,
+}: StartRowListProps) {
   const mask = useMaskedText();
   const [query, setQuery] = useState('');
   const [isAll, setIsAll] = useState(false);
@@ -48,9 +55,12 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
           <li key={row.id}>
             {row.group !== undefined &&
               row.group !== shown[index - 1]?.group && (
-                <p className='bg-muted/50 text-muted-foreground px-3 py-1.5 text-sm font-medium'>
-                  {row.group}
-                </p>
+                <div className='bg-muted/50 flex items-center gap-2 px-3 py-1'>
+                  <p className='text-muted-foreground min-w-0 flex-1 py-0.5 text-sm font-medium break-words'>
+                    {row.group}
+                  </p>
+                  {renderHeadingAction?.(row.group)}
+                </div>
               )}
             <Button
               type='button'

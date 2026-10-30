@@ -84,7 +84,9 @@ import type {
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import {
   NEW_GROUP_ID,
+  getGroupChoices,
   resolveGroupChoice,
+  toGroupAnswer,
 } from '@apps/runway/utils/groupChoice';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -298,18 +300,30 @@ function BillForm({
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
-  const groupOptions = groups.map(({ item, version }) => ({
-    value: item.id,
-    label: version.payload.name,
+  const groupChoices = getGroupChoices(
+    groups.map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+    })),
+    draft?.forName,
+  );
+  const groupOptions = groupChoices.map(({ id, name }) => ({
+    value: id,
+    label: name,
   }));
   const allCards = useAppSelector(selectAllCards);
   const isTracking = useAppSelector(selectLevel) === 'track';
   const [formData, setFormData] = useState<BillFormData>(() =>
     editing || draft?.initial
-      ? getEditingData(
-          (editing?.payload ?? draft?.initial) as BillSealed,
-          editing === undefined,
-        )
+      ? {
+          ...getEditingData(
+            (editing?.payload ?? draft?.initial) as BillSealed,
+            editing === undefined,
+          ),
+          ...(draft?.forName
+            ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
+            : {}),
+        }
       : {
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,
@@ -378,14 +392,7 @@ function BillForm({
     dueDate !== undefined && (editing !== undefined || dueDate >= today);
 
   const resolveGroup = (data: BillFormData) =>
-    resolveGroupChoice(
-      data.group.choice,
-      data.group.newText,
-      groups.map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-      })),
-    );
+    resolveGroupChoice(data.group.choice, data.group.newText, groupChoices);
   /** The priority the person chose, else the starting priority of the group the bill joins, else the default. */
   const getPriority = (data: BillFormData): Priority => {
     if (isPriorityChosen) return data.priority;
@@ -617,7 +624,7 @@ function BillForm({
           },
         ]
       : []),
-    ...(draft
+    ...(draft && !draft.forName
       ? []
       : [
           {
@@ -781,7 +788,7 @@ function BillForm({
       ending,
       fundedBy,
       stanceOverride: getStanceOverride(data.amount),
-      groupId: groupId ?? (newGroup ? NEW_GROUP_ID : null),
+      groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       paidByCardId: data.paidByCardId,
     };
     return result;
@@ -824,7 +831,7 @@ function BillForm({
     const bill = buildBill(formData);
     if (!bill) return;
     if (draft) {
-      draft.onSave(bill);
+      draft.onSave(bill, resolveGroup(formData).name || null);
       onClose();
       return;
     }

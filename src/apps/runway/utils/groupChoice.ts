@@ -52,3 +52,32 @@ export function resolveGroupRename(
     ? { kind: 'taken', name: resolved.option.name }
     : { kind: 'name', name: resolved.label };
 }
+
+const toKey = (name: string) => name.trim().toLowerCase();
+
+/** The plan's groups, then the names a review uses that no group has yet, as the choices a drafted bill or envelope picks from. */
+export const getGroupChoices = (
+  groups: readonly { id: string; name: string }[],
+  forName?: { names: string[] },
+): { id: string; name: string }[] =>
+  forName === undefined
+    ? [...groups]
+    : forName.names.reduce<{ id: string; name: string }[]>(
+        (acc, name) =>
+          acc.some((choice) => toKey(choice.name) === toKey(name))
+            ? acc
+            : [...acc, { id: `review:${toKey(name)}`, name }],
+        [...groups],
+      );
+
+/** A question's answer for a name already chosen: the matching choice, else the name typed in. */
+export const toGroupAnswer = (
+  name: string | null,
+  choices: readonly { id: string; name: string }[],
+) => {
+  if (name === null) return { choice: '', newText: '' };
+  const found = choices.find((choice) => toKey(choice.name) === toKey(name));
+  return found
+    ? { choice: found.id, newText: '' }
+    : { choice: NEW_CHOICE, newText: name };
+};

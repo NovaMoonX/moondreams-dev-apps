@@ -20,6 +20,7 @@ import {
 } from '@apps/runway/store/actions/draftActions';
 import {
   selectBills,
+  selectGroups,
   selectEnvelopes,
   selectGoals,
   selectIsPlanItemsLoaded,
@@ -38,6 +39,7 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
+  const groups = useAppSelector((state) => selectGroups(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const items = useAppSelector((state) => state.runway.items);
@@ -58,6 +60,10 @@ function DraftHandoff({ draft }: { draft: StartDraft }) {
       bills: bills.map(({ version }) => version.payload.name),
       envelopes: envelopes.map(({ version }) => version.payload.name),
       goals: goals.map(({ version }) => version.payload.name),
+      groups: groups.map(({ item, version }) => ({
+        id: item.id,
+        name: version.payload.name,
+      })),
       topRanks: toTopRanks([...bills, ...envelopes, ...goals]),
       startDate,
       itemCount: items.length,
