@@ -145,6 +145,85 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     );
   });
 
+  // One session in each state the admin's Pipeline view draws, and the PRs they drive.
+  const MINUTE_MS = 60_000;
+  const pipelineSessions = [
+    {
+      sessionId: 'session_seedWaiting',
+      branch: 'claude/runway-cards',
+      state: 'waiting',
+      raisedHands: [
+        'Pick the History header: A keeps Back on the title line, B stacks it above.',
+        'Add the `PIPELINE_KEY` secret before merging.',
+      ],
+      minutesAgo: 6,
+    },
+    { sessionId: 'session_seedWorking', branch: 'claude/pinch-voice', state: 'working', raisedHands: [], minutesAgo: 2 },
+    { sessionId: 'session_seedQuiet', branch: 'claude/a-list-calendar', state: 'working', raisedHands: [], minutesAgo: 95 },
+    { sessionId: 'session_seedIdle', branch: 'claude/waypoint-expenses', state: 'idle', raisedHands: [], minutesAgo: 300 },
+  ].map(({ minutesAgo, ...session }) => ({
+    ...session,
+    url: `https://claude.ai/code/${session.sessionId}`,
+    startedAt: context.now - (minutesAgo + 40) * MINUTE_MS,
+    turnStartedAt: context.now - (minutesAgo + 5) * MINUTE_MS,
+    updatedAt: context.now - minutesAgo * MINUTE_MS,
+  }));
+  pipelineSessions.forEach((session) => {
+    batch.set(context.firestore.doc(`pipelineSessions/${session.sessionId}`), session);
+  });
+  const toInboxPr = (number: number, title: string, head: string, sessionUrl: string | null, sessionTitle: string) => ({
+    number,
+    title,
+    url: `https://github.com/NovaMoonX/moondreams-dev-apps/pull/${number}`,
+    head,
+    base: 'main',
+    isDraft: true,
+    labels: ['minor'],
+    ci: 'green',
+    bodySessionUrl: sessionUrl,
+    status: {
+      sessionUrl,
+      sessionTitle,
+      state: 'in progress',
+      ownerItems: [] as { text: string; options: { label: string; images: string[] }[] }[],
+      goodToKnow: [] as string[],
+      screenshots: [] as string[],
+      updatedAt: context.now - 10 * MINUTE_MS,
+    },
+  });
+  const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
+  const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
+  batch.set(context.firestore.doc('pipeline/inbox'), {
+    prs: [
+      {
+        ...runwayPr,
+        status: {
+          ...runwayPr.status,
+          ownerItems: [
+            {
+              text: "History's header: A or B?",
+              options: [
+                { label: 'A, Back on the title line', images: ['https://placehold.co/390x844.png?text=A'] },
+                { label: 'B, Back above the title', images: ['https://placehold.co/390x844.png?text=B'] },
+              ],
+            },
+          ],
+          goodToKnow: ['The undo sheet was only checked at 390px.'],
+          screenshots: ['https://placehold.co/390x844.png?text=History'],
+        },
+      },
+      {
+        ...orphanPr,
+        ci: 'red',
+        status: {
+          ...orphanPr.status,
+          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [] }],
+        },
+      },
+    ],
+    updatedAt: context.now - 4 * MINUTE_MS,
+  });
+
   await batch.commit();
 
   const statuses = fixtures.map((fixture) => [
@@ -163,7 +242,8 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const result: SeedResult = {
     ...EMPTY_SEED_RESULT,
     authUsers: fixtures.length,
-    firestoreDocuments: fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length,
+    firestoreDocuments:
+      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + 1,
     realtimePaths: fixtures.length,
   };
 

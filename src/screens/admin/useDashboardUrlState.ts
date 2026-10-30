@@ -1,7 +1,7 @@
 import { parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
-const VIEWS = ['apps', 'members', 'firebase'] as const;
+const VIEWS = ['apps', 'pipeline', 'members', 'firebase'] as const;
 const SECTIONS = ['usage', 'settings'] as const;
 
 export type DashboardSection = (typeof SECTIONS)[number];
@@ -40,6 +40,9 @@ export function useDashboardUrlState() {
     if (options?.isStep) void result.then(markStep);
   };
 
+  const showPipeline = (options?: NavigateOptions) =>
+    update({ view: 'pipeline', app: null, section: null, member: null }, options);
+
   const showMembers = (options?: NavigateOptions) =>
     update({ view: 'members', app: null, section: null, member: null }, options);
 
@@ -66,6 +69,7 @@ export function useDashboardUrlState() {
     app: state.app,
     section: state.section ?? 'usage',
     member: state.member,
+    showPipeline,
     showMembers,
     showFirebase,
     showApp,

@@ -53,4 +53,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          PIPELINE_KEY: ${{ secrets.PIPELINE_KEY }}
         run: node scripts/ownerInbox/run.ts

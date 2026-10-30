@@ -184,8 +184,30 @@ const readSaved = (path: string): InboxPr[] =>
 
 const prs = fromFile ? readSaved(fromFile) : await readOpenPrs();
 const body = buildInbox(prs, new Date().toISOString());
+const pipelineKey = process.env.PIPELINE_KEY ?? '';
+const pipelineUrl =
+  process.env.PIPELINE_URL ??
+  'https://us-central1-moondreams-dev-apps.cloudfunctions.net/recordPipelineEvent';
+
+const reportToPipeline = async (list: InboxPr[]) => {
+  const response = await fetch(pipelineUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      data: { key: pipelineKey, kind: 'inbox', prs: list },
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`status ${response.status}`);
+};
+
 if (isDryRun) {
   console.log(body);
 } else {
   await writeInbox(body);
+  if (pipelineKey) {
+    await reportToPipeline(prs).catch((error: Error) =>
+      console.log(`::warning::Pipeline view not updated: ${error.message}`),
+    );
+  }
 }

@@ -1,10 +1,11 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Workflow } from 'lucide-react';
 import { useQueries } from '@tanstack/react-query';
 import { useMemo, useState, type ReactNode } from 'react';
 
 import AppLogo from '@/components/AppLogo';
+import IconBadge from '@/components/IconBadge';
 import SearchInput from '@/components/SearchInput';
 import useNow from '@/hooks/useNow';
 import { accessRequestsQueryOptions, isOnAccessList } from '@lib/accessRequests/accessRequests';
@@ -66,6 +67,8 @@ interface DashboardNavProps {
   selected: string | null;
   unsavedAppIds: string[];
   isWide: boolean;
+  pipelineSummary: { waiting: number; text: string };
+  onSelectPipeline: () => void;
   onSelectMembers: () => void;
   onSelectFirebase: () => void;
   onSelectApp: (appId: string) => void;
@@ -81,6 +84,8 @@ function DashboardNav({
   selected,
   unsavedAppIds,
   isWide,
+  pipelineSummary,
+  onSelectPipeline,
   onSelectMembers,
   onSelectFirebase,
   onSelectApp,
@@ -127,6 +132,21 @@ function DashboardNav({
   return (
     <nav aria-label='Dashboard' className='space-y-4'>
       <div className='divide-border divide-y'>
+        <NavRow
+          leading={
+            <IconBadge
+              icon={<Workflow className='text-muted-foreground size-6' aria-hidden='true' />}
+              count={pipelineSummary.waiting}
+              urgent
+            />
+          }
+          title='Pipeline'
+          subtitle={pipelineSummary.text}
+          meta={[]}
+          isSelected={selected === 'pipeline'}
+          isWide={isWide}
+          onClick={onSelectPipeline}
+        />
         <NavRow
           title='Members'
           subtitle={getMembersSubtitle()}

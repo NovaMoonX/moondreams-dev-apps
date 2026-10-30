@@ -9,6 +9,8 @@ import HeaderIconButton from '@/components/HeaderIconButton';
 import SectionHeader from '@/components/SectionHeader';
 import StickyAppBar from '@/components/StickyAppBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import useNow from '@/hooks/useNow';
+import { usePipelineSync } from '@/hooks/usePipelineSync';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { adminUsersQueryOptions } from '@lib/admin/adminQueries';
@@ -21,6 +23,8 @@ import { isSameDraft, toDraft, type AppDraft } from './admin/appDraft';
 import DashboardNav from './admin/DashboardNav';
 import FirebaseUsageView from './admin/FirebaseUsageView';
 import MembersView from './admin/MembersView';
+import PipelineView from './admin/PipelineView';
+import { getPipelineSummary } from './admin/pipelineUtils';
 import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
 
@@ -37,21 +41,28 @@ function AdminDashboard() {
   const allUsage = useAllAppUsage(allApps);
   const [drafts, setDrafts] = useState<Record<string, AppDraft>>({});
   const users = usersQuery.data ?? NO_USERS;
+  // Live, unlike the rest of the dashboard: the sessions change while the owner watches.
+  const pipeline = usePipelineSync(isAdmin);
+  const now = useNow(60_000);
+  const pipelineSummary = getPipelineSummary(pipeline.sessions, now);
 
+  const isPipelineOpen = url.view === 'pipeline';
   const isMembersOpen = url.view === 'members';
   const isFirebaseOpen = url.view === 'firebase';
   // A phone with no app chosen shows the list, but the wide layout's main view is never empty.
   const selectedApp =
-    isMembersOpen || isFirebaseOpen
+    isPipelineOpen || isMembersOpen || isFirebaseOpen
       ? undefined
       : (allApps.find((app) => app.id === url.app) ?? (isWide ? allApps[0] : undefined));
   const getSelected = () => {
+    if (isPipelineOpen) return 'pipeline';
     if (isMembersOpen) return 'members';
     if (isFirebaseOpen) return 'firebase';
     return selectedApp?.id ?? null;
   };
   const selected = getSelected();
   const getDetailTitle = () => {
+    if (isPipelineOpen) return 'Pipeline';
     if (isFirebaseOpen) return 'Firebase usage';
     return selectedApp?.name ?? 'Members';
   };
@@ -69,6 +80,7 @@ function AdminDashboard() {
     );
 
   const getPhoneDetail = () => {
+    if (isPipelineOpen) return pipelineView;
     if (isMembersOpen) return members;
     if (isFirebaseOpen) return firebaseUsage;
     return appDetail;
@@ -90,6 +102,8 @@ function AdminDashboard() {
       selected={selected}
       unsavedAppIds={allApps.filter(isDirty).map((app) => app.id)}
       isWide={isWide}
+      pipelineSummary={pipelineSummary}
+      onSelectPipeline={() => url.showPipeline({ isStep })}
       onSelectMembers={() => url.showMembers({ isStep })}
       onSelectFirebase={() => url.showFirebase({ isStep })}
       onSelectApp={(appId) => url.showApp(appId, { isStep })}
@@ -105,6 +119,7 @@ function AdminDashboard() {
       onSelectMember={url.openMember}
     />
   );
+  const pipelineView = <PipelineView pipeline={pipeline} />;
   const firebaseUsage = <FirebaseUsageView apps={allApps} />;
   const appDetail = selectedApp ? (
     <AppDetail
@@ -188,7 +203,12 @@ function AdminDashboard() {
               {nav}
             </aside>
             <div className='min-w-0'>
-              {isMembersOpen ? (
+              {isPipelineOpen ? (
+                <div className='max-w-3xl space-y-4'>
+                  <SectionHeader title='Pipeline' />
+                  {pipelineView}
+                </div>
+              ) : isMembersOpen ? (
                 <div className='max-w-3xl space-y-4'>
                   <SectionHeader title='Members' />
                   {members}
