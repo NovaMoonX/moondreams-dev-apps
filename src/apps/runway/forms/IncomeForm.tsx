@@ -1,20 +1,23 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import {
   useQuestionFlow,
   type QuestionControls,
   type QuestionStep,
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
+import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -22,6 +25,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import {
   CHANGE_WORDS,
   DEFAULT_PAY_LINE_NAME,
+  FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
@@ -38,7 +42,20 @@ import {
 } from '@apps/runway/store/actions/itemActions';
 import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
 import { toGroupAnswer } from '@apps/runway/utils/groupChoice';
+import {
+  isAmountDraft,
+  isNullableOneOf,
+  isOneOf,
+  isPickOrCreate,
+  isText,
+  readDraftFields,
+  readKeptWithChange,
+} from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
+import {
+  withStartOver,
+  type StartOverProps,
+} from '@apps/runway/forms/withStartOver';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
@@ -86,6 +103,23 @@ interface IncomeFormData {
   endDate: string;
   endCount: string;
 }
+
+const parseIncomeDraftFields = (stored: unknown) =>
+  readDraftFields<IncomeFormData>(stored, {
+    source: isPickOrCreate,
+    payName: isText,
+    amount: isAmountDraft,
+    frequency: isNullableOneOf(INCOME_FREQUENCIES),
+    startDate: isText,
+    firstDay: isText,
+    secondDay: isText,
+    endKind: isOneOf(INCOME_ENDINGS),
+    endDate: isText,
+    endCount: isText,
+  });
+
+const parseIncomeDraft = (stored: unknown) =>
+  readKeptWithChange(stored, parseIncomeDraftFields);
 
 interface IncomeFormProps {
   isOpen: boolean;
@@ -318,7 +352,8 @@ const getDraftData = (input: CreateIncomeInput): IncomeFormData => {
   };
 };
 
-function IncomeForm({
+function IncomeFormBody({
+  onStartOver,
   isOpen,
   onClose,
   onCancel,
@@ -327,12 +362,12 @@ function IncomeForm({
   editing,
   openStep = null,
   draft,
-}: IncomeFormProps) {
+}: IncomeFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const resolved = useAppSelector((state) => selectResolvedPlan(state, today));
   const planStance = useAppSelector(selectStance);
-  const [formData, setFormData] = useState<IncomeFormData>(() =>
+  const [startData] = useState<IncomeFormData>(() =>
     editing
       ? getEditingData(editing)
       : draft?.initial
@@ -356,7 +391,19 @@ function IncomeForm({
             endCount: '',
           },
   );
-  const [startData] = useState(formData);
+  const draftKey = draft
+    ? null
+    : `${FORM_DRAFT_PREFIX}income:${editing?.itemId ?? `new:${defaultFrequency ?? 'any'}`}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
+  const kept = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseIncomeDraft,
+  });
+  const [formData, setFormData] = useState<IncomeFormData>(
+    kept.restored?.formData ?? startData,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<IncomeFormData>) =>
@@ -670,6 +717,7 @@ function IncomeForm({
       isHidden,
     ),
     startFolded: isEditing || !!draft?.initial,
+    foldAnswered: kept.restored !== null,
     initialOpenId: draft?.openStep ?? null,
   });
 
@@ -702,12 +750,31 @@ function IncomeForm({
     current: editing?.payload ?? EMPTY_PAY_LINE,
     candidate,
     onDone: onClose,
+    initialNote: kept.restored?.note,
+    initialFrom: kept.restored?.from,
   });
   const editBlocker = flow.getBlocker(blocker);
-  const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) ||
+  const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
+  const keptValue = useMemo(
+    () => ({ formData, note: flow.note, from: flow.from }),
+    [formData, flow.note, flow.from],
+  );
+  useKeepFormDraft({
+    isRestored: kept.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: keptValue,
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty,
+  });
+  const startOver = () => {
+    if (user && draftKey) clearFormDraft(user.uid, draftKey);
+    onStartOver();
+  };
   const requestClose = useDiscardGuard({
     isDirty,
     onClose: onCancel ?? onClose,
@@ -794,6 +861,12 @@ function IncomeForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
+            {kept.isNoticeShown && (
+              <DraftRestoredNotice
+                onStartOver={startOver}
+                onDismiss={kept.hideNotice}
+              />
+            )}
             {isQuick && quickStep ? (
               <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
             ) : (
@@ -858,5 +931,7 @@ function IncomeForm({
     </FormSheet>
   );
 }
+
+const IncomeForm = withStartOver(IncomeFormBody);
 
 export default IncomeForm;
