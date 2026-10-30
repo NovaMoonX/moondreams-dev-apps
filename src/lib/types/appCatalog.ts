@@ -29,6 +29,8 @@ export interface AppMetadata {
   description: string;
   status: AppStatus;
   isRestricted: boolean;
+  /** A restricted app people without access can see on Home and ask for. Stored `boolean | null`; missing reads as false. */
+  isRequestable: boolean;
   allowedUsers: string[];
   createdAt?: string;
   updatedAt?: string;
@@ -41,4 +43,20 @@ export interface UserProfile {
   photoURL?: string;
   customPhotoURL?: string | null;
   isAdmin?: boolean;
+}
+
+/** A member's private site settings at `userPrefs/{uid}`; only they and the admin read it. */
+export interface UserPrefs {
+  uid: string;
+  /** Oldest star first, so a new star joins the end of the starred group. */
+  starredAppIds: string[];
+  updatedAt: number;
+}
+
+/** The public face of an app open to requests at `appListings/{appId}`: readable by every member, so it carries no access list. */
+export interface AppListing {
+  id: AppId;
+  name: string;
+  description: string;
+  path: string;
 }

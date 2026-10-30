@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 interface SettingsRowProps {
   /** An emoji or icon for the round chip at the start. */
   icon: ReactNode;
@@ -10,6 +12,8 @@ interface SettingsRowProps {
   control?: ReactNode;
   /** Fields that belong to this row, under its text. */
   children?: ReactNode;
+  /** Makes the icon and text one tappable button (pick this account, open this item); the control stays its own target. */
+  onClick?: () => void;
 }
 
 /** One line of a `SettingsGroup`: an icon chip, a title with its description and a control at the end, with the row's own fields beneath. */
@@ -19,30 +23,49 @@ function SettingsRow({
   description,
   control,
   children,
+  onClick,
 }: SettingsRowProps) {
+  const iconChip = (
+    <span
+      className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full text-lg leading-none'
+      aria-hidden='true'
+    >
+      {icon}
+    </span>
+  );
+  const text = (
+    <span className='flex min-h-10 min-w-0 flex-1 flex-col justify-center'>
+      <span className='text-foreground font-medium text-pretty'>{title}</span>
+      {description && (
+        <span className='text-muted-foreground block text-sm text-pretty break-words'>{description}</span>
+      )}
+    </span>
+  );
+  const controlSlot = control && <span className='flex h-10 shrink-0 items-center'>{control}</span>;
+
   return (
     <li className='py-3'>
-      <label className='flex items-start gap-3'>
-        <span
-          className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-full text-lg leading-none'
-          aria-hidden='true'
-        >
-          {icon}
-        </span>
-        <span className='flex min-h-10 min-w-0 flex-1 flex-col justify-center'>
-          <span className='text-foreground font-medium text-pretty'>
-            {title}
-          </span>
-          {description && (
-            <span className='text-muted-foreground block text-sm text-pretty'>
-              {description}
-            </span>
-          )}
-        </span>
-        {control && (
-          <span className='flex h-10 shrink-0 items-center'>{control}</span>
-        )}
-      </label>
+      {onClick ? (
+        <div className='flex items-start gap-3'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='stripped'
+            className='h-auto min-w-0 flex-1 items-start justify-start gap-3 rounded-xl p-0 text-left font-normal'
+            onClick={onClick}
+          >
+            {iconChip}
+            {text}
+          </Button>
+          {controlSlot}
+        </div>
+      ) : (
+        <label className='flex items-start gap-3'>
+          {iconChip}
+          {text}
+          {controlSlot}
+        </label>
+      )}
       {children && <div className='mt-3 space-y-4'>{children}</div>}
     </li>
   );
