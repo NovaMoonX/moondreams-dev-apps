@@ -209,7 +209,7 @@ interface PurchaseFormProps {
 
 const toHttpsLink = (text: string) => {
   const link = text.trim() === '' ? null : toWebLink(text);
-  return link?.startsWith('https://') ? link : null;
+  return link?.replace(/^http:\/\//i, 'https://') ?? null;
 };
 
 const isOfflineFailure = (error: unknown) =>
@@ -247,7 +247,9 @@ function PurchaseForm({
       label: editing?.label ?? null,
       note: editing?.note ?? null,
       link: editing?.link ?? null,
-      group: editing?.expenseId ?? null,
+      group: expenses.some((expense) => expense.id === editing?.expenseId)
+        ? (editing?.expenseId ?? null)
+        : null,
       groupName: '',
     },
   }));
@@ -413,7 +415,10 @@ function PurchaseForm({
     return found ? getCardName(found, allCards) : CARD_WORDS.cashOrDebit;
   };
   const nameOfGroup = (id: string | null) =>
-    expenses.find((expense) => expense.id === id)?.name ?? SPEND_WORDS.noGroup;
+    expenses.find((expense) => expense.id === id)?.name ??
+    (id !== null && formData.extras.group === NEW_CHOICE
+      ? formData.extras.groupName.trim()
+      : SPEND_WORDS.noGroup);
   const cardOptions = allCards.filter(
     (card) => card.archivedAt === null || card.id === paidByCardId,
   );
@@ -1099,22 +1104,27 @@ function PurchaseForm({
                       value: mask(name),
                       isEmpty: name === '',
                       render: () => (
-                        <PickOrCreate
-                          label={SPEND_WORDS.groupLabel}
-                          options={expenses.map((expense) => ({
-                            value: expense.id,
-                            label: expense.name,
-                          }))}
-                          choice={text}
-                          newText={extras.groupName}
-                          onChange={(choice, newText) =>
-                            setExtras({ group: choice, groupName: newText })
-                          }
-                          newPillLabel={SPEND_WORDS.newGroup}
-                          newPlaceholder={words.placeholder}
-                          maxLength={maxLength}
-                          hasPlus={false}
-                        />
+                        <div className='space-y-3'>
+                          <p className='text-muted-foreground text-sm'>
+                            {SPEND_WORDS.groupHint}
+                          </p>
+                          <PickOrCreate
+                            label={SPEND_WORDS.groupLabel}
+                            options={expenses.map((expense) => ({
+                              value: expense.id,
+                              label: expense.name,
+                            }))}
+                            choice={text}
+                            newText={extras.groupName}
+                            onChange={(choice, newText) =>
+                              setExtras({ group: choice, groupName: newText })
+                            }
+                            newPillLabel={SPEND_WORDS.newGroup}
+                            newPlaceholder={words.placeholder}
+                            maxLength={maxLength}
+                            hasPlus={false}
+                          />
+                        </div>
                       ),
                     },
                   ];

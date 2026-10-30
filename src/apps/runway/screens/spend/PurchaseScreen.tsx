@@ -80,10 +80,17 @@ interface PurchaseScreenProps {
   /** Opens a related purchase; the Spend list uses the address. */
   onOpen?: (purchaseId: string) => void;
   onClose: () => void;
+  /** The purchase as a wider read found it, for one dated outside the loaded window. */
+  fallback?: OpenPurchase | null;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
-function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
+function PurchaseScreen({
+  purchaseId,
+  onOpen,
+  onClose,
+  fallback = null,
+}: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { isHidden } = useValuesHidden();
@@ -103,13 +110,17 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const receiptChooser = useRef<ReceiptChooser>(null);
   const [receiptViewId, setReceiptViewId] = useState<string | null>(null);
   const [isAddingReceipt, setIsAddingReceipt] = useState(false);
+  const [openedFromGroup, setOpenedFromGroup] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const purchase = purchases.find((entry) => entry.id === purchaseId) ?? null;
+  const purchase =
+    purchases.find((entry) => entry.id === purchaseId) ??
+    (fallback?.id === purchaseId ? fallback : null);
   const group =
     expenses.find((entry) => entry.id === purchase?.expenseId) ?? null;
-  const groupPurchases = useExpensePurchases(group?.id ?? null).purchases;
+  const groupRead = useExpensePurchases(group?.id ?? null);
+  const groupPurchases = groupRead.purchases;
   const receipts = useReceiptImages(purchaseId) ?? [];
   const viewedReceipt =
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
@@ -254,6 +265,20 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
     );
   }
 
+  if (group !== null && groupViewFor === purchase.id && openedFromGroup) {
+    return (
+      <PurchaseScreen
+        key={openedFromGroup}
+        purchaseId={openedFromGroup}
+        fallback={
+          groupPurchases?.find((entry) => entry.id === openedFromGroup) ?? null
+        }
+        onOpen={setOpenedFromGroup}
+        onClose={() => setOpenedFromGroup(null)}
+      />
+    );
+  }
+
   if (group !== null && groupViewFor === purchase.id) {
     return (
       <FormSheet
@@ -266,10 +291,12 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
         <div className='pb-4'>
           <ExpenseView
             expenseId={group.id}
+            purchases={groupPurchases}
+            isFailed={groupRead.isFailed}
             onBack={() => setGroupViewFor(null)}
             onOpenPurchase={(id) => {
-              setGroupViewFor(null);
-              openPurchase(id);
+              if (id !== purchase.id) setOpenedFromGroup(id);
+              else setGroupViewFor(null);
             }}
           />
         </div>

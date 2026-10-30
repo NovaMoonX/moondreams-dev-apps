@@ -714,6 +714,7 @@ export const SPEND_WORDS = {
   linkPlaceholder: 'Paste an order page or receipt link',
   addLink: 'Add a link',
   needsWebLink: 'Enter a web link, or remove it.',
+  groupHint: 'A group adds up its purchases, like a trip. It changes no balance.',
   group: 'Group',
   groupPlaceholder: 'Chicago trip',
   addGroup: 'Add to a group',
