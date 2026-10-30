@@ -180,7 +180,7 @@ const getParts = (
         (value) => PRIORITY_LABELS[value],
       ),
       diff('Funding', goalBefore.funding, goalAfter.funding, describeFunding),
-      ...('groupId' in goalBefore && 'groupId' in goalAfter
+      ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
             diff(
               GROUP_WORDS.changeLabel,
