@@ -1,5 +1,5 @@
-// Puts an issue on the owner's project board with its Apps field set from its
-// "<App name> (App)" label, and Status "Ready" when the item is new.
+// Puts an open issue on the owner's project board, filling its Apps field from
+// its "<App name> (App)" label and Status with "Ready", each only while empty.
 //
 //   node scripts/board/run.ts --issue 537   # needs PROJECT_TOKEN, GH_TOKEN and REPO (owner/name)
 //   node scripts/board/run.ts --all         # every open issue with an app label
@@ -246,7 +246,7 @@ const main = async () => {
           () => numbers,
           (error: unknown) => {
             console.log(
-              `::error::#${issue.number}: ${error instanceof Error ? error.message : String(error)}`,
+              `::error::#${issue.number}: ${(error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ')}`,
             );
             return [...numbers, issue.number];
           },
