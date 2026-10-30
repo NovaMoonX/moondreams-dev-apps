@@ -10,7 +10,8 @@ export function useRestartApp() {
     if (hasUnsavedWork()) {
       const isConfirmed = await confirm({
         title: 'Restart and lose what you typed?',
-        message: 'Finish and save it first, then restart. Restarting now throws it away.',
+        message:
+          'Finish and save it first, then restart. Restarting now throws it away.',
         confirmText: 'Restart anyway',
         cancelText: 'Keep editing',
         destructive: true,

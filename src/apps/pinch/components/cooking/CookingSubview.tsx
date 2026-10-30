@@ -21,6 +21,7 @@ import {
   Timer,
 } from 'lucide-react';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import Subview from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useWakeLock } from '@/hooks/useWakeLock';
@@ -464,6 +465,7 @@ function CookingSession({
     Record<string, 'NOTHING' | 'CHANGED'>
   >({});
   const editDirtyRef = useRef(false);
+  useUnsavedWork(() => editDirtyRef.current);
   const editBackStepRef = useRef<(() => boolean) | null>(null);
   const isAskingToLeaveEdit = useRef(false);
   const scrollBeforeEdit = useRef(0);

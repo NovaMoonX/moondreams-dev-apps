@@ -7,6 +7,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
@@ -160,6 +161,7 @@ function NoteForm({
       data.reason !== initialData.reason ||
       data.step !== initialData.step
     : data.text.trim() !== '';
+  useUnsavedWork(() => isDirty);
   const kind: WrittenNoteKind | 'TWEAK' = isTweak ? 'TWEAK' : data.kind;
   const stepIndex = data.step === WHOLE_RECIPE ? null : Number(data.step);
   const isTextOk = isTweak || isValidNoteText(data.text);
