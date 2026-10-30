@@ -4,6 +4,7 @@ import {
   chooseVersion,
   getMissingStep,
   getMissingSteps,
+  toBillProposal,
   toBillValue,
   toIncomeValue,
   toMonthlyBillValue,
@@ -599,4 +600,96 @@ assert.deepEqual(
     ['Extra.csv', null],
   ],
   'each file is listed with what it said itself, not with what another file filled in',
+);
+
+const paycheckFiles = ['Paycheck_15th.csv', 'Paycheck_30th.csv'];
+const paycheckLine = (
+  sourceFile: string,
+  name: string,
+  amountCents: number,
+  dayOfMonth: number,
+) => ({
+  sourceFile,
+  payer: 'HubSpot',
+  name,
+  amountCents,
+  scheduleKind: 'monthly',
+  dayOfMonth,
+});
+const owned = normalizeBudgetReading(
+  {
+    incomes: [
+      paycheckLine('Paycheck_15th.csv', 'Paycheck #1', 325_000, 15),
+      paycheckLine('Paycheck_15th.csv', 'ESPP Amount', 110_000, 15),
+      paycheckLine('Paycheck_30th.csv', 'Paycheck #2', 325_500, 30),
+      paycheckLine('Paycheck_30th.csv', 'ESPP Amount', 110_000, 30),
+    ],
+    bills: [
+      { ...bill('Paycheck_30th.csv', 'Rent', 160_000), forName: 'Housing' },
+      { ...bill('Paycheck_30th.csv', 'Water', 5_000), forName: 'housing ' },
+      { ...bill('Paycheck_30th.csv', 'Car note', 65_000), forName: 'Car' },
+      { ...bill('Paycheck_30th.csv', 'Vehicle', 30_000), forName: 'Savings' },
+    ],
+    envelopes: [
+      {
+        sourceFile: 'Paycheck_30th.csv',
+        name: 'Litter',
+        forName: 'Pet Parent',
+        amountCents: 6_000,
+        period: 'monthly',
+      },
+      {
+        sourceFile: 'Paycheck_15th.csv',
+        name: 'Hobbies',
+        forName: 'Additional Savings',
+        amountCents: 12_000,
+        period: 'monthly',
+      },
+    ],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: paycheckFiles },
+);
+assert.deepEqual(
+  owned.incomes.map((entry) => [entry.payer, entry.name, entry.monthDays]),
+  [
+    ['HubSpot', 'Paycheck #1', [15]],
+    ['HubSpot', 'ESPP Amount', [15, 30]],
+    ['HubSpot', 'Paycheck #2', [30]],
+  ],
+  'the payer is kept apart from the kind of pay, and a file named for a day gives the day',
+);
+assert.deepEqual(
+  [owned.incomes[1].scheduleKind, owned.incomes[1].versions.length],
+  ['twiceMonthly', 0],
+  'the same pay on two days of the month is one pay twice a month',
+);
+assert.deepEqual(
+  owned.bills.map((entry) => entry.forName),
+  ['Housing', 'Housing', 'Car', null],
+  'one purpose name across case and spacing, and a savings word is dropped',
+);
+assert.deepEqual(
+  owned.envelopes.map((entry) => entry.forName),
+  ['Pet Parent', null],
+  'the document’s own word is kept and a savings word is dropped',
+);
+const hubspot = toIncomeValue(owned.incomes[0], today);
+assert.equal(hubspot.sourceName, 'HubSpot');
+assert.equal(hubspot.payLineName, 'Paycheck #1');
+assert.equal(
+  hubspot.schedule.anchor,
+  Date.UTC(2026, 10, 15),
+  'a monthly day with no date lands on the next such day',
+);
+assert.equal(
+  toIncomeValue({ ...owned.incomes[0], payer: null }, today).sourceName,
+  'Paycheck #1',
+  'without a payer the name is the source, as before',
+);
+assert.equal(
+  toBillProposal(owned.bills[0], today).forName,
+  'Housing',
+  'a proposal carries its purpose name',
 );
