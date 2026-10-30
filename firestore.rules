@@ -299,6 +299,10 @@ service cloud.firestore {
       allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses'];
     }
 
+    match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {
+      allow delete: if isUser(uid);
+    }
+
     // --- App: waypoint ---
 
     match /apps/waypoint/inviteCodes/{inviteCode} {

@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Search } from 'lucide-react';
+import { ImagePlus, Search } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AmountHero from '@/components/AmountHero';
+import FallbackImage from '@/components/FallbackImage';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -34,6 +35,12 @@ import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { generateUuid } from '@/utils/idUtils';
 import { getWebLinkHost, toWebLink } from '@/utils/urlUtils';
 import { useAppSelector } from '@/store';
+import ReceiptFileInput, {
+  type ReceiptChooser,
+} from '@apps/runway/components/ReceiptFileInput';
+import { ReceiptTile } from '@apps/runway/components/ReceiptsBlock';
+import { pickReceiptFiles } from '@apps/runway/utils/receiptFiles';
+import { addReceiptImages } from '@apps/runway/store/actions/receiptActions';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import SplitEditor from '@apps/runway/components/SplitEditor';
 import { isTooLong } from '@apps/runway/utils/rangeInput';
@@ -41,6 +48,7 @@ import {
   CARD_WORDS,
   FORM_FLOW_WORDS,
   MAX_LINK_LENGTH,
+  MAX_RECEIPTS_PER_PURCHASE,
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
   RUNWAY_SEARCH_THRESHOLD,
@@ -115,10 +123,16 @@ const countUsualNote = (seen: number) => {
   }
 };
 
-type ExtraKey = 'label' | 'merchant' | 'note' | 'link' | 'group';
+type TextExtraKey = 'label' | 'merchant' | 'note' | 'link' | 'group';
+type ExtraKey = TextExtraKey | 'receipt';
+
+interface PickedReceipt {
+  file: File;
+  url: string;
+}
 
 const EXTRAS: {
-  key: ExtraKey;
+  key: TextExtraKey;
   words: { name: string; placeholder: string; add: string };
   maxLength: number;
 }[] = [
@@ -192,6 +206,8 @@ interface PurchaseFormProps {
   presetEnvelopeId?: string | null;
   /** The purchase being changed; the form then saves over it instead of adding. */
   editing?: OpenPurchase;
+  /** How many receipts the purchase already holds, so the cap counts them. */
+  heldReceiptCount?: number;
 }
 
 const toHttpsLink = (text: string) => {
@@ -210,6 +226,7 @@ function PurchaseForm({
   onCancel,
   presetEnvelopeId = null,
   editing,
+  heldReceiptCount = 0,
 }: PurchaseFormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -287,15 +304,44 @@ function PurchaseForm({
   const [usualNotesSeen] = useState(readUsualNotesSeen);
   const [originQuery, setOriginQuery] = useState('');
   const [openExtra, setOpenExtra] = useState<ExtraKey | null>(null);
+  const [pickedReceipts, setPickedReceipts] = useState<PickedReceipt[] | null>(
+    null,
+  );
+  const [receiptNote, setReceiptNote] = useState<string | null>(null);
+  const receiptChooser = useRef<ReceiptChooser>(null);
+  const receiptUrls = useRef(new Set<string>());
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     isMounted.current = true;
+    const urls = receiptUrls.current;
     return () => {
       isMounted.current = false;
+      urls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
+
+  const dropReceipts = (dropped: PickedReceipt[]) => {
+    dropped.forEach(({ url }) => {
+      URL.revokeObjectURL(url);
+      receiptUrls.current.delete(url);
+    });
+  };
+
+  const addReceiptFiles = (files: File[]) => {
+    const picked = pickReceiptFiles(
+      files,
+      heldReceiptCount + (pickedReceipts?.length ?? 0),
+    );
+    const added = picked.files.map((file) => {
+      const url = URL.createObjectURL(file);
+      receiptUrls.current.add(url);
+      return { file, url };
+    });
+    setReceiptNote(picked.note);
+    setPickedReceipts((current) => [...(current ?? []), ...added]);
+  };
 
   const countedFrom = getCountedFrom(periods);
   const isEditingCounted =
@@ -593,6 +639,47 @@ function PurchaseForm({
       const merchant = formData.extras.merchant?.trim() || null;
       const label = formData.extras.label?.trim() || null;
       const note = formData.extras.note?.trim() || null;
+      const receiptFiles = pickedReceipts?.map(({ file }) => file) ?? [];
+      const finishReceipts = (
+        purchaseId: string,
+        savedTitle: string | null,
+      ) => {
+        if (savedTitle !== null) {
+          addToast({ title: savedTitle, type: 'success' });
+        }
+        if (receiptFiles.length === 0) return;
+        if (!navigator.onLine) {
+          addToast({
+            title:
+              savedTitle === null
+                ? SPEND_WORDS.receiptOffline
+                : SPEND_WORDS.receiptOfflineAfterSave,
+            type: 'warning',
+          });
+          return;
+        }
+        void addReceiptImages(
+          user.uid,
+          encryption,
+          purchaseId,
+          receiptFiles,
+        ).then((failed) =>
+          addToast(
+            failed === 0
+              ? {
+                  title: SPEND_WORDS.receiptAdded(receiptFiles.length),
+                  type: 'success',
+                }
+              : {
+                  title: SPEND_WORDS.receiptsLeftBehind(
+                    failed,
+                    receiptFiles.length,
+                  ),
+                  type: 'warning',
+                },
+          ),
+        );
+      };
       const input = {
         link: toHttpsLink(linkText),
         ...getGroupChoice(),
@@ -631,20 +718,17 @@ function PurchaseForm({
               nameOfGroup,
             ),
           );
-          addToast({
-            title: isRefund ? 'Refund saved' : 'Purchase saved',
-            type: 'success',
-          });
         }
+        finishReceipts(
+          editing.id,
+          !isUnchanged ? (isRefund ? 'Refund saved' : 'Purchase saved') : null,
+        );
         onClose();
         return;
       }
-      await addPurchase(user.uid, encryption, input);
+      const purchaseId = await addPurchase(user.uid, encryption, input);
       if (isUsualCard) countUsualNote(usualNotesSeen);
-      addToast({
-        title: isRefund ? 'Refund added' : 'Purchase added',
-        type: 'success',
-      });
+      finishReceipts(purchaseId, isRefund ? 'Refund added' : 'Purchase added');
       onClose();
     } catch (saveError) {
       if (isMounted.current) {
@@ -989,7 +1073,7 @@ function PurchaseForm({
   });
   const isAsking = !questions.hasReviewed;
   const requestClose = useDiscardGuard({
-    isDirty: snapshot !== startSnapshot,
+    isDirty: snapshot !== startSnapshot || (pickedReceipts?.length ?? 0) > 0,
     onClose: onCancel ?? onClose,
     isBusy: isSaving,
     title: editing
@@ -1004,19 +1088,29 @@ function PurchaseForm({
         <div className='space-y-3'>
           <OptionalDetailRows
             heading={SPEND_WORDS.moreDetails}
-            removeLabel={SPEND_WORDS.removeDetail}
+            removeLabel={
+              openExtra === 'receipt'
+                ? SPEND_WORDS.removeAllReceiptFiles
+                : SPEND_WORDS.removeDetail
+            }
             openKey={openExtra}
             onOpen={(key) => setOpenExtra(key as ExtraKey)}
             onClose={() => setOpenExtra(null)}
-            onRemove={(key) =>
+            onRemove={(key) => {
+              if (key === 'receipt') {
+                dropReceipts(pickedReceipts ?? []);
+                setPickedReceipts(null);
+                setReceiptNote(null);
+                return;
+              }
               setExtras(
                 key === 'group'
                   ? { group: null, groupName: '' }
                   : { [key]: null },
-              )
-            }
-            details={EXTRAS.flatMap<OptionalDetail>(
-              ({ key, words, maxLength }) => {
+              );
+            }}
+            details={[
+              ...EXTRAS.flatMap<OptionalDetail>(({ key, words, maxLength }) => {
                 const text = extras[key];
                 if (text === null) return [];
                 if (key === 'group') {
@@ -1089,10 +1183,98 @@ function PurchaseForm({
                     ),
                   },
                 ];
-              },
-            )}
+              }),
+              ...(pickedReceipts === null
+                ? []
+                : [
+                    {
+                      key: 'receipt',
+                      label: SPEND_WORDS.receipt,
+                      value: SPEND_WORDS.receiptPhotos(pickedReceipts.length),
+                      isEmpty: pickedReceipts.length === 0,
+                      render: () => (
+                        <div className='space-y-3'>
+                          <p className='text-muted-foreground text-xs'>
+                            {SPEND_WORDS.receiptHelp}
+                          </p>
+                          <Button
+                            type='button'
+                            variant='secondary'
+                            className='h-11 w-full gap-1.5'
+                            disabled={
+                              heldReceiptCount + pickedReceipts.length >=
+                              MAX_RECEIPTS_PER_PURCHASE
+                            }
+                            onClick={() => receiptChooser.current?.open()}
+                          >
+                            <ImagePlus className='h-4 w-4' aria-hidden='true' />
+                            {SPEND_WORDS.chooseReceipts}
+                          </Button>
+                          <ReceiptFileInput
+                            chooser={receiptChooser}
+                            onFiles={addReceiptFiles}
+                          />
+                          {heldReceiptCount > 0 && (
+                            <p className='text-muted-foreground text-xs'>
+                              {SPEND_WORDS.receiptsHeld(heldReceiptCount)}
+                            </p>
+                          )}
+                          {receiptNote && (
+                            <p
+                              className='text-muted-foreground text-xs'
+                              role='status'
+                            >
+                              {receiptNote}
+                            </p>
+                          )}
+                          {isHidden && pickedReceipts.length > 0 && (
+                            <p className='text-muted-foreground text-xs'>
+                              {SPEND_WORDS.receiptPhotos(pickedReceipts.length)}
+                            </p>
+                          )}
+                          {pickedReceipts.length > 0 && (
+                            <ul className='grid grid-cols-3 gap-3'>
+                              {pickedReceipts.map((picked) => (
+                                <li key={picked.url} className='space-y-1.5'>
+                                  <div className='border-border aspect-square w-full overflow-hidden rounded-xl border'>
+                                    {isHidden ? (
+                                      <ReceiptTile />
+                                    ) : (
+                                      <FallbackImage
+                                        src={picked.url}
+                                        alt=''
+                                        className='size-full object-cover'
+                                      />
+                                    )}
+                                  </div>
+                                  <Button
+                                    type='button'
+                                    variant='tertiary'
+                                    size='sm'
+                                    className="text-muted-foreground relative w-full before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                                    onClick={() => {
+                                      dropReceipts([picked]);
+                                      setPickedReceipts(
+                                        pickedReceipts.filter(
+                                          (entry) => entry !== picked,
+                                        ),
+                                      );
+                                    }}
+                                  >
+                                    {SPEND_WORDS.removeReceiptFile}
+                                  </Button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      ),
+                    },
+                  ]),
+            ]}
           />
-          {EXTRAS.some(({ key }) => extras[key] === null) && (
+          {(EXTRAS.some(({ key }) => extras[key] === null) ||
+            pickedReceipts === null) && (
             <div className='flex flex-wrap gap-2'>
               {EXTRAS.filter(({ key }) => extras[key] === null).map(
                 ({ key, words }) => (
@@ -1106,6 +1288,16 @@ function PurchaseForm({
                     {words.add}
                   </RevealChip>
                 ),
+              )}
+              {pickedReceipts === null && (
+                <RevealChip
+                  onClick={() => {
+                    setPickedReceipts([]);
+                    setOpenExtra('receipt');
+                  }}
+                >
+                  {SPEND_WORDS.addReceipt}
+                </RevealChip>
               )}
             </div>
           )}

@@ -26,13 +26,14 @@ Built:
 - [x] Priorities: every item in funding order, where a short pay runs out, and a way to reorder
 - [x] Credit cards, each with its own reserve: purchases and bills paid by card, and paying a card off in one step
 - [x] A link on a purchase, and purchases grouped into an expense ("Chicago trip") with its total
+- [x] Receipt photos on purchases, sealed on the device and kept until you remove them
 
 Next:
 - [ ] Start from gross pay with taxes and deductions
 - [ ] Loans and interest on savings
 - [ ] What if: a scratch copy of the plan
 - [ ] Import purchases from a CSV
-- [ ] Receipt photos on purchases, and reminders for bills and income days
+- [ ] Reminders for bills and income days
 
 ## Docs
 

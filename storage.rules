@@ -44,6 +44,16 @@ service firebase.storage {
       allow delete: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Receipt photos are sealed on the device, so the bytes are opaque (Runway; mirrors apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages).
+    match /apps/runway/receipts/{uid}/{purchaseId}/{imageId} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && resource == null
+        && request.resource.size < 10 * 1024 * 1024 + 1024
+        && request.resource.contentType == 'application/octet-stream';
+    }
+
     // A store's own image, private to the person whose kitchen it is (mirrors apps/pinch/kitchens/{uid}/stores/{storeId}).
     match /apps/pinch/kitchens/{uid}/stores/{storeId}/{fileName} {
       function isKitchenOwner() {

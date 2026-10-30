@@ -1,5 +1,7 @@
 import {
+  decryptBytes,
   decryptValue,
+  encryptBytes,
   encryptValue,
   normalizeAppEncryption,
 } from '@lib/security';
@@ -50,6 +52,17 @@ export async function openJson<T extends object>(
   }
   return fields as T;
 }
+
+/** Seals a file's bytes for Storage; the nonce goes in the file's document. */
+export const sealBytes = (bytes: Uint8Array, encryption: RunwayEncryption) =>
+  encryptBytes(bytes, encryption.key);
+
+/** Opens bytes sealed by `sealBytes`; throws when they do not open. */
+export const openBytes = (
+  bytes: Uint8Array,
+  nonce: string,
+  encryption: RunwayEncryption,
+) => decryptBytes(bytes, encryption.key, nonce);
 
 const MAX_REMEMBERED_PAYLOADS = 6_000;
 
