@@ -14,7 +14,7 @@ import { useState, type ReactNode } from 'react';
 import { VersionLabel } from '@components/VersionLabel';
 import IconTile from '@/ui/IconTile';
 import { CANVAS_CLASS, LIST_CARD_CLASS, SURFACE_CLASS } from '@/ui/siteSurface';
-import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
+import { getRememberedPhoto, type RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import UserAvatar from '@/ui/UserAvatar';
 
 interface AccountPanelProps {
@@ -154,7 +154,7 @@ function AccountPanel({
           ? otherAccounts.map((account) => (
               <PanelRow
                 key={account.uid}
-                icon={<UserAvatar user={account} size='md' />}
+                icon={<UserAvatar user={{ ...account, photoURL: getRememberedPhoto(account) }} size='md' />}
                 title={getName(account)}
                 subtitle={account.email}
                 onClick={() => onSwitch(account)}
