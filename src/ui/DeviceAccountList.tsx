@@ -1,8 +1,9 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Check, UserPlus } from 'lucide-react';
+import { Check, Plus } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
+import SettingsGroup from '@/components/SettingsGroup';
+import SettingsRow from '@/components/SettingsRow';
 import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import UserAvatar from '@/ui/UserAvatar';
 
@@ -15,7 +16,7 @@ interface DeviceAccountListProps {
 
 const getName = (account: RememberedAccount) => account.displayName?.trim() || account.email || 'Unnamed account';
 
-/** The accounts this device remembers: tap one to switch to it, the trash icon to remove it from this device, or add another. */
+/** The accounts this device remembers, as a settings section: tap one to switch to it, the trash icon to remove it from this device, or add another. */
 function DeviceAccountList({ accounts, currentUid, onSwitch, onForget }: DeviceAccountListProps) {
   const { confirm } = useActionModal();
 
@@ -31,53 +32,41 @@ function DeviceAccountList({ accounts, currentUid, onSwitch, onForget }: DeviceA
   };
 
   return (
-    <ul className='divide-border divide-y'>
-      {accounts.map((account) => {
-        const isCurrent = account.uid === currentUid;
-        return (
-          <li key={account.uid} className='flex items-center gap-1 py-1'>
-            <Button
-              type='button'
-              variant='tertiary'
-              aria-current={isCurrent ? 'true' : undefined}
-              disabled={isCurrent}
-              className='h-auto min-w-0 flex-1 justify-start gap-3 rounded-2xl px-1 py-2 text-left font-normal disabled:opacity-100'
-              onClick={() => onSwitch(account)}
-            >
-              <UserAvatar user={account} size='md' />
-              <span className='min-w-0 flex-1'>
-                <span className='text-foreground block truncate text-sm font-medium'>{getName(account)}</span>
-                <span className='text-muted-foreground block truncate text-xs'>
-                  {isCurrent ? 'Signed in now' : account.email}
-                </span>
+    <SettingsGroup
+      title='Accounts on this device'
+      description='Switch between them from your avatar. Signing out keeps an account here until you remove it.'
+    >
+      {accounts.map((account) =>
+        account.uid === currentUid ? (
+          <SettingsRow
+            key={account.uid}
+            icon={<UserAvatar user={account} size='sm' className='size-10!' />}
+            title={getName(account)}
+            description='Signed in now'
+            control={
+              <span className='grid size-10 place-items-center' aria-label='Signed in'>
+                <Check className='text-primary size-5' aria-hidden='true' />
               </span>
-              {isCurrent ? <Check className='text-primary size-5 shrink-0' aria-hidden='true' /> : null}
-            </Button>
-            {isCurrent ? (
-              <span className='size-10 shrink-0' />
-            ) : (
+            }
+          />
+        ) : (
+          <SettingsRow
+            key={account.uid}
+            icon={<UserAvatar user={account} size='sm' className='size-10!' />}
+            title={getName(account)}
+            description={account.email}
+            onClick={() => onSwitch(account)}
+            control={
               <DeleteIconButton
                 label={`Remove ${getName(account)} from this device`}
                 onClick={() => handleForget(account)}
               />
-            )}
-          </li>
-        );
-      })}
-      <li className='py-1'>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='h-auto w-full justify-start gap-3 rounded-2xl px-1 py-2 text-left font-normal'
-          onClick={() => onSwitch(null)}
-        >
-          <span className='bg-muted grid size-10 shrink-0 place-items-center rounded-full'>
-            <UserPlus className='size-5' />
-          </span>
-          <span className='text-foreground text-sm font-medium'>Add another account</span>
-        </Button>
-      </li>
-    </ul>
+            }
+          />
+        ),
+      )}
+      <SettingsRow icon={<Plus className='size-5' />} title='Add another account' onClick={() => onSwitch(null)} />
+    </SettingsGroup>
   );
 }
 

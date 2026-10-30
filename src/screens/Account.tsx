@@ -1,6 +1,7 @@
 import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { useState } from 'react';
+import { Camera, Pencil, RefreshCw } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 
 import SettingsGroup from '@/components/SettingsGroup';
@@ -13,6 +14,23 @@ import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import DeviceAccountList from '@/ui/DeviceAccountList';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDate } from '@/utils/formatUtils';
+
+/** A row's one control as a quiet 40px icon, matching the trash icon on the accounts rows. */
+function RowIconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='icon'
+      aria-label={label}
+      title={label}
+      className='size-10 min-w-10 shrink-0 p-0'
+      onClick={onClick}
+    >
+      {children}
+    </Button>
+  );
+}
 
 /** The signed-in account's own page: profile, the accounts on this device, this device's saved data, and sign-out. */
 function Account() {
@@ -74,9 +92,9 @@ function Account() {
             title='Name'
             description={displayName}
             control={
-              <Button type='button' variant='secondary' size='sm' onClick={() => setNameDraft(user.displayName ?? '')}>
-                Change
-              </Button>
+              <RowIconButton label='Change your name' onClick={() => setNameDraft(user.displayName ?? '')}>
+                <Pencil className='size-4' />
+              </RowIconButton>
             }
           />
           <SettingsRow
@@ -84,31 +102,19 @@ function Account() {
             title='Photo'
             description='Shown across apps in place of your Google photo.'
             control={
-              <Button type='button' variant='secondary' size='sm' onClick={() => setIsPhotoOpen(true)}>
-                Change
-              </Button>
+              <RowIconButton label='Change your photo' onClick={() => setIsPhotoOpen(true)}>
+                <Camera className='size-4' />
+              </RowIconButton>
             }
           />
         </SettingsGroup>
 
-        <section className='space-y-2'>
-          <div className='px-1'>
-            <h3 className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>
-              Accounts on this device
-            </h3>
-            <p className='text-muted-foreground mt-1 text-sm'>
-              Switch between them from your avatar. Signing out keeps an account here until you remove it.
-            </p>
-          </div>
-          <div className='border-border rounded-2xl border px-3'>
-            <DeviceAccountList
-              accounts={rememberedAccounts}
-              currentUid={user.uid}
-              onSwitch={switchToAccount}
-              onForget={forgetAccount}
-            />
-          </div>
-        </section>
+        <DeviceAccountList
+          accounts={rememberedAccounts}
+          currentUid={user.uid}
+          onSwitch={switchToAccount}
+          onForget={forgetAccount}
+        />
 
         <SettingsGroup title='This device'>
           <SettingsRow
@@ -116,9 +122,9 @@ function Account() {
             title='Reset saved data'
             description='If screens look empty or out of date, this clears what this device kept and reloads.'
             control={
-              <Button type='button' variant='secondary' size='sm' onClick={resetSavedData}>
-                Reset
-              </Button>
+              <RowIconButton label='Reset saved data' onClick={resetSavedData}>
+                <RefreshCw className='size-4' />
+              </RowIconButton>
             }
           />
         </SettingsGroup>

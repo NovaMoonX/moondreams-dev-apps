@@ -37,15 +37,6 @@ function AccountPanel({
 
   return (
     <div className='space-y-3'>
-      {isAdmin ? (
-        <div className='flex justify-center'>
-          <Button type='button' variant='link' size='sm' className='gap-1.5' onClick={onOpenAdmin}>
-            <ShieldCheck className='size-4' aria-hidden='true' />
-            Admin dashboard
-          </Button>
-        </div>
-      ) : null}
-
       <div className='border-border bg-card divide-border divide-y overflow-hidden rounded-3xl border'>
         <div className='flex items-center gap-3 px-4 py-4'>
           <UserAvatar user={user} size='lg' />
@@ -105,6 +96,14 @@ function AccountPanel({
         Manage your account
       </Button>
 
+      {isAdmin ? (
+        <div className='flex justify-center'>
+          <Button type='button' variant='link' size='sm' className='gap-1.5' onClick={onOpenAdmin}>
+            <ShieldCheck className='size-4' aria-hidden='true' />
+            Admin dashboard
+          </Button>
+        </div>
+      ) : null}
       <div className='text-muted-foreground text-center text-xs'>
         <VersionLabel />
       </div>
