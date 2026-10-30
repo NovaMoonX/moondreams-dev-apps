@@ -29,6 +29,8 @@ import {
   type SummaryGroupPosition,
 } from '@/components/summaryGroup';
 import UndoSnackbar from '@/components/UndoSnackbar';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useImageUpload } from '@/hooks/useImageUpload';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { store, useAppDispatch, useAppSelector } from '@/store';
@@ -60,6 +62,7 @@ import {
   isValidNutrition,
   parseMinutes,
   parseNutrition,
+  parseRecipeFormData,
   toRecipeLine,
   type IngredientRow,
   type RecipeFormData,
@@ -169,6 +172,37 @@ const findLoadablePhoto = (photos: WebPhoto[]) =>
 const isRowValid = (row: IngredientRow) =>
   row.ingredientId !== '' && isRowAmountValid(row);
 
+interface RecipeFormDraft {
+  formData: RecipeFormData;
+  webCover: WebPhoto | null;
+  isCoverRemoved: boolean;
+}
+
+const isHttpsText = (value: unknown): value is string =>
+  typeof value === 'string' && value.startsWith('https://');
+
+function parseRecipeFormDraft(stored: unknown): RecipeFormDraft | null {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { formData, webCover, isCoverRemoved } =
+    stored as Partial<RecipeFormDraft>;
+  const parsed = parseRecipeFormData(formData);
+  const isCoverShaped =
+    webCover === null ||
+    (typeof webCover === 'object' &&
+      isHttpsText(webCover?.thumbUrl) &&
+      isHttpsText(webCover.imageUrl) &&
+      typeof webCover.title === 'string' &&
+      typeof webCover.host === 'string');
+  if (
+    parsed === null ||
+    !isCoverShaped ||
+    typeof isCoverRemoved !== 'boolean'
+  ) {
+    return null;
+  }
+  return { formData: parsed, webCover, isCoverRemoved };
+}
+
 interface RecipeFormProps {
   uid: string;
   /** The recipe being changed; null writes a new one. */
@@ -231,8 +265,17 @@ function RecipeForm({
   );
   const upload = useImageUpload(null);
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
-  const [isCoverRemoved, setIsCoverRemoved] = useState(false);
-  const [webCover, setWebCover] = useState<WebPhoto | null>(null);
+  const draftKey =
+    initialRead !== null || initialIdea !== null || initialChanges.length > 0
+      ? null
+      : `pinch:recipe:${recipeId ?? 'new'}`;
+  const draft = useFormDraft({ key: draftKey, parse: parseRecipeFormDraft });
+  const [isCoverRemoved, setIsCoverRemoved] = useState(
+    draft.restored?.isCoverRemoved ?? false,
+  );
+  const [webCover, setWebCover] = useState<WebPhoto | null>(
+    draft.restored?.webCover ?? null,
+  );
   const [offeredPhotos] = useState(() =>
     initialRead
       ? initialRead.extras.photos
@@ -241,7 +284,10 @@ function RecipeForm({
         : [],
   );
   const [sourcePhoto, setSourcePhoto] = useState<WebPhoto | null>(null);
-  const hasChosenCover = useRef(false);
+  const hasChosenCover = useRef(
+    draft.restored !== null &&
+      (draft.restored.webCover !== null || draft.restored.isCoverRemoved),
+  );
   const [initialData] = useState(() =>
     initialRead
       ? {
@@ -260,7 +306,50 @@ function RecipeForm({
         ? getDataFromIdea(initialIdea, sources)
         : getInitialData(recipe, sourcesById, collections),
   );
-  const [formData, setFormData] = useState<RecipeFormData>(initialData);
+  const [formStart, setFormStart] = useState<RecipeFormData>(() => {
+    const restored = draft.restored?.formData;
+    if (!restored) return initialData;
+    const { choice } = restored.sourceChoice;
+    const isSourceKnown =
+      choice === '' || choice === NEW_CHOICE || sourcesById.has(choice);
+    return isSourceKnown
+      ? restored
+      : { ...restored, sourceChoice: { choice: '', newText: '' } };
+  });
+  const [formData, setFormData] = useState<RecipeFormData>(formStart);
+  const [formKey, setFormKey] = useState(0);
+  const isDraftDirty = useMemo(
+    () =>
+      webCover !== null ||
+      isCoverRemoved ||
+      JSON.stringify(formData) !== JSON.stringify(initialData),
+    [formData, initialData, webCover, isCoverRemoved],
+  );
+  const draftValue = useMemo(
+    () => ({ formData, webCover, isCoverRemoved }),
+    [formData, webCover, isCoverRemoved],
+  );
+  useKeepFormDraft({
+    key: draftKey,
+    value: draftValue,
+    isDirty: isDraftDirty,
+  });
+  const isRestored = draft.restored !== null;
+  useEffect(() => {
+    if (isRestored) isDirtyRef.current = true;
+  }, [isRestored, isDirtyRef]);
+  const startOver = () => {
+    clearCover();
+    setWebCover(null);
+    setIsCoverRemoved(false);
+    hasChosenCover.current = false;
+    setFormStart(initialData);
+    setFormData(initialData);
+    setFormKey((current) => current + 1);
+    onTitleChange(initialData.title);
+    isDirtyRef.current = false;
+    draft.hideNotice();
+  };
   const [isNoteClosed, setIsNoteClosed] = useState(false);
   const [isAllChangesShown, setIsAllChangesShown] = useState(false);
   const [appliedIds, setAppliedIds] = useState(() =>
@@ -894,11 +983,7 @@ function RecipeForm({
 
   const handleSubmit = async (data: RecipeFormData) => {
     const hasReason = applied.length > 0 && why.trim() !== '';
-    if (
-      recipe &&
-      (tracking === 'on' || applied.length > 0) &&
-      !hasReason
-    ) {
+    if (recipe && (tracking === 'on' || applied.length > 0) && !hasReason) {
       const { changes, topics } = getDraftChanges(
         recipe,
         getDraft(data, ''),
@@ -949,6 +1034,14 @@ function RecipeForm({
 
   return (
     <>
+      {draft.isNoticeShown && (
+        <div className='mb-4'>
+          <DraftRestoredNotice
+            onStartOver={startOver}
+            onDismiss={draft.hideNotice}
+          />
+        </div>
+      )}
       <UndoSnackbar pending={pending} onUndo={undo} />
       {initialIdea?.kind === 'PHOTO' && (
         <p className='text-muted-foreground mb-4 text-sm'>
@@ -964,7 +1057,10 @@ function RecipeForm({
               : `Applying the ${initialChanges.length} changes you planned. Untick one this edit doesn't make, and it stays planned.`}
           </p>
           <ul className='space-y-2'>
-            {(isAllChangesShown ? initialChanges : initialChanges.slice(0, 3)).map((change) => (
+            {(isAllChangesShown
+              ? initialChanges
+              : initialChanges.slice(0, 3)
+            ).map((change) => (
               <li key={change.id} className='flex items-start gap-3'>
                 {initialChanges.length > 1 && (
                   <Checkbox
@@ -1030,10 +1126,11 @@ function RecipeForm({
         </div>
       )}
       <Form
+        key={formKey}
         id='pinch-recipe'
         className={join(ask !== null && 'hidden!')}
         form={fields}
-        initialData={initialData}
+        initialData={formStart}
         columns={1}
         onDataChange={(data) => {
           const next = data as RecipeFormData;

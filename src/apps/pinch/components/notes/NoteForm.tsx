@@ -7,8 +7,10 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
@@ -26,6 +28,7 @@ import {
   MAX_RECIPE_NOTE_LENGTH,
   NOTE_KIND_LABELS,
   NOTE_TEXT_COPY,
+  WRITTEN_NOTE_KINDS,
 } from '@apps/pinch/constants';
 import {
   addNote,
@@ -66,6 +69,18 @@ interface NoteFormData {
   cook: string;
 }
 
+function parseNoteDraft(stored: unknown): NoteFormData | null {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { kind, text, reason, step, cook } = stored as Partial<NoteFormData>;
+  const knownKind = WRITTEN_NOTE_KINDS.find((value) => value === kind);
+  const isShaped =
+    knownKind !== undefined &&
+    typeof text === 'string' &&
+    typeof reason === 'string' &&
+    typeof step === 'string' &&
+    typeof cook === 'string';
+  return isShaped ? { kind: knownKind, text, reason, step, cook } : null;
+}
 
 interface NoteFormProps {
   uid: string;
@@ -112,7 +127,7 @@ function NoteForm({
   const isToday = (cook: Cook) =>
     toLocalDateInputValue(cook.cookedAt) === today;
   const steps = recipe?.steps ?? NO_STEPS;
-  const [initialData] = useState<NoteFormData>(() => {
+  const [startData] = useState<NoteFormData>(() => {
     const at = note === null ? initialStepIndex : resolveNoteStep(note, steps);
     return {
       kind:
@@ -125,7 +140,29 @@ function NoteForm({
       cook: initialCookId ?? cooks.find(isToday)?.id ?? NO_COOK,
     };
   });
-  const [data, setData] = useState<NoteFormData>(initialData);
+  const draftKey = noteId
+    ? `pinch:note:${noteId}`
+    : `pinch:note:new:${recipeId}`;
+  const draft = useFormDraft({ key: draftKey, parse: parseNoteDraft });
+  const [data, setData] = useState<NoteFormData>(() => {
+    const restored = draft.restored;
+    if (restored === null) return startData;
+    const isStepKnown =
+      restored.step === WHOLE_RECIPE ||
+      (/^\d+$/.test(restored.step) && Number(restored.step) < steps.length);
+    const isCookKnown =
+      restored.cook === NO_COOK ||
+      cooks.some((cook) => cook.id === restored.cook);
+    return {
+      kind: note === null ? restored.kind : startData.kind,
+      text: restored.text,
+      reason: restored.reason,
+      step: isStepKnown ? restored.step : startData.step,
+      cook:
+        isCookKnown && initialCookId === null ? restored.cook : startData.cook,
+    };
+  });
+  const [formKey, setFormKey] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -157,11 +194,17 @@ function NoteForm({
     !isEditing && initialCookId === null && isCooksReady && choices.length > 0;
   const isFull = !isEditing && isNoteHistoryFull(noteCount);
   const isDirty = isEditing
-    ? data.text !== initialData.text ||
-      data.reason !== initialData.reason ||
-      data.step !== initialData.step
+    ? data.text !== startData.text ||
+      data.reason !== startData.reason ||
+      data.step !== startData.step
     : data.text.trim() !== '';
   useUnsavedWork(() => isDirty);
+  useKeepFormDraft({ key: draftKey, value: data, isDirty });
+  const startOver = () => {
+    setData(startData);
+    setFormKey((current) => current + 1);
+    draft.hideNotice();
+  };
   const kind: WrittenNoteKind | 'TWEAK' = isTweak ? 'TWEAK' : data.kind;
   const stepIndex = data.step === WHOLE_RECIPE ? null : Number(data.step);
   const isTextOk = isTweak || isValidNoteText(data.text);
@@ -255,7 +298,9 @@ function NoteForm({
                       : Number(props.value)
                   }
                   onChange={(next) =>
-                    props.onValueChange(next === null ? WHOLE_RECIPE : String(next))
+                    props.onValueChange(
+                      next === null ? WHOLE_RECIPE : String(next),
+                    )
                   }
                 />
               ),
@@ -301,7 +346,7 @@ function NoteForm({
             id: noteId,
             text: data.text,
             ...(note?.kind === 'CHANGE' ? { reason: data.reason } : {}),
-            ...(isTweak || data.step === initialData.step ? {} : { stepIndex }),
+            ...(isTweak || data.step === startData.step ? {} : { stepIndex }),
           }),
         ).unwrap();
       } else {
@@ -380,58 +425,69 @@ function NoteForm({
   }
 
   return (
-    <Form
-      id='pinch-note'
-      form={fields}
-      initialData={initialData}
-      columns={1}
-      onDataChange={(next) => {
-        setData(next as NoteFormData);
-        setError(null);
-      }}
-      onSubmit={() => {
-        void handleSubmit();
-      }}
-      submitButton={
-        <ModalFooterActions
-          note={
-            blocker ??
-            (error && <span className='text-destructive'>{error}</span>)
-          }
-          leftActions={
-            note && (
-              <DeleteIconButton
-                label={`Delete this ${note ? NOTE_KIND_LABELS[note.kind].toLowerCase() : 'entry'}`}
-                onClick={() => void handleDelete()}
+    <>
+      {draft.isNoticeShown && (
+        <div className='mb-4'>
+          <DraftRestoredNotice
+            onStartOver={startOver}
+            onDismiss={draft.hideNotice}
+          />
+        </div>
+      )}
+      <Form
+        key={formKey}
+        id='pinch-note'
+        form={fields}
+        initialData={data}
+        columns={1}
+        onDataChange={(next) => {
+          setData(next as NoteFormData);
+          setError(null);
+        }}
+        onSubmit={() => {
+          void handleSubmit();
+        }}
+        submitButton={
+          <ModalFooterActions
+            note={
+              blocker ??
+              (error && <span className='text-destructive'>{error}</span>)
+            }
+            leftActions={
+              note && (
+                <DeleteIconButton
+                  label={`Delete this ${note ? NOTE_KIND_LABELS[note.kind].toLowerCase() : 'entry'}`}
+                  onClick={() => void handleDelete()}
+                  disabled={isSubmitting}
+                />
+              )
+            }
+            cancelAction={
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={onCancel}
                 disabled={isSubmitting}
-              />
-            )
-          }
-          cancelAction={
-            <Button
-              type='button'
-              variant='secondary'
-              onClick={onCancel}
-              disabled={isSubmitting}
-            >
-              Cancel
-            </Button>
-          }
-          rightActions={
-            <Button
-              type='submit'
-              formNoValidate
-              loading={isSubmitting}
-              disabled={
-                isSubmitting || blocker !== null || (isEditing && !isDirty)
-              }
-            >
-              Save
-            </Button>
-          }
-        />
-      }
-    />
+              >
+                Cancel
+              </Button>
+            }
+            rightActions={
+              <Button
+                type='submit'
+                formNoValidate
+                loading={isSubmitting}
+                disabled={
+                  isSubmitting || blocker !== null || (isEditing && !isDirty)
+                }
+              >
+                Save
+              </Button>
+            }
+          />
+        }
+      />
+    </>
   );
 }
 

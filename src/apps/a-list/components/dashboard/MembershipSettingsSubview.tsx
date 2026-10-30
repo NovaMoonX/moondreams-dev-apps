@@ -8,7 +8,9 @@ import {
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
@@ -49,6 +51,41 @@ interface GoalValues {
   monthlyGoal: string;
 }
 
+interface MembershipDraft {
+  costValues: CostStepValues;
+  goalValues: GoalValues;
+  ticketPriceKind: TicketPriceKind;
+}
+
+function parseMembershipDraft(stored: unknown): MembershipDraft | null {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { costValues, goalValues, ticketPriceKind } =
+    stored as Partial<MembershipDraft>;
+  const knownKind = TICKET_PRICE_KINDS.find((kind) => kind === ticketPriceKind);
+  const isShaped =
+    knownKind !== undefined &&
+    typeof costValues?.cost === 'string' &&
+    typeof costValues.billTotal === 'string' &&
+    typeof costValues.startDate === 'string' &&
+    typeof costValues.showBillTotal === 'boolean' &&
+    typeof goalValues?.weeklyGoal === 'string' &&
+    typeof goalValues.monthlyGoal === 'string';
+  if (!isShaped) return null;
+  return {
+    costValues: {
+      cost: costValues.cost,
+      billTotal: costValues.billTotal,
+      startDate: costValues.startDate,
+      showBillTotal: costValues.showBillTotal,
+    },
+    goalValues: {
+      weeklyGoal: goalValues.weeklyGoal,
+      monthlyGoal: goalValues.monthlyGoal,
+    },
+    ticketPriceKind: knownKind,
+  };
+}
+
 const { custom, input } = FormFactories;
 const COST_GROUP = [
   'monthlyCostCents',
@@ -84,22 +121,33 @@ function MembershipSettingsSubview({
   const now = useNow();
   // Only fields the member changed in this form are written, so a concurrent edit to another field survives.
   const [openedWith] = useState(membership);
-  const [costValues, setCostValues] = useState<CostStepValues>({
-    cost: centsToInputValue(membership.monthlyCostCents),
-    billTotal:
-      membership.taxRate === null
-        ? ''
-        : centsToInputValue(membership.monthlyTotalCents),
-    startDate: toDateInputValue(membership.startDate),
-    showBillTotal: membership.taxRate !== null,
-  });
-  const [goalValues, setGoalValues] = useState<GoalValues>({
-    weeklyGoal: membership.weeklyGoal?.toString() ?? '',
-    monthlyGoal: membership.monthlyGoal?.toString() ?? '',
-  });
-  const [ticketPriceKind, setTicketPriceKind] = useState<TicketPriceKind>(
-    getTicketPriceKind(membership),
+  const [start] = useState<MembershipDraft>(() => ({
+    costValues: {
+      cost: centsToInputValue(membership.monthlyCostCents),
+      billTotal:
+        membership.taxRate === null
+          ? ''
+          : centsToInputValue(membership.monthlyTotalCents),
+      startDate: toDateInputValue(membership.startDate),
+      showBillTotal: membership.taxRate !== null,
+    },
+    goalValues: {
+      weeklyGoal: membership.weeklyGoal?.toString() ?? '',
+      monthlyGoal: membership.monthlyGoal?.toString() ?? '',
+    },
+    ticketPriceKind: getTicketPriceKind(membership),
+  }));
+  const draftKey = `a-list:membership:${membership.uid}`;
+  const draft = useFormDraft({ key: draftKey, parse: parseMembershipDraft });
+  const [begin] = useState(draft.restored ?? start);
+  const [costValues, setCostValues] = useState<CostStepValues>(
+    begin.costValues,
   );
+  const [goalValues, setGoalValues] = useState<GoalValues>(begin.goalValues);
+  const [ticketPriceKind, setTicketPriceKind] = useState<TicketPriceKind>(
+    begin.ticketPriceKind,
+  );
+  const [formKey, setFormKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -147,6 +195,19 @@ function MembershipSettingsSubview({
   const changedFields = getChangedFields();
   const hasChanges = Object.keys(changedFields).length > 0;
   useUnsavedWork(() => hasChanges);
+  const draftValue = { costValues, goalValues, ticketPriceKind };
+  useKeepFormDraft({
+    key: draftKey,
+    value: draftValue,
+    isDirty: JSON.stringify(draftValue) !== JSON.stringify(start),
+  });
+  const startOver = () => {
+    setCostValues(start.costValues);
+    setGoalValues(start.goalValues);
+    setTicketPriceKind(start.ticketPriceKind);
+    setFormKey((current) => current + 1);
+    draft.hideNotice();
+  };
 
   const handleSave = async () => {
     if (!hasChanges) {
@@ -241,6 +302,12 @@ function MembershipSettingsSubview({
   return (
     <Subview title='Membership' onClose={onClose}>
       <div className='space-y-4'>
+        {draft.isNoticeShown && (
+          <DraftRestoredNotice
+            onStartOver={startOver}
+            onDismiss={draft.hideNotice}
+          />
+        )}
         <div className='bg-secondary/60 flex items-center gap-3 rounded-2xl px-4 py-3'>
           <span className='text-3xl' aria-hidden='true'>
             🎟️
@@ -255,7 +322,7 @@ function MembershipSettingsSubview({
         <SectionDivider label='💳 Monthly cost' />
         <div className='space-y-2'>
           <Form
-            key={costValues.showBillTotal ? 'with-bill' : 'no-bill'}
+            key={`${formKey}-${costValues.showBillTotal ? 'with-bill' : 'no-bill'}`}
             id='a-list-settings-cost'
             form={costFields}
             initialData={costValues}
@@ -342,6 +409,7 @@ function MembershipSettingsSubview({
         </div>
         <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
         <Form
+          key={formKey}
           id='a-list-settings-goals'
           form={goalFields}
           initialData={goalValues}
