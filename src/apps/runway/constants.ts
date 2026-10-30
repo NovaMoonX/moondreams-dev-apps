@@ -62,7 +62,12 @@ export const STANCE_FOLLOW_PLAN = 'plan' as const;
 export const MORE_ENTRIES = ['priorities', 'settings', 'changeLog'] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
-export const RUNWAY_VIEWS = ['start', 'freeToSpend', 'checkAmount'] as const;
+export const RUNWAY_VIEWS = [
+  'start',
+  'freeToSpend',
+  'checkAmount',
+  'checkBalance',
+] as const;
 
 /** The screens Settings opens, kept in the URL as `settingsView`. */
 export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
@@ -834,6 +839,31 @@ export const CHECK_WORDS = {
   promptChosen: 'Type an amount. Nothing is spent or moved.',
   noEnvelopes: 'Add an envelope to check an amount against it.',
   hidden: 'Show amounts to see how it fits.',
+} as const;
+
+export const BALANCE_CHECK_WORDS = {
+  title: 'Check your balance',
+  open: 'Check your balance',
+  openSub: 'Compare your bank with Runway',
+  question: 'What does your account hold now?',
+  amount: 'Account balance',
+  hint: 'Checking changes nothing.',
+  counts: 'Runway counts',
+  onHand: 'on hand',
+  match: 'They match.',
+  less: (amount: string) =>
+    `Your account has ${amount} less than Runway counts.`,
+  more: (amount: string) =>
+    `Your account has ${amount} more than Runway counts.`,
+  onCards: (amount: string) =>
+    `This includes ${amount} waiting to be paid on cards, which is still in your account.`,
+  causesCaption: 'What can cause it',
+  causes: [
+    'A purchase or card payment not added yet',
+    "Money that arrived but isn't confirmed on its income day",
+    'Interest, a fee or a transfer',
+  ],
+  loading: 'Getting your plan.',
 } as const;
 
 export const START_WORDS = {

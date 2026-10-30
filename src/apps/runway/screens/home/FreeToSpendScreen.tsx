@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Calculator, ChevronRight, Wallet } from 'lucide-react';
+import { Calculator, ChevronRight, Landmark, Wallet } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -17,6 +17,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import {
+  BALANCE_CHECK_WORDS,
   CARD_WORDS,
   CHECK_WORDS,
   ENVELOPE_SPEND_WORDS,
@@ -24,6 +25,7 @@ import {
   HOME_WORDS,
 } from '@apps/runway/constants';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
+import { CheckBalanceBody } from '@apps/runway/screens/home/CheckBalanceScreen';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
@@ -60,9 +62,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     checkEnvelope,
     openCheckAmount,
     closeCheckAmount,
+    openCheckBalance,
+    closeCheckBalance,
     leaveViewForTab,
   } = useRunwayUrlState();
   const isChecking = view === 'checkAmount';
+  const isCheckingBalance = view === 'checkBalance';
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -149,10 +154,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
 
   const getTitle = () => {
     if (isChecking) return CHECK_WORDS.title;
+    if (isCheckingBalance) return BALANCE_CHECK_WORDS.title;
     return sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand';
   };
   const getBack = () => {
     if (isChecking) return closeCheckAmount;
+    if (isCheckingBalance) return closeCheckBalance;
     return sheetKey === null ? undefined : () => setSheetKey(null);
   };
 
@@ -165,6 +172,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     >
       {isChecking ? (
         <CheckAmountBody presetEnvelopeId={checkEnvelope} />
+      ) : isCheckingBalance ? (
+        <CheckBalanceBody />
       ) : sheetKey !== null ? (
         <StartingAmountsSheet
           key={sheetKey}
@@ -299,6 +308,17 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 label={CHECK_WORDS.open}
                 subtitle={ENVELOPE_SPEND_WORDS.checkSub}
                 onClick={() => openCheckAmount(null)}
+              />
+            )}
+            {level === 'track' && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Landmark />}
+                label={BALANCE_CHECK_WORDS.open}
+                subtitle={BALANCE_CHECK_WORDS.openSub}
+                onClick={openCheckBalance}
               />
             )}
           </ActionGroup>
