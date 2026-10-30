@@ -4,6 +4,7 @@ import { CheckCircle2, LoaderCircle, RefreshCw, WifiOff, WifiZero } from 'lucide
 import { useState } from 'react';
 
 import { useNetworkStatus, type NetworkBannerState } from '@hooks/useNetworkStatus';
+import { useRestartApp } from '@hooks/useRestartApp';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 
 type Variant = Exclude<NetworkBannerState, null> | 'update';
@@ -44,6 +45,7 @@ const VARIANTS: Record<
 function OfflineBanner() {
   const networkStatus = useNetworkStatus();
   const isUpdateReady = useUpdateReady();
+  const restart = useRestartApp();
   const status: Variant | null = networkStatus ?? (isUpdateReady ? 'update' : null);
   // Keeps the last shown variant while sliding out, so a cleared status doesn't repaint it.
   const [shownVariant, setShownVariant] = useState<Variant>(status ?? 'offline');
@@ -69,7 +71,7 @@ function OfflineBanner() {
           size='sm'
           variant='base'
           className='pointer-events-auto relative h-7 bg-primary-foreground! px-3 text-primary! after:absolute after:-inset-1.5 hover:bg-primary-foreground/85! focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground!'
-          onClick={() => window.location.reload()}
+          onClick={restart}
         >
           Restart
         </Button>

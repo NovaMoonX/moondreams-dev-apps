@@ -3,6 +3,7 @@ import { ChevronLeft } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import AppLogo from '@/components/AppLogo';
 import HeaderIconButton from '@/components/HeaderIconButton';
 import SectionHeader from '@/components/SectionHeader';
@@ -57,6 +58,7 @@ function AdminDashboard() {
 
   const getDraft = (app: AppMetadata) => drafts[app.id] ?? toDraft(app);
   const isDirty = (app: AppMetadata) => !isSameDraft(getDraft(app), toDraft(app));
+  useUnsavedWork(() => allApps.some(isDirty));
 
   const handleDraftChange = (app: AppMetadata, patch: Partial<AppDraft>) =>
     setDrafts((current) => ({ ...current, [app.id]: { ...(current[app.id] ?? toDraft(app)), ...patch } }));

@@ -8,6 +8,7 @@ import {
   Label,
 } from '@moondreamsdev/dreamer-ui/components';
 
+import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
@@ -145,6 +146,7 @@ function MembershipSettingsSubview({
 
   const changedFields = getChangedFields();
   const hasChanges = Object.keys(changedFields).length > 0;
+  useUnsavedWork(() => hasChanges);
 
   const handleSave = async () => {
     if (!hasChanges) {

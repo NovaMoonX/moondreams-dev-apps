@@ -70,7 +70,7 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
 
 ## Merging a run's PRs
 
-The owner merges, unless they hand the merges over. "Merge them through" (in chat or in a PR comment) lets you merge this run's open PRs down their merge order; it covers the PRs open when it was given, and a PR opened later needs its own go. Say in each status comment's Next moves that you are merging, and on whose go.
+The owner merges, unless they hand the merges over. "Merge them through" (in chat or in a PR comment) lets you merge this run's open PRs down their merge order; it covers the PRs open when it was given, and a PR opened later needs its own go. "automerge" (the `automerge` skill) is a standing go for the PRs a session drives, held back by anything the owner should decide or know. Say in each status comment's Next moves that you are merging, and on whose go.
 
 For each PR, in order:
 
