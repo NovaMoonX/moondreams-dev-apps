@@ -70,6 +70,7 @@ interface PurchaseFields {
   lines: readonly PurchaseLine[];
   paidByCardId: string | null;
   link: string | null;
+  receiptText: string | null;
   expenseId: string | null;
 }
 
@@ -83,7 +84,6 @@ export function describePurchaseRemoval(
   const kind = isRefund(purchase) ? 'Refund' : 'Purchase';
   return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateUTC(purchase.date)}.`;
 }
-
 
 const describeGroupChange = (
   before: string | null,
@@ -135,6 +135,9 @@ export function describePurchaseEdit(
       : null,
     (after.link?.trim() || null) !== (before.link?.trim() || null)
       ? 'link'
+      : null,
+    (after.receiptText?.trim() || null) !== (before.receiptText?.trim() || null)
+      ? 'items'
       : null,
     describeGroupChange(
       before.expenseId ?? null,

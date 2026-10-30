@@ -2378,26 +2378,34 @@ A second provider behind `BankDataProvider` if the spike shows the first does no
 ### Success Criteria
 - [ ] Provider names stay inside `provider*.ts`.
 
-### Issue 72: Itemized receipts and order pages
+### Issue 72: Read a receipt when adding a purchase
 
 **Prerequisites:** Issue 47
-**Target PR Size:** To be sized when scoped
+**Target PR Size:** M
 **Files:**
-- `src/apps/runway/components/ReceiptPicker.tsx`
+- `src/apps/runway/forms/PurchaseForm.tsx`, `src/apps/runway/utils/receiptText.ts`, `src/apps/runway/screens/spend/PurchaseScreen.tsx`
 
-**Context:** Read the TDD's "Receipts".
+**Context:** Read the TDD's "Receipts" and PRODUCT.md "Privacy and Security".
 
 ### Description
-Read order numbers and itemized details from receipts and order pages to suggest an envelope for a mixed purchase.
+A person adding a purchase can start from a photo of the receipt. One tap reads it with the shared receipt reader and fills in the amount, the store and the day for them to check, keeps the photo as the purchase's receipt, and saves the items as text with the purchase. Reading runs only when the person taps it; otherwise a photo is just an attachment. Order pages are not read yet.
 
 ### Possible Approach
-1. Scope when picked up.
+1. "Read a receipt" is a reveal under the amount of a new purchase; its view says what is sent before the chooser opens.
+2. The form applies the reading (`extractReceiptFromFile`) to its own fields and adds the photo to its receipt files.
+3. The items are formatted by `formatReceiptItems` and sealed as `receiptText`; the purchase sheet shows them, masked while amounts are hidden.
 
 ### CRUD & Entry-Point Requirements
-- [ ] To be scoped.
+- [x] Create: the reveal on a new purchase's amount.
+- [x] Read: an "Items" entry on the purchase sheet.
+- [x] Update: kept as it was on an edit; a change would be named "items" in the change log.
+- [x] Delete: goes with the purchase.
 
 ### Success Criteria
-- [ ] Scoped before it is built.
+- [x] Nothing is sent until the person taps and chooses a photo, and the screen says what is sent first.
+- [x] A failed reading shows its reason in the view, which stays open, and adds nothing.
+- [x] A day outside tracking is not applied; the form keeps today.
+- [x] Prices in the items are masked while amounts are hidden.
 
 ### Issue 73: View-only access to a plan
 

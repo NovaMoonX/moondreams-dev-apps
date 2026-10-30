@@ -564,6 +564,8 @@ export interface PurchaseSealed {
   paidByCardId?: string | null;
   /** An https link to the order or receipt; null (or missing on an older purchase) when none was added. */
   link: string | null;
+  /** The items read from a receipt, one per line; null (or missing on an older purchase) when none were read. */
+  receiptText: string | null;
 }
 
 /** `date` is the spending day, date-only; `createdAt` is the instant it was added. */

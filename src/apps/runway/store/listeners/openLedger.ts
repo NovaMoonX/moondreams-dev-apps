@@ -100,6 +100,7 @@ export async function openPurchase(
     refundOfId: payload.refundOfId ?? null,
     paidByCardId: payload.paidByCardId ?? null,
     link: payload.link ?? null,
+    receiptText: payload.receiptText ?? null,
   };
   return result;
 }
