@@ -2,7 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, House, Menu, Moon } from 'lucide-react';
+import { Check, House, Menu } from 'lucide-react';
 
 import AppLogo from '@components/AppLogo';
 import SideSheet from '@components/SideSheet';
@@ -10,7 +10,7 @@ import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { getAppResumePath } from '@lib/app';
 import IconTile from '@ui/IconTile';
-import ThemeToggle from '@ui/ThemeToggle';
+import ThemePicker from '@ui/ThemePicker';
 
 interface AppNavPanelProps {
   isOpen: boolean;
@@ -23,7 +23,7 @@ const rowClassName = (isCurrent: boolean) =>
     isCurrent && 'bg-primary/10 font-medium',
   );
 
-/** The header's menu: a hamburger that slides in the list of apps (each opens where you last left it), Home, and the theme switch. */
+/** The header's menu: a hamburger that slides in the list of apps (each opens where you last left it), Home, and the theme choice. */
 function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
@@ -61,17 +61,7 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
         isOpen={isOpen}
         onClose={() => onOpenChange(false)}
         title='Apps'
-        footer={
-          <div className='flex items-center justify-between gap-3'>
-            <span className='flex items-center gap-3'>
-              <IconTile>
-                <Moon className='size-5' />
-              </IconTile>
-              <span className='text-foreground text-base'>Dark mode</span>
-            </span>
-            <ThemeToggle />
-          </div>
-        }
+        footer={<ThemePicker />}
       >
         {(close) => (
           <nav aria-label='Apps' className='space-y-4'>
