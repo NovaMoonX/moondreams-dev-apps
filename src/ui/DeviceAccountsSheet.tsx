@@ -63,6 +63,7 @@ function DeviceAccountsSheet({ isOpen, accounts, currentUid, onSwitch, onForget,
                   <EllipsisDropdown
                     ariaLabel={`More for ${getName(account)}`}
                     variant='tertiary'
+                    className="relative after:absolute after:-inset-1 after:content-['']"
                     items={[
                       DropdownMenuFactories.option({
                         label: 'Remove from this device',
