@@ -30,6 +30,7 @@ Built:
 - [x] Read a receipt on tap: the amount, the store, the day and the items fill in for you to check
 - [x] Move what is left in an envelope to another envelope, a goal or Free to Spend, with an Undo
 
+- [x] Check your balance: type what your bank holds and see how it compares with Runway
 Next:
 - [ ] Start from gross pay with taxes and deductions
 - [ ] Loans and interest on savings

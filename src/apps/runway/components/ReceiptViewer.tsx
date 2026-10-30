@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Download, ReceiptText, Trash2 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -12,9 +12,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { SPEND_WORDS } from '@apps/runway/constants';
-import { useReceiptImageUrl } from '@apps/runway/hooks/useReceiptImageUrl';
+import {
+  forgetReceiptImage,
+  useReceiptImageUrl,
+} from '@apps/runway/hooks/useReceiptImageUrl';
 import { removeReceiptImage } from '@apps/runway/store/actions/receiptActions';
 import type { OpenReceiptImage } from '@apps/runway/types';
+import { findScrollParent } from '@apps/runway/utils/receiptFiles';
 
 interface ReceiptViewerProps {
   image: OpenReceiptImage;
@@ -28,8 +32,14 @@ function ReceiptViewer({ image, onBack }: ReceiptViewerProps) {
   const { addToast } = useToast();
   const { isHidden, toggle } = useValuesHidden();
   const { url, isFailed } = useReceiptImageUrl(image, !isHidden);
+  const root = useRef<HTMLDivElement>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useLayoutEffect(() => {
+    const scroller = findScrollParent(root.current);
+    if (scroller) scroller.scrollTop = 0;
+  }, []);
 
   const download = () => {
     if (url === null) return;
@@ -52,6 +62,7 @@ function ReceiptViewer({ image, onBack }: ReceiptViewerProps) {
     setError(null);
     try {
       await removeReceiptImage(user.uid, image);
+      forgetReceiptImage(image.id);
       addToast({ title: SPEND_WORDS.receiptRemoved, type: 'success' });
       onBack();
     } catch (removeError) {
@@ -61,7 +72,7 @@ function ReceiptViewer({ image, onBack }: ReceiptViewerProps) {
   };
 
   return (
-    <div className='space-y-4'>
+    <div ref={root} className='space-y-4'>
       <BackLink onBack={onBack} />
       <div data-sensitive=''>
         {isHidden ? (
@@ -89,20 +100,22 @@ function ReceiptViewer({ image, onBack }: ReceiptViewerProps) {
                 {SPEND_WORDS.receiptOpenFailed}
               </p>
             }
-            className='border-border h-auto w-full rounded-2xl border'
+            className='border-border mx-auto h-auto max-h-[60vh] w-auto max-w-full rounded-2xl border object-contain'
           />
         )}
       </div>
-      <ActionGroup isRoomy>
-        <ActionRow
-          isGrouped
-          isRoomy
-          icon={<Download />}
-          label={SPEND_WORDS.downloadReceipt}
-          isDisabled={url === null}
-          onClick={download}
-        />
-      </ActionGroup>
+      {!isHidden && (
+        <ActionGroup isRoomy>
+          <ActionRow
+            isGrouped
+            isRoomy
+            icon={<Download />}
+            label={SPEND_WORDS.downloadReceipt}
+            isDisabled={url === null}
+            onClick={download}
+          />
+        </ActionGroup>
+      )}
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}

@@ -41,6 +41,7 @@ import { useAppSelector } from '@/store';
 import ReceiptFileInput, {
   type ReceiptChooser,
 } from '@apps/runway/components/ReceiptFileInput';
+import { ReceiptTile } from '@apps/runway/components/ReceiptsBlock';
 import { pickReceiptFiles } from '@apps/runway/utils/receiptFiles';
 import { formatReceiptItems } from '@apps/runway/utils/receiptText';
 import { addReceiptImages } from '@apps/runway/store/actions/receiptActions';
@@ -211,6 +212,8 @@ interface PurchaseFormProps {
   presetEnvelopeId?: string | null;
   /** The purchase being changed; the form then saves over it instead of adding. */
   editing?: OpenPurchase;
+  /** How many receipts the purchase already holds, so the cap counts them. */
+  heldReceiptCount?: number;
 }
 
 const toHttpsLink = (text: string) => {
@@ -229,6 +232,7 @@ function PurchaseForm({
   onCancel,
   presetEnvelopeId = null,
   editing,
+  heldReceiptCount = 0,
 }: PurchaseFormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -339,7 +343,10 @@ function PurchaseForm({
   };
 
   const addReceiptFiles = (files: File[]) => {
-    const picked = pickReceiptFiles(files, pickedReceipts?.length ?? 0);
+    const picked = pickReceiptFiles(
+      files,
+      heldReceiptCount + (pickedReceipts?.length ?? 0),
+    );
     const added = picked.files.map((file) => {
       const url = URL.createObjectURL(file);
       receiptUrls.current.add(url);
@@ -646,24 +653,45 @@ function PurchaseForm({
       const label = formData.extras.label?.trim() || null;
       const note = formData.extras.note?.trim() || null;
       const receiptFiles = pickedReceipts?.map(({ file }) => file) ?? [];
-      const finishReceipts = async (
+      const finishReceipts = (
         purchaseId: string,
         savedTitle: string | null,
       ) => {
-        const failed =
-          receiptFiles.length === 0
-            ? 0
-            : await addReceiptImages(
-                user.uid,
-                encryption,
-                purchaseId,
-                receiptFiles,
-              );
-        if (failed > 0) {
-          addToast({ title: SPEND_WORDS.receiptLeftBehind, type: 'warning' });
-        } else if (savedTitle !== null) {
+        if (savedTitle !== null) {
           addToast({ title: savedTitle, type: 'success' });
         }
+        if (receiptFiles.length === 0) return;
+        if (!navigator.onLine) {
+          addToast({
+            title:
+              savedTitle === null
+                ? SPEND_WORDS.receiptOffline
+                : SPEND_WORDS.receiptOfflineAfterSave,
+            type: 'warning',
+          });
+          return;
+        }
+        void addReceiptImages(
+          user.uid,
+          encryption,
+          purchaseId,
+          receiptFiles,
+        ).then((failed) =>
+          addToast(
+            failed === 0
+              ? {
+                  title: SPEND_WORDS.receiptAdded(receiptFiles.length),
+                  type: 'success',
+                }
+              : {
+                  title: SPEND_WORDS.receiptsLeftBehind(
+                    failed,
+                    receiptFiles.length,
+                  ),
+                  type: 'warning',
+                },
+          ),
+        );
       };
       const input = {
         link: toHttpsLink(linkText),
@@ -706,25 +734,16 @@ function PurchaseForm({
             ),
           );
         }
-        await finishReceipts(
+        finishReceipts(
           editing.id,
-          !isUnchanged
-            ? isRefund
-              ? 'Refund saved'
-              : 'Purchase saved'
-            : receiptFiles.length > 0
-              ? SPEND_WORDS.receiptAdded(receiptFiles.length)
-              : null,
+          !isUnchanged ? (isRefund ? 'Refund saved' : 'Purchase saved') : null,
         );
         onClose();
         return;
       }
       const purchaseId = await addPurchase(user.uid, encryption, input);
       if (isUsualCard) countUsualNote(usualNotesSeen);
-      await finishReceipts(
-        purchaseId,
-        isRefund ? 'Refund added' : 'Purchase added',
-      );
+      finishReceipts(purchaseId, isRefund ? 'Refund added' : 'Purchase added');
       onClose();
     } catch (saveError) {
       if (isMounted.current) {
@@ -1143,7 +1162,7 @@ function PurchaseForm({
     }
   };
   const requestClose = useDiscardGuard({
-    isDirty: snapshot !== startSnapshot || pickedReceipts !== null,
+    isDirty: snapshot !== startSnapshot || (pickedReceipts?.length ?? 0) > 0,
     onClose: onCancel ?? onClose,
     isBusy: isSaving,
     title: editing
@@ -1161,7 +1180,11 @@ function PurchaseForm({
         <div className='space-y-3'>
           <OptionalDetailRows
             heading={SPEND_WORDS.moreDetails}
-            removeLabel={SPEND_WORDS.removeDetail}
+            removeLabel={
+              openExtra === 'receipt'
+                ? SPEND_WORDS.removeAllReceiptFiles
+                : SPEND_WORDS.removeDetail
+            }
             openKey={openExtra}
             onOpen={(key) => setOpenExtra(key as ExtraKey)}
             onClose={() => setOpenExtra(null)}
@@ -1271,7 +1294,8 @@ function PurchaseForm({
                             variant='secondary'
                             className='h-11 w-full gap-1.5'
                             disabled={
-                              pickedReceipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                              heldReceiptCount + pickedReceipts.length >=
+                              MAX_RECEIPTS_PER_PURCHASE
                             }
                             onClick={() => receiptChooser.current?.open()}
                           >
@@ -1282,6 +1306,11 @@ function PurchaseForm({
                             chooser={receiptChooser}
                             onFiles={addReceiptFiles}
                           />
+                          {heldReceiptCount > 0 && (
+                            <p className='text-muted-foreground text-xs'>
+                              {SPEND_WORDS.receiptsHeld(heldReceiptCount)}
+                            </p>
+                          )}
                           {receiptNote && (
                             <p
                               className='text-muted-foreground text-xs'
@@ -1290,20 +1319,31 @@ function PurchaseForm({
                               {receiptNote}
                             </p>
                           )}
+                          {isHidden && pickedReceipts.length > 0 && (
+                            <p className='text-muted-foreground text-xs'>
+                              {SPEND_WORDS.receiptPhotos(pickedReceipts.length)}
+                            </p>
+                          )}
                           {pickedReceipts.length > 0 && (
                             <ul className='grid grid-cols-3 gap-3'>
                               {pickedReceipts.map((picked) => (
                                 <li key={picked.url} className='space-y-1.5'>
-                                  <FallbackImage
-                                    src={picked.url}
-                                    alt={picked.file.name}
-                                    className='border-border aspect-square w-full rounded-xl border object-cover'
-                                  />
+                                  <div className='border-border aspect-square w-full overflow-hidden rounded-xl border'>
+                                    {isHidden ? (
+                                      <ReceiptTile />
+                                    ) : (
+                                      <FallbackImage
+                                        src={picked.url}
+                                        alt=''
+                                        className='size-full object-cover'
+                                      />
+                                    )}
+                                  </div>
                                   <Button
                                     type='button'
-                                    variant='secondary'
+                                    variant='tertiary'
                                     size='sm'
-                                    className="relative w-full before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                                    className="text-muted-foreground relative w-full before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                                     onClick={() => {
                                       dropReceipts([picked]);
                                       setPickedReceipts(

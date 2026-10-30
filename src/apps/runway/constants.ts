@@ -62,7 +62,12 @@ export const STANCE_FOLLOW_PLAN = 'plan' as const;
 export const MORE_ENTRIES = ['priorities', 'settings', 'changeLog'] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
-export const RUNWAY_VIEWS = ['start', 'freeToSpend', 'checkAmount'] as const;
+export const RUNWAY_VIEWS = [
+  'start',
+  'freeToSpend',
+  'checkAmount',
+  'checkBalance',
+] as const;
 
 /** The screens Settings opens, kept in the URL as `settingsView`. */
 export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
@@ -759,7 +764,7 @@ export const SPEND_WORDS = {
   items: 'Items',
   showAllItems: 'Show all',
   showFewerItems: 'Show fewer',
-  addReceiptSub: 'A photo or screenshot, kept sealed until you remove it.',
+  addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',
   receiptPhotos: (count: number) =>
     count === 1 ? '1 photo' : `${count} photos`,
   chooseReceipts: 'Choose photos',
@@ -772,12 +777,26 @@ export const SPEND_WORDS = {
   receiptAdding: 'Adding the receipt.',
   receiptOpening: 'Opening the receipt.',
   receiptHidden: 'Show amounts to see it',
-  removeReceiptFile: 'Remove',
+  removeReceiptFile: 'Remove photo',
+  removeAllReceiptFiles: 'Remove all',
+  receiptsHeld: (count: number) =>
+    `This purchase has ${count === 1 ? '1 receipt' : `${count} receipts`}. View or remove ${count === 1 ? 'it' : 'them'} from the purchase.`,
+  receiptsLoadFailed:
+    'Receipts did not load. Reopen the purchase to try again.',
+  receiptFormat:
+    "That photo's format can't be shown here. Try a screenshot or a JPEG.",
+  receiptOffline: "You're offline. Nothing was added.",
+  receiptOfflineAfterSave:
+    "The purchase saved. You're offline, so the receipts were not added; add them from the purchase.",
+  receiptsLeftBehind: (failed: number, total: number) =>
+    `The purchase saved. ${failed} of ${total} receipt${total === 1 ? '' : 's'} did not upload; add ${failed === 1 ? 'it' : 'them'} from the purchase.`,
+  receiptsRemovedWithPurchase: (count: number) =>
+    `Its ${count} receipt${count === 1 ? ' is' : 's are'} deleted too.`,
+  receiptsLeftWithPurchase:
+    'The purchase was removed, but its receipts could not be. They are deleted with the plan.',
   receiptAdded: (count: number) =>
     count === 1 ? 'Receipt added' : 'Receipts added',
   receiptAddFailed: 'The receipt did not upload. Nothing was changed.',
-  receiptLeftBehind:
-    'The purchase saved. A receipt did not upload; add it from the purchase.',
   viewReceipt: 'View this receipt',
   downloadReceipt: 'Download',
   removeReceipt: 'Remove this receipt',
@@ -837,6 +856,42 @@ export const CHECK_WORDS = {
   promptChosen: 'Type an amount. Nothing is spent or moved.',
   noEnvelopes: 'Add an envelope to check an amount against it.',
   hidden: 'Show amounts to see how it fits.',
+} as const;
+
+export const BALANCE_CHECK_WORDS = {
+  title: 'Check balance',
+  open: 'Check your balance',
+  openSub: 'Compare your bank with Runway',
+  question: 'What does your account hold now?',
+  amount: 'Account balance',
+  hint: 'Checking changes nothing.',
+  counts: 'Runway counts',
+  onHand: 'on hand',
+  match: 'They match.',
+  less: (amount: string) =>
+    `Your account has ${amount} less than Runway counts.`,
+  more: (amount: string) =>
+    `Your account has ${amount} more than Runway counts.`,
+  onCards: (amount: string) =>
+    `This includes ${amount} waiting to be paid on cards, which is still in your account.`,
+  causesCaption: 'What can cause it',
+  lessCauses: [
+    'A purchase or card payment not added yet',
+    'A fee, or a transfer out',
+  ],
+  moreCauses: [
+    "Money that arrived but isn't confirmed on its income day",
+    'Interest, a refund or a transfer in',
+  ],
+  addPurchase: 'Add a purchase',
+  openDays: 'See your income days',
+  laterFix:
+    'A balance from before this can be fixed by correcting the income day or bill payment it came from.',
+  tooLarge: 'Enter what the account holds now.',
+  showToCompare: 'Show amounts to see how they compare',
+  notSet:
+    'Runway does not know what you started with yet, so there is nothing to compare. Say where things stand first.',
+  loading: 'Getting your plan.',
 } as const;
 
 export const START_WORDS = {
