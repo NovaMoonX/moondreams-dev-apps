@@ -39,10 +39,11 @@ async function openChange(
       ...base,
       summary: payload.summary,
       note: payload.note ?? null,
+      move: payload.move ?? null,
       isUnreadable: false,
     };
   } catch {
-    return { ...base, summary: '', note: null, isUnreadable: true };
+    return { ...base, summary: '', note: null, move: null, isUnreadable: true };
   }
 }
 

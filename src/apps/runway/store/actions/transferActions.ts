@@ -9,6 +9,7 @@ import { sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import type {
   ChangeDoc,
+  ChangeMove,
   ChangeSealed,
   Cents,
   DateOnly,
@@ -38,6 +39,7 @@ const getChangeDoc = async (
   summary: string,
   note: string | null,
   itemIds: string[],
+  move: ChangeMove,
 ) => {
   const id = generateUuid();
   return {
@@ -47,7 +49,7 @@ const getChangeDoc = async (
     effectiveFrom: null,
     itemIds,
     sealed: await sealJson(
-      { summary, note } satisfies ChangeSealed,
+      { summary, note, move } satisfies ChangeSealed,
       encryption,
     ),
   } satisfies ChangeDoc;
@@ -64,12 +66,14 @@ export interface MoveLeftoverInput {
   note: string | null;
   /** The change-log sentence for this move. */
   summary: string;
+  /** What taking it back restores, kept on the log entry so History can offer the Undo. */
+  undoText: string;
 }
 
 const isStopped = (item: Partial<PlanItemDoc> | undefined) =>
   item === undefined || (item.archivedAt ?? null) !== null;
 
-/** Moves money from an envelope to another envelope, a goal or Free to Spend; the total never changes. Resolves with the day it is dated, so an Undo can name it. */
+/** Moves money from an envelope to another envelope, a goal or Free to Spend; money on hand never changes. Resolves with the day it is dated, so an Undo can name it. */
 export async function moveLeftover(
   uid: string,
   encryption: RunwayEncryption,
@@ -96,10 +100,22 @@ export async function moveLeftover(
       } satisfies TransferSealed,
       encryption,
     ),
-    getChangeDoc(encryption, input.summary, noteText, [
-      input.fromId,
-      ...(input.toId === null ? [] : [input.toId]),
-    ]),
+    getChangeDoc(
+      encryption,
+      input.summary,
+      noteText,
+      [input.fromId, ...(input.toId === null ? [] : [input.toId])],
+      {
+        moveId: input.moveId,
+        date,
+        fromId: input.fromId,
+        toId: input.toId,
+        cents: input.cents,
+        note: noteText,
+        undoText: input.undoText,
+        isUndo: false,
+      },
+    ),
   ]);
   await runTransaction(db, async (transaction) => {
     const [plan, from, to, existing] = await Promise.all([
@@ -139,16 +155,7 @@ export async function moveLeftover(
   return date;
 }
 
-export interface UndoTransferInput {
-  moveId: string;
-  date: DateOnly;
-  fromId: string;
-  toId: string | null;
-  cents: Cents;
-  note: string | null;
-  /** The change-log sentence for taking it back. */
-  summary: string;
-}
+export type UndoTransferInput = Omit<ChangeMove, 'isUndo'>;
 
 /** Takes a move of money back by appending a move that names it; the move itself stays in the ledger. */
 export async function undoTransfer(
@@ -167,10 +174,13 @@ export async function undoTransfer(
       } satisfies TransferSealed,
       encryption,
     ),
-    getChangeDoc(encryption, moved.summary, null, [
-      moved.fromId,
-      ...(moved.toId === null ? [] : [moved.toId]),
-    ]),
+    getChangeDoc(
+      encryption,
+      `${moved.undoText}.`,
+      null,
+      [moved.fromId, ...(moved.toId === null ? [] : [moved.toId])],
+      { ...moved, isUndo: true },
+    ),
   ]);
   await runTransaction(db, async (transaction) => {
     const [existing, plan] = await Promise.all([

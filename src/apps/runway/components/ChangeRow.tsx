@@ -1,10 +1,14 @@
-import { FileText } from 'lucide-react';
+import { FileText, Undo2 } from 'lucide-react';
+
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import InlineNotice from '@/components/InlineNotice';
 import ActionChips from '@/components/ActionChips';
 import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { CHANGE_KIND_LABELS } from '@apps/runway/constants';
+import { CHANGE_KIND_LABELS, MOVE_WORDS } from '@apps/runway/constants';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useUndoTransfer } from '@apps/runway/hooks/useUndoTransfer';
 import type { OpenChange } from '@apps/runway/types';
 
 interface ChangeRowProps {
@@ -12,10 +16,31 @@ interface ChangeRowProps {
   /** The confirmed income day this change shaped, when there is one. */
   confirmedDayKey: string | null;
   onOpenRecord: (dayKey: string) => void;
+  /** The ids of moves of money that a later entry in the log took back. */
+  undoneMoveIds?: ReadonlySet<string>;
 }
 
 /** One entry of the change log: when it was made, what it was, the day it starts from and the person's reason. */
-function ChangeRow({ change, confirmedDayKey, onOpenRecord }: ChangeRowProps) {
+function ChangeRow({
+  change,
+  confirmedDayKey,
+  onOpenRecord,
+  undoneMoveIds,
+}: ChangeRowProps) {
+  const { confirm } = useActionModal();
+  const mask = useMaskedText();
+  const undoMove = useUndoTransfer();
+  const move = change.move !== null && !change.move.isUndo ? change.move : null;
+  const isUndone = move !== null && (undoneMoveIds?.has(move.moveId) ?? false);
+  const takeBack = async () => {
+    if (move === null) return;
+    const isConfirmed = await confirm({
+      title: MOVE_WORDS.undoTitle,
+      message: mask(`${move.undoText}.`),
+      confirmText: MOVE_WORDS.undoThis,
+    });
+    if (isConfirmed) await undoMove(move);
+  };
   return (
     <li className='space-y-1.5 p-3'>
       <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
@@ -46,6 +71,21 @@ function ChangeRow({ change, confirmedDayKey, onOpenRecord }: ChangeRowProps) {
         <p className='text-muted-foreground text-sm break-words'>
           Reason: {change.note}
         </p>
+      )}
+      {isUndone && (
+        <p className='text-muted-foreground text-sm'>{MOVE_WORDS.undoneRow}</p>
+      )}
+      {move !== null && !isUndone && (
+        <ActionChips
+          actions={[
+            {
+              key: 'undo',
+              icon: <Undo2 className='h-4 w-4' />,
+              label: MOVE_WORDS.undoThis,
+              onClick: () => void takeBack(),
+            },
+          ]}
+        />
       )}
       {confirmedDayKey !== null && (
         <ActionChips

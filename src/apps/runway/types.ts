@@ -424,10 +424,24 @@ export interface PlanVersionDoc {
   sealed: Sealed;
 }
 
+/** The move of money a `moveChange` entry records, kept so its History row can take it back; an entry that takes one back carries the same ids with `isUndo` set. */
+export interface ChangeMove {
+  moveId: string;
+  date: DateOnly;
+  fromId: string;
+  toId: string | null;
+  cents: Cents;
+  note: string | null;
+  /** The sentence that says what taking it back restores, for the confirm, the toast and the log. */
+  undoText: string;
+  isUndo: boolean;
+}
+
 export interface ChangeSealed {
   summary: string;
   /** The person's reason; a change written before notes existed has none. */
   note?: string | null;
+  move?: ChangeMove | null;
 }
 
 export interface ChangeDoc {
@@ -448,6 +462,7 @@ export interface OpenChange {
   itemIds: string[];
   summary: string;
   note: string | null;
+  move: ChangeMove | null;
   isUnreadable: boolean;
 }
 
@@ -620,8 +635,8 @@ export interface ClosingSealed {
   charged: Record<string, Cents>;
   /** `[day, cents, moveId]` for each card payment not undone. */
   cardPaid: Record<string, [number, Cents, string][]>;
-  /** What transfers since the starting day added to (positive) or took from (negative) each item. */
-  transfers: Record<string, Cents>;
+  /** `[day, fromId, toId, cents, moveId]` for each transfer not undone; a null `toId` is Free to Spend. */
+  transfers: [number, string, string | null, Cents, string][];
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

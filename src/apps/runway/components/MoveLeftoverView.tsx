@@ -11,6 +11,7 @@ import { PillGroup, type PillOption } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   centsToInputValue,
@@ -28,19 +29,21 @@ import {
   MAX_PURCHASE_CENTS,
   MOVE_WORDS,
 } from '@apps/runway/constants';
+import { deriveBalances } from '@apps/runway/engine/balances';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { useUndoTransfer } from '@apps/runway/hooks/useUndoTransfer';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   moveLeftover,
   newTransferMoveId,
-  undoTransfer,
 } from '@apps/runway/store/actions/transferActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectBalanceInputs } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectEnvelopes,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { Cents } from '@apps/runway/types';
+import type { Cents, OpenMove } from '@apps/runway/types';
+import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 
 const FREE = 'free';
 
@@ -68,11 +71,15 @@ function MoveLeftoverView({
   const { user } = useAuth();
   const { addToast } = useToast();
   const mask = useMaskedText();
-  const balances = useAppSelector(selectBalances);
+  const { isHidden } = useValuesHidden();
+  const undoMove = useUndoTransfer();
+  const inputs = useAppSelector(selectBalanceInputs);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const [moveId] = useState(newTransferMoveId);
-  const [amount, setAmount] = useState(centsToInputValue(leftCents));
+  const [amount, setAmount] = useState(() =>
+    isHidden ? '' : centsToInputValue(leftCents),
+  );
   const [pick, setPick] = useState<string | null>(null);
   const [isNoting, setIsNoting] = useState(false);
   const [note, setNote] = useState('');
@@ -122,61 +129,61 @@ function MoveLeftoverView({
   };
   const blocker = getBlocker();
 
-  const toBefore =
-    pick === FREE
-      ? balances.freeToSpendCents
-      : (balances.assignedByItem[pick ?? ''] ?? 0);
-  const rows =
-    cents === null || cents > leftCents || toName === null
-      ? []
-      : [
+  const toId = pick === FREE ? null : pick;
+  const isReady = cents !== null && cents <= leftCents && toName !== null;
+  const before = deriveBalances(inputs);
+  const after = isReady
+    ? deriveBalances({
+        ...inputs,
+        moves: [
+          ...inputs.moves,
           {
-            name,
-            text: `${formatCents(leftCents)} → ${formatCents(leftCents - cents)}`,
-          },
-          {
-            name: toName,
-            text:
-              pick === FREE && !balances.hasMoney
-                ? `+${formatCents(cents)}`
-                : `${formatCents(toBefore)} → ${formatCents(toBefore + cents)}`,
-          },
-        ];
-
-  const undo = async (moved: {
-    date: number;
-    cents: Cents;
-    toId: string | null;
-    toName: string;
-    note: string | null;
-  }) => {
-    if (!user) return;
-    const money = formatCents(moved.cents);
-    try {
-      const encryption = await getRunwayEncryption(user.uid);
-      await undoTransfer(user.uid, encryption, {
-        moveId,
-        date: moved.date,
-        fromId: envelopeId,
-        toId: moved.toId,
-        cents: moved.cents,
-        note: moved.note,
-        summary: MOVE_WORDS.undoSummary(money, name, moved.toName),
-      });
-      addToast({
-        title: mask(MOVE_WORDS.undone(money, name)),
-        type: 'success',
-      });
-    } catch (undoError) {
-      addToast({
-        title: MOVE_WORDS.undoFailed,
-        description: isOfflineFailure(undoError)
-          ? MOVE_WORDS.offline
-          : getErrorMessage(undoError, MOVE_WORDS.failed),
-        type: 'error',
-      });
-    }
+            id: moveId,
+            kind: 'transfer',
+            date: today,
+            refId: envelopeId,
+            reversesMoveId: null,
+            createdAt: today,
+            payload: { fromId: envelopeId, toId, cents, note: null },
+          } satisfies OpenMove,
+        ],
+      })
+    : before;
+  const figure = (value: Cents) => describeEnvelopeFigure('track', value).value;
+  const change = (from: Cents, to: Cents) => `${figure(from)} → ${figure(to)}`;
+  const freeRow = {
+    name: MOVE_WORDS.freeToSpendNow,
+    text: change(before.freeToSpendCents, after.freeToSpendCents),
   };
+  const isFreeChanging =
+    before.hasMoney && after.freeToSpendCents !== before.freeToSpendCents;
+  const rows = !isReady
+    ? []
+    : [
+        {
+          name,
+          text: change(leftCents, leftCents - cents),
+        },
+        pick === FREE
+          ? {
+              ...freeRow,
+              text: before.hasMoney ? freeRow.text : `+${formatCents(cents)}`,
+            }
+          : {
+              name: toName,
+              text: change(
+                before.assignedByItem[pick ?? ''] ?? 0,
+                after.assignedByItem[pick ?? ''] ?? 0,
+              ),
+            },
+        ...(pick !== FREE && isFreeChanging ? [freeRow] : []),
+      ];
+  const allLabel = isHidden
+    ? MOVE_WORDS.moveAllHidden
+    : MOVE_WORDS.moveAll(formatCents(leftCents));
+  const isOverLeft = cents !== null && cents > leftCents;
+  const isAllOffered =
+    leftCents > 0 && (isOverLeft || (isHidden && amount === ''));
 
   const move = async () => {
     if (isSavingRef.current || !user || cents === null || toName === null) {
@@ -186,7 +193,6 @@ function MoveLeftoverView({
       setError(MOVE_WORDS.offline);
       return;
     }
-    const toId = pick === FREE ? null : pick;
     const why = note.trim() === '' ? null : note.trim();
     const money = formatCents(cents);
     isSavingRef.current = true;
@@ -202,13 +208,23 @@ function MoveLeftoverView({
         leftCents,
         note: why,
         summary: MOVE_WORDS.summary(money, name, toName),
+        undoText: MOVE_WORDS.undone(money, name, toName),
       });
       addToast({
         title: mask(MOVE_WORDS.moved(money, toName)),
         type: 'success',
         action: {
           label: MOVE_WORDS.undo,
-          onClick: () => void undo({ date, cents, toId, toName, note: why }),
+          onClick: () =>
+            void undoMove({
+              moveId,
+              date,
+              fromId: envelopeId,
+              toId,
+              cents,
+              note: why,
+              undoText: MOVE_WORDS.undone(money, name, toName),
+            }),
         },
       });
       onBack();
@@ -225,7 +241,7 @@ function MoveLeftoverView({
   };
 
   return (
-    <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+    <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
       <ActionTitle>{MOVE_WORDS.title(name)}</ActionTitle>
       <AmountHero
@@ -234,6 +250,13 @@ function MoveLeftoverView({
         onChange={setAmount}
         disabled={isSaving}
       />
+      {isAllOffered && (
+        <div>
+          <RevealChip onClick={() => setAmount(centsToInputValue(leftCents))}>
+            {allLabel}
+          </RevealChip>
+        </div>
+      )}
       <ActionSection caption={MOVE_WORDS.moveTo}>
         <div className='space-y-3'>
           <PillGroup
@@ -250,7 +273,7 @@ function MoveLeftoverView({
           className='border-border divide-border bg-card divide-y rounded-2xl border'
         >
           {rows.map((row) => (
-            <li key={row.name} className='p-3 text-sm'>
+            <li key={row.name} className='px-3 py-2 text-sm'>
               <p className='flex items-baseline justify-between gap-3'>
                 <span className='min-w-0 break-words'>{row.name}</span>
                 <span className='font-medium whitespace-nowrap tabular-nums'>

@@ -1177,22 +1177,27 @@ export const ITEM_SHEET_WORDS = {
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
-  title: (name: string) => `Move what's left in ${name}`,
+  title: (name: string) => `Move money from ${name}`,
   amount: 'Amount to move',
   moveTo: 'Move it to',
-  places: 'Envelopes and goals',
+  places: 'Places',
   freeToSpend: 'Free to Spend',
   needsAmount: 'Enter how much to move.',
   needsPlace: 'Pick where it goes.',
   tooMuch: 'That is more than is left in it.',
   action: (amount: string) => `Move ${amount}`,
   moved: (amount: string, to: string) => `Moved ${amount} to ${to}`,
-  undone: (amount: string, from: string) => `Put ${amount} back in ${from}`,
+  undone: (amount: string, from: string, to: string) =>
+    `Put ${amount} back in ${from} from ${to}`,
   summary: (amount: string, from: string, to: string) =>
     `Moved ${amount} from ${from} to ${to}.`,
-  undoSummary: (amount: string, from: string, to: string) =>
-    `Put ${amount} back in ${from} from ${to}.`,
+  moveAll: (amount: string) => `Move all ${amount}`,
+  moveAllHidden: 'Move all of it',
+  freeToSpendNow: 'Free to Spend',
   undo: 'Undo',
+  undoThis: 'Undo this move',
+  undoTitle: 'Undo this move?',
+  undoneRow: 'Undone',
   failed: 'This did not save. Nothing was changed.',
   undoFailed: 'That was not undone.',
   offline: 'Moving money needs a connection. Nothing was changed.',

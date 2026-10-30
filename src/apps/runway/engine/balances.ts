@@ -22,7 +22,8 @@ import {
   collectFunded,
   collectPaid,
   collectStarted,
-  collectTransfers,
+  collectTransferEntries,
+  sumTransfers,
   settlePaid,
 } from './progress';
 
@@ -170,10 +171,10 @@ export function deriveBalances(input: BalancesInput): Balances {
       }, {}),
   );
 
-  const transfers = joinCents(
-    base?.transfers,
-    collectTransfers(input.moves, startDate),
-  );
+  const transfers = sumTransfers([
+    ...(base?.transfers ?? []),
+    ...collectTransferEntries(input.moves, startDate),
+  ]);
 
   const isCard = (id: string) => input.kinds[id] === 'card';
   const itemIds = new Set(

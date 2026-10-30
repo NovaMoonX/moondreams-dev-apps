@@ -8522,9 +8522,9 @@ const version = (
     billIds: new Set(),
   });
   assert.deepEqual(
-    closed.transfers,
-    { food: -5_200, fun: 4_200, trip: 1_000 },
-    'a closing sums the net each item gained or lost',
+    closed.transfers.map((entry) => entry.moveId),
+    ['t1', 't2'],
+    'a closing keeps each transfer not undone, with its day',
   );
   assert.deepEqual(
     deriveBalances({ ...base, moves: starts, closing: closed }),
@@ -8544,6 +8544,63 @@ const version = (
     decodeClosing(month, encodeClosing(closed)),
     closed,
     'and reads back sealed',
+  );
+  const input = { ...base, moves: [...starts, ...moved] };
+  const closedInput = { ...base, moves: starts, closing: closed };
+  [day(3), day(5), day(9), day(10), day(11)].forEach((on) => {
+    assert.deepEqual(
+      deriveBalancesBefore(closedInput, on),
+      deriveBalancesBefore(input, on),
+      'a closed transfer is left out of a figure as of a day on or before it, like a live one',
+    );
+  });
+  assert.equal(
+    deriveBalancesBefore(closedInput, day(3)).assignedByItem.fun,
+    before.assignedByItem.fun,
+    'before a closed transfer nothing has moved',
+  );
+  assert.equal(
+    deriveBalancesBefore(closedInput, day(4)).assignedByItem.fun,
+    6_200,
+    'after it the move counts',
+  );
+
+  const overspent = deriveBalances({
+    ...base,
+    moves: starts,
+    purchases: [
+      {
+        id: 'p1',
+        date: day(2),
+        amountCents: 5_000,
+        lines: toChosenLines([{ envelopeId: 'fun', cents: 5_000 }]),
+        paidByCardId: null,
+      } as OpenPurchase,
+    ],
+  });
+  const covered = deriveBalances({
+    ...base,
+    moves: [...starts, move1('c1', day(3), 'food', 'fun', 3_000)],
+    purchases: [
+      {
+        id: 'p1',
+        date: day(2),
+        amountCents: 5_000,
+        lines: toChosenLines([{ envelopeId: 'fun', cents: 5_000 }]),
+        paidByCardId: null,
+      } as OpenPurchase,
+    ],
+  });
+  assert.equal(overspent.assignedByItem.fun, -3_000, 'fun is over by 30.00');
+  assert.equal(
+    covered.freeToSpendCents - overspent.freeToSpendCents,
+    3_000,
+    'moving into an overspent envelope raises Free to Spend by exactly the overspend it covers',
+  );
+  assert.equal(
+    covered.moneyOnHandCents,
+    overspent.moneyOnHandCents,
+    'and leaves money on hand as it was',
   );
 }
 
