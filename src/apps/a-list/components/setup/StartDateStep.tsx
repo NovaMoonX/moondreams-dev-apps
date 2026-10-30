@@ -1,9 +1,8 @@
-import { Input } from '@moondreamsdev/dreamer-ui/components';
-
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import type { CostStepValues } from '@apps/a-list/utils/costStep';
 import { evaluateCostStep } from '@apps/a-list/utils/costStep';
 import { getMembershipAgeLabel } from '@apps/a-list/utils/membershipAge';
+import DateInput from '@/components/DateInput';
 
 interface StartDateStepProps {
   values: CostStepValues;
@@ -34,8 +33,7 @@ function StartDateStep({ values, todayDay, onChange }: StartDateStepProps) {
         </p>
       </div>
       <div className='mx-auto max-w-xs text-left'>
-        <Input
-          type='date'
+        <DateInput
           variant='outline'
           rounded='full'
           aria-label='Membership start date'

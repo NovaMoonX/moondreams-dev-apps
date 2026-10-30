@@ -13,7 +13,7 @@ const syncWithin = (node: Node) => {
   node.querySelectorAll<HTMLInputElement>(SELECTOR).forEach(sync);
 };
 
-/** Marks every date input that has no date (`data-empty`), so `index.css` can hide the browser's "mm/dd/yyyy" segments until one is picked. */
+/** Marks every date input that has no date (`data-empty`), so `index.css` hides the browser's "mm/dd/yyyy" segments and `DateInput` draws its placeholder instead. */
 export function installEmptyDateInputs() {
   const onEvent = (event: Event) => {
     const { target } = event;

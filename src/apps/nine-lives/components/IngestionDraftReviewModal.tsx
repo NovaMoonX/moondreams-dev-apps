@@ -57,6 +57,7 @@ import {
 import { DEFAULT_EXPENSE_CATEGORIES, getExpenseCategoryLabel } from '../utils/budgetCalculators';
 import type { Cat, CatSex, HealthRecordType, IngestionDraft, VisitReason } from '../types';
 import RecordTypeField, { NEW_TYPE_VALUE, type RecordTypeChoice } from './RecordTypeField';
+import DateInput from '@/components/DateInput';
 
 const mutedLinkClassName = 'text-muted-foreground hover:text-foreground px-0';
 
@@ -1234,8 +1235,7 @@ function IngestionDraftReviewModal({
                 {isEditing('visit', index) ? (
                   <div className='space-y-2'>
                     <div className='flex flex-col gap-2 sm:flex-row'>
-                      <Input
-                        type='date'
+                      <DateInput
                         value={toLocalDateInputValue(visit.scheduledAt)}
                         onChange={(event) => {
                           const scheduledAt = withUpdatedDate(visit.scheduledAt, event.target.value);
@@ -1365,8 +1365,7 @@ function IngestionDraftReviewModal({
                         aria-label='Vaccination name'
                         onChange={(event) => updateVaccinationAt(index, { name: event.target.value })}
                       />
-                      <Input
-                        type='date'
+                      <DateInput
                         value={toLocalDateInputValue(item.administeredAt)}
                         onChange={(event) => {
                           const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
@@ -1453,8 +1452,7 @@ function IngestionDraftReviewModal({
                         aria-label='Preventive name'
                         onChange={(event) => updatePreventiveAt(index, { name: event.target.value })}
                       />
-                      <Input
-                        type='date'
+                      <DateInput
                         value={toLocalDateInputValue(item.administeredAt)}
                         onChange={(event) => {
                           const administeredAt = withUpdatedDate(item.administeredAt, event.target.value);
@@ -1553,8 +1551,7 @@ function IngestionDraftReviewModal({
                         aria-label='Weight'
                         onChange={(event) => updateWeightAt(index, { weight: Number(event.target.value) })}
                       />
-                      <Input
-                        type='date'
+                      <DateInput
                         value={toLocalDateInputValue(item.measuredAt)}
                         onChange={(event) => {
                           const measuredAt = withUpdatedDate(item.measuredAt, event.target.value);

@@ -47,7 +47,13 @@ export interface LookaheadInput {
   horizon: DateOnly;
   /** The coming income days, in order. */
   days: readonly ComingDay[];
-  bills: readonly { id: string; name: string; since: DateOnly }[];
+  bills: readonly {
+    id: string;
+    name: string;
+    since: DateOnly;
+    /** No due date yet: the plan sets nothing aside for it. */
+    isUndated: boolean;
+  }[];
   payments: Readonly<Record<string, BillPayment[]>>;
   /** The draft for one day given what the days before it left behind; null when the day has none. */
   draftOf: (day: ComingDay, carry: LookaheadCarry) => LookaheadDraft | null;
@@ -69,6 +75,8 @@ export interface Lookahead {
   } | null;
   /** The last income day when nothing follows it for a long stretch. */
   incomeEndsOn: DateOnly | null;
+  /** Bills with no due date yet, in the order given. They never stop the plan, so they are not in `problems`. */
+  undated: { billId: string; name: string }[];
 }
 
 const EMPTY_CARRY: LookaheadCarry = { funded: {}, added: {} };
@@ -259,6 +267,9 @@ export function lookahead(input: LookaheadInput): Lookahead {
     ),
     firstShortDay: walked.firstShortDay,
     incomeEndsOn,
+    undated: input.bills
+      .filter((bill) => bill.isUndated)
+      .map((bill) => ({ billId: bill.id, name: bill.name })),
   };
   return result;
 }

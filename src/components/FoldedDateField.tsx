@@ -1,8 +1,7 @@
-import { Input } from '@moondreamsdev/dreamer-ui/components';
-
 import SummaryEditor from '@/components/SummaryEditor';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
+import DateInput from '@/components/DateInput';
 
 interface FoldedDateFieldProps {
   label: string;
@@ -43,8 +42,7 @@ function FoldedDateField({
       isFramed
       shouldFocus={false}
     >
-      <Input
-        type='date'
+      <DateInput
         variant='outline'
         aria-label={label}
         min={min}

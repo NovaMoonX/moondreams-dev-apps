@@ -102,9 +102,11 @@ export function toIncomeValue(
   const twice = kind === 'twiceMonthly' && item.monthDays.length === 2;
   const anchor = twice
     ? Math.min(...item.monthDays.map((day) => nextDayOfMonth(day, today)))
-    : item.nextOn === null
-      ? null
-      : rollForward(item.nextOn, kind, today);
+    : item.nextOn !== null
+      ? rollForward(item.nextOn, kind, today)
+      : kind === 'monthly' && item.monthDays.length === 1
+        ? nextDayOfMonth(item.monthDays[0], today)
+        : null;
   const schedule: Schedule = {
     kind,
     anchor,
@@ -112,8 +114,11 @@ export function toIncomeValue(
   };
   return {
     sourceId: null,
-    sourceName: item.name,
-    payLineName: DEFAULT_PAY_LINE_NAME,
+    sourceName: item.payer ?? item.name,
+    payLineName:
+      item.payer !== null && item.name !== item.payer
+        ? item.name
+        : DEFAULT_PAY_LINE_NAME,
     amount: toRange(item.amountCents, null),
     stanceOverride: null,
     schedule,
@@ -158,6 +163,7 @@ export function toEnvelopeValue(
     emoji: null,
     priority: 'should',
     orderIndex: 0,
+    groupId: null,
     funding: {
       amount: { kind: 'exact', cents: item.amountCents ?? 0 },
       cadence:
@@ -167,6 +173,19 @@ export function toEnvelopeValue(
     },
   };
 }
+
+/** A bill or envelope as the form takes it, with the purpose name the review turns into a group. */
+export const toBillProposal = (item: BudgetBill, today: number) => ({
+  value: toBillValue(item, today),
+  forName: item.forName,
+  forEmoji: item.forEmoji,
+});
+
+export const toEnvelopeProposal = (item: BudgetEnvelope, today: number) => ({
+  value: toEnvelopeValue(item, today),
+  forName: item.forName,
+  forEmoji: item.forEmoji,
+});
 
 export function toGoalValue(item: BudgetGoal, today: number): GoalSealed {
   const lastDay = addUtcMonths(today, LOOKAHEAD_MONTHS);
@@ -284,7 +303,7 @@ export function getMissingSteps(
     const { schedule } = bill.timing;
     const amount = bill.amount.lowCents <= 0 ? ['amount'] : [];
     if (schedule.kind === 'irregular') return [...amount, 'repeats'];
-    return schedule.anchor === null ? [...amount, 'due'] : amount;
+    return amount;
   }
   if (kind === 'envelope') {
     const { amount } = (value as EnvelopeSealed).funding;

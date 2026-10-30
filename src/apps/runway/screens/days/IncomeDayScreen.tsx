@@ -216,7 +216,6 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         isOpen={openLineId === line.lineId}
         onOpenChange={(isOpen) => setOpenLineId(isOpen ? line.lineId : null)}
         name={envelope.name}
-        emoji={envelope.emoji}
         kind={isKnown ? (line.bill ? 'bill' : 'envelope') : null}
         sourceNames={sourceNames}
         daySourceId={day.sourceId}

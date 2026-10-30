@@ -7,6 +7,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
@@ -52,6 +53,7 @@ function EnvelopeTile({
   const level = useAppSelector(selectLevel);
   const { value, word } = describeEnvelopeFigure(level, cents);
   const funding = describeFundingShort(envelope.funding);
+  const emoji = useItemEmoji(envelope.emoji, envelope.groupId);
   const { amount } = envelope.funding;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
   const isPlan = level === 'plan';
@@ -83,7 +85,7 @@ function EnvelopeTile({
           >
             <span className='flex w-full min-w-0 items-center gap-2'>
               <span className='max-[359px]:hidden [&>span]:size-8 [&>span]:rounded-lg [&>span]:text-base'>
-                <ItemBadge name={envelope.name} emoji={envelope.emoji} />
+                <ItemBadge name={envelope.name} emoji={emoji} />
               </span>
               <span className='min-w-0 flex-1 font-medium break-words'>
                 <span className='line-clamp-2'>{envelope.name}</span>
@@ -111,7 +113,7 @@ function EnvelopeTile({
       ) : (
         <ItemRow
           name={envelope.name}
-          emoji={envelope.emoji}
+          emoji={emoji}
           detail={rowDetail}
           figure={rowFigure}
           ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}

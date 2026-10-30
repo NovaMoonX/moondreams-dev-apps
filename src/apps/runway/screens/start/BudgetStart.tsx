@@ -6,12 +6,16 @@ import {
   Loader,
   Pencil,
   Repeat,
+  Tag,
   Trash2,
   Upload,
   X,
 } from 'lucide-react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
+import { PillGroup } from '@/components/PillGroup';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -38,6 +42,8 @@ import {
   BUDGET_LIMITS,
   BUDGET_WORDS,
   CALENDAR_PERIOD_UNITS,
+  FORM_FLOW_WORDS,
+  GROUP_WORDS,
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -50,10 +56,10 @@ import { toDraftSourceId } from '@apps/runway/forms/fundingFlow';
 import {
   chooseVersion,
   getMissingSteps,
-  toBillValue,
+  toBillProposal,
   toMonthlyBillValue,
   toPerMonthCents,
-  toEnvelopeValue,
+  toEnvelopeProposal,
   toGoalValue,
   toIncomeValue,
   type BudgetKind,
@@ -74,6 +80,7 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 import SheetHead from '@apps/runway/components/SheetHead';
+import ForRenameSheet from '@apps/runway/screens/start/ForRenameSheet';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
 import {
   toBillRow,
@@ -123,6 +130,8 @@ interface Proposal {
   isUndecided: boolean;
   /** The person had chosen, and a file added since disagrees. */
   isReopened: boolean;
+  /** What a bill or envelope is for, by name; null for the rest and for ones that are for nothing. */
+  forName: string | null;
   /** What a goal's document says goes toward it each month. */
   monthlyCents: number | null;
   /** What a bill's document wrote for a repeat Runway has none for ("yearly"), with the figure it gave and what that comes to a month. */
@@ -143,6 +152,7 @@ interface ReadItem<V> {
 
 interface KindReading<K extends BudgetKind, V, T extends ReadItem<V>> {
   make: (item: T) => BudgetValues[K];
+  forName?: (item: T) => string | null;
   choose: (item: T, version: BudgetVersion<V>) => T;
   say: (values: V) => string;
   cadence?: (item: T) => Proposal['cadence'];
@@ -222,7 +232,8 @@ const getKindReadings = (today: number) => ({
     BudgetReading['incomes'][number]
   >,
   bill: {
-    make: (item) => toBillValue(item, today),
+    make: (item) => toBillProposal(item, today).value,
+    forName: (item) => toBillProposal(item, today).forName,
     choose: chooseVersion.bill,
     say: sayBill,
     cadence: (item) =>
@@ -236,7 +247,8 @@ const getKindReadings = (today: number) => ({
           },
   } satisfies KindReading<'bill', BillValues, BudgetReading['bills'][number]>,
   envelope: {
-    make: (item) => toEnvelopeValue(item, today),
+    make: (item) => toEnvelopeProposal(item, today).value,
+    forName: (item) => toEnvelopeProposal(item, today).forName,
     choose: chooseVersion.envelope,
     say: sayEnvelope,
   } satisfies KindReading<
@@ -252,12 +264,17 @@ const getKindReadings = (today: number) => ({
   } satisfies KindReading<'goal', GoalValues, BudgetReading['goals'][number]>,
 });
 
+const toKey = (name: string) => name.trim().toLowerCase();
+
+const toForName = (name: string | null | undefined) => name?.trim() || null;
+
 const toProposals = <K extends BudgetKind, V, T extends ReadItem<V>>(
   kind: K,
   items: T[],
   reading: KindReading<K, V, T>,
   edited: Record<string, Decision>,
   removed: ReadonlySet<string>,
+  forNames: Record<string, string | null>,
 ): Proposal[] =>
   items.flatMap((item, index) => {
     const key = `${kind}${KEY_SEPARATOR}${index}`;
@@ -276,6 +293,9 @@ const toProposals = <K extends BudgetKind, V, T extends ReadItem<V>>(
             ? (value as BudgetValues['income']).sourceName
             : (value as BudgetValues['bill']).name,
         sourceFile: item.sourceFile,
+        forName: toForName(
+          key in forNames ? forNames[key] : (reading.forName?.(item) ?? null),
+        ),
         isUndecided,
         isReopened: isUndecided && decision !== undefined,
         monthlyCents: reading.monthly?.(item) ?? null,
@@ -395,6 +415,78 @@ const toRow = (proposal: Proposal, isHidden: boolean): StartRow =>
       }
     : toBaseRow(proposal, getMissingSteps(proposal.kind, proposal.value));
 
+/** Bills or envelopes under what they are for in the order first seen, the ones for nothing last under their own heading once any has one. */
+const toForRows = (
+  list: Proposal[],
+  other: string,
+  toProposalRow: (proposal: Proposal) => StartRow,
+  getEmoji: (name: string) => string | null,
+): StartRow[] => {
+  const names = list.reduce<string[]>(
+    (acc, { forName }) =>
+      forName === null ||
+      toKey(forName) === toKey(other) ||
+      acc.some((name) => toKey(name) === toKey(forName))
+        ? acc
+        : [...acc, forName],
+    [],
+  );
+  if (names.length === 0) return list.map(toProposalRow);
+  const headingOf = ({ forName }: Proposal) =>
+    names.find((name) => forName !== null && toKey(name) === toKey(forName)) ??
+    other;
+  return [...names, other].flatMap((heading) =>
+    list
+      .filter((proposal) => headingOf(proposal) === heading)
+      .map((proposal) => {
+        const row = toProposalRow(proposal);
+        return {
+          ...row,
+          group: heading,
+          emoji: row.emoji ?? (heading === other ? null : getEmoji(heading)),
+        };
+      }),
+  );
+};
+
+/** Pay lines of a payer that has several sit under its name, after the payers that have one. */
+const toPayerRows = (
+  list: Proposal[],
+  toProposalRow: (proposal: Proposal) => StartRow,
+): StartRow[] => {
+  const incomeOf = ({ value }: Proposal) => value as BudgetValues['income'];
+  const payers = list.reduce<string[]>(
+    (acc, proposal) =>
+      acc.some((name) => toKey(name) === toKey(incomeOf(proposal).sourceName))
+        ? acc
+        : [...acc, incomeOf(proposal).sourceName],
+    [],
+  );
+  const sizeOf = (name: string) =>
+    list.filter(
+      (proposal) => toKey(incomeOf(proposal).sourceName) === toKey(name),
+    ).length;
+  const rows = payers.flatMap((payer) =>
+    list
+      .filter(
+        (proposal) => toKey(incomeOf(proposal).sourceName) === toKey(payer),
+      )
+      .map((proposal) =>
+        sizeOf(payer) > 1
+          ? {
+              ...toProposalRow(proposal),
+              name: incomeOf(proposal).payLineName,
+              group: payer,
+            }
+          : { ...toProposalRow(proposal) },
+      ),
+  );
+  return [
+    ...rows.filter((row) => row.group === undefined),
+    ...rows.filter((row) => row.group !== undefined),
+  ];
+};
+
 const countReading = (reading: BudgetReading) =>
   reading.incomes.length +
   reading.bills.length +
@@ -448,7 +540,18 @@ function BudgetStart({
   const [edited, setEdited] = useState<Record<string, Decision>>({});
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
-  const [form, setForm] = useState<{ key: string; token: number } | null>(null);
+  const [forNames, setForNames] = useState<Record<string, string | null>>({});
+  const [forEmojis, setForEmojis] = useState<Record<string, string | null>>({});
+  const [renaming, setRenaming] = useState<{
+    name: string;
+    kind: BudgetKind;
+  } | null>(null);
+  const [form, setForm] = useState<{
+    key: string;
+    token: number;
+    step: string | null;
+  } | null>(null);
+  const { addToast } = useToast();
   const today = todayAsUtcDate();
 
   const slotsLeft = BUDGET_LIMITS.files - readFiles.length - files.length;
@@ -467,6 +570,9 @@ function BudgetStart({
     setReadFiles([]);
     setReadNames([]);
     setEdited({});
+    setForNames({});
+    setForEmojis({});
+    setRenaming(null);
     setRemoved(new Set());
     setSelected(null);
     setForm(null);
@@ -537,16 +643,38 @@ function BudgetStart({
   const readings = getKindReadings(today);
 
   const proposals: Proposal[] = [
-    ...toProposals('income', data.incomes, readings.income, edited, removed),
-    ...toProposals('bill', data.bills, readings.bill, edited, removed),
+    ...toProposals(
+      'income',
+      data.incomes,
+      readings.income,
+      edited,
+      removed,
+      forNames,
+    ),
+    ...toProposals(
+      'bill',
+      data.bills,
+      readings.bill,
+      edited,
+      removed,
+      forNames,
+    ),
     ...toProposals(
       'envelope',
       data.envelopes,
       readings.envelope,
       edited,
       removed,
+      forNames,
     ),
-    ...toProposals('goal', data.goals, readings.goal, edited, removed),
+    ...toProposals(
+      'goal',
+      data.goals,
+      readings.goal,
+      edited,
+      removed,
+      forNames,
+    ),
   ];
   const ofKind = (kind: BudgetKind) =>
     proposals.filter((proposal) => proposal.kind === kind);
@@ -555,7 +683,83 @@ function BudgetStart({
       proposal.isUndecided ||
       getMissingSteps(proposal.kind, proposal.value).length > 0,
   ).length;
+  const undated = ofKind('bill').filter(
+    (proposal) =>
+      !proposal.isUndecided &&
+      (proposal.value as BudgetValues['bill']).timing.schedule.anchor === null,
+  ).length;
   const toProposalRow = (proposal: Proposal) => toRow(proposal, isHidden);
+  const forNameList = [...ofKind('bill'), ...ofKind('envelope')].reduce<
+    string[]
+  >(
+    (acc, { forName }) =>
+      forName === null || acc.some((name) => toKey(name) === toKey(forName))
+        ? acc
+        : [...acc, forName],
+    [],
+  );
+  const readEmojis = [...data.bills, ...data.envelopes].reduce<
+    Map<string, string>
+  >(
+    (acc, { forName, forEmoji }) =>
+      forName === null || forEmoji === null || acc.has(toKey(forName))
+        ? acc
+        : acc.set(toKey(forName), forEmoji),
+    new Map(),
+  );
+  const emojiOf = (name: string) =>
+    toKey(name) in forEmojis
+      ? forEmojis[toKey(name)]
+      : (readEmojis.get(toKey(name)) ?? null);
+  const setFor = (
+    keys: string[],
+    next: (current: string | null) => string | null,
+  ) =>
+    setForNames((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        keys.map((key) => [
+          key,
+          next(
+            toForName(
+              proposals.find((proposal) => proposal.key === key)?.forName,
+            ),
+          ),
+        ]),
+      ),
+    }));
+  const keysFor = (name: string, kind?: BudgetKind) =>
+    proposals
+      .filter(
+        (proposal) =>
+          (kind === undefined
+            ? proposal.kind === 'bill' || proposal.kind === 'envelope'
+            : proposal.kind === kind) &&
+          proposal.forName !== null &&
+          toKey(proposal.forName) === toKey(name),
+      )
+      .map((proposal) => proposal.key);
+  const takeOut = (kind: BudgetKind, name: string) => {
+    const keys = keysFor(name, kind);
+    const before = Object.fromEntries(keys.map((key) => [key, name] as const));
+    setFor(keys, () => null);
+    addToast({
+      title: BUDGET_WORDS.tookOut(keys.length, name),
+      type: 'success',
+      action: {
+        label: BUDGET_WORDS.undo,
+        onClick: () => setForNames((current) => ({ ...current, ...before })),
+      },
+    });
+  };
+  const renameFor = (from: string, to: string, emoji: string | null) => {
+    const isJoining = forNameList.some(
+      (name) => toKey(name) === toKey(to) && toKey(name) !== toKey(from),
+    );
+    if (!isJoining)
+      setForEmojis((current) => ({ ...current, [toKey(to)]: emoji }));
+    setFor(keysFor(from), () => to);
+  };
   const setValue = (
     { key, versions }: Proposal,
     value: BudgetValues[BudgetKind],
@@ -658,9 +862,11 @@ function BudgetStart({
     setIsAdding(true);
     setError(null);
     const valuesOf = <K extends BudgetKind>(kind: K) =>
-      ofKind(kind).map(({ key, value }) => ({
+      ofKind(kind).map(({ key, value, forName }) => ({
         id: key,
         value: value as BudgetValues[K],
+        forName,
+        forEmoji: forName === null ? null : emojiOf(forName),
       }));
     try {
       await onAdd({
@@ -695,17 +901,29 @@ function BudgetStart({
       initial: BudgetValues[K],
     ): DraftSink<BudgetValues[K]> => ({
       initial,
-      openStep: getMissingSteps(kind, value)[0] ?? null,
       repeatNote: toCadenceNote(formProposal),
-      sources: ofKind('income').map((entry) => {
-        const name = (entry.value as BudgetValues['income']).sourceName;
-        return { id: toDraftSourceId(name), name };
-      }),
-      onSave: (next) =>
+      sources: ofKind('income')
+        .map((entry) => (entry.value as BudgetValues['income']).sourceName)
+        .reduce<string[]>(
+          (acc, name) =>
+            acc.some((seen) => toKey(seen) === toKey(name))
+              ? acc
+              : [...acc, name],
+          [],
+        )
+        .map((name) => ({ id: toDraftSourceId(name), name })),
+      ...(kind === 'bill' || kind === 'envelope'
+        ? { forName: { names: forNameList, current: formProposal.forName } }
+        : {}),
+      openStep: form.step ?? getMissingSteps(kind, value)[0] ?? null,
+      onSave: (next, nextFor) => {
         setEdited((current) => ({
           ...current,
           [key]: { value: next, versionCount: formProposal.versions.length },
-        })),
+        }));
+        if (kind === 'bill' || kind === 'envelope')
+          setForNames((current) => ({ ...current, [key]: nextFor ?? null }));
+      },
     });
     const close = () => setForm(null);
     const formKey = form.token;
@@ -929,13 +1147,61 @@ function BudgetStart({
       )}
       {KINDS.map(({ kind, label, search }) => {
         const list = ofKind(kind);
+        const rows =
+          kind === 'bill'
+            ? toForRows(list, GROUP_WORDS.ungrouped, toProposalRow, emojiOf)
+            : kind === 'envelope'
+              ? toForRows(
+                  list,
+                  GROUP_WORDS.ungroupedEnvelopes,
+                  toProposalRow,
+                  emojiOf,
+                )
+              : kind === 'income'
+                ? toPayerRows(list, toProposalRow)
+                : list.map(toProposalRow);
+        const isFor = kind === 'bill' || kind === 'envelope';
+        const hasFor =
+          isFor && list.some((proposal) => proposal.forName !== null);
+        const isHelpHere =
+          hasFor &&
+          (kind === 'bill' ||
+            !ofKind('bill').some((proposal) => proposal.forName !== null));
         return list.length === 0 ? null : (
           <div key={kind} className='space-y-2'>
-            <SectionDivider label={label} />
+            <SectionDivider
+              label={label}
+              trailing={
+                isHelpHere ? (
+                  <HelpTip title={FORM_FLOW_WORDS.groupTitle}>
+                    <p>{FORM_FLOW_WORDS.groupHelp}</p>
+                  </HelpTip>
+                ) : undefined
+              }
+            />
             <StartRowList
-              rows={list.map(toProposalRow)}
+              rows={rows}
               searchLabel={search}
               onOpen={setSelected}
+              getHeadingEmoji={hasFor ? emojiOf : undefined}
+              renderHeadingAction={
+                hasFor
+                  ? (group) =>
+                      group === GROUP_WORDS.ungrouped ||
+                      group === GROUP_WORDS.ungroupedEnvelopes ? null : (
+                        <Button
+                          type='button'
+                          variant='tertiary'
+                          size='sm'
+                          className="relative px-1.5! before:absolute before:-inset-1.5 before:content-['']"
+                          aria-label={BUDGET_WORDS.forActions(group)}
+                          onClick={() => setRenaming({ name: group, kind })}
+                        >
+                          <Pencil className='h-4 w-4' aria-hidden='true' />
+                        </Button>
+                      )
+                  : undefined
+              }
             />
           </div>
         );
@@ -967,7 +1233,11 @@ function BudgetStart({
       )}
       <ModalFooterActions
         note={
-          needing > 0 && !isFolded ? BUDGET_WORDS.needDetails(needing) : null
+          needing > 0 && !isFolded
+            ? BUDGET_WORDS.needDetails(needing)
+            : needing === 0 && undated > 0 && !isShort
+              ? BUDGET_WORDS.dueLaterNote(undated)
+              : null
         }
         cancelAction={
           <Button
@@ -1120,6 +1390,33 @@ function BudgetStart({
               </ul>
             </div>
           )}
+          {selectedProposal &&
+            (selectedProposal.kind === 'bill' ||
+              selectedProposal.kind === 'envelope') &&
+            forNameList.length > 0 && (
+              <div className='space-y-2'>
+                <p className='text-muted-foreground text-xs'>
+                  {FORM_FLOW_WORDS.groupTitle}
+                </p>
+                <PillGroup
+                  label={FORM_FLOW_WORDS.groupTitle}
+                  options={[
+                    ...forNameList.map((name) => ({
+                      value: name,
+                      label: name,
+                    })),
+                    { value: '', label: FORM_FLOW_WORDS.clearGroup },
+                  ]}
+                  value={selectedProposal.forName ?? ''}
+                  onChange={(name) => {
+                    setFor([selectedProposal.key], () =>
+                      name === '' ? null : name,
+                    );
+                    setSelected(null);
+                  }}
+                />
+              </div>
+            )}
           <ActionGroup isRoomy={!isShort}>
             {selectedProposal && selectedCadence?.perMonthCents != null && (
               <ActionRow
@@ -1137,6 +1434,41 @@ function BudgetStart({
                 }
               />
             )}
+            {selectedProposal &&
+              (selectedProposal.kind === 'bill' ||
+                selectedProposal.kind === 'envelope' ||
+                selectedProposal.kind === 'income') && (
+                <ActionRow
+                  isGrouped
+                  isRoomy={!isShort}
+                  icon={<Tag />}
+                  label={
+                    selectedProposal.kind === 'income'
+                      ? BUDGET_WORDS.changePayer
+                      : forNameList.length > 0
+                        ? BUDGET_WORDS.forSomethingElse
+                        : BUDGET_WORDS.changeFor
+                  }
+                  subtitle={
+                    selectedProposal.kind === 'income'
+                      ? (selectedProposal.value as BudgetValues['income'])
+                          .sourceName
+                      : forNameList.length > 0
+                        ? undefined
+                        : FORM_FLOW_WORDS.noGroup
+                  }
+                  hasChevron
+                  onClick={() => {
+                    setForm((current) => ({
+                      key: selectedProposal.key,
+                      token: (current?.token ?? 0) + 1,
+                      step:
+                        selectedProposal.kind === 'income' ? 'source' : 'group',
+                    }));
+                    setSelected(null);
+                  }}
+                />
+              )}
             <ActionRow
               isGrouped
               isRoomy={!isShort}
@@ -1148,6 +1480,7 @@ function BudgetStart({
                 setForm((current) => ({
                   key: selected,
                   token: (current?.token ?? 0) + 1,
+                  step: null,
                 }));
                 setSelected(null);
               }}
@@ -1168,6 +1501,22 @@ function BudgetStart({
         </div>
       </DetailSheet>
       {renderForm()}
+      {renaming !== null && (
+        <ForRenameSheet
+          key={renaming.name}
+          name={renaming.name}
+          emoji={emojiOf(renaming.name)}
+          onClose={() => setRenaming(null)}
+          onDone={(name, emoji) => {
+            renameFor(renaming.name, name, emoji);
+            setRenaming(null);
+          }}
+          onTakeOut={() => {
+            takeOut(renaming.kind, renaming.name);
+            setRenaming(null);
+          }}
+        />
+      )}
     </div>
   );
 }

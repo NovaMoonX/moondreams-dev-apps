@@ -288,6 +288,8 @@ export interface EnvelopeSealed {
   /** A fractional rank inside the priority tier. */
   orderIndex: number;
   funding: FundingRule;
+  /** The group that lists this envelope; a version written before envelopes had groups reads as null. */
+  groupId: string | null;
 }
 
 /** How a bill is funded: spread over the income days before it is due, or on days the person picked. */
@@ -318,6 +320,8 @@ export interface GroupSealed {
   name: string;
   /** The priority a new bill in this group starts with; null leaves it to the bill. */
   startingPriority: Priority | null;
+  /** The emoji its bills and envelopes wear unless they have their own; a version written before it existed reads as null. */
+  emoji: string | null;
 }
 
 export interface GoalSealed {

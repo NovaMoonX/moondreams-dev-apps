@@ -15,7 +15,7 @@ Most budgets start from a month and a bank balance. Money actually arrives in pi
 The owner is Runway's first user, and every change is checked against how they handle money:
 
 - **Spending goes on credit cards.** Purchases and most bills are charged to several cards, each paid in full every month. A card's balance is money already spoken for, not a debt carried.
-- **One account holds the cash.** Deposits land in one account (Wealthfront cash, with buckets that each stand for an envelope or a goal) and the cards are paid from it. Runway's envelopes and goals are those buckets, so the money never has to move between accounts for the budget to stay true.
+- **One account holds the cash.** Deposits land in one account (Wealthfront cash) and the cards are paid from it. The account holds the money Runway sets aside for envelopes and goals, so the money never has to move between accounts for the budget to stay true.
 - **The problem it solves.** Keeping a separate account per envelope and per card meant a transfer for every purchase; when the transfers lagged, nobody knew what was really free to spend, owed on a card or set aside. Runway keeps that picture without a single transfer.
 - **Typed by hand, for now.** Importing a CSV and linking banks are on hold until the owner says otherwise, so adding a purchase, a card charge or a card payment must stay quick by hand.
 
@@ -153,7 +153,7 @@ Money going out comes in three shapes, by how well you know the date:
 A bill is funded by the income days you choose, or by the ones Runway suggests (the days before it is due, divided evenly). A bill is marked paid by you, or automatically when a matching purchase arrives.
 
 - **Paid ahead of time.** A card, a car note or any bill can be marked paid before its due date. It stops asking for money, and the payment is recorded with the day you made it. If the bill was not yet funded, the payment comes out of Free to Spend and the next draft makes it up.
-- **Groups.** Any bill or expected expense can belong to a group you name or pick (Home, Subscriptions). The Bills list shows each group with its bills under it and what they come to per month (a range when a bill varies). A group can set the priority a new bill in it starts with. Archiving a group leaves its bills in the plan, without a group. A group is a label for organizing and totaling; it does not change when a bill is funded.
+- **What it's for.** A bill or an envelope can say what it is for: Pets, Home, Car. Pets can hold the pet insurance bill and the Food, Litter and Pet misc envelopes. The Bills and Envelopes lists show each name with what is for it under it, and what they come to in a usual month, bills and envelopes together (a range when an amount varies; an envelope with no fixed amount or beat is named as left out). What is for something can set the priority a new bill or envelope starts with. "Stop using Pets" leaves its bills and envelopes in the plan with nothing set. It is a label for organizing and totaling; it does not change when anything is funded. Goals and income get nothing. (Code and data keep the name group.)
 
 ### Envelopes, In Detail
 
@@ -431,7 +431,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [x] Monthly envelope funding, split across the month's income days
 - [x] Move leftover envelope money to another envelope, a goal or Free to Spend
 - [ ] Open the plan as of a past date
-- [ ] Group bills and expected expenses (Subscriptions, Housing, Car), with a monthly total and a starting priority per group
+- [ ] Say what a bill or envelope is for (Subscriptions, Housing, Car), with a monthly total and a starting priority per name
 - [ ] Irregular income with no schedule, and a rough monthly expectation for lookahead
 - [ ] Free to Spend shows how much came from each source, and you can assign a chosen source's money
 - [ ] Name accounts, say where each goal and envelope is held, and see the line-up against each balance (check a balance against all your money: built)
@@ -473,3 +473,4 @@ Every change says from when and shows, before it saves, which coming income days
 - **Notifications:** Next Steps. Pushes carry fixed text only. A server function matches new purchases and deposits with the same engine as the device, writes each event once, and sends through the site's push service.
 - **Receipts:** Images are kept until the person removes them; nothing expires and no scheduled function touches them.
 - **State and tooling:** Slices, listeners, actions and selectors follow the repo's existing pattern, with the app's own reducer composed into the central store.
+- **A bill can wait for its due date.** Adding a bill never needs a date: until it has one, the plan sets nothing aside for it and says so as a thing to fix. A monthly bill without a date still counts in its group's monthly total.

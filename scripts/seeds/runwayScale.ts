@@ -352,6 +352,7 @@ export async function seedRunwayScale(
         emoji: EMOJI[index % EMOJI.length],
         priority,
         orderIndex: index + 1,
+        groupId: null,
         funding: {
           amount: { kind: 'exact', cents },
           cadence:

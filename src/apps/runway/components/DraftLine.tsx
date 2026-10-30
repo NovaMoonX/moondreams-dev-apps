@@ -18,6 +18,7 @@ import {
   NEEDS_LOOK_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
 import {
@@ -28,7 +29,6 @@ import {
 interface DraftLineProps {
   line: DraftLineData;
   name: string;
-  emoji: string | null;
   /** The item's kind; a line whose item is gone has none and opens nothing. */
   kind: ItemKind | null;
   sourceNames: Record<string, string>;
@@ -56,7 +56,6 @@ interface DraftLineProps {
 function DraftLine({
   line,
   name,
-  emoji,
   kind,
   sourceNames,
   daySourceId,
@@ -73,6 +72,7 @@ function DraftLine({
 }: DraftLineProps) {
   const [isOwnOpen, setIsOwnOpen] = useState(false);
   const { isHidden } = useValuesHidden();
+  const emoji = useRecordedEmoji(null, line.itemId);
   const isOpen = isOpenProp ?? isOwnOpen;
   const setIsOpen = onOpenChange ?? setIsOwnOpen;
   const reason = describeLineReason(line, sourceNames, name, daySourceId);

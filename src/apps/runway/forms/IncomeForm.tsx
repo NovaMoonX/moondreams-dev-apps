@@ -41,6 +41,7 @@ import {
   type CreateIncomeInput,
 } from '@apps/runway/store/actions/itemActions';
 import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
+import { toGroupAnswer } from '@apps/runway/utils/groupChoice';
 import {
   isAmountDraft,
   isNullableOneOf,
@@ -86,6 +87,7 @@ import type {
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import DateInput from '@/components/DateInput';
 
 type Frequency = (typeof INCOME_FREQUENCIES)[number];
 type EndKind = (typeof INCOME_ENDINGS)[number];
@@ -370,7 +372,13 @@ function IncomeFormBody({
     editing
       ? getEditingData(editing)
       : draft?.initial
-        ? getDraftData(draft.initial)
+        ? {
+            ...getDraftData(draft.initial),
+            source: toGroupAnswer(
+              draft.initial.sourceName,
+              draft.sources ?? [],
+            ),
+          }
         : {
             source: { choice: '', newText: '' },
             payName: '',
@@ -428,12 +436,27 @@ function IncomeFormBody({
         })
       : set({ frequency });
 
+  const sourceChoices = [
+    ...(draft?.sources ?? []),
+    ...resolved
+      .map((source) => ({
+        id: source.item.id,
+        name: source.version.payload.name,
+      }))
+      .filter(
+        ({ name }) =>
+          !(draft?.sources ?? []).some(
+            (entry) =>
+              entry.name.trim().toLowerCase() === name.trim().toLowerCase(),
+          ),
+      ),
+  ];
   const sourceNames = Object.fromEntries(
-    resolved.map((source) => [source.item.id, source.version.payload.name]),
+    sourceChoices.map(({ id, name }) => [id, name]),
   );
-  const sourceOptions = resolved.map((source) => ({
-    value: source.item.id,
-    label: source.version.payload.name,
+  const sourceOptions = sourceChoices.map(({ id, name }) => ({
+    value: id,
+    label: name,
   }));
   const sourceName = getSourceName(formData, sourceNames);
   const isEditing = editing !== undefined;
@@ -578,8 +601,7 @@ function IncomeFormBody({
                 <p className='text-muted-foreground text-xs'>
                   {isOnce ? 'Arrives' : 'Next payday'}
                 </p>
-                <Input
-                  type='date'
+                <DateInput
                   variant='outline'
                   aria-label={isOnce ? 'Arrives' : 'First payday'}
                   value={formData.startDate}
@@ -639,8 +661,7 @@ function IncomeFormBody({
                   }}
                 />
                 {formData.endKind === 'date' && (
-                  <Input
-                    type='date'
+                  <DateInput
                     variant='outline'
                     aria-label='Last payday'
                     min={formData.startDate || undefined}
@@ -785,7 +806,7 @@ function IncomeFormBody({
     const existingSource =
       data.source.choice !== NEW_CHOICE && data.source.choice !== '';
     const input: CreateIncomeInput = {
-      sourceId: existingSource ? data.source.choice : null,
+      sourceId: existingSource && !draft ? data.source.choice : null,
       sourceName: getSourceName(data, sourceNames),
       payLineName: data.payName.trim() || DEFAULT_PAY_LINE_NAME,
       amount,

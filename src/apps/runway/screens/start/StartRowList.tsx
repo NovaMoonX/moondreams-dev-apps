@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -9,6 +9,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import type { StartRow } from '@apps/runway/screens/start/startRows';
 
@@ -19,10 +20,25 @@ interface StartRowListProps {
   /** What the search box is called, "Search your bills". */
   searchLabel: string;
   onOpen: (id: string) => void;
+  /** Sits at the end of a heading, when that heading has something to change. */
+  renderHeadingAction?: (group: string) => ReactNode;
+  /** The emoji shown before a heading's name. */
+  getHeadingEmoji?: (group: string) => string | null;
+}
+
+function StartRowBadge({ row }: { row: StartRow }) {
+  const emoji = useItemEmoji(row.emoji, row.groupId ?? null);
+  return <ItemBadge name={row.name} emoji={emoji} />;
 }
 
 /** What has been added in a step: one-line rows that each open their item, searchable from eight and folded after a few. */
-function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
+function StartRowList({
+  rows,
+  searchLabel,
+  onOpen,
+  renderHeadingAction,
+  getHeadingEmoji,
+}: StartRowListProps) {
   const mask = useMaskedText();
   const [query, setQuery] = useState('');
   const [isAll, setIsAll] = useState(false);
@@ -31,7 +47,9 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
     text === ''
       ? rows
       : rows.filter((row) => row.name.toLowerCase().includes(text));
-  const shown = isAll || text !== '' ? matches : matches.slice(0, ROWS_SHOWN);
+  const isGrouped = rows.some((row) => row.group !== undefined);
+  const isFolded = text === '' && !isGrouped && rows.length > ROWS_SHOWN;
+  const shown = isFolded && !isAll ? matches.slice(0, ROWS_SHOWN) : matches;
 
   if (rows.length === 0) return null;
   return (
@@ -48,9 +66,14 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
           <li key={row.id}>
             {row.group !== undefined &&
               row.group !== shown[index - 1]?.group && (
-                <p className='bg-muted/50 text-muted-foreground px-3 py-1.5 text-sm font-medium'>
-                  {row.group}
-                </p>
+                <div className='bg-accent/50 flex min-h-10 items-center gap-2 py-1 pr-2 pl-3'>
+                  <p className='text-muted-foreground min-w-0 flex-1 py-0.5 text-sm font-medium break-words'>
+                    {getHeadingEmoji?.(row.group) &&
+                      `${getHeadingEmoji(row.group)} `}
+                    {row.group}
+                  </p>
+                  {renderHeadingAction?.(row.group)}
+                </div>
               )}
             <Button
               type='button'
@@ -61,7 +84,7 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
               )}
               onClick={() => onOpen(row.id)}
             >
-              <ItemBadge name={row.name} emoji={row.emoji} />
+              <StartRowBadge row={row} />
               <span className='min-w-24 flex-1'>
                 <span className='line-clamp-2 block text-base font-medium break-words'>
                   {row.name}
@@ -93,7 +116,7 @@ function StartRowList({ rows, searchLabel, onOpen }: StartRowListProps) {
       {text !== '' && matches.length === 0 && (
         <p className='text-muted-foreground text-sm'>Nothing matches that.</p>
       )}
-      {text === '' && rows.length > ROWS_SHOWN && (
+      {isFolded && (
         <ShowMoreButton
           isOpen={isAll}
           onClick={() => setIsAll((open) => !open)}

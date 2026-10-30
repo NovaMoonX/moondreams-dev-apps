@@ -17,6 +17,7 @@ import type {
   FromWhenChoice,
   FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
+import DateInput from '@/components/DateInput';
 
 interface FromWhenPickerProps {
   value: FromWhenValue;
@@ -109,8 +110,7 @@ function FromWhenPicker({
         </div>
       )}
       {value.choice === 'date' && (
-        <Input
-          type='date'
+        <DateInput
           variant='outline'
           aria-label={CHANGE_WORDS.dateLabel}
           min={toDateInputValue(addUtcDays(today, 1))}
@@ -148,8 +148,7 @@ function FromWhenPicker({
               }
             />
           ) : (
-            <Input
-              type='date'
+            <DateInput
               variant='outline'
               aria-label={CHANGE_WORDS.stretchDateLabel}
               min={toDateInputValue(today)}

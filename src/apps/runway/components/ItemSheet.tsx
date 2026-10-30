@@ -129,6 +129,8 @@ import type { PreviewChange } from '@apps/runway/store/selectors/previewSelector
 import type {
   BillSealed,
   BillVersion,
+  EnvelopeSealed,
+  EnvelopeVersion,
   GoalSealed,
   ItemKind,
   OpenVersion,
@@ -175,6 +177,8 @@ interface ItemSheetProps {
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
   quickChange?: { label: string; step: string };
+  /** Opens the change form at this question at once, as a link to "Set the due date" does. */
+  startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
   payment?: BillPayment | null;
   onMarked?: () => void;
@@ -231,6 +235,7 @@ function ItemSheet({
   fact,
   help,
   quickChange,
+  startsAtStep,
   payment = null,
   onMarked,
   onUndone,
@@ -268,8 +273,10 @@ function ItemSheet({
   const header = useAppSelector(
     (state) => state.runway.items.find((item) => item.id === itemId) ?? null,
   );
-  const [phase, setPhase] = useState<Phase>('sheet');
-  const [openStep, setOpenStep] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>(
+    startsAtStep === undefined ? 'sheet' : 'change',
+  );
+  const [openStep, setOpenStep] = useState<string | null>(startsAtStep ?? null);
   const [view, setView] = useState<View>('menu');
   const [reason, setReason] = useState('');
   const [isReasonOpen, setIsReasonOpen] = useState(false);
@@ -426,14 +433,16 @@ function ItemSheet({
     id: item.id,
     name: version.payload.name,
   }));
-  const currentGroupId =
-    itemKind === 'bill' &&
-    groupOptions.some(({ id }) => id === (payload as BillSealed).groupId)
-      ? ((payload as BillSealed).groupId ?? null)
-      : null;
+  const isGroupable = itemKind === 'bill' || itemKind === 'envelope';
+  const savedGroupId = isGroupable
+    ? (payload as BillSealed | EnvelopeSealed).groupId
+    : null;
+  const currentGroupId = groupOptions.some(({ id }) => id === savedGroupId)
+    ? savedGroupId
+    : null;
   const currentGroupName =
     groupOptions.find(({ id }) => id === currentGroupId)?.name ??
-    GROUP_WORDS.none;
+    GROUP_WORDS.unset;
   const pickedGroup = resolveGroupChoice(groupChoice, groupText, groupOptions);
   const isGroupUnchanged =
     pickedGroup.groupId === currentGroupId && pickedGroup.newGroup === null;
@@ -451,21 +460,26 @@ function ItemSheet({
   };
 
   const saveGroup = async () => {
-    if (isSavingRef.current || !user || itemKind !== 'bill') return;
-    const bill = payload as BillSealed;
+    if (
+      isSavingRef.current ||
+      !user ||
+      (itemKind !== 'bill' && itemKind !== 'envelope')
+    )
+      return;
+    const bill = payload as BillSealed | EnvelopeSealed;
     isSavingRef.current = true;
     setError(null);
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      const next: BillSealed = {
+      const next = {
         ...bill,
         groupId:
           pickedGroup.groupId ?? (pickedGroup.newGroup ? NEW_GROUP_ID : null),
       };
       await changeItem(user.uid, encryption, {
         itemId,
-        kind: 'bill',
+        kind: itemKind,
         payload: next,
         summary: `${bill.name}: ${describeChange(
           { ...bill, groupId: currentGroupId },
@@ -478,11 +492,15 @@ function ItemSheet({
         note: null,
         effectiveFrom: today,
         newGroup: pickedGroup.newGroup,
-        stretches: getVersionStretches<BillVersion, BillSealed>(
+        stretches: getVersionStretches<
+          BillVersion | EnvelopeVersion,
+          BillSealed | EnvelopeSealed
+        >(
           store
             .getState()
             .runway.versions.filter(
-              (version): version is BillVersion => version.kind === 'bill',
+              (version): version is BillVersion | EnvelopeVersion =>
+                version.kind === itemKind,
             ),
           itemId,
           today,
@@ -494,7 +512,9 @@ function ItemSheet({
       addToast({
         title:
           pickedGroup.name === ''
-            ? GROUP_WORDS.movedOut(bill.name)
+            ? currentGroupName === GROUP_WORDS.unset
+              ? GROUP_WORDS.movedClear(bill.name)
+              : GROUP_WORDS.movedOut(bill.name, currentGroupName)
             : GROUP_WORDS.moved(bill.name, pickedGroup.name),
         type: 'success',
       });
@@ -821,7 +841,7 @@ function ItemSheet({
           label={ITEM_SHEET_WORDS.history}
           onClick={openHistory}
         />
-        {canChange && itemKind === 'bill' && (
+        {canChange && isGroupable && (
           <ActionRow
             isGrouped
             hasChevron

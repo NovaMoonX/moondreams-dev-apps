@@ -54,12 +54,25 @@ const NAME = (what: string) =>
     `${what}, shortened to at most ${MAX_NAME_LENGTH} characters: "Rent", not "Rent - Oak Street apartment (due on the 1st)". No amount in it.`,
   );
 
+const FOR_NAME = text(
+  `What this money takes care of, as a short everyday name at most ${MAX_NAME_LENGTH} characters long: "Home", "Car", "Pets", "Phone and internet". Null when it is not reasonably clear. Never a savings or investing word, and never a priority.`,
+);
+
+const FOR_EMOJI = text(
+  'One plain, widely supported emoji that fits what forName is for (🏠 Home, 🚗 Car, 🐾 Pets), the same one on every item with that forName. Null when forName is null or no emoji fits.',
+);
+
 const responseSchema = {
   type: SchemaType.OBJECT,
   properties: {
     incomes: list({
       sourceFile: SOURCE,
-      name: NAME('Who or what pays, such as the employer'),
+      payer: text(
+        'Who pays it: the employer or person, from any column, heading or sentence ("Source: HubSpot"). Null when not given.',
+      ),
+      name: NAME(
+        'What kind of pay it is, as the document labels it ("Paycheck", "ESPP", "Paycheck #2"). Null when the line is only the payer',
+      ),
       amountCents: cents(
         'What lands in the account each time, in cents. Null when not written.',
       ),
@@ -74,10 +87,18 @@ const responseSchema = {
         description:
           'For twice a month, the two days of the month it arrives (like 1 and 15). Null otherwise.',
       },
+      dayOfMonth: {
+        type: SchemaType.INTEGER,
+        nullable: true,
+        description:
+          'For a monthly income, the day of the month it arrives (1 to 31), from a written day or from the document\'s name ("Paycheck_15th" is 15). Null otherwise.',
+      },
     }),
     bills: list({
       sourceFile: SOURCE,
       name: NAME('The bill or expense'),
+      forName: FOR_NAME,
+      forEmoji: FOR_EMOJI,
       amountCents: cents(
         'The amount in cents when it is one figure. Null when not written or when a range is written.',
       ),
@@ -100,6 +121,8 @@ const responseSchema = {
     envelopes: list({
       sourceFile: SOURCE,
       name: NAME('The kind of spending, such as Groceries'),
+      forName: FOR_NAME,
+      forEmoji: FOR_EMOJI,
       amountCents: cents(
         'The amount set aside for one period, in cents. Null when not written.',
       ),
@@ -137,7 +160,10 @@ Rules:
 - Each document sits between "--- BEGIN <name> ---" and "--- END <name> ---" lines, or follows a line naming it (a PDF). Set sourceFile on every item to the name of the document it came from.
 - Income is money that arrives (a paycheck, a regular payment to the person). Bills are payments that come due on a date or day of the month (rent, a phone plan, a subscription). Envelopes are amounts set aside for a kind of spending that is refilled each period (groceries, dining out). Goals are savings toward a target (a trip, an emergency fund).
 - A bill that repeats yearly, quarterly or on any cadence the repeat choices do not list gets repeats null and its written cadence, with the amount as written for that cadence. A day of the month alone does not make a bill monthly when the document gives another cadence.
-- Never invent a value. When an amount, date or frequency is not written, leave it null. A total, a subtotal or a balance is not an item.
+- Never invent an amount, date or frequency: when one is not written, leave it null. A total, a subtotal or a balance is not an item. Judging what a bill or envelope is for, or who pays an income, from context is not inventing.
+- Say what each bill and envelope is for in forName, using any signal: a column of any name (category, group, bucket, section, type), headings, how lines are grouped in pasted text, the document's name, or the item itself when its purpose is plain (water, energy and rent are Home; car note, gas and auto insurance are Car; litter, pet food and pet insurance are Pets). Set it whenever you are reasonably confident and leave it null when you are not. Use one name per purpose across all items, never both "Housing" and "Home"; when the document's own word is fine, keep it. A savings or investing word (Savings, Additional Savings, Investments) or a priority word is never a forName: a line filed under one is more likely a goal.
+- Suggest one emoji per purpose in forEmoji: a single plain, widely supported emoji that fits it (🏠 Home, 🚗 Car, 🐾 Pets), the same on every item with that forName, and null when forName is null or nothing fits. Never more than one emoji, and no words.
+- For income, put who pays in payer (from any column or text, such as a Source column) and what kind of pay it is in name. A document named for a day of the month ("Paycheck_15th") has its income arriving on that day each month (dayOfMonth), and the items in that document are what that pay covers.
 - All money is an integer number of cents (12.50 is 1250). Never include a currency symbol. Dates are YYYY-MM-DD.
 - Give at most ${BUDGET_LIMITS.items.incomes} incomes, ${BUDGET_LIMITS.items.bills} bills, ${BUDGET_LIMITS.items.envelopes} envelopes and ${BUDGET_LIMITS.items.goals} goals, keeping the first ones written. Keep each name under ${MAX_NAME_LENGTH} characters and drop asides.
 - The same thing in two documents is listed once for each document it appears in.

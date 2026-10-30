@@ -47,8 +47,15 @@ interface LookaheadWarningsProps {
 }
 
 type WarningRow =
-  | { kind: 'plan'; on: number; group: ProblemGroup }
-  | { kind: 'card'; on: number; due: DueCard };
+  { kind: 'plan'; group: ProblemGroup } | { kind: 'card'; due: DueCard };
+
+const getRowKey = (row: WarningRow) => {
+  if (row.kind === 'card') return `card:${row.due.card.id}`;
+  const { group } = row;
+  if (group.kind === 'undated') return 'undated';
+  if (group.kind === 'day') return `day:${group.on}:${group.dayKey}`;
+  return `single:${group.on}:${group.problem.kind}`;
+};
 
 /** What stops the plan, as one warning row that counts the rest; it opens "Things to fix", one row per problem, soonest first. The open list lives in the URL, so coming back from a row's day lands on it again. */
 function LookaheadWarnings({
@@ -61,18 +68,29 @@ function LookaheadWarnings({
   const [isAllShown, setIsAllShown] = useState(false);
   const [paying, setPaying] = useState<OpenedCard | null>(null);
   const allCards = useAppSelector(selectAllCards);
-  const rows = [
-    ...groupProblems(lookahead?.problems ?? []).map((group): WarningRow => ({
-      kind: 'plan',
-      on: group.on,
-      group,
-    })),
-    ...dueCards.map((due): WarningRow => ({
-      kind: 'card',
-      on: due.dueOn,
-      due,
-    })),
-  ].sort((a, b) => a.on - b.on);
+  const undated = lookahead?.undated ?? [];
+  const rows: WarningRow[] = [
+    ...[
+      ...groupProblems(lookahead?.problems ?? []).map((group) => ({
+        on: group.on,
+        row: { kind: 'plan', group } satisfies WarningRow,
+      })),
+      ...dueCards.map((due) => ({
+        on: due.dueOn,
+        row: { kind: 'card', due } satisfies WarningRow,
+      })),
+    ]
+      .sort((a, b) => a.on - b.on)
+      .map(({ row }) => row),
+    ...(undated.length === 0
+      ? []
+      : [
+          {
+            kind: 'plan',
+            group: { kind: 'undated', bills: undated },
+          } satisfies WarningRow,
+        ]),
+  ];
   const first = rows[0] ?? null;
   // A card coming due is not a gap in the plan, so a list of only cards is not "things to fix".
   const isCardsOnly =
@@ -173,11 +191,7 @@ function LookaheadWarnings({
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {shown.map((row) => (
               <li
-                key={
-                  row.kind === 'card'
-                    ? `card:${row.due.card.id}`
-                    : `${row.group.kind}:${row.on}:${row.group.kind === 'day' ? row.group.dayKey : row.group.problem.kind}`
-                }
+                key={getRowKey(row)}
                 className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'
               >
                 {row.kind === 'card' ? (

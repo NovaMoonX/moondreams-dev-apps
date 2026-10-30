@@ -131,6 +131,14 @@ export function useRunwayUrlState() {
   const openFixes = () => setRequestedFixes(true, { history: 'replace' });
   const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
 
+  const [requestedDueBill, setRequestedDueBill] = useQueryState(
+    'dueBill',
+    parseAsString,
+  );
+  const openDueBill = (billId: string) =>
+    setRequestedDueBill(billId, { history: 'replace' });
+  const closeDueBill = () => setRequestedDueBill(null, { history: 'replace' });
+
   const [requestedGroups, setRequestedGroups] = useQueryState(
     'groups',
     parseAsBoolean,
@@ -192,6 +200,7 @@ export function useRunwayUrlState() {
     if (tab === activeTab) return;
     if (requestedFixes !== null) closeFixes();
     if (requestedAdd !== null) clearAdd();
+    if (requestedDueBill !== null) closeDueBill();
     if (tab === DEFAULT_RUNWAY_TAB) {
       if (window.history.state?.runwayTabStep) {
         navigate(-1);
@@ -238,6 +247,7 @@ export function useRunwayUrlState() {
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
   const showPlanSection = (section: PlanSection) => {
     if (requestedAdd !== null && section !== requestedSection) clearAdd();
+    if (requestedDueBill !== null) closeDueBill();
     return setRequestedSection(
       section === DEFAULT_PLAN_SECTION ? null : section,
       { history: 'replace' },
@@ -322,6 +332,9 @@ export function useRunwayUrlState() {
     isFixesOpen: requestedFixes === true,
     openFixes,
     closeFixes,
+    dueBillId: requestedDueBill,
+    openDueBill,
+    closeDueBill,
     isGroupsOpen: requestedGroups === true,
     openGroups,
     closeGroups,

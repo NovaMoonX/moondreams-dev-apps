@@ -4,6 +4,8 @@ import {
   chooseVersion,
   getMissingStep,
   getMissingSteps,
+  toBillProposal,
+  toEnvelopeProposal,
   toBillValue,
   toIncomeValue,
   toMonthlyBillValue,
@@ -13,6 +15,7 @@ import {
   cutAtWord,
   normalizeBudgetReading,
 } from '../../src/apps/runway/lib/normalizeBudgetReading.ts';
+import { describeBillTiming } from '../../src/apps/runway/utils/billText.ts';
 import { maskFigures } from '../../src/apps/runway/utils/maskText.ts';
 import { nameDocuments } from '../../src/apps/runway/lib/nameDocuments.ts';
 
@@ -599,4 +602,185 @@ assert.deepEqual(
     ['Extra.csv', null],
   ],
   'each file is listed with what it said itself, not with what another file filled in',
+);
+
+const paycheckFiles = ['Paycheck_15th.csv', 'Paycheck_30th.csv'];
+const paycheckLine = (
+  sourceFile: string,
+  name: string,
+  amountCents: number,
+  dayOfMonth: number,
+) => ({
+  sourceFile,
+  payer: 'HubSpot',
+  name,
+  amountCents,
+  scheduleKind: 'monthly',
+  dayOfMonth,
+});
+const owned = normalizeBudgetReading(
+  {
+    incomes: [
+      paycheckLine('Paycheck_15th.csv', 'Paycheck #1', 325_000, 15),
+      paycheckLine('Paycheck_15th.csv', 'ESPP Amount', 110_000, 15),
+      paycheckLine('Paycheck_30th.csv', 'Paycheck #2', 325_500, 30),
+      paycheckLine('Paycheck_30th.csv', 'ESPP Amount', 110_000, 30),
+    ],
+    bills: [
+      { ...bill('Paycheck_30th.csv', 'Rent', 160_000), forName: 'Housing' },
+      { ...bill('Paycheck_30th.csv', 'Water', 5_000), forName: 'housing ' },
+      { ...bill('Paycheck_30th.csv', 'Car note', 65_000), forName: 'Car' },
+      { ...bill('Paycheck_30th.csv', 'Vehicle', 30_000), forName: 'Savings' },
+    ],
+    envelopes: [
+      {
+        sourceFile: 'Paycheck_30th.csv',
+        name: 'Litter',
+        forName: 'Pet Parent',
+        amountCents: 6_000,
+        period: 'monthly',
+      },
+      {
+        sourceFile: 'Paycheck_15th.csv',
+        name: 'Hobbies',
+        forName: 'Additional Savings',
+        amountCents: 12_000,
+        period: 'monthly',
+      },
+    ],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: paycheckFiles },
+);
+assert.deepEqual(
+  owned.incomes.map((entry) => [entry.payer, entry.name, entry.monthDays]),
+  [
+    ['HubSpot', 'Paycheck #1', [15]],
+    ['HubSpot', 'ESPP Amount', [15, 30]],
+    ['HubSpot', 'Paycheck #2', [30]],
+  ],
+  'the payer is kept apart from the kind of pay, and a file named for a day gives the day',
+);
+assert.deepEqual(
+  [owned.incomes[1].scheduleKind, owned.incomes[1].versions.length],
+  ['twiceMonthly', 0],
+  'the same pay on two days of the month is one pay twice a month',
+);
+assert.deepEqual(
+  owned.bills.map((entry) => entry.forName),
+  ['Housing', 'Housing', 'Car', null],
+  'one purpose name across case and spacing, and a savings word is dropped',
+);
+assert.deepEqual(
+  owned.envelopes.map((entry) => entry.forName),
+  ['Pet Parent', null],
+  'the document’s own word is kept and a savings word is dropped',
+);
+const hubspot = toIncomeValue(owned.incomes[0], today);
+assert.equal(hubspot.sourceName, 'HubSpot');
+assert.equal(hubspot.payLineName, 'Paycheck #1');
+assert.equal(
+  hubspot.schedule.anchor,
+  Date.UTC(2026, 10, 15),
+  'a monthly day with no date lands on the next such day',
+);
+assert.equal(
+  toIncomeValue({ ...owned.incomes[0], payer: null }, today).sourceName,
+  'Paycheck #1',
+  'without a payer the name is the source, as before',
+);
+assert.equal(
+  toBillProposal(owned.bills[0], today).forName,
+  'Housing',
+  'a proposal carries its purpose name',
+);
+const purposes = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      { ...bill('a.csv', 'Mortgage', 90_000), forName: 'Retirement home' },
+      { ...bill('a.csv', 'Fees', 1_000), forName: 'Additional Savings' },
+    ],
+    envelopes: [],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: ['a.csv'] },
+);
+assert.deepEqual(
+  purposes.bills.map((entry) => entry.forName),
+  ['Retirement home', null],
+  'only a name that is just a savings word is dropped',
+);
+
+const undatedBill = toBillValue(yearly.bills[1], today);
+const undatedSchedule = {
+  ...undatedBill.timing.schedule,
+  kind: 'monthly' as const,
+  anchor: null,
+};
+assert.ok(
+  !getMissingSteps('bill', {
+    ...undatedBill,
+    timing: { ...undatedBill.timing, schedule: undatedSchedule },
+  }).includes('due'),
+  'a bill with no due date is not sent back for one',
+);
+assert.deepEqual(
+  (['monthly', 'weekly', 'once'] as const).map((kind) =>
+    describeBillTiming({ ...undatedSchedule, kind }),
+  ),
+  ['Monthly · due date later', 'Weekly · due date later', 'Due date later'],
+  'a bill with no due date says so in one wording for every repeat',
+);
+const emojis = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      { ...bill('a.csv', 'Rent', 100_000), forName: 'Home', forEmoji: '🏠' },
+      { ...bill('a.csv', 'Water', 5_000), forName: 'home', forEmoji: '🏡' },
+      { ...bill('a.csv', 'Gas', 4_000), forName: 'Home', forEmoji: null },
+      { ...bill('a.csv', 'Car note', 30_000), forName: 'Car', forEmoji: 'car' },
+      { ...bill('a.csv', 'Tags', 1_000), forName: 'Car', forEmoji: '🚗🚙' },
+      { ...bill('a.csv', 'Vet', 1_000), forName: 'Pets', forEmoji: '🇨🇦' },
+      { ...bill('a.csv', 'Misc', 1_000), forName: null, forEmoji: '🎉' },
+    ],
+    envelopes: [
+      {
+        sourceFile: 'a.csv',
+        name: 'Litter',
+        forName: 'Pets',
+        forEmoji: '🐾',
+        amountCents: 6_000,
+        period: 'monthly',
+      },
+    ],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: ['a.csv'] },
+);
+assert.deepEqual(
+  emojis.bills.map((entry) => [entry.forName, entry.forEmoji]),
+  [
+    ['Home', '🏠'],
+    ['Home', '🏠'],
+    ['Home', '🏠'],
+    ['Car', null],
+    ['Car', null],
+    ['Pets', '🇨🇦'],
+    [null, null],
+  ],
+  'one real emoji is kept, the first one wins per name, words and several emoji are dropped, and no name means no emoji',
+);
+assert.equal(
+  emojis.envelopes[0].forEmoji,
+  '🇨🇦',
+  'an envelope shares the emoji of the bill that named the purpose first',
+);
+assert.equal(
+  toEnvelopeProposal(emojis.envelopes[0], today).forEmoji,
+  '🇨🇦',
+  'a proposal carries its purpose emoji',
 );
