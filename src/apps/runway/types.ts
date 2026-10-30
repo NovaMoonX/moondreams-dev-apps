@@ -320,6 +320,8 @@ export interface GroupSealed {
   name: string;
   /** The priority a new bill in this group starts with; null leaves it to the bill. */
   startingPriority: Priority | null;
+  /** The emoji its bills and envelopes wear unless they have their own; a version written before it existed reads as null. */
+  emoji: string | null;
 }
 
 export interface GoalSealed {

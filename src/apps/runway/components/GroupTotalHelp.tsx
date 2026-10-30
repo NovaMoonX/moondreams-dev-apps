@@ -8,12 +8,24 @@ interface GroupTotalHelpProps {
   /** The total is a range and amounts are showing. */
   hasRange: boolean;
   stance: Stance;
+  /** What a heading counts when the group has the other kind too; the sheet counts both. */
+  only?: 'bills' | 'envelopes';
 }
 
 /** What a group's total counts and leaves out, the same words on its heading and in its sheet. */
-function GroupTotalHelp({ total, hasRange, stance }: GroupTotalHelpProps) {
+function GroupTotalHelp({
+  total,
+  hasRange,
+  stance,
+  only,
+}: GroupTotalHelpProps) {
   return (
     <>
+      {only && (
+        <p>
+          {only === 'bills' ? GROUP_WORDS.onlyBills : GROUP_WORDS.onlyEnvelopes}
+        </p>
+      )}
       <p>{GROUP_WORDS.basis}</p>
       {total.uncounted > 0 && <p>{GROUP_WORDS.uncounted(total.uncounted)}</p>}
       {hasRange && (
