@@ -72,6 +72,14 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
 
 The owner merges, unless they hand the merges over. "Merge them through" (in chat or in a PR comment) lets you merge this run's open PRs down their merge order; it covers the PRs open when it was given, and a PR opened later needs its own go. "automerge" (the `automerge` skill) is a standing go for the PRs a session drives, held back by anything the owner should decide or know. Say in each status comment's Next moves that you are merging, and on whose go.
 
+**One merge into main at a time, across every session.** Every merge, on any go (automerge, "merge them through", a PR the owner asked you to merge), goes through the merge lock, and nothing merges while a deploy runs. The go is permission to join the line, never to merge at once.
+
+- **Busy** means the lock is held (`npm run merge:lock -- status` exits 2 and names the PR and session; exit 1 means origin could not be read, which is never free) or `firebase-hosting-merge.yml` has a run queued or in progress (`actions_list` `list_workflow_runs` with that file). The owner merging by hand shows up as the deploy.
+- **The line** is the pinned "🔀 Merge queue" issue ([#573](https://github.com/NovaMoonX/moondreams-dev-apps/issues/573); search the title if it moves). A PR that is ready (every gate below holds but the conflict and the lock) gets one comment there from its session: the PR link, the session link, what it builds on, the areas it touches, and the time it became ready; the session edits that comment's time each time it checks, and once its PR merges or leaves the line edits it to one line, "Merged" or "Left the line" (a session may not be able to delete a comment). Order: a PR goes after anything it is stacked on; otherwise the oldest ready time goes first. A comment whose time is over 30 minutes old is a session that stopped checking, and is skipped (and named in your status comment), never deleted by another session.
+- **Waiting** is said where the owner looks: the status comment's Next moves reads "Waiting to merge: behind [#N](link) (its session's link), lock held since 16:05" or "behind the deploy of [#N](link)", and so does your reply. Check again every 10 minutes (`send_later`) and on every event from your PR; never poll with `sleep`. Reading another session's queue comment, lock or deploy is the one place this session looks at another's PRs, and it is only to wait its turn.
+- **Your turn:** the lock is free, nothing is deploying, and no live comment is ahead of yours. Take it (`npm run merge:lock -- take <pr> <your session link>`; exit 2 means someone took it first, so wait again), then merge the base into your branch and wait for CI on that head. Right before merging, fetch main again: if it moved (a merge by hand takes no lock), merge it in and wait for CI again. Merge, mark your queue comment merged, and keep the lock until the deploy has finished, checking with `send_later`; release it (`npm run merge:lock -- release <pr>`) when the deploy succeeds or fails. A run that stops anywhere between taking and releasing releases before it hands back: a failed gate, a conflict that needs the owner, the owner saying stop.
+- **A stuck lock** (the holder's PR merged or closed, or its session idle, and the lock over 90 minutes old): message that session first (`send_message`), and break it only when that gets no answer (`npm run merge:lock -- break <pr> "<why>"`), saying so in your status comment.
+
 For each PR, in order:
 
 1. **Gate it.** Merge only when every one holds on the current head, and never with admin rights or past a failing check:
@@ -82,8 +90,9 @@ For each PR, in order:
    - No owner comment or review on it is left unanswered.
    - The last review and screenshots covered this head; otherwise run what the push needed first.
    - A stacked PR's base has merged.
+   - You hold the merge lock and nothing is deploying (above). A run of several PRs takes it once per PR, so another session's PR can go between them.
 2. **Merge it.** Mark it ready for review, then merge it the way the repo's history does (squash, the PR's title as the commit title, its number appended).
-3. **Wait for its deploy.** `firebase-hosting-merge.yml` must succeed on the merge commit before the next merge. A failed deploy stops the run: report it, and fix it if it is yours.
+3. **Wait for its deploy.** `firebase-hosting-merge.yml` must succeed on the merge commit before the lock is released. A failed deploy stops the run: release the lock, report it, and fix it if it is yours.
 4. **Keep the rest current.** Merge the new base into the remaining PRs (above), and wait for their CI on the new heads before the next merge.
 
 Stop and tell the owner when:

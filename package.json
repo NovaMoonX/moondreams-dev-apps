@@ -72,7 +72,8 @@
     "issues:create": "tsx scripts/createGithubIssues.ts",
     "issues:create:dry-run": "tsx scripts/createGithubIssues.ts",
     "prs:check": "bash scripts/prSync.sh",
-    "prs:sync": "bash scripts/prSync.sh --merge"
+    "prs:sync": "bash scripts/prSync.sh --merge",
+    "merge:lock": "bash scripts/mergeLock.sh"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",
