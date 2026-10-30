@@ -214,6 +214,7 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
         ...option,
         label: fromPlain(option.label),
       })),
+      isMulti: item.isMulti,
     })),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
   },

@@ -22,12 +22,15 @@ const MAX_PRS = 20;
 const MAX_ITEMS = 20;
 const MAX_QUESTION = 500;
 const MAX_CHOICE = 300;
+const MAX_CHOICES = 26;
 const MAX_NOTE = 2000;
 const RECENT_COMMENTS_PAGE = 30;
 
 interface AnswerItem {
   question: string;
-  choice: string | null;
+  choices: string[];
+  /** What the owner typed instead of picking an option. */
+  other: string | null;
   note: string | null;
 }
 
@@ -68,16 +71,38 @@ const neutralise = (value: string | null) =>
 const collapse = (value: string | null) =>
   value === null ? null : value.replace(/\s+/g, ' ').trim();
 
+const readChoice = (value: unknown) =>
+  neutralise(collapse(readText(value, MAX_CHOICE)));
+
+// A page loaded before the multi-select change still sends one `choice`.
+const readChoices = (raw: Json) => {
+  if (raw.choices === undefined) {
+    const choice = readChoice(raw.choice);
+    return choice === null ? [] : [choice];
+  }
+  if (!Array.isArray(raw.choices) || raw.choices.length > MAX_CHOICES) {
+    throw invalid('An answer is too long or the wrong shape.');
+  }
+  return Array.from(
+    new Set(
+      raw.choices
+        .map(readChoice)
+        .filter((choice): choice is string => choice !== null),
+    ),
+  );
+};
+
 const readItem = (raw: unknown): AnswerItem => {
   if (!isObject(raw)) throw invalid('Bad answer.');
   const question = neutralise(collapse(readText(raw.question, MAX_QUESTION)));
-  const choice = neutralise(collapse(readText(raw.choice, MAX_CHOICE)));
+  const choices = readChoices(raw);
+  const other = neutralise(readText(raw.other, MAX_NOTE));
   const note = neutralise(readText(raw.note, MAX_NOTE));
   if (question === null) throw invalid('Each answer needs its question.');
-  if (choice === null && note === null) {
-    throw invalid('Each answer needs a choice or a note.');
+  if (choices.length === 0 && other === null && note === null) {
+    throw invalid('Each answer needs a choice, an answer or a note.');
   }
-  return { question, choice, note };
+  return { question, choices, other, note };
 };
 
 const ATTEMPT = /^[A-Za-z0-9_-]{8,64}$/;
@@ -134,21 +159,60 @@ const isBusy = (response: Response) =>
 
 const BUSY = 'GitHub is busy right now. Try again in a minute.';
 
+const indent = (value: string) => defang(value).replace(/\n/g, '\n  ');
+
+const toAnswerText = ({ choices, other }: AnswerItem) =>
+  [
+    ...choices.map(defang),
+    ...(other === null
+      ? []
+      : [choices.length > 0 ? `Other: ${indent(other)}` : indent(other)]),
+  ].join('; ');
+
 const toCommentBody = (items: AnswerItem[], marker: string) => {
-  const lines = items.flatMap(({ question, choice, note }) => {
-    const first =
-      choice !== null
-        ? `- **${defang(question)}** ${defang(choice)}`
-        : `- **${defang(question)}**${note !== null ? ' Note: ' + defang(note).replace(/\n/g, '\n  ') : ''}`;
-    const second =
-      choice !== null && note !== null
-        ? [`  Note: ${defang(note).replace(/\n/g, '\n  ')}`]
-        : [];
-    return [first, ...second];
+  const lines = items.flatMap((item) => {
+    const answer = toAnswerText(item);
+    const heading = `- **${defang(item.question)}**`;
+    if (answer === '') {
+      return [`${heading} ${item.note === null ? '' : indent(item.note)}`];
+    }
+    return [
+      `${heading} ${answer}`,
+      ...(item.note === null ? [] : [`  Note: ${indent(item.note)}`]),
+    ];
   });
   return [marker, '**Answers from the admin dashboard**', '', ...lines].join(
     '\n',
   );
+};
+
+const TOKEN_PAGE = 'https://github.com/settings/personal-access-tokens';
+
+// A fine-grained token refused for a missing permission names what it needs in this header.
+const toRefusal = async (response: Response, action: string) => {
+  const needed = response.headers.get('x-accepted-github-permissions');
+  const body = await readJson(response);
+  logger.warn('answerPipelineQuestions: token refused', {
+    status: response.status,
+    needed,
+    message: typeof body?.message === 'string' ? body.message : null,
+  });
+  if (response.status === 401) {
+    return 'GitHub says the token has expired or was revoked. Run npm run pipeline:secrets -- token to make a new one.';
+  }
+  const permissions = (needed ?? '')
+    .split(/[;,]/)
+    .map((pair) => pair.trim().split('='))
+    .filter(([name, level]) => name && level)
+    .map(
+      ([name, level]) =>
+        `${name.replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase())}: ${level === 'write' ? 'Read and write' : 'Read-only'}`,
+    );
+  const fix =
+    permissions.length > 0
+      ? `Give it ${Array.from(new Set(permissions)).join(' and ')}`
+      : 'Give it Pull requests: Read and write and Issues: Read and write';
+  return `The token can't ${action}. ${fix} on ${TOKEN_PAGE} (edit the Pipeline answers token; no new token needed), then send again.`;
 };
 
 const githubFetch = (token: string, path: string, init?: RequestInit) =>
@@ -226,7 +290,7 @@ const postAnswers = async (
       if (isBusy(pull)) return fail(BUSY);
       return fail(
         pull.status === 401 || pull.status === 403
-          ? "GitHub refused the token, or it has expired. Run npm run pipeline:secrets -- token again."
+          ? await toRefusal(pull, 'read this pull request')
           : "Couldn't reach that pull request.",
       );
     }
@@ -263,11 +327,11 @@ const postAnswers = async (
     if (!comment.ok) {
       logger.warn('answerPipelineQuestions: post failed', comment.status);
       if (isBusy(comment)) return fail(BUSY);
-      return fail(
-        comment.status === 401 || comment.status === 403
-          ? "The token can't comment here, or it has expired. Run npm run pipeline:secrets -- token again."
-          : "Couldn't post the comment.",
-      );
+      if (comment.status === 401 || comment.status === 403) {
+        readSecret.forget('PIPELINE_GITHUB_TOKEN');
+        return fail(await toRefusal(comment, 'comment on pull requests'));
+      }
+      return fail("Couldn't post the comment.");
     }
     const posted = await readJson(comment);
     const createdAt = Date.parse(String(posted?.created_at));

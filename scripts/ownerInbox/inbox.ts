@@ -47,6 +47,8 @@ export interface OwnerItem {
   text: string;
   /** The options on the lines indented under it, each with its words and its screenshots, so the question and the screens it is about sit together. */
   options: { label: string; images: string[] }[];
+  /** Marked `(pick any)`: the owner may pick several options. */
+  isMulti: boolean;
 }
 
 const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;
@@ -140,11 +142,14 @@ export const toPlain = (text: string) =>
     .replace(/>/g, '&gt;')
     .replace(/@(?=\w)/g, '@\u200b');
 
+const PICK_ANY = /\s*\(pick any\)/i;
+
 const bullet = (line: string) =>
   toPlain(
     line
       .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
       .replace(/\s*\(who:[^)]*\)/i, '')
+      .replace(PICK_ANY, '')
       .trim(),
   );
 
@@ -179,6 +184,7 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
       {
         text: bullet(line),
         options: nested.flatMap(toOption).slice(0, MAX_OPTIONS),
+        isMulti: PICK_ANY.test(line),
       },
     ];
   });

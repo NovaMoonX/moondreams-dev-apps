@@ -4,7 +4,9 @@ import { functions } from '@lib/firebase/config';
 
 export interface PipelineAnswerItem {
   question: string;
-  choice: string | null;
+  choices: string[];
+  /** What the owner typed after picking Other. */
+  other: string | null;
   note: string | null;
 }
 

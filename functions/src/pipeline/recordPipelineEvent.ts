@@ -77,6 +77,7 @@ const toStatus = (value: unknown) => {
         label: text(option.label),
         images: httpsUrls(option.images),
       })),
+      isMulti: item.isMulti === true,
     })),
     goodToKnow: texts(value.goodToKnow),
     screenshots: httpsUrls(value.screenshots),

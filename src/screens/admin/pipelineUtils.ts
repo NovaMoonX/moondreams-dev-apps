@@ -23,6 +23,8 @@ export interface PipelinePr extends Omit<PipelineInboxPr, 'url'> {
 export interface PipelineOption {
   label: string;
   images: string[];
+  /** Written "(Recommended)" by the session; the words are taken off the label. */
+  isRecommended: boolean;
 }
 
 export interface PipelineOwnerEntryItem {
@@ -33,6 +35,7 @@ export interface PipelineOwnerEntryItem {
   statusAt: number;
   text: string;
   options: PipelineOption[];
+  isMulti: boolean;
 }
 
 export interface GalleryItem {
@@ -116,6 +119,8 @@ const toSafePr = (pr: PipelineInboxPr): PipelinePr => ({
   url: toHttps(pr.url),
 });
 
+const RECOMMENDED = /\s*\(recommended\)/i;
+
 const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
   prs.flatMap((pr) =>
     (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => ({
@@ -124,9 +129,11 @@ const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
       statusAt: pr.status?.updatedAt ?? 0,
       text: item.text,
       options: item.options.map((option) => ({
-        label: option.label,
+        label: option.label.replace(RECOMMENDED, '').trim(),
         images: onlyHttps(option.images),
+        isRecommended: RECOMMENDED.test(option.label),
       })),
+      isMulti: item.isMulti === true,
     })),
   );
 
@@ -275,6 +282,9 @@ function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
   };
 }
 
+/** A question; a reply to 🚩 lines when no question was asked; or feedback beside the questions, tied to none of them. */
+export type AnswerSlotKind = 'question' | 'reply' | 'feedback';
+
 export interface AnswerSlot {
   id: string;
   prNumber: number;
@@ -284,37 +294,51 @@ export interface AnswerSlot {
   /** The question as the owner reads it, links and all. */
   text: string;
   options: PipelineOption[];
-  /** No question was asked: a note answers the 🚩 lines as a whole. */
-  isReply: boolean;
+  isMulti: boolean;
+  kind: AnswerSlotKind;
 }
 
-/** What the owner can answer on an entry: each question, or one reply on the first pull request when only 🚩 lines were raised. */
+/** What the owner can answer on an entry: each question plus one box for anything else, or one reply on the first pull request when only 🚩 lines were raised. */
 export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
-  if (entry.ownerItems.length > 0) {
-    return entry.ownerItems.map((item) => ({
-      id: item.id,
-      prNumber: item.prNumber,
-      statusAt: item.statusAt,
-      question: stripLinks(item.text).slice(0, 500),
-      text: item.text,
-      options: item.options,
-      isReply: false,
-    }));
-  }
   const [pr] = entry.prs;
+  const toFreeSlot = (
+    target: PipelinePr,
+    kind: AnswerSlotKind,
+  ): AnswerSlot => ({
+    id: `${target.number}:${kind}`,
+    prNumber: target.number,
+    statusAt: target.status?.updatedAt ?? 0,
+    question: kind === 'reply' ? 'Reply to what was raised' : 'Anything else',
+    text: kind === 'reply' ? `Reply on #${target.number}` : 'Anything else?',
+    options: [],
+    isMulti: false,
+    kind,
+  });
+  if (entry.ownerItems.length > 0) {
+    const questions = entry.ownerItems.map(
+      (item): AnswerSlot => ({
+        id: item.id,
+        prNumber: item.prNumber,
+        statusAt: item.statusAt,
+        question: stripLinks(item.text).slice(0, 500),
+        text: item.text,
+        options: item.options,
+        isMulti: item.isMulti,
+        kind: 'question',
+      }),
+    );
+    const target =
+      entry.prs.find((candidate) => candidate.number === questions[0].prNumber) ??
+      pr;
+    return target ? [...questions, toFreeSlot(target, 'feedback')] : questions;
+  }
   if (!pr || entry.raisedHands.length === 0) return [];
-  return [
-    {
-      id: `${pr.number}:reply`,
-      prNumber: pr.number,
-      statusAt: pr.status?.updatedAt ?? 0,
-      question: 'Reply to what was raised',
-      text: `Reply on #${pr.number}`,
-      options: [],
-      isReply: true,
-    },
-  ];
+  return [toFreeSlot(pr, 'reply')];
 }
+
+/** The slots that ask something of the owner, leaving out the optional feedback box. */
+export const getAskedSlots = (slots: AnswerSlot[]) =>
+  slots.filter((slot) => slot.kind !== 'feedback');
 
 /** A pull request's failure goes under its last question only, once. */
 export const getPrError = (

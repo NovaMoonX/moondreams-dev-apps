@@ -15,6 +15,8 @@ export interface PipelineSession {
 export interface PipelineOwnerItem {
   text: string;
   options: { label: string; images: string[] }[];
+  /** Read with `=== true`: documents written before multi-select questions lack it. */
+  isMulti: boolean;
 }
 
 export interface PipelineInboxStatus {

@@ -15,7 +15,9 @@ import {
 } from './pipelineUtils';
 
 export interface AnswerDraft {
-  choice: string | null;
+  choices: string[];
+  /** Null until Other is picked; then what the owner typed for it. */
+  other: string | null;
   note: string;
 }
 
@@ -24,16 +26,20 @@ export interface SentPr {
   url: string | null;
 }
 
-const EMPTY: AnswerDraft = { choice: null, note: '' };
+const EMPTY: AnswerDraft = { choices: [], other: null, note: '' };
 
 export const getChoiceText = (label: string) => stripLinks(label).slice(0, 300);
 
 const isAnswered = (draft: AnswerDraft | undefined) =>
-  draft !== undefined && (draft.choice !== null || draft.note.trim() !== '');
+  draft !== undefined &&
+  (draft.choices.length > 0 ||
+    (draft.other ?? '').trim() !== '' ||
+    draft.note.trim() !== '');
 
 const toItem = (slot: AnswerSlot, draft: AnswerDraft) => ({
   question: slot.question,
-  choice: draft.choice,
+  choices: draft.choices,
+  other: (draft.other ?? '').trim() === '' ? null : (draft.other ?? '').trim(),
   note: draft.note.trim() === '' ? null : draft.note.trim(),
 });
 
@@ -177,7 +183,9 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     isNotSetUp,
     isSent,
     getDraft,
-    setChoice: (id: string, choice: string | null) => setDraft(id, { choice }),
+    setChoices: (id: string, choices: string[], other: string | null) =>
+      setDraft(id, { choices, other }),
+    setOther: (id: string, other: string) => setDraft(id, { other }),
     setNote: (id: string, note: string) => setDraft(id, { note }),
     getReadyCount: (scope: AnswerSlot[] = slots) => getReady(scope).length,
     clear: () => {
