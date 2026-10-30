@@ -21,6 +21,7 @@ import {
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 function EnvelopesScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -33,7 +34,9 @@ function EnvelopesScreen() {
   );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
+  const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
+  const isRequested = addRequest === 'envelope';
   const [query, setQuery] = useState('');
 
   const hasSearch = envelopes.length >= RUNWAY_SEARCH_THRESHOLD;
@@ -97,12 +100,15 @@ function EnvelopesScreen() {
         icon={<Wallet className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
-      {formKey !== null && (
+      {(formKey !== null || isRequested) && (
         <EnvelopeForm
-          key={formKey}
+          key={formKey ?? 'requested'}
           isOpen
           title='Envelope'
-          onClose={() => setFormKey(null)}
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
         />
       )}
     </div>

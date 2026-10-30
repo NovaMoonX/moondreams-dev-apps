@@ -120,6 +120,47 @@ export const SEALED_SCHEMA_VERSION = 1;
 export const FORM_DRAFT_PREFIX = 'runway:';
 declareSealedFormDrafts(FORM_DRAFT_PREFIX);
 
+/** The forms a kept draft can reopen from Home, keyed by the draft's full key; edit, pay-card and starting-amounts drafts are not offered. */
+export const DRAFT_PICK_UP_KINDS = [
+  'bill',
+  'expense',
+  'envelope',
+  'goal',
+  'income',
+  'expectedIncome',
+  'card',
+  'purchase',
+] as const;
+
+export const DRAFT_PICK_UP_KEYS: Record<
+  string,
+  (typeof DRAFT_PICK_UP_KINDS)[number]
+> = {
+  [`${FORM_DRAFT_PREFIX}bill:new`]: 'bill',
+  [`${FORM_DRAFT_PREFIX}expense:new`]: 'expense',
+  [`${FORM_DRAFT_PREFIX}envelope:new`]: 'envelope',
+  [`${FORM_DRAFT_PREFIX}goal:new`]: 'goal',
+  [`${FORM_DRAFT_PREFIX}income:new:any`]: 'income',
+  [`${FORM_DRAFT_PREFIX}income:new:once`]: 'expectedIncome',
+  [`${FORM_DRAFT_PREFIX}card:new`]: 'card',
+  [`${FORM_DRAFT_PREFIX}purchase:new`]: 'purchase',
+};
+
+export const DRAFT_PICK_UP_WORDS = {
+  title: (noun: string) => `Pick up your unsaved ${noun}?`,
+  dismiss: 'Not now',
+  nouns: {
+    bill: 'bill',
+    expense: 'expense',
+    envelope: 'envelope',
+    goal: 'goal',
+    income: 'income',
+    expectedIncome: 'income',
+    card: 'card',
+    purchase: 'purchase',
+  },
+} as const;
+
 export const DEFAULT_CURRENCY_CODE = 'USD';
 
 export const ITEM_KINDS = [

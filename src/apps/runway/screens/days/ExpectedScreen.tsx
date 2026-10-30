@@ -14,12 +14,13 @@ import IncomeForm from '@apps/runway/forms/IncomeForm';
 type ExpectedKind = (typeof EXPECTED_KINDS)[number];
 
 interface ExpectedScreenProps {
+  initialKind?: ExpectedKind | null;
   onClose: () => void;
 }
 
 /** Reached from "Add expected" on Days: money coming in or an expense coming up, asked first as two large choices because it decides the questions after it. */
-function ExpectedScreen({ onClose }: ExpectedScreenProps) {
-  const [kind, setKind] = useState<ExpectedKind | null>(null);
+function ExpectedScreen({ initialKind = null, onClose }: ExpectedScreenProps) {
+  const [kind, setKind] = useState<ExpectedKind | null>(initialKind);
 
   if (kind === 'income') {
     return (

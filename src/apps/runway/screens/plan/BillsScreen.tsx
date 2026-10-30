@@ -35,6 +35,7 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 const ROWS_PER_CHUNK = 12;
 const ESTIMATED_ROW_HEIGHT = 69;
@@ -52,7 +53,9 @@ function BillsScreen() {
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);
+  const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
+  const isRequested = addRequest === 'bill';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [openBillId, setOpenBillId] = useState<string | null>(null);
@@ -295,12 +298,15 @@ function BillsScreen() {
           onClose={() => setOpenBillId(null)}
         />
       )}
-      {formKey !== null && (
+      {(formKey !== null || isRequested) && (
         <BillForm
-          key={formKey}
+          key={formKey ?? 'requested'}
           isOpen
           title='Bill'
-          onClose={() => setFormKey(null)}
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
         />
       )}
     </div>

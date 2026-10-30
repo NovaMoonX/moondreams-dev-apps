@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   CHANGE_LOG_SPANS,
+  DRAFT_PICK_UP_KINDS,
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
   DEFAULT_SPEND_PERIOD,
@@ -37,6 +38,12 @@ export function useRunwayUrlState() {
     'section',
     parseAsStringLiteral(PLAN_SECTIONS),
   );
+
+  const [requestedAdd, setRequestedAdd] = useQueryState(
+    'add',
+    parseAsStringLiteral(DRAFT_PICK_UP_KINDS),
+  );
+  const clearAdd = () => setRequestedAdd(null, { history: 'replace' });
 
   const [requestedDay, setRequestedDay] = useQueryState('day', parseAsString);
 
@@ -253,6 +260,10 @@ export function useRunwayUrlState() {
 
   return {
     activeTab,
+    addRequest: requestedAdd,
+    requestAdd: (kind: (typeof DRAFT_PICK_UP_KINDS)[number]) =>
+      setRequestedAdd(kind, { history: 'replace' }),
+    clearAdd,
     view: requestedView,
     openView,
     closeView,

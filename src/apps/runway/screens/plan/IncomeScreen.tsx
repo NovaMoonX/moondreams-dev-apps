@@ -12,10 +12,7 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import {
-  ITEM_SHEET_R2_WORDS,
-  SCHEDULE_LABELS,
-} from '@apps/runway/constants';
+import { ITEM_SHEET_R2_WORDS, SCHEDULE_LABELS } from '@apps/runway/constants';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
@@ -36,6 +33,7 @@ import type {
   SourceSealed,
   Stance,
 } from '@apps/runway/types';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 const MAX_SHOWN_NAMES = 3;
 
@@ -192,7 +190,9 @@ function IncomeScreen() {
   const goals = useAppSelector((state) => selectGoals(state, today));
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
+  const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
+  const isRequested = addRequest === 'income';
   const namesOf = (pairings: readonly Pairing[] | undefined) =>
     (pairings ?? []).flatMap((pairing) => {
       const target = [...envelopes, ...bills, ...goals].find(
@@ -250,22 +250,23 @@ function IncomeScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader
-        title='Income'
-      />
+      <SectionHeader title='Income' />
       {getBody()}
       <FloatingAction
         label='Add income'
         icon={<Banknote className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
-      {formKey !== null && (
+      {(formKey !== null || isRequested) && (
         <IncomeForm
-          key={formKey}
+          key={formKey ?? 'requested'}
           isOpen
           title='Income'
           defaultFrequency={null}
-          onClose={() => setFormKey(null)}
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
         />
       )}
     </div>
