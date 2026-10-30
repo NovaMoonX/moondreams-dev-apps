@@ -467,7 +467,7 @@ input[type="date"][data-empty]:not(:focus)::-webkit-datetime-edit {
   opacity: 0;
 }
 
-/* A press and hold is under way (useLongPress): no text selection or callout anywhere until the finger lifts. */
+/* A press and hold is under way: no text selection or callout anywhere until the finger lifts. */
 html[data-pressing],
 html[data-pressing] * {
   -webkit-user-select: none !important;
