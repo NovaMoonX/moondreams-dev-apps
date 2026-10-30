@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import HelpTip from '@/components/HelpTip';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -10,12 +11,14 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import {
   useQuestionFlow,
   type QuestionControls,
   type QuestionStep,
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
+import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -28,6 +31,7 @@ import {
   CHANGE_WORDS,
   BILL_QUICK_PICKS,
   CARD_WORDS,
+  FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
@@ -43,7 +47,24 @@ import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
+import {
+  isAmountDraft,
+  isFlag,
+  isNullableOneOf,
+  isNullableText,
+  isOneOf,
+  isPickOrCreate,
+  isText,
+  isTextList,
+  keptChangeChecks,
+  readDraftFields,
+  type KeptChange,
+} from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
+import {
+  withStartOver,
+  type StartOverProps,
+} from '@apps/runway/forms/withStartOver';
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -114,6 +135,37 @@ interface BillFormData {
   /** The card it is usually charged to; null for cash or debit. */
   paidByCardId: string | null;
 }
+
+interface BillDraft extends KeptChange {
+  formData: BillFormData;
+  isPriorityChosen: boolean;
+}
+
+const parseBillDraft = (stored: unknown): BillDraft | null => {
+  const draft = readDraftFields<BillDraft>(stored, {
+    formData: () => true,
+    isPriorityChosen: isFlag,
+    ...keptChangeChecks,
+  });
+  const formData = draft
+    ? readDraftFields<BillFormData>(draft.formData, {
+        name: isText,
+        amount: isAmountDraft,
+        priority: isOneOf(PRIORITIES),
+        startDate: isText,
+        frequency: isNullableOneOf(BILL_FREQUENCIES),
+        endKind: isOneOf(INCOME_ENDINGS),
+        endDate: isText,
+        endCount: isText,
+        funding: isOneOf(BILL_FUNDINGS),
+        dayKeys: isTextList,
+        emoji: isNullableText,
+        group: isPickOrCreate,
+        paidByCardId: isNullableText,
+      })
+    : null;
+  return draft && formData ? { ...draft, formData } : null;
+};
 
 interface BillFormProps {
   isOpen: boolean;
@@ -279,7 +331,8 @@ const getEditingData = (
   };
 };
 
-function BillForm({
+function BillFormBody({
+  onStartOver,
   isOpen,
   onClose,
   onCancel,
@@ -290,7 +343,7 @@ function BillForm({
   openStep = null,
   draft,
   presetGroupId,
-}: BillFormProps) {
+}: BillFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
@@ -304,7 +357,7 @@ function BillForm({
   }));
   const allCards = useAppSelector(selectAllCards);
   const isTracking = useAppSelector(selectLevel) === 'track';
-  const [formData, setFormData] = useState<BillFormData>(() =>
+  const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial
       ? getEditingData(
           (editing?.payload ?? draft?.initial) as BillSealed,
@@ -326,10 +379,23 @@ function BillForm({
           paidByCardId: null,
         },
   );
-  const [isPriorityChosen, setIsPriorityChosen] = useState(
-    editing !== undefined || draft !== undefined,
+  const startsChosen = editing !== undefined || draft !== undefined;
+  const draftKey = draft
+    ? null
+    : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
+  const kept = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseBillDraft,
+  });
+  const [formData, setFormData] = useState<BillFormData>(
+    kept.restored?.formData ?? startData,
   );
-  const [startData] = useState(formData);
+  const [isPriorityChosen, setIsPriorityChosen] = useState(
+    kept.restored?.isPriorityChosen ?? startsChosen,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<BillFormData>) =>
@@ -729,6 +795,7 @@ function BillForm({
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
+    foldAnswered: kept.restored !== null,
     initialOpenId: draft?.openStep ?? null,
   });
 
@@ -801,12 +868,33 @@ function BillForm({
     presetDayKey,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
+    initialNote: kept.restored?.note,
+    initialFrom: kept.restored?.from,
   });
   const editBlocker = flow.getBlocker(blocker);
-  const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) ||
+  const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
+  const keptValue = useMemo(
+    () => ({ formData, isPriorityChosen, note: flow.note, from: flow.from }),
+    [formData, isPriorityChosen, flow.note, flow.from],
+  );
+  useKeepFormDraft({
+    isRestored: kept.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: keptValue,
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(startData) ||
+      isPriorityChosen !== startsChosen ||
+      isChangeDirty,
+  });
+  const startOver = () => {
+    if (user && draftKey) clearFormDraft(user.uid, draftKey);
+    onStartOver();
+  };
   const requestClose = useDiscardGuard({
     isDirty,
     onClose: onCancel ?? onClose,
@@ -872,6 +960,12 @@ function BillForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
+            {kept.isNoticeShown && (
+              <DraftRestoredNotice
+                onStartOver={startOver}
+                onDismiss={kept.hideNotice}
+              />
+            )}
             {isQuick && quickStep ? (
               <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
             ) : (
@@ -934,5 +1028,7 @@ function BillForm({
     </FormSheet>
   );
 }
+
+const BillForm = withStartOver(BillFormBody);
 
 export default BillForm;

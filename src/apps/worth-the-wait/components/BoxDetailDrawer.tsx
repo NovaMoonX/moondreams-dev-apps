@@ -6,12 +6,16 @@ import {
   Drawer,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { CheckCircled, DeepRing } from '@moondreamsdev/dreamer-ui/symbols';
 import { useBoxContext } from '../context/boxContext';
 import { useWorthTheWait } from '../context/worthTheWaitContext';
+import { FORM_DRAFT_PREFIX } from '../security';
 import type { Item } from '../types';
 import { getWasRecentlyRevealed } from '../utils/itemHelpers';
 import ItemCard from './ItemCard';
@@ -49,8 +53,22 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
   }, [items]);
 
   const [visibleItemIds, setVisibleItemIds] = useState(new Set<string>());
-  const [draftItemContent, setDraftItemContent] = useState('');
+  const draftKey = `${FORM_DRAFT_PREFIX}item:${box.id}`;
+  const draft = useFormDraft({
+    key: draftKey,
+    base: null,
+    parse: (stored) => (typeof stored === 'string' ? stored : null),
+  });
+  const [draftItemContent, setDraftItemContent] = useState(draft.restored ?? '');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const forgetDraft = useKeepFormDraft({
+    isRestored: draft.restored !== null,
+    key: draftKey,
+    base: null,
+    value: draftItemContent,
+    isDirty: editingItemId === null && draftItemContent.trim() !== '',
+    keepOnUnmount: true,
+  });
   const [showRecentlyRevealedItems, setShowRecentlyRevealedItems] =
     useState(itemsDisclosureOpen);
   const itemTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -181,10 +199,28 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
     setDraftItemContent('');
   };
 
+  const typedText = draftItemContent.trim();
+  const requestClose = useDiscardGuard({
+    isDirty:
+      typedText !== '' &&
+      typedText !== (itemsById[editingItemId ?? '']?.content.trim() ?? ''),
+    onClose: () => {
+      forgetDraft();
+      onClose();
+    },
+    title: 'Discard this item?',
+    message: "What you typed hasn't been added to the box.",
+  });
+
+  const isRestored = draft.restored !== null;
+  useEffect(() => {
+    if (isRestored) itemTextareaRef.current?.scrollIntoView({ block: 'center' });
+  }, [isRestored]);
+
   return (
     <Drawer
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={
         box ? (
           <div className='flex items-center gap-3 pb-2'>
@@ -356,6 +392,17 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
           </div>
 
           <div className='border-border border-t pt-4'>
+            {draft.isNoticeShown && (
+              <div className='mb-3'>
+                <DraftRestoredNotice
+                  onStartOver={() => {
+                    setDraftItemContent('');
+                    draft.hideNotice();
+                  }}
+                  onDismiss={draft.hideNotice}
+                />
+              </div>
+            )}
             <ItemForm
               textareaRef={itemTextareaRef}
               value={draftItemContent}

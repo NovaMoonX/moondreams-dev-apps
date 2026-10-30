@@ -10,7 +10,10 @@ import {
 import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
+import { FORM_DRAFT_PREFIX } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { createDraftSealer } from '@apps/runway/security';
 import { ensurePlan } from '@apps/runway/store/actions/planActions';
 import {
   startItemsListener,
@@ -94,6 +97,11 @@ export function useRunwaySync(uid: string | null, attempt: number) {
 
     getRunwayEncryption(uid)
       .then(async (encryption) => {
+        void unlockSealedFormDrafts(
+          uid,
+          FORM_DRAFT_PREFIX,
+          createDraftSealer(encryption),
+        );
         await ensurePlan(uid, encryption);
         if (!run.isCurrent) return;
         dispatch(setLoadDay(todayAsUtcDate()));

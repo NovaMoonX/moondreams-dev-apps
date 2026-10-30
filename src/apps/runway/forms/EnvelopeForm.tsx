@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -12,17 +13,20 @@ import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import {
   useQuestionFlow,
   type QuestionControls,
   type QuestionStep,
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
+import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   CHANGE_WORDS,
   ENVELOPE_QUICK_PICKS,
+  FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
@@ -33,7 +37,20 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { createEnvelope } from '@apps/runway/store/actions/itemActions';
+import {
+  fundingFieldChecks,
+  isNullableOneOf,
+  isNullableText,
+  isPickOrCreate,
+  isText,
+  readDraftFields,
+  readKeptWithChange,
+} from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
+import {
+  withStartOver,
+  type StartOverProps,
+} from '@apps/runway/forms/withStartOver';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
@@ -74,6 +91,18 @@ interface EnvelopeFormData extends FundingFormData {
   /** An existing group's id, `NEW_CHOICE` while naming one, or '' for none. */
   group: { choice: string; newText: string };
 }
+
+const parseEnvelopeDraftFields = (stored: unknown) =>
+  readDraftFields<EnvelopeFormData>(stored, {
+    ...fundingFieldChecks,
+    name: isText,
+    priority: isNullableOneOf(PRIORITIES),
+    emoji: isNullableText,
+    group: isPickOrCreate,
+  });
+
+const parseEnvelopeDraft = (stored: unknown) =>
+  readKeptWithChange(stored, parseEnvelopeDraftFields);
 
 interface EnvelopeFormProps {
   isOpen: boolean;
@@ -137,7 +166,8 @@ const getBlocker = (data: EnvelopeFormData, hasDays: boolean) => {
   return getFundingBlocker(data, hasDays);
 };
 
-function EnvelopeForm({
+function EnvelopeFormBody({
+  onStartOver,
   isOpen,
   onClose,
   onCancel,
@@ -147,7 +177,7 @@ function EnvelopeForm({
   openStep = null,
   draft,
   presetGroupId,
-}: EnvelopeFormProps) {
+}: EnvelopeFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
@@ -159,7 +189,7 @@ function EnvelopeForm({
     value: item.id,
     label: version.payload.name,
   }));
-  const [formData, setFormData] = useState<EnvelopeFormData>(() =>
+  const [startData] = useState<EnvelopeFormData>(() =>
     editing
       ? getEditingData(editing.payload)
       : draft?.initial
@@ -172,7 +202,19 @@ function EnvelopeForm({
   const [isPriorityChosen, setIsPriorityChosen] = useState(
     editing !== undefined || draft !== undefined,
   );
-  const [startData] = useState(formData);
+  const draftKey = draft
+    ? null
+    : `${FORM_DRAFT_PREFIX}envelope:${editing?.itemId ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? startData : null;
+  const kept = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseEnvelopeDraft,
+  });
+  const [formData, setFormData] = useState<EnvelopeFormData>(
+    kept.restored?.formData ?? startData,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<EnvelopeFormData>) =>
@@ -328,6 +370,7 @@ function EnvelopeForm({
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined || !!draft?.initial,
+    foldAnswered: kept.restored !== null,
     initialOpenId: draft?.openStep ?? null,
   });
 
@@ -365,12 +408,31 @@ function EnvelopeForm({
     presetDayKey,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
+    initialNote: kept.restored?.note,
+    initialFrom: kept.restored?.from,
   });
   const editBlocker = flow.getBlocker(blocker);
-  const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) ||
+  const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+  const isDirty =
+    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
+  const keptValue = useMemo(
+    () => ({ formData, note: flow.note, from: flow.from }),
+    [formData, flow.note, flow.from],
+  );
+  useKeepFormDraft({
+    isRestored: kept.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: keptValue,
+    isDirty:
+      JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty,
+  });
+  const startOver = () => {
+    if (user && draftKey) clearFormDraft(user.uid, draftKey);
+    onStartOver();
+  };
   const requestClose = useDiscardGuard({
     isDirty,
     onClose: onCancel ?? onClose,
@@ -436,6 +498,12 @@ function EnvelopeForm({
       >
         <ChangeFlowContext value={flowValue}>
           <div className='space-y-5'>
+            {kept.isNoticeShown && (
+              <DraftRestoredNotice
+                onStartOver={startOver}
+                onDismiss={kept.hideNotice}
+              />
+            )}
             {isQuick && quickStep ? (
               <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
             ) : (
@@ -498,5 +566,7 @@ function EnvelopeForm({
     </FormSheet>
   );
 }
+
+const EnvelopeForm = withStartOver(EnvelopeFormBody);
 
 export default EnvelopeForm;
