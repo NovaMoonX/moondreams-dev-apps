@@ -3,7 +3,11 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { getRegistryAppForPath, rememberAppLocation, SITE_VERSION } from '@/lib/app';
+import {
+  getRegistryAppForPath,
+  rememberAppLocation,
+  SITE_VERSION,
+} from '@/lib/app';
 import { DevAccountSwitcher } from '@components/DevAccountSwitcher';
 import { EmulatorStatus } from '@components/EmulatorStatus';
 import { useAuth } from '@hooks/useAuth';
@@ -68,7 +72,7 @@ function LocationSync() {
     }
   }, [user, location.pathname, location.search]);
 
-  // The hub's manifest (index.html) is the only one, so the site installs as a single app; each mini-app only gets its own tab icon and title.
+  // The hub's manifest (index.html) is the only one, so the site installs as a single app; each app only gets its own tab icon and title.
   useEffect(() => {
     const app = getRegistryAppForPath(location.pathname);
 
@@ -93,14 +97,21 @@ function Layout() {
   const isUpdateReady = useUpdateReady();
   const isBannerVisible = networkStatus !== null || isUpdateReady;
   const isHeaderHidden = useHideOnScroll();
-  const { key: locationKey } = useLocation();
+  const { key: locationKey, pathname } = useLocation();
+  const isSiteCanvas =
+    pathname === '/' ||
+    pathname === '/account' ||
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/');
   const [navOpenKey, setNavOpenKey] = useState<string | null>(null);
   // Tied to the location it was opened on, so Back or any navigation closes it.
   const isNavOpen = navOpenKey === locationKey;
   const swipeToOpen = useSwipeRight(() => setNavOpenKey(locationKey));
 
   useLayoutEffect(() => {
-    document.documentElement.dataset.siteHeader = isHeaderHidden ? 'hidden' : 'visible';
+    document.documentElement.dataset.siteHeader = isHeaderHidden
+      ? 'hidden'
+      : 'visible';
     document.documentElement.dataset.siteBanner = String(isBannerVisible);
   }, [isHeaderHidden, isBannerVisible]);
   useReminderToasts();
@@ -121,16 +132,22 @@ function Layout() {
       <div
         data-site-chrome=''
         className={join(
-          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 max-[380px]:gap-2 py-4 max-md:h-16 max-md:py-2 transition-[top] duration-300 max-md:pointer-events-auto max-md:bg-background/80 max-md:backdrop-blur md:absolute md:px-6',
+          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 max-[380px]:gap-2 max-md:pointer-events-auto max-md:h-16 max-md:py-2 max-md:backdrop-blur md:absolute md:px-6',
+          isSiteCanvas
+            ? 'max-md:bg-muted/80 dark:max-md:bg-background/80'
+            : 'max-md:bg-background/80',
           isBannerVisible ? 'top-9' : 'top-0',
-          isHeaderHidden && (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
+          isHeaderHidden &&
+            (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
         )}
         {...swipeToOpen}
       >
         <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
           <AppNavPanel
             isOpen={isNavOpen}
-            onOpenChange={(isOpen) => setNavOpenKey(isOpen ? locationKey : null)}
+            onOpenChange={(isOpen) =>
+              setNavOpenKey(isOpen ? locationKey : null)
+            }
           />
         </div>
 

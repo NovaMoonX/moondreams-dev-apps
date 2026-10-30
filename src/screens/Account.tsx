@@ -1,5 +1,6 @@
 import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Camera, Pencil, RefreshCw } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
@@ -12,11 +13,20 @@ import { useAuth } from '@/hooks/useAuth';
 import { resetFirestoreLocalData } from '@/lib/firebase/localData';
 import ChangePhotoModal from '@/ui/ChangePhotoModal';
 import DeviceAccountList from '@/ui/DeviceAccountList';
+import { CANVAS_CLASS, CARD_CLASS, SURFACE_CLASS } from '@/ui/siteSurface';
 import UserAvatar from '@/ui/UserAvatar';
 import { formatDate } from '@/utils/formatUtils';
 
 /** A row's one control as a quiet 40px icon, matching the trash icon on the accounts rows. */
-function RowIconButton({ label, onClick, children }: { label: string; onClick: () => void; children: ReactNode }) {
+function RowIconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <Button
       type='button'
@@ -34,8 +44,15 @@ function RowIconButton({ label, onClick, children }: { label: string; onClick: (
 
 /** The signed-in account's own page: profile, the accounts on this device, this device's saved data, and sign-out. */
 function Account() {
-  const { user, loading, logOut, updateDisplayName, isDisplayNameUpdating, rememberedAccounts, forgetAccount } =
-    useAuth();
+  const {
+    user,
+    loading,
+    logOut,
+    updateDisplayName,
+    isDisplayNameUpdating,
+    rememberedAccounts,
+    forgetAccount,
+  } = useAuth();
   const switchToAccount = useAccountSwitch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -48,7 +65,9 @@ function Account() {
   if (!user) return <Navigate to='/' replace />;
 
   const displayName = user.displayName ?? user.email ?? 'User';
-  const memberSince = user.metadata.creationTime ? formatDate(Date.parse(user.metadata.creationTime)) : null;
+  const memberSince = user.metadata.creationTime
+    ? formatDate(Date.parse(user.metadata.creationTime))
+    : null;
 
   const saveName = async () => {
     const nextName = nameDraft?.trim() ?? '';
@@ -57,7 +76,11 @@ function Account() {
       await updateDisplayName(nextName);
       setNameDraft(null);
     } catch {
-      addToast({ title: "Couldn't save your name", description: 'Check your connection and try again.', type: 'error' });
+      addToast({
+        title: "Couldn't save your name",
+        description: 'Check your connection and try again.',
+        type: 'error',
+      });
     }
   };
 
@@ -73,26 +96,51 @@ function Account() {
   };
 
   return (
-    <div className='page pt-20'>
+    <div className={join('page', CANVAS_CLASS, 'pt-20')}>
       <div className='mx-auto w-full max-w-xl space-y-6'>
-        <SubviewHeader title='Your account' onBack={() => (location.key === 'default' ? navigate('/') : navigate(-1))} />
+        <SubviewHeader
+          title='Your account'
+          onBack={() =>
+            location.key === 'default' ? navigate('/') : navigate(-1)
+          }
+        />
 
-        <div className='flex flex-col items-center gap-2 text-center'>
+        <div
+          className={join(
+            CARD_CLASS,
+            'flex flex-col items-center gap-2 text-center',
+          )}
+        >
           <UserAvatar user={user} size='lg' className='size-20! text-2xl' />
           <div className='min-w-0'>
-            <p className='text-foreground truncate text-xl font-semibold'>{displayName}</p>
-            <p className='text-muted-foreground truncate text-sm'>{user.email}</p>
-            {memberSince ? <p className='text-muted-foreground text-xs'>Member since {memberSince}</p> : null}
+            <p className='text-foreground truncate text-xl font-semibold'>
+              {displayName}
+            </p>
+            <p className='text-muted-foreground truncate text-sm'>
+              {user.email}
+            </p>
+            {memberSince ? (
+              <p className='text-muted-foreground text-xs'>
+                Member since {memberSince}
+              </p>
+            ) : null}
           </div>
         </div>
 
-        <SettingsGroup title='Profile' description='How you show up to the people you share apps with.'>
+        <SettingsGroup
+          isCard
+          title='Profile'
+          description='How you show up to the people you share apps with.'
+        >
           <SettingsRow
             icon='✏️'
             title='Name'
             description={displayName}
             control={
-              <RowIconButton label='Change your name' onClick={() => setNameDraft(user.displayName ?? '')}>
+              <RowIconButton
+                label='Change your name'
+                onClick={() => setNameDraft(user.displayName ?? '')}
+              >
                 <Pencil className='size-4' />
               </RowIconButton>
             }
@@ -102,7 +150,10 @@ function Account() {
             title='Photo'
             description='Shown across apps in place of your Google photo.'
             control={
-              <RowIconButton label='Change your photo' onClick={() => setIsPhotoOpen(true)}>
+              <RowIconButton
+                label='Change your photo'
+                onClick={() => setIsPhotoOpen(true)}
+              >
                 <Camera className='size-4' />
               </RowIconButton>
             }
@@ -116,7 +167,7 @@ function Account() {
           onForget={forgetAccount}
         />
 
-        <SettingsGroup title='This device'>
+        <SettingsGroup isCard title='This device'>
           <SettingsRow
             icon='🔄'
             title='Reset saved data'
@@ -129,25 +180,44 @@ function Account() {
           />
         </SettingsGroup>
 
-        <Button type='button' variant='secondary' rounded='full' className='w-full' onClick={() => void logOut()}>
+        <Button
+          type='button'
+          variant='outline'
+          rounded='full'
+          className={join(SURFACE_CLASS, 'w-full')}
+          onClick={() => void logOut()}
+        >
           Sign out
         </Button>
       </div>
 
-      {isPhotoOpen ? <ChangePhotoModal user={user} onClose={() => setIsPhotoOpen(false)} /> : null}
+      {isPhotoOpen ? (
+        <ChangePhotoModal user={user} onClose={() => setIsPhotoOpen(false)} />
+      ) : null}
 
       <Modal
         isOpen={nameDraft !== null}
         onClose={() => setNameDraft(null)}
         title='Change your name'
         actions={[
-          { label: 'Cancel', variant: 'secondary', onClick: () => setNameDraft(null), disabled: isDisplayNameUpdating },
+          {
+            label: 'Cancel',
+            variant: 'secondary',
+            onClick: () => setNameDraft(null),
+            disabled: isDisplayNameUpdating,
+          },
           { label: 'Save', onClick: saveName, loading: isDisplayNameUpdating },
         ]}
       >
         <div className='space-y-3'>
-          <p className='text-muted-foreground text-sm'>The name you want to show across apps.</p>
-          <Input value={nameDraft ?? ''} onChange={(event) => setNameDraft(event.target.value)} placeholder='Your name' />
+          <p className='text-muted-foreground text-sm'>
+            The name you want to show across apps.
+          </p>
+          <Input
+            value={nameDraft ?? ''}
+            onChange={(event) => setNameDraft(event.target.value)}
+            placeholder='Your name'
+          />
         </div>
       </Modal>
     </div>

@@ -53,4 +53,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          # A pull request runs its own branch's script, so only runs of the default branch's code get the key.
+          PIPELINE_KEY: ${{ github.event_name != 'pull_request' && secrets.PIPELINE_KEY || '' }}
         run: node scripts/ownerInbox/run.ts

@@ -4,6 +4,7 @@ import {
   INBOX_MARKER,
   buildInbox,
   findSessionLink,
+  parseGallery,
   groupSessions,
   parseStatus,
   summarizeCi,
@@ -88,6 +89,7 @@ assert.match(
         labels: [],
         ci: 'green',
         bodySessionUrl: null,
+        gallery: [],
         status: { ...asked, sessionUrl: 'https://claude.ai/code/session_q' },
       },
     ],
@@ -113,6 +115,7 @@ const pr = (
   labels: [],
   ci,
   bodySessionUrl: null,
+  gallery: [],
   status:
     body === null ? null : parseStatus(body, `2026-10-29T1${number}:00:00Z`),
 });
@@ -178,14 +181,17 @@ const fromBody = groupSessions([
   {
     ...pr(5, 'a', 'main', unmarked),
     bodySessionUrl: 'https://claude.ai/code/session_x',
+    gallery: [],
   },
   {
     ...pr(6, 'b', 'a', unmarked),
     bodySessionUrl: 'https://claude.ai/code/session_x',
+    gallery: [],
   },
   {
     ...pr(7, 'c', 'main', null),
     bodySessionUrl: 'https://claude.ai/code/session_y',
+    gallery: [],
   },
 ]);
 assert.deepEqual(
@@ -285,5 +291,76 @@ assert.deepEqual(
   ],
   'a markdown link keeps its words, a page link stays a link, trailing punctuation is not part of a URL, labels are escaped, and a blank line or a nested ask ends the options',
 );
+
+const gallery = parseGallery(`## Overview
+- a thing
+
+## Screenshots
+| | Before | After |
+|---|---|---|
+| 1 · Open the tab | ![](https://x.test/b1.png) | ![](https://x.test/a1.png) |
+| 2 · Answer a question | | ![](https://x.test/a2.png) |
+| Text only | nothing | here |
+
+A caption line
+![](https://x.test/c.png)
+![Named](https://x.test/d.png)
+
+<details><summary>Regression check</summary>
+
+## Not part of it
+![](https://x.test/z.png)
+`);
+assert.deepEqual(
+  gallery,
+  [
+    {
+      label: '1 · Open the tab',
+      images: [
+        { src: 'https://x.test/b1.png', role: 'before' },
+        { src: 'https://x.test/a1.png', role: 'after' },
+      ],
+    },
+    {
+      label: '2 · Answer a question',
+      images: [{ src: 'https://x.test/a2.png', role: 'after' }],
+    },
+    {
+      label: 'A caption line',
+      images: [{ src: 'https://x.test/c.png', role: null }],
+    },
+    { label: 'Named', images: [{ src: 'https://x.test/d.png', role: null }] },
+  ],
+  'every screenshot of the body section in order: table rows by column title, image lines by their alt or the line above, and nothing from after the next heading',
+);
+assert.deepEqual(parseGallery(null), [], 'no body, no gallery');
+const nameless = parseGallery(`## Screenshots
+| Answer all | Sheet (320) | Sent |
+|---|---|---|
+| ![](https://x.test/1.png) | ![](https://x.test/2.png) | ![](https://x.test/3.png) |
+
+### Phone
+<img src='https://x.test/(4).png'>
+| Phone \\| dark | Before | After |
+|---|---|---|
+| Phone \\| dark | ![](https://x.test/(5).png) | ![](https://x.test/6.png) |
+`);
+assert.deepEqual(
+  nameless.map((step) => [step.label, step.images.map((image) => image.src.split('/').pop())]),
+  [
+    ['Answer all', ['1.png']],
+    ['Sheet (320)', ['2.png']],
+    ['Sent', ['3.png']],
+    ['Phone', ['(4).png']],
+    ['Phone | dark', ['(5).png', '6.png']],
+  ],
+  'a row of only pictures keeps every picture, named by its column; a heading is not part of a label; an escaped pipe, parentheses in a URL and a single-quoted img all hold',
+);
+assert.deepEqual(
+  nameless[4].images.map((image) => image.role),
+  ['before', 'after'],
+  'an escaped pipe does not shift the columns',
+);
+assert.deepEqual(parseGallery('## Overview\n![](https://x.test/y.png)'), [], 'only the Screenshots section counts');
 
 console.log('owner inbox: ok');

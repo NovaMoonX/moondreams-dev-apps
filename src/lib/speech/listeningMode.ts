@@ -1,5 +1,5 @@
 /**
- * How a microphone is open, as a pure state machine any mini-app can drive with `useSpeechCommands`:
+ * How a microphone is open, as a pure state machine any app can drive with `useSpeechCommands`:
  * OFF (closed), WAITING (open, ignoring everything but a wake phrase), WINDOW (open for commands for a few seconds)
  * and LOCKED (open for commands until a fixed time, no phrase). The caller owns the clocks: it sends `WINDOW_ENDED`,
  * `WAIT_ENDED` and `LOCK_ENDED` when `getWaitEnd`, its window length and `lockEndsAt` say so, and turns the recognizer

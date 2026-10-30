@@ -1,5 +1,4 @@
 import AppLogo from '@/components/AppLogo';
-import SectionDivider from '@/components/SectionDivider';
 import { TabPanel, UnderlineTabs } from '@/components/UnderlineTabs';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
@@ -61,20 +60,29 @@ function AppDetail({
 
   if (isWide) {
     return (
-      <div className='max-w-3xl space-y-6'>
+      <div className='max-w-3xl space-y-8'>
         <div className='flex items-center gap-3'>
           <AppLogo appId={app.id} className='size-12 rounded-xl' />
           <div className='min-w-0'>
-            <h2 className='text-foreground text-2xl font-semibold'>{app.name}</h2>
-            <p className='text-muted-foreground text-sm'>/{app.path.replace(/^\//, '') || app.id}</p>
+            <h2 className='text-foreground text-2xl font-semibold'>
+              {app.name}
+            </h2>
+            <p className='text-muted-foreground text-sm'>
+              /{app.path.replace(/^\//, '') || app.id}
+            </p>
           </div>
         </div>
         <section className='space-y-4'>
-          <SectionDivider label='Usage' />
+          <h3 className='text-foreground text-lg font-semibold'>Usage</h3>
           {usage}
         </section>
         <section className='space-y-4'>
-          <SectionDivider label='Settings' trailing={isDirty ? <span className='text-muted-foreground text-xs'>unsaved</span> : null} />
+          <div className='flex items-baseline justify-between gap-3'>
+            <h3 className='text-foreground text-lg font-semibold'>Settings</h3>
+            {isDirty ? (
+              <span className='text-muted-foreground text-xs'>unsaved</span>
+            ) : null}
+          </div>
           {settings}
         </section>
       </div>
@@ -82,7 +90,7 @@ function AppDetail({
   }
 
   return (
-    <div className='space-y-4'>
+    <div className='space-y-6'>
       <UnderlineTabs
         value={section}
         onChange={onSectionChange}

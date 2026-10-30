@@ -4,7 +4,7 @@ import { db } from '@/lib/firebase/config';
 import type { Reminder } from '@/lib/notifications/types';
 import { createFirestoreCollectionListener } from '@/store/listeners/createFirestoreCollectionListener';
 
-/** Central, app-wide: every reminder targeting the signed-in user, across every mini-app. */
+/** Central, app-wide: every reminder targeting the signed-in user, across every app. */
 export function startRemindersListener(
   uid: string,
   onChange: (reminders: Reminder[]) => void,

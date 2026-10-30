@@ -376,7 +376,7 @@ call; typing itself is free because a session token ties the keystrokes to that 
 Picked places carry no photo: the Places Photo SKU is billed separately, and Google Maps
 pages only expose a place photo to allowlisted crawlers, so covers come from attached links'
 previews. Once stored, rendering never calls Google or the function again; a broken image
-just hides itself. These are app-agnostic, so other mini-apps can reuse them: the
+just hides itself. These are app-agnostic, so other apps can reuse them: the
 Places client lives at `src/lib/places/placesApi.ts`, the link-metadata client and the
 image component at `src/lib/linkMetadata/fetchLinkMetadata.ts` and
 `src/components/FallbackImage.tsx`, and the Cloud Function at
@@ -736,7 +736,7 @@ Defaults to driving as the common case, but genuine downtime between events (no 
 
 ## Client State Management (Redux Toolkit)
 
-- **Central vs. app-scoped**: if no earlier mini app has introduced `src/store/` yet, Waypoint's Phase 4 roadmap includes the one-time central store foundation issue. Otherwise, Waypoint builds directly on it.
+- **Central vs. app-scoped**: if no earlier app has introduced `src/store/` yet, Waypoint's Phase 4 roadmap includes the one-time central store foundation issue. Otherwise, Waypoint builds directly on it.
 - **Typed per-app state**: `WaypointState` composes `trip`, `expenses`, `personalExpenses`, `events`, `eventSuggestions`, `announcements`, `ideas`, `checklist`, `stays`, and `pendingRequests` sub-slices (no `album` slice — the shared album is just fields on the trip doc), exposed via a base `selectWaypoint(state)`.
 - **Member display info is never in Waypoint's own state.** `TripMember` only carries `uid`/`role`/`joinedAt`; any component rendering a member's name or avatar resolves it via the existing central `useUserInfo(uid)` hook.
 - **`resetAllState`**: dispatched on UID change, including via `DevAccountSwitcher`.

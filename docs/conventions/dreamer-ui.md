@@ -88,3 +88,4 @@ Some components use factory patterns for type-safe creation:
 ## Utilities
 
 - **join**: Import from `@moondreamsdev/dreamer-ui/utils` - Utility function for conditionally joining class names.
+- **A row that overrides a `Button`'s horizontal padding writes `px-N!`.** The library's own `px-4` wins over a plain `px-1` without any warning, so a row drawn for a 4px inset sat 12px off its card's heading (design review, the pipeline dashboard).

@@ -1,8 +1,9 @@
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 
-import HeaderIconButton from '@/components/HeaderIconButton';
 import { ADMIN_QUERY_KEY } from '@lib/admin/adminQueries';
+
+import HeaderIconButton from '@/components/HeaderIconButton';
 
 /** Re-reads everything the dashboard shows, since none of it is live. */
 function AdminRefreshButton() {
@@ -11,11 +12,14 @@ function AdminRefreshButton() {
 
   return (
     <HeaderIconButton
+      isQuiet
       icon={<RefreshCw className='size-4' />}
       label='Refresh members and usage'
       isLoading={isRefreshing}
       isDisabled={isRefreshing}
-      onClick={() => queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEY })}
+      onClick={() =>
+        queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEY })
+      }
     />
   );
 }

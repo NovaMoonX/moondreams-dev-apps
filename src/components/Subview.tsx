@@ -39,6 +39,23 @@ interface SubviewHeaderProps {
   isTitleWrapped?: boolean;
 }
 
+/** The round back chip every subview and site screen opens with, with a 40px tap area. */
+export function SubviewBackButton({ label = 'Back', onClick }: { label?: string; onClick: () => void }) {
+  return (
+    <Button
+      type='button'
+      variant='secondary'
+      size='icon'
+      rounded='full'
+      aria-label={label}
+      className="relative shrink-0 before:absolute before:-inset-1.5 before:content-['']"
+      onClick={onClick}
+    >
+      <ChevronLeft className='h-5 w-5' />
+    </Button>
+  );
+}
+
 /** The round back button and large title that open every subview; the larger type sets it apart from section subheaders. */
 export function SubviewHeader({
   title,
@@ -49,17 +66,7 @@ export function SubviewHeader({
 }: SubviewHeaderProps) {
   return (
     <div className={join('flex items-center gap-2', className)}>
-      <Button
-        type='button'
-        variant='secondary'
-        size='icon'
-        rounded='full'
-        aria-label='Back'
-        className="relative before:absolute before:-inset-1.5 before:content-['']"
-        onClick={onBack}
-      >
-        <ChevronLeft className='h-5 w-5' />
-      </Button>
+      <SubviewBackButton onClick={onBack} />
       <h1
         className={join(
           'min-w-0 flex-1 text-2xl font-semibold tracking-tight',
@@ -96,7 +103,7 @@ interface SubviewProps {
 }
 
 /**
- * A nested page that takes over a mini-app: it opens at the top, brings its own way back, and
+ * A nested page that takes over an app: it opens at the top, brings its own way back, and
  * closes on the browser's back gesture rather than leaving the page beneath it. It floats as a card on
  * a tint of the app's colour and hides the site header; the card's look is the `--subview-*` tokens, and its
  * unlayered CSS beats any Tailwind surface class in `className` (use it for width only).

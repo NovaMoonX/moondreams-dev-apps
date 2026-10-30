@@ -87,6 +87,16 @@ export interface PrStatus {
   updatedAt: string;
 }
 
+export interface GalleryImage {
+  src: string;
+  role: 'before' | 'after' | null;
+}
+
+export interface GalleryStep {
+  label: string;
+  images: GalleryImage[];
+}
+
 export interface InboxPr {
   number: number;
   title: string;
@@ -99,6 +109,7 @@ export interface InboxPr {
   /** The session link in the PR body's attribution, for PRs whose status comment predates the session marker. */
   bodySessionUrl: string | null;
   status: PrStatus | null;
+  gallery: GalleryStep[];
 }
 
 const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
@@ -186,6 +197,133 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     screenshots: screenshots ?? [],
     updatedAt,
   };
+}
+
+
+const MAX_STEPS = 30;
+const MAX_STEP_IMAGES = 3;
+const MAX_LABEL = 120;
+const MARKDOWN_IMAGE =
+  /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
+const HTML_IMAGE = /<img[^>]*\bsrc=(?:"([^"\s]+)"|'([^'\s]+)'|([^\s>"']+))/gi;
+const MARKUP_TAG = /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
+
+const toImageUrls = (cell: string) =>
+  [
+    ...[...cell.matchAll(MARKDOWN_IMAGE)].map((match) => ({
+      at: match.index ?? 0,
+      src: match[1],
+    })),
+    ...[...cell.matchAll(HTML_IMAGE)].map((match) => ({
+      at: match.index ?? 0,
+      src: match[1] ?? match[2] ?? match[3],
+    })),
+  ]
+    .filter((image) => image.src.startsWith('https://'))
+    .sort((a, b) => a.at - b.at)
+    .map((image) => image.src);
+
+const toImages = (cell: string, role: GalleryImage['role']): GalleryImage[] =>
+  toImageUrls(cell).map((src) => ({ src, role }));
+
+// Cut before escaping, so the cut never lands inside `&amp;`.
+const toLabel = (text: string) =>
+  toPlain(
+    text
+      .replace(MARKDOWN_IMAGE, '')
+      .replace(MARKUP_TAG, '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+      .replace(/^\s*#+\s*/, '')
+      .replace(/\*\*|__|`/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, MAX_LABEL),
+  );
+
+const toCells = (line: string) =>
+  line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/(?<!\\)\|$/, '')
+    .split(/(?<!\\)\|/)
+    .map((cell) => cell.trim().replace(/\\\|/g, '|'));
+
+const getRole = (heading: string): GalleryImage['role'] => {
+  const word = heading.toLowerCase();
+  if (word.includes('before')) return 'before';
+  if (word.includes('after')) return 'after';
+  return null;
+};
+
+const screenshotLines = (body: string) => {
+  const all = lines(body);
+  const start = all.findIndex((line) => /^##\s+Screenshots\b/i.test(line));
+  if (start === -1) return [];
+  const rest = all.slice(start + 1);
+  const end = rest.findIndex((line) => /^##\s/.test(line));
+  return end === -1 ? rest : rest.slice(0, end);
+};
+
+const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
+  const [first = '', ...rest] = cells;
+  if (toImageUrls(first).length === 0) {
+    const images = rest
+      .flatMap((cell, index) =>
+        toImages(cell, getRole(headings[index + 1] ?? '')),
+      )
+      .slice(0, MAX_STEP_IMAGES);
+    return images.length === 0
+      ? []
+      : [{ label: toLabel(first) || 'Screenshot', images }];
+  }
+  return cells.flatMap((cell, index) => {
+    const images = toImages(cell, getRole(headings[index] ?? ''));
+    return images.length === 0
+      ? []
+      : [
+          {
+            label: toLabel(headings[index] ?? '') || 'Screenshot',
+            images: images.slice(0, MAX_STEP_IMAGES),
+          },
+        ];
+  });
+};
+
+/** Every screenshot in a PR body's Screenshots section, in the order written. */
+export function parseGallery(body: string | null): GalleryStep[] {
+  const result = screenshotLines(body ?? '').reduce<{
+    steps: GalleryStep[];
+    headings: string[];
+    caption: string;
+  }>(
+    (acc, line) => {
+      if (line.trim().startsWith('|')) {
+        const cells = toCells(line);
+        if (cells.every((cell) => /^:?-{2,}:?$/.test(cell))) return acc;
+        if (acc.headings.length === 0) return { ...acc, headings: cells };
+        return {
+          ...acc,
+          steps: [...acc.steps, ...toRowSteps(cells, acc.headings)],
+        };
+      }
+      const images = toImages(line, null).slice(0, MAX_STEP_IMAGES);
+      if (images.length > 0) {
+        const alt = /!\[([^\]]*)\]/.exec(line)?.[1] ?? '';
+        return {
+          steps: [
+            ...acc.steps,
+            { label: toLabel(alt) || acc.caption || 'Screenshot', images },
+          ],
+          headings: [],
+          caption: '',
+        };
+      }
+      const words = toLabel(line);
+      return { ...acc, headings: [], caption: words || acc.caption };
+    },
+    { steps: [], headings: [], caption: '' },
+  );
+  return result.steps.slice(0, MAX_STEPS);
 }
 
 interface Session {
@@ -332,7 +470,14 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
     ]),
   );
   const allShots = session.prs.flatMap((pr) =>
-    (pr.status?.screenshots ?? []).map(
+    (pr.gallery.length > 0
+      ? pr.gallery.flatMap((step) =>
+          step.images
+            .filter((image) => image.role !== 'before')
+            .map((image) => image.src),
+        )
+      : (pr.status?.screenshots ?? [])
+    ).map(
       (src) =>
         `<a href="${pr.url}"><img src="${src}" width="120" alt="#${pr.number}"></a>`,
     ),

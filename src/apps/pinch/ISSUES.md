@@ -24,12 +24,12 @@ Every issue's Success Criteria end with the same two checks, written once here a
 **Context:** Read the registry comment at the top of `src/lib/app/app.registry.ts` (it lists what must stay in sync), `src/apps/pinch/README.md` (name, tagline, the 🧂 identity) and the root `README.md`'s "Current apps" and PWA sections. Pinch is a draft app, like the others.
 
 ### Description
-Make Pinch a real mini-app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, add Pinch to the root README's app list, in the format the list already uses (emoji, name, registry description).
+Make Pinch a real app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, add Pinch to the root README's app list, in the format the list already uses (emoji, name, registry description).
 
 ### Possible Approach
 1. Add the registry entry (`id: 'pinch'`, `name: 'Pinch'`, `path: '/pinch'`, a `createdAt` of today, and a one-sentence description in the same voice as the others) and widen `AppId` in `appCatalog.ts`.
 2. Create `Pinch.tsx` as a placeholder (a title and one muted line), exported as the default, and add the lazy route in `AppRoutes.tsx` following the A-List entry exactly (including `ProtectedRoute` if it uses it).
-3. Add no per-app manifest (the site installs as one app through `manifest-main.json`; each mini-app only gets its tab icon and title from its logo). Add the logo SVG (a salt-pinch mark in the orange accent) and the banner PNG (same dimensions as the other banners).
+3. Add no per-app manifest (the site installs as one app through `manifest-main.json`; each app only gets its tab icon and title from its logo). Add the logo SVG (a salt-pinch mark in the orange accent) and the banner PNG (same dimensions as the other banners).
 4. Add exactly one entry to `cloudflare-worker.js`'s app registry, copying A-List's shape without its `params`. Change nothing else in the file.
 5. Root `README.md`: add one line for Pinch, in registry order, with its emoji and registry description.
 6. Do not touch `src/apps/pinch` data code or `SITE_VERSION` beyond the standard bump.
@@ -66,7 +66,7 @@ Make Pinch a real mini-app that opens to a placeholder screen, so every later is
 - `.github/instructions/pinch.instructions.md` and `.claude/rules/pinch.md` (identical bodies)
 - `CLAUDE.md` / `.github/copilot-instructions.md` (a third-party assets and licences rule, if not already present)
 
-**Context:** Read `TECHNICAL.md`'s "Catalog (constants, not documents)", Theming and Component & File Architecture; `UX.md`'s shell diagram and the Kitchen tab; A-List's `BottomNav.tsx`, `a-list.css`, `useAListTheme` and `a-list.instructions.md` for shape; CLAUDE.md's "Designing a mini-app's look".
+**Context:** Read `TECHNICAL.md`'s "Catalog (constants, not documents)", Theming and Component & File Architecture; `UX.md`'s shell diagram and the Kitchen tab; A-List's `BottomNav.tsx`, `a-list.css`, `useAListTheme` and `a-list.instructions.md` for shape; CLAUDE.md's "Designing an app's look".
 
 ### Description
 Open Pinch to a three-tab shell: Calendar (left), Recipes (centre, raised) and Kitchen (right), in a warm orange-on-slate theme with light and dark modes. The Kitchen tab already works as a catalog browser: grouped by family, searchable, each ingredient with an icon and a drawer showing its nutrition per 100 g. Calendar and Recipes show friendly empty states.

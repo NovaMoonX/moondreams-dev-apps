@@ -13,7 +13,7 @@ const FINAL_ERROR_CODES = [
   'permission-denied',
 ];
 
-/** Notes that the signed-in member landed in `appId`. Call it from the mini-app's top-level page, so it only runs inside that app. */
+/** Notes that the signed-in member landed in `appId`. Call it from the app's top-level page, so it only runs inside that app. */
 export function useTrackAppUsage(appId: string, uid: string | null) {
   useEffect(() => {
     if (!uid) return;

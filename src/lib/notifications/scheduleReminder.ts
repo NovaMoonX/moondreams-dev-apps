@@ -24,7 +24,7 @@ export interface ScheduleReminderInput {
 
 const remindersCollectionRef = () => collection(db, 'reminders');
 
-/** Thin, app-agnostic helper any mini-app can call to schedule a push reminder. */
+/** Thin, app-agnostic helper any app can call to schedule a push reminder. */
 export async function scheduleReminder(input: ScheduleReminderInput): Promise<Reminder> {
   const reminderId = input.id ?? doc(remindersCollectionRef()).id;
 

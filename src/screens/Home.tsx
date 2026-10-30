@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import AppToggle from '@/components/AppToggle';
-import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
@@ -10,6 +11,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { APP_DESCRIPTION, APP_TITLE, getAppResumePath } from '@lib/app';
 import type { AppMetadata } from '@lib/types/appCatalog';
+import { CANVAS_CLASS, CARD_CLASS } from '@ui/siteSurface';
 
 import AppCard from './home/AppCard';
 import AppInfoDrawer from './home/AppInfoDrawer';
@@ -18,10 +20,14 @@ import RequestableApps from './home/RequestableApps';
 
 function Home() {
   const { user } = useAuth();
-  const { apps, requestableApps, loading, starredAppIds, setAppStarred } = useAppCatalog();
+  const { apps, requestableApps, loading, starredAppIds, setAppStarred } =
+    useAppCatalog();
   const navigate = useNavigate();
   const isWide = useMediaQuery().isAtLeast('sm');
-  const [isShowingDetails, setIsShowingDetails] = useLocalStoragePreference('home:show-app-details', false);
+  const [isShowingDetails, setIsShowingDetails] = useLocalStoragePreference(
+    'home:show-app-details',
+    false,
+  );
   const [infoAppId, setInfoAppId] = useState<string | null>(null);
   const isGrid = !isWide && !isShowingDetails;
   const infoApp = apps.find((app) => app.id === infoAppId) ?? null;
@@ -30,27 +36,38 @@ function Home() {
     starredApps.length > 0
       ? [
           { label: 'Starred', apps: starredApps },
-          { label: 'All apps', apps: apps.filter((app) => !starredAppIds.includes(app.id)) },
+          {
+            label: 'All apps',
+            apps: apps.filter((app) => !starredAppIds.includes(app.id)),
+          },
         ]
       : [{ label: null, apps }];
 
   // Starring only matters once there is something to put first.
-  const isHintShown = isGrid && user !== null && apps.length > 1 && starredApps.length === 0;
+  const isHintShown =
+    isGrid && user !== null && apps.length > 1 && starredApps.length === 0;
 
   const requestablePerson = user
-    ? { uid: user.uid, email: user.email ?? null, displayName: user.displayName ?? null }
+    ? {
+        uid: user.uid,
+        email: user.email ?? null,
+        displayName: user.displayName ?? null,
+      }
     : null;
 
-  const getHref = (app: AppMetadata) => getAppResumePath(user?.uid ?? null, app.id, app.path);
+  const getHref = (app: AppMetadata) =>
+    getAppResumePath(user?.uid ?? null, app.id, app.path);
   const toggleStar = (appId: string) =>
     setAppStarred(appId, !starredAppIds.includes(appId)).catch((error) =>
       console.error('Failed to star app:', error),
     );
 
   return (
-    <div className='page flex items-center justify-center'>
+    <div
+      className={join('page flex items-center justify-center', CANVAS_CLASS)}
+    >
       <div className='w-full max-w-4xl'>
-        <header className='mb-10 flex items-center justify-center'>
+        <header className='mb-10 flex items-center justify-center md:pt-6'>
           <div className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
             {APP_TITLE}
           </div>
@@ -71,7 +88,12 @@ function Home() {
           </div>
         ) : apps.length === 0 ? (
           <div className='mx-auto mt-12 max-w-2xl space-y-8 text-left'>
-            <div className='border-border bg-card text-foreground/70 rounded-3xl border px-5 py-4 text-center text-sm'>
+            <div
+              className={join(
+                CARD_CLASS,
+                'text-foreground/70 text-center text-sm',
+              )}
+            >
               {user
                 ? requestableApps.length > 0
                   ? 'No apps on your account yet. Ask for one below.'
@@ -79,19 +101,28 @@ function Home() {
                 : 'No apps generally available. Please sign in to see apps available for your account.'}
             </div>
             {requestablePerson !== null && requestableApps.length > 0 ? (
-              <RequestableApps apps={requestableApps} person={requestablePerson} />
+              <RequestableApps
+                apps={requestableApps}
+                person={requestablePerson}
+              />
             ) : null}
           </div>
         ) : (
-          <section className='mt-12 space-y-4 text-left'>
+          <section className='mt-10 space-y-6 text-left'>
             {!isWide ? (
               <SectionHeader
                 title='Your apps'
-                subtitle={isHintShown ? 'Press and hold an app to star it, or turn on Details.' : undefined}
+                subtitle={
+                  isHintShown
+                    ? 'Press and hold an app to star it, or turn on Details.'
+                    : undefined
+                }
                 action={
                   isWide ? null : (
                     <div className='flex items-center gap-2'>
-                      <span className='text-muted-foreground text-sm'>Details</span>
+                      <span className='text-muted-foreground text-sm'>
+                        Details
+                      </span>
                       <AppToggle
                         size='sm'
                         aria-label='Show details'
@@ -106,9 +137,19 @@ function Home() {
             ) : null}
             {groups.map((group) => (
               <div key={group.label ?? 'all'} className='space-y-3'>
-                {group.label ? <SectionDivider label={group.label} /> : null}
+                {group.label ? (
+                  <h2 className='text-foreground px-1 text-base font-semibold'>
+                    {group.label}
+                  </h2>
+                ) : null}
                 {isGrid ? (
-                  <nav aria-label={group.label ?? 'Apps'} className='grid grid-cols-3 gap-x-2 gap-y-4 min-[360px]:grid-cols-4'>
+                  <nav
+                    aria-label={group.label ?? 'Apps'}
+                    className={join(
+                      CARD_CLASS,
+                      'grid grid-cols-3 gap-x-2 gap-y-5 px-3 py-5 min-[360px]:grid-cols-4',
+                    )}
+                  >
                     {group.apps.map((app) => (
                       <AppTile
                         key={app.id}
@@ -120,7 +161,10 @@ function Home() {
                     ))}
                   </nav>
                 ) : (
-                  <nav aria-label={group.label ?? 'Apps'} className='grid gap-4 sm:grid-cols-2'>
+                  <nav
+                    aria-label={group.label ?? 'Apps'}
+                    className='grid gap-4 sm:grid-cols-2'
+                  >
                     {group.apps.map((app) => (
                       <AppCard
                         key={app.id}
@@ -135,7 +179,10 @@ function Home() {
               </div>
             ))}
             {requestablePerson !== null && requestableApps.length > 0 ? (
-              <RequestableApps apps={requestableApps} person={requestablePerson} />
+              <RequestableApps
+                apps={requestableApps}
+                person={requestablePerson}
+              />
             ) : null}
           </section>
         )}
@@ -148,7 +195,9 @@ function Home() {
           setInfoAppId(null);
           navigate(getHref(infoApp), { state: { resumed: true } });
         }}
-        onToggleStar={user && infoApp !== null ? () => toggleStar(infoApp.id) : null}
+        onToggleStar={
+          user && infoApp !== null ? () => toggleStar(infoApp.id) : null
+        }
         onClose={() => setInfoAppId(null)}
       />
     </div>

@@ -16,7 +16,7 @@ export async function askNotificationPermission(): Promise<NotificationPermissio
  * already granted.
  *
  * Reuses the single origin-wide service worker registered in `main.tsx`
- * (shared by every mini-app's manifest) rather than registering a second
+ * (shared by every app's manifest) rather than registering a second
  * one — see vite.config.ts's `workbox.importScripts` for how that worker
  * gets its Firebase Messaging background handler.
  */

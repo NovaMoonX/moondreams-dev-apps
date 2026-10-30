@@ -20,7 +20,7 @@ import {
 import { router } from '@routes/AppRoutes';
 import { store } from '@store/index';
 
-// Central, app-wide reminder sync — every mini-app shares this one
+// Central, app-wide reminder sync — every app shares this one
 // subscription instead of each wiring its own.
 function AppShell() {
   useDisableAutocomplete();

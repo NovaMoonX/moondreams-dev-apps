@@ -132,6 +132,14 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
 
+    // The admin screen's Pipeline view. Written only by Functions (admin SDK), so no rule opens a write.
+    match /pipelineSessions/{sessionId} {
+      allow read: if isAdmin();
+    }
+    match /pipeline/{docId} {
+      allow read: if isAdmin();
+    }
+
     // What a member without access may see of an app open to requests: no access list, nothing else.
     // The admin writes it beside the app doc and deletes it when the app stops taking requests.
     match /appListings/{appId} {
@@ -807,7 +815,7 @@ service cloud.firestore {
       allow write: if isUser(userId);
     }
 
-    // Central, cross-app: every mini-app schedules and reads its own reminders. Only the scheduled
+    // Central, cross-app: every app schedules and reads its own reminders. Only the scheduled
     // Function (admin SDK) marks one `sent` or rolls a recurring one forward.
     match /reminders/{reminderId} {
       function relatedGroupOf(data) {

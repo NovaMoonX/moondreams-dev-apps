@@ -1,10 +1,10 @@
 # **Technical Architecture: Worth the Wait**
 
-> **Global Data Keying**: All application data must be namespaced under the mini-app identifier worth-the-wait (e.g., Firestore root path /apps/worth-the-wait/spaces/{spaceId}).
+> **Global Data Keying**: All application data must be namespaced under the app identifier worth-the-wait (e.g., Firestore root path /apps/worth-the-wait/spaces/{spaceId}).
 
 ## **Space Entry, Auth & Pairing Mechanics**
 
-Primary user authentication and display names are managed globally by the host application shell and passed down to the mini-app.
+Primary user authentication and display names are managed globally by the host application shell and passed down to the app.
 
 When a user opens Worth the Wait without an active space, they are presented with an onboarding choice to either **Create a Space** or **Join a Space**.
 
@@ -199,7 +199,7 @@ To prevent race conditions (e.g., both partners clicking trigger simultaneously,
                                                       (Reveal complete & UI unlock)
 
 1. **Button Disabled Conditions:**  
-   * Partner offline or in a different mini-app.  
+   * Partner offline or in a different app.  
    * activeAction is non-null AND activeAction.status !== "completed" (action in progress).  
 2. **Derived UI Animation State:**  
    * **Client Animation Visibility:** On the client, the UI animation/modal overlay is derived and displayed whenever activeAction exists and activeAction.status !== "completed" (i.e. status is "initiating" or "executing").  
@@ -280,6 +280,6 @@ src/
         │   └── useSpace.ts              # Active space context & join approval logic  
         ├── utils/  
         │   └── boxHelpers.ts            # Formatting and helper utilities  
-        ├── WorthTheWait.tsx             # Mini-app main entry point  
+        ├── WorthTheWait.tsx             # App main entry point  
         └── index.ts                     # Public exports for application router  
 ```

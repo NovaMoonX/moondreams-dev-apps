@@ -16,6 +16,8 @@ interface HeaderIconButtonProps {
   isHighlighted?: boolean;
   /** Set on a control that opens a panel, so a screen reader hears whether it is open. */
   isExpanded?: boolean;
+  /** A ghost icon with no fill, for a dashboard header. */
+  isQuiet?: boolean;
 }
 
 /** A quiet 28px round icon in a header's action cluster with a 40×40 tap area. Its neighbours sit `gap-3` apart, so the areas meet without overlapping. */
@@ -28,11 +30,12 @@ function HeaderIconButton({
   isDisabled = false,
   isHighlighted = false,
   isExpanded,
+  isQuiet = false,
 }: HeaderIconButtonProps) {
   return (
     <Button
       type='button'
-      variant='secondary'
+      variant={isQuiet ? 'tertiary' : 'secondary'}
       size='sm'
       rounded='full'
       className={join(
@@ -40,6 +43,7 @@ function HeaderIconButton({
         isDestructive &&
           'border-destructive/60 text-destructive! hover:bg-destructive/10',
         isHighlighted && 'bg-accent!',
+        isQuiet && 'text-muted-foreground',
       )}
       aria-label={label}
       aria-expanded={isExpanded}

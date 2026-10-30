@@ -349,7 +349,7 @@ flowchart LR
     B -->|Yes| D
     D --> E[Tap Request] --> F["Trip shows Pending in My Trips"]
 ```
-*Will eventually need real redirect/deep-link infrastructure (land on the right screen post-sign-in, handle the app not yet being installed, etc.) — a cross-app concern for every mini app with an invite link, not specific to Waypoint. Noting it here rather than solving it now.*
+*Will eventually need real redirect/deep-link infrastructure (land on the right screen post-sign-in, handle the app not yet being installed, etc.) — a cross-app concern for every app with an invite link, not specific to Waypoint. Noting it here rather than solving it now.*
 
 **Admin approves**
 ```mermaid

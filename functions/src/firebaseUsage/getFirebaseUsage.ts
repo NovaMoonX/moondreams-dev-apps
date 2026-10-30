@@ -2,6 +2,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getStorage } from 'firebase-admin/storage';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { isRunningInEmulator } from '../emulator.js';
 import { getFootprints, type Footprints } from './attribution.js';
 import { getMonthStart, MonitoringAccessError, readMetric } from './monitoring.js';
 import { getUsageMetrics, priceMetric, PRICING_LAST_CHECKED, type UsageLine } from './pricing.js';
@@ -39,7 +40,7 @@ export const getFirebaseUsage = onCall(
   },
   async (request) => {
     const email = request.auth?.token.email?.trim().toLowerCase() ?? null;
-    const isEmulator = process.env.FUNCTIONS_EMULATOR === 'true' && !process.env.K_SERVICE;
+    const isEmulator = isRunningInEmulator();
     const isAdminEmail = email === ADMIN_EMAIL && request.auth?.token.email_verified === true;
     const isEmulatorDev = isEmulator && request.auth?.token.dev === true;
     if (!request.auth || (!isAdminEmail && !isEmulatorDev && request.auth.token.admin !== true)) {

@@ -2,11 +2,14 @@ import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
 import { useState } from 'react';
 
 import AppLogo from '@/components/AppLogo';
-import SectionDivider from '@/components/SectionDivider';
 import { useMyAccessRequests } from '@/hooks/useMyAccessRequests';
 import { formatDate } from '@/utils/formatUtils';
-import { cancelAccessRequest, requestAccess } from '@lib/accessRequests/accessRequests';
+import {
+  cancelAccessRequest,
+  requestAccess,
+} from '@lib/accessRequests/accessRequests';
 import type { AppListing } from '@lib/types/appCatalog';
+import { LIST_CARD_CLASS } from '@ui/siteSurface';
 
 interface RequestableAppsProps {
   apps: AppListing[];
@@ -40,23 +43,32 @@ function RequestableApps({ apps, person }: RequestableAppsProps) {
 
   return (
     <div className='space-y-3'>
-      <SectionDivider label='Ask for access' />
-      <ul className='divide-border divide-y'>
+      <h2 className='text-foreground px-1 text-base font-semibold'>
+        Ask for access
+      </h2>
+      <ul className={LIST_CARD_CLASS}>
         {apps.map((app) => (
           <li key={app.id}>
             <Button
               type='button'
               variant='tertiary'
-              className='h-auto w-full justify-start gap-3 px-0! py-3 text-left font-normal'
+              className='h-auto w-full justify-start gap-3 rounded-none px-4! py-3 text-left font-normal'
               onClick={() => {
                 setError(null);
                 setOpenAppId(app.id);
               }}
             >
-              <AppLogo appId={app.id} className='size-10 rounded-xl opacity-60 grayscale' />
+              <AppLogo
+                appId={app.id}
+                className='size-10 rounded-xl opacity-60 grayscale'
+              />
               <span className='min-w-0 flex-1'>
-                <span className='text-foreground block truncate text-sm font-medium'>{app.name}</span>
-                <span className='text-muted-foreground block truncate text-xs'>{app.description}</span>
+                <span className='text-foreground block truncate text-sm font-medium'>
+                  {app.name}
+                </span>
+                <span className='text-muted-foreground block truncate text-xs'>
+                  {app.description}
+                </span>
               </span>
               <span className='text-muted-foreground shrink-0 text-xs'>
                 {requests[app.id] ? 'Requested' : 'Ask'}
@@ -66,17 +78,28 @@ function RequestableApps({ apps, person }: RequestableAppsProps) {
         ))}
       </ul>
 
-      <Drawer isOpen={openApp !== null} onClose={() => setOpenAppId(null)} title={openApp?.name ?? ''} showCloseButton>
+      <Drawer
+        isOpen={openApp !== null}
+        onClose={() => setOpenAppId(null)}
+        title={openApp?.name ?? ''}
+        showCloseButton
+      >
         {openApp ? (
           <div className='space-y-5 pb-4'>
             <div className='flex items-start gap-4'>
-              <AppLogo appId={openApp.id} className='size-16 rounded-2xl shadow-sm' />
-              <p className='text-foreground/70 min-w-0 flex-1 text-sm'>{openApp.description}</p>
+              <AppLogo
+                appId={openApp.id}
+                className='size-16 rounded-2xl shadow-sm'
+              />
+              <p className='text-foreground/70 min-w-0 flex-1 text-sm'>
+                {openApp.description}
+              </p>
             </div>
             {openRequest ? (
               <div className='space-y-3'>
                 <p className='text-foreground text-sm'>
-                  You asked on {formatDate(openRequest.requestedAt)}. It shows up with your apps once you have access.
+                  You asked on {formatDate(openRequest.requestedAt)}. It shows
+                  up with your apps once you have access.
                 </p>
                 <Button
                   type='button'
@@ -84,7 +107,9 @@ function RequestableApps({ apps, person }: RequestableAppsProps) {
                   rounded='full'
                   className='w-full'
                   loading={isBusy}
-                  onClick={() => run(() => cancelAccessRequest(openApp.id, person.uid))}
+                  onClick={() =>
+                    run(() => cancelAccessRequest(openApp.id, person.uid))
+                  }
                 >
                   I changed my mind
                 </Button>
@@ -101,7 +126,8 @@ function RequestableApps({ apps, person }: RequestableAppsProps) {
                   Ask for access
                 </Button>
                 <p className='text-muted-foreground text-center text-xs'>
-                  Your name and email go to whoever runs the app, who lets you in once it's ready.
+                  Your name and email go to whoever runs the app, who lets you
+                  in once it's ready.
                 </p>
               </div>
             )}

@@ -72,7 +72,7 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 
 ### Stretch Goals
 
-- [ ] Push notification reminders (Firebase Cloud Messaging) for upcoming visits and vaccination due dates, built as shared infrastructure other mini-apps can reuse — the dashboard timeline above doesn't wait on this; it reads visit/vaccination data directly
+- [ ] Push notification reminders (Firebase Cloud Messaging) for upcoming visits and vaccination due dates, built as shared infrastructure other apps can reuse — the dashboard timeline above doesn't wait on this; it reads visit/vaccination data directly
 - [ ] Email notification channel, once push notifications are working
 - [ ] In-app camera scanner that captures a photo and produces a cleaned-up document, instead of requiring an existing file
 - [ ] Monthly growth photo timeline and weight chart over time per cat
@@ -86,8 +86,8 @@ Built after adopting two kittens (both girls) and realizing how much there is to
 
 ## Under the Hood
 
-- **Frontend**: React + TailwindCSS + Dreamer UI, following existing mini-app conventions in this repo
-- **State**: Redux Toolkit (typed per-mini-app slice trees, optimistic thunks, cross-slice selectors) — see the Technical Design Document for the full architecture
+- **Frontend**: React + TailwindCSS + Dreamer UI, following existing app conventions in this repo
+- **State**: Redux Toolkit (typed per-app slice trees, optimistic thunks, cross-slice selectors) — see the Technical Design Document for the full architecture
 - **Data**: Firestore, namespaced under `apps/nine-lives/...`, household-scoped for owned data and globally shared for reference content (condition library, glossary, resources, vaccine reference list)
 - **Files**: Firebase Storage for health-record uploads and photos
 - **Document ingestion**: Firebase AI Logic uses App Check. Production builds require `VITE_FIREBASE_APPCHECK_SITE_KEY`. Local emulator builds enable the App Check debug token; set `VITE_FIREBASE_APPCHECK_DEBUG_TOKEN` to a fixed UUID in `.env.local` so the whole team shares one token registered once in Firebase Console > App Check > Manage debug tokens, instead of every browser generating (and needing to separately register) its own.

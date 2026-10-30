@@ -7,6 +7,11 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/orchestrate-hint.sh\"",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pipeline-pulse.sh\" working",
+            "timeout": 5
           }
         ]
       }
@@ -18,6 +23,11 @@
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pr-gate.sh\"",
             "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pipeline-pulse.sh\" stop",
+            "timeout": 5
           }
         ]
       }

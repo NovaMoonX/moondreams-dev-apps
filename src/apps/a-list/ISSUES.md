@@ -23,7 +23,7 @@ Tiers mirror the README's Core MVP / Next Steps / Stretch Goals. Within a tier, 
 **Context:** Read the registry comment at the top of `src/lib/app/app.registry.ts` (it lists what must stay in sync), `src/apps/a-list/README.md` (name, tagline, the 🎟️ identity) and the root `README.md`'s "Current apps" and PWA sections. A-List Tracker is a draft app, like Nine Lives and Waypoint.
 
 ### Description
-Make A-List Tracker a real, installable mini-app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, fix the root README's app list, which names only Worth the Wait, so it lists every app (Worth the Wait, Nine Lives, Waypoint, A-List Tracker), each with an emoji, and add the rule that keeps it current to `CLAUDE.md` and `copilot-instructions.md`.
+Make A-List Tracker a real, installable app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, fix the root README's app list, which names only Worth the Wait, so it lists every app (Worth the Wait, Nine Lives, Waypoint, A-List Tracker), each with an emoji, and add the rule that keeps it current to `CLAUDE.md` and `copilot-instructions.md`.
 
 ### Possible Approach
 1. Add the app's registry entry (`id: 'a-list'`, `name: 'A-List Tracker'`, `path: '/a-list'`, `status: 'draft'`, a `createdAt` of today, and a one-sentence description in the same voice as the others) and widen `AppId` in `appCatalog.ts`.
@@ -80,7 +80,7 @@ On first launch, a member lands on a three-step Setup modal: confirm the perks, 
 7. `MembershipSettingsModal` (opened from the Dashboard gear) shows the saved values read-only, including the rate as "about 7.5%".
 8. Rules: add the `apps/a-list` catalog block (four read predicates, admin writes, placed above `nine-lives`) and `memberships/{uid}` with the shape checks and immutables from TECHNICAL.md's criteria. Verify on the emulator (owner allowed; a second user and a signed-out request denied; a bad shape denied).
 9. Seed: `seedAList` creates a membership for the dev fixture users, registers `'a-list'` in `SeedScope`, adds `npm run seed:a-list`, and updates SEEDING.md and the document counts.
-10. `copilot-instructions.md`: add (a) **per-member private data nests under `apps/{appId}/<root>/{uid}/…` with one-line `request.auth.uid == uid` rules, no `ownerUid` body checks and no composite indexes**; (b) **sums of money are stored as integer minor units (`priceCents`) and formatted at the edge**; (c) **when a second mini-app needs a component or hook, move it to central `src/components`, `src/ui` or `src/hooks` in that same PR; never import across `src/apps/*`**.
+10. `copilot-instructions.md`: add (a) **per-member private data nests under `apps/{appId}/<root>/{uid}/…` with one-line `request.auth.uid == uid` rules, no `ownerUid` body checks and no composite indexes**; (b) **sums of money are stored as integer minor units (`priceCents`) and formatted at the edge**; (c) **when a second app needs a component or hook, move it to central `src/components`, `src/ui` or `src/hooks` in that same PR; never import across `src/apps/*`**.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** the Setup modal writes the member's one `MembershipProfile` on first launch.

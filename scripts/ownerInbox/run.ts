@@ -12,6 +12,7 @@ import {
   STATUS_MARKER,
   buildInbox,
   findSessionLink,
+  parseGallery,
   parseStatus,
   summarizeCi,
   type CheckRun,
@@ -111,6 +112,7 @@ const readPr = async (pull: ApiPull): Promise<InboxPr> => {
     ci: await getCi(pull.head.sha),
     bodySessionUrl: findSessionLink(pull.body),
     status: status ? parseStatus(status.body, status.updated_at) : null,
+    gallery: parseGallery(pull.body),
   };
 };
 
@@ -169,23 +171,74 @@ const writeInbox = async (body: string) => {
   console.log(`Created #${created.number}`);
 };
 
-type SavedPr = Omit<InboxPr, 'status'> & {
+type SavedPr = Omit<InboxPr, 'status' | 'gallery'> & {
+  body?: string | null;
   statusBody: string | null;
   statusUpdatedAt: string;
 };
 
 const readSaved = (path: string): InboxPr[] =>
   (JSON.parse(readFileSync(path, 'utf8')) as SavedPr[]).map(
-    ({ statusBody, statusUpdatedAt, ...pr }) => ({
+    ({ body, statusBody, statusUpdatedAt, ...pr }) => ({
       ...pr,
+      gallery: parseGallery(body ?? null),
       status: statusBody ? parseStatus(statusBody, statusUpdatedAt) : null,
     }),
   );
 
 const prs = fromFile ? readSaved(fromFile) : await readOpenPrs();
 const body = buildInbox(prs, new Date().toISOString());
+const pipelineKey = process.env.PIPELINE_KEY ?? '';
+const pipelineUrl =
+  process.env.PIPELINE_URL ??
+  'https://us-central1-moondreams-dev-apps.cloudfunctions.net/recordPipelineEvent';
+
+/** Undoes `toPlain`'s escaping, which the issue needs and the dashboard (React escapes for itself) doesn't. */
+const fromPlain = (text: string) =>
+  text
+    .replace(/@\u200b/g, '@')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&');
+
+const toPipelinePr = (pr: InboxPr): InboxPr => ({
+  ...pr,
+  title: fromPlain(pr.title),
+  status: pr.status && {
+    ...pr.status,
+    sessionTitle: pr.status.sessionTitle && fromPlain(pr.status.sessionTitle),
+    state: pr.status.state && fromPlain(pr.status.state),
+    ownerItems: pr.status.ownerItems.map((item) => ({
+      text: fromPlain(item.text),
+      options: item.options.map((option) => ({
+        ...option,
+        label: fromPlain(option.label),
+      })),
+    })),
+    goodToKnow: pr.status.goodToKnow.map(fromPlain),
+  },
+  gallery: pr.gallery.map((step) => ({ ...step, label: fromPlain(step.label) })),
+});
+
+const reportToPipeline = async (list: InboxPr[]) => {
+  const response = await fetch(pipelineUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      data: { key: pipelineKey, kind: 'inbox', prs: list.map(toPipelinePr) },
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`status ${response.status}`);
+};
+
 if (isDryRun) {
   console.log(body);
 } else {
   await writeInbox(body);
+  if (pipelineKey) {
+    await reportToPipeline(prs).catch((error: Error) =>
+      console.log(`::warning::Pipeline view not updated: ${error.message}`),
+    );
+  }
 }

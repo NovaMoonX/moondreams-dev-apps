@@ -185,13 +185,13 @@ Register Waypoint in the platform's app catalog with placeholder branding and so
 **Files:**
 - `src/routes/AppRoutes.tsx`
 - `src/apps/waypoint/Waypoint.tsx`
-- `src/store/index.ts`, `src/store/actions/globalActions.ts`, `src/store/listeners/createFirestoreCollectionListener.ts`, `src/store/utils/createOptimisticCollectionSlice.ts` (only if not already present from an earlier mini app — check before creating)
+- `src/store/index.ts`, `src/store/actions/globalActions.ts`, `src/store/listeners/createFirestoreCollectionListener.ts`, `src/store/utils/createOptimisticCollectionSlice.ts` (only if not already present from an earlier app — check before creating)
 
 ### Description
 Wire up Waypoint's route to a placeholder screen so every subsequent issue has something real to render into, per the "route before any other UI work" rule. Verify the central Redux store foundation exists; build it only if it genuinely doesn't.
 
 ### Possible Approach
-1. Check whether `src/store/` already exists (another mini app may have built it already, per `TECHNICAL.md`'s Client State Management note) — if so, skip straight to step 4.
+1. Check whether `src/store/` already exists (another app may have built it already, per `TECHNICAL.md`'s Client State Management note) — if so, skip straight to step 4.
 2. If it doesn't exist: add `configureStore`/`RootState`/typed hooks, the central `user` slice, `resetAllState`, `createFirestoreCollectionListener`, and `createOptimisticCollectionSlice` to `src/store/`.
 3. Wrap `App.tsx` in `<Provider store={store}>` if not already done.
 4. Add `/apps/waypoint` to `AppRoutes.tsx`, rendering a minimal `Waypoint.tsx` placeholder (just a loading/coming-soon state — no auth gate or trip logic yet, that's Issue 3).
@@ -358,7 +358,7 @@ Lets an Admin change another member's role (including promoting to Admin) or rem
 - `src/apps/waypoint/store/slices/checklistSlice.ts`
 - `src/apps/waypoint/components/ChecklistSection.tsx`
 - `src/apps/waypoint/components/ChecklistItemFormModal.tsx`
-- `src/ui/FormSection.tsx` (only if no earlier mini app has built this yet)
+- `src/ui/FormSection.tsx` (only if no earlier app has built this yet)
 - `firestore.rules`
 
 ### Description

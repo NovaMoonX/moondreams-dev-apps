@@ -7,6 +7,7 @@ import {
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useMemo, useState } from 'react';
 
 import AppToggle from '@/components/AppToggle';
@@ -28,7 +29,12 @@ import {
 } from '@lib/types/appCatalog';
 
 import { type AppDraft } from './appDraft';
-import { AVAILABLE_USERS_PREVIEW } from './constants';
+import {
+  AVAILABLE_USERS_PREVIEW,
+  CARD_CLASS,
+  DISABLED_CLASS,
+  SURFACE_CLASS,
+} from './constants';
 
 interface AppSettingsTabProps {
   app: AppMetadata;
@@ -40,22 +46,46 @@ interface AppSettingsTabProps {
   onSaved: () => void;
 }
 
-function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onSaved }: AppSettingsTabProps) {
-  const { name, description, status, isRestricted, isRequestable, allowedUsers } = draft;
-  const setIsRequestable = (value: boolean) => onDraftChange({ isRequestable: value });
+function AppSettingsTab({
+  app,
+  draft,
+  isDirty,
+  users,
+  onDraftChange,
+  onSave,
+  onSaved,
+}: AppSettingsTabProps) {
+  const {
+    name,
+    description,
+    status,
+    isRestricted,
+    isRequestable,
+    allowedUsers,
+  } = draft;
+  const setIsRequestable = (value: boolean) =>
+    onDraftChange({ isRequestable: value });
   const queryClient = useQueryClient();
   const requestsQuery = useQuery(accessRequestsQueryOptions(app.id));
   const [dismissingUid, setDismissingUid] = useState<string | null>(null);
-  const isGranted = (uid: string, email: string | null) => isOnAccessList(allowedUsers, uid, email);
+  const isGranted = (uid: string, email: string | null) =>
+    isOnAccessList(allowedUsers, uid, email);
   const openRequests = (requestsQuery.data ?? []).filter(
-    (request) => request.dismissedAt === null && !isGranted(request.uid, request.email),
+    (request) =>
+      request.dismissedAt === null && !isGranted(request.uid, request.email),
   );
   const setName = (value: string) => onDraftChange({ name: value });
-  const setDescription = (value: string) => onDraftChange({ description: value });
+  const setDescription = (value: string) =>
+    onDraftChange({ description: value });
   const setStatus = (value: AppStatus) => onDraftChange({ status: value });
-  const setIsRestricted = (value: boolean) => onDraftChange({ isRestricted: value });
-  const setAllowedUsers = (next: string[] | ((current: string[]) => string[])) =>
-    onDraftChange({ allowedUsers: typeof next === 'function' ? next(allowedUsers) : next });
+  const setIsRestricted = (value: boolean) =>
+    onDraftChange({ isRestricted: value });
+  const setAllowedUsers = (
+    next: string[] | ((current: string[]) => string[]),
+  ) =>
+    onDraftChange({
+      allowedUsers: typeof next === 'function' ? next(allowedUsers) : next,
+    });
   const [searchTerm, setSearchTerm] = useState('');
   const [searchError, setSearchError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -113,7 +143,9 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
   );
 
   const trimmedSearchTerm = searchTerm.trim();
-  const shownUsers = trimmedSearchTerm ? availableUsers : availableUsers.slice(0, AVAILABLE_USERS_PREVIEW);
+  const shownUsers = trimmedSearchTerm
+    ? availableUsers
+    : availableUsers.slice(0, AVAILABLE_USERS_PREVIEW);
   const hasNoSearchResults =
     trimmedSearchTerm.length > 0 && availableUsers.length === 0;
 
@@ -193,17 +225,27 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
     try {
       await onSave(app.id, draft);
       await syncAppListing(
-        { id: app.id, name: draft.name.trim(), description: draft.description.trim(), path: app.path },
+        {
+          id: app.id,
+          name: draft.name.trim(),
+          description: draft.description.trim(),
+          path: app.path,
+        },
         draft.status === 'public' && draft.isRestricted && draft.isRequestable,
       );
-      const latestRequests = await queryClient.fetchQuery({ ...accessRequestsQueryOptions(app.id), staleTime: 0 });
+      const latestRequests = await queryClient.fetchQuery({
+        ...accessRequestsQueryOptions(app.id),
+        staleTime: 0,
+      });
       const answered = latestRequests
         .filter((request) => isGranted(request.uid, request.email))
         .map((request) => request.uid);
       await clearAccessRequests(app.id, answered).catch((error) =>
         console.error('Failed to clear answered access requests:', error),
       );
-      void queryClient.invalidateQueries({ queryKey: accessRequestKeys.forApp(app.id) });
+      void queryClient.invalidateQueries({
+        queryKey: accessRequestKeys.forApp(app.id),
+      });
       onSaved();
     } catch (error) {
       console.error('Failed to save app metadata:', error);
@@ -214,139 +256,179 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
 
   return (
     <div className='space-y-6'>
-      <div className='grid gap-6 md:grid-cols-2'>
-        <div className='space-y-2'>
-          <label className='text-foreground text-sm font-medium'>
-            App name
-          </label>
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-          />
-        </div>
+      <section className='space-y-3'>
+        <h3 className='text-foreground text-base font-semibold'>
+          About this app
+        </h3>
+        <div className={join(CARD_CLASS, 'space-y-5')}>
+          <div className='grid gap-5 md:grid-cols-2'>
+            <div className='space-y-2'>
+              <label className='text-foreground text-sm font-medium'>
+                App name
+              </label>
+              <Input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </div>
 
-        <div className='space-y-2'>
-          <label className='text-foreground text-sm font-medium'>Path</label>
-          <Input value={app.path} disabled />
-        </div>
-      </div>
-
-      <div className='space-y-2'>
-        <label className='text-foreground text-sm font-medium'>Status</label>
-        <Select
-          options={APP_STATUS_OPTIONS.map((option) => ({
-            text:
-              option === 'draft'
-                ? 'Draft / In progress'
-                : option === 'public'
-                  ? 'Public / Ready'
-                  : 'Removed / Archived',
-            value: option,
-          }))}
-          value={status}
-          onChange={(nextStatus) => setStatus(nextStatus as AppStatus)}
-        />
-      </div>
-
-      <div className='space-y-2'>
-        <label className='text-foreground text-sm font-medium'>
-          Description
-        </label>
-        <Textarea
-          value={description}
-          onChange={(event) => setDescription(event.target.value)}
-          rows={3}
-        />
-      </div>
-
-      <div className='flex items-center justify-between gap-3'>
-        <div>
-          <div className='text-foreground text-sm font-medium'>
-            Restrict access
+            <div className='space-y-2'>
+              <label className='text-foreground text-sm font-medium'>
+                Path
+              </label>
+              <Input value={app.path} disabled />
+            </div>
           </div>
-          <div className='text-muted-foreground text-xs'>
-            Limit the app to specific users or emails.
-          </div>
-        </div>
-        <AppToggle checked={isRestricted} onCheckedChange={setIsRestricted} />
-      </div>
 
-      <div className='flex items-center justify-between gap-3'>
-        <div>
-          <div className='text-foreground text-sm font-medium'>Let people ask for access</div>
-          <div className='text-muted-foreground text-xs'>
-            Members without access see it on Home and can ask. Asking never gives access by itself.
+          <div className='space-y-2'>
+            <label className='text-foreground text-sm font-medium'>
+              Status
+            </label>
+            <Select
+              options={APP_STATUS_OPTIONS.map((option) => ({
+                text:
+                  option === 'draft'
+                    ? 'Draft / In progress'
+                    : option === 'public'
+                      ? 'Public / Ready'
+                      : 'Removed / Archived',
+                value: option,
+              }))}
+              value={status}
+              onChange={(nextStatus) => setStatus(nextStatus as AppStatus)}
+            />
+          </div>
+
+          <div className='space-y-2'>
+            <label className='text-foreground text-sm font-medium'>
+              Description
+            </label>
+            <Textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              rows={3}
+            />
           </div>
         </div>
-        <AppToggle
-          checked={isRestricted && isRequestable}
-          onCheckedChange={setIsRequestable}
-          disabled={!isRestricted}
-          aria-label='Let people ask for access'
-        />
-      </div>
+      </section>
+
+      <section className='space-y-3'>
+        <h3 className='text-foreground text-base font-semibold'>
+          Who can open it
+        </h3>
+        <div className={join(CARD_CLASS, 'space-y-5')}>
+          <div className='flex items-center justify-between gap-3'>
+            <div>
+              <div className='text-foreground text-sm font-medium'>
+                Restrict access
+              </div>
+              <div className='text-muted-foreground text-xs'>
+                Limit the app to specific users or emails.
+              </div>
+            </div>
+            <AppToggle
+              checked={isRestricted}
+              onCheckedChange={setIsRestricted}
+            />
+          </div>
+
+          <div className='flex items-center justify-between gap-3'>
+            <div>
+              <div className='text-foreground text-sm font-medium'>
+                Let people ask for access
+              </div>
+              <div className='text-muted-foreground text-xs'>
+                Members without access see it on Home and can ask. Asking never
+                gives access by itself.
+              </div>
+            </div>
+            <AppToggle
+              checked={isRestricted && isRequestable}
+              onCheckedChange={setIsRequestable}
+              disabled={!isRestricted}
+              aria-label='Let people ask for access'
+            />
+          </div>
+        </div>
+      </section>
 
       {openRequests.length > 0 ? (
-        <div className='space-y-2'>
-          <div className='text-foreground text-sm font-medium'>Asked for access</div>
-          <p className='text-muted-foreground text-xs'>
-            Give access adds them to the list below; it takes effect when you save.
-          </p>
-          <div className='divide-border divide-y'>
-            {openRequests.map((request) => (
-              <div key={request.uid} className='flex items-center justify-between gap-3 py-2'>
-                <div className='flex min-w-0 items-center gap-3'>
-                  <UserAvatar user={request} size='sm' />
-                  <div className='min-w-0'>
-                    <div className='text-foreground truncate text-sm'>
-                      {request.displayName ?? request.email ?? 'Someone'}
-                    </div>
-                    <div className='text-muted-foreground truncate text-xs'>
-                      Asked {formatDate(request.requestedAt)}
+        <section className='space-y-3'>
+          <h3 className='text-foreground text-base font-semibold'>
+            Asked for access
+          </h3>
+          <div className={join(CARD_CLASS, 'space-y-2')}>
+            <p className='text-muted-foreground text-xs'>
+              Give access adds them to the list below; it takes effect when you
+              save.
+            </p>
+            <div className='divide-border divide-y'>
+              {openRequests.map((request) => (
+                <div
+                  key={request.uid}
+                  className='flex items-center justify-between gap-3 py-2'
+                >
+                  <div className='flex min-w-0 items-center gap-3'>
+                    <UserAvatar user={request} size='sm' />
+                    <div className='min-w-0'>
+                      <div className='text-foreground truncate text-sm'>
+                        {request.displayName ?? request.email ?? 'Someone'}
+                      </div>
+                      <div className='text-muted-foreground truncate text-xs'>
+                        Asked {formatDate(request.requestedAt)}
+                      </div>
                     </div>
                   </div>
+                  <div className='flex shrink-0 gap-2'>
+                    <Button
+                      variant='tertiary'
+                      size='sm'
+                      loading={dismissingUid === request.uid}
+                      onClick={async () => {
+                        setDismissingUid(request.uid);
+                        try {
+                          await dismissAccessRequest(app.id, request.uid);
+                          await queryClient.invalidateQueries({
+                            queryKey: accessRequestKeys.forApp(app.id),
+                          });
+                        } catch (error) {
+                          console.error(
+                            'Failed to answer access request:',
+                            error,
+                          );
+                        } finally {
+                          setDismissingUid(null);
+                        }
+                      }}
+                    >
+                      Not now
+                    </Button>
+                    <Button
+                      variant='secondary'
+                      size='sm'
+                      className={DISABLED_CLASS}
+                      onClick={() => addUserToAccessList(request.uid)}
+                      disabled={!isRestricted}
+                    >
+                      Give access
+                    </Button>
+                  </div>
                 </div>
-                <div className='flex shrink-0 gap-2'>
-                  <Button
-                    variant='tertiary'
-                    size='sm'
-                    loading={dismissingUid === request.uid}
-                    onClick={async () => {
-                      setDismissingUid(request.uid);
-                      try {
-                        await dismissAccessRequest(app.id, request.uid);
-                        await queryClient.invalidateQueries({ queryKey: accessRequestKeys.forApp(app.id) });
-                      } catch (error) {
-                        console.error('Failed to answer access request:', error);
-                      } finally {
-                        setDismissingUid(null);
-                      }
-                    }}
-                  >
-                    Not now
-                  </Button>
-                  <Button
-                    variant='secondary'
-                    size='sm'
-                    onClick={() => addUserToAccessList(request.uid)}
-                    disabled={!isRestricted}
-                  >
-                    Give access
-                  </Button>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        </section>
       ) : null}
 
-      <div className='space-y-3'>
+      <section className='space-y-3'>
         <div className='flex items-center justify-between'>
-          <label className='text-foreground text-sm font-medium'>
+          <h3 className='text-foreground text-base font-semibold'>
             Approved users
-          </label>
+          </h3>
           <Button
             variant='destructive'
+            size='sm'
+            className={DISABLED_CLASS}
             onClick={clearList}
             disabled={!isRestricted}
           >
@@ -354,127 +436,141 @@ function AppSettingsTab({ app, draft, isDirty, users, onDraftChange, onSave, onS
           </Button>
         </div>
 
-        <div className='flex flex-wrap gap-2'>
-          {approvedUsers.length === 0 ? (
-            <span className='text-muted-foreground text-sm'>
-              No restricted users yet.
-            </span>
-          ) : (
-            approvedUsers.map((profile) => (
-              <div
-                key={profile.key}
-                className='border-border bg-muted/40 text-foreground flex items-center gap-2 rounded-full border px-2.5 py-1.5'
-              >
-                <UserAvatar user={profile} size='xs' />
-                <span>{profile.displayName}</span>
-                <Button
-                  size='icon'
-                  className='rounded-full!'
-                  onClick={() => removeUserFromAccessList(profile.key)}
-                  disabled={!isRestricted}
-                >
-                  <X className='h-3 w-3' />
-                </Button>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div>
-          <div className='text-foreground mb-2 text-sm font-medium'>
-            Available users
-          </div>
-          <div className='mb-3'>
-            <Input
-              value={searchTerm}
-              onChange={(event) => {
-                setSearchTerm(event.target.value);
-                if (searchError) {
-                  setSearchError('');
-                }
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && hasNoSearchResults) {
-                  event.preventDefault();
-                  addSearchTermToAccessList();
-                }
-              }}
-              placeholder={
-                hasNoSearchResults
-                  ? 'No match — add this email'
-                  : 'Search users by name or email'
-              }
-              disabled={!isRestricted}
-            />
-          </div>
-
-          {hasNoSearchResults ? (
-            <div className='border-border mb-3 flex items-center justify-between gap-2 rounded-lg border border-dashed p-2'>
-              <span className='text-muted-foreground text-xs'>
-                No matching users found. Add this email instead.
-              </span>
-              <Button
-                variant='secondary'
-                size='sm'
-                onClick={addSearchTermToAccessList}
-                disabled={!isRestricted}
-              >
-                Add email
-              </Button>
-            </div>
-          ) : null}
-
-          {searchError ? (
-            <p className='text-destructive mb-3 text-xs'>{searchError}</p>
-          ) : null}
-
-          <div className='divide-border divide-y'>
-            {availableUsers.length === 0 && !hasNoSearchResults ? (
+        <div className={join(CARD_CLASS, 'space-y-5')}>
+          <div className='flex flex-wrap gap-2'>
+            {approvedUsers.length === 0 ? (
               <span className='text-muted-foreground text-sm'>
-                No matching users found.
+                No restricted users yet.
               </span>
             ) : (
-              shownUsers.map((profile) => (
+              approvedUsers.map((profile) => (
                 <div
-                  key={profile.uid}
-                  className='flex items-center justify-between gap-3 py-2'
+                  key={profile.key}
+                  className='border-border bg-muted/40 text-foreground flex items-center gap-2 rounded-full border px-2.5 py-1.5'
                 >
-                  <div className='flex min-w-0 items-center gap-3'>
-                    <UserAvatar user={profile} size='sm' />
-                    <div className='min-w-0'>
-                      <div className='text-foreground truncate text-sm'>
-                        {profile.displayName ?? profile.email}
-                      </div>
-                      <div className='text-muted-foreground truncate text-xs'>
-                        {profile.email}
-                      </div>
-                    </div>
-                  </div>
+                  <UserAvatar user={profile} size='xs' />
+                  <span>{profile.displayName}</span>
                   <Button
-                    variant='secondary'
-                    size='sm'
-                    onClick={() => addUserToAccessList(profile.uid)}
+                    size='icon'
+                    className='rounded-full!'
+                    onClick={() => removeUserFromAccessList(profile.key)}
                     disabled={!isRestricted}
                   >
-                    Grant
+                    <X className='h-3 w-3' />
                   </Button>
                 </div>
               ))
             )}
           </div>
-          {shownUsers.length < availableUsers.length ? (
-            <p className='text-muted-foreground pt-2 text-xs'>
-              Showing {shownUsers.length} of {availableUsers.length}. Search to find the rest.
-            </p>
-          ) : null}
-        </div>
-      </div>
 
-      <div className='bg-background/90 border-border sticky bottom-0 z-10 flex items-center justify-between gap-3 border-t py-3 backdrop-blur'>
+          <div>
+            <div className='text-foreground mb-2 text-sm font-medium'>
+              Available users
+            </div>
+            <div className='mb-3'>
+              <Input
+                className='placeholder:text-muted-foreground disabled:placeholder:text-muted-foreground disabled:opacity-100'
+                value={searchTerm}
+                onChange={(event) => {
+                  setSearchTerm(event.target.value);
+                  if (searchError) {
+                    setSearchError('');
+                  }
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' && hasNoSearchResults) {
+                    event.preventDefault();
+                    addSearchTermToAccessList();
+                  }
+                }}
+                placeholder={
+                  hasNoSearchResults
+                    ? 'No match — add this email'
+                    : 'Search users by name or email'
+                }
+                disabled={!isRestricted}
+              />
+            </div>
+
+            {hasNoSearchResults ? (
+              <div className='border-border mb-3 flex items-center justify-between gap-2 rounded-lg border border-dashed p-2'>
+                <span className='text-muted-foreground text-xs'>
+                  No matching users found. Add this email instead.
+                </span>
+                <Button
+                  variant='secondary'
+                  size='sm'
+                  onClick={addSearchTermToAccessList}
+                  disabled={!isRestricted}
+                >
+                  Add email
+                </Button>
+              </div>
+            ) : null}
+
+            {searchError ? (
+              <p className='text-destructive mb-3 text-xs'>{searchError}</p>
+            ) : null}
+
+            <div className='divide-border divide-y'>
+              {availableUsers.length === 0 && !hasNoSearchResults ? (
+                <span className='text-muted-foreground text-sm'>
+                  No matching users found.
+                </span>
+              ) : (
+                shownUsers.map((profile) => (
+                  <div
+                    key={profile.uid}
+                    className='flex items-center justify-between gap-3 py-2'
+                  >
+                    <div className='flex min-w-0 items-center gap-3'>
+                      <UserAvatar user={profile} size='sm' />
+                      <div className='min-w-0'>
+                        <div className='text-foreground truncate text-sm'>
+                          {profile.displayName ?? profile.email}
+                        </div>
+                        <div className='text-muted-foreground truncate text-xs'>
+                          {profile.email}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant='secondary'
+                      size='sm'
+                      className={DISABLED_CLASS}
+                      onClick={() => addUserToAccessList(profile.uid)}
+                      disabled={!isRestricted}
+                    >
+                      Grant
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+            {shownUsers.length < availableUsers.length ? (
+              <p className='text-muted-foreground pt-2 text-xs'>
+                Showing {shownUsers.length} of {availableUsers.length}. Search
+                to find the rest.
+              </p>
+            ) : null}
+          </div>
+        </div>
+      </section>
+
+      <div
+        className={join(
+          SURFACE_CLASS,
+          'border-border/60 sticky bottom-0 z-10 -mx-4 -mb-12 flex items-center justify-between gap-3 border-t px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_12px_-6px_rgb(0_0_0/0.12)] sm:mx-0 sm:mb-0 sm:rounded-2xl sm:border',
+        )}
+      >
         <p role='status' className='text-muted-foreground min-w-0 text-sm'>
-          {isDirty ? 'You have unsaved changes.' : 'Everything is saved.'}
+          {isDirty ? 'You have unsaved changes.' : 'No changes'}
         </p>
-        <Button onClick={saveChanges} disabled={isSaving || !isDirty}>
+        <Button
+          className={join('shrink-0 whitespace-nowrap', DISABLED_CLASS)}
+          onClick={saveChanges}
+          disabled={isSaving || !isDirty}
+        >
           {isSaving ? 'Saving...' : 'Save changes'}
         </Button>
       </div>

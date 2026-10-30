@@ -209,7 +209,7 @@ and a Dune IMAX showing entered as an all-in $21.39 total. Two planned showings 
 without an answer (Midnight Matinee four days ago and Hometown Film Fest Shorts yesterday),
 so the Seen prompt opens on load; The Matrix and both Dune viewings carry star ratings.
 
-To add a main app or mini-app, create a module in `scripts/seeds/`, seed data under
+To add a main app or app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its
 scope here. Keep fixed fixture UIDs in `scripts/seeds/types.ts` so global and
 app-specific records always agree.
