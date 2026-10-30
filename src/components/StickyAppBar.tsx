@@ -7,7 +7,7 @@ interface StickyAppBarProps {
   leading: ReactNode;
   /** Quick actions on the right (alerts, share, a menu). */
   trailing?: ReactNode;
-  /** Slides in beside the back control, on one line, once the bar has stuck to the top of the screen. */
+  /** Slides in beside the back control, on one line, once the bar has stuck to the top of the screen; empty when `leading` already carries the title. */
   title: string;
   /** The page's own title: the bar's copy appears once half of it has scrolled under the bar, and leaves as soon as half of it is back. */
   titleRef?: RefObject<HTMLElement | null>;
@@ -53,15 +53,17 @@ function StickyAppBar({ leading, trailing, title, titleRef, className }: StickyA
     >
       <div className='flex min-w-0 flex-1 items-center gap-2'>
         {leading}
-        <p
-          aria-hidden={!isTitleShown}
-          className={join(
-            'min-w-0 flex-1 truncate text-base font-semibold transition-all duration-200',
-            isTitleShown ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
-          )}
-        >
-          {title}
-        </p>
+        {title ? (
+          <p
+            aria-hidden={!isTitleShown}
+            className={join(
+              'min-w-0 flex-1 truncate text-base font-semibold transition-all duration-200',
+              isTitleShown ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-2 opacity-0',
+            )}
+          >
+            {title}
+          </p>
+        ) : null}
       </div>
       {trailing}
     </div>
