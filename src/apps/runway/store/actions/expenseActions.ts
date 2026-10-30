@@ -35,7 +35,7 @@ export async function renameExpense(
   });
 }
 
-/** Removes the group and takes it off each purchase in it, which are otherwise left as they were. */
+/** Removes the group and takes it off each purchase in it; each purchase's `updatedAt` moves on, so an edit already open elsewhere is refused rather than putting the group back. */
 export async function deleteExpense(
   uid: string,
   expense: OpenExpense,
@@ -47,7 +47,13 @@ export async function deleteExpense(
     ),
   );
   const batch = writeBatch(db);
-  members.docs.forEach((entry) => batch.update(entry.ref, { expenseId: null }));
+  const now = Date.now();
+  members.docs.forEach((entry) =>
+    batch.update(entry.ref, {
+      expenseId: null,
+      updatedAt: Math.max(now, (entry.get('updatedAt') as number) + 1),
+    }),
+  );
   batch.delete(expenseRef(uid, expense.id));
   await batch.commit();
 }

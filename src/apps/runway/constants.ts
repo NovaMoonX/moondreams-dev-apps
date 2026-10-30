@@ -720,7 +720,7 @@ export const SPEND_WORDS = {
   addGroup: 'Add to a group',
   newGroup: 'New group',
   groupLabel: 'Which group?',
-  noGroup: 'No group',
+  goneGroup: 'a removed group',
   partOfGroup: 'Part of',
   groupHead: 'Group',
   renameGroup: 'Rename the group',

@@ -247,9 +247,7 @@ function PurchaseForm({
       label: editing?.label ?? null,
       note: editing?.note ?? null,
       link: editing?.link ?? null,
-      group: expenses.some((expense) => expense.id === editing?.expenseId)
-        ? (editing?.expenseId ?? null)
-        : null,
+      group: editing?.expenseId ?? null,
       groupName: '',
     },
   }));
@@ -414,11 +412,11 @@ function PurchaseForm({
     const found = allCards.find((card) => card.id === id);
     return found ? getCardName(found, allCards) : CARD_WORDS.cashOrDebit;
   };
-  const nameOfGroup = (id: string | null) =>
+  const nameOfGroup = (id: string) =>
     expenses.find((expense) => expense.id === id)?.name ??
-    (id !== null && formData.extras.group === NEW_CHOICE
+    (formData.extras.group === NEW_CHOICE
       ? formData.extras.groupName.trim()
-      : SPEND_WORDS.noGroup);
+      : SPEND_WORDS.goneGroup);
   const cardOptions = allCards.filter(
     (card) => card.archivedAt === null || card.id === paidByCardId,
   );
@@ -487,6 +485,7 @@ function PurchaseForm({
   const linkText = formData.extras.link?.trim() ?? '';
   const linkPreview = useLinkPreview(linkText, {
     getQueryOptions: linkPageQueryOptions,
+    isEnabled: openExtra === 'link' && linkText !== (editing?.link ?? ''),
   });
 
   const getBlocker = () => {
