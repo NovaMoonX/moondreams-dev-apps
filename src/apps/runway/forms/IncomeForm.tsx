@@ -86,6 +86,7 @@ import type {
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import DateInput from '@/components/DateInput';
 
 type Frequency = (typeof INCOME_FREQUENCIES)[number];
 type EndKind = (typeof INCOME_ENDINGS)[number];
@@ -578,8 +579,7 @@ function IncomeFormBody({
                 <p className='text-muted-foreground text-xs'>
                   {isOnce ? 'Arrives' : 'Next payday'}
                 </p>
-                <Input
-                  type='date'
+                <DateInput
                   variant='outline'
                   aria-label={isOnce ? 'Arrives' : 'First payday'}
                   value={formData.startDate}
@@ -639,8 +639,7 @@ function IncomeFormBody({
                   }}
                 />
                 {formData.endKind === 'date' && (
-                  <Input
-                    type='date'
+                  <DateInput
                     variant='outline'
                     aria-label='Last payday'
                     min={formData.startDate || undefined}

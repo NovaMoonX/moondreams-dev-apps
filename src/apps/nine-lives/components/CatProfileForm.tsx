@@ -17,6 +17,7 @@ import DeleteIconButton from './DeleteIconButton';
 import ModalFooterActions from './ModalFooterActions';
 import TagPickerField from './TagPickerField';
 import { generateUuid } from '@/utils/idUtils';
+import DateInput from '@/components/DateInput';
 
 interface CatProfileFormProps {
   householdId?: string;
@@ -190,8 +191,7 @@ function DateOfBirthGroupField({
     <div className='space-y-2'>
       <div className='space-y-1'>
         <Label className='text-sm'>Date of birth</Label>
-        <Input
-          type='date'
+        <DateInput
           value={value.dateOfBirth}
           onChange={(event) => onValueChange({ ...value, dateOfBirth: event.target.value })}
           variant='outline'
@@ -232,8 +232,7 @@ function SpayNeuterGroupField({
       {value.isSpayedNeutered && (
         <div className='space-y-1'>
           <Label className='text-sm'>Spayed / neutered date (optional)</Label>
-          <Input
-            type='date'
+          <DateInput
             value={value.spayedNeuteredAt}
             onChange={(event) => onValueChange({ ...value, spayedNeuteredAt: event.target.value })}
             variant='outline'
@@ -326,8 +325,7 @@ function IdentificationFields({
         </div>
         <div className='space-y-1'>
           <Label className='text-sm'>Adoption date</Label>
-          <Input
-            type='date'
+          <DateInput
             value={value.adoptedAt}
             onChange={(event) => update({ adoptedAt: event.target.value })}
             variant='outline'
@@ -505,8 +503,7 @@ function KeyDatesAndNotesFields({
               placeholder='e.g. Microchipped'
               disabled={disabled}
             />
-            <Input
-              type='date'
+            <DateInput
               value={toDateInputValue(entry.date)}
               onChange={(event) => updateKeyDate(entry.id, { date: fromDateInputValue(event.target.value) ?? 0 })}
               variant='outline'

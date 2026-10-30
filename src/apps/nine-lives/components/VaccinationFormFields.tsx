@@ -18,6 +18,7 @@ import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
 import LinkedVisitsField from './LinkedVisitsField';
 import ModalFooterActions from './ModalFooterActions';
+import DateInput from '@/components/DateInput';
 
 const NONE_OPTION_VALUE = '';
 
@@ -59,8 +60,7 @@ function AdditionalDetailsFields({
       <div className='space-y-3'>
         <div className='space-y-1'>
           <Label className='text-sm'>Next due date</Label>
-          <Input
-            type='date'
+          <DateInput
             value={value.expiresAt}
             onChange={(event) => update({ expiresAt: event.target.value })}
             variant='outline'

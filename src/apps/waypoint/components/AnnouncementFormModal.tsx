@@ -18,6 +18,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { ANNOUNCEMENT_SEVERITY_LABELS } from '@apps/waypoint/constants';
 import type { AnnouncementSeverity } from '@apps/waypoint/types';
+import DateInput from '@/components/DateInput';
 
 interface AnnouncementExpiry {
   enabled: boolean;
@@ -125,8 +126,7 @@ function AnnouncementFormModal({
           return (
             <div className='space-y-2'>
               <div className='flex gap-2'>
-                <Input
-                  type='date'
+                <DateInput
                   variant='outline'
                   value={expiry.date}
                   onChange={(changeEvent) =>

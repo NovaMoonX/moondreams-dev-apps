@@ -35,6 +35,7 @@ import {
 } from '@apps/pinch/store/actions/cookActions';
 import type { Cook } from '@apps/pinch/types';
 import { isValidCookServings } from '@apps/pinch/utils/cooks';
+import DateInput from '@/components/DateInput';
 
 const { custom } = FormFactories;
 
@@ -107,8 +108,7 @@ function CookEditView({
             <div className='grid gap-3 @min-[19rem]:grid-cols-2'>
               <div className='min-w-0 space-y-1'>
                 <Label className='text-muted-foreground text-xs'>Day</Label>
-                <Input
-                  type='date'
+                <DateInput
                   variant='outline'
                   aria-label='Day cooked'
                   className={join(COMPACT_INPUT_CLASS, 'min-w-0')}

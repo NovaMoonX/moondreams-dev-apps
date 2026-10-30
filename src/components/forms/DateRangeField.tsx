@@ -1,6 +1,6 @@
-import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import { shiftDateRangeStart } from '@/utils/dateRangeUtils';
+import DateInput from '@/components/DateInput';
 
 export interface DateRangeValue {
   startDate: string;
@@ -17,8 +17,7 @@ function DateRangeField({ value, onChange, disabled = false }: DateRangeFieldPro
   return (
     <div className='@container'>
       <div className='grid gap-2 @min-[26rem]:grid-cols-[1fr_auto_1fr] @min-[26rem]:items-center'>
-        <Input
-          type='date'
+        <DateInput
           variant='outline'
           className='min-w-0'
           aria-label='Start date'
@@ -32,8 +31,7 @@ function DateRangeField({ value, onChange, disabled = false }: DateRangeFieldPro
         <span aria-hidden className='text-foreground hidden font-semibold @min-[26rem]:block'>
           –
         </span>
-        <Input
-          type='date'
+        <DateInput
           variant='outline'
           className='min-w-0'
           aria-label='End date'

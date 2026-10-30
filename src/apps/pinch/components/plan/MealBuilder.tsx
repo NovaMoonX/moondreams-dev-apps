@@ -82,6 +82,7 @@ import {
   getMealNutrition,
   hasShownValue,
 } from '@apps/pinch/utils/nutritionMath';
+import DateInput from '@/components/DateInput';
 
 const MEAL_TYPE_OPTIONS = MEAL_TYPES.map((value) => ({
   value,
@@ -755,8 +756,7 @@ function MealBuilder({
                 }}
               />
               {dayPillValue === OTHER_DAY && (
-                <Input
-                  type='date'
+                <DateInput
                   variant='outline'
                   aria-label='Other day'
                   value={dayKey}

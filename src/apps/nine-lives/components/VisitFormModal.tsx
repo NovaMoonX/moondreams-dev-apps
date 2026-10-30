@@ -47,6 +47,7 @@ import DeleteIconButton from './DeleteIconButton';
 import DetailsDisclosure from './DetailsDisclosure';
 import ExpenseLineItemsField from './ExpenseLineItemsField';
 import ModalFooterActions from './ModalFooterActions';
+import DateInput from '@/components/DateInput';
 
 export interface VisitExpenseDraft {
   catIds: string[];
@@ -128,8 +129,7 @@ function VisitDateTimeField({
     <div className='grid grid-cols-2 gap-3'>
       <div className='space-y-1'>
         <Label className='text-sm'>Date</Label>
-        <Input
-          type='date'
+        <DateInput
           value={value.date}
           onChange={(event) => update({ date: event.target.value })}
           variant='outline'

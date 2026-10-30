@@ -122,6 +122,7 @@ import PurchaseEffectNotice, {
   CardChargeNotice,
 } from '@apps/runway/components/PurchaseEffectNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import DateInput from '@/components/DateInput';
 
 const ORIGIN_PAGE = 20;
 const MOST_USED_SHOWN = 5;
@@ -1283,8 +1284,7 @@ function PurchaseFormBody({
       isAnswered: date !== null && date <= today,
       isPreAnswered: true,
       render: () => (
-        <Input
-          type='date'
+        <DateInput
           variant='outline'
           aria-label={SPEND_WORDS.day}
           max={todayValue}

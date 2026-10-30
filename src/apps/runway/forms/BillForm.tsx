@@ -108,6 +108,7 @@ import {
 } from '@apps/runway/utils/groupChoice';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import DateInput from '@/components/DateInput';
 
 const CASH_VALUE = 'cash';
 
@@ -543,8 +544,7 @@ function BillFormBody({
           <p className='text-muted-foreground text-xs'>
             {isDueWord ? 'Due' : 'Starts'}
           </p>
-          <Input
-            type='date'
+          <DateInput
             variant='outline'
             aria-label={isDueWord ? 'Due' : 'Starts'}
             min={startMin}
@@ -613,8 +613,7 @@ function BillFormBody({
                   }}
                 />
                 {formData.endKind === 'date' && (
-                  <Input
-                    type='date'
+                  <DateInput
                     variant='outline'
                     aria-label='Last payment'
                     min={formData.startDate || undefined}
