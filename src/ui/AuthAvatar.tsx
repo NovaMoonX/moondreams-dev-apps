@@ -14,7 +14,7 @@ import { useState } from 'react';
 import { resetFirestoreLocalData } from '@/lib/firebase/localData';
 import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import ChangePhotoModal from '@/ui/ChangePhotoModal';
-import DeviceAccountsModal from '@/ui/DeviceAccountsModal';
+import DeviceAccountsSheet from '@/ui/DeviceAccountsSheet';
 import ProfileModal from '@/ui/ProfileModal';
 import UserAvatar from '@/ui/UserAvatar';
 import FallbackImage from '@components/FallbackImage';
@@ -47,7 +47,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     forgetAccount,
   } = useAuth();
   const { addToast } = useToast();
-  const [isAccountsModalOpen, setIsAccountsModalOpen] = useState(false);
+  const [isAccountsSheetOpen, setIsAccountsSheetOpen] = useState(false);
   const { option, separator, custom } = DropdownMenuFactories;
   const [nameInput, setNameInput] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -144,7 +144,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
     ),
     option({ label: 'Add another account', value: 'add-account', icon: <UserPlus className='size-4' /> }),
     ...(otherAccounts.length > 0
-      ? [option({ label: 'Accounts on this device', value: 'device-accounts', icon: <Users className='size-4' /> })]
+      ? [option({ label: 'Manage accounts', value: 'device-accounts', icon: <Users className='size-4' /> })]
       : []),
     separator(),
   ];
@@ -195,7 +195,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
       return;
     }
     if (value === 'device-accounts') {
-      setIsAccountsModalOpen(true);
+      setIsAccountsSheetOpen(true);
       return;
     }
     if (value === 'admin') {
@@ -272,18 +272,17 @@ function AuthAvatar({ className }: AuthAvatarProps) {
         <ProfileModal user={user} onClose={() => setIsProfileModalOpen(false)} />
       )}
 
-      {isAccountsModalOpen && (
-        <DeviceAccountsModal
-          accounts={rememberedAccounts}
-          currentUid={user.uid}
-          onSwitch={(account) => {
-            setIsAccountsModalOpen(false);
-            handleSwitch(account);
-          }}
-          onForget={forgetAccount}
-          onClose={() => setIsAccountsModalOpen(false)}
-        />
-      )}
+      <DeviceAccountsSheet
+        isOpen={isAccountsSheetOpen}
+        accounts={rememberedAccounts}
+        currentUid={user.uid}
+        onSwitch={(account) => {
+          setIsAccountsSheetOpen(false);
+          handleSwitch(account);
+        }}
+        onForget={forgetAccount}
+        onClose={() => setIsAccountsSheetOpen(false)}
+      />
 
       {isPhotoModalOpen && (
         <ChangePhotoModal user={user} onClose={() => setIsPhotoModalOpen(false)} />
