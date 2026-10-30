@@ -192,6 +192,7 @@ export function useRunwayUrlState() {
   const showTab = (tab: RunwayTab) => {
     if (tab === activeTab) return;
     if (requestedFixes !== null) closeFixes();
+    if (requestedDueBill !== null) closeDueBill();
     if (tab === DEFAULT_RUNWAY_TAB) {
       if (window.history.state?.runwayTabStep) {
         navigate(-1);
@@ -215,10 +216,12 @@ export function useRunwayUrlState() {
     setRequestedSpendEnvelope(envelopeId, { history: 'replace' });
 
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
-  const showPlanSection = (section: PlanSection) =>
+  const showPlanSection = (section: PlanSection) => {
+    if (requestedDueBill !== null) closeDueBill();
     setRequestedSection(section === DEFAULT_PLAN_SECTION ? null : section, {
       history: 'replace',
     });
+  };
 
   const openDay = (dayKey: string) =>
     setRequestedDay(dayKey, { history: 'replace' });

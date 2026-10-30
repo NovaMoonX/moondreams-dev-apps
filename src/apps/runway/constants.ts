@@ -1100,8 +1100,6 @@ export const BUDGET_WORDS = {
     count === 1
       ? 'One needs a look. Open it or remove it.'
       : `${count} need a look. Open them or remove them.`,
-  dueLaterLine: (repeat: string | null) =>
-    repeat === null ? 'Due date later' : `${repeat} · due date later`,
   dueLaterNote: (count: number) =>
     count === 1
       ? 'One bill has no due date yet. Add it later from the plan.'
@@ -1383,6 +1381,7 @@ export const ITEM_SHEET_R2_WORDS = {
   toppedUp: 'Topped up',
   setAsideHeading: 'Set aside from this pay',
   holdsThrough: 'Your plan holds through',
+  holdsThroughUndated: 'not counting bills with no due date',
   everythingPaid: 'Mark all paid',
   markedPaid: (name: string) => `Marked ${name} paid`,
   unmarkedPaid: (name: string) => `${name} is not marked paid`,

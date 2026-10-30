@@ -105,14 +105,15 @@ export function BillSheet({
   const isUndated = schedule.anchor === null;
   const repeat =
     schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);
+  const getDueFact = () => {
+    if (isUndated) return BILL_WORDS.needsDueDate;
+    if (payment) return `due ${formatDateShortUTC(payment.dueOn)}`;
+    return 'No payment left';
+  };
   const fact = [
     PRIORITY_LABELS[bill.priority],
     repeat,
-    isUndated
-      ? BILL_WORDS.needsDueDate
-      : payment
-        ? `due ${formatDateShortUTC(payment.dueOn)}`
-        : 'No payment left',
+    getDueFact(),
     getProgress(payment),
   ]
     .filter(Boolean)

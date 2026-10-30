@@ -89,8 +89,10 @@ function BillsScreen() {
     figuresByGroup.every(({ bills: inGroup }) => inGroup.length === 0);
   const ungrouped = visible.filter(({ groupId }) => groupId === null);
   const { dueBillId, closeDueBill } = useRunwayUrlState();
-  const openBill = listed.find(
-    ({ item }) => item.id === (openBillId ?? dueBillId),
+  const openBill = listed.find(({ item, payload }) =>
+    openBillId !== null
+      ? item.id === openBillId
+      : item.id === dueBillId && payload.timing.schedule.anchor === null,
   );
 
   const getCard = (rows: typeof visible) => (

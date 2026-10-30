@@ -30,10 +30,10 @@ function ProblemRow({ group }: ProblemRowProps) {
       return;
     }
     closeFixes();
-    if (group.kind === 'undated' && group.bills.length === 1)
-      openDueBill(group.bills[0].billId);
     showPlanSection('bills');
     showTab('plan');
+    if (group.kind === 'undated' && group.bills.length === 1)
+      openDueBill(group.bills[0].billId);
   };
 
   return (

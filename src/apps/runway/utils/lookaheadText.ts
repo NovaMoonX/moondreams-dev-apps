@@ -46,14 +46,15 @@ export type ProblemGroup =
   | { kind: 'single'; on: number; problem: LookaheadProblem }
   | {
       kind: 'undated';
-      on: number;
       bills: readonly { billId: string; name: string }[];
     };
+
+export type DatedProblemGroup = Exclude<ProblemGroup, { kind: 'undated' }>;
 
 /** The problems soonest first, one group per income day that runs short: the order the summary row and the list it opens both use. */
 export function groupProblems(problems: readonly LookaheadProblem[]) {
   const sorted = [...problems].sort((a, b) => a.on - b.on);
-  const result = sorted.reduce<ProblemGroup[]>((groups, problem) => {
+  const result = sorted.reduce<DatedProblemGroup[]>((groups, problem) => {
     if (problem.kind !== 'short') {
       return [...groups, { kind: 'single', on: problem.on, problem }];
     }
