@@ -73,7 +73,7 @@ You wear the **product designer** hat. **Phone first** (390×844, then 320×568,
 
 When the brief says **polish mode**, you review the finished MVP of one app on its polish branch instead of a diff. Use these instructions in place of the diff-specific parts of the preamble:
 
-You are reviewing the finished MVP of the <App Name> mini-app in NovaMoonX/moondreams-dev-apps, using the local clone at /home/user/moondreams-dev-apps on branch `<polish branch>`. Read these first:
+You are reviewing the finished MVP of the <App Name> app in NovaMoonX/moondreams-dev-apps, using the local clone at /home/user/moondreams-dev-apps on branch `<polish branch>`. Read these first:
 - `src/apps/<id>/README.md`, `src/apps/<id>/PRODUCT.md`, `src/apps/<id>/UX.md` and `src/apps/<id>/TECHNICAL.md`;
 - `docs/conventions/design-ux.md` and `docs/conventions/product.md`.
 

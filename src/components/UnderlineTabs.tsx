@@ -13,7 +13,7 @@ interface UnderlineTabsProps<T extends string> {
   tabs: readonly { value: T; label: string }[];
 }
 
-/** Underline tabs for utility screens such as the admin dashboard (a mini-app uses `Tabs variant='pills'`): equal widths on a phone, sized to their labels from `sm`. Pair each tab with a `TabPanel`. */
+/** Underline tabs for utility screens such as the admin dashboard (an app uses `Tabs variant='pills'`): equal widths on a phone, sized to their labels from `sm`. Pair each tab with a `TabPanel`. */
 export function UnderlineTabs<T extends string>({ value, onChange, tabs }: UnderlineTabsProps<T>) {
   const isPhone = useMediaQuery().isBelow('sm');
 

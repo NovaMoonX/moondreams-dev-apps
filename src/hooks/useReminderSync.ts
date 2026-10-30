@@ -6,7 +6,7 @@ import { startRemindersListener } from '@/store/listeners/remindersListener';
 import { setReminders } from '@/store/slices/remindersSlice';
 import { useAppDispatch } from '@/store/index';
 
-/** Central, app-wide: reminders where the signed-in user is in `targetUids`, regardless of mini-app. */
+/** Central, app-wide: reminders where the signed-in user is in `targetUids`, regardless of app. */
 export function useReminderSync() {
   const { user } = useAuth();
   const dispatch = useAppDispatch();

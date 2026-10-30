@@ -793,7 +793,7 @@ scripts/seeds/aList.ts
 
 Charts use `recharts` (already a dependency), following Nine Lives' `TrendLineChart` pattern.
 
-**Wiring checklist** (everything a new mini-app has to touch; each item is in the roadmap):
+**Wiring checklist** (everything a new app has to touch; each item is in the roadmap):
 
 - `src/lib/types/appCatalog.ts`: `'a-list'` in `AppId`. `src/lib/app/app.registry.ts`: a registry entry (`status: 'draft'`, `path: '/a-list'`).
 - `src/routes/AppRoutes.tsx`: lazy route to `@apps/a-list/AList`.

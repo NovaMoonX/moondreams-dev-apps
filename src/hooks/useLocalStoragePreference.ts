@@ -9,7 +9,7 @@ function readStoredPreference(key: string, defaultValue: boolean): boolean {
   }
 }
 
-/** Any mini-app's per-viewer boolean preference (a view toggle, "show archived",
+/** Any app's per-viewer boolean preference (a view toggle, "show archived",
  * etc.) — remembered locally, and never blocking rendering if storage is
  * unavailable (private browsing, blocked site data, etc). */
 export function useLocalStoragePreference(key: string, defaultValue: boolean) {

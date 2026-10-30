@@ -37,7 +37,7 @@ Conventions that apply to every issue:
 **Context:** Read the registry comment at the top of `src/lib/app/app.registry.ts`, the New-app checklist in `.github/copilot-instructions.md`, `scripts/checkAppWiring.ts`, and the TDD's Decisions 16 and 18 and its "Wiring checklist".
 
 ### Description
-Make Runway a real, access-gated mini-app that opens to a placeholder, counts a member's first visit, and appears in the root README's app list, so every later issue can be opened and checked in the running app. Runway has no manifest of its own: the site is one PWA.
+Make Runway a real, access-gated app that opens to a placeholder, counts a member's first visit, and appears in the root README's app list, so every later issue can be opened and checked in the running app. Runway has no manifest of its own: the site is one PWA.
 
 ### Possible Approach
 1. Add the registry entry (`id: 'runway'`, `name: 'Runway'`, `path: '/runway'`, `status: 'draft'`, today's `createdAt`, a one-sentence description in the voice of the others) and widen `AppId`. Route it as a `ProtectedRoute appId='runway'` (Decision 16, beta access), following A-List's entry exactly.
@@ -75,7 +75,7 @@ Make Runway a real, access-gated mini-app that opens to a placeholder, counts a 
 - `src/lib/app/app.registry.ts` (`resumeParams: ['tab']`)
 - `.github/instructions/runway.instructions.md` and `.claude/rules/runway.md` (identical bodies)
 
-**Context:** Read the TDD's "Theming", "UI Conventions Applied" and Decision 17, `UX.md` section 1 (what is specific to Runway) and the sitemap; Pinch's and A-List's `BottomNav`, theme stylesheet and `use<App>Theme`; CLAUDE.md's "Designing a mini-app's look" and "An app resumes where you left it".
+**Context:** Read the TDD's "Theming", "UI Conventions Applied" and Decision 17, `UX.md` section 1 (what is specific to Runway) and the sitemap; Pinch's and A-List's `BottomNav`, theme stylesheet and `use<App>Theme`; CLAUDE.md's "Designing an app's look" and "An app resumes where you left it".
 
 ### Description
 Open Runway to three tabs, Home, Days and Plan, in a restrained, matter-of-fact theme with light and dark modes. Each tab shows one friendly empty state. The Spend tab does not exist yet.

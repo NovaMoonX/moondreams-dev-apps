@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-/** Shared debounce delays, so every mini-app's autocomplete/auto-fetch feels the same. */
+/** Shared debounce delays, so every app's autocomplete/auto-fetch feels the same. */
 export const DEBOUNCE_MS = {
   autocomplete: 450,
   linkDetection: 800,

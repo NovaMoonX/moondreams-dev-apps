@@ -21,7 +21,7 @@
   contain-intrinsic-size: auto var(--defer-size, 600px);
 }
 
-/* A mini-app's own header on a phone: it sticks under the site header while that is showing and takes
+/* An app's own header on a phone: it sticks under the site header while that is showing and takes
  * the top of the screen once the site header slides away (`data-site-header` on <html>, set by Layout). */
 @utility sticky-app-bar {
   position: sticky;
@@ -63,7 +63,7 @@
 
 /* A subview is a floating card on a tint of the app's colour. While one is mounted `Subview` sets `data-subview-open` on <html>:
  * the site header steps aside (the card brings its own back control), the page behind turns to the backdrop colour, and the
- * sticky bars stick to the top of the screen. A mini-app restyles the card from its theme class with these tokens:
+ * sticky bars stick to the top of the screen. An app restyles the card from its theme class with these tokens:
  *   --subview-backdrop         the tint around the card (opaque; the default mixes the primary into the background)
  *   --subview-backdrop-dark    the same in dark, darker than the card so it still reads as raised
  *   --subview-border           the card's hairline

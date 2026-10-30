@@ -815,7 +815,7 @@ service cloud.firestore {
       allow write: if isUser(userId);
     }
 
-    // Central, cross-app: every mini-app schedules and reads its own reminders. Only the scheduled
+    // Central, cross-app: every app schedules and reads its own reminders. Only the scheduled
     // Function (admin SDK) marks one `sent` or rolls a recurring one forward.
     match /reminders/{reminderId} {
       function relatedGroupOf(data) {

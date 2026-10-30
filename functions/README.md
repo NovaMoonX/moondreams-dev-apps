@@ -1,6 +1,6 @@
 # Cloud Functions for MoonDreams Apps
 
-Server-side code for the mini-apps. Every function:
+Server-side code for the apps. Every function:
 
 - is exported from `functions/src/index.ts`;
 - runs in `us-central1`;
@@ -54,7 +54,7 @@ Every callable requires a signed-in caller, except `getCalendarShare` and `getPi
 | `AMC_API_BASE` | env, optional | AMC calls | `functions/.env.local`. Points AMC calls at another server; a test aid, never set in production. |
 | `A_LIST_THEATRE_APP_DAILY_LOOKUP_CAP` / `A_LIST_THEATRE_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 500 and 40) | `findTheatres` | `functions/.env.local` locally |
 | `A_LIST_SHOWTIME_APP_DAILY_LOOKUP_CAP` / `A_LIST_SHOWTIME_MEMBER_DAILY_LOOKUP_CAP` | env, optional (defaults 2000 and 200) | `findShowtimes` (its own budget, counted in `lookupUsage` under `showtimes_`) | `functions/.env.local` locally |
-| `PIPELINE_KEY` | Functions secret, optional (reporting is off without it) | `recordPipelineEvent` | Read at run time, never bound, so a deploy never needs it. `firebase functions:secrets:set PIPELINE_KEY --project moondreams-dev-apps` (any long random string, e.g. `openssl rand -hex 32`); the same value goes in the `PIPELINE_KEY` GitHub secret and the Claude Code environment. `functions/.env.local` locally |
+| `PIPELINE_KEY` | Functions secret, optional (reporting is off without it) | `recordPipelineEvent` | Read at run time, never bound, so a deploy never needs it. `firebase functions:secrets:set PIPELINE_KEY --project moondreams-dev-apps` (any long random string, e.g. `openssl rand -hex 32`), then give the runtime account `roles/secretmanager.secretAccessor` on it (the `gcloud secrets add-iam-policy-binding` line under "Secrets and config"; without it every call answers "Pipeline reporting is off"); the same value goes in the `PIPELINE_KEY` GitHub secret and the Claude Code environment. `functions/.env.local` locally |
 | `IMAGE_SEARCH_PROVIDERS` | env, optional (default `ddg,google`) | `searchRecipeImages` | `functions/.env.local` locally; in production a committed `functions/.env` line (`IMAGE_SEARCH_PROVIDERS=google`) and a deploy. Providers are tried in the order listed and the first with pictures wins; `google` alone makes Google the only one. Unknown names are ignored. |
 | `GOOGLE_CSE_KEY` / `GOOGLE_CSE_CX` | Secret Manager secrets, **optional, not bound to the function, so the deploy never needs them** | `searchRecipeImages` (the Google provider) | See "Pinch: `searchRecipeImages`" below. Absent, the Google provider is skipped. Locally, `functions/.env.local` (`GOOGLE_CSE_KEY=…`) is read first. |
 | `IMAGE_SEARCH_GOOGLE_DAILY_CAP` / `IMAGE_SEARCH_DDG_DAILY_CAP` | env, optional (defaults 90 and 1500) | `searchRecipeImages` | `functions/.env.local` locally. Google's free tier is 100 a day, counted from midnight Pacific time. |

@@ -65,7 +65,7 @@ Introduce Redux Toolkit to the repo for the first time. Pure infrastructure — 
 
 #### Description
 
-Register Nine Lives as an official mini-app: manifest, placeholder branding assets, and Cloudflare worker OG meta tag injection, following the same pattern Worth the Wait already uses.
+Register Nine Lives as an official app: manifest, placeholder branding assets, and Cloudflare worker OG meta tag injection, following the same pattern Worth the Wait already uses.
 
 #### Possible Approach
 
@@ -643,7 +643,7 @@ Structured diet tracking per cat — food type, brand, feedings per day, automat
 
 #### Description
 
-Build the reminder system as shared infrastructure any mini-app can call — deliberately sequenced late in this roadmap. The due-dates visibility that matters most for MVP (Issue 12) already works without this; this issue is specifically about the proactive push notification, which is a genuine stretch goal, not a blocker for the rest of Nine Lives shipping.
+Build the reminder system as shared infrastructure any app can call — deliberately sequenced late in this roadmap. The due-dates visibility that matters most for MVP (Issue 12) already works without this; this issue is specifically about the proactive push notification, which is a genuine stretch goal, not a blocker for the rest of Nine Lives shipping.
 
 #### Possible Approach
 

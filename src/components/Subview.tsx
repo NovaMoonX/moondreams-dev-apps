@@ -96,7 +96,7 @@ interface SubviewProps {
 }
 
 /**
- * A nested page that takes over a mini-app: it opens at the top, brings its own way back, and
+ * A nested page that takes over an app: it opens at the top, brings its own way back, and
  * closes on the browser's back gesture rather than leaving the page beneath it. It floats as a card on
  * a tint of the app's colour and hides the site header; the card's look is the `--subview-*` tokens, and its
  * unlayered CSS beats any Tailwind surface class in `className` (use it for width only).

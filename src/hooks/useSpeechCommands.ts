@@ -404,7 +404,7 @@ export function canUseSpeechCommands() {
 }
 
 /**
- * Voice for any mini-app: listens for spoken phrases with the browser's speech recognition while the person has it on,
+ * Voice for any app: listens for spoken phrases with the browser's speech recognition while the person has it on,
  * and only after `start`, which comes from a tap and readies the browser's voice and sound (an app may call it without
  * one only when the person's earlier choice and a granted microphone permission say so). It restarts after the browser
  * ends a session, backing off and giving up after repeated failures, pauses while `say` reads something aloud (so it

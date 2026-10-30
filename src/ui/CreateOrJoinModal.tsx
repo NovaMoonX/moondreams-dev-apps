@@ -38,7 +38,7 @@ interface CreateOrJoinModalProps {
 }
 
 /**
- * Shared create-or-join-by-code onboarding modal for mini-apps built around a
+ * Shared create-or-join-by-code onboarding modal for apps built around a
  * shared container a user creates or requests to join (Nine Lives' household,
  * Worth the Wait's space). Owns the modal, tabs, and the join tab (identical
  * across both); each app supplies its own create-tab content and terminology.

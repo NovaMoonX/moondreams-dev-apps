@@ -1,6 +1,6 @@
 # Nine Lives — Technical Design Document
 
-> **Global Data Keying**: All application data is namespaced under the mini-app identifier `nine-lives` (e.g., Firestore root path `apps/nine-lives/...`), with two exceptions: the shared user profile (`users/{uid}`) and the cross-app reminder system (`reminders/{reminderId}`), both intentionally central so other mini-apps can use them too.
+> **Global Data Keying**: All application data is namespaced under the app identifier `nine-lives` (e.g., Firestore root path `apps/nine-lives/...`), with two exceptions: the shared user profile (`users/{uid}`) and the cross-app reminder system (`reminders/{reminderId}`), both intentionally central so other apps can use them too.
 
 > **Household model**: cats belong to a `Household`, not directly to a single user. `Household.members` is an array of UIDs and the household uses a shared `inviteCode` plus a top-level `pendingRequests` collection to support multiple caretakers. All household-owned data (cats, vet clinics, doctors, visits, emergency info, care instructions) is nested under `households/{householdId}` and access-checked against `members`, the same pattern Worth the Wait uses for `space.members`.
 
@@ -816,11 +816,11 @@ This is explicitly sequenced after the rest of Nine Lives' UI is working, not ea
 
 ## Client State Management (Redux Toolkit)
 
-Nine Lives is the first mini-app on this pattern; the repo has no Redux yet, so the central foundation is built alongside it.
+Nine Lives is the first app on this pattern; the repo has no Redux yet, so the central foundation is built alongside it.
 
 ### Store shape and per-app typing
 
-Every mini-app exports its own named state interface and reducer, so `RootState` composes named types instead of an inline blob — and any selector built on top of `selectNineLives(state)` is typed against `NineLivesState` without casting:
+Every app exports its own named state interface and reducer, so `RootState` composes named types instead of an inline blob — and any selector built on top of `selectNineLives(state)` is typed against `NineLivesState` without casting:
 
 ```typescript
 // src/apps/nine-lives/store/index.ts
@@ -857,7 +857,7 @@ export const selectNineLives = (state: RootState): NineLivesState => state.nineL
 export interface RootState {
   user: UserState;
   reminders: RemindersState;
-  nineLives: NineLivesState; // typed via the mini-app's own exported interface
+  nineLives: NineLivesState; // typed via the app's own exported interface
 }
 ```
 
@@ -1043,13 +1043,13 @@ src/store/
 src/lib/notifications/
 ├── requestPushPermission.ts
 ├── registerDeviceToken.ts     # writes into users/{uid}.fcmTokens
-└── scheduleReminder.ts        # thin helper any mini-app calls to create a Reminder doc
+└── scheduleReminder.ts        # thin helper any app calls to create a Reminder doc
 
 functions/src/notifications/
 └── sendDueReminders.ts        # scheduled Cloud Function, queries reminders, sends via FCM, marks sent
 ```
 
-Mini-app-scoped state and components:
+App-scoped state and components:
 
 ```
 src/apps/nine-lives/

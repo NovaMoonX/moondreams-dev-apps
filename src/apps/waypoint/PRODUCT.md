@@ -75,5 +75,5 @@ Planning trips in Google Docs starts out well but quickly turns into a chaotic w
 
 - **Frontend:** React + TypeScript + Tailwind CSS.
 - **Backend & Realtime:** Firebase (Firestore, Realtime Database, Auth).
-- **State Management:** Redux Toolkit, consistent with the platform's other mini apps.
-- **Deployment:** Ships as a mini-app within the existing platform, under `src/apps/waypoint`.
+- **State Management:** Redux Toolkit, consistent with the platform's other apps.
+- **Deployment:** Ships as an app within the existing platform, under `src/apps/waypoint`.

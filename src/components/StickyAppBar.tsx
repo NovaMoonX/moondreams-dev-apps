@@ -14,7 +14,7 @@ interface StickyAppBarProps {
   className?: string;
 }
 
-/** A mini-app header row on a phone that keeps back navigation on screen, and shows `title` beside it once stuck. */
+/** An app header row on a phone that keeps back navigation on screen, and shows `title` beside it once stuck. */
 function StickyAppBar({ leading, trailing, title, titleRef, className }: StickyAppBarProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);

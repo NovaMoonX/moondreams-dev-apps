@@ -1,6 +1,6 @@
 # Graduating an app
 
-How a mini-app that lives inside this site becomes an app of its own, with its own address, and what has to be true before it does. This is a plan to refine, not a record of something done: no app has graduated yet, and the open decisions at the end are the owner's.
+How an app that lives inside this site becomes an app of its own, with its own address, and what has to be true before it does. This is a plan to refine, not a record of something done: no app has graduated yet, and the open decisions at the end are the owner's.
 
 ## The three stages
 
