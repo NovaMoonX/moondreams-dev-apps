@@ -10,6 +10,7 @@ import { useBackStep } from '@/hooks/useBackHistory';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import {
@@ -40,6 +41,7 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
   const today = todayAsUtcDate(useNow(60_000));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const balances = useAppSelector(selectBalances);
+  const emojiOf = useLiveEmojiResolver();
   const isLedgerReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
@@ -52,7 +54,7 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
   const entries = envelopes.map(({ item, version }) => ({
     id: item.id,
     name: version.payload.name,
-    emoji: version.payload.emoji,
+    emoji: emojiOf(version.payload.emoji, version.payload.groupId),
     priority: version.payload.priority,
     leftCents: balances.assignedByItem[item.id] ?? 0,
   }));

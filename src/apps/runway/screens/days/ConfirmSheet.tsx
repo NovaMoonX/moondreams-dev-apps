@@ -19,6 +19,7 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { store, useAppSelector } from '@/store';
+import { useRecordedEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -112,6 +113,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const { day, draft } = view;
   const today = todayAsUtcDate();
   const balances = useAppSelector(selectBalances);
+  const emojiOf = useRecordedEmojiResolver();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const initialData: ConfirmFormData = {
     amount: centsToInputValue(draft.moneyCents),
@@ -385,7 +387,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       suggested={suggested.map(({ line, from, to }) => ({
         lineId: line.lineId,
         name: line.name === '' ? 'Bill' : line.name,
-        emoji: line.emoji,
+        emoji: emojiOf(line.emoji, line.itemId),
         fromCents: from,
         toCents: to,
       }))}
@@ -591,7 +593,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
               return {
                 id: line.lineId,
                 name: original.name === '' ? 'Bill' : original.name,
-                emoji: original.emoji,
+                emoji: emojiOf(original.emoji, original.itemId),
                 value: Object.hasOwn(lineInputs, line.lineId)
                   ? lineInputs[line.lineId]
                   : centsToInputValue(original.cents),

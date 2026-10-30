@@ -18,6 +18,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector } from '@/store';
+import { useRecordedEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   centsToInputValue,
@@ -92,6 +93,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
   const cutsId = useId();
   const { isHidden } = useValuesHidden();
   const balances = useAppSelector(selectBalances);
+  const emojiOf = useRecordedEmojiResolver();
   const items = useAppSelector((state) => state.runway.items);
   const held = useAppSelector(selectHeldByItem);
   const openDay = useAppSelector((state) => selectOpenDay(state, dayKey));
@@ -175,7 +177,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
         line === undefined || line.name === ''
           ? DRAFT_WORDS.billFallback
           : line.name,
-      emoji: line?.emoji ?? null,
+      emoji: line === undefined ? null : emojiOf(line.emoji, line.itemId),
       fromCents: line?.cents ?? 0,
       toCents: cents,
     };
@@ -448,7 +450,7 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
             items={visibleLines.map((line) => ({
               id: line.lineId,
               name: line.name === '' ? DRAFT_WORDS.billFallback : line.name,
-              emoji: line.emoji,
+              emoji: emojiOf(line.emoji, line.itemId),
               cents:
                 corrected?.lines.find((l) => l.lineId === line.lineId)?.cents ??
                 line.cents,
@@ -527,7 +529,10 @@ function CorrectSheet({ dayKey, base, onClose }: CorrectSheetProps) {
                           : change.name
                       }
                       leading={
-                        <ItemBadge name={change.name} emoji={change.emoji} />
+                        <ItemBadge
+                          name={change.name}
+                          emoji={emojiOf(change.emoji, change.itemId)}
+                        />
                       }
                       before={formatCents(change.beforeCents)}
                       after={formatCents(change.afterCents)}

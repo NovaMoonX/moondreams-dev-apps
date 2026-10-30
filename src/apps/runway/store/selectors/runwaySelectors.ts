@@ -1054,35 +1054,58 @@ export const selectReachedEndingsKey = (state: RootState, today: number) => {
   return result;
 };
 
-/** The emoji each live purpose has chosen, by id; a purpose without one, or archived, is absent. */
-export const selectPurposeEmojis = createSelector(
+/** Each purpose's newest emoji and whether it is archived, as one string, so the maps below only rebuild when one of those changes. */
+const selectPurposeEmojiKey = createSelector(
   [selectItems, selectVersions],
-  (items, versions): ReadonlyMap<string, string> => {
-    const live = new Set(
+  (items, versions): string => {
+    const archived = new Map(
       items
-        .filter((item) => item.kind === 'group' && item.archivedAt === null)
-        .map((item) => item.id),
+        .filter((item) => item.kind === 'group')
+        .map((item) => [item.id, item.archivedAt !== null] as const),
     );
     const newest = versions
       .filter(isGroup)
-      .filter((version) => live.has(version.itemId))
       .reduce<Map<string, GroupVersion>>((acc, version) => {
         const seen = acc.get(version.itemId);
         return seen && seen.createdAt >= version.createdAt
           ? acc
           : acc.set(version.itemId, version);
       }, new Map());
-    return new Map(
-      [...newest.entries()].flatMap(([id, { payload }]) =>
-        payload.emoji === null ? [] : [[id, payload.emoji] as const],
-      ),
-    );
+    const entries = [...newest.entries()]
+      .flatMap(([id, { payload }]) =>
+        payload.emoji === null || !archived.has(id)
+          ? []
+          : [[id, payload.emoji, archived.get(id)] as const],
+      )
+      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    return JSON.stringify(entries);
   },
+);
+
+const readPurposeEmojiKey = (key: string) =>
+  JSON.parse(key) as [string, string, boolean][];
+
+/** The emoji each live purpose has chosen, by id, for lists of live items; a purpose without one, or archived, is absent. */
+export const selectPurposeEmojis = createSelector(
+  [selectPurposeEmojiKey],
+  (key): ReadonlyMap<string, string> =>
+    new Map(
+      readPurposeEmojiKey(key).flatMap(([id, emoji, isArchived]) =>
+        isArchived ? [] : [[id, emoji] as const],
+      ),
+    ),
+);
+
+/** The emoji every purpose has chosen, archived ones too, so history keeps the look it had. */
+export const selectAllPurposeEmojis = createSelector(
+  [selectPurposeEmojiKey],
+  (key): ReadonlyMap<string, string> =>
+    new Map(readPurposeEmojiKey(key).map(([id, emoji]) => [id, emoji])),
 );
 
 /** Every item's name and emoji by id, from its newest version (a bill's or envelope's own emoji, else its purpose's), so a purchase still names an envelope that was renamed or archived. */
 export const selectItemLooks = createSelector(
-  [selectVersions, selectPurposeEmojis],
+  [selectVersions, selectAllPurposeEmojis],
   (versions, purposeEmojis) => {
     const newest = versions.reduce<Map<string, OpenVersion>>((acc, version) => {
       const seen = acc.get(version.itemId);

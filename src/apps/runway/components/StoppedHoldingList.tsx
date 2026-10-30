@@ -11,6 +11,8 @@ import ItemSheet from '@apps/runway/components/ItemSheet';
 import { HELD_WORDS } from '@apps/runway/constants';
 import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectAllPurposeEmojis } from '@apps/runway/store/selectors/runwaySelectors';
+import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 
 type HoldingKind = 'envelope' | 'bill' | 'goal';
 
@@ -28,10 +30,11 @@ const selectStoppedHolding = createSelector(
     (state: RootState) => state.runway.items,
     (state: RootState) => state.runway.versions,
     selectBalances,
+    selectAllPurposeEmojis,
     (_state: RootState, on: number) => on,
     (_state: RootState, _on: number, kind: HoldingKind) => kind,
   ],
-  (items, versions, balances, on, kind): StoppedRow[] => {
+  (items, versions, balances, purposeEmojis, on, kind): StoppedRow[] => {
     const result = items
       .filter(
         (item) =>
@@ -47,7 +50,11 @@ const selectStoppedHolding = createSelector(
         const row: StoppedRow = {
           itemId: item.id,
           name: version.payload.name,
-          emoji: version.payload.emoji,
+          emoji: resolveItemEmoji(
+            version.payload.emoji,
+            'groupId' in version.payload ? version.payload.groupId : null,
+            purposeEmojis,
+          ),
           cents: balances.assignedByItem[item.id] ?? 0,
           fact:
             item.archivedAt !== null

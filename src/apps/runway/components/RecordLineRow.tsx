@@ -3,6 +3,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow from '@apps/runway/components/ItemRow';
 import {
   CONFIRM_WORDS,
@@ -30,6 +31,7 @@ function RecordLineRow({
   isShortSaidAbove = false,
 }: RecordLineRowProps) {
   const mask = useMaskedText();
+  const emoji = useRecordedEmoji(line.emoji, line.itemId);
   const { isHidden } = useValuesHidden();
   const name = line.name === '' ? DRAFT_WORDS.billFallback : line.name;
   const isChanged = plannedCents !== undefined && plannedCents !== line.cents;
@@ -44,7 +46,7 @@ function RecordLineRow({
     return (
       <BeforeAfterRow
         title={name}
-        leading={<ItemBadge name={name} emoji={line.emoji} />}
+        leading={<ItemBadge name={name} emoji={emoji} />}
         before={mask(formatCents(plannedCents))}
         after={mask(formatCents(line.cents))}
         beforeLabel={CONFIRM_WORDS.planned}
@@ -63,7 +65,7 @@ function RecordLineRow({
   return (
     <ItemRow
       name={name}
-      emoji={line.emoji}
+      emoji={emoji}
       detail={shortText ?? PRIORITY_LABELS[line.tier]}
       isDetailStrong={shortText !== null && !isHidden}
       figure={formatCents(line.cents)}
