@@ -8,10 +8,16 @@ interface ReceiptFileInputProps {
   /** Lets the control that sits beside the input open the chooser. */
   chooser: Ref<ReceiptChooser>;
   onFiles: (files: File[]) => void;
+  /** False takes one file at a time. */
+  isMultiple?: boolean;
 }
 
 /** The file chooser behind a control: photos and screenshots, several at once; a phone's chooser offers its camera. */
-function ReceiptFileInput({ chooser, onFiles }: ReceiptFileInputProps) {
+function ReceiptFileInput({
+  chooser,
+  onFiles,
+  isMultiple = true,
+}: ReceiptFileInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   useImperativeHandle(chooser, () => ({
     open: () => inputRef.current?.click(),
@@ -22,7 +28,7 @@ function ReceiptFileInput({ chooser, onFiles }: ReceiptFileInputProps) {
       ref={inputRef}
       type='file'
       accept='image/*'
-      multiple
+      multiple={isMultiple}
       className='hidden'
       tabIndex={-1}
       aria-hidden='true'

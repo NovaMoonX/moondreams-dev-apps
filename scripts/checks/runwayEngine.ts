@@ -52,6 +52,13 @@ import {
   spreadCalendarAmount,
 } from '../../src/apps/runway/engine/calendar.ts';
 import { describeFunding } from '../../src/apps/runway/utils/fundingText.ts';
+import {
+  countReceiptItems,
+  describeReceiptRead,
+  formatReceiptItems,
+  splitReceiptRow,
+} from '../../src/apps/runway/utils/receiptText.ts';
+import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import type { OpenDay, Pairing } from '../../src/apps/runway/types.ts';
 import type { DraftDayInput } from '../../src/apps/runway/engine/demands.ts';
 import type { ComingDay } from '../../src/apps/runway/engine/comingDays.ts';
@@ -8370,6 +8377,123 @@ const version = (
   );
 }
 
+{
+  const reading: ReceiptReading = {
+    merchant: 'Corner Cafe',
+    kind: 'RESTAURANT',
+    address: null,
+    date: null,
+    time: null,
+    currency: 'USD',
+    lines: [
+      { name: 'Latte', quantity: 2, unitPriceCents: 450, priceCents: 900 },
+      { name: 'Bagel', quantity: 1, unitPriceCents: 350, priceCents: 350 },
+    ],
+    unpricedLineCount: 0,
+    subtotalCents: 1_250,
+    taxCents: 100,
+    feesCents: 200,
+    discountCents: 300,
+    tipCents: 150,
+    suggestedTips: [],
+    totalCents: 1_400,
+  };
+  assert.equal(
+    formatReceiptItems(reading),
+    'Latte ×2  $9.00\nBagel  $3.50\nSubtotal  $12.50\nTax  $1.00\nFees  $2.00\nDiscount  -$3.00\nTip  $1.50\nTotal  $14.00',
+    'items then Subtotal, Tax, Fees, Discount (negative), Tip and Total',
+  );
+  assert.equal(
+    formatReceiptItems({ ...reading, currency: 'EUR' })?.split('\n')[0],
+    'Latte ×2  EUR 9.00',
+    'another currency is written with its code, never a $',
+  );
+  assert.ok(
+    !formatReceiptItems({ ...reading, currency: 'EUR' })?.includes('$'),
+    'no dollar sign on a euro receipt',
+  );
+  assert.equal(
+    formatReceiptItems({ ...reading, currency: 'EUR' })?.split('\n')[5],
+    'Discount  -EUR 3.00',
+  );
+  const many = {
+    ...reading,
+    lines: Array.from({ length: 80 }, (_, index) => ({
+      name: `Item number ${index} with a fairly long name here`,
+      quantity: 1,
+      unitPriceCents: 100,
+      priceCents: 100,
+    })),
+  };
+  const capped = formatReceiptItems(many) ?? '';
+  const cappedRows = capped.split('\n');
+  assert.ok(capped.length <= 2_000, 'the cap holds');
+  assert.ok(cappedRows.at(-1)?.startsWith('Total  '), 'the total always fits');
+  assert.match(
+    cappedRows.at(-7) ?? '',
+    /^…and \d+ more items$/,
+    'a cut list says how many items were left out',
+  );
+  assert.equal(
+    countReceiptItems(capped),
+    80,
+    'kept items plus the ones left out count all 80',
+  );
+  assert.equal(
+    formatReceiptItems({
+      ...reading,
+      lines: [],
+      subtotalCents: null,
+      taxCents: null,
+      feesCents: null,
+      discountCents: null,
+      tipCents: null,
+      totalCents: null,
+    }),
+    null,
+  );
+  assert.deepEqual(splitReceiptRow('Latte ×2  $9.00'), {
+    name: 'Latte ×2',
+    price: '$9.00',
+  });
+  assert.deepEqual(splitReceiptRow('Just a name'), {
+    name: 'Just a name',
+    price: null,
+  });
+  const outcome = {
+    hasTotal: true,
+    hasStore: true,
+    hasDay: true,
+    itemCount: 9,
+    foreignCurrency: null,
+    isTotalMissing: false,
+    isDayRefused: false,
+    keptAmount: false,
+    keptStore: false,
+  };
+  assert.equal(
+    describeReceiptRead(outcome),
+    'Read the total, the store, the day and 9 items. Check them before you add it.',
+  );
+  assert.equal(
+    describeReceiptRead({
+      ...outcome,
+      hasTotal: false,
+      hasDay: false,
+      isTotalMissing: true,
+    }),
+    'Read the store and 9 items. No total was found, so type the amount.',
+  );
+  assert.equal(
+    describeReceiptRead({
+      ...outcome,
+      hasTotal: false,
+      foreignCurrency: 'EUR',
+    }),
+    'Read the store, the day and 9 items. This receipt is in EUR, so type the amount in dollars.',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
@@ -9772,6 +9896,123 @@ console.log('runway engine: ok');
       { payload: { cents: 95 }, effectiveFrom: 30 * D, effectiveUntil: null },
     ],
     'a change ahead keeps its date and amount',
+  );
+}
+
+{
+  const reading: ReceiptReading = {
+    merchant: 'Corner Cafe',
+    kind: 'RESTAURANT',
+    address: null,
+    date: null,
+    time: null,
+    currency: 'USD',
+    lines: [
+      { name: 'Latte', quantity: 2, unitPriceCents: 450, priceCents: 900 },
+      { name: 'Bagel', quantity: 1, unitPriceCents: 350, priceCents: 350 },
+    ],
+    unpricedLineCount: 0,
+    subtotalCents: 1_250,
+    taxCents: 100,
+    feesCents: 200,
+    discountCents: 300,
+    tipCents: 150,
+    suggestedTips: [],
+    totalCents: 1_400,
+  };
+  assert.equal(
+    formatReceiptItems(reading),
+    'Latte ×2  $9.00\nBagel  $3.50\nSubtotal  $12.50\nTax  $1.00\nFees  $2.00\nDiscount  -$3.00\nTip  $1.50\nTotal  $14.00',
+    'items then Subtotal, Tax, Fees, Discount (negative), Tip and Total',
+  );
+  assert.equal(
+    formatReceiptItems({ ...reading, currency: 'EUR' })?.split('\n')[0],
+    'Latte ×2  EUR 9.00',
+    'another currency is written with its code, never a $',
+  );
+  assert.ok(
+    !formatReceiptItems({ ...reading, currency: 'EUR' })?.includes('$'),
+    'no dollar sign on a euro receipt',
+  );
+  assert.equal(
+    formatReceiptItems({ ...reading, currency: 'EUR' })?.split('\n')[5],
+    'Discount  -EUR 3.00',
+  );
+  const many = {
+    ...reading,
+    lines: Array.from({ length: 80 }, (_, index) => ({
+      name: `Item number ${index} with a fairly long name here`,
+      quantity: 1,
+      unitPriceCents: 100,
+      priceCents: 100,
+    })),
+  };
+  const capped = formatReceiptItems(many) ?? '';
+  const cappedRows = capped.split('\n');
+  assert.ok(capped.length <= 2_000, 'the cap holds');
+  assert.ok(cappedRows.at(-1)?.startsWith('Total  '), 'the total always fits');
+  assert.match(
+    cappedRows.at(-7) ?? '',
+    /^…and \d+ more items$/,
+    'a cut list says how many items were left out',
+  );
+  assert.equal(
+    countReceiptItems(capped),
+    80,
+    'kept items plus the ones left out count all 80',
+  );
+  assert.equal(
+    formatReceiptItems({
+      ...reading,
+      lines: [],
+      subtotalCents: null,
+      taxCents: null,
+      feesCents: null,
+      discountCents: null,
+      tipCents: null,
+      totalCents: null,
+    }),
+    null,
+  );
+  assert.deepEqual(splitReceiptRow('Latte ×2  $9.00'), {
+    name: 'Latte ×2',
+    price: '$9.00',
+  });
+  assert.deepEqual(splitReceiptRow('Just a name'), {
+    name: 'Just a name',
+    price: null,
+  });
+  const outcome = {
+    hasTotal: true,
+    hasStore: true,
+    hasDay: true,
+    itemCount: 9,
+    foreignCurrency: null,
+    isTotalMissing: false,
+    isDayRefused: false,
+    keptAmount: false,
+    keptStore: false,
+  };
+  assert.equal(
+    describeReceiptRead(outcome),
+    'Read the total, the store, the day and 9 items. Check them before you add it.',
+  );
+  assert.equal(
+    describeReceiptRead({
+      ...outcome,
+      hasTotal: false,
+      hasDay: false,
+      isTotalMissing: true,
+    }),
+    'Read the store and 9 items. No total was found, so type the amount.',
+  );
+  assert.equal(
+    describeReceiptRead({
+      ...outcome,
+      hasTotal: false,
+      foreignCurrency: 'EUR',
+    }),
+    'Read the store, the day and 9 items. This receipt is in EUR, so type the amount in dollars.',
   );
 }
 

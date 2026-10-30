@@ -19,6 +19,10 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { maskFigures } from '@apps/runway/utils/maskText';
+import {
+  isReceiptTotalRow,
+  splitReceiptRow,
+} from '@apps/runway/utils/receiptText';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
@@ -28,6 +32,7 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   MAX_RECEIPTS_PER_PURCHASE,
   RECEIPT_TEXT_LINES_SHOWN,
+  RECEIPT_TEXT_MIN_HIDDEN,
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
@@ -195,7 +200,16 @@ function PurchaseScreen({
   const note = purchase.note?.trim() || null;
   const receiptText = purchase.receiptText?.trim() || null;
   const receiptRows = receiptText?.split('\n') ?? [];
-  const hasMoreItems = receiptRows.length > RECEIPT_TEXT_LINES_SHOWN;
+  const totalRow = isReceiptTotalRow(receiptRows.at(-1) ?? '')
+    ? receiptRows.slice(-1)
+    : [];
+  const bodyRows = receiptRows.slice(0, receiptRows.length - totalRow.length);
+  const hasMoreItems =
+    bodyRows.length - RECEIPT_TEXT_LINES_SHOWN >= RECEIPT_TEXT_MIN_HIDDEN;
+  const shownRows =
+    isItemsOpen || !hasMoreItems
+      ? receiptRows
+      : [...bodyRows.slice(0, RECEIPT_TEXT_LINES_SHOWN), ...totalRow];
   const link = purchase.link?.trim() || null;
   const linkHost = link === null ? null : getWebLinkHost(link);
 
@@ -411,13 +425,23 @@ function PurchaseScreen({
                   <dt className='text-muted-foreground text-xs'>
                     {SPEND_WORDS.items}
                   </dt>
-                  <dd className='whitespace-pre-line'>
-                    {mask(
-                      (isItemsOpen || !hasMoreItems
-                        ? receiptRows
-                        : receiptRows.slice(0, RECEIPT_TEXT_LINES_SHOWN)
-                      ).join('\n'),
-                    )}
+                  <dd className='space-y-1'>
+                    {shownRows.map((row, index) => {
+                      const { name, price } = splitReceiptRow(row);
+                      return (
+                        <div
+                          key={`${index}-${row}`}
+                          className='flex items-start justify-between gap-3'
+                        >
+                          <span className='min-w-0 break-words'>{name}</span>
+                          {price !== null && (
+                            <span className='shrink-0 whitespace-nowrap tabular-nums'>
+                              {mask(price)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </dd>
                   {hasMoreItems && (
                     <ShowMoreButton
