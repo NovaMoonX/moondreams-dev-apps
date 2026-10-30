@@ -1104,6 +1104,15 @@ export const selectAllCards = createSelector([selectCardList], (cards) =>
   ),
 );
 
+const selectExpenseList = (state: RootState) => state.runway.expenses;
+
+/** Every expense group, most recently updated first. */
+export const selectExpenses = createSelector([selectExpenseList], (expenses) =>
+  [...expenses].sort(
+    (a, b) => b.updatedAt - a.updatedAt || a.id.localeCompare(b.id),
+  ),
+);
+
 /** The cards that can take a new charge, oldest first. */
 export const selectCards = createSelector([selectAllCards], (cards) =>
   cards.filter((card) => card.archivedAt === null),

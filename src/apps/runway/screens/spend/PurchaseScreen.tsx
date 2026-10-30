@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Pencil, ReceiptText, Trash2, Undo2 } from 'lucide-react';
+import { Layers, Pencil, ReceiptText, Trash2, Undo2 } from 'lucide-react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import ExternalLinkText from '@/components/ExternalLinkText';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,15 +15,19 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { SPEND_WORDS } from '@apps/runway/constants';
 import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
 import type { OpenPurchase } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import ExpenseView from '@apps/runway/components/ExpenseView';
 import SheetHead from '@apps/runway/components/SheetHead';
+import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
 import {
+  selectExpenses,
   selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
@@ -57,10 +62,17 @@ interface PurchaseScreenProps {
   /** Opens a related purchase; the Spend list uses the address. */
   onOpen?: (purchaseId: string) => void;
   onClose: () => void;
+  /** The purchase as a wider read found it, for one dated outside the loaded window. */
+  fallback?: OpenPurchase | null;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
-function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
+function PurchaseScreen({
+  purchaseId,
+  onOpen,
+  onClose,
+  fallback = null,
+}: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { isHidden } = useValuesHidden();
@@ -71,14 +83,23 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
   const purchases = useAppSelector(selectSpendPurchases);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
+  const expenses = useAppSelector(selectExpenses);
   const [editTarget, setEditTarget] = useState<{
     key: number;
     purchase: OpenPurchase;
   } | null>(null);
+  const [groupViewFor, setGroupViewFor] = useState<string | null>(null);
+  const [openedFromGroup, setOpenedFromGroup] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const purchase = purchases.find((entry) => entry.id === purchaseId) ?? null;
+  const purchase =
+    purchases.find((entry) => entry.id === purchaseId) ??
+    (fallback?.id === purchaseId ? fallback : null);
+  const group =
+    expenses.find((entry) => entry.id === purchase?.expenseId) ?? null;
+  const groupRead = useExpensePurchases(group?.id ?? null);
+  const groupPurchases = groupRead.purchases;
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
 
@@ -112,6 +133,8 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
       : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
+  const link = purchase.link?.trim() || null;
+  const linkHost = link === null ? null : getWebLinkHost(link);
 
   const remove = async () => {
     if (!user || isBusy) return;
@@ -162,6 +185,45 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
     }
   };
 
+  if (group !== null && groupViewFor === purchase.id && openedFromGroup) {
+    return (
+      <PurchaseScreen
+        key={openedFromGroup}
+        purchaseId={openedFromGroup}
+        fallback={
+          groupPurchases?.find((entry) => entry.id === openedFromGroup) ?? null
+        }
+        onOpen={setOpenedFromGroup}
+        onClose={() => setOpenedFromGroup(null)}
+      />
+    );
+  }
+
+  if (group !== null && groupViewFor === purchase.id) {
+    return (
+      <FormSheet
+        isOpen
+        isDrawerWhenShort
+        onClose={onClose}
+        title={mask(group.name)}
+        actions={<ValuesEyeButton />}
+      >
+        <div className='pb-4'>
+          <ExpenseView
+            expenseId={group.id}
+            purchases={groupPurchases}
+            isFailed={groupRead.isFailed}
+            onBack={() => setGroupViewFor(null)}
+            onOpenPurchase={(id) => {
+              if (id !== purchase.id) setOpenedFromGroup(id);
+              else setGroupViewFor(null);
+            }}
+          />
+        </div>
+      </FormSheet>
+    );
+  }
+
   if (editTarget !== null) {
     return (
       <PurchaseForm
@@ -189,7 +251,9 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
             figure={refund ? `+${amount}` : amount}
             fact={fact}
           />
-          {(note !== null || purchase.lines.length > 1) && (
+          {(note !== null ||
+            linkHost !== null ||
+            purchase.lines.length > 1) && (
             <dl className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
               {note !== null && (
                 <div className='space-y-0.5 p-3 break-words'>
@@ -197,6 +261,14 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                     {SPEND_WORDS.note}
                   </dt>
                   <dd className='whitespace-pre-line'>{note}</dd>
+                </div>
+              )}
+              {link !== null && linkHost !== null && (
+                <div className='flex items-start justify-between gap-3 p-3'>
+                  <dt className='text-muted-foreground'>{SPEND_WORDS.link}</dt>
+                  <dd className='min-w-0'>
+                    <ExternalLinkText href={link} label={linkHost} />
+                  </dd>
                 </div>
               )}
               {purchase.lines.length > 1 &&
@@ -233,6 +305,23 @@ function PurchaseScreen({ purchaseId, onOpen, onClose }: PurchaseScreenProps) {
                 }));
               }}
             />
+            {group !== null && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Layers />}
+                label={`${SPEND_WORDS.partOfGroup} ${mask(group.name)}`}
+                subtitle={
+                  groupPurchases === null
+                    ? undefined
+                    : groupPurchases.length === 1
+                      ? '1 purchase'
+                      : `${groupPurchases.length} purchases`
+                }
+                onClick={() => setGroupViewFor(purchase.id)}
+              />
+            )}
             {original && !isHidden && (
               <ActionRow
                 isGrouped

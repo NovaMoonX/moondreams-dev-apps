@@ -310,6 +310,9 @@ export const CLOSING_VERSION = 3;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
+export const MAX_LINK_LENGTH = 2000;
+/** How long a pasted order link's page is waited for before the preview is skipped. */
+export const LINK_LOOKUP_TIMEOUT_MS = 6000;
 /** Confirmed and not-arrived days shown before "Show more". */
 export const SETTLED_DAYS_PREVIEW = 3;
 
@@ -702,6 +705,32 @@ export const SPEND_WORDS = {
   note: 'Note',
   notePlaceholder: 'Split with Sam, paid back Friday',
   addNote: 'Add a note',
+  link: 'Link',
+  linkPlaceholder: 'Paste an order page or receipt link',
+  addLink: 'Add a link',
+  needsWebLink: 'Enter a web link, or remove it.',
+  groupHint: 'A group adds up its purchases, like a trip. It changes no balance.',
+  group: 'Group',
+  groupPlaceholder: 'Chicago trip',
+  addGroup: 'Add to a group',
+  newGroup: 'New group',
+  groupLabel: 'Which group?',
+  goneGroup: 'a removed group',
+  partOfGroup: 'Part of',
+  groupHead: 'Group',
+  renameGroup: 'Rename the group',
+  renameGroupTitle: 'Rename the group',
+  renameSave: 'Save the name',
+  removeGroup: 'Remove the group',
+  removeGroupTitle: 'Remove this group?',
+  removeGroupMessage:
+    'The purchases stay where they are. Only the group goes, and its total with it.',
+  removeGroupConfirm: 'Remove the group',
+  groupRemoved: 'Group removed.',
+  groupRenamed: 'Group renamed.',
+  groupFailed: 'The group could not be saved. Nothing was changed.',
+  groupGone: 'That group is no longer here.',
+  groupLoading: 'Getting the group.',
   moreDetails: 'More about it',
   removeDetail: 'Remove',
   markRefund: 'This is a refund',

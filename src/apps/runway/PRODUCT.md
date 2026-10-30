@@ -266,7 +266,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
 *Track level.*
 
-- **Group purchases into an expense.** A $40 flight, a $12 bag fee and a $200 hotel can be one "Chicago trip". Grouping adds a label, not a balance change.
+- **Group purchases into an expense.** A $40 flight, a $12 bag fee and a $200 hotel can be one "Chicago trip". Grouping adds a label, not a balance change. Open any purchase in it to see the group: what it comes to, from when to when, and each purchase. Removing a group keeps its purchases.
 - **Add context.** A link to an order page, a long note, photos or screenshots, on a purchase you added by hand, imported or linked.
 - **Details are kept as text.** An order number, a date and an itemized breakdown read from a receipt or order page are saved as text with the purchase.
 - **Receipt images expire after one year.** A photo or screenshot is removed a year after it was added. The note, the link and the text details stay for good. Before an image goes, Runway offers to keep it or download it. A kept image stays until you remove it.
@@ -426,7 +426,8 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Bills that land within a window, funded across the income days before it closes
 - [ ] Cover it: choose what gives when a new bill leaves a day short, lowest priority first
 - [ ] Put it to work: where new income or a raise would go
-- [ ] Notes, links, receipts and expense groups on purchases at the Track level, with receipt photos kept for one year and a keep-or-download offer
+- [x] Notes, links and expense groups on purchases at the Track level
+- [ ] Receipt photos on purchases
 - [x] Monthly envelope funding, split across the month's income days
 - [ ] Move leftover envelope money to another envelope or a goal
 - [ ] Open the plan as of a past date

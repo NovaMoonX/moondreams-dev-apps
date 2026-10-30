@@ -69,6 +69,8 @@ interface PurchaseFields {
   note: string | null;
   lines: readonly PurchaseLine[];
   paidByCardId: string | null;
+  link: string | null;
+  expenseId: string | null;
 }
 
 const money = (cents: number) => formatCents(Math.abs(cents));
@@ -82,12 +84,25 @@ export function describePurchaseRemoval(
   return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateUTC(purchase.date)}.`;
 }
 
+
+const describeGroupChange = (
+  before: string | null,
+  after: string | null,
+  groupNameOf: (expenseId: string) => string,
+) => {
+  if (before === after) return null;
+  if (before === null) return `added to ${groupNameOf(after ?? '')}`;
+  if (after === null) return `taken out of ${groupNameOf(before)}`;
+  return `moved from ${groupNameOf(before)} to ${groupNameOf(after)}`;
+};
+
 /** The change-log sentence for an edit: only what changed, from and to. */
 export function describePurchaseEdit(
   before: OpenPurchase,
   after: PurchaseFields,
   nameOf: (envelopeId: string) => string,
   cardNameOf: (cardId: string | null) => string,
+  groupNameOf: (expenseId: string) => string,
 ): string {
   const was = (value: string | null) => value?.trim() || 'nothing';
   const shape = (lines: readonly PurchaseLine[]) =>
@@ -118,6 +133,14 @@ export function describePurchaseEdit(
     (after.note?.trim() || null) !== (before.note?.trim() || null)
       ? 'note'
       : null,
+    (after.link?.trim() || null) !== (before.link?.trim() || null)
+      ? 'link'
+      : null,
+    describeGroupChange(
+      before.expenseId ?? null,
+      after.expenseId ?? null,
+      groupNameOf,
+    ),
   ].filter((entry): entry is string => entry !== null);
   const kind = isRefund(before) ? 'Refund' : 'Purchase';
   return `${kind} changed: ${getPurchaseTitle(before, nameOf)}, ${changes.join('; ') || 'saved again'}.`;

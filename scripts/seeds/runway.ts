@@ -41,6 +41,8 @@ import type {
   CardDoc,
   CardPaymentSealed,
   CardSealed,
+  ExpenseDoc,
+  ExpenseSealed,
   ChangeDoc,
   ChangeSealed,
   ClosingDoc,
@@ -2060,7 +2062,9 @@ async function seedTrackingPlan(
   );
 }
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, and nine rows in all so the Spend tab shows its search. */
+const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
+
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, nine rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -2085,6 +2089,8 @@ async function writeSeedPurchases(
     refundOfId?: string;
     editedAt?: number;
     paidByCardId?: string;
+    link?: string;
+    expenseId?: string;
   }[] = [
     {
       id: 'seed-purchase-safeway',
@@ -2110,12 +2116,14 @@ async function writeSeedPurchases(
       note: 'Sam paid for drinks',
       lines: [line('seed-envelope-dining', 3_800)],
       paidByCardId: SEED_VENTURE_CARD,
+      expenseId: SEED_BIRTHDAY_EXPENSE,
     },
     {
       id: 'seed-purchase-target',
       daysAgo: 6,
       merchant: 'Target',
       note: 'Groceries and a birthday gift',
+      link: 'https://www.target.com/orders',
       lines: [line(groceries, 6_000), line(gifts, 4_000)],
     },
     {
@@ -2147,6 +2155,7 @@ async function writeSeedPurchases(
       label: 'Birthday card',
       note: null,
       lines: [line(gifts, 650)],
+      expenseId: SEED_BIRTHDAY_EXPENSE,
     },
     {
       id: 'seed-purchase-market',
@@ -2168,6 +2177,7 @@ async function writeSeedPurchases(
         date,
         source: 'manual',
         needsHome: false,
+        expenseId: entry.expenseId ?? null,
         createdAt,
         updatedAt: createdAt + (entry.editedAt ?? 0),
         sealed: await sealJson(
@@ -2179,6 +2189,7 @@ async function writeSeedPurchases(
             lines: entry.lines,
             refundOfId: entry.refundOfId ?? null,
             paidByCardId: entry.paidByCardId ?? null,
+            link: entry.link ?? null,
           } satisfies PurchaseSealed,
           encryption,
         ),
@@ -2214,8 +2225,21 @@ async function writeSeedPurchases(
       } satisfies ChangeDoc);
     }),
   );
+  const expenseCreatedAt = today - 3 * DAY_MS;
+  batch.set(
+    context.firestore.doc(`${plan}/expenses/${SEED_BIRTHDAY_EXPENSE}`),
+    {
+      id: SEED_BIRTHDAY_EXPENSE,
+      createdAt: expenseCreatedAt,
+      updatedAt: expenseCreatedAt,
+      sealed: await sealJson(
+        { name: "Sam's birthday", note: null } satisfies ExpenseSealed,
+        encryption,
+      ),
+    } satisfies ExpenseDoc,
+  );
   await batch.commit();
-  return purchases.length + changes.length;
+  return purchases.length + changes.length + 1;
 }
 
 /**
