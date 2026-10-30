@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountHero from '@/components/AmountHero';
 import FoldedDateField from '@/components/FoldedDateField';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
 import MoneyInput from '@/components/MoneyInput';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -13,17 +14,20 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
+  FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
   START_AMOUNTS_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
   START_ROWS_PREVIEW,
 } from '@apps/runway/constants';
+import { isText, readDraftFields } from '@apps/runway/forms/draftParse';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { collectStarted } from '@apps/runway/engine/progress';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -37,6 +41,27 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import SensitiveValue from '@/components/SensitiveValue';
+
+interface StartingAmountsDraft {
+  date: string;
+  money: string;
+  amounts: Record<string, string>;
+}
+
+const parseStartingAmountsDraft = (
+  stored: unknown,
+): StartingAmountsDraft | null => {
+  const draft = readDraftFields<StartingAmountsDraft>(stored, {
+    date: isText,
+    money: isText,
+    amounts: (value) =>
+      typeof value === 'object' &&
+      value !== null &&
+      !Array.isArray(value) &&
+      Object.values(value).every((entry) => typeof entry === 'string'),
+  });
+  return draft;
+};
 
 const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
@@ -148,12 +173,36 @@ function StartingAmountsSheet({
   const started = collectStarted(moves, plan?.startDate ?? null);
   const toText = (cents: number | undefined) =>
     cents === undefined ? '' : (cents / 100).toFixed(2);
-  const [date, setDate] = useState(toDateInputValue(plan?.startDate ?? today));
-  const [money, setMoney] = useState(toText(started.money ?? undefined));
-  const [amounts, setAmounts] = useState<Record<string, string>>(
-    Object.fromEntries(
+  const [start] = useState<StartingAmountsDraft>(() => ({
+    date: toDateInputValue(plan?.startDate ?? today),
+    money: toText(started.money ?? undefined),
+    amounts: Object.fromEntries(
       Object.entries(started.byItem).map(([id, cents]) => [id, toText(cents)]),
     ),
+  }));
+  const kept = useFormDraft({
+    key: `${FORM_DRAFT_PREFIX}starting-amounts`,
+    base: plan?.startDate ?? null,
+    parse: (stored) => {
+      const draft = parseStartingAmountsDraft(stored);
+      if (draft === null) return null;
+      const known = new Set([
+        ...Object.keys(started.byItem),
+        ...goals.map(({ item }) => item.id),
+        ...bills.map(({ item }) => item.id),
+      ]);
+      return {
+        ...draft,
+        amounts: Object.fromEntries(
+          Object.entries(draft.amounts).filter(([id]) => known.has(id)),
+        ),
+      };
+    },
+  });
+  const [date, setDate] = useState(kept.restored?.date ?? start.date);
+  const [money, setMoney] = useState(kept.restored?.money ?? start.money);
+  const [amounts, setAmounts] = useState<Record<string, string>>(
+    kept.restored?.amounts ?? start.amounts,
   );
   const askedGoals = goals.filter(
     ({ item, version }) =>
@@ -169,7 +218,24 @@ function StartingAmountsSheet({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const snapshot = JSON.stringify({ date, money, amounts });
-  const [startSnapshot] = useState(snapshot);
+  const startSnapshot = JSON.stringify(start);
+  const keptValue = useMemo(
+    () => ({ date, money, amounts }),
+    [date, money, amounts],
+  );
+  useKeepFormDraft({
+    isRestored: kept.restored !== null,
+    key: `${FORM_DRAFT_PREFIX}starting-amounts`,
+    base: plan?.startDate ?? null,
+    value: keptValue,
+    isDirty: snapshot !== startSnapshot,
+  });
+  const startOver = () => {
+    setDate(start.date);
+    setMoney(start.money);
+    setAmounts(start.amounts);
+    kept.hideNotice();
+  };
   const requestClose = useDiscardGuard({
     isDirty: snapshot !== startSnapshot,
     onClose,
@@ -239,6 +305,12 @@ function StartingAmountsSheet({
 
   const content = (
     <div className='grid gap-4'>
+      {kept.isNoticeShown && (
+        <DraftRestoredNotice
+          onStartOver={startOver}
+          onDismiss={kept.hideNotice}
+        />
+      )}
       <AmountHero
         label={FORM_FLOW_WORDS.moneyOnHand}
         value={money}

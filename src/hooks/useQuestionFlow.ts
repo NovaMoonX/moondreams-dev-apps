@@ -29,6 +29,8 @@ interface UseQuestionFlowOptions {
   steps: QuestionStep[];
   /** Opens on every answer folded, for a form that changes something already saved. */
   startFolded?: boolean;
+  /** Opens on the first unanswered question with every answered one folded above it, for a form given back its unsaved answers. */
+  foldAnswered?: boolean;
   /** A question to open first even though it is answered. */
   initialOpenId?: string | null;
   /** Runs as the person moves on from a question, before the next one opens (to prefill it). */
@@ -39,12 +41,19 @@ interface UseQuestionFlowOptions {
 export function useQuestionFlow({
   steps,
   startFolded = false,
+  foldAnswered = false,
   initialOpenId = null,
   onAdvance,
 }: UseQuestionFlowOptions) {
-  const [passed, setPassed] = useState<ReadonlySet<string>>(
-    () => new Set(startFolded ? steps.map((step) => step.id) : []),
-  );
+  const [passed, setPassed] = useState<ReadonlySet<string>>(() => {
+    if (startFolded) return new Set(steps.map((step) => step.id));
+    if (foldAnswered) {
+      return new Set(
+        steps.filter((step) => step.isAnswered).map((step) => step.id),
+      );
+    }
+    return new Set<string>();
+  });
   const [openId, setOpenId] = useState<string | null>(initialOpenId);
   const [hasReviewed, setHasReviewed] = useState(startFolded);
 

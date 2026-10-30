@@ -83,3 +83,18 @@ export function createSealedReader(encryption: RunwayEncryption) {
 }
 
 export type SealedReader = ReturnType<typeof createSealedReader>;
+
+/** Seals and opens a form's draft kept on this device, with the plan's key. */
+export function createDraftSealer(encryption: RunwayEncryption) {
+  return {
+    seal: (text: string) => sealJson({ draft: text }, encryption),
+    open: async (sealed: object) => {
+      const { draft } = await openJson<{ draft?: unknown }>(
+        sealed as Sealed,
+        encryption,
+      );
+      if (typeof draft !== 'string') throw new Error('A sealed draft did not open.');
+      return draft;
+    },
+  };
+}

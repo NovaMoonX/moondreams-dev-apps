@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImagePlus, Search } from 'lucide-react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
@@ -8,11 +8,13 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import AmountHero from '@/components/AmountHero';
 import FallbackImage from '@/components/FallbackImage';
 import BackLink from '@/components/BackLink';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import LinkPreviewCard from '@/components/LinkPreviewCard';
 import RevealChip from '@/components/RevealChip';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -23,6 +25,7 @@ import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
 import InlineNotice from '@/components/InlineNotice';
 import { useAuth } from '@/hooks/useAuth';
+import { clearFormDraft } from '@lib/app/formDrafts';
 import { useLinkPreview } from '@/hooks/useLinkPreview';
 import {
   useQuestionFlow,
@@ -57,6 +60,7 @@ import {
   CARD_WORDS,
   FORM_FLOW_WORDS,
   MAX_LINK_LENGTH,
+  FORM_DRAFT_PREFIX,
   MAX_RECEIPTS_PER_PURCHASE,
   MAX_RECEIPT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
@@ -76,6 +80,17 @@ import {
   splitEvenly,
   toChosenLines,
 } from '@apps/runway/engine/purchases';
+import {
+  isFlag,
+  isNullableText,
+  isText,
+  isTextList,
+  readDraftFields,
+} from '@apps/runway/forms/draftParse';
+import {
+  withStartOver,
+  type StartOverProps,
+} from '@apps/runway/forms/withStartOver';
 import { linkPageQueryOptions } from '@apps/runway/queries/linkPageQueries';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -209,6 +224,64 @@ interface PurchaseFormData {
   };
 }
 
+interface PurchaseDraft {
+  formData: PurchaseFormData;
+  isRefund: boolean;
+  isSplit: boolean;
+  envelopeId: string | null;
+  splitIds: string[];
+  shares: Record<string, string>;
+  originalId: string | null;
+  returnTo: string;
+  /** Whether a card was picked, and which (null is cash or debit); not picked leaves the usual card to suggest. */
+  paidBy: { isPicked: boolean; cardId: string | null };
+}
+
+const isTextRecord = (value: unknown) =>
+  typeof value === 'object' &&
+  value !== null &&
+  !Array.isArray(value) &&
+  Object.values(value).every((entry) => typeof entry === 'string');
+
+const parsePurchaseDraft = (stored: unknown): PurchaseDraft | null => {
+  const draft = readDraftFields<PurchaseDraft>(stored, {
+    formData: () => true,
+    isRefund: isFlag,
+    isSplit: isFlag,
+    envelopeId: isNullableText,
+    splitIds: isTextList,
+    shares: isTextRecord,
+    originalId: isNullableText,
+    returnTo: isText,
+    paidBy: (value) =>
+      readDraftFields<PurchaseDraft['paidBy']>(value, {
+        isPicked: isFlag,
+        cardId: isNullableText,
+      }) !== null,
+  });
+  const formData = draft
+    ? readDraftFields<PurchaseFormData>(draft.formData, {
+        amount: isText,
+        date: isText,
+        receiptText: isNullableText,
+        extras: () => true,
+      })
+    : null;
+  const extras = formData
+    ? readDraftFields<PurchaseFormData['extras']>(formData.extras, {
+        merchant: isNullableText,
+        label: isNullableText,
+        note: isNullableText,
+        link: isNullableText,
+        group: isNullableText,
+        groupName: isText,
+      })
+    : null;
+  return draft && formData && extras
+    ? { ...draft, formData: { ...formData, extras } }
+    : null;
+};
+
 interface PurchaseFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -232,14 +305,15 @@ const isOfflineFailure = (error: unknown) =>
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
 /** Adds what was spent, or changes a purchase already added: an amount, the envelope it came out of (or several), the day, and a refund when money came back. Needs a connection, since the plan is read fresh as it saves. */
-function PurchaseForm({
+function PurchaseFormBody({
+  onStartOver,
   isOpen,
   onClose,
   onCancel,
   presetEnvelopeId = null,
   editing,
   heldReceiptCount = 0,
-}: PurchaseFormProps) {
+}: PurchaseFormProps & StartOverProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isMounted = useRef(true);
@@ -271,29 +345,19 @@ function PurchaseForm({
   const editingLines = editing?.lines ?? [];
   const startsSplit =
     editing !== undefined && editing.amountCents > 0 && editingLines.length > 1;
-  const [formData, setFormData] = useState<PurchaseFormData>(initialData);
-  const [view, setView] = useState<
-    'form' | 'split' | 'original' | 'envelopes' | 'read'
-  >('form');
-  const [envelopeSearch, setEnvelopeSearch] = useState('');
-  const [isRefund, setIsRefund] = useState(
-    editing !== undefined && editing.amountCents < 0,
-  );
-  const [isSplit, setIsSplit] = useState(startsSplit);
-  const [envelopeId, setEnvelopeId] = useState<string | null>(
-    editing && !startsSplit && editing.amountCents > 0
-      ? (editingLines[0]?.envelopeId ?? null)
-      : presetEnvelopeId,
-  );
-  const [splitIds, setSplitIds] = useState<string[]>(() =>
-    startsSplit
+  const [start] = useState(() => ({
+    envelopeId:
+      editing && !startsSplit && editing.amountCents > 0
+        ? (editingLines[0]?.envelopeId ?? null)
+        : presetEnvelopeId,
+    isRefund: editing !== undefined && editing.amountCents < 0,
+    isSplit: startsSplit,
+    splitIds: startsSplit
       ? editingLines.flatMap((line) =>
           line.envelopeId === null ? [] : [line.envelopeId],
         )
       : [],
-  );
-  const [shares, setShares] = useState<Record<string, string>>(() =>
-    startsSplit
+    shares: startsSplit
       ? Object.fromEntries(
           editingLines.flatMap((line) =>
             line.envelopeId === null
@@ -301,18 +365,97 @@ function PurchaseForm({
               : [[line.envelopeId, (line.cents / 100).toFixed(2)]],
           ),
         )
-      : {},
+      : ({} as Record<string, string>),
+    originalId: editing?.refundOfId ?? null,
+    returnTo:
+      editing && editing.amountCents < 0
+        ? (editingLines[0]?.envelopeId ?? FREE_VALUE)
+        : FREE_VALUE,
+    paidByChoice: editing ? (editing.paidByCardId ?? null) : undefined,
+  }));
+  const draftKey = `${FORM_DRAFT_PREFIX}purchase:${editing?.id ?? 'new'}`;
+  // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
+  const draftBase = editing ? { initialData, start } : null;
+  const kept = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: (stored) => {
+      const draft = parsePurchaseDraft(stored);
+      if (draft === null) return null;
+      const known = new Set([
+        ...envelopes.map(({ item }) => item.id),
+        ...editingLines.flatMap((line) =>
+          line.envelopeId === null ? [] : [line.envelopeId],
+        ),
+      ]);
+      const splitIds = draft.splitIds.filter((id) => known.has(id));
+      const { group } = draft.formData.extras;
+      const isGroupKnown =
+        group === null ||
+        group === '' ||
+        group === NEW_CHOICE ||
+        expenses.some((expense) => expense.id === group);
+      const { cardId } = draft.paidBy;
+      const isCardKnown =
+        cardId === null || allCards.some((card) => card.id === cardId);
+      return {
+        ...draft,
+        formData: {
+          ...draft.formData,
+          extras: {
+            ...draft.formData.extras,
+            group: isGroupKnown ? group : '',
+          },
+        },
+        envelopeId:
+          draft.envelopeId !== null && known.has(draft.envelopeId)
+            ? draft.envelopeId
+            : null,
+        splitIds,
+        shares: Object.fromEntries(
+          splitIds.map((id) => [id, draft.shares[id] ?? '']),
+        ),
+        returnTo:
+          draft.returnTo === FREE_VALUE || known.has(draft.returnTo)
+            ? draft.returnTo
+            : FREE_VALUE,
+        paidBy: isCardKnown ? draft.paidBy : { isPicked: false, cardId: null },
+      };
+    },
+  });
+  const restored = kept.restored;
+  const [formData, setFormData] = useState<PurchaseFormData>(
+    restored?.formData ?? initialData,
+  );
+  const [view, setView] = useState<
+    'form' | 'split' | 'original' | 'envelopes' | 'read'
+  >('form');
+  const [envelopeSearch, setEnvelopeSearch] = useState('');
+  const [isRefund, setIsRefund] = useState(
+    restored?.isRefund ?? start.isRefund,
+  );
+  const [isSplit, setIsSplit] = useState(restored?.isSplit ?? start.isSplit);
+  const [envelopeId, setEnvelopeId] = useState<string | null>(
+    restored ? restored.envelopeId : start.envelopeId,
+  );
+  const [splitIds, setSplitIds] = useState<string[]>(
+    restored?.splitIds ?? start.splitIds,
+  );
+  const [shares, setShares] = useState<Record<string, string>>(
+    restored?.shares ?? start.shares,
   );
   const [originalId, setOriginalId] = useState<string | null>(
-    editing?.refundOfId ?? null,
+    restored ? restored.originalId : start.originalId,
   );
   const [returnTo, setReturnTo] = useState<string>(
-    editing && editing.amountCents < 0
-      ? (editingLines[0]?.envelopeId ?? FREE_VALUE)
-      : FREE_VALUE,
+    restored?.returnTo ?? start.returnTo,
   );
   const [paidByChoice, setPaidByChoice] = useState<string | null | undefined>(
-    editing ? (editing.paidByCardId ?? null) : undefined,
+    restored
+      ? restored.paidBy.isPicked
+        ? restored.paidBy.cardId
+        : undefined
+      : start.paidByChoice,
   );
   const [usualNotesSeen] = useState(readUsualNotesSeen);
   const [originQuery, setOriginQuery] = useState('');
@@ -456,14 +599,19 @@ function PurchaseForm({
       : (others.find((purchase) => purchase.id === originalId) ?? null);
   const refundable =
     original === null ? null : getRefundableCents(original, others);
-  const usualCardId =
-    editing || isRefund || envelopeId === null || isSplit
+  const getUsual = (
+    forEnvelopeId: string | null,
+    asRefund: boolean,
+    asSplit: boolean,
+  ) =>
+    editing || asRefund || forEnvelopeId === null || asSplit
       ? undefined
       : getUsualCardId(
-          envelopeId,
+          forEnvelopeId,
           purchases,
           cards.map((card) => card.id),
         );
+  const usualCardId = getUsual(envelopeId, isRefund, isSplit);
   const isUsualCard = paidByChoice === undefined && usualCardId !== undefined;
   const paidByCardId =
     paidByChoice !== undefined ? paidByChoice : (usualCardId ?? null);
@@ -597,7 +745,21 @@ function PurchaseForm({
     returnTo,
     paidByCardId,
   });
-  const [startSnapshot] = useState(snapshot);
+  const [startSnapshot] = useState(() =>
+    JSON.stringify({
+      formData: initialData,
+      envelopeId: start.envelopeId,
+      isRefund: start.isRefund,
+      splitIds: start.splitIds,
+      shares: start.shares,
+      originalId: start.originalId,
+      returnTo: start.returnTo,
+      paidByCardId:
+        start.paidByChoice !== undefined
+          ? start.paidByChoice
+          : (getUsual(start.envelopeId, start.isRefund, start.isSplit) ?? null),
+    }),
+  );
   const isCounted =
     date !== null && countedFrom !== null && date >= countedFrom;
   const effect =
@@ -1144,6 +1306,7 @@ function PurchaseForm({
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
     startFolded: editing !== undefined,
+    foldAnswered: restored !== null,
   });
   const isAsking = !questions.hasReviewed;
 
@@ -1241,6 +1404,44 @@ function PurchaseForm({
       }
     }
   };
+  const keptValue = useMemo(
+    () => ({
+      formData,
+      isRefund,
+      isSplit,
+      envelopeId,
+      splitIds,
+      shares,
+      originalId,
+      returnTo,
+      paidBy: {
+        isPicked: paidByChoice !== undefined,
+        cardId: paidByChoice ?? null,
+      },
+    }),
+    [
+      formData,
+      isRefund,
+      isSplit,
+      envelopeId,
+      splitIds,
+      shares,
+      originalId,
+      returnTo,
+      paidByChoice,
+    ],
+  );
+  useKeepFormDraft({
+    isRestored: restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: keptValue,
+    isDirty: snapshot !== startSnapshot,
+  });
+  const startOver = () => {
+    if (user) clearFormDraft(user.uid, draftKey);
+    onStartOver();
+  };
   const requestClose = useDiscardGuard({
     isDirty: snapshot !== startSnapshot || (pickedReceipts?.length ?? 0) > 0,
     onClose: onCancel ?? onClose,
@@ -1252,6 +1453,12 @@ function PurchaseForm({
 
   const formBody = (
     <div className='space-y-5'>
+      {kept.isNoticeShown && (
+        <DraftRestoredNotice
+          onStartOver={startOver}
+          onDismiss={kept.hideNotice}
+        />
+      )}
       {readNotice !== null && !isRefund && (
         <InlineNotice tone='info'>{readNotice}</InlineNotice>
       )}
@@ -1759,5 +1966,7 @@ function PurchaseForm({
     </FormSheet>
   );
 }
+
+const PurchaseForm = withStartOver(PurchaseFormBody);
 
 export default PurchaseForm;
