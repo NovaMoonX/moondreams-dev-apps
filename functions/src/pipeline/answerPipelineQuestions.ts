@@ -272,7 +272,7 @@ const recordAnswered = async (answers: PrAnswers[], results: PrResult[]) => {
         { merge: true },
       );
   } catch (error) {
-    logger.warn('answerPipelineQuestions: answered mark failed', getErrorName(error));
+    logger.error('answerPipelineQuestions: answered mark failed', getErrorName(error));
   }
 };
 

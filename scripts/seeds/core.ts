@@ -213,6 +213,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
   const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
   const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
+  batch.delete(context.firestore.doc('pipeline/answered'));
   batch.set(context.firestore.doc('pipeline/inbox'), {
     prs: [
       {

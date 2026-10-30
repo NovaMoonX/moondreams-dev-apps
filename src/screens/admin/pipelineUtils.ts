@@ -251,8 +251,10 @@ function toSessionEntry(
   const baseGroup = getSessionGroup(session, now);
   const getGroup = (): PipelineGroup | null => {
     // A finished or quiet session that still holds asks is waiting on the owner.
-    if (asks.length > 0 && baseGroup !== 'working') return 'waiting';
-    return baseGroup === 'waiting' ? 'finished' : baseGroup;
+    if (asks.length > 0 && (baseGroup === 'finished' || baseGroup === 'quiet'))
+      return 'waiting';
+    if (baseGroup !== 'waiting' || asks.length > 0) return baseGroup;
+    return now - session.updatedAt > IDLE_KEEP_MS ? null : 'finished';
   };
   const group = getGroup();
   const time = formatPipelineTime(session.updatedAt, now);

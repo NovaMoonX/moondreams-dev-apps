@@ -24,6 +24,7 @@ interface RawState {
   inbox: PipelineInbox | null;
   answered: Record<string, number>;
   sessionsLoaded: boolean;
+  answeredLoaded: boolean;
   inboxLoaded: boolean;
   sessionsFailed: boolean;
   inboxFailed: boolean;
@@ -34,6 +35,7 @@ const INITIAL: RawState = {
   inbox: null,
   answered: {},
   sessionsLoaded: false,
+  answeredLoaded: false,
   inboxLoaded: false,
   sessionsFailed: false,
   inboxFailed: false,
@@ -83,10 +85,18 @@ export function usePipelineSync(isEnabled: boolean): PipelineState {
     );
     const stopAnswered = startPipelineAnsweredListener(
       (answered) =>
-        setState((current) => ({ ...current, answered: answered?.marks ?? {} })),
+        setState((current) => ({
+          ...current,
+          answered: answered?.marks ?? {},
+          answeredLoaded: true,
+        })),
       (error) => {
         console.error('Pipeline answered listener failed', error);
-        setState((current) => ({ ...current, answered: {} }));
+        setState((current) => ({
+          ...current,
+          answered: {},
+          answeredLoaded: true,
+        }));
       },
     );
     return () => {
@@ -102,7 +112,8 @@ export function usePipelineSync(isEnabled: boolean): PipelineState {
     answered: state.answered,
     sessionsFailed: state.sessionsFailed,
     inboxFailed: state.inboxFailed,
-    isLoading: !state.sessionsLoaded || !state.inboxLoaded,
+    isLoading:
+      !state.sessionsLoaded || !state.inboxLoaded || !state.answeredLoaded,
     hasError: state.sessionsFailed || state.inboxFailed,
   };
 }
