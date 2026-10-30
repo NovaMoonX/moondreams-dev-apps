@@ -27,8 +27,8 @@ const AFTER_INCOME_KINDS: readonly DraftKind[] = [
   'goal',
   'card',
 ];
-// Dismissed until the app reloads, whichever screen unmounts the row meanwhile.
-const dismissal = { isHidden: false };
+// Each account's dismissal lasts until the app reloads, whichever screen unmounts the row meanwhile.
+const dismissedFor = new Set<string>();
 
 const PLAN_SECTION_BY_KIND = {
   bill: 'bills',
@@ -47,9 +47,10 @@ interface DraftPickUpRowProps {
 function DraftPickUpRow({ isTrack, onPickUpPurchase }: DraftPickUpRowProps) {
   const { user } = useAuth();
   const { showAddOnTab } = useRunwayUrlState();
-  const [isHidden, setIsHidden] = useState(dismissal.isHidden);
+  const [hiddenFor, setHiddenFor] = useState<string | null>(null);
   const hasIncome = useAppSelector(selectHasEverHadIncome);
   const uid = user?.uid ?? null;
+  const isHidden = uid !== null && (hiddenFor === uid || dismissedFor.has(uid));
   // A string snapshot, so the store's answer compares equal until the kept set really changes.
   const keptKeys = useSyncExternalStore(subscribeKeptFormDrafts, () =>
     uid === null
@@ -111,8 +112,9 @@ function DraftPickUpRow({ isTrack, onPickUpPurchase }: DraftPickUpRowProps) {
         title={DRAFT_PICK_UP_WORDS.dismiss}
         className='text-muted-foreground! mr-1 size-10 min-w-10 shrink-0 self-center rounded-full p-0'
         onClick={() => {
-          dismissal.isHidden = true;
-          setIsHidden(true);
+          if (uid === null) return;
+          dismissedFor.add(uid);
+          setHiddenFor(uid);
         }}
       >
         <X className='h-5 w-5' aria-hidden='true' />
