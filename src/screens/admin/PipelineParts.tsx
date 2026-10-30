@@ -1,11 +1,20 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, Maximize2, PenLine, Plus, TriangleAlert } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  Maximize2,
+  PenLine,
+  Plus,
+  TriangleAlert,
+} from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
 import FallbackImage from '@/components/FallbackImage';
 import HelpTip from '@/components/HelpTip';
+import FormSheet from '@/components/FormSheet';
 import ImageViewer from '@/components/ImageViewer';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { MAX_ANSWER_NOTE } from '@lib/admin/pipelineAnswers';
 
@@ -174,6 +183,8 @@ interface AnswerFieldsProps {
   onChoices: (choices: string[], other: string | null) => void;
   onOther: (other: string) => void;
   onNote: (note: string) => void;
+  /** Inside its own drawer: the free-text box is open at once instead of behind a button. */
+  isExpanded?: boolean;
 }
 
 const ROW_CLASS =
@@ -195,13 +206,15 @@ function FreeTextField({
   slot,
   value,
   onChange,
+  isExpanded,
 }: {
   slot: AnswerSlot;
   value: string;
   onChange: (value: string) => void;
+  isExpanded: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(false);
-  if (slot.kind === 'feedback' && !isOpen && value === '') {
+  if (slot.kind === 'feedback' && !isOpen && !isExpanded && value === '') {
     return (
       <Button
         type='button'
@@ -231,8 +244,8 @@ function FreeTextField({
       value={value}
       onChange={onChange}
       maxLength={MAX_ANSWER_NOTE}
-      rows={2}
-      shouldFocus={isOpen}
+      rows={isExpanded ? 4 : 2}
+      shouldFocus={isOpen || isExpanded}
     />
   );
 }
@@ -246,6 +259,7 @@ export function AnswerFields({
   onChoices,
   onOther,
   onNote,
+  isExpanded = false,
 }: AnswerFieldsProps) {
   const [previewAt, setPreviewAt] = useState<number | null>(null);
   const [isOtherFocus, setIsOtherFocus] = useState(false);
@@ -301,7 +315,12 @@ export function AnswerFields({
           Sent · waiting for the session
         </p>
       ) : !hasOptions ? (
-        <FreeTextField slot={slot} value={draft.note} onChange={onNote} />
+        <FreeTextField
+          slot={slot}
+          value={draft.note}
+          onChange={onNote}
+          isExpanded={isExpanded}
+        />
       ) : (
         <>
           {plain.length > 0 ? (
@@ -412,6 +431,106 @@ export function AnswerFields({
           <WarningLine>{error}</WarningLine>
         </p>
       ) : null}
+    </div>
+  );
+}
+
+const ROW_WORDS = {
+  question: { sheet: 'Answer', empty: 'Not answered yet' },
+  reply: { sheet: 'Reply', empty: 'Not answered yet' },
+  feedback: { sheet: 'Anything else?', empty: "Optional: feedback that isn't an answer" },
+};
+
+const getAnswerSummary = (draft: AnswerDraft) => {
+  const other = (draft.other ?? '').trim();
+  const picks = [...draft.choices, ...(other === '' ? [] : [`Other: ${other}`])];
+  const note = draft.note.trim();
+  return [...picks, ...(note === '' ? [] : [note])].join(', ');
+};
+
+/** A question as one row that names it and what you picked; the fields open in their own drawer, so the sheet under it stays short. */
+export function AnswerRow(props: AnswerFieldsProps) {
+  const { slot, draft, isSent, error } = props;
+  const [isOpen, setIsOpen] = useState(false);
+  const words = ROW_WORDS[slot.kind];
+  const summary = getAnswerSummary(draft);
+  const heading =
+    slot.kind === 'question'
+      ? stripLinks(slot.text)
+      : slot.kind === 'reply'
+        ? 'Your reply'
+        : 'Anything else?';
+
+  const getStatus = () => {
+    if (isSent) {
+      return (
+        <span className='text-muted-foreground inline-flex items-center gap-1'>
+          <Check className='size-3.5' aria-hidden='true' />
+          Sent · waiting for the session
+        </span>
+      );
+    }
+    return summary === '' ? (
+      <span className='text-muted-foreground'>{words.empty}</span>
+    ) : (
+      <span className='text-foreground'>{summary}</span>
+    );
+  };
+
+  return (
+    <div className='space-y-1.5'>
+      <Button
+        type='button'
+        variant='tertiary'
+        className={join(
+          ROW_CLASS,
+          'gap-2 py-2.5',
+          summary !== '' && !isSent ? getEdgeClass(true) : 'border-border',
+        )}
+        disabled={isSent}
+        onClick={() => setIsOpen(true)}
+      >
+        <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
+          <span className='text-foreground line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]'>
+            {heading}
+          </span>
+          <span className='line-clamp-1 text-xs [overflow-wrap:anywhere]'>
+            {getStatus()}
+          </span>
+        </span>
+        {isSent ? null : (
+          <ChevronRight
+            className='text-muted-foreground size-4 shrink-0'
+            aria-hidden='true'
+          />
+        )}
+      </Button>
+      {error ? (
+        <p role='alert'>
+          <WarningLine>{error}</WarningLine>
+        </p>
+      ) : null}
+      <FormSheet
+        isOpen={isOpen}
+        isDrawerWhenShort
+        onClose={() => setIsOpen(false)}
+        title={words.sheet}
+      >
+        <div className='space-y-4 pb-2'>
+          <AnswerFields {...props} error={null} isExpanded />
+        </div>
+        <ModalFooterActions
+          rightActions={
+            <Button
+              type='button'
+              variant='primary'
+              onClick={() => setIsOpen(false)}
+            >
+              Done
+            </Button>
+          }
+        />
+      </FormSheet>
     </div>
   );
 }

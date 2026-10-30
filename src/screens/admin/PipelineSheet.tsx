@@ -6,7 +6,7 @@ import DetailSheet from '@/components/DetailSheet';
 import { DISABLED_CLASS } from './constants';
 import ScreenshotGallery from './ScreenshotGallery';
 import {
-  AnswerFields,
+  AnswerRow,
   CiBadge,
   LinkedText,
   NotSetUpLine,
@@ -193,15 +193,15 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
                   ))}
                 </ul>
               ) : null}
-              <ul className='space-y-5'>
+              <ul className='space-y-2'>
                 {slots.map((slot) => (
                   <li
                     key={slot.id}
                     className={
-                      slot.kind === 'feedback' ? 'border-border border-t pt-4' : undefined
+                      slot.kind === 'feedback' ? 'border-border !mt-4 border-t pt-4' : undefined
                     }
                   >
-                    <AnswerFields
+                    <AnswerRow
                       slot={slot}
                       draft={answers.getDraft(slot.id)}
                       isSent={answers.isSent(slot)}
