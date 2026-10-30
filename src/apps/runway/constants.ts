@@ -1656,15 +1656,20 @@ export const GROUP_WORDS = {
       : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
   archiveFailed: 'This did not stop. Nothing was changed.',
   saveFailed: 'This did not save. Nothing was changed.',
+  ofWord: 'of',
   basisTitle: 'How a month is worked out',
   rangeTotal:
     'A bill or envelope that varies counts at its low and its high amount, so the total is a range.',
   basis:
     'A usual month: each repeating bill at what it comes to in an average month, and each envelope at what it gets in one. A one-time bill is not in it.',
-  onlyBills:
-    'This counts its bills only. Its envelopes are on the Envelopes list.',
-  onlyEnvelopes:
-    'This counts its envelopes only. Its bills are on the Bills list.',
+  onlyBills: (name: string, part: string | null, whole: string | null) =>
+    part === null || whole === null
+      ? `This counts bills only. Tap ${name} to see both.`
+      : `Bills come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
+  onlyEnvelopes: (name: string, part: string | null, whole: string | null) =>
+    part === null || whole === null
+      ? `This counts envelopes only. Tap ${name} to see both.`
+      : `Envelopes come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
   chooseEmoji: (name: string) => `Choose an emoji for ${name}`,
   changeEmoji: (name: string) => `Change the emoji for ${name}`,
   emojiLabel: 'Emoji',
