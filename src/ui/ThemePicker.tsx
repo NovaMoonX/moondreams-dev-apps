@@ -18,7 +18,7 @@ function ThemePicker() {
   const Icon = THEME_ICONS[theme];
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-3 px-2'>
       <span className='flex items-center gap-3'>
         <IconTile>
           <Icon className='size-5' />
@@ -33,7 +33,7 @@ function ThemePicker() {
         </span>
       </span>
       <PillGroup
-        label='Theme'
+        label='Choose a theme'
         options={THEME_OPTIONS}
         value={theme}
         onChange={setTheme}

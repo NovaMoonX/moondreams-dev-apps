@@ -66,14 +66,14 @@ const resolveTheme = (theme: Theme, isDeviceDark: boolean) => {
 const applyBrowserColor = (theme: Theme, resolved: 'light' | 'dark') => {
   document
     .querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')
-    .forEach((meta) => {
-      const deviceMedia = meta.dataset.deviceMedia ?? meta.media;
-      meta.dataset.deviceMedia = deviceMedia;
+    .forEach((tag) => {
+      const deviceMedia = tag.dataset.deviceMedia ?? tag.media;
+      tag.dataset.deviceMedia = deviceMedia;
       if (theme === 'system') {
-        meta.media = deviceMedia;
+        tag.media = deviceMedia;
         return;
       }
-      meta.media = deviceMedia.includes(resolved) ? 'all' : 'not all';
+      tag.media = deviceMedia.includes(resolved) ? 'all' : 'not all';
     });
 };
 
