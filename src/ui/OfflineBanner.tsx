@@ -59,7 +59,7 @@ function OfflineBanner() {
     <div
       aria-live='polite'
       className={join(
-        'pointer-events-none fixed inset-x-0 top-0 z-50 flex h-9 items-center justify-center gap-2 text-sm font-medium transition-transform duration-300 ease-out',
+        'pointer-events-none fixed inset-x-0 top-0 z-[105] flex h-9 items-center justify-center gap-2 text-sm font-medium transition-transform duration-300 ease-out',
         status ? 'translate-y-0' : '-translate-y-full',
         variant.className,
       )}
