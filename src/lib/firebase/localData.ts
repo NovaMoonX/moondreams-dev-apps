@@ -15,11 +15,13 @@ function readCacheOwner() {
   }
 }
 
+/** Whether the owner was recorded; without storage the copy can't be tied to an account, and Reset saved data still clears it. */
 function writeCacheOwner(owner: string) {
   try {
     window.localStorage.setItem(CACHE_OWNER_KEY, owner);
+    return window.localStorage.getItem(CACHE_OWNER_KEY) === owner;
   } catch {
-    // Without storage the copy can't be tied to an account; Reset saved data still clears it.
+    return false;
   }
 }
 
@@ -30,8 +32,9 @@ function writeCacheOwner(owner: string) {
 export function claimFirestoreLocalData(uid: string) {
   if (isUsingFirebaseEmulators) return false;
   const owner = readCacheOwner();
-  writeCacheOwner(uid);
-  return owner !== null && owner !== uid;
+  if (owner === uid) return false;
+  // Clearing reloads the page, so it only happens once the new owner is recorded, or it would never stop.
+  return writeCacheOwner(uid) && owner !== null;
 }
 
 /** Marks the saved copy as no longer any account's, so the next sign-in starts from a clean one. */
