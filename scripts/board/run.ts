@@ -28,6 +28,7 @@ interface Issue {
   number: number;
   node_id: string;
   title: string;
+  state: string;
   labels: { name: string }[];
   pull_request?: unknown;
 }
@@ -39,7 +40,10 @@ const rest = async <T>(path: string): Promise<T> => {
       accept: 'application/vnd.github+json',
     },
   });
-  if (!response.ok) throw new Error(`GET ${path}: ${response.status}`);
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 200);
+    throw new Error(`GET ${path}: ${response.status} ${detail}`);
+  }
   return (await response.json()) as T;
 };
 
@@ -55,10 +59,16 @@ const graphql = async <T>(
     },
     body: JSON.stringify({ query, variables }),
   });
-  const body = (await response.json()) as {
-    data?: T;
-    errors?: { message: string }[];
-  };
+  const text = await response.text();
+  const body = (() => {
+    try {
+      return JSON.parse(text) as { data?: T; errors?: { message: string }[] };
+    } catch {
+      return {
+        errors: [{ message: `${response.status} ${text.slice(0, 200)}` }],
+      };
+    }
+  })();
   if (!response.ok || body.errors?.length) {
     throw new Error(
       body.errors?.map((error) => error.message).join('; ') ??
@@ -141,6 +151,10 @@ const setOption = (
   );
 
 const placeIssue = async (project: Project, issue: Issue) => {
+  if (issue.pull_request || issue.state !== 'open') {
+    console.log(`#${issue.number}: not an open issue, left as it is`);
+    return;
+  }
   const appName = readAppName(issue.labels.map((label) => label.name));
   if (appName === null) {
     console.log(
@@ -157,18 +171,30 @@ const placeIssue = async (project: Project, issue: Issue) => {
   }
   const added = await graphql<{
     addProjectV2ItemById: {
-      item: { id: string; status: { name: string } | null };
+      item: {
+        id: string;
+        status: { name: string } | null;
+        apps: { name: string } | null;
+      };
     };
   }>(
     `mutation($project: ID!, $content: ID!) {
       addProjectV2ItemById(input: { projectId: $project, contentId: $content }) {
-        item { id status: fieldValueByName(name: "${STATUS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } } }
+        item {
+          id
+          status: fieldValueByName(name: "${STATUS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+          apps: fieldValueByName(name: "${APPS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+        }
       }
     }`,
     { project: project.id, content: issue.node_id },
   );
   const item = added.addProjectV2ItemById.item;
-  if (apps && project.apps) {
+  if (item.apps) {
+    console.log(
+      `#${issue.number}: ${APPS_FIELD} already "${item.apps.name}", kept`,
+    );
+  } else if (apps && project.apps) {
     await setOption(project, item.id, project.apps.id, apps.id);
   } else {
     console.log(
@@ -200,7 +226,7 @@ const main = async () => {
   }
   if (!projectToken) {
     console.log(
-      '::warning::PROJECT_TOKEN is not set, so issues are not added to the board. Add a token with project access as a repository secret.',
+      '::warning::PROJECT_TOKEN is not set, so issues are not added to the board. Add a classic token with the project scope (and repo, if the repository is private) as a repository secret.',
     );
     return;
   }
@@ -208,10 +234,24 @@ const main = async () => {
   const issues = isAll
     ? await listOpenIssues()
     : [await rest<Issue>(`/repos/${repo}/issues/${issueArg}`)];
-  await issues.reduce<Promise<void>>(
-    (previous, issue) => previous.then(() => placeIssue(project, issue)),
-    Promise.resolve(),
+  const failed = await issues.reduce<Promise<number[]>>(
+    (previous, issue) =>
+      previous.then((numbers) =>
+        placeIssue(project, issue).then(
+          () => numbers,
+          (error: unknown) => {
+            console.log(
+              `::error::#${issue.number}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return [...numbers, issue.number];
+          },
+        ),
+      ),
+    Promise.resolve([]),
   );
+  if (failed.length > 0) {
+    throw new Error(`Not placed: ${failed.map((n) => `#${n}`).join(', ')}`);
+  }
 };
 
 main().catch((error: unknown) => {
