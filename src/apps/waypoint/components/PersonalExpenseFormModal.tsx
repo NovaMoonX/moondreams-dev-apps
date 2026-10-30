@@ -5,8 +5,10 @@ import type { FormField } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { Lock, StickyNote } from 'lucide-react';
 
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import DeleteIconButton from '@/components/DeleteIconButton';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import FormSheet from '@/components/FormSheet';
@@ -66,6 +68,24 @@ const parseAmount = (value: string) => {
   return value.trim() === '' || !Number.isFinite(parsed) || parsed < 0 ? null : parsed;
 };
 
+interface PersonalExpenseDraft {
+  formData: PersonalExpenseFormData;
+  showNoteField: boolean;
+}
+
+const TEXT_KEYS = ['title', 'amount', 'status', 'dayIndex', 'note'] as const;
+
+function parsePersonalExpenseDraft(stored: unknown): PersonalExpenseDraft | null {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { formData, showNoteField } = stored as Partial<PersonalExpenseDraft>;
+  if (typeof showNoteField !== 'boolean' || typeof formData !== 'object' || formData === null) return null;
+  const isShaped =
+    TEXT_KEYS.every((key) => typeof formData[key] === 'string') &&
+    typeof formData.category?.choice === 'string' &&
+    typeof formData.category?.newLabel === 'string';
+  return isShaped ? { formData, showNoteField } : null;
+}
+
 const resolveCategory = ({ choice, newLabel }: CategoryValue) =>
   choice === NEW_CHOICE || choice === '' ? newLabel.trim() || null : choice;
 
@@ -83,15 +103,27 @@ function PersonalExpenseFormModal({
   const { confirm } = useActionModal();
   const [error, setError] = useState<string | null>(null);
   const [isToggling, setIsToggling] = useState(false);
-  const [showNoteField, setShowNoteField] = useState(Boolean(initialExpense.note));
-  const [formData, setFormData] = useState<PersonalExpenseFormData>({
+  const startData: PersonalExpenseFormData = {
     title: initialExpense.title,
     category: { choice: getExpenseCategoryKey(initialExpense), newLabel: '' },
     amount: String(initialExpense.amount),
     status: initialExpense.status,
     dayIndex: initialExpense.dayIndex === null ? '' : String(initialExpense.dayIndex),
     note: initialExpense.note ?? '',
+  };
+  const draftKey = `waypoint:personal-expense:${initialExpense.id}`;
+  const draft = useFormDraft({ key: draftKey, base: startData, parse: parsePersonalExpenseDraft });
+  const [showNoteField, setShowNoteField] = useState(
+    draft.restored?.showNoteField ?? Boolean(initialExpense.note),
+  );
+  const [formData, setFormData] = useState<PersonalExpenseFormData>(() => {
+    const restored = draft.restored?.formData;
+    if (!restored) return startData;
+    const { choice } = restored.category;
+    const isCategoryKnown = choice === '' || choice === NEW_CHOICE || categoryKeys.includes(choice);
+    return isCategoryKnown ? restored : { ...restored, category: startData.category };
   });
+  const [formKey, setFormKey] = useState(0);
   const isDirty =
     formData.title !== initialExpense.title ||
     formData.amount !== String(initialExpense.amount) ||
@@ -100,6 +132,16 @@ function PersonalExpenseFormModal({
     showNoteField !== Boolean(initialExpense.note) ||
     formData.category.choice !== getExpenseCategoryKey(initialExpense);
   useUnsavedWork(() => isDirty);
+  const draftValue = useMemo(() => ({ formData, showNoteField }), [formData, showNoteField]);
+  useKeepFormDraft({
+    isRestored: draft.restored !== null, key: draftKey, base: startData, value: draftValue, isDirty });
+
+  const startOver = () => {
+    setFormData(startData);
+    setShowNoteField(Boolean(initialExpense.note));
+    setFormKey((current) => current + 1);
+    draft.hideNotice();
+  };
   const isFormComplete =
     formData.title.trim() !== '' && resolveCategory(formData.category) !== null && parseAmount(formData.amount) !== null;
   const dayOptions = useMemo(
@@ -249,7 +291,13 @@ function PersonalExpenseFormModal({
           </Button>
         )}
       </div>
+      {draft.isNoticeShown && (
+        <div className='mb-4'>
+          <DraftRestoredNotice onStartOver={startOver} onDismiss={draft.hideNotice} />
+        </div>
+      )}
       <Form
+        key={formKey}
         id='waypoint-personal-expense'
         form={fields}
         initialData={formData}

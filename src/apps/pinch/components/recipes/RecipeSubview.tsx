@@ -13,6 +13,10 @@ import { useAppSelector } from '@/store';
 import RecipeForm, {
   type RecipeRead,
 } from '@apps/pinch/components/recipes/RecipeForm';
+import {
+  getRecipeDraftKey,
+  readRecipeDraftTitle,
+} from '@apps/pinch/components/recipes/recipeFormModel';
 import RecipeReader from '@apps/pinch/components/recipes/RecipeReader';
 import RecipeStart from '@apps/pinch/components/recipes/RecipeStart';
 import {
@@ -96,6 +100,18 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
   const [read, setRead] = useState<RecipeRead | null>(null);
   const [kept, setKept] = useState<Kept | null>(null);
   const [title, setTitle] = useState(existing?.title ?? fromIdea?.title ?? '');
+  const [draftTitle] = useState(() =>
+    readRecipeDraftTitle(
+      uid,
+      getRecipeDraftKey(recipeId, fromIdea !== null || fromChanges.length > 0),
+      existing?.updatedAt ?? null,
+    ),
+  );
+  const [isTitleTouched, setIsTitleTouched] = useState(false);
+  const changeTitle = (next: string) => {
+    setIsTitleTouched(true);
+    setTitle(next);
+  };
 
   const stageRef = useRef(stage);
 
@@ -201,7 +217,12 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
     if (stage === 'start') return 'New recipe';
     if (stage === 'idea') return 'Idea';
     if (stage === 'form')
-      return title.trim() || existing?.title || 'New recipe';
+      return (
+        title.trim() ||
+        (isTitleTouched ? '' : draftTitle?.trim()) ||
+        existing?.title ||
+        'New recipe'
+      );
     return (
       RECIPE_START_METHODS.find((method) => method.id === stage)?.title ??
       'New recipe'
@@ -262,7 +283,7 @@ function RecipeSubview({ uid, recipeId }: RecipeSubviewProps) {
           isDirtyRef={isDirtyRef}
           backStepRef={backStepRef}
           onLeave={() => void leave()}
-          onTitleChange={setTitle}
+          onTitleChange={changeTitle}
         />
       );
     }
