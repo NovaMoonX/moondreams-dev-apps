@@ -67,7 +67,7 @@ function Home() {
       className={join('page flex items-center justify-center', CANVAS_CLASS)}
     >
       <div className='w-full max-w-4xl'>
-        <header className='mb-10 flex items-center justify-center'>
+        <header className='mb-10 flex items-center justify-center md:pt-6'>
           <div className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
             {APP_TITLE}
           </div>

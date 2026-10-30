@@ -1,20 +1,26 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import ExternalLinkText from '@/components/ExternalLinkText';
 
+import { DISABLED_CLASS } from './constants';
 import {
   AnswerFields,
   ImageRow,
   LinkedText,
+  NotSetUpLine,
   SentLine,
   StatusDot,
+  UnsureLine,
+  WarningLine,
 } from './PipelineParts';
 import {
   CI_WORDS,
   getAnswerSlots,
   getEntryActions,
   getEntryPrUrl,
+  getPrError,
   type PipelineEntry,
 } from './pipelineUtils';
 import type { PipelineAnswers } from './usePipelineAnswers';
@@ -43,6 +49,7 @@ interface PipelineSheetProps {
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
 function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
   const slots = entry ? getAnswerSlots(entry) : [];
+  const isAllSent = slots.length > 0 && slots.every(answers.isSent);
   const slotPrs = new Set(slots.map((slot) => slot.prNumber));
   const entryReady = answers.getReadyCount(slots);
   const elsewhereReady = answers.getReadyCount() - entryReady;
@@ -67,15 +74,31 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
             <Button
               type='button'
               variant='primary'
-              className='w-full'
-              disabled={entryReady === 0 || answers.isSending}
+              className={join('w-full', DISABLED_CLASS)}
+              disabled={
+                entryReady === 0 || answers.isSending || answers.isNotSetUp
+              }
               onClick={() => void answers.send(slots)}
             >
               {answers.isSending ? 'Sending…' : 'Send answers'}
             </Button>
+            {answers.isNotSetUp ? (
+              <p role='status'>
+                <NotSetUpLine />
+              </p>
+            ) : entryReady === 0 && !answers.isSending && !isAllSent ? (
+              <p role='status' className='text-muted-foreground text-xs'>
+                Pick an option or add a note first
+              </p>
+            ) : null}
             {answers.sendNote ? (
-              <p role='alert' className='text-destructive text-sm'>
-                {answers.sendNote}
+              <p role='alert'>
+                <WarningLine>{answers.sendNote}</WarningLine>
+              </p>
+            ) : null}
+            {answers.unsure.length > 0 ? (
+              <p role='alert'>
+                <UnsureLine prs={answers.unsure} />
               </p>
             ) : null}
             <SentLine sent={sent} />
@@ -88,7 +111,7 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
           </>
         ) : null}
         {links.length > 0 || prUrl ? (
-          <div className='grid gap-2 min-[380px]:grid-cols-2'>
+          <div className='grid grid-cols-2 gap-2'>
             {[
               ...links,
               ...(prUrl ? [{ label: 'Open the PR', href: prUrl }] : []),
@@ -99,7 +122,7 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
                 target='_blank'
                 rel='noreferrer'
                 variant='outline'
-                className='w-full whitespace-nowrap'
+                className='w-full px-2 text-xs whitespace-nowrap min-[380px]:px-4 min-[380px]:text-sm'
               >
                 {action.label}
               </Button>
@@ -147,7 +170,7 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
                       slot={slot}
                       draft={answers.getDraft(slot.id)}
                       isSent={answers.isSent(slot)}
-                      error={answers.errors[slot.prNumber] ?? null}
+                      error={getPrError(slots, slot, answers.errors)}
                       onChoice={(choice) => answers.setChoice(slot.id, choice)}
                       onNote={(note) => answers.setNote(slot.id, note)}
                     />

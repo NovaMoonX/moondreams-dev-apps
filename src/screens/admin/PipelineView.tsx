@@ -59,6 +59,11 @@ function PipelineView({
     ...groups.quiet,
     ...groups.finished,
   ];
+  // With no Answer all, the one solid button leads with the first entry that can be answered here.
+  const leadKey = (
+    groups.waiting.find((entry) => getAnswerSlots(entry).length > 0) ??
+    groups.waiting[0]
+  )?.key;
   const latestUpdate = Math.max(
     0,
     inbox?.updatedAt ?? 0,
@@ -77,7 +82,7 @@ function PipelineView({
     return getPartialFailureLine(sessionsFailed);
   };
 
-  const renderWaitingCard = (entry: PipelineEntry, index: number) => {
+  const renderWaitingCard = (entry: PipelineEntry) => {
     const [firstAsk = ''] = entry.asks;
     const moreCount = entry.asks.length - 1;
     return (
@@ -105,7 +110,7 @@ function PipelineView({
               </span>
             ) : null}
             {moreCount > 0 ? (
-              <span className='text-muted-foreground block text-xs'>
+              <span className='text-muted-foreground block text-xs font-medium'>
                 +{moreCount} more
               </span>
             ) : null}
@@ -117,7 +122,7 @@ function PipelineView({
         </Button>
         <EntryActions
           entry={entry}
-          isFilled={index === 0 && answerCount === 0}
+          isFilled={answerCount === 0 && entry.key === leadKey}
           onAnswer={() => onOpenEntry(entry.key)}
         />
       </li>

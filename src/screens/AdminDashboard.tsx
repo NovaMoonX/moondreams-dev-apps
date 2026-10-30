@@ -1,11 +1,11 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import AppLogo from '@/components/AppLogo';
+import { SubviewBackButton } from '@/components/Subview';
 import SectionHeader from '@/components/SectionHeader';
 import StickyAppBar from '@/components/StickyAppBar';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -17,7 +17,6 @@ import { adminUsersQueryOptions } from '@lib/admin/adminQueries';
 import { ADMIN_EMAIL } from '@lib/app';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
-import HeaderIconButton from '@/components/HeaderIconButton';
 import AdminRefreshButton from './admin/AdminRefreshButton';
 import AppDetail from './admin/AppDetail';
 import { isSameDraft, toDraft, type AppDraft } from './admin/appDraft';
@@ -37,6 +36,7 @@ const NO_USERS: UserProfile[] = [];
 /** An opaque bar in the canvas colour, so scrolled content never shows through it. */
 const BAR_CLASS = 'bg-muted! dark:bg-background!';
 
+/** The round back chip of the account page's header. */
 function AdminDashboard() {
   const { user, isAdmin } = useAuth();
   const { allApps, updateAppMetadata } = useAppCatalog();
@@ -188,12 +188,7 @@ function AdminDashboard() {
   );
 
   const homeButton = (
-    <HeaderIconButton
-      isQuiet
-      icon={<ChevronLeft className='size-4' />}
-      label='Back to home'
-      onClick={() => navigate('/')}
-    />
+    <SubviewBackButton label='Back to home' onClick={() => navigate('/')} />
   );
 
   if (!isWide && selected !== null) {
@@ -205,12 +200,7 @@ function AdminDashboard() {
             className={BAR_CLASS}
             leading={
               <div className='flex min-w-0 flex-1 items-center gap-3'>
-                <HeaderIconButton
-                  isQuiet
-                  icon={<ChevronLeft className='size-4' />}
-                  label='Back to dashboard'
-                  onClick={url.goBack}
-                />
+                <SubviewBackButton label='Back to dashboard' onClick={url.goBack} />
                 {selectedApp ? (
                   <AppLogo
                     appId={selectedApp.id}

@@ -17,6 +17,8 @@ export interface PipelineAnswerResult {
   prNumber: number;
   ok: boolean;
   url: string | null;
+  /** When the comment was posted, in the server's time. */
+  postedAt: number | null;
   error: string | null;
 }
 

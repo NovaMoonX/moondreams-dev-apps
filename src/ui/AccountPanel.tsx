@@ -91,7 +91,12 @@ function AccountPanel({
   const hasOthers = otherAccounts.length > 0;
 
   return (
-    <div className={join(CANVAS_CLASS, 'space-y-3 rounded-3xl p-3')}>
+    <div
+      className={join(
+        'space-y-3',
+        onClose && join(CANVAS_CLASS, 'rounded-3xl p-3'),
+      )}
+    >
       {onClose ? (
         <div className='flex min-h-10 items-center justify-end'>
           <Button

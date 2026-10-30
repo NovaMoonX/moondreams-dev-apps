@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import {
   sendPipelineAnswers,
@@ -23,8 +23,6 @@ export interface SentPr {
 }
 
 const EMPTY: AnswerDraft = { choice: null, note: '' };
-const NOT_SET_UP =
-  "Answering isn't set up yet. Add the GitHub token (see the PR notes).";
 
 export const getChoiceText = (label: string) => stripLinks(label).slice(0, 300);
 
@@ -40,11 +38,15 @@ const toItem = (slot: AnswerSlot, draft: AnswerDraft) => ({
 /** The owner's unsent answers across every waiting entry, and the one send that turns them into a comment per pull request. */
 export function usePipelineAnswers(entries: PipelineEntry[]) {
   const [drafts, setDrafts] = useState<Record<string, AnswerDraft>>({});
+  // Server time of each posted comment, so a sent mark outlasts only the status comment written before it.
   const [sentAt, setSentAt] = useState<Record<string, number>>({});
   const [errors, setErrors] = useState<Record<number, string>>({});
   const [lastSent, setLastSent] = useState<SentPr[]>([]);
+  const [unsure, setUnsure] = useState<SentPr[]>([]);
   const [sendNote, setSendNote] = useState<string | null>(null);
+  const [isNotSetUp, setIsNotSetUp] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const sendingRef = useRef(false);
 
   const slots = entries.flatMap(getAnswerSlots);
   // A sent answer shows as sent until its pull request's status comment is newer than the send.
@@ -62,7 +64,7 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
 
   const send = async (scope: AnswerSlot[]) => {
     const ready = getReady(scope);
-    if (ready.length === 0 || isSending) return false;
+    if (ready.length === 0 || sendingRef.current) return false;
     const answers = ready.reduce<PipelineAnswersForPr[]>((all, slot) => {
       const item = toItem(slot, getDraft(slot.id));
       const existing = all.find((entry) => entry.prNumber === slot.prNumber);
@@ -74,17 +76,24 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
           )
         : [...all, { prNumber: slot.prNumber, items: [item] }];
     }, []);
+    sendingRef.current = true;
     setIsSending(true);
     setSendNote(null);
+    setUnsure([]);
     try {
       const results = await sendPipelineAnswers(answers);
-      const now = Date.now();
       const done = results.filter((result) => result.ok);
       const doneNumbers = new Set(done.map((result) => result.prNumber));
       const doneSlots = ready.filter((slot) => doneNumbers.has(slot.prNumber));
       setSentAt((current) => ({
         ...current,
-        ...Object.fromEntries(doneSlots.map((slot) => [slot.id, now])),
+        ...Object.fromEntries(
+          doneSlots.map((slot) => [
+            slot.id,
+            results.find((result) => result.prNumber === slot.prNumber)
+              ?.postedAt ?? Date.now(),
+          ]),
+        ),
       }));
       setDrafts((current) =>
         Object.fromEntries(
@@ -112,13 +121,30 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
       return results.every((result) => result.ok);
     } catch (error) {
       const code = (error as { code?: unknown }).code;
-      setSendNote(
-        code === 'functions/failed-precondition'
-          ? NOT_SET_UP
-          : "Couldn't send your answers. They're still here.",
+      if (code === 'functions/failed-precondition') {
+        setIsNotSetUp(true);
+        return false;
+      }
+      if (
+        code === 'functions/invalid-argument' ||
+        code === 'functions/permission-denied'
+      ) {
+        setSendNote("Couldn't send your answers. They're still here.");
+        return false;
+      }
+      // A timeout or a dropped connection says nothing about whether GitHub got the comment.
+      setUnsure(
+        answers.map(({ prNumber }) => ({
+          prNumber,
+          url:
+            entries
+              .flatMap((entry) => entry.prs)
+              .find((pr) => pr.number === prNumber)?.url ?? null,
+        })),
       );
       return false;
     } finally {
+      sendingRef.current = false;
       setIsSending(false);
     }
   };
@@ -129,6 +155,8 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     errors,
     lastSent,
     sendNote,
+    unsure,
+    isNotSetUp,
     isSent,
     getDraft,
     setChoice: (id: string, choice: string | null) => setDraft(id, { choice }),
@@ -138,6 +166,7 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
       setDrafts({});
       setErrors({});
       setSendNote(null);
+      setUnsure([]);
     },
     send,
   };

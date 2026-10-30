@@ -129,6 +129,15 @@ const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
     })),
   );
 
+const toSentence = (text: string) =>
+  text.trim().replace(/^./, (first) => first.toUpperCase());
+
+/** "claude/runway-cards" as "Runway cards". */
+const toBranchWords = (branch: string | null) =>
+  branch
+    ? toSentence(branch.replace(/^claude\//, '').replace(/[-_/]+/g, ' '))
+    : '';
+
 const toAsk = (line: string) => stripLinks(line).replace(/^🚩\s*/, '');
 
 function getSubtitle(
@@ -193,10 +202,12 @@ function toSessionEntry(
   const time = formatPipelineTime(session.updatedAt, now);
   const title = sessionPrs.find((pr) => pr.status?.sessionTitle)?.status
     ?.sessionTitle;
-  const branchName = session.branch?.replace(/^claude\//, '');
   return {
     key: session.sessionId,
-    name: title || branchName || 'Session',
+    name:
+      toSentence(title || sessionPrs[0]?.title || '') ||
+      toBranchWords(session.branch) ||
+      'Session',
     url: toHttps(session.url),
     group,
     isPrOnly: false,
@@ -223,7 +234,7 @@ function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
   return {
     key: `pr-${pr.number}`,
-    name: status?.sessionTitle || pr.title,
+    name: toSentence(status?.sessionTitle || pr.title),
     url: toHttps(status?.sessionUrl ?? pr.bodySessionUrl),
     group: 'waiting',
     isPrOnly: true,
@@ -280,6 +291,16 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
     },
   ];
 }
+
+/** A pull request's failure goes under its last question only, once. */
+export const getPrError = (
+  slots: AnswerSlot[],
+  slot: AnswerSlot,
+  errors: Record<number, string>,
+) =>
+  slots.filter((other) => other.prNumber === slot.prNumber).at(-1) === slot
+    ? (errors[slot.prNumber] ?? null)
+    : null;
 
 export interface PipelineAction {
   label: string;

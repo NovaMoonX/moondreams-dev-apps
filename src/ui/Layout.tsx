@@ -97,12 +97,12 @@ function Layout() {
   const isUpdateReady = useUpdateReady();
   const isBannerVisible = networkStatus !== null || isUpdateReady;
   const isHeaderHidden = useHideOnScroll();
-  const { key: locationKey } = useLocation();
-  const { pathname } = useLocation();
+  const { key: locationKey, pathname } = useLocation();
   const isSiteCanvas =
     pathname === '/' ||
     pathname === '/account' ||
-    pathname.startsWith('/admin');
+    pathname === '/admin' ||
+    pathname.startsWith('/admin/');
   const [navOpenKey, setNavOpenKey] = useState<string | null>(null);
   // Tied to the location it was opened on, so Back or any navigation closes it.
   const isNavOpen = navOpenKey === locationKey;

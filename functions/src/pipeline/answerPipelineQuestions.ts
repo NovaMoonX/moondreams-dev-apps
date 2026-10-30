@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -20,6 +22,7 @@ const MAX_ITEMS = 20;
 const MAX_QUESTION = 500;
 const MAX_CHOICE = 300;
 const MAX_NOTE = 2000;
+const RECENT_COMMENTS_PAGE = 30;
 
 interface AnswerItem {
   question: string;
@@ -36,6 +39,8 @@ interface PrResult {
   prNumber: number;
   ok: boolean;
   url: string | null;
+  /** When the comment was posted, in the server's time. */
+  postedAt: number | null;
   error: string | null;
 }
 
@@ -55,11 +60,18 @@ const readText = (value: unknown, max: number) => {
   return value.trim() === '' ? null : value.trim();
 };
 
+// A joiner after "<" keeps text from opening a hidden marker of its own.
+const neutralise = (value: string | null) =>
+  value === null ? null : value.replace(/<!--/g, '<\u200d!--');
+
+const collapse = (value: string | null) =>
+  value === null ? null : value.replace(/\s+/g, ' ').trim();
+
 const readItem = (raw: unknown): AnswerItem => {
   if (!isObject(raw)) throw invalid('Bad answer.');
-  const question = readText(raw.question, MAX_QUESTION);
-  const choice = readText(raw.choice, MAX_CHOICE);
-  const note = readText(raw.note, MAX_NOTE);
+  const question = neutralise(collapse(readText(raw.question, MAX_QUESTION)));
+  const choice = neutralise(collapse(readText(raw.choice, MAX_CHOICE)));
+  const note = neutralise(readText(raw.note, MAX_NOTE));
   if (question === null) throw invalid('Each answer needs its question.');
   if (choice === null && note === null) {
     throw invalid('Each answer needs a choice or a note.');
@@ -98,7 +110,10 @@ const readAnswers = (data: unknown): PrAnswers[] => {
 // A zero-width joiner after "@" keeps a stray name from pinging anyone.
 const defang = (value: string) => value.replace(/@/g, '@‍');
 
-const toCommentBody = (items: AnswerItem[]) => {
+const toMarker = (items: AnswerItem[]) =>
+  `<!-- pipeline-answer:${createHash('sha256').update(JSON.stringify(items)).digest('hex').slice(0, 16)} -->`;
+
+const toCommentBody = (items: AnswerItem[], marker: string) => {
   const lines = items.flatMap(({ question, choice, note }) => {
     const first =
       choice !== null
@@ -110,12 +125,9 @@ const toCommentBody = (items: AnswerItem[]) => {
         : [];
     return [first, ...second];
   });
-  return [
-    '<!-- pipeline-answer -->',
-    '**Answers from the admin dashboard**',
-    '',
-    ...lines,
-  ].join('\n');
+  return [marker, '**Answers from the admin dashboard**', '', ...lines].join(
+    '\n',
+  );
 };
 
 const githubFetch = (token: string, path: string, init?: RequestInit) =>
@@ -130,6 +142,48 @@ const githubFetch = (token: string, path: string, init?: RequestInit) =>
     signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
   });
 
+const readJson = async (response: Response): Promise<Json | null> => {
+  try {
+    const body: unknown = await response.json();
+    return isObject(body) ? body : null;
+  } catch {
+    return null;
+  }
+};
+
+const getErrorName = (error: unknown) =>
+  error instanceof Error ? error.name : 'unknown';
+
+/** The newest comments on a pull request: GitHub lists oldest first, so the last page (and the one before it when it is short) holds them. */
+const readRecentComments = async (
+  token: string,
+  prNumber: number,
+  commentCount: number,
+) => {
+  const lastPage = Math.max(1, Math.ceil(commentCount / RECENT_COMMENTS_PAGE));
+  const pages = lastPage > 1 ? [lastPage - 1, lastPage] : [lastPage];
+  const responses = await Promise.all(
+    pages.map((page) =>
+      githubFetch(
+        token,
+        `/issues/${prNumber}/comments?per_page=${RECENT_COMMENTS_PAGE}&page=${page}`,
+      ),
+    ),
+  );
+  if (!responses.every((response) => response.ok)) return null;
+  const bodies = await Promise.all(
+    responses.map(async (response) => {
+      try {
+        const body: unknown = await response.json();
+        return Array.isArray(body) ? body : [];
+      } catch {
+        return [];
+      }
+    }),
+  );
+  return bodies.flat().filter(isObject);
+};
+
 const postAnswers = async (
   token: string,
   { prNumber, items }: PrAnswers,
@@ -138,8 +192,10 @@ const postAnswers = async (
     prNumber,
     ok: false,
     url: null,
+    postedAt: null,
     error,
   });
+  const marker = toMarker(items);
   try {
     const pull = await githubFetch(token, `/pulls/${prNumber}`);
     if (pull.status === 404) return fail("That pull request doesn't exist.");
@@ -151,12 +207,35 @@ const postAnswers = async (
           : "Couldn't reach that pull request.",
       );
     }
-    const state = ((await pull.json()) as { state?: unknown }).state;
-    if (state !== 'open') return fail('That pull request is already closed.');
+    const pullBody = await readJson(pull);
+    if (pullBody?.state !== 'open') {
+      return fail('That pull request is already closed.');
+    }
+
+    const recent = await readRecentComments(
+      token,
+      prNumber,
+      typeof pullBody.comments === 'number' ? pullBody.comments : 0,
+    );
+    if (recent === null) return fail("Couldn't reach that pull request.");
+    const earlier = recent.find(
+      (comment) =>
+        typeof comment.body === 'string' && comment.body.includes(marker),
+    );
+    if (earlier) {
+      const created = Date.parse(String(earlier.created_at));
+      return {
+        prNumber,
+        ok: true,
+        url: typeof earlier.html_url === 'string' ? earlier.html_url : null,
+        postedAt: Number.isNaN(created) ? Date.now() : created,
+        error: null,
+      };
+    }
 
     const comment = await githubFetch(token, `/issues/${prNumber}/comments`, {
       method: 'POST',
-      body: JSON.stringify({ body: toCommentBody(items) }),
+      body: JSON.stringify({ body: toCommentBody(items, marker) }),
     });
     if (!comment.ok) {
       logger.warn('answerPipelineQuestions: post failed', comment.status);
@@ -166,15 +245,17 @@ const postAnswers = async (
           : "Couldn't post the comment.",
       );
     }
-    const url = ((await comment.json()) as { html_url?: unknown }).html_url;
+    const posted = await readJson(comment);
+    const createdAt = Date.parse(String(posted?.created_at));
     return {
       prNumber,
       ok: true,
-      url: typeof url === 'string' ? url : null,
+      url: typeof posted?.html_url === 'string' ? posted.html_url : null,
+      postedAt: Number.isNaN(createdAt) ? Date.now() : createdAt,
       error: null,
     };
-  } catch {
-    logger.warn('answerPipelineQuestions: request failed');
+  } catch (error) {
+    logger.warn('answerPipelineQuestions: request failed', getErrorName(error));
     return fail("Couldn't reach GitHub.");
   }
 };
@@ -218,12 +299,19 @@ export const answerPipelineQuestions = onCall(
       );
     }
 
-    const results = await answers.reduce<Promise<PrResult[]>>(
-      async (done, answer) => [
-        ...(await done),
-        await postAnswers(token, answer),
-      ],
-      Promise.resolve([]),
+    const settled = await Promise.allSettled(
+      answers.map((answer) => postAnswers(token, answer)),
+    );
+    const results = settled.map((outcome, index): PrResult =>
+      outcome.status === 'fulfilled'
+        ? outcome.value
+        : {
+            prNumber: answers[index].prNumber,
+            ok: false,
+            url: null,
+            postedAt: null,
+            error: "Couldn't reach GitHub.",
+          },
     );
     return { results };
   },

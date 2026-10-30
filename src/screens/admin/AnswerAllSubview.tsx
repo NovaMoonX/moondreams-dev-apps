@@ -5,8 +5,19 @@ import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 
-import { AnswerFields, SentLine } from './PipelineParts';
-import { getAnswerSlots, type PipelineEntry } from './pipelineUtils';
+import { DISABLED_CLASS } from './constants';
+import {
+  AnswerFields,
+  NotSetUpLine,
+  SentLine,
+  UnsureLine,
+  WarningLine,
+} from './PipelineParts';
+import {
+  getAnswerSlots,
+  getPrError,
+  type PipelineEntry,
+} from './pipelineUtils';
 import type { PipelineAnswers } from './usePipelineAnswers';
 
 interface AnswerAllSubviewProps {
@@ -44,6 +55,21 @@ function AnswerAllSubview({
     if (isAllSent) onClose();
   };
 
+  const getSendLabel = () => {
+    if (answers.isSending) return 'Sending…';
+    if (readyCount === 0) return 'Send answers';
+    return `Send ${readyCount} ${readyCount === 1 ? 'answer' : 'answers'}`;
+  };
+
+  const getFooterNote = () => {
+    if (answers.isNotSetUp) return <NotSetUpLine />;
+    if (answers.sendNote) return <WarningLine>{answers.sendNote}</WarningLine>;
+    if (answers.unsure.length > 0) return <UnsureLine prs={answers.unsure} />;
+    return readyCount === 0 && !answers.isSending
+      ? 'Pick an option or add a note first'
+      : undefined;
+  };
+
   return (
     <Subview overlay title='Answer all' onClose={requestClose}>
       <div className='space-y-6 pb-6'>
@@ -66,7 +92,7 @@ function AnswerAllSubview({
                     slot={slot}
                     draft={answers.getDraft(slot.id)}
                     isSent={answers.isSent(slot)}
-                    error={answers.errors[slot.prNumber] ?? null}
+                    error={getPrError(slots, slot, answers.errors)}
                     onChoice={(choice) => answers.setChoice(slot.id, choice)}
                     onNote={(note) => answers.setNote(slot.id, note)}
                   />
@@ -78,21 +104,18 @@ function AnswerAllSubview({
         <SentLine sent={answers.lastSent} />
       </div>
       <ModalFooterActions
-        note={
-          answers.sendNote ? (
-            <span className='text-destructive'>{answers.sendNote}</span>
-          ) : undefined
-        }
+        note={getFooterNote()}
         rightActions={
           <Button
             type='button'
             variant='primary'
-            disabled={readyCount === 0 || answers.isSending}
+            className={DISABLED_CLASS}
+            disabled={
+              readyCount === 0 || answers.isSending || answers.isNotSetUp
+            }
             onClick={() => void handleSend()}
           >
-            {answers.isSending
-              ? 'Sending…'
-              : `Send ${readyCount} ${readyCount === 1 ? 'answer' : 'answers'}`}
+            {getSendLabel()}
           </Button>
         }
       />
