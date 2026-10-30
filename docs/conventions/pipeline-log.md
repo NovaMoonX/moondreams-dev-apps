@@ -4,6 +4,7 @@ One row per change to the pipeline or proposal about it, newest first (`pipeline
 
 | Date | Scope | Signal | Change or proposal | Owner file | Outcome |
 |---|---|---|---|---|---|
+| 2026-10-30 | shared | Owner: a press and hold was built inside Home's tile, though a phone-first site will want it everywhere | Shared-first now covers what other apps are likely to need, not only what one already does; the technical reviewer flags gestures, timers and storage helpers written inside a component | `CLAUDE.md`, `code.md`, `technical-reviewer.md` | changed |
 | 2026-10-30 | shared | Owner: follow-up issues should land on board 3 with the right app, without anyone running a script | `issue-to-board.yml` adds each issue with an `<App> (App)` label to the board, sets Apps and Status Ready; sessions label every issue they open | `issue-to-board.yml`, `scripts/board`, `pipeline.md` | changed |
 | 2026-10-29 | shared | Owner: merging several PRs one by one; feedback on PRs across devices | A merge order for parallel PRs; a session merges down it on the owner's go; the owner's PR comments are the feedback channel | `orchestrate/SKILL.md`, `pipeline.md` | changed |
 | 2026-10-29 | shared | Owner: a plan for a follow-up re-output everything | Iteration plans cover only the owner's latest message | `orchestrate/SKILL.md` | changed |

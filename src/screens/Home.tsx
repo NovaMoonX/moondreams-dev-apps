@@ -15,9 +15,6 @@ import AppCard from './home/AppCard';
 import AppInfoDrawer from './home/AppInfoDrawer';
 import AppTile from './home/AppTile';
 
-/** Below this many apps, starring only moves an app to the front; from here the list splits under headings. */
-const STARRED_SECTION_MIN_APPS = 5;
-
 function Home() {
   const { user } = useAuth();
   const { apps, loading, starredAppIds, setAppStarred } = useAppCatalog();
@@ -29,7 +26,7 @@ function Home() {
   const infoApp = apps.find((app) => app.id === infoAppId) ?? null;
   const starredApps = apps.filter((app) => starredAppIds.includes(app.id));
   const groups =
-    apps.length >= STARRED_SECTION_MIN_APPS && starredApps.length > 0
+    starredApps.length > 0
       ? [
           { label: 'Starred', apps: starredApps },
           { label: 'All apps', apps: apps.filter((app) => !starredAppIds.includes(app.id)) },
