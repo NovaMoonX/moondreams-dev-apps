@@ -9,7 +9,6 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
-import SearchInput from '@/components/SearchInput';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -28,7 +27,6 @@ import {
   MAX_NOTE_LENGTH,
   MAX_PURCHASE_CENTS,
   MOVE_WORDS,
-  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -76,7 +74,6 @@ function MoveLeftoverView({
   const [moveId] = useState(newTransferMoveId);
   const [amount, setAmount] = useState(centsToInputValue(leftCents));
   const [pick, setPick] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
   const [isNoting, setIsNoting] = useState(false);
   const [note, setNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -99,8 +96,6 @@ function MoveLeftoverView({
         emoji: version.payload.emoji,
       })),
   ];
-  const hasSearch = places.length + 1 >= RUNWAY_SEARCH_THRESHOLD;
-  const needle = hasSearch ? query.trim().toLowerCase() : '';
   const options: PillOption<string>[] = [
     { value: FREE, label: MOVE_WORDS.freeToSpend },
     ...places.map(({ id, name: placeName, emoji }) => ({
@@ -108,10 +103,7 @@ function MoveLeftoverView({
       label: placeName,
       emoji: emoji ?? undefined,
     })),
-  ].filter(
-    (option) =>
-      option.value === FREE || option.label.toLowerCase().includes(needle),
-  );
+  ];
 
   const parsed = parseMoneyToCents(amount);
   const cents =
@@ -244,24 +236,12 @@ function MoveLeftoverView({
       />
       <ActionSection caption={MOVE_WORDS.moveTo}>
         <div className='space-y-3'>
-          {hasSearch && (
-            <SearchInput
-              value={query}
-              onChange={setQuery}
-              placeholder={MOVE_WORDS.search}
-            />
-          )}
           <PillGroup
-            label={MOVE_WORDS.moveTo}
+            label={MOVE_WORDS.places}
             options={options}
             value={pick}
             onChange={setPick}
           />
-          {options.length === 1 && needle !== '' && (
-            <p className='text-muted-foreground text-sm'>
-              {MOVE_WORDS.noMatch}
-            </p>
-          )}
         </div>
       </ActionSection>
       {rows.length > 0 && (
