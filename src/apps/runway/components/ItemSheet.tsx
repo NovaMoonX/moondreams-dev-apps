@@ -935,16 +935,18 @@ function ItemSheet({
 
   const browse = (
     <div className='flex flex-1 flex-col gap-4'>
-      <BackLink onBack={() => goTo('menu')} />
-      <p className='text-2xl font-semibold'>
-        {view === 'balance'
-          ? GOAL_CHART_WORDS.title
-          : view === 'history'
-            ? ITEM_VIEW_WORDS.historyTitle
-            : view === 'check'
-              ? CHECK_WORDS.title
-              : ITEM_VIEW_WORDS.purchasesTitle}
-      </p>
+      <div className='flex items-center gap-1'>
+        <BackLink isChevronOnly onBack={() => goTo('menu')} />
+        <p className='min-w-0 text-2xl font-semibold'>
+          {view === 'balance'
+            ? GOAL_CHART_WORDS.title
+            : view === 'history'
+              ? ITEM_VIEW_WORDS.historyTitle
+              : view === 'check'
+                ? CHECK_WORDS.title
+                : ITEM_VIEW_WORDS.purchasesTitle}
+        </p>
+      </div>
       {view === 'balance' && goal ? (
         <GoalBalanceView goalId={itemId} goal={goal} today={today} />
       ) : view === 'history' ? (
