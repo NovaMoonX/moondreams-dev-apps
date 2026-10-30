@@ -23,7 +23,6 @@ export interface PipelinePr extends Omit<PipelineInboxPr, 'url'> {
 export interface PipelineOption {
   label: string;
   images: string[];
-  /** Written "(Recommended)" by the session; the words are taken off the label. */
   isRecommended: boolean;
 }
 
@@ -282,7 +281,7 @@ function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
   };
 }
 
-/** A question; a reply to 🚩 lines when no question was asked; or feedback beside the questions, tied to none of them. */
+// A reply answers 🚩 lines when no question was asked; feedback sits beside the questions, tied to none.
 export type AnswerSlotKind = 'question' | 'reply' | 'feedback';
 
 export interface AnswerSlot {
@@ -298,14 +297,14 @@ export interface AnswerSlot {
   kind: AnswerSlotKind;
 }
 
-/** What the owner can answer on an entry: each question plus one box for anything else, or one reply on the first pull request when only 🚩 lines were raised. */
+/** What the owner can answer on an entry: each question plus one box for anything else, or one reply when only 🚩 lines were raised. */
 export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
   const [pr] = entry.prs;
   const toFreeSlot = (
     target: PipelinePr,
     kind: AnswerSlotKind,
   ): AnswerSlot => ({
-    id: `${target.number}:${kind}`,
+    id: `${entry.key}:${target.number}:${kind}`,
     prNumber: target.number,
     statusAt: target.status?.updatedAt ?? 0,
     question: kind === 'reply' ? 'Reply to what was raised' : 'Anything else',
@@ -336,19 +335,22 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
   return [toFreeSlot(pr, 'reply')];
 }
 
-/** The slots that ask something of the owner, leaving out the optional feedback box. */
+/** The slots that ask something of the owner, without the optional feedback box. */
 export const getAskedSlots = (slots: AnswerSlot[]) =>
   slots.filter((slot) => slot.kind !== 'feedback');
 
-/** A pull request's failure goes under its last question only, once. */
+/** A pull request's failure goes under its last question only, once (the feedback box when it asked none). */
 export const getPrError = (
   slots: AnswerSlot[],
   slot: AnswerSlot,
   errors: Record<number, string>,
-) =>
-  slots.filter((other) => other.prNumber === slot.prNumber).at(-1) === slot
+) => {
+  const onPr = slots.filter((other) => other.prNumber === slot.prNumber);
+  const asked = getAskedSlots(onPr);
+  return (asked.length > 0 ? asked : onPr).at(-1) === slot
     ? (errors[slot.prNumber] ?? null)
     : null;
+};
 
 export interface PipelineAction {
   label: string;

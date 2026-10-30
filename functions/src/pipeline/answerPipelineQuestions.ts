@@ -19,17 +19,18 @@ const ADMIN_EMAIL = 'nova@moondreams.dev';
 const REPO = 'NovaMoonX/moondreams-dev-apps';
 const GITHUB_TIMEOUT_MS = 15_000;
 const MAX_PRS = 20;
-const MAX_ITEMS = 20;
+// Up to 20 questions on a pull request, and the dashboard's Anything else box.
+const MAX_ITEMS = 21;
 const MAX_QUESTION = 500;
 const MAX_CHOICE = 300;
 const MAX_CHOICES = 26;
 const MAX_NOTE = 2000;
 const RECENT_COMMENTS_PAGE = 30;
+const MAX_COMMENT = 60_000;
 
 interface AnswerItem {
   question: string;
   choices: string[];
-  /** What the owner typed instead of picking an option. */
   other: string | null;
   note: string | null;
 }
@@ -138,9 +139,13 @@ const readAnswers = (data: unknown): PrAnswers[] => {
       items.length === 0 ||
       items.length > MAX_ITEMS
     ) {
-      throw invalid('Send between 1 and 20 answers per pull request.');
+      throw invalid('Send between 1 and 21 answers per pull request.');
     }
-    return { prNumber, items: items.map(readItem) };
+    const answer = { prNumber, items: items.map(readItem) };
+    if (toCommentBody(answer.items, '').length > MAX_COMMENT) {
+      throw invalid(`Your answers for #${prNumber} are too long for one comment.`);
+    }
+    return answer;
   });
 };
 
@@ -188,6 +193,26 @@ const toCommentBody = (items: AnswerItem[], marker: string) => {
 
 const TOKEN_PAGE = 'https://github.com/settings/personal-access-tokens';
 
+const toPermissionWords = (pair: string) => {
+  const [name, level] = pair.trim().split('=');
+  if (!name || !level) return [];
+  const label = name.replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase());
+  return [`${label}: ${level === 'write' ? 'Read and write' : 'Read-only'}`];
+};
+
+// The header lists sets that each suffice, split by ";", and the permissions a set needs together, split by ",".
+const toPermissionFix = (needed: string | null) => {
+  const sets = (needed ?? '')
+    .split(';')
+    .map((set) => Array.from(new Set(set.split(',').flatMap(toPermissionWords))))
+    .filter((set) => set.length > 0)
+    .map((set) => set.join(' and '));
+  if (sets.length === 0) {
+    return 'Give it Pull requests: Read and write and Issues: Read and write';
+  }
+  return `Give it ${sets.join(', or ')}`;
+};
+
 // A fine-grained token refused for a missing permission names what it needs in this header.
 const toRefusal = async (response: Response, action: string) => {
   const needed = response.headers.get('x-accepted-github-permissions');
@@ -200,19 +225,13 @@ const toRefusal = async (response: Response, action: string) => {
   if (response.status === 401) {
     return 'GitHub says the token has expired or was revoked. Run npm run pipeline:secrets -- token to make a new one.';
   }
-  const permissions = (needed ?? '')
-    .split(/[;,]/)
-    .map((pair) => pair.trim().split('='))
-    .filter(([name, level]) => name && level)
-    .map(
-      ([name, level]) =>
-        `${name.replace(/_/g, ' ').replace(/^\w/, (letter) => letter.toUpperCase())}: ${level === 'write' ? 'Read and write' : 'Read-only'}`,
-    );
-  const fix =
-    permissions.length > 0
-      ? `Give it ${Array.from(new Set(permissions)).join(' and ')}`
-      : 'Give it Pull requests: Read and write and Issues: Read and write';
+  const fix = toPermissionFix(needed);
   return `The token can't ${action}. ${fix} on ${TOKEN_PAGE} (edit the Pipeline answers token; no new token needed), then send again.`;
+};
+
+const forgetAndRefuse = (response: Response, action: string) => {
+  readSecret.forget('PIPELINE_GITHUB_TOKEN');
+  return toRefusal(response, action);
 };
 
 const githubFetch = (token: string, path: string, init?: RequestInit) =>
@@ -290,7 +309,7 @@ const postAnswers = async (
       if (isBusy(pull)) return fail(BUSY);
       return fail(
         pull.status === 401 || pull.status === 403
-          ? await toRefusal(pull, 'read this pull request')
+          ? await forgetAndRefuse(pull, 'read this pull request')
           : "Couldn't reach that pull request.",
       );
     }
@@ -328,8 +347,7 @@ const postAnswers = async (
       logger.warn('answerPipelineQuestions: post failed', comment.status);
       if (isBusy(comment)) return fail(BUSY);
       if (comment.status === 401 || comment.status === 403) {
-        readSecret.forget('PIPELINE_GITHUB_TOKEN');
-        return fail(await toRefusal(comment, 'comment on pull requests'));
+        return fail(await forgetAndRefuse(comment, 'comment on pull requests'));
       }
       return fail("Couldn't post the comment.");
     }

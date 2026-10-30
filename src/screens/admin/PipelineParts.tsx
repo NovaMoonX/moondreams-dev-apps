@@ -89,7 +89,6 @@ const getEdgeClass = (isSelected: boolean) =>
     ? 'border-indigo-500 bg-indigo-500/10 ring-1 ring-indigo-500 dark:border-indigo-400 dark:bg-indigo-400/10 dark:ring-indigo-400'
     : 'border-border';
 
-/** A circle for one pick, a rounded square when several may be picked. */
 function LetterChip({
   letter,
   isSelected,
@@ -188,7 +187,6 @@ function RecommendedTag() {
   );
 }
 
-/** The box for words not tied to an option: an open question's answer, a reply to 🚩 lines, or anything else the owner wants to say. */
 function FreeTextField({
   slot,
   value,
@@ -235,7 +233,7 @@ function FreeTextField({
   );
 }
 
-/** One question with its options as tappable rows (a picture makes its option a card) and an Other row for writing your own, or a free-text box; and what happened when it was sent. */
+/** One question as tappable options with an Other row for a typed answer, or a free-text box. */
 export function AnswerFields({
   slot,
   draft,

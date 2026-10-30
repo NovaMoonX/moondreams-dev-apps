@@ -16,7 +16,7 @@ import {
 
 export interface AnswerDraft {
   choices: string[];
-  /** Null until Other is picked; then what the owner typed for it. */
+  // Null until Other is picked.
   other: string | null;
   note: string;
 }
@@ -60,8 +60,11 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
 
   const slots = entries.flatMap(getAnswerSlots);
   // A sent answer shows as sent until its pull request's status comment is newer than the send.
+  // Feedback can be sent again at once, so it never waits on the next status.
   const isSent = (slot: AnswerSlot) =>
-    sentAt[slot.id] !== undefined && slot.statusAt <= sentAt[slot.id];
+    slot.kind !== 'feedback' &&
+    sentAt[slot.id] !== undefined &&
+    slot.statusAt <= sentAt[slot.id];
   const getDraft = (id: string) => drafts[id] ?? EMPTY;
   const getReady = (scope: AnswerSlot[]) =>
     scope.filter((slot) => !isSent(slot) && isAnswered(drafts[slot.id]));

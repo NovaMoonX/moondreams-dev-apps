@@ -47,7 +47,6 @@ export interface OwnerItem {
   text: string;
   /** The options on the lines indented under it, each with its words and its screenshots, so the question and the screens it is about sit together. */
   options: { label: string; images: string[] }[];
-  /** Marked `(pick any)`: the owner may pick several options. */
   isMulti: boolean;
 }
 

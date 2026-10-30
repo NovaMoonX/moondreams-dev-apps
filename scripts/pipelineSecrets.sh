@@ -76,6 +76,8 @@ check_token() {
   can_comment "$token" || result=$?
   case $result in
     0) echo "✓ The token can comment on pull requests" ;;
+    2) echo "✗ The token can't list this repo's pull requests. Edit it: $TOKEN_PAGE → Pipeline answers → Permissions → Pull requests: Read and write → Update." >&2
+       return 1 ;;
     3) echo "• No pull request is open, so commenting couldn't be tested. The token can read the repo." ;;
     *) echo "✗ The token can read the repo but can't comment on pull requests." >&2
        echo "  Edit it (no new token needed): $TOKEN_PAGE → Pipeline answers → Permissions" >&2
