@@ -73,6 +73,25 @@ function getWatchlistFixtures(now: number) {
       priority: 'IF_I_HAVE_TIME',
       preferredFormat: null,
     },
+    // Unplanned releases: the Calendar marks their days (one on a planned day, two sharing one).
+    {
+      movieKey: 'manual-seed-0002-paper-moons',
+      movie: movie('Paper Moons', getDayUtcAhead(now, 4), 101, 'PG'),
+      priority: 'WANT_TO_SEE',
+      preferredFormat: null,
+    },
+    {
+      movieKey: 'manual-seed-0003-the-long-reel',
+      movie: movie('The Long Reel', getDayUtcAhead(now, 10), 128, 'PG-13'),
+      priority: 'MUST_SEE',
+      preferredFormat: null,
+    },
+    {
+      movieKey: 'manual-seed-0004-quiet-coast',
+      movie: movie('Quiet Coast', getDayUtcAhead(now, 10), 97, 'R'),
+      priority: 'IF_I_HAVE_TIME',
+      preferredFormat: null,
+    },
     {
       movieKey: 'imdb-tt0133093',
       movie: movie('The Matrix', Date.UTC(1999, 2, 31), 136, 'R'),

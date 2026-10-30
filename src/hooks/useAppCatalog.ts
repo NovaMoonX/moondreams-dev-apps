@@ -1,9 +1,14 @@
 import { createContext, useContext } from 'react';
 
-import type { AppMetadata } from '@lib/types/appCatalog';
+import type { AppListing, AppMetadata } from '@lib/types/appCatalog';
 
 export type AppCatalogContextValue = {
+  /** What this person can open, starred first. */
   apps: AppMetadata[];
+  /** Restricted apps this person doesn't have yet but may ask for. */
+  requestableApps: AppListing[];
+  starredAppIds: string[];
+  setAppStarred: (appId: string, isStarred: boolean) => Promise<void>;
   allApps: AppMetadata[];
   appPathMap: Record<string, AppMetadata>;
   loading: boolean;
