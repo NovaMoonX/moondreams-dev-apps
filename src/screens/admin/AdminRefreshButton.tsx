@@ -14,6 +14,7 @@ function AdminRefreshButton() {
       icon={<RefreshCw className='size-4' />}
       label='Refresh members and usage'
       isLoading={isRefreshing}
+      isDisabled={isRefreshing}
       onClick={() => queryClient.invalidateQueries({ queryKey: ADMIN_QUERY_KEY })}
     />
   );

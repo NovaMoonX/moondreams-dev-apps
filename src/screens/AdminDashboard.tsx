@@ -146,34 +146,38 @@ function AdminDashboard() {
     );
   }
 
-  const heading = (
-    <div className='min-w-0'>
-      <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>Admin</p>
-      <h1 ref={titleRef} className='text-foreground mt-2 text-3xl font-semibold tracking-tight sm:text-4xl'>
-        Dashboard
-      </h1>
-      <p className='text-muted-foreground mt-1 truncate text-sm'>{ADMIN_EMAIL}</p>
-    </div>
+  const email = <p className='text-muted-foreground mt-1 truncate text-sm'>{ADMIN_EMAIL}</p>;
+  const eyebrow = <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>Admin</p>;
+  const title = (
+    <h1 ref={titleRef} className='text-foreground min-w-0 truncate text-3xl font-semibold tracking-tight sm:text-4xl'>
+      Dashboard
+    </h1>
   );
 
   return (
     <div className='page pt-20'>
       <div className='mx-auto w-full max-w-5xl space-y-6'>
         {isWide ? (
-          <header className='flex items-start justify-between gap-4'>
-            <div className='flex min-w-0 items-start gap-3'>
-              <span className='mt-1'>{homeButton}</span>
-              {heading}
+          <header>
+            {eyebrow}
+            <div className='mt-2 flex items-center gap-3'>
+              {homeButton}
+              {title}
+              <span className='ml-auto'>
+                <AdminRefreshButton />
+              </span>
             </div>
-            <span className='mt-1'>
-              <AdminRefreshButton />
-            </span>
+            {email}
           </header>
         ) : (
-          <header className='space-y-2'>
+          <>
             <StickyAppBar title='Dashboard' titleRef={titleRef} leading={homeButton} trailing={<AdminRefreshButton />} />
-            {heading}
-          </header>
+            <header className='-mt-4'>
+              {eyebrow}
+              <div className='mt-2'>{title}</div>
+              {email}
+            </header>
+          </>
         )}
 
         {isWide ? (
