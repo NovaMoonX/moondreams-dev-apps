@@ -465,7 +465,7 @@ function CookingSession({
     Record<string, 'NOTHING' | 'CHANGED'>
   >({});
   const editDirtyRef = useRef(false);
-  useUnsavedWork(() => editDirtyRef.current);
+  useUnsavedWork(() => edit !== null && editDirtyRef.current);
   const editBackStepRef = useRef<(() => boolean) | null>(null);
   const isAskingToLeaveEdit = useRef(false);
   const scrollBeforeEdit = useRef(0);
