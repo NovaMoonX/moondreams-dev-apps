@@ -1686,15 +1686,15 @@ Money left in an envelope can be moved to another envelope or a goal; the ledger
 1. A `transfer` move with source and target and a note; balances read it.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read:** a transfer. **Delete:** a reversing move.
+- [x] **Create / Read:** a transfer. **Delete:** a reversing move.
 
 ### Success Criteria
-- [ ] Total money is unchanged by any transfer (check case).
-- [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
-- [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
-- [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
+- [x] Total money is unchanged by any transfer (check case).
+- [x] (No rule change: moves were already create-only for the owner.) `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
+- [x] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
+- [x] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
-- [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+- [x] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
 ### Issue 49: Free to Spend, by source
 

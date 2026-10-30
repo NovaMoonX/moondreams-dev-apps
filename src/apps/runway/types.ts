@@ -505,6 +505,14 @@ export interface CardPaymentSealed {
   covers?: CardPaymentCovers;
 }
 
+/** Money moved between buckets: `refId` is `fromId`, `toId` null is Free to Spend. A move that names it in `reversesMoveId` takes it back. */
+export interface TransferSealed {
+  fromId: string;
+  toId: string | null;
+  cents: Cents;
+  note: string | null;
+}
+
 export type CardPaymentCovers = 'full' | 'minimum' | 'part';
 
 export type StartHolding = (typeof START_HOLDINGS)[number];
@@ -532,7 +540,8 @@ export type OpenMove =
   | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
   | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
   | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed })
-  | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed });
+  | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed })
+  | (OpenMoveBase & { kind: 'transfer'; payload: TransferSealed });
 
 export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
 export type StartMove = Extract<OpenMove, { kind: 'start' }>;
@@ -611,6 +620,8 @@ export interface ClosingSealed {
   charged: Record<string, Cents>;
   /** `[day, cents, moveId]` for each card payment not undone. */
   cardPaid: Record<string, [number, Cents, string][]>;
+  /** What transfers since the starting day added to (positive) or took from (negative) each item. */
+  transfers: Record<string, Cents>;
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

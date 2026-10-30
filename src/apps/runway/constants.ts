@@ -100,6 +100,7 @@ export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
     correction: 'Correction',
     purchaseChange: 'Purchase',
     cardChange: 'Card',
+    moveChange: 'Move',
   };
 
 export const RANGE_END_WORDS = {
@@ -139,6 +140,7 @@ export const CHANGE_KINDS = [
   'correction',
   'purchaseChange',
   'cardChange',
+  'moveChange',
 ] as const;
 
 export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
@@ -257,12 +259,13 @@ export const DAY_RECORD_KINDS = [
   'confirmed',
   'correction',
 ] as const;
-/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding and a `trackingChange` (tracking turned on or off). */
+/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment` and a `transfer` (money left in an envelope moved to another envelope, a goal or Free to Spend, and its undo, a `transfer` that names it). */
 export const MOVE_KINDS = [
   'billPaid',
   'start',
   'trackingChange',
   'cardPayment',
+  'transfer',
 ] as const;
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
@@ -306,7 +309,7 @@ export const CLOSING_WRITE_CHUNK = 6;
 /** Times one rebuild is tried again after another device changed the plan under it. */
 export const CLOSING_REBUILD_ATTEMPTS = 3;
 /** A closing is stored as this version of its sealed payload; a reader of a different one rebuilds it. */
-export const CLOSING_VERSION = 3;
+export const CLOSING_VERSION = 4;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
@@ -1114,6 +1117,31 @@ export const ITEM_SHEET_WORDS = {
   draftStatus: 'Expected. This is the plan until the money arrives.',
   dayMore: 'More about this day',
   notArrivedSub: 'Takes this day off your plan until you put it back',
+} as const;
+
+/** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
+export const MOVE_WORDS = {
+  open: "Move what's left",
+  title: (name: string) => `Move what's left in ${name}`,
+  amount: 'Amount to move',
+  moveTo: 'Move it to',
+  freeToSpend: 'Free to Spend',
+  search: 'Search envelopes and goals',
+  noMatch: 'Nothing matches that.',
+  needsAmount: 'Enter how much to move.',
+  needsPlace: 'Pick where it goes.',
+  tooMuch: 'That is more than is left in it.',
+  action: (amount: string) => `Move ${amount}`,
+  moved: (amount: string, to: string) => `Moved ${amount} to ${to}`,
+  undone: (amount: string, from: string) => `Put ${amount} back in ${from}`,
+  summary: (amount: string, from: string, to: string) =>
+    `Moved ${amount} from ${from} to ${to}.`,
+  undoSummary: (amount: string, from: string, to: string) =>
+    `Put ${amount} back in ${from} from ${to}.`,
+  undo: 'Undo',
+  failed: 'This did not save. Nothing was changed.',
+  undoFailed: 'That was not undone.',
+  offline: 'Moving money needs a connection. Nothing was changed.',
 } as const;
 
 export const PROBLEM_WORDS = {

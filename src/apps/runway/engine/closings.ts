@@ -23,6 +23,7 @@ import {
   collectFunded,
   collectPaid,
   collectStarted,
+  collectTransfers,
   getPaidMoveId,
   settlePaid,
   type BillProgressInput,
@@ -58,6 +59,8 @@ export interface ClosingState {
   chargedByCard: Record<string, Cents>;
   /** Each card's payments not undone; the ones before the starting day are kept and left out of the sums. */
   cardPaid: Record<string, CardPaid[]>;
+  /** What transfers since the starting day added to or took from each item; money moved, never spent, so it stays when spending is left out. */
+  transfers: Record<string, Cents>;
 }
 
 /** One confirmed day's money that arrived after the month it was expected in had closed. */
@@ -199,6 +202,7 @@ export const emptyClosing = (
   late: [],
   chargedByCard: {},
   cardPaid: {},
+  transfers: {},
 });
 
 /**
@@ -287,6 +291,10 @@ export function closing(
     billPaid: joinLists(base.billPaid, collectPaid(entries.moves)),
     chargedByCard: addCents(base.chargedByCard, chargedByCard),
     cardPaid: joinLists(base.cardPaid, collectCardPaid(entries.moves)),
+    transfers: addCents(
+      base.transfers,
+      collectTransfers(entries.moves, startDate),
+    ),
   };
   return result;
 }
@@ -377,9 +385,20 @@ export function deriveHeldByItem(
 ): Record<string, Cents> {
   const confirmed = addCents(base?.given ?? {}, sumConfirmedByItem(records));
   const { byItem } = collectStarted(moves, startDate);
-  const ids = new Set([...Object.keys(confirmed), ...Object.keys(byItem)]);
+  const moved = addCents(
+    base?.transfers ?? {},
+    collectTransfers(moves, startDate),
+  );
+  const ids = new Set([
+    ...Object.keys(confirmed),
+    ...Object.keys(byItem),
+    ...Object.keys(moved),
+  ]);
   const result = Object.fromEntries(
-    [...ids].map((id) => [id, (confirmed[id] ?? 0) + (byItem[id] ?? 0)]),
+    [...ids].map((id) => [
+      id,
+      (confirmed[id] ?? 0) + (byItem[id] ?? 0) + (moved[id] ?? 0),
+    ]),
   );
   return result;
 }
@@ -512,6 +531,7 @@ export function encodeClosing(state: ClosingState): ClosingSealed {
         ]),
       ]),
     ),
+    transfers: state.transfers,
   };
   return result;
 }
@@ -575,6 +595,7 @@ export function decodeClosing(
         })),
       ]),
     ),
+    transfers: sealed.transfers,
   };
   return result;
 }

@@ -22,6 +22,7 @@ import type {
   RunwayEncryption,
   StartSealed,
   TrackingChangeSealed,
+  TransferSealed,
 } from '@apps/runway/types';
 
 export async function openMove(
@@ -46,6 +47,10 @@ export async function openMove(
   if (entry.kind === 'cardPayment') {
     const payload = await read<CardPaymentSealed>(entry.sealed);
     return { ...base, kind: 'cardPayment', payload };
+  }
+  if (entry.kind === 'transfer') {
+    const payload = await read<TransferSealed>(entry.sealed);
+    return { ...base, kind: 'transfer', payload };
   }
   const payload = await read<BillPaidSealed>(entry.sealed);
   return {
@@ -151,7 +156,10 @@ export async function openMonthEntries(
       docs.moves
         .map((entry) => ({ ...(entry.data() as MoveDoc), id: entry.id }))
         .filter(
-          (entry) => entry.kind === 'billPaid' || entry.kind === 'cardPayment',
+          (entry) =>
+            entry.kind === 'billPaid' ||
+            entry.kind === 'cardPayment' ||
+            entry.kind === 'transfer',
         )
         .map((entry) => openMove(entry, read)),
     ),

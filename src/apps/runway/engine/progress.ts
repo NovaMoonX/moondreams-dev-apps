@@ -115,6 +115,31 @@ export function collectCardPaid(
   return result;
 }
 
+/** What transfers added to (positive) or took from (negative) each item since the starting day: the `transfer` moves that no later move reverses. */
+export function collectTransfers(
+  moves: readonly OpenMove[],
+  startDate: DateOnly | null,
+): Record<string, Cents> {
+  const reversed = new Set(
+    moves.flatMap((move) => (move.reversesMoveId ? [move.reversesMoveId] : [])),
+  );
+  const result = moves.reduce<Record<string, Cents>>((sums, move) => {
+    if (
+      move.kind !== 'transfer' ||
+      move.reversesMoveId ||
+      reversed.has(move.id) ||
+      startDate === null ||
+      move.date < startDate
+    )
+      return sums;
+    const { fromId, toId, cents } = move.payload;
+    sums[fromId] = (sums[fromId] ?? 0) - cents;
+    if (toId !== null) sums[toId] = (sums[toId] ?? 0) + cents;
+    return sums;
+  }, {});
+  return result;
+}
+
 /** How many times a payment has been marked paid, undone ones included, which is what the next mark's id counts. */
 export const countMarks = (
   moves: readonly OpenMove[],

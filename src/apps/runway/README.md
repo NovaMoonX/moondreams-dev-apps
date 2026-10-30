@@ -28,6 +28,7 @@ Built:
 - [x] A link on a purchase, and purchases grouped into an expense ("Chicago trip") with its total
 - [x] Receipt photos on purchases, sealed on the device and kept until you remove them
 - [x] Read a receipt on tap: the amount, the store, the day and the items fill in for you to check
+- [x] Move what is left in an envelope to another envelope, a goal or Free to Spend, with an Undo
 
 Next:
 - [ ] Start from gross pay with taxes and deductions

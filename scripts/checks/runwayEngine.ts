@@ -6112,7 +6112,7 @@ const version = (
   });
   const mkMove = (
     id: string,
-    kind: 'billPaid' | 'start',
+    kind: 'billPaid' | 'start' | 'transfer',
     date: number,
     refId: string | null,
     reversesMoveId: string | null,
@@ -6235,7 +6235,41 @@ const version = (
         ),
       ),
   ];
-  const moves = [...startMoves, ...paidMoves];
+  const transferMoves = Array.from({ length: 48 }, (_, index) => {
+    const on = startDate + (index - 2) * 37 * DAY_MS;
+    const fromId = envelopeIds[index % 3];
+    const toId =
+      index % 3 === 0
+        ? null
+        : index % 3 === 1
+          ? goalIds[0]
+          : envelopeIds[(index + 1) % 3];
+    const payload = { fromId, toId, cents: 100 + index * 7, note: null };
+    const made = mkMove(
+      `move_${index}`,
+      'transfer',
+      on,
+      fromId,
+      null,
+      payload,
+      index,
+    );
+    return index % 5 === 0
+      ? [
+          made,
+          mkMove(
+            `unmove_${index}`,
+            'transfer',
+            on,
+            fromId,
+            made.id,
+            payload,
+            index + 1,
+          ),
+        ]
+      : [made];
+  }).flat();
+  const moves = [...startMoves, ...paidMoves, ...transferMoves];
   const spendDays = Array.from(
     { length: 1_800 },
     (_, index) =>
@@ -6303,7 +6337,9 @@ const version = (
       days: monthDays,
       records: monthDays.flatMap((day) => recordsByDay.get(day.id) ?? []),
       moves: ledger.moves.filter(
-        (move) => move.kind === 'billPaid' && inMonth(monthOf(move.date)),
+        (move) =>
+          (move.kind === 'billPaid' || move.kind === 'transfer') &&
+          inMonth(monthOf(move.date)),
       ),
       purchases: ledger.purchases.filter((purchase) =>
         inMonth(monthOf(purchase.date)),
@@ -6386,6 +6422,18 @@ const version = (
   };
   assert.ok(
     full.track.balances.paidCents > 0 && full.track.balances.spentCents !== 0,
+  );
+  assert.notEqual(
+    full.track.balances.assignedByItem.goalA,
+    deriveBalances({
+      startDate,
+      moves: moves.filter((move) => move.kind !== 'transfer'),
+      records,
+      arrivedOn,
+      kinds,
+      purchases,
+    }).assignedByItem.goalA,
+    'the plan has moves of money to carry',
   );
   assert.ok(
     Object.values(full.track.progress).some((entry) => entry.paid.length > 1),
@@ -8313,6 +8361,189 @@ const version = (
     ),
     [['p1'], ['pay2', true], ['pay1', false], ['paid_rent']],
     'newest first: its purchases, its payments (one taken back), the bill charged to it; cash purchases and undo moves are not entries',
+  );
+}
+
+// Moving what is left in an envelope: a transfer changes which bucket holds the money, never how much there is.
+{
+  const start = Date.UTC(2026, 9, 1);
+  const day = (n: number) => start + n * 86_400_000;
+  const move = (
+    id: string,
+    kind: 'start' | 'transfer',
+    on: number,
+    refId: string | null,
+    payload: object,
+    reversesMoveId: string | null = null,
+  ) =>
+    ({
+      id,
+      kind,
+      date: on,
+      refId,
+      reversesMoveId,
+      createdAt: on,
+      payload,
+    }) as unknown as OpenMove;
+  const move1 = (
+    id: string,
+    on: number,
+    fromId: string,
+    toId: string | null,
+    cents: number,
+    reverses: string | null = null,
+  ) =>
+    move(
+      id,
+      'transfer',
+      on,
+      fromId,
+      { fromId, toId, cents, note: null },
+      reverses,
+    );
+  const starts = [
+    move('s-money', 'start', start, null, {
+      amountCents: 100_000,
+      holding: 'money',
+    }),
+    move('s-food', 'start', start, 'food', {
+      amountCents: 10_000,
+      holding: 'envelope',
+    }),
+    move('s-fun', 'start', start, 'fun', {
+      amountCents: 2_000,
+      holding: 'envelope',
+    }),
+    move('s-trip', 'start', start, 'trip', {
+      amountCents: 30_000,
+      holding: 'goal',
+    }),
+  ];
+  const kinds = { food: 'envelope', fun: 'envelope', trip: 'goal' } as const;
+  const base = {
+    startDate: start,
+    moves: starts,
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds,
+  };
+  const before = deriveBalances(base);
+  const held = (b: typeof before) =>
+    b.assignedToEnvelopesCents + b.assignedToGoalsCents + b.freeToSpendCents;
+  const withMoves = (...moved: OpenMove[]) =>
+    deriveBalances({ ...base, moves: [...starts, ...moved] });
+
+  const toEnvelope = withMoves(move1('t1', day(3), 'food', 'fun', 4_200));
+  assert.deepEqual(
+    [toEnvelope.assignedByItem.food, toEnvelope.assignedByItem.fun],
+    [5_800, 6_200],
+    'a move to an envelope takes it from one and gives it to the other',
+  );
+  const toGoal = withMoves(move1('t2', day(3), 'food', 'trip', 10_000));
+  assert.deepEqual(
+    [toGoal.assignedByItem.food, toGoal.assignedByItem.trip],
+    [0, 40_000],
+    'a move to a goal adds to what the goal holds',
+  );
+  const toFree = withMoves(move1('t3', day(3), 'food', null, 4_000));
+  assert.equal(toFree.assignedByItem.food, 6_000);
+  assert.equal(
+    toFree.freeToSpendCents,
+    before.freeToSpendCents + 4_000,
+    'a move to Free to Spend raises it by exactly the amount',
+  );
+  [toEnvelope, toGoal, toFree].forEach((after) => {
+    assert.equal(
+      after.moneyOnHandCents,
+      before.moneyOnHandCents,
+      'no move changes the money on hand',
+    );
+    assert.equal(
+      held(after),
+      held(before),
+      'envelopes, goals and Free to Spend still add up to the same money',
+    );
+  });
+  assert.equal(
+    deriveHeldByItem(
+      [],
+      [...starts, move1('t2', day(3), 'food', 'trip', 10_000)],
+      start,
+      null,
+    ).trip,
+    40_000,
+    'a goal holds what was moved into it',
+  );
+
+  const undone = withMoves(
+    move1('t1', day(3), 'food', 'fun', 4_200),
+    move1('ut1', day(3), 'food', 'fun', 4_200, 't1'),
+  );
+  assert.deepEqual(undone, before, 'a reversed move counts as nothing');
+
+  const dropped = deriveBalancesBefore(
+    { ...base, moves: [...starts, move1('t1', day(3), 'food', 'fun', 4_200)] },
+    day(3),
+  );
+  assert.deepEqual(
+    dropped.assignedByItem,
+    before.assignedByItem,
+    'the figures at the start of a day leave out a move made that day',
+  );
+  const kept = deriveBalancesBefore(
+    { ...base, moves: [...starts, move1('t1', day(3), 'food', 'fun', 4_200)] },
+    day(4),
+  );
+  assert.equal(kept.assignedByItem.fun, 6_200, 'and keep an earlier one');
+
+  const early = withMoves(
+    move1('t0', start - 86_400_000, 'food', 'fun', 4_200),
+  );
+  assert.deepEqual(
+    early,
+    before,
+    'a move dated before the start counts nowhere',
+  );
+
+  const moved = [
+    move1('t1', day(3), 'food', 'fun', 4_200),
+    move1('t2', day(9), 'food', 'trip', 1_000),
+    move1('t3', day(10), 'fun', null, 500),
+    move1('ut3', day(10), 'fun', null, 500, 't3'),
+  ];
+  const whole = deriveBalances({ ...base, moves: [...starts, ...moved] });
+  const month = toMonthKey(start);
+  const closed = buildClosing(month, null, {
+    startDate: start,
+    days: [],
+    records: [],
+    moves: moved,
+    purchases: [],
+    billIds: new Set(),
+  });
+  assert.deepEqual(
+    closed.transfers,
+    { food: -5_200, fun: 4_200, trip: 1_000 },
+    'a closing sums the net each item gained or lost',
+  );
+  assert.deepEqual(
+    deriveBalances({ ...base, moves: starts, closing: closed }),
+    whole,
+    'a transfer dated in a closed month equals the unclosed result',
+  );
+  assert.deepEqual(
+    deriveBalances({
+      ...base,
+      moves: starts,
+      closing: withoutSpending(closed),
+    }),
+    whole,
+    'and stays when spending is left out',
+  );
+  assert.deepEqual(
+    decodeClosing(month, encodeClosing(closed)),
+    closed,
+    'and reads back sealed',
   );
 }
 
