@@ -67,6 +67,19 @@ function LookaheadWarnings({
       on: group.on,
       group,
     })),
+    ...((lookahead?.undated ?? []).length === 0
+      ? []
+      : [
+          {
+            kind: 'plan',
+            on: Number.MAX_SAFE_INTEGER,
+            group: {
+              kind: 'undated',
+              on: Number.MAX_SAFE_INTEGER,
+              bills: lookahead?.undated ?? [],
+            },
+          } satisfies WarningRow,
+        ]),
     ...dueCards.map((due): WarningRow => ({
       kind: 'card',
       on: due.dueOn,
@@ -176,7 +189,7 @@ function LookaheadWarnings({
                 key={
                   row.kind === 'card'
                     ? `card:${row.due.card.id}`
-                    : `${row.group.kind}:${row.on}:${row.group.kind === 'day' ? row.group.dayKey : row.group.problem.kind}`
+                    : `${row.group.kind}:${row.on}:${row.group.kind === 'day' ? row.group.dayKey : row.group.kind === 'undated' ? 'bills' : row.group.problem.kind}`
                 }
                 className='first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'
               >

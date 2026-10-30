@@ -473,3 +473,4 @@ Every change says from when and shows, before it saves, which coming income days
 - **Notifications:** Next Steps. Pushes carry fixed text only. A server function matches new purchases and deposits with the same engine as the device, writes each event once, and sends through the site's push service.
 - **Receipts:** Images are kept until the person removes them; nothing expires and no scheduled function touches them.
 - **State and tooling:** Slices, listeners, actions and selectors follow the repo's existing pattern, with the app's own reducer composed into the central store.
+- **A bill can wait for its due date.** Adding a bill never needs a date: until it has one, the plan sets nothing aside for it and says so as a thing to fix. A monthly bill without a date still counts in its group's monthly total.

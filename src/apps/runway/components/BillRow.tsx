@@ -3,6 +3,7 @@ import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
+  BILL_WORDS,
   GROUP_WORDS,
   ITEM_SHEET_R2_WORDS,
   PRIORITY_LABELS,
@@ -33,10 +34,12 @@ interface BillSheetProps {
   payment: BillPayment | null;
   planStance: Stance;
   today: number;
+  startsAtStep?: string;
   onClose: () => void;
 }
 
-const getDueLine = (payment: BillPayment | null) => {
+const getDueLine = (payment: BillPayment | null, isUndated: boolean) => {
+  if (isUndated) return BILL_WORDS.needsDueDate;
   if (!payment) return 'No payment left';
   const date = formatDateShortUTC(payment.dueOn);
   return payment.paid ? `Paid · due ${date}` : `Due ${date}`;
@@ -67,9 +70,10 @@ function BillRow({
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
+  const isUndated = bill.timing.schedule.anchor === null;
   const dueLine = isOutsideTotal
-    ? `${getDueLine(payment)} · ${GROUP_WORDS.oneTimeNote}`
-    : getDueLine(payment);
+    ? `${getDueLine(payment, isUndated)} · ${GROUP_WORDS.oneTimeNote}`
+    : getDueLine(payment, isUndated);
 
   return (
     <ItemRow
@@ -92,17 +96,23 @@ export function BillSheet({
   payment,
   planStance,
   today,
+  startsAtStep,
   onClose,
 }: BillSheetProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
+  const isUndated = schedule.anchor === null;
   const repeat =
     schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);
   const fact = [
     PRIORITY_LABELS[bill.priority],
     repeat,
-    payment ? `due ${formatDateShortUTC(payment.dueOn)}` : 'No payment left',
+    isUndated
+      ? BILL_WORDS.needsDueDate
+      : payment
+        ? `due ${formatDateShortUTC(payment.dueOn)}`
+        : 'No payment left',
     getProgress(payment),
   ]
     .filter(Boolean)
@@ -123,10 +133,12 @@ export function BillSheet({
       figure={amount}
       fact={fact}
       help={rangeText}
-      quickChange={{
-        label: ITEM_SHEET_R2_WORDS.changeAmount,
-        step: 'amount',
-      }}
+      quickChange={
+        isUndated
+          ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
+          : { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+      }
+      startsAtStep={startsAtStep}
       payment={payment}
       onClose={onClose}
     />

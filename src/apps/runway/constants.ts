@@ -616,6 +616,7 @@ export const BILL_WORDS = {
   paidAhead: 'Paid ahead',
   waiting: 'Waiting for the rest',
   readyToPay: 'Set aside in full',
+  needsDueDate: 'Needs a due date',
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
@@ -1099,6 +1100,12 @@ export const BUDGET_WORDS = {
     count === 1
       ? 'One needs a look. Open it or remove it.'
       : `${count} need a look. Open them or remove them.`,
+  dueLaterLine: (repeat: string | null) =>
+    repeat === null ? 'Due date later' : `${repeat} · due date later`,
+  dueLaterNote: (count: number) =>
+    count === 1
+      ? 'One bill has no due date yet. Add it later from the plan.'
+      : `${count} bills have no due date yet. Add them later from the plan.`,
   needDetailsShort: (count: number) =>
     `${count} ${count === 1 ? 'needs' : 'need'} a look`,
   openToChange: 'Check or change it',
@@ -1263,6 +1270,8 @@ export const FORM_FLOW_WORDS = {
   amount: 'Amount',
   dueTitle: 'When is it due?',
   due: 'Due',
+  dueLater: "I'll add it later",
+  dueLaterSummary: 'Later',
   repeatsTitle: 'Does it repeat?',
   repeats: 'Repeats',
   endsTitle: 'Does it end?',
@@ -1365,6 +1374,7 @@ export const ITEM_SHEET_R2_WORDS = {
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
   changeAmount: 'Change amount',
+  setDueDate: 'Set the due date',
   eachTime: 'Each time',
   balance: 'Balance',
   changeTarget: 'Change target',
@@ -1484,6 +1494,17 @@ export const FIX_WORDS = {
   runsShortOn: (date: string) => `On ${date}`,
   openDay: 'Open this income day',
   openBills: 'Open your bills',
+  needsDate: (names: readonly string[]) =>
+    names.length === 1
+      ? `${names[0]} needs a due date`
+      : names.length <= 3
+        ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} need a due date`
+        : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more need a due date`,
+  nothingSetAside: (count: number) =>
+    count === 1
+      ? 'Nothing is set aside for it until then'
+      : 'Nothing is set aside for them until then',
+  openDueBill: 'Set its due date',
   incomeEnds: (date: string) =>
     `Your last income day is ${date}. Nothing is planned after it.`,
 } as const;

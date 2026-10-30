@@ -17,7 +17,8 @@ interface ProblemRowProps {
 
 /** One day that runs short, or one problem not tied to a day: what is short or missing and when, as a row that opens the income day it runs short on, or the bills. */
 function ProblemRow({ group }: ProblemRowProps) {
-  const { openDay, showPlanSection, showTab, closeFixes } = useRunwayUrlState();
+  const { openDay, openDueBill, showPlanSection, showTab, closeFixes } =
+    useRunwayUrlState();
   const { isHidden } = useValuesHidden();
   const { title, detail } = describeGroupRow(group, isHidden);
   const isDay = group.kind === 'day';
@@ -29,6 +30,8 @@ function ProblemRow({ group }: ProblemRowProps) {
       return;
     }
     closeFixes();
+    if (group.kind === 'undated' && group.bills.length === 1)
+      openDueBill(group.bills[0].billId);
     showPlanSection('bills');
     showTab('plan');
   };
@@ -38,7 +41,7 @@ function ProblemRow({ group }: ProblemRowProps) {
       type='button'
       variant='tertiary'
       className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
-      aria-label={`${title}, ${detail}. ${isDay ? FIX_WORDS.openDay : FIX_WORDS.openBills}`}
+      aria-label={`${title}, ${detail}. ${group.kind === 'day' ? FIX_WORDS.openDay : group.kind === 'undated' && group.bills.length === 1 ? FIX_WORDS.openDueBill : FIX_WORDS.openBills}`}
       onClick={open}
     >
       <span

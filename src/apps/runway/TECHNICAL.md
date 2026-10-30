@@ -665,6 +665,7 @@ The checklist (`ChecklistScreen`, in a confirmed day) lists the day's bill lines
 
 - *Holds through:* the last income day before the first day on which a Must goes unfunded (a Must held or short because of a pairing counts as unfunded), or a bill due on or before the next income day is not fully funded. In lookahead an unresolved hold stays reserved and shows as a gap on its day.
 - *No income before a bill is due:* a bill whose due date falls after the last income day that could fund it.
+- *No due date yet:* a bill whose `schedule.anchor` is null has no payments (`generateCandidates` returns none), so nothing is demanded, warned or closed for it. `Lookahead.undated` lists such bills (`LookaheadInput.bills[].isUndated`) apart from `problems`, so they never shorten `holdsThrough`; `LookaheadWarnings` draws each as a `ProblemGroup` of kind `undated`, which opens the Bills view with the `dueBill` URL param so `BillSheet` starts the change form at the `due` question. `getMissingSteps` no longer asks Starting out for a bill's date.
 - *Cushion:* the sum over ranges of the difference between the Conservative and Middle figures, shown only when the plan's stance is not Middle.
 - It is memoized on the plan fingerprint and state key. With 200 items over a year this is under 60 drafts of a few hundred lines each, which fits comfortably in a single synchronous selector; if profiling says otherwise it moves to a worker without changing its signature.
 

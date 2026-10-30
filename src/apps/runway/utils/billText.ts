@@ -68,9 +68,14 @@ export function describeBillRepeat(kind: Schedule['kind']) {
   return result;
 }
 
-/** When a bill falls due, in the words a row and a change entry share: "Due Dec 1" or "Monthly from Dec 1". */
+/** When a bill falls due, in the words a row and a change entry share: "Due Dec 1", "Monthly from Dec 1" or, with no date yet, "Monthly, date later". */
 export function describeBillTiming(schedule: Schedule) {
-  const start = schedule.anchor === null ? '' : formatDateUTC(schedule.anchor);
+  if (schedule.anchor === null) {
+    return schedule.kind === 'once'
+      ? 'Due date later'
+      : `${describeBillRepeat(schedule.kind)}, date later`;
+  }
+  const start = formatDateUTC(schedule.anchor);
   if (schedule.kind === 'once') return `Due ${start}`;
   const result = `${describeBillRepeat(schedule.kind)} from ${start}`;
   return result;

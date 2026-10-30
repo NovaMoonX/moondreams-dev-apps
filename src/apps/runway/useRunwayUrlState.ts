@@ -124,6 +124,14 @@ export function useRunwayUrlState() {
   const openFixes = () => setRequestedFixes(true, { history: 'replace' });
   const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
 
+  const [requestedDueBill, setRequestedDueBill] = useQueryState(
+    'dueBill',
+    parseAsString,
+  );
+  const openDueBill = (billId: string) =>
+    setRequestedDueBill(billId, { history: 'replace' });
+  const closeDueBill = () => setRequestedDueBill(null, { history: 'replace' });
+
   const [requestedGroups, setRequestedGroups] = useQueryState(
     'groups',
     parseAsBoolean,
@@ -287,6 +295,9 @@ export function useRunwayUrlState() {
     isFixesOpen: requestedFixes === true,
     openFixes,
     closeFixes,
+    dueBillId: requestedDueBill,
+    openDueBill,
+    closeDueBill,
     isGroupsOpen: requestedGroups === true,
     openGroups,
     closeGroups,
