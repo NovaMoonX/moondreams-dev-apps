@@ -209,7 +209,13 @@ function NoteForm({
       data.step !== startData.step
     : data.text.trim() !== '';
   useUnsavedWork(() => isDirty);
-  useKeepFormDraft({ key: draftKey, base: draftBase, value: data, isDirty });
+  useKeepFormDraft({
+    isRestored: draft.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: data,
+    isDirty,
+  });
   const startOver = () => {
     setData(startData);
     setFormKey((current) => current + 1);

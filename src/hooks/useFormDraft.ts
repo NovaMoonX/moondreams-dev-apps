@@ -40,6 +40,8 @@ interface UseKeepFormDraftOptions<T> {
   key: string | null;
   /** The same opening values given to `useFormDraft`. */
   base: unknown;
+  /** The form started from a kept draft, which makes that draft this form's to remove. */
+  isRestored: boolean;
   value: T;
   isDirty: boolean;
 }
@@ -48,6 +50,7 @@ interface UseKeepFormDraftOptions<T> {
 export function useKeepFormDraft<T>({
   key,
   base,
+  isRestored,
   value,
   isDirty,
 }: UseKeepFormDraftOptions<T>) {
@@ -56,7 +59,7 @@ export function useKeepFormDraft<T>({
   const uid = user?.uid ?? null;
 
   // A form only removes a draft it wrote, so one that opens clean never deletes another's kept work.
-  const hasWrittenRef = useRef(false);
+  const hasWrittenRef = useRef(isRestored);
 
   useEffect(() => {
     if (!uid || !key) return;

@@ -204,6 +204,7 @@ function MembershipSettingsSubview({
     [costValues, goalValues, ticketPriceKind],
   );
   useKeepFormDraft({
+    isRestored: draft.restored !== null,
     key: draftKey,
     base: start,
     value: draftValue,

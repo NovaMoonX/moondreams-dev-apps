@@ -133,7 +133,8 @@ function PersonalExpenseFormModal({
     formData.category.choice !== getExpenseCategoryKey(initialExpense);
   useUnsavedWork(() => isDirty);
   const draftValue = useMemo(() => ({ formData, showNoteField }), [formData, showNoteField]);
-  useKeepFormDraft({ key: draftKey, base: startData, value: draftValue, isDirty });
+  useKeepFormDraft({
+    isRestored: draft.restored !== null, key: draftKey, base: startData, value: draftValue, isDirty });
 
   const startOver = () => {
     setFormData(startData);

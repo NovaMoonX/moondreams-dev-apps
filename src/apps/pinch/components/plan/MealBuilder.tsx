@@ -398,7 +398,13 @@ function MealBuilder({
     () => ({ items, source, dayKey, chosenType, name, categories }),
     [items, source, dayKey, chosenType, name, categories],
   );
-  useKeepFormDraft({ key: draftKey, base: draftBase, value: draftValue, isDirty });
+  useKeepFormDraft({
+    isRestored: draft.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: draftValue,
+    isDirty,
+  });
   const startOver = () => {
     setItems(start.items);
     setSource(start.source);

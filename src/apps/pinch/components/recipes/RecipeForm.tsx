@@ -322,6 +322,7 @@ function RecipeForm({
     [formData, webCover, isCoverRemoved],
   );
   useKeepFormDraft({
+    isRestored: draft.restored !== null,
     key: getRecipeDraftKey(recipeId, false),
     base: draftBase,
     value: draftValue,
