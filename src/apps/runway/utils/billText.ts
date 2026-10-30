@@ -43,6 +43,23 @@ export function describeGroupLead(total: GroupTotal, memberCount: number) {
   };
 }
 
+/** The "Bills $835 · Envelopes $90" line under a group's combined figure; null unless both kinds have a monthly figure, since one alone is the figure above it. */
+export function describeGroupSplit(
+  billsTotal: GroupTotal,
+  billCount: number,
+  envelopesTotal: GroupTotal,
+  envelopeCount: number,
+) {
+  const bills = describeGroupLead(billsTotal, billCount);
+  const envelopes = describeGroupLead(envelopesTotal, envelopeCount);
+  return bills.amount === null ||
+    bills.isOneTime ||
+    envelopes.amount === null ||
+    envelopes.isOneTime
+    ? null
+    : GROUP_WORDS.split(bills.amount, envelopes.amount);
+}
+
 /** The bill and envelope names a group's monthly figure stands for; every name only when none is counted (a group of one-time bills). */
 export function getGroupMemberNames(
   bills: readonly (GroupMember & { name: string })[],

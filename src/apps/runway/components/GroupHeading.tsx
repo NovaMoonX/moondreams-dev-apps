@@ -8,24 +8,31 @@ import { useAppSelector } from '@/store';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import { GROUP_WORDS } from '@apps/runway/constants';
 import type { GroupFigures } from '@apps/runway/hooks/useGroupFigures';
-import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectPurposeEmojis,
+  selectStance,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { describeGroupLead } from '@apps/runway/utils/billText';
 
 interface GroupHeadingProps {
   figures: GroupFigures;
+  /** The list the heading sits on: it shows the total of that kind alone. */
+  kind: 'bills' | 'envelopes';
   onOpen: () => void;
 }
 
 /** The heading of a list's section for one group: its name and combined monthly total, opening the group's sheet. */
-function GroupHeading({ figures, onOpen }: GroupHeadingProps) {
+function GroupHeading({ figures, kind, onOpen }: GroupHeadingProps) {
   const { isHidden } = useValuesHidden();
   const stance = useAppSelector(selectStance);
-  const { name, total } = figures;
+  const { name } = figures;
+  const emoji = useAppSelector(selectPurposeEmojis).get(figures.id);
+  const isBills = kind === 'bills';
+  const total = isBills ? figures.billsTotal : figures.envelopesTotal;
+  const count = isBills ? figures.bills.length : figures.envelopes.length;
+  const otherCount = isBills ? figures.envelopes.length : figures.bills.length;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
-  const lead = describeGroupLead(
-    total,
-    figures.bills.length + figures.envelopes.length,
-  );
+  const lead = describeGroupLead(total, count);
 
   return (
     <div className='flex items-start gap-1'>
@@ -38,7 +45,10 @@ function GroupHeading({ figures, onOpen }: GroupHeadingProps) {
           onClick={onOpen}
         >
           <span className='block break-words'>
-            <span className='line-clamp-2'>{name}</span>
+            <span className='line-clamp-2'>
+              {emoji && `${emoji} `}
+              {name}
+            </span>
           </span>
         </Button>
         <div className='flex items-center gap-1'>
@@ -59,12 +69,16 @@ function GroupHeading({ figures, onOpen }: GroupHeadingProps) {
               {lead.rest}
             </span>
           </Button>
-          {(hasRange || total.uncounted > 0 || total.oneTime.count > 0) && (
+          {(hasRange ||
+            total.uncounted > 0 ||
+            total.oneTime.count > 0 ||
+            otherCount > 0) && (
             <HelpTip title={GROUP_WORDS.basisTitle}>
               <GroupTotalHelp
                 total={total}
                 hasRange={hasRange}
                 stance={stance}
+                only={otherCount > 0 ? kind : undefined}
               />
             </HelpTip>
           )}

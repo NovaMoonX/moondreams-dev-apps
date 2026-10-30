@@ -2,11 +2,12 @@ import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Archive, Pencil, Receipt, Wallet } from 'lucide-react';
+import { Archive, Pencil, Receipt, Smile, Wallet } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
+import EmojiField from '@/components/EmojiField';
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -21,6 +22,7 @@ import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   GROUP_WORDS,
+  MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
@@ -44,6 +46,7 @@ import {
 import type { GroupSealed, Priority } from '@apps/runway/types';
 import {
   describeBillRepeat,
+  describeGroupSplit,
   describeGroupLead,
   describeGroupTotal,
 } from '@apps/runway/utils/billText';
@@ -79,6 +82,8 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     selectGroups(state, today).find(({ item }) => item.id === groupId),
   );
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isPickingEmoji, setIsPickingEmoji] = useState(false);
+  const [emoji, setEmoji] = useState('');
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +96,14 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
 
   if (!group || !figures) return null;
-  const { total, bills, envelopes, names: memberNames } = figures;
+  const {
+    total,
+    billsTotal,
+    envelopesTotal,
+    bills,
+    envelopes,
+    names: memberNames,
+  } = figures;
   const billCount = bills.length;
   const envelopeCount = envelopes.length;
   const memberCount = billCount + envelopeCount;
@@ -142,6 +154,17 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     }
     const failure = await save({ ...payload, name: renamed.name });
     if (failure === null) setIsRenaming(false);
+    else setError(failure);
+  };
+
+  const saveEmoji = async (next: string | null) => {
+    setError(null);
+    if (next === payload.emoji) {
+      setIsPickingEmoji(false);
+      return;
+    }
+    const failure = await save({ ...payload, emoji: next });
+    if (failure === null) setIsPickingEmoji(false);
     else setError(failure);
   };
 
@@ -196,6 +219,13 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const trimmed = name.trim();
   const canRename = trimmed !== '' && trimmed !== payload.name;
   const lead = describeGroupLead(total, memberCount);
+  const split = describeGroupSplit(
+    billsTotal,
+    billCount,
+    envelopesTotal,
+    envelopeCount,
+  );
+  const trimmedEmoji = emoji.trim();
 
   if (adding === 'bill') {
     return (
@@ -224,11 +254,56 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     <FormSheet
       isOpen
       onClose={onClose}
-      title={payload.name}
+      title={payload.emoji ? `${payload.emoji} ${payload.name}` : payload.name}
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
-        {isRenaming ? (
+        {isPickingEmoji ? (
+          <>
+            <BackLink onBack={() => setIsPickingEmoji(false)} />
+            <div className='space-y-1.5'>
+              <p className='text-muted-foreground text-xs'>
+                {GROUP_WORDS.emojiLabel}
+              </p>
+              <EmojiField
+                value={emoji}
+                onChange={setEmoji}
+                ariaLabel={GROUP_WORDS.emojiLabel}
+                placeholder='🐾'
+                maxLength={MAX_EMOJI_LENGTH}
+              />
+            </div>
+            <ModalFooterActions
+              note={error}
+              leftActions={
+                payload.emoji !== null && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    disabled={isSaving}
+                    onClick={() => void saveEmoji(null)}
+                  >
+                    {GROUP_WORDS.removeEmoji}
+                  </Button>
+                )
+              }
+              rightActions={
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={
+                    isSaving ||
+                    trimmedEmoji === '' ||
+                    trimmedEmoji === payload.emoji
+                  }
+                  onClick={() => void saveEmoji(trimmedEmoji)}
+                >
+                  Save
+                </Button>
+              }
+            />
+          </>
+        ) : isRenaming ? (
           <>
             <BackLink onBack={() => setIsRenaming(false)} />
             <div className='space-y-1.5'>
@@ -287,6 +362,11 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
               }
               helpTitle={GROUP_WORDS.basisTitle}
             />
+            {split !== null && (
+              <p className='text-muted-foreground -mt-2 text-sm'>
+                <MaskedText>{split}</MaskedText>
+              </p>
+            )}
             {total.oneTime.count > 0 && !lead.isOneTime && (
               <p className='text-muted-foreground -mt-2 text-sm'>
                 <MaskedText>
@@ -310,7 +390,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                     <ItemRow
                       key={item.id}
                       name={version.payload.name}
-                      emoji={version.payload.emoji}
+                      emoji={version.payload.emoji ?? payload.emoji}
                       detail={describeBillRepeat(
                         version.payload.timing.schedule.kind,
                       )}
@@ -332,7 +412,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                       <ItemRow
                         key={item.id}
                         name={version.payload.name}
-                        emoji={version.payload.emoji}
+                        emoji={version.payload.emoji ?? payload.emoji}
                         detail={
                           funding.amount.kind === 'exact'
                             ? describeCadenceLine(funding.cadence)
@@ -386,6 +466,21 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                 icon={<Wallet />}
                 label={GROUP_WORDS.addEnvelope(payload.name)}
                 onClick={() => setAdding('envelope')}
+              />
+              <ActionRow
+                isGrouped
+                hasChevron
+                icon={<Smile />}
+                label={
+                  payload.emoji === null
+                    ? GROUP_WORDS.chooseEmoji(payload.name)
+                    : GROUP_WORDS.changeEmoji(payload.name)
+                }
+                onClick={() => {
+                  setEmoji(payload.emoji ?? '');
+                  setError(null);
+                  setIsPickingEmoji(true);
+                }}
               />
               <ActionRow
                 isGrouped

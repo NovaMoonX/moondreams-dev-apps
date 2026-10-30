@@ -160,6 +160,7 @@ function BillsScreen() {
               <div key={figures.id} className='space-y-2'>
                 <GroupHeading
                   figures={figures}
+                  kind='bills'
                   onOpen={() => setOpenGroupId(figures.id)}
                 />
                 {rows.length > 0 && getCard(rows)}

@@ -1727,11 +1727,11 @@ async function writeSeedBills(
   const groups: { id: string; payload: GroupSealed }[] = [
     {
       id: 'seed-group-home',
-      payload: { name: 'Home', startingPriority: 'must' },
+      payload: { name: 'Home', startingPriority: 'must', emoji: '🏠' },
     },
     {
       id: 'seed-group-subscriptions',
-      payload: { name: 'Subscriptions', startingPriority: 'want' },
+      payload: { name: 'Subscriptions', startingPriority: 'want', emoji: null },
     },
   ];
 

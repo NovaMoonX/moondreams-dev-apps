@@ -30,6 +30,7 @@ import {
   planBillPayments,
   type BillPayment,
 } from '@apps/runway/engine/demands';
+import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
 import { findReturning } from '@apps/runway/engine/stretch';
@@ -1053,25 +1054,58 @@ export const selectReachedEndingsKey = (state: RootState, today: number) => {
   return result;
 };
 
-/** Every item's name and emoji by id, from its newest version, so a purchase still names an envelope that was renamed or archived. */
-export const selectItemLooks = createSelector([selectVersions], (versions) => {
-  const newest = versions.reduce<Map<string, OpenVersion>>((acc, version) => {
-    const seen = acc.get(version.itemId);
-    return seen && seen.createdAt >= version.createdAt
-      ? acc
-      : acc.set(version.itemId, version);
-  }, new Map());
-  const result = new Map(
-    [...newest.entries()].map(([id, version]) => [
-      id,
-      {
-        name: version.payload.name,
-        emoji: 'emoji' in version.payload ? version.payload.emoji : null,
-      },
-    ]),
-  );
-  return result;
-});
+/** The emoji each live purpose has chosen, by id; a purpose without one, or archived, is absent. */
+export const selectPurposeEmojis = createSelector(
+  [selectItems, selectVersions],
+  (items, versions): ReadonlyMap<string, string> => {
+    const live = new Set(
+      items
+        .filter((item) => item.kind === 'group' && item.archivedAt === null)
+        .map((item) => item.id),
+    );
+    const newest = versions
+      .filter(isGroup)
+      .filter((version) => live.has(version.itemId))
+      .reduce<Map<string, GroupVersion>>((acc, version) => {
+        const seen = acc.get(version.itemId);
+        return seen && seen.createdAt >= version.createdAt
+          ? acc
+          : acc.set(version.itemId, version);
+      }, new Map());
+    return new Map(
+      [...newest.entries()].flatMap(([id, { payload }]) =>
+        payload.emoji === null ? [] : [[id, payload.emoji] as const],
+      ),
+    );
+  },
+);
+
+/** Every item's name and emoji by id, from its newest version (a bill's or envelope's own emoji, else its purpose's), so a purchase still names an envelope that was renamed or archived. */
+export const selectItemLooks = createSelector(
+  [selectVersions, selectPurposeEmojis],
+  (versions, purposeEmojis) => {
+    const newest = versions.reduce<Map<string, OpenVersion>>((acc, version) => {
+      const seen = acc.get(version.itemId);
+      return seen && seen.createdAt >= version.createdAt
+        ? acc
+        : acc.set(version.itemId, version);
+    }, new Map());
+    const result = new Map(
+      [...newest.entries()].map(([id, version]) => [
+        id,
+        {
+          name: version.payload.name,
+          emoji: resolveItemEmoji(
+            'emoji' in version.payload ? version.payload.emoji : null,
+            'groupId' in version.payload ? version.payload.groupId : null,
+            purposeEmojis,
+          ),
+        },
+      ]),
+    );
+    return result;
+  },
+);
 
 const selectPurchases = (state: RootState) => state.runway.purchases;
 const selectPeriodPurchases = (state: RootState) =>

@@ -113,6 +113,7 @@ function EnvelopesScreen() {
               <div key={figures.id} className='space-y-2'>
                 <GroupHeading
                   figures={figures}
+                  kind='envelopes'
                   onOpen={() => setOpenGroupId(figures.id)}
                 />
                 {rows.length > 0 && getList(rows)}
