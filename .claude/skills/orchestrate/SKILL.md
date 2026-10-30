@@ -32,9 +32,19 @@ Every brief has: the goal in one line; the files to touch (and not to touch); wh
 3. Commit in coherent steps. Agents never commit or push (the one exception is `stack-pr-reviewer`, which commits its fix and syncs the stack it was handed), and an agent that needs another revision works in its own `git worktree`, never a checkout in yours.
 4. **Prove each push landed.** Read `git push`'s own output (never piped through `tail` or `-q`) and check `git status -sb` names your branch, not `HEAD (no branch)`. Before a review starts, check the SHA it reads contains every fix commit (`git merge-base --is-ancestor <fix> origin/<branch>`). A detached checkout once turned two pushes into silent no-ops and a whole fix round went unreviewed.
 
-## Iterating on owner feedback
+## Writing a plan
 
-When the owner answers a review or adds follow-ups (in plan mode or not), the plan covers only that message: each answer and what it changes, the questions they asked, and the checks that follow. Never re-output the earlier plan or what is already built (owner: "the plan should be focused on my last message").
+The plan is for the owner, and its job is to lighten their mental load (owner: "the plan is so dense"). Keep it to a short page with plain bullets:
+
+- **The idea** in a line or two, and **what the person will see or be able to do**.
+- **What counts** (the criteria) when the request has them, with any change you made to them in a clause.
+- **Decisions for the owner**, only the ones that are uncertain or risky, each a 🚩 question with your recommendation. When none are left, say "No open decisions."
+
+Leave out the files, selectors, data paths, verification steps, docs to update and review sizing. They are yours to get right, and they belong in the PR's How it works and evidence blocks. Keep paragraphs and nested bullets out of the plan.
+
+**Back in plan mode with nothing new to plan.** A restarted session can come back in plan mode after the owner approved the plan and switched to Auto, though nobody switched it. When nothing new needs a decision, the plan is one line ("Nothing new: PR #N is built and waiting on you."), never a repeat of what was already agreed (owner: "there's nothing new for me to look at").
+
+**Iterating on owner feedback.** When the owner answers a review or adds follow-ups (in plan mode or not), the plan covers only that message: each answer and what it changes, and the questions they asked. Never re-output the earlier plan or what is already built (owner: "the plan should be focused on my last message").
 
 ## Several issues in order
 
@@ -45,7 +55,7 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
 "Current" means one thing: the PR's own base (main, or the PR beneath it in a stack) is merged into its branch. Its diff against that base stays exactly its own changes; nothing from another open PR ever enters it, and unrelated PRs are never stacked on each other. The session that opened a PR keeps it current for as long as it watches it, so the owner never has to ask.
 
 1. **Watch every PR you open.** Subscribe to its activity right after opening it, without asking (`CLAUDE.md` "Every PR ends the same way"). A stacked PR also records its base: `git config branch.<head>.prBase <base>`.
-2. **Main moving wakes you, at no cost until it does.** The `PR sync check` workflow (`.github/workflows/pr-sync-check.yml`, git only, no tokens) runs on every push to main, on each PR push and every six hours, and labels each open PR `behind-base` or `merge-conflict`. On a PR you watch, that label is an event, as is the harness's merge-conflict notice. The Stop hook also checks your current branch on every push.
+2. **Main moving wakes you, at no cost until it does.** The `PR sync check` workflow (`.github/workflows/pr-sync-check.yml`, git only, no tokens) runs on every push to main, on each PR push and every six hours, and labels each open PR `behind-base` or `merge-conflict`. On a PR you watch, that label is an event, as is the harness's merge-conflict notice. The Stop hook also checks your current branch on every push. A label is not sure to wake you, so **every wake on a PR you watch starts with `npm run -s prs:check -- <head>:<base>`** (a CI result, a review, ready for review, a check-in), before you report anything about it; "CI green" never stands for "mergeable" (owner: a PR went ready for review with a conflict the session had not looked for).
 3. **On the event, run one command.** `npm run -s prs:sync -- <head>:<base>` merges the base in and pushes when it merges cleanly (`scripts/prSync.sh`, `git merge-tree`, no checkout; it never touches a branch you didn't name), then `git pull --ff-only` in your checkout. That is one tool call: spawn `pr-syncer` (haiku) only when you drive several PRs at once (a stack or a run, bottom of the stack first), where its loop saves your turns.
 4. **On a conflict, resolve it yourself and tell the owner; never ask them to.**
 
@@ -98,7 +108,7 @@ Measure the PR against its base with `git diff --shortstat <base>...HEAD -- . ':
 | **M** | ≤1,500 lines, or any visible change | `validator`; Copilot's 20-minute window (`pr-wrap-up` §3); `technical-reviewer`, plus `product-reviewer` and `design-reviewer` when anything visible changed. |
 | **L** | >1,500 lines, or touches rules, indexes, functions, a public page or a shared component | `validator`; Copilot's window; split the diff into **shards** by area (rules and data, functions, each app's UI, shared components, docs) of about 1,500 lines at most; one reviewer of the fitting kind per shard in parallel (technical for code and rules; product and design per app with visible changes); then `lead-reviewer` (opus) gets the shard map and every report, verifies each finding against the code, drops noise and does the cross-shard pass. You fix what it confirms. |
 
-Reviewers that run at the same time against one emulator never share a seeded account they may write to: give each its own account (or tell all but one to only read), and tell each to list what it wrote. Two Runway passes on one account reported each other's saves as bugs (a cut line that "moved", a group count that changed). A docs-only or comment-only change needs no review agents; `validator` is enough. A follow-up push reviews only what changed since the last review, at the size of that delta, unless it touches an area the last review didn't cover. When the owner says a review should have caught something, fix the agent per `docs/conventions/agents.md`.
+Reviewers that run at the same time against one emulator never share a seeded account they may write to: give each its own account (or tell all but one to only read), and tell each to list what it wrote. Two Runway passes on one account reported each other's saves as bugs (a cut line that "moved", a group count that changed). An app that won't start (the emulators fail in the sandbox) never skips the product and design reviewers: give them the harness page's URL and fixtures (`pr-wrap-up` "An environment failure is not a reason to skip"); A-List release days shipped two misses the reviewers would have caught. A docs-only or comment-only change needs no review agents; `validator` is enough. A follow-up push reviews only what changed since the last review, at the size of that delta, unless it touches an area the last review didn't cover. When the owner says a review should have caught something, fix the agent per `docs/conventions/agents.md`.
 
 ## The PR status comment
 
