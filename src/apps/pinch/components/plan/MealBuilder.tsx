@@ -4,7 +4,9 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from 'lucide-react';
 
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import HelpTip from '@/components/HelpTip';
 import MacroStats from '@/components/MacroStats';
 import Subview from '@/components/Subview';
@@ -51,7 +53,12 @@ import {
   selectShareBySource,
   selectShowNutrition,
 } from '@apps/pinch/store/selectors';
-import type { ItemKind, MealItem, MealType } from '@apps/pinch/types';
+import type {
+  DishCategory,
+  ItemKind,
+  MealItem,
+  MealType,
+} from '@apps/pinch/types';
 import { getCategories } from '@apps/pinch/utils/categories';
 import { getCellDayKey, getPlannedDayKey } from '@apps/pinch/utils/dayKeys';
 import { countLeftOutIngredients, formatLeftOut } from '@apps/pinch/utils/gaps';
@@ -104,11 +111,84 @@ const FEW_PICKS = 5;
 const copyItems = (items: MealItem[]) =>
   items.map((item) => ({ ...item, id: generateUuid() }));
 
+const getDraftKey = ({
+  mode,
+  plannedMealId,
+  mealId,
+  startRecipeId,
+}: {
+  mode: 'plan' | 'meal';
+  plannedMealId: string | null;
+  mealId: string | null;
+  startRecipeId: string | null;
+}) => {
+  if (plannedMealId) return `pinch:meal-builder:planned:${plannedMealId}`;
+  if (mode === 'meal' && mealId) return `pinch:meal-builder:meal:${mealId}`;
+  if (mealId) return `pinch:meal-builder:new:${mode}:meal:${mealId}`;
+  if (startRecipeId) {
+    return `pinch:meal-builder:new:${mode}:recipe:${startRecipeId}`;
+  }
+  return `pinch:meal-builder:new:${mode}`;
+};
+
 const getRecentCaption = (kinds: Set<'RECIPE' | 'MEAL'>) => {
   if (!kinds.has('MEAL')) return 'Your recent recipes';
   if (!kinds.has('RECIPE')) return 'Your recent saved meals';
   return 'Your recent recipes and saved meals';
 };
+
+interface MealBuilderDraft {
+  items: MealItem[];
+  source: { id: string; name: string } | null;
+  dayKey: string;
+  chosenType: MealType | null;
+  name: string;
+  categories: DishCategory[];
+}
+
+const isDraftItem = (value: unknown): value is MealItem => {
+  if (typeof value !== 'object' || value === null) return false;
+  const { id, kind, refId, servings } = value as Partial<MealItem>;
+  return (
+    typeof id === 'string' &&
+    (kind === 'RECIPE' || kind === 'INGREDIENT') &&
+    typeof refId === 'string' &&
+    typeof servings === 'number' &&
+    Number.isFinite(servings) &&
+    servings > 0
+  );
+};
+
+function parseMealBuilderDraft(stored: unknown): MealBuilderDraft | null {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { items, source, dayKey, chosenType, name, categories } =
+    stored as Partial<MealBuilderDraft>;
+  const isShaped =
+    Array.isArray(items) &&
+    items.length <= MAX_MEAL_ITEMS &&
+    items.every(isDraftItem) &&
+    (source === null ||
+      (typeof source === 'object' &&
+        typeof source?.id === 'string' &&
+        typeof source?.name === 'string')) &&
+    typeof dayKey === 'string' &&
+    fromDateInputValue(dayKey) !== null &&
+    chosenType !== undefined &&
+    (chosenType === null || MEAL_TYPES.some((type) => type === chosenType)) &&
+    typeof name === 'string' &&
+    name.length <= MAX_NAME_LENGTH &&
+    Array.isArray(categories) &&
+    categories.every((category) => typeof category === 'string');
+  if (!isShaped) return null;
+  return {
+    items,
+    source,
+    dayKey,
+    chosenType,
+    name,
+    categories: getCategories({ categories }),
+  };
+}
 
 interface MealBuilderProps {
   uid: string;
@@ -166,25 +246,9 @@ function MealBuilder({
     mode === 'plan' && !existingPlanned && !mealId && recipeId
       ? recipeId
       : null;
-  const [dayKey, setDayKey] = useState(
-    existingPlanned ? getPlannedDayKey(existingPlanned.date) : initialDayKey,
-  );
-  const [chosenType, setChosenType] = useState<MealType | null>(
-    existingPlanned?.mealType ?? initialType,
-  );
-  const [isOtherDay, setIsOtherDay] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [isRecentExpanded, setIsRecentExpanded] = useState(false);
-  const [isSearchFirst] = useState(
-    () =>
-      mode === 'plan' &&
-      !existingPlanned &&
-      !starter &&
-      !startRecipeId &&
-      window.matchMedia('(hover: hover) and (pointer: fine)').matches,
-  );
-  const [items, setItems] = useState<MealItem[]>(
-    existingPlanned?.items ??
+  const [start] = useState<MealBuilderDraft>(() => ({
+    items:
+      existingPlanned?.items ??
       existingMeal?.items ??
       (starter
         ? copyItems(starter.items)
@@ -198,14 +262,61 @@ function MealBuilder({
               },
             ]
           : []),
+    source: starter ? { id: starter.id, name: starter.name } : null,
+    dayKey: existingPlanned
+      ? getPlannedDayKey(existingPlanned.date)
+      : initialDayKey,
+    chosenType: existingPlanned?.mealType ?? initialType,
+    name: existingMeal?.name ?? '',
+    categories: getCategories(existingMeal ?? {}),
+  }));
+  const draftKey = getDraftKey({
+    mode,
+    plannedMealId,
+    mealId,
+    startRecipeId,
+  });
+  const draftBase = {
+    updatedAt: existingPlanned?.updatedAt ?? existingMeal?.updatedAt ?? null,
+    dayKey: start.dayKey,
+    chosenType: start.chosenType,
+  };
+  const draft = useFormDraft({
+    key: draftKey,
+    base: draftBase,
+    parse: parseMealBuilderDraft,
+  });
+  const [begin] = useState(() =>
+    draft.restored === null
+      ? start
+      : {
+          ...draft.restored,
+          items: draft.restored.items.filter((item) =>
+            item.kind === 'RECIPE'
+              ? recipesById.has(item.refId)
+              : ingredientsById.has(item.refId),
+          ),
+        },
   );
-  const [source, setSource] = useState<{ id: string; name: string } | null>(
-    starter ? { id: starter.id, name: starter.name } : null,
+  const [dayKey, setDayKey] = useState(begin.dayKey);
+  const [chosenType, setChosenType] = useState<MealType | null>(
+    begin.chosenType,
   );
-  const [name, setName] = useState(existingMeal?.name ?? '');
-  const [categories, setCategories] = useState(() =>
-    getCategories(existingMeal ?? {}),
+  const [isOtherDay, setIsOtherDay] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [isRecentExpanded, setIsRecentExpanded] = useState(false);
+  const [isSearchFirst] = useState(
+    () =>
+      mode === 'plan' &&
+      !existingPlanned &&
+      !starter &&
+      !startRecipeId &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches,
   );
+  const [items, setItems] = useState<MealItem[]>(begin.items);
+  const [source, setSource] = useState(begin.source);
+  const [name, setName] = useState(begin.name);
+  const [categories, setCategories] = useState(begin.categories);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -273,9 +384,37 @@ function MealBuilder({
     when: existingPlanned ? `${dayKey}|${mealType}` : null,
     categories,
   });
-  const [openedWith] = useState(snapshot);
+  const [openedWith] = useState(() =>
+    getBuilderSnapshot({
+      items: start.items,
+      name: start.name,
+      when: existingPlanned ? `${start.dayKey}|${start.chosenType}` : null,
+      categories: start.categories,
+    }),
+  );
   const isDirty = snapshot !== openedWith;
   useUnsavedWork(() => isDirty);
+  const draftValue = useMemo(
+    () => ({ items, source, dayKey, chosenType, name, categories }),
+    [items, source, dayKey, chosenType, name, categories],
+  );
+  useKeepFormDraft({
+    isRestored: draft.restored !== null,
+    key: draftKey,
+    base: draftBase,
+    value: draftValue,
+    isDirty,
+  });
+  const startOver = () => {
+    setItems(start.items);
+    setSource(start.source);
+    setDayKey(start.dayKey);
+    setChosenType(start.chosenType);
+    setIsOtherDay(false);
+    setName(start.name);
+    setCategories(start.categories);
+    draft.hideNotice();
+  };
   const isShortScreen = useSyncExternalStore(
     subscribeToHeight,
     getIsShortScreen,
@@ -579,6 +718,12 @@ function MealBuilder({
       onBack={() => void goBack()}
     >
       <div className='flex flex-1 flex-col gap-5'>
+        {draft.isNoticeShown && (
+          <DraftRestoredNotice
+            onStartOver={startOver}
+            onDismiss={draft.hideNotice}
+          />
+        )}
         <UndoSnackbar pending={pending} onUndo={undo} />
         {mode === 'plan' ? (
           <SummaryEditor

@@ -1,6 +1,6 @@
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useState, type KeyboardEvent, type Ref, type SyntheticEvent } from 'react';
-import { getBoxItemCardElementId } from '../utils/itemHelpers';
+import { getBoxItemCardElementId, ITEM_MAX_LENGTH } from '../utils/itemHelpers';
 
 interface ItemFormProps {
   textareaRef: Ref<HTMLTextAreaElement>;
@@ -108,7 +108,7 @@ function ItemForm({
             disabled={disabled || isSubmitting}
             placeholder={placeholder}
             rows={4}
-            maxLength={500}
+            maxLength={ITEM_MAX_LENGTH}
             className='border-border bg-background text-foreground placeholder:text-muted-foreground focus:border-ring w-full resize-none rounded-xl border px-3 py-2 text-sm ring-0 transition outline-none'
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey) {
@@ -120,7 +120,7 @@ function ItemForm({
         </label>
         <div className='flex items-center justify-between gap-3 px-1'>
           <span className='text-muted-foreground text-xs'>
-            {currentValue.trim().length}/500
+            {currentValue.trim().length}/{ITEM_MAX_LENGTH}
           </span>
           {submissionError && (
             <span className='text-destructive text-xs'>{submissionError}</span>
