@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   CHANGE_LOG_SPANS,
+  ADD_REQUEST_KINDS,
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
   DEFAULT_SPEND_PERIOD,
@@ -37,6 +38,12 @@ export function useRunwayUrlState() {
     'section',
     parseAsStringLiteral(PLAN_SECTIONS),
   );
+
+  const [requestedAdd, setRequestedAdd] = useQueryState(
+    'add',
+    parseAsStringLiteral(ADD_REQUEST_KINDS),
+  );
+  const clearAdd = () => setRequestedAdd(null, { history: 'replace' });
 
   const [requestedDay, setRequestedDay] = useQueryState('day', parseAsString);
 
@@ -189,23 +196,45 @@ export function useRunwayUrlState() {
     void backLayerSeq;
     window.history.replaceState({ ...entry, runwayTabStep: true }, '');
   };
-  const showTab = (tab: RunwayTab) => {
+  const showTab = async (tab: RunwayTab) => {
     if (tab === activeTab) return;
     if (requestedFixes !== null) closeFixes();
+    if (requestedAdd !== null) clearAdd();
     if (requestedDueBill !== null) closeDueBill();
     if (tab === DEFAULT_RUNWAY_TAB) {
       if (window.history.state?.runwayTabStep) {
         navigate(-1);
         return;
       }
-      setRequestedTab(null, { history: 'replace' });
+      await setRequestedTab(null, { history: 'replace' });
       return;
     }
     if (activeTab === DEFAULT_RUNWAY_TAB) {
-      void setRequestedTab(tab, { history: 'push' }).then(markTabStep);
+      await setRequestedTab(tab, { history: 'push' });
+      markTabStep();
       return;
     }
-    setRequestedTab(tab, { history: 'replace' });
+    await setRequestedTab(tab, { history: 'replace' });
+  };
+
+  /** Opens a new item's form on another tab once the tab's own history entry is written, so the form's entry sits on top and Back asks before it closes. */
+  const showAddOnTab = async (
+    kind: (typeof ADD_REQUEST_KINDS)[number],
+    tab: RunwayTab,
+    section?: PlanSection,
+  ) => {
+    if (section) showPlanSection(section);
+    await showTab(tab);
+    // A kept entry under the form's own carries the request, so Back lands on it with the form still open for its guard to ask,
+    // and it steps itself away once the form closes, leaving the tab's entry clean for a later Back.
+    const address = new URL(window.location.href);
+    address.searchParams.set('add', kind);
+    window.history.pushState(
+      { ...window.history.state, keptFor: 'add' },
+      '',
+      address,
+    );
+    await setRequestedAdd(kind, { history: 'replace' });
   };
 
   const showSpend = (envelopeId: string | null) => {
@@ -217,10 +246,12 @@ export function useRunwayUrlState() {
 
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
   const showPlanSection = (section: PlanSection) => {
+    if (requestedAdd !== null && section !== requestedSection) clearAdd();
     if (requestedDueBill !== null) closeDueBill();
-    setRequestedSection(section === DEFAULT_PLAN_SECTION ? null : section, {
-      history: 'replace',
-    });
+    return setRequestedSection(
+      section === DEFAULT_PLAN_SECTION ? null : section,
+      { history: 'replace' },
+    );
   };
 
   const openDay = (dayKey: string) =>
@@ -264,6 +295,9 @@ export function useRunwayUrlState() {
 
   return {
     activeTab,
+    addRequest: requestedAdd,
+    showAddOnTab,
+    clearAdd,
     view: requestedView,
     openView,
     closeView,

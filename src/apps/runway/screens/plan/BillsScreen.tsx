@@ -45,7 +45,9 @@ function BillsScreen() {
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);
+  const { addRequest, clearAdd, dueBillId, closeDueBill } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
+  const isRequested = addRequest === 'bill';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [openBillId, setOpenBillId] = useState<string | null>(null);
@@ -88,7 +90,6 @@ function BillsScreen() {
     bills.length >= TIP_MIN_ROWS &&
     figuresByGroup.every(({ bills: inGroup }) => inGroup.length === 0);
   const ungrouped = visible.filter(({ groupId }) => groupId === null);
-  const { dueBillId, closeDueBill } = useRunwayUrlState();
   const openBill = listed.find(({ item, payload }) =>
     openBillId !== null
       ? item.id === openBillId
@@ -221,12 +222,15 @@ function BillsScreen() {
           }}
         />
       )}
-      {formKey !== null && (
+      {(formKey !== null || isRequested) && (
         <BillForm
-          key={formKey}
+          key={formKey ?? 'requested'}
           isOpen
           title='Bill'
-          onClose={() => setFormKey(null)}
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
         />
       )}
     </div>

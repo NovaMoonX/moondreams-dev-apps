@@ -33,12 +33,12 @@ function DraftRestoredNotice({
       onDismiss={onDismiss}
       dismissLabel='Hide this note'
     >
-      <span>We kept what you typed before the app closed. </span>
+      <p>We kept what you typed before the app closed.</p>
       <Button
         type='button'
-        variant='link'
+        variant='outline'
         size='sm'
-        className='h-auto p-0 align-baseline'
+        className="relative mt-2 after:absolute after:-inset-1.5 after:content-['']"
         onClick={() => void askToStartOver()}
       >
         Start over

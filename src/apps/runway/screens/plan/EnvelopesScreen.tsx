@@ -25,6 +25,7 @@ import {
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 const TIP_MIN_ROWS = 3;
 
@@ -39,7 +40,9 @@ function EnvelopesScreen() {
   );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
+  const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
+  const isRequested = addRequest === 'envelope';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const figuresByGroup = useGroupFigures(today);
@@ -153,12 +156,15 @@ function EnvelopesScreen() {
           onClose={() => setOpenGroupId(null)}
         />
       )}
-      {formKey !== null && (
+      {(formKey !== null || isRequested) && (
         <EnvelopeForm
-          key={formKey}
+          key={formKey ?? 'requested'}
           isOpen
           title='Envelope'
-          onClose={() => setFormKey(null)}
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
         />
       )}
     </div>

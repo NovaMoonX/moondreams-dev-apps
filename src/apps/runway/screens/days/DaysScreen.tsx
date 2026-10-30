@@ -80,7 +80,8 @@ function DaysScreen() {
         cushion.billCount > 0 && plural(cushion.billCount, 'bill'),
       ].filter(Boolean)
     : [];
-  const { openDay, daysMonth, showDaysMonth } = useRunwayUrlState();
+  const { openDay, daysMonth, showDaysMonth, addRequest, clearAdd } =
+    useRunwayUrlState();
   const recentFrom = useAppSelector(selectRecentFrom);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
@@ -268,8 +269,23 @@ function DaysScreen() {
           onClick={() => setFormKey((current) => (current ?? 0) + 1)}
         />
       )}
-      {formKey !== null && (
-        <ExpectedScreen key={formKey} onClose={() => setFormKey(null)} />
+      {(formKey !== null ||
+        addRequest === 'expense' ||
+        addRequest === 'expectedIncome') && (
+        <ExpectedScreen
+          key={formKey ?? 'requested'}
+          initialKind={
+            formKey !== null
+              ? null
+              : addRequest === 'expense'
+                ? 'expense'
+                : 'income'
+          }
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
+        />
       )}
     </div>
   );

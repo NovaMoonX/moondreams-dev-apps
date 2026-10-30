@@ -20,6 +20,7 @@ import {
 import { useNow } from '@/hooks/useNow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getListedCards } from '@apps/runway/utils/cardText';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 function CardsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -28,7 +29,9 @@ function CardsScreen() {
   const isLedgerReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
+  const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
+  const isRequested = addRequest === 'card';
   const [open, setOpen] = useState<OpenedCard | null>(null);
 
   // An archived card that still waits to be paid stays listed, so it can be paid off.
@@ -64,8 +67,15 @@ function CardsScreen() {
         icon={<CreditCard className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
-      {formKey !== null && (
-        <CardForm key={formKey} isOpen onClose={() => setFormKey(null)} />
+      {(formKey !== null || isRequested) && (
+        <CardForm
+          key={formKey ?? 'requested'}
+          isOpen
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
+        />
       )}
       <CardSheets cards={cards} open={open} onChange={setOpen} />
     </div>

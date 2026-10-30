@@ -26,6 +26,7 @@ import {
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { getDueCards } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
 import HomeCards from '@apps/runway/screens/home/HomeCards';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { getListedCards } from '@apps/runway/utils/cardText';
@@ -174,6 +175,12 @@ function HomeScreen() {
           </Button>
         </div>
       </div>
+      {!isAddingPurchase && (
+        <DraftPickUpRow
+          isTrack={isTrack}
+          onPickUpPurchase={() => setIsAddingPurchase(true)}
+        />
+      )}
       {isSetupOpen && (
         <EmptyCard
           icon={<ListChecks className='h-5 w-5' />}

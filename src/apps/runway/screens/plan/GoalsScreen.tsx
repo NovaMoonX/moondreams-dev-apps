@@ -27,6 +27,7 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 function GoalsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -49,7 +50,9 @@ function GoalsScreen() {
     comingDays,
     goals.map(({ version }) => version.payload.funding),
   );
+  const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
+  const isRequested = addRequest === 'goal';
   const [query, setQuery] = useState('');
 
   const hasRangedIncome = comingDays.some(
@@ -145,12 +148,15 @@ function GoalsScreen() {
         icon={<Target className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
-      {formKey !== null && (
+      {(formKey !== null || isRequested) && (
         <GoalForm
-          key={formKey}
+          key={formKey ?? 'requested'}
           isOpen
           title='Goal'
-          onClose={() => setFormKey(null)}
+          onClose={() => {
+            setFormKey(null);
+            clearAdd();
+          }}
         />
       )}
     </div>
