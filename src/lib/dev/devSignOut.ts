@@ -6,6 +6,7 @@ const pending = { isStayingOnPage: false };
 
 /** Signs out and keeps the page open, where every other sign-out lands on Home. Emulator account switcher only. */
 export async function signOutInPlace() {
+  if (!auth.currentUser) return;
   pending.isStayingOnPage = true;
   await signOut(auth).catch((error) => {
     pending.isStayingOnPage = false;

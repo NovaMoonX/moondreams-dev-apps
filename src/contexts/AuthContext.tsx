@@ -80,8 +80,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       const { pathname } = window.location;
       // A shared page reads the same for any account or none, so it stays; anywhere else starts again from Home.
       const isLeavingPage = pathname !== '/' && !pathname.includes('/shared/');
-      const isSwitchingHome =
-        isSwitchingRef.current && isLeavingPage && Boolean(previousUserId && nextUserId !== previousUserId);
+      const isSwitchedAccount =
+        isSwitchingRef.current && Boolean(previousUserId && nextUserId && nextUserId !== previousUserId);
+      if (isSwitchedAccount) isSwitchingRef.current = false;
+      const isSwitchingHome = isSwitchedAccount && isLeavingPage;
       // Every account on this device shares Firestore's saved copy, and a read one account is refused
       // can be saved as "deleted" and hide that document from the next, so each account starts clean.
       const mustClearSavedData = Boolean(firebaseUser && claimFirestoreLocalData(firebaseUser.uid));
@@ -109,8 +111,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       previousUserIdRef.current = nextUserId;
       // Signed out from anywhere (another tab, an expired session) starts again from Home, not the app's page.
-      const isSigningOutInPlace = takeInPlaceSignOut();
-      if (previousUserId && !nextUserId && isLeavingPage && !isSigningOutInPlace) {
+      if (previousUserId && !nextUserId && isLeavingPage && !takeInPlaceSignOut()) {
         isReloadingRef.current = true;
         dispatch(setCurrentUser(null));
         setUser(null);
