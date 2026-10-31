@@ -819,40 +819,32 @@ const refused = (error: string): MergeResult => ({
   isSample: false,
 });
 
-const ANSWER_MARKER = '<!-- pipeline-answer:';
 const TO_DO_TAG = /\(to do\)/i;
+const OWNER_TICK = /^\s*[-*]\s+\[[xX]\].*\(owner:\s*(done|not doing it)\)/i;
 
-/** The owner's open questions in a status comment, by the same key the dashboard's answers carry. */
+// Numbered as the inbox numbers them (every open or owner-ticked owner box, in order), since the dashboard's answer marks use that place.
 const readOpenQuestions = (body: string) => {
   const lines = body.split(/\r?\n/);
-  return lines.flatMap((line, index) => {
+  const boxes = lines.flatMap((line, index) => {
     const box = BOX_LINE.exec(line);
-    if (!box || box[2] !== ' ' || !isForOwner(line) || TO_DO_TAG.test(line)) return [];
-    const next = lines[index + 1] ?? '';
+    const isOwnerBox = box !== null && (box[2] === ' ' || OWNER_TICK.test(line));
+    return isOwnerBox && isForOwner(line) ? [{ line, next: lines[index + 1] ?? '' }] : [];
+  });
+  return boxes.flatMap(({ line, next }, place) => {
+    if (BOX_LINE.exec(line)?.[2] !== ' ' || TO_DO_TAG.test(line)) return [];
     const hasOptions = next.search(/\S/) > line.search(/\S/) && /^\s*[-*]\s+/.test(next);
-    return line.includes('?') || hasOptions ? [toItemKey(line)] : [];
+    return line.includes('?') || hasOptions ? [place] : [];
   });
 };
 
-// An answer sent from the dashboard after the status counts, before the session has read it and rewritten the status.
-const readAnsweredSince = (comments: Json[], since: number) =>
-  new Set(
-    comments
-      .filter(
-        (comment) =>
-          typeof comment.body === 'string' &&
-          comment.body.includes(ANSWER_MARKER) &&
-          Date.parse(String(comment.created_at)) >= since,
-      )
-      .flatMap((comment) =>
-        [...String(comment.body).matchAll(/^- \*\*(.+?)\*\*/gm)].map((match) => toItemKey(match[1])),
-      ),
-  );
+const readAnswerMarks = async () => {
+  const marks = (await getFirestore().doc('pipeline/answered').get()).get('marks') as unknown;
+  return isObject(marks) ? marks : {};
+};
 
 const hasSeededQuestion = async (prNumber: number, status: Json | null) => {
   if (status === null || !Array.isArray(status.ownerItems)) return false;
-  const answered = (await getFirestore().doc('pipeline/answered').get()).get('marks') as unknown;
-  const marks = isObject(answered) ? answered : {};
+  const marks = await readAnswerMarks();
   const statusAt = Number(status.updatedAt) || 0;
   return status.ownerItems
     .filter(isObject)
@@ -1100,19 +1092,12 @@ const isBehindBase = async (token: string, pr: Json, sha: string) => {
   return Number((await readJson(response))?.behind_by) > 0;
 };
 
-const hasOpenQuestion = async (
-  token: string,
-  prNumber: number,
-  pr: Json,
-  statusBody: string | null,
-  status: Json | null,
-) => {
+const hasOpenQuestion = async (prNumber: number, statusBody: string | null, status: Json | null) => {
   const open = statusBody === null ? [] : readOpenQuestions(statusBody);
   if (open.length === 0) return false;
-  const comments = await readRecentComments(token, prNumber, typeof pr.comments === 'number' ? pr.comments : 0);
-  if (comments === null) throw new Error('comments unread');
-  const answered = readAnsweredSince(comments, Date.parse(String(status?.updated_at)) || 0);
-  return open.some((key) => !answered.has(key));
+  const marks = await readAnswerMarks();
+  const statusAt = Date.parse(String(status?.updated_at)) || 0;
+  return open.some((place) => Number(marks[`${prNumber}:${place}`] ?? 0) < statusAt);
 };
 
 const readGates = async (token: string, prNumber: number) => {
@@ -1141,7 +1126,7 @@ const readGates = async (token: string, prNumber: number) => {
       mustDo: statusBody === null ? 'no status' : readMustDo(statusBody),
       isStatusForHead: statusBody !== null && isHeadingFor(statusBody, sha),
       isBehind: await isBehindBase(token, pr, sha),
-      hasOpenQuestion: await hasOpenQuestion(token, prNumber, pr, statusBody, status),
+      hasOpenQuestion: await hasOpenQuestion(prNumber, statusBody, status),
     });
     if (refusal !== null) return refused(refusal);
     const sessionUrl =
