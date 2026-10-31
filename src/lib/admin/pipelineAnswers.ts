@@ -40,3 +40,21 @@ export async function sendPipelineAnswers(
   const result = await answerPipelineQuestionsCallable({ answers, attempt });
   return { results: result.data.results, isSample: result.data.isSample === true };
 }
+
+export interface PipelineSettleRequest {
+  prNumber: number | null;
+  sessionId: string | null;
+  text: string;
+  outcome: 'done' | 'skipped' | 'open';
+}
+
+const settlePipelineAskCallable = httpsCallable<
+  PipelineSettleRequest,
+  { ok: boolean; error: string | null; at: number | null }
+>(functions, 'settlePipelineAsk', { timeout: 60_000 });
+
+/** Ticks off, sets aside or reopens one ask: in its status comment on GitHub when it has one, and for the dashboard. */
+export async function settlePipelineAsk(request: PipelineSettleRequest) {
+  const result = await settlePipelineAskCallable(request);
+  return result.data;
+}

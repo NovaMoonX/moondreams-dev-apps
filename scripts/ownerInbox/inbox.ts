@@ -48,6 +48,17 @@ export interface OwnerItem {
   /** The options on the lines indented under it, each with its words and its screenshots, so the question and the screens it is about sit together. */
   options: { label: string; images: string[] }[];
   isMulti: boolean;
+  /** A step for the owner to do and tick off rather than a question to answer: tagged `(to do)`, or a line with no options and no question mark. */
+  isTask: boolean;
+  /** Ticked from the dashboard (its `(owner: …)` note), shown with an Undo; null while it waits on the owner. */
+  settled: 'done' | 'skipped' | null;
+}
+
+/** A pull request merged lately, so the dashboard stops showing what its session raised before the merge. */
+export interface MergedPr {
+  number: number;
+  sessionUrl: string | null;
+  mergedAt: string;
 }
 
 const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;
@@ -95,6 +106,8 @@ export interface GalleryImage {
 
 export interface GalleryStep {
   label: string;
+  /** A line under the title, written after `<br>` or ` — ` in the label (`**Undo** — the row's sheet holds it`). */
+  note: string | null;
   images: GalleryImage[];
 }
 
@@ -142,6 +155,8 @@ export const toPlain = (text: string) =>
     .replace(/@(?=\w)/g, '@\u200b');
 
 const PICK_ANY = /\s*\(pick any\)/i;
+const TO_DO = /\s*\(to do\)/i;
+const OWNER_NOTE = /\s*\(owner:[^)]*\)/gi;
 
 const bullet = (line: string) =>
   toPlain(
@@ -149,16 +164,24 @@ const bullet = (line: string) =>
       .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
       .replace(/\s*\(who:[^)]*\)/i, '')
       .replace(PICK_ANY, '')
+      .replace(TO_DO, '')
       .trim(),
   );
 
 const isOpenBox = (line: string) => /^\s*[-*]\s+\[ \]/.test(line);
+const getOwnerNote = (line: string): OwnerItem['settled'] => {
+  if (!/^\s*[-*]\s+\[[xX]\]/.test(line)) return null;
+  if (/\(owner:\s*done\)/i.test(line)) return 'done';
+  return /\(owner:\s*not doing it\)/i.test(line) ? 'skipped' : null;
+};
+const isOwnerBox = (line: string) =>
+  isOpenBox(line) || getOwnerNote(line) !== null;
 const isForOwner = (line: string) =>
   (line.match(/\(who:([^)]*)\)/i)?.[1] ?? '')
     .split(/[,/]/)
     .some((who) => who.trim().toLowerCase() === 'owner');
 
-/** Reads a PR's `📋 Status` comment: its session, state, unchecked owner items, good-to-know notes and latest screenshots. */
+/** Reads a PR's `📋 Status` comment: its session, state, owner items (unchecked, or ticked from the dashboard), good-to-know notes and latest screenshots. */
 export function parseStatus(body: string, updatedAt: string): PrStatus {
   const sessionUrl = body.match(SESSION_MARKER)?.[1] ?? null;
   const titleLine = lines(body).find((line) =>
@@ -171,19 +194,24 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
   const state = toPlain(heading?.split('·')[1]?.trim() ?? '') || null;
   const all = lines(body);
   const ownerItems = all.flatMap((line, index): OwnerItem[] => {
-    if (!isOpenBox(line) || !isForOwner(line)) return [];
+    if (!isOwnerBox(line) || !isForOwner(line)) return [];
     const depth = line.search(/\S/);
     const after = all.slice(index + 1);
     const end = after.findIndex(
       (next) =>
-        next.trim() === '' || next.search(/\S/) <= depth || isOpenBox(next),
+        next.trim() === '' || next.search(/\S/) <= depth || isOwnerBox(next),
     );
     const nested = end === -1 ? after : after.slice(0, end);
+    const text = bullet(line.replace(OWNER_NOTE, ''));
+    const options = nested.flatMap(toOption).slice(0, MAX_OPTIONS);
     return [
       {
-        text: bullet(line),
-        options: nested.flatMap(toOption).slice(0, MAX_OPTIONS),
+        text,
+        options,
         isMulti: PICK_ANY.test(line),
+        isTask:
+          TO_DO.test(line) || (options.length === 0 && !text.includes('?')),
+        settled: getOwnerNote(line),
       },
     ];
   });
@@ -204,14 +232,80 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
   };
 }
 
+const BOX_LINE = /^(\s*[-*]\s+)\[([ xX])\]\s+(.*?)\r?$/;
+
+/** An owner line's identity across rewrites: its words without the box, the tags or the owner's note, in lower case. */
+export const toItemKey = (line: string) =>
+  line
+    .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
+    .replace(/\s*\(who:[^)]*\)/gi, '')
+    .replace(PICK_ANY, '')
+    .replace(TO_DO, '')
+    .replace(OWNER_NOTE, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.!]+$/, '')
+    .toLowerCase();
+
+const toOwnerBox = (line: string, index: number) => {
+  const match = BOX_LINE.exec(line);
+  if (!match || !isForOwner(line)) return [];
+  return [
+    {
+      index,
+      lead: match[1],
+      rest: match[3],
+      isTicked: match[2] !== ' ',
+      key: toItemKey(line),
+    },
+  ];
+};
+
+/**
+ * The status comment as just edited, with every owner box that was ticked before and is still listed ticked again.
+ * An edit that only unticks one box is the owner changing their mind, and stays.
+ */
+export function keepOwnerTicks(before: string, after: string): string {
+  const old = before.split('\n');
+  const next = after.split('\n');
+  const ticked = new Map(
+    old
+      .flatMap(toOwnerBox)
+      .filter((box) => box.isTicked)
+      .map((box) => [box.key, box] as const),
+  );
+  if (ticked.size === 0) return after;
+  const changed = next.flatMap((line, index) =>
+    line === old[index] ? [] : [index],
+  );
+  const isOwnUntick =
+    old.length === next.length &&
+    changed.length === 1 &&
+    toOwnerBox(old[changed[0]], 0).some((box) => box.isTicked) &&
+    [
+      old[changed[0]].replace(/\[[xX]\]/, '[ ]'),
+      // The dashboard's Undo also takes off the note it wrote.
+      old[changed[0]].replace(/\[[xX]\]/, '[ ]').replace(OWNER_NOTE, ''),
+    ].includes(next[changed[0]]);
+  if (isOwnUntick) return after;
+  return next
+    .map((line, index) => {
+      const [box] = toOwnerBox(line, index);
+      const kept = box && !box.isTicked ? ticked.get(box.key) : undefined;
+      if (!kept) return line;
+      const ending = line.endsWith('\r') ? '\r' : '';
+      return `${box.lead}[x] ${kept.rest}${ending}`;
+    })
+    .join('\n');
+}
 
 const MAX_STEPS = 30;
 const MAX_STEP_IMAGES = 3;
 const MAX_LABEL = 120;
-const MARKDOWN_IMAGE =
-  /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
 const HTML_IMAGE = /<img[^>]*\bsrc=(?:"([^"\s]+)"|'([^'\s]+)'|([^\s>"']+))/gi;
-const MARKUP_TAG = /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
+const MARKUP_TAG =
+  /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
 
 const toImageUrls = (cell: string) =>
   [
@@ -228,22 +322,53 @@ const toImageUrls = (cell: string) =>
     .sort((a, b) => a.at - b.at)
     .map((image) => image.src);
 
+const ROLE_RANK = { before: 0, none: 1, after: 2 } as const;
+
+// A shot whose column doesn't say still says in its file name (`history-mobile-before.png`).
+const getFileRole = (src: string): GalleryImage['role'] => {
+  const name = src.split('?')[0].split('/').pop() ?? '';
+  if (/(^|[-_.])before([-_.]|$)/i.test(name)) return 'before';
+  if (/(^|[-_.])after([-_.]|$)/i.test(name)) return 'after';
+  return null;
+};
+
 const toImages = (cell: string, role: GalleryImage['role']): GalleryImage[] =>
-  toImageUrls(cell).map((src) => ({ src, role }));
+  toImageUrls(cell).map((src) => ({ src, role: role ?? getFileRole(src) }));
+
+/** A step's pictures with Before first and After last, whatever order they were written in. */
+const toOrdered = (images: GalleryImage[]) =>
+  [...images].sort(
+    (a, b) => ROLE_RANK[a.role ?? 'none'] - ROLE_RANK[b.role ?? 'none'],
+  );
 
 // Cut before escaping, so the cut never lands inside `&amp;`.
-const toLabel = (text: string) =>
+const toLabel = (text: string, max = MAX_LABEL) =>
   toPlain(
     text
       .replace(MARKDOWN_IMAGE, '')
-      .replace(MARKUP_TAG, '')
+      .replace(MARKUP_TAG, ' ')
       .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
       .replace(/^\s*#+\s*/, '')
       .replace(/\*\*|__|`/g, '')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, MAX_LABEL),
+      .slice(0, max),
   );
+
+const MAX_NOTE = 240;
+const NOTE_BREAK = /<br\s*\/?>|\s+—\s+/i;
+
+/** A label and the note written after its first `<br>`, or after ` — ` when the label is bold (a plain dash is punctuation). */
+const toTitled = (raw: string) => {
+  const isBold = /^\s*(\*\*|__|<b>)/i.test(raw);
+  const at = isBold ? raw.search(NOTE_BREAK) : raw.search(/<br\s*\/?>/i);
+  if (at === -1) return { label: toLabel(raw), note: null };
+  const rest = raw.slice(at).replace(NOTE_BREAK, '');
+  return {
+    label: toLabel(raw.slice(0, at)),
+    note: toLabel(rest, MAX_NOTE) || null,
+  };
+};
 
 const toCells = (line: string) =>
   line
@@ -272,14 +397,15 @@ const screenshotLines = (body: string) => {
 const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
   const [first = '', ...rest] = cells;
   if (toImageUrls(first).length === 0) {
-    const images = rest
-      .flatMap((cell, index) =>
+    const images = toOrdered(
+      rest.flatMap((cell, index) =>
         toImages(cell, getRole(headings[index + 1] ?? '')),
-      )
-      .slice(0, MAX_STEP_IMAGES);
+      ),
+    ).slice(0, MAX_STEP_IMAGES);
+    const { label, note } = toTitled(first);
     return images.length === 0
       ? []
-      : [{ label: toLabel(first) || 'Screenshot', images }];
+      : [{ label: label || 'Screenshot', note, images }];
   }
   return cells.flatMap((cell, index) => {
     const images = toImages(cell, getRole(headings[index] ?? ''));
@@ -288,7 +414,8 @@ const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
       : [
           {
             label: toLabel(headings[index] ?? '') || 'Screenshot',
-            images: images.slice(0, MAX_STEP_IMAGES),
+            note: null,
+            images: toOrdered(images).slice(0, MAX_STEP_IMAGES),
           },
         ];
   });
@@ -311,20 +438,24 @@ export function parseGallery(body: string | null): GalleryStep[] {
           steps: [...acc.steps, ...toRowSteps(cells, acc.headings)],
         };
       }
-      const images = toImages(line, null).slice(0, MAX_STEP_IMAGES);
+      const images = toOrdered(toImages(line, null)).slice(0, MAX_STEP_IMAGES);
       if (images.length > 0) {
-        const alt = /!\[([^\]]*)\]/.exec(line)?.[1] ?? '';
+        const alt = toLabel(/!\[([^\]]*)\]/.exec(line)?.[1] ?? '');
+        const titled = alt ? { label: alt, note: null } : toTitled(acc.caption);
         return {
           steps: [
             ...acc.steps,
-            { label: toLabel(alt) || acc.caption || 'Screenshot', images },
+            { label: titled.label || 'Screenshot', note: titled.note, images },
           ],
           headings: [],
           caption: '',
         };
       }
-      const words = toLabel(line);
-      return { ...acc, headings: [], caption: words || acc.caption };
+      return {
+        ...acc,
+        headings: [],
+        caption: toLabel(line) ? line : acc.caption,
+      };
     },
     { steps: [], headings: [], caption: '' },
   );
@@ -336,6 +467,8 @@ interface Session {
   title: string;
   url: string | null;
   prs: InboxPr[];
+  /** The time the inbox is built for, so a held PR's six hours are counted from one clock. */
+  now: number;
 }
 
 type Standing = 'needsYou' | 'needsFixing' | 'inProgress' | 'waiting';
@@ -347,8 +480,23 @@ const STANDING_ORDER: Standing[] = [
   'waiting',
 ];
 
+const HELD_FOR_MS = 6 * 60 * 60 * 1000;
+
+/** A PR whose status says it's still in progress asks nothing yet, for up to six hours since that status. */
+export const isStillWorking = (status: PrStatus | null, now = Date.now()) =>
+  /^in progress\b/i.test(status?.state ?? '') &&
+  now - Date.parse(status?.updatedAt ?? '') <= HELD_FOR_MS;
+
+const waitingItems = (pr: InboxPr, now: number) =>
+  isStillWorking(pr.status, now)
+    ? []
+    : (pr.status?.ownerItems ?? []).filter((item) => item.settled === null);
+
 const ownerCount = (session: Session) =>
-  session.prs.reduce((sum, pr) => sum + (pr.status?.ownerItems.length ?? 0), 0);
+  session.prs.reduce(
+    (sum, pr) => sum + waitingItems(pr, session.now).length,
+    0,
+  );
 
 const isBroken = (pr: InboxPr) =>
   pr.ci === 'red' || pr.labels.includes('merge-conflict');
@@ -357,7 +505,7 @@ const getStanding = (session: Session): Standing => {
   if (ownerCount(session) > 0) return 'needsYou';
   if (session.prs.some(isBroken)) return 'needsFixing';
   const isMoving = session.prs.some(
-    (pr) => pr.ci === 'running' || /progress/i.test(pr.status?.state ?? ''),
+    (pr) => pr.ci === 'running' || isStillWorking(pr.status, session.now),
   );
   return isMoving ? 'inProgress' : 'waiting';
 };
@@ -460,7 +608,7 @@ const stackTree = (session: Session, all: readonly InboxPr[]): string[] => {
 
 const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
   const needs = session.prs.flatMap((pr) =>
-    (pr.status?.ownerItems ?? []).flatMap((item) => [
+    waitingItems(pr, session.now).flatMap((item) => [
       `- [#${pr.number}](${pr.url}) ${item.text}`,
       ...item.options.map(
         (option) =>
@@ -534,7 +682,10 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
 };
 
 /** Groups open PRs by the session that drives them, sessions that need the owner first. */
-export function groupSessions(prs: readonly InboxPr[]): Session[] {
+export function groupSessions(
+  prs: readonly InboxPr[],
+  now = Date.now(),
+): Session[] {
   const sorted = [...prs].sort((a, b) => a.number - b.number);
   const sessions = sorted.reduce<Map<string, Session>>((acc, pr) => {
     const key = pr.status
@@ -550,6 +701,7 @@ export function groupSessions(prs: readonly InboxPr[]): Session[] {
       title,
       url: key === 'none' ? null : key,
       prs: [...(found?.prs ?? []), pr],
+      now,
     });
   }, new Map());
   return [...sessions.values()].sort(
@@ -564,7 +716,7 @@ export function groupSessions(prs: readonly InboxPr[]): Session[] {
 
 /** The inbox issue's body: a one-line switchboard per session, then one folded section per session. */
 export function buildInbox(prs: readonly InboxPr[], now: string): string {
-  const sessions = groupSessions(prs);
+  const sessions = groupSessions(prs, Date.parse(now));
   const total = sessions.reduce((sum, session) => sum + ownerCount(session), 0);
   const headline =
     total === 0

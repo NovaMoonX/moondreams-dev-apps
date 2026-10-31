@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
 
 import FallbackImage from '@/components/FallbackImage';
 import { useSheetHistory } from '@/hooks/useBackHistory';
@@ -15,6 +15,8 @@ export interface ViewerPicture {
 
 export interface ViewerSlide {
   caption: string | null;
+  /** A longer line about the slide, laid over the bottom of the picture until dismissed; null for none. */
+  note?: string | null;
   pictures: ViewerPicture[];
 }
 
@@ -30,6 +32,7 @@ const SWIPE_PX = 50;
 function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
   const [index, setIndex] = useState(startIndex);
   const [pick, setPick] = useState({ slide: startIndex, picture: 0 });
+  const [hiddenNotes, setHiddenNotes] = useState<number[]>([]);
   const isNarrow = useMediaQuery().isBelow('sm');
   const swipeStart = useRef<number | null>(null);
   const didSwipe = useRef(false);
@@ -82,6 +85,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
   }, [step, onDialogClose]);
 
   if (!slide) return null;
+  const isNoteHidden = hiddenNotes.includes(index);
   const shownPicture = pick.slide === index ? pick.picture : 0;
   const shown = isNarrow
     ? slide.pictures.slice(shownPicture, shownPicture + 1)
@@ -97,9 +101,24 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
       className='fixed inset-0 z-100 flex flex-col bg-black text-white outline-none'
     >
       <div className='flex items-center gap-2 px-4 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]'>
-        <p className='min-w-0 flex-1 truncate text-sm'>
+        <p className='line-clamp-2 min-w-0 flex-1 text-sm [overflow-wrap:anywhere]'>
           {slide.caption ?? 'Screenshot'}
         </p>
+        {slide.note && isNoteHidden ? (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='icon'
+            rounded='full'
+            aria-label='Show the note'
+            className="relative text-white! before:absolute before:-inset-1.5 before:content-['']"
+            onClick={() =>
+              setHiddenNotes((current) => current.filter((at) => at !== index))
+            }
+          >
+            <Info className='size-5' aria-hidden='true' />
+          </Button>
+        ) : null}
         {count > 1 ? (
           <span className='text-xs tabular-nums text-white/70'>
             {index + 1} / {count}
@@ -145,8 +164,8 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
               key={picture.src}
               className='flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-2'
             >
-              {!isNarrow && picture.label ? (
-                <figcaption className='text-xs text-white/70'>
+              {picture.label ? (
+                <figcaption className='rounded-full bg-white/15 px-2 py-0.5 text-xs font-medium text-white'>
                   {picture.label}
                 </figcaption>
               ) : null}
@@ -164,6 +183,24 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
             </figure>
           ))}
         </div>
+        {slide.note && !isNoteHidden ? (
+          <div className='absolute inset-x-3 bottom-[max(1rem,env(safe-area-inset-bottom))] mx-auto flex max-w-md items-start gap-2 rounded-xl bg-black/80 p-3 text-sm text-white shadow-lg backdrop-blur'>
+            <p className='min-w-0 flex-1 [overflow-wrap:anywhere]'>
+              {slide.note}
+            </p>
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              rounded='full'
+              aria-label='Hide the note'
+              className="relative -my-1 size-7 min-w-7 p-0 text-white! before:absolute before:-inset-1.5 before:content-['']"
+              onClick={() => setHiddenNotes((current) => [...current, index])}
+            >
+              <X className='size-4' aria-hidden='true' />
+            </Button>
+          </div>
+        ) : null}
         {count > 1 ? (
           <>
             <Button

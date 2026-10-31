@@ -28,6 +28,7 @@ import PipelineSheet from './admin/PipelineSheet';
 import PipelineView from './admin/PipelineView';
 import { buildPipeline, getPipelineSummary } from './admin/pipelineUtils';
 import { usePipelineAnswers } from './admin/usePipelineAnswers';
+import { usePipelineSettle } from './admin/usePipelineSettle';
 import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
 
@@ -54,10 +55,12 @@ function AdminDashboard() {
   // Live, unlike the rest of the dashboard: the sessions change while the owner watches.
   const pipeline = usePipelineSync(isAdmin);
   const now = useNow(60_000);
+  const pipelineSettle = usePipelineSettle(pipeline.settled);
   const pipelineGroups = buildPipeline(
     pipeline.sessions,
     pipeline.inbox,
     pipeline.answered,
+    pipelineSettle.asks,
     now,
   );
   const pipelineSummary = getPipelineSummary(pipelineGroups);
@@ -189,6 +192,7 @@ function AdminDashboard() {
       entry={openEntry}
       onClose={() => setOpenEntryKey(null)}
       answers={pipelineAnswers}
+      settle={pipelineSettle}
     />
   );
 

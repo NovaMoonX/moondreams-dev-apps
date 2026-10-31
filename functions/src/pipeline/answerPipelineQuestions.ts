@@ -3,7 +3,11 @@ import { createHash } from 'node:crypto';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
-import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import {
+  HttpsError,
+  onCall,
+  type CallableRequest,
+} from 'firebase-functions/v2/https';
 
 import { isRunningInEmulator } from '../emulator.js';
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
@@ -408,26 +412,30 @@ const postAnswers = async (
   }
 };
 
+const assertAdmin = (auth: CallableRequest['auth']) => {
+  const email = auth?.token.email?.trim().toLowerCase() ?? null;
+  const isAdminEmail = email === ADMIN_EMAIL && auth?.token.email_verified === true;
+  if (!auth || (!isAdminEmail && auth.token.admin !== true)) {
+    throw new HttpsError(
+      'permission-denied',
+      'Only the admin can answer from the dashboard.',
+    );
+  }
+};
+
+const CALLABLE_OPTIONS = {
+  region: 'us-central1',
+  maxInstances: 5,
+  cors: [
+    'https://apps.moondreams.dev',
+    /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
+  ],
+};
+
 export const answerPipelineQuestions = onCall(
-  {
-    region: 'us-central1',
-    maxInstances: 5,
-    timeoutSeconds: 120,
-    cors: [
-      'https://apps.moondreams.dev',
-      /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
-    ],
-  },
+  { ...CALLABLE_OPTIONS, timeoutSeconds: 120 },
   async (request) => {
-    const email = request.auth?.token.email?.trim().toLowerCase() ?? null;
-    const isAdminEmail =
-      email === ADMIN_EMAIL && request.auth?.token.email_verified === true;
-    if (!request.auth || (!isAdminEmail && request.auth.token.admin !== true)) {
-      throw new HttpsError(
-        'permission-denied',
-        'Only the admin can answer from the dashboard.',
-      );
-    }
+    assertAdmin(request.auth);
 
     const answers = readAnswers(request.data);
     const attempt = readAttempt(request.data);
@@ -488,5 +496,197 @@ export const answerPipelineQuestions = onCall(
     );
     await recordAnswered(answers, results);
     return { isSample: false, results };
+  },
+);
+
+type Outcome = 'done' | 'skipped' | 'open';
+
+interface SettledAsk {
+  /** The pull request whose status comment lists it, or null for a line a session raised in chat. */
+  prNumber: number | null;
+  sessionId: string | null;
+  /** The ask's words exactly as the dashboard showed them. */
+  text: string;
+  outcome: Exclude<Outcome, 'open'>;
+  at: number;
+}
+
+const OUTCOMES: Outcome[] = ['done', 'skipped', 'open'];
+const OWNER_NOTES: Record<Outcome, string> = {
+  done: ' (owner: done)',
+  skipped: ' (owner: not doing it)',
+  open: '',
+};
+const MAX_SETTLED = 300;
+const MAX_STATUS_PAGES = 5;
+const STATUS_MARKER = '<!-- pr-status -->';
+const TRUSTED = new Set(['OWNER', 'MEMBER', 'COLLABORATOR']);
+const SESSION_ID = /^[A-Za-z0-9_-]{1,80}$/;
+const BOX_LINE = /^(\s*[-*]\s+)\[([ xX])\]\s+(.*?)(\r?)$/;
+
+// The same reading of an owner line as the inbox builder's `toItemKey`, so a rewrite with the same words still matches.
+const toItemKey = (line: string) =>
+  line
+    .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
+    .replace(/\s*\(who:[^)]*\)/gi, '')
+    .replace(/\s*\(pick any\)/i, '')
+    .replace(/\s*\(to do\)/i, '')
+    .replace(/\s*\(owner:[^)]*\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.!]+$/, '')
+    .toLowerCase();
+
+const isForOwner = (line: string) =>
+  (line.match(/\(who:([^)]*)\)/i)?.[1] ?? '')
+    .split(/[,/]/)
+    .some((who) => who.trim().toLowerCase() === 'owner');
+
+const readSettle = (data: unknown) => {
+  if (!isObject(data)) throw invalid('Bad request.');
+  const { prNumber, sessionId, outcome } = data;
+  // As long as the inbox lets an owner line be.
+  const text = readText(data.text, 1000);
+  if (text === null) throw invalid('Say which ask this is.');
+  if (typeof outcome !== 'string' || !OUTCOMES.includes(outcome as Outcome)) {
+    throw invalid('Bad outcome.');
+  }
+  const isPr =
+    typeof prNumber === 'number' && Number.isInteger(prNumber) && prNumber > 0;
+  const isSession = typeof sessionId === 'string' && SESSION_ID.test(sessionId);
+  if (isPr === isSession) throw invalid('Name a pull request or a session.');
+  return {
+    prNumber: isPr ? prNumber : null,
+    sessionId: isSession ? sessionId : null,
+    text,
+    outcome: outcome as Outcome,
+  };
+};
+
+/** The status comment with the owner's line for `text` ticked with a note, or unticked; null when no such line is left. */
+const toSettledBody = (body: string, text: string, outcome: Outcome) => {
+  const key = toItemKey(text);
+  const lines = body.split('\n');
+  const index = lines.findIndex(
+    (line) => BOX_LINE.test(line) && isForOwner(line) && toItemKey(line) === key,
+  );
+  if (index === -1) return null;
+  const [, lead, , rest, ending] = BOX_LINE.exec(lines[index]) ?? [];
+  const words = rest.replace(/\s*\(owner:[^)]*\)/gi, '');
+  const box = outcome === 'open' ? '[ ]' : '[x]';
+  return lines
+    .map((line, at) =>
+      at === index ? `${lead}${box} ${words}${OWNER_NOTES[outcome]}${ending}` : line,
+    )
+    .join('\n');
+};
+
+const findStatusComment = async (token: string, prNumber: number, page = 1): Promise<Json | null> => {
+  const response = await githubFetch(
+    token,
+    `/issues/${prNumber}/comments?per_page=100&page=${page}`,
+  );
+  if (!response.ok) throw response;
+  const body: unknown = await response.json();
+  const comments = (Array.isArray(body) ? body : []).filter(isObject);
+  const later =
+    comments.length === 100 && page < MAX_STATUS_PAGES
+      ? await findStatusComment(token, prNumber, page + 1)
+      : null;
+  const own = comments.filter(
+    (comment) =>
+      typeof comment.body === 'string' &&
+      comment.body.trimStart().startsWith(STATUS_MARKER) &&
+      TRUSTED.has(String(comment.author_association)),
+  );
+  return later ?? own.at(-1) ?? null;
+};
+
+/** Ticks, skips or reopens the owner's line in a pull request's status comment; null when it worked. */
+const settleOnGithub = async (
+  token: string,
+  prNumber: number,
+  text: string,
+  outcome: Outcome,
+): Promise<string | null> => {
+  try {
+    const comment = await findStatusComment(token, prNumber);
+    if (comment === null || typeof comment.body !== 'string') {
+      return "That pull request has no status comment any more.";
+    }
+    const next = toSettledBody(comment.body, text, outcome);
+    if (next === null) {
+      return 'The session already changed that line. Open the PR to see it.';
+    }
+    if (next === comment.body) return null;
+    const saved = await githubFetch(token, `/issues/comments/${String(comment.id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ body: next }),
+    });
+    if (saved.ok) return null;
+    throw saved;
+  } catch (error) {
+    if (!(error instanceof Response)) {
+      logger.warn('settlePipelineAsk: request failed', getErrorName(error));
+      return "Couldn't reach GitHub.";
+    }
+    logger.warn('settlePipelineAsk: GitHub refused', error.status);
+    if (isBusy(error)) return BUSY;
+    if (error.status === 401 || error.status === 403) {
+      return forgetAndRefuse(error, 'edit comments on pull requests');
+    }
+    return "Couldn't update the status comment.";
+  }
+};
+
+const isSameAsk = (a: Omit<SettledAsk, 'outcome' | 'at'>) => (b: SettledAsk) =>
+  a.prNumber === b.prNumber && a.sessionId === b.sessionId && a.text === b.text;
+
+const recordSettled = async (ask: Omit<SettledAsk, 'outcome' | 'at'>, outcome: Outcome) => {
+  const db = getFirestore();
+  const ref = db.doc('pipeline/settled');
+  const now = Date.now();
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const stored = snapshot.get('asks') as unknown;
+    const kept = (Array.isArray(stored) ? (stored as SettledAsk[]) : []).filter(
+      (other) => !isSameAsk(ask)(other),
+    );
+    const asks =
+      outcome === 'open' ? kept : [...kept, { ...ask, outcome, at: now }];
+    transaction.set(ref, {
+      asks: asks.sort((a, b) => b.at - a.at).slice(0, MAX_SETTLED),
+      updatedAt: now,
+    });
+  });
+  return now;
+};
+
+/** Marks one ask as done or not being done, or opens it again: on GitHub when a status comment lists it, and for the dashboard. */
+export const settlePipelineAsk = onCall(
+  { ...CALLABLE_OPTIONS, timeoutSeconds: 60 },
+  async (request) => {
+    assertAdmin(request.auth);
+    const { prNumber, sessionId, text, outcome } = readSettle(request.data);
+    if (prNumber !== null && !isRunningInEmulator()) {
+      const token = await readSecret('PIPELINE_GITHUB_TOKEN', AbortSignal.timeout(10_000));
+      if (token === null) {
+        throw new HttpsError(
+          'failed-precondition',
+          "Answering from the dashboard isn't set up yet.",
+        );
+      }
+      const error = await settleOnGithub(token, prNumber, text, outcome);
+      if (error !== null) return { ok: false, error, at: null };
+    }
+    try {
+      const at = await recordSettled({ prNumber, sessionId, text }, outcome);
+      return { ok: true, error: null, at };
+    } catch (error) {
+      // GitHub already holds the change, which the next inbox rebuild carries; only a 🚩 line has nothing to fall back on.
+      logger.error('settlePipelineAsk: record failed', getErrorName(error));
+      if (prNumber === null) throw new HttpsError('internal', "Couldn't save that.");
+      return { ok: true, error: null, at: Date.now() };
+    }
   },
 );
