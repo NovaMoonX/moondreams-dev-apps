@@ -16,15 +16,16 @@ export function needsMotionPermission() {
 
 const readStoredShakeOn = () => {
   try {
-    return localStorage.getItem(SHAKE_ON_KEY) === 'true';
+    return localStorage.getItem(SHAKE_ON_KEY);
   } catch {
-    return false;
+    return null;
   }
 };
 
-/** Whether motion events can be listened for now: always where no permission exists, otherwise once the person has allowed it. */
+/** Whether shake is on: never after the person turned it off, otherwise always where no permission exists, and on iPhones once allowed. */
 export function isMotionAllowed() {
-  return !needsMotionPermission() || readStoredShakeOn();
+  const stored = readStoredShakeOn();
+  return stored !== 'false' && (!needsMotionPermission() || stored === 'true');
 }
 
 /** Asks the device for motion access (call it from a tap) and remembers a yes. */
@@ -42,4 +43,13 @@ export async function requestMotionPermission() {
     }
   }
   return isGranted;
+}
+
+/** Turns shake on or off for this device; a no-op where storage is blocked. */
+export function setShakeOn(isOn: boolean) {
+  try {
+    localStorage.setItem(SHAKE_ON_KEY, String(isOn));
+  } catch {
+    // The choice still holds until the page closes.
+  }
 }

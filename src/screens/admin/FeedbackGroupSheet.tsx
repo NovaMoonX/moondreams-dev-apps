@@ -81,6 +81,7 @@ function FeedbackGroupSheet({
         />
         {error ? <InlineNotice tone='warning'>{error}</InlineNotice> : null}
         <ModalFooterActions
+          note={canSave ? undefined : 'Pick or name a group'}
           leftActions={
             currentGroupId ? (
               <Button

@@ -23,14 +23,10 @@ interface FeedbackConversationProps {
   feedback: Feedback;
   /** Whose side is reading: their own replies sit on the right. */
   viewer: 'sender' | 'admin';
-  onReply: (text: string) => Promise<void>;
-  replyLabel: string;
-  sendLabel: string;
-  /** A quiet line under the reply box. */
-  replyNote?: string;
 }
 
-function ContextDetails({ feedback }: { feedback: Feedback }) {
+/** Where the message was sent from, for the owner. */
+export function FeedbackContextDetails({ feedback }: { feedback: Feedback }) {
   const { context } = feedback;
   const rows = [
     ['Where', getContextPlaceName(context)],
@@ -40,7 +36,7 @@ function ContextDetails({ feedback }: { feedback: Feedback }) {
     ['Window', `${context.viewportWidth} × ${context.viewportHeight}`],
   ];
   return (
-    <dl className='text-muted-foreground mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs'>
+    <dl className='text-muted-foreground grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs'>
       {rows.map(([term, detail]) => (
         <div key={term} className='contents'>
           <dt className='font-medium'>{term}</dt>
@@ -52,37 +48,10 @@ function ContextDetails({ feedback }: { feedback: Feedback }) {
 }
 
 /** The original message, the replies and status changes, and a reply box; the sender's inbox and the admin's feedback view share it. */
-function FeedbackConversation({
-  feedback,
-  viewer,
-  onReply,
-  replyLabel,
-  sendLabel,
-  replyNote,
-}: FeedbackConversationProps) {
+function FeedbackConversation({ feedback, viewer }: FeedbackConversationProps) {
   const now = useNow(60_000);
   const { messages, status } = useFeedbackMessages(feedback.id);
-  const [reply, setReply] = useState('');
-  const [isSending, setIsSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const isAdminView = viewer === 'admin';
-
-  const handleSend = async () => {
-    const text = reply.trim();
-    if (!text) return;
-    setIsSending(true);
-    setError(null);
-    try {
-      await onReply(text);
-      setReply('');
-    } catch {
-      setError(
-        "We couldn't send that just now. Your reply is still here, so check your connection and try again.",
-      );
-    } finally {
-      setIsSending(false);
-    }
-  };
 
   return (
     <div className='space-y-4'>
@@ -96,9 +65,7 @@ function FeedbackConversation({
         <p className='text-foreground mt-2 text-sm wrap-break-word whitespace-pre-wrap'>
           {feedback.text}
         </p>
-        {isAdminView ? (
-          <ContextDetails feedback={feedback} />
-        ) : (
+        {isAdminView ? null : (
           <p className='text-muted-foreground mt-3 text-xs'>
             Sent from {getContextPlaceName(feedback.context)} · version{' '}
             {feedback.context.siteVersion}
@@ -152,34 +119,70 @@ function FeedbackConversation({
           );
         })}
       </ul>
+    </div>
+  );
+}
 
-      <div className='space-y-2'>
-        <Field label={replyLabel}>
-          {() => (
-            <Textarea
-              variant='outline'
-              rows={3}
-              maxLength={MAX_REPLY_LENGTH}
-              value={reply}
-              onChange={(event) => setReply(event.target.value)}
-            />
-          )}
-        </Field>
-        {error ? <InlineNotice tone='warning'>{error}</InlineNotice> : null}
-        <div className='flex items-center justify-between gap-3'>
-          <p className='text-muted-foreground min-w-0 flex-1 text-xs'>
-            {replyNote}
-          </p>
-          <Button
-            type='button'
-            size='sm'
-            disabled={reply.trim().length === 0}
-            loading={isSending}
-            onClick={() => void handleSend()}
-          >
-            {sendLabel}
-          </Button>
-        </div>
+interface FeedbackReplyBarProps {
+  onReply: (text: string) => Promise<void>;
+  label: string;
+  sendLabel: string;
+  /** A quiet line under the reply box. */
+  note?: string;
+}
+
+/** The reply box, pinned in a sheet's footer so it stays on screen beside the conversation it answers. */
+export function FeedbackReplyBar({
+  onReply,
+  label,
+  sendLabel,
+  note,
+}: FeedbackReplyBarProps) {
+  const [reply, setReply] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSend = async () => {
+    const text = reply.trim();
+    if (!text) return;
+    setIsSending(true);
+    setError(null);
+    try {
+      await onReply(text);
+      setReply('');
+    } catch {
+      setError(
+        "We couldn't send that just now. Your reply is still here, so check your connection and try again.",
+      );
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  return (
+    <div className='space-y-2 px-6 pt-3 pb-[calc(1rem+env(safe-area-inset-bottom))]'>
+      <Field label={label}>
+        {() => (
+          <Textarea
+            variant='outline'
+            rows={2}
+            maxLength={MAX_REPLY_LENGTH}
+            value={reply}
+            onChange={(event) => setReply(event.target.value)}
+          />
+        )}
+      </Field>
+      {error ? <InlineNotice tone='warning'>{error}</InlineNotice> : null}
+      <div className='flex items-center justify-between gap-3'>
+        <p className='text-muted-foreground min-w-0 flex-1 text-xs'>{note}</p>
+        <Button
+          type='button'
+          disabled={reply.trim().length === 0}
+          loading={isSending}
+          onClick={() => void handleSend()}
+        >
+          {sendLabel}
+        </Button>
       </div>
     </div>
   );

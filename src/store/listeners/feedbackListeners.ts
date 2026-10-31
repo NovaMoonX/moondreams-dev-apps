@@ -17,7 +17,9 @@ import type {
 } from '@/lib/feedback/types';
 import { createFirestoreCollectionListener } from '@/store/listeners/createFirestoreCollectionListener';
 
-const ALL_FEEDBACK_LIMIT = 300;
+// The badge counts up to this many; the UI shows the cap as "99+".
+export const UNREAD_FEEDBACK_LIMIT = 100;
+export const ALL_FEEDBACK_LIMIT = 300;
 
 const normalize = (id: string, data: unknown): Feedback => {
   const stored = data as Partial<Feedback>;
@@ -56,6 +58,7 @@ export function startAdminUnreadFeedbackListener(
     query: query(
       collection(db, 'feedback'),
       where('isUnreadByAdmin', '==', true),
+      limit(UNREAD_FEEDBACK_LIMIT),
     ),
     normalize,
     onData: (items) => onChange(items.length),

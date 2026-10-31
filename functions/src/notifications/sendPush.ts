@@ -33,11 +33,19 @@ export interface PushContent {
   url: string;
   /** How long from now the push still matters. FCM drops it undelivered after that, so a phone that was off never shows it late. */
   usefulForMs: number;
+  /** 'high' wakes a sleeping phone (a reminder, a reply); 'normal' waits for it to be awake. */
+  urgency: 'high' | 'normal';
 }
+
+// FCM holds a message four weeks at most and rejects a longer TTL.
+const MAX_PUSH_TTL_SECONDS = 2_419_200;
 
 /** The seconds FCM holds an undelivered push for: the window rounded up, at least one (FCM's default is four weeks, and zero would mean "now or never"). */
 export function toPushTtlSeconds(usefulForMs: number): number {
-  return Math.max(1, Math.ceil(usefulForMs / 1000));
+  return Math.min(
+    MAX_PUSH_TTL_SECONDS,
+    Math.max(1, Math.ceil(usefulForMs / 1000)),
+  );
 }
 
 /** The error codes with which FCM says a device token will never work again: the app was removed, the browser's permission was withdrawn or the token was replaced. */
@@ -109,7 +117,7 @@ export async function sendPushToUsers(
       webpush: {
         headers: {
           TTL: String(toPushTtlSeconds(content.usefulForMs)),
-          Urgency: 'high',
+          Urgency: content.urgency,
         },
         fcmOptions: { link: content.url },
       },

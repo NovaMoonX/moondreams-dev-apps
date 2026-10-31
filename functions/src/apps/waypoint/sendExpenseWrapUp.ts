@@ -54,6 +54,7 @@ async function wrapUpTrip(firestore: Firestore, tripId: string, trip: DocumentDa
     ...content,
     url: toAppUrl(getTripLink(tripId, 'expenses')) ?? APP_ORIGIN,
     usefulForMs: WRAP_UP_USEFUL_FOR_MS,
+    urgency: 'normal',
   });
   return true;
 }

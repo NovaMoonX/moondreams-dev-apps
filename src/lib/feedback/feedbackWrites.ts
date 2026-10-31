@@ -41,17 +41,19 @@ export function buildFeedbackContext({
   };
 }
 
-/** Sends a new bug, idea or question and returns its id. */
+/** Sends a new bug, idea or question and returns its id. The admin's own note is not unread to the admin. */
 export async function sendFeedback({
   user,
   kind,
   text,
   context,
+  isAdmin = false,
 }: {
   user: User;
   kind: FeedbackKind;
   text: string;
   context: FeedbackContext;
+  isAdmin?: boolean;
 }): Promise<string> {
   const id = generateUuid();
   const now = Date.now();
@@ -68,7 +70,7 @@ export async function sendFeedback({
     status: 'new',
     context,
     isUnreadBySender: false,
-    isUnreadByAdmin: true,
+    isUnreadByAdmin: !isAdmin,
     createdAt: now,
     lastActivityAt: now,
     groupId: null,

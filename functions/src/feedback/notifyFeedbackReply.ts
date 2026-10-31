@@ -69,6 +69,7 @@ export const notifyFeedbackReply = onDocumentCreated(
             toAppUrl(`/inbox?feedback=${event.params.feedbackId}`) ??
             APP_ORIGIN,
           usefulForMs: REPLY_USEFUL_FOR_MS,
+          urgency: 'high',
         },
       );
       logger.info('Feedback reply pushed', { devices });

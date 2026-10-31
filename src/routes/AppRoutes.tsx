@@ -54,7 +54,8 @@ export const router = createBrowserRouter([
         path: 'waypoint',
         HydrateFallback: Loading,
         lazy: async () => {
-          const { default: Waypoint } = await import('@apps/waypoint/Waypoint');
+          const { default: Waypoint } =
+            await import('@apps/waypoint/Waypoint');
           return { Component: Waypoint };
         },
       },
@@ -78,8 +79,7 @@ export const router = createBrowserRouter([
         path: 'runway',
         HydrateFallback: Loading,
         lazy: async () => {
-          const { default: RunwayPage } =
-            await import('@apps/runway/RunwayPage');
+          const { default: RunwayPage } = await import('@apps/runway/RunwayPage');
           return {
             Component: () => (
               <ProtectedRoute appId='runway' allowSignedOut>
@@ -111,8 +111,7 @@ export const router = createBrowserRouter([
         path: 'admin',
         HydrateFallback: Loading,
         lazy: async () => {
-          const { default: AdminDashboard } =
-            await import('@screens/AdminDashboard');
+          const { default: AdminDashboard } = await import('@screens/AdminDashboard');
           return {
             Component: () => (
               <ProtectedRoute requireAdmin>
@@ -142,8 +141,7 @@ export const router = createBrowserRouter([
         path: 'unauthorized',
         HydrateFallback: Loading,
         lazy: async () => {
-          const { default: Unauthorized } =
-            await import('@screens/Unauthorized');
+          const { default: Unauthorized } = await import('@screens/Unauthorized');
           return { Component: Unauthorized };
         },
       },

@@ -77,6 +77,11 @@ assert.equal(
   'an expired window still sends for one second at most',
 );
 assert.equal(toPushTtlSeconds(-5000), 1, 'a negative window is clamped');
+assert.equal(
+  toPushTtlSeconds(90 * 24 * 60 * 60 * 1000),
+  2_419_200,
+  "a window past FCM's four weeks is clamped",
+);
 
 const listFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((name) => {
@@ -123,12 +128,16 @@ const clientFiles = sourceFiles('src', ['.ts', '.tsx']);
 functionFiles
   .filter((path) => !path.endsWith('sendPush.ts'))
   .forEach((path) =>
-    getCalls(read(path), 'sendPushToUsers').forEach((call) =>
+    getCalls(read(path), 'sendPushToUsers').forEach((call) => {
       assert.ok(
         call.includes('usefulForMs'),
         `${rel(path)}: a sendPushToUsers call has no usefulForMs. Add one named constant next to the sender saying how long the push still matters (FCM turns it into the push's TTL).`,
-      ),
-    ),
+      );
+      assert.ok(
+        call.includes('urgency'),
+        `${rel(path)}: a sendPushToUsers call has no urgency. Say 'high' only for what the person must see now (a reminder, a reply), else 'normal'.`,
+      );
+    }),
   );
 
 // Every scheduled reminder declares it too.

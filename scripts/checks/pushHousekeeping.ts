@@ -246,7 +246,7 @@ const pushed = async (
     firestore as never,
     messaging as never,
     Object.keys(tokensByUid),
-    { title: 't', body: 'b', url: 'https://apps.moondreams.dev/pinch', usefulForMs: 60_000 },
+    { title: 't', body: 'b', url: 'https://apps.moondreams.dev/pinch', usefulForMs: 60_000, urgency: 'normal' },
   );
   return { count, sent: batches.at(-1) ?? [], updates };
 };

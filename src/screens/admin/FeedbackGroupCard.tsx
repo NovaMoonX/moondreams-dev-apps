@@ -25,10 +25,11 @@ import SendToClaudeButton from './SendToClaudeButton';
 
 const { option } = DropdownMenuFactories;
 
-const MENU_ITEMS = [
+const BASE_MENU_ITEMS = [
   option({ label: 'Rename group', value: 'rename' }),
   option({ label: 'Remove group', value: 'remove' }),
 ];
+const MARK_DONE_ITEM = option({ label: 'Mark all done', value: 'done' });
 
 interface FeedbackGroupCardProps {
   group: FeedbackGroup;
@@ -37,7 +38,7 @@ interface FeedbackGroupCardProps {
   onRemoved: () => void;
 }
 
-/** The group the list is filtered to: its name and count, renaming and removing it (the feedback stays), marking all of it done, and sending it to Claude. */
+/** The group the list is filtered to: its name and count, renaming and removing it (the feedback stays), marking all of it done from its menu, and sending it to Claude. */
 function FeedbackGroupCard({
   group,
   items,
@@ -52,6 +53,9 @@ function FeedbackGroupCard({
   const openCount = items.filter(
     (item) => item.status !== 'done' && item.status !== 'wont-do',
   ).length;
+
+  const menuItems =
+    openCount > 0 ? [MARK_DONE_ITEM, ...BASE_MENU_ITEMS] : BASE_MENU_ITEMS;
 
   const run = async (write: () => Promise<unknown>, message: string) => {
     setIsBusy(true);
@@ -97,9 +101,14 @@ function FeedbackGroupCard({
 
   const handleMarkDone = async () => {
     if (!user) return;
+    const people = new Set(
+      items
+        .filter((item) => item.status !== 'done' && item.status !== 'wont-do')
+        .map((item) => item.authorEmail ?? item.authorName ?? item.id),
+    ).size;
     const isConfirmed = await confirm({
       title: 'Mark all done',
-      message: `This marks ${openCount} ${openCount === 1 ? 'item' : 'items'} done, and each sender is told.`,
+      message: `This marks ${openCount} ${openCount === 1 ? 'item' : 'items'} done. ${people} ${people === 1 ? 'person' : 'people'} will see it marked done.`,
       confirmText: 'Mark all done',
     });
     if (!isConfirmed) return;
@@ -120,25 +129,18 @@ function FeedbackGroupCard({
           </p>
         </div>
         <EllipsisDropdown
-          items={MENU_ITEMS}
+          items={menuItems}
           variant='tertiary'
+          className='size-10'
           ariaLabel={`Actions for ${group.name}`}
           onItemSelect={(value) => {
             if (value === 'rename') setNameDraft(group.name);
             if (value === 'remove') void handleRemove();
+            if (value === 'done') void handleMarkDone();
           }}
         />
       </div>
       <div className='mt-3 space-y-3'>
-        <Button
-          type='button'
-          variant='secondary'
-          className='w-full'
-          disabled={openCount === 0 || isBusy}
-          onClick={() => void handleMarkDone()}
-        >
-          Mark all done
-        </Button>
         <SendToClaudeButton
           target={{ groupId: group.id }}
           lastSessionUrl={group.claudeSessionUrl}

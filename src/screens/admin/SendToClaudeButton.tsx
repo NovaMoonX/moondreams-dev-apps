@@ -1,11 +1,12 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
 import InlineNotice from '@/components/InlineNotice';
 import { copyToClipboard } from '@/utils/clipboardUtils';
+import { useClaudeRoutineStatus } from '@hooks/useClaudeRoutineStatus';
 import { sendFeedbackToClaude } from '@lib/feedback/sendToClaude';
 
 import { CLAUDE_CODE_URL } from './constants';
@@ -15,6 +16,8 @@ interface SendToClaudeButtonProps {
   /** The last session this was sent to. */
   lastSessionUrl: string | null;
   onOpenSettings: () => void;
+  /** A quiet action among details, where the group card's is the filled primary. */
+  isQuiet?: boolean;
 }
 
 type Outcome =
@@ -32,12 +35,24 @@ function SendToClaudeButton({
   target,
   lastSessionUrl,
   onOpenSettings,
+  isQuiet = false,
 }: SendToClaudeButtonProps) {
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
+  const { isConnected } = useClaudeRoutineStatus(true);
   const [isSending, setIsSending] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const sessionUrl = outcome?.kind === 'opened' ? outcome.url : lastSessionUrl;
 
   const handleSend = async () => {
+    if (sessionUrl) {
+      const isConfirmed = await confirm({
+        title: 'Start another session?',
+        message: 'This was already sent to Claude.',
+        confirmText: 'Start another',
+      });
+      if (!isConfirmed) return;
+    }
     // Opened on the tap itself: a tab opened after the wait is blocked on iOS Safari.
     const tab = window.open('about:blank', '_blank');
     if (tab) tab.opener = null;
@@ -65,22 +80,22 @@ function SendToClaudeButton({
     }
   };
 
-  const sessionUrl = outcome?.kind === 'opened' ? outcome.url : lastSessionUrl;
-
   return (
     <div className='space-y-2'>
       <Button
         type='button'
-        variant='secondary'
-        className='w-full'
+        variant={isQuiet ? 'tertiary' : 'primary'}
+        className={isQuiet ? 'w-full justify-start px-0!' : 'w-full'}
         loading={isSending}
         onClick={() => void handleSend()}
       >
         Send to Claude
       </Button>
-      <p className='text-muted-foreground text-xs'>
-        Starts a new Claude Code session with this feedback
-      </p>
+      {isConnected === false ? (
+        <p className='text-muted-foreground text-xs'>
+          Claude isn&apos;t connected yet, so this copies it for you to paste.
+        </p>
+      ) : null}
       {outcome?.kind === 'opened' ? (
         <p className='flex items-center gap-2 text-sm' role='status'>
           <span className='shrink-0'>Opened in Claude</span>

@@ -42,6 +42,7 @@ export const notifyTripIdea = onDocumentCreated(
         ...content,
         url: toAppUrl(getTripLink(event.params.tripId, 'ideas')) ?? APP_ORIGIN,
         usefulForMs: IDEA_USEFUL_FOR_MS,
+        urgency: 'normal',
       });
       logger.info('Trip idea pushed', { devices });
     } catch (error) {

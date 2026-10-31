@@ -44,6 +44,7 @@ export const notifyTripAnnouncement = onDocumentCreated(
         ...content,
         url: toAppUrl(getTripLink(event.params.tripId)) ?? APP_ORIGIN,
         usefulForMs: ANNOUNCEMENT_USEFUL_FOR_MS,
+        urgency: announcement.severity === 'URGENT' ? 'high' : 'normal',
       });
       logger.info('Trip announcement pushed', { devices });
     } catch (error) {

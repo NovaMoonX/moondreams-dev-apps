@@ -1,7 +1,18 @@
-import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
+import {
+  cancelReminder,
+  scheduleReminder,
+} from '@/lib/notifications/scheduleReminder';
 import type { TimelineEvent, TripSpace } from '@apps/waypoint/types';
 import { formatClockTime } from '@/utils/formatUtils';
-import { type EventTimeSource, formatEventArriveBy, getEventArriveByMs, getEventTime } from '@apps/waypoint/utils/tripTime';
+import {
+  type EventTimeSource,
+  formatEventArriveBy,
+  getEventArriveByMs,
+  getEventTime,
+} from '@apps/waypoint/utils/tripTime';
+
+// The sender runs once a minute, so a shorter window would be dropped before it ran.
+const MIN_REMINDER_USEFUL_FOR_MS = 5 * 60_000;
 
 function formatLead(minutes: number) {
   const hours = Math.floor(minutes / 60);
@@ -18,11 +29,20 @@ export type EventReminderSource = EventTimeSource &
   Partial<Pick<TimelineEvent, 'arriveByTime'>> &
   Pick<
     TimelineEvent,
-    'id' | 'title' | 'reminderMinutesBefore' | 'reminderEnabled' | 'assignedMemberIds'
+    | 'id'
+    | 'title'
+    | 'reminderMinutesBefore'
+    | 'reminderEnabled'
+    | 'assignedMemberIds'
   >;
 
-function getReminderTargetUids(trip: TripSpace, assignedMemberIds: string[]): string[] {
-  return assignedMemberIds.length > 0 ? assignedMemberIds : Object.keys(trip.members);
+function getReminderTargetUids(
+  trip: TripSpace,
+  assignedMemberIds: string[],
+): string[] {
+  return assignedMemberIds.length > 0
+    ? assignedMemberIds
+    : Object.keys(trip.members);
 }
 
 /**
@@ -72,7 +92,10 @@ export async function scheduleEventReminder({
       createdBy: uid,
       relatedEntityPath: `apps/waypoint/trips/${trip.id}/events/${event.id}`,
       link: `/waypoint?trip=${encodeURIComponent(trip.id)}`,
-      usefulForMs: event.reminderMinutesBefore * 60_000,
+      usefulForMs: Math.max(
+        event.reminderMinutesBefore * 60_000,
+        MIN_REMINDER_USEFUL_FOR_MS,
+      ),
     });
     return reminder.id;
   } catch {
@@ -81,7 +104,9 @@ export async function scheduleEventReminder({
 }
 
 /** Best-effort: same rationale as `scheduleEventReminder`. */
-export async function cancelEventReminder(reminderId: string | null): Promise<void> {
+export async function cancelEventReminder(
+  reminderId: string | null,
+): Promise<void> {
   if (!reminderId) {
     return;
   }

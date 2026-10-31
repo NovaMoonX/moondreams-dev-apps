@@ -182,6 +182,11 @@ function ClaudeConnectionSheet({
             </Field>
             {error ? <InlineNotice tone='warning'>{error}</InlineNotice> : null}
             <ModalFooterActions
+              note={
+                isFireUrl(fireUrl) && token.trim().length > 0
+                  ? undefined
+                  : 'Paste the URL and the token'
+              }
               cancelAction={
                 <Button type='button' variant='tertiary' onClick={handleClose}>
                   Cancel

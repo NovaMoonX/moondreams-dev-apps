@@ -1,10 +1,13 @@
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils';
 
 import { addFeedbackStatusChange } from './feedbackWrites';
 import type { Feedback, FeedbackGroup, FeedbackStatus } from './types';
+
+// Each item is two writes and a batch holds 500.
+const STATUS_CHUNK_ITEMS = 200;
 
 const groupRef = (id: string) => doc(db, 'feedbackGroups', id);
 const feedbackRef = (id: string) => doc(db, 'feedback', id);
@@ -93,12 +96,23 @@ export async function setGroupStatus({
   status: FeedbackStatus;
 }): Promise<void> {
   const now = Date.now();
-  const batch = writeBatch(db);
-  items
-    .filter((item) => item.status !== status)
-    .forEach((feedback) =>
-      addFeedbackStatusChange({ batch, feedback, uid, status, now }),
-    );
-  batch.update(groupRef(group.id), { updatedAt: now });
-  await batch.commit();
+  const changed = items.filter((item) => item.status !== status);
+  const chunks = Array.from(
+    { length: Math.ceil(changed.length / STATUS_CHUNK_ITEMS) },
+    (_, index) =>
+      changed.slice(
+        index * STATUS_CHUNK_ITEMS,
+        (index + 1) * STATUS_CHUNK_ITEMS,
+      ),
+  );
+  await Promise.all(
+    chunks.map((chunk) => {
+      const batch = writeBatch(db);
+      chunk.forEach((feedback) =>
+        addFeedbackStatusChange({ batch, feedback, uid, status, now }),
+      );
+      return batch.commit();
+    }),
+  );
+  await updateDoc(groupRef(group.id), { updatedAt: now });
 }

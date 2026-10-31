@@ -1,8 +1,10 @@
-import { Button, Checkbox, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, Sparkles } from 'lucide-react';
+import { Check, ChevronRight, ListFilter, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
+import FormSheet from '@/components/FormSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import useNow from '@/hooks/useNow';
 import { useClaudeRoutineStatus } from '@hooks/useClaudeRoutineStatus';
@@ -15,6 +17,7 @@ import {
   KIND_EMOJI,
   KIND_LABEL,
   sortByActivity,
+  STATUS_LABEL,
 } from '@lib/feedback/feedbackDisplay';
 import type {
   Feedback,
@@ -28,15 +31,18 @@ import FeedbackGroupCard from './FeedbackGroupCard';
 import FeedbackGroupSheet from './FeedbackGroupSheet';
 import FeedbackThreadSheet from './FeedbackThreadSheet';
 
-type StatusFilter = 'open' | 'done' | 'wont-do' | 'all';
+type StatusFilter = FeedbackStatus | 'open' | 'all';
 type KindFilter = FeedbackKind | 'all';
 /** `all`, `none` (not grouped), or a group's id. */
 type GroupFilter = string;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
-  { value: 'done', label: 'Done' },
-  { value: 'wont-do', label: "Won't do" },
+  { value: 'new', label: STATUS_LABEL.new },
+  { value: 'looking', label: STATUS_LABEL.looking },
+  { value: 'planned', label: STATUS_LABEL.planned },
+  { value: 'done', label: STATUS_LABEL.done },
+  { value: 'wont-do', label: STATUS_LABEL['wont-do'] },
   { value: 'all', label: 'All' },
 ];
 
@@ -46,6 +52,8 @@ const KIND_FILTERS: { value: KindFilter; label: string }[] = [
   { value: 'idea', label: 'Ideas' },
   { value: 'question', label: 'Questions' },
 ];
+
+const SHEET_HEADING_CLASS = 'text-foreground text-sm font-medium';
 
 const OPEN_STATUSES: FeedbackStatus[] = ['new', 'looking', 'planned'];
 
@@ -65,7 +73,7 @@ interface FeedbackViewProps {
 
 /** Everything people have sent, newest activity first; a row opens its thread. */
 function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
-  const { items, status } = useAllFeedback(true);
+  const { items, status, isTruncated } = useAllFeedback(true);
   const now = useNow(60_000);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
@@ -76,6 +84,7 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
   const [isSelecting, setIsSelecting] = useState(false);
   const [checkedIds, setCheckedIds] = useState<string[]>([]);
   const [isGroupSheetOpen, setIsGroupSheetOpen] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const activeGroup = groups.find((group) => group.id === groupFilter) ?? null;
   const effectiveGroupFilter =
@@ -98,10 +107,24 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
     ? items.filter((item) => item.groupId === activeGroup.id)
     : [];
   const groupOptions = [
-    { text: 'All groups', value: 'all' },
-    { text: 'Not grouped', value: 'none' },
-    ...groups.map((group) => ({ text: group.name, value: group.id })),
+    { label: 'All groups', value: 'all' },
+    { label: 'Not grouped', value: 'none' },
+    ...groups.map((group) => ({ label: group.name, value: group.id })),
   ];
+  const isDefaultFilter =
+    statusFilter === 'open' &&
+    kindFilter === 'all' &&
+    effectiveGroupFilter === 'all';
+  const filterSummary = [
+    STATUS_FILTERS.find((filter) => filter.value === statusFilter)?.label,
+    KIND_FILTERS.find((filter) => filter.value === kindFilter)?.label,
+    groupOptions.find((group) => group.value === effectiveGroupFilter)?.label,
+  ].join(' · ');
+  const clearFilters = () => {
+    setStatusFilter('open');
+    setKindFilter('all');
+    setGroupFilter('all');
+  };
   const checkedCount = checkedIds.length;
 
   const stopSelecting = () => {
@@ -133,43 +156,51 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
           type='button'
           variant='base'
           size='sm'
-          className="text-muted-foreground relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+          className="text-primary relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           onClick={() => setIsSettingsOpen(true)}
         >
           <Sparkles className='size-4' aria-hidden='true' />
           {isConnected ? 'Claude connected' : 'Connect Claude'}
         </Button>
-        <Button
-          type='button'
-          variant='base'
-          size='sm'
-          className="text-primary relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-          onClick={() => (isSelecting ? stopSelecting() : setIsSelecting(true))}
-        >
-          {isSelecting ? 'Cancel' : 'Select'}
-        </Button>
+        <div className='flex items-center gap-4'>
+          <Button
+            type='button'
+            variant='base'
+            size='sm'
+            className="text-primary relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            onClick={() => setIsFilterOpen(true)}
+          >
+            <ListFilter className='size-4' aria-hidden='true' />
+            Filter
+          </Button>
+          <Button
+            type='button'
+            variant='base'
+            size='sm'
+            className="text-primary relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            onClick={() =>
+              isSelecting ? stopSelecting() : setIsSelecting(true)
+            }
+          >
+            {isSelecting ? 'Cancel' : 'Select'}
+          </Button>
+        </div>
       </div>
-      <div className='space-y-3'>
-        <PillGroup
-          label='Status'
-          isThin
-          options={STATUS_FILTERS}
-          value={statusFilter}
-          onChange={setStatusFilter}
-        />
-        <PillGroup
-          label='Kind'
-          isThin
-          options={KIND_FILTERS}
-          value={kindFilter}
-          onChange={setKindFilter}
-        />
-        <Select
-          aria-label='Group'
-          options={groupOptions}
-          value={effectiveGroupFilter}
-          onChange={setGroupFilter}
-        />
+      <div className='flex items-center justify-between gap-2'>
+        <p className='text-muted-foreground min-w-0 text-xs' role='status'>
+          {filterSummary}
+        </p>
+        {isDefaultFilter ? null : (
+          <Button
+            type='button'
+            variant='base'
+            size='sm'
+            className="text-primary relative shrink-0 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            onClick={clearFilters}
+          >
+            Clear
+          </Button>
+        )}
       </div>
 
       {activeGroup ? (
@@ -195,23 +226,18 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
       ) : (
         <ul className={LIST_CARD_CLASS}>
           {visible.map((item) => (
-            <li key={item.id} className='flex items-stretch'>
-              {isSelecting ? (
-                <span className='flex w-12 shrink-0 items-center justify-center pl-2'>
-                  <Checkbox
-                    checked={checkedIds.includes(item.id)}
-                    onCheckedChange={() => toggleChecked(item.id)}
-                    aria-label={`Select ${getSenderName(item)}`}
-                  />
-                </span>
-              ) : null}
+            <li key={item.id}>
               <Button
                 type='button'
                 variant='tertiary'
-                className={join(
-                  'h-auto min-h-16 min-w-0 flex-1 justify-start gap-3 rounded-none py-3 text-left font-normal',
-                  isSelecting ? 'pr-4! pl-2!' : 'px-4!',
-                )}
+                role={isSelecting ? 'checkbox' : undefined}
+                aria-checked={
+                  isSelecting ? checkedIds.includes(item.id) : undefined
+                }
+                aria-label={
+                  isSelecting ? `Select ${getSenderName(item)}` : undefined
+                }
+                className='h-auto min-h-16 w-full min-w-0 justify-start gap-3 rounded-none px-4! py-3 text-left font-normal'
                 onClick={() =>
                   isSelecting ? toggleChecked(item.id) : onSelect(item.id)
                 }
@@ -232,6 +258,7 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
                     {item.groupId && groupNames[item.groupId]
                       ? ` · ${groupNames[item.groupId]}`
                       : ''}
+                    {` · ${STATUS_LABEL[item.status]}`}
                   </span>
                   <span className='text-foreground mt-0.5 line-clamp-2 text-sm wrap-break-word'>
                     {getFirstLine(item.text)}
@@ -244,20 +271,46 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
                     className='bg-primary size-2.5 shrink-0 rounded-full'
                   />
                 ) : null}
-                <ChevronRight
-                  className='text-muted-foreground size-4 shrink-0'
-                  aria-hidden='true'
-                />
+                <span className='flex size-5 shrink-0 items-center justify-center'>
+                  {isSelecting ? (
+                    <span
+                      aria-hidden='true'
+                      className={join(
+                        'flex size-5 items-center justify-center rounded-md border',
+                        checkedIds.includes(item.id)
+                          ? 'bg-primary border-primary text-primary-foreground'
+                          : 'border-muted-foreground/60',
+                      )}
+                    >
+                      {checkedIds.includes(item.id) ? (
+                        <Check className='size-3.5' strokeWidth={3} />
+                      ) : null}
+                    </span>
+                  ) : (
+                    <ChevronRight
+                      className='text-muted-foreground size-4'
+                      aria-hidden='true'
+                    />
+                  )}
+                </span>
               </Button>
             </li>
           ))}
         </ul>
       )}
 
+      {isTruncated ? (
+        <p className='text-muted-foreground text-center text-xs'>
+          Showing the 300 most recent.
+        </p>
+      ) : null}
+
       {isSelecting ? (
         <div className='bg-popover border-border sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border p-3 shadow-lg'>
           <p className='text-sm' role='status'>
-            {checkedCount} selected
+            {checkedCount === 0
+              ? 'Tap rows to pick them'
+              : `${checkedCount} selected`}
           </p>
           <Button
             type='button'
@@ -270,6 +323,62 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
         </div>
       ) : null}
 
+      <FormSheet
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        title='Filter feedback'
+        isDrawerWhenShort
+      >
+        <div className='space-y-5'>
+          <div className='space-y-2'>
+            <h3 className={SHEET_HEADING_CLASS}>Status</h3>
+            <PillGroup
+              label='Status'
+              isThin
+              options={STATUS_FILTERS}
+              value={statusFilter}
+              onChange={setStatusFilter}
+            />
+          </div>
+          <div className='space-y-2'>
+            <h3 className={SHEET_HEADING_CLASS}>Kind</h3>
+            <PillGroup
+              label='Kind'
+              isThin
+              options={KIND_FILTERS}
+              value={kindFilter}
+              onChange={setKindFilter}
+            />
+          </div>
+          <div className='space-y-2'>
+            <h3 className={SHEET_HEADING_CLASS}>Group</h3>
+            <PillGroup
+              label='Group'
+              isThin
+              options={groupOptions}
+              value={effectiveGroupFilter}
+              onChange={setGroupFilter}
+            />
+          </div>
+          <ModalFooterActions
+            leftActions={
+              <Button
+                type='button'
+                variant='tertiary'
+                disabled={isDefaultFilter}
+                onClick={clearFilters}
+              >
+                Clear
+              </Button>
+            }
+            rightActions={
+              <Button type='button' onClick={() => setIsFilterOpen(false)}>
+                Show {visible.length}
+              </Button>
+            }
+          />
+        </div>
+      </FormSheet>
       <FeedbackGroupSheet
         isOpen={isGroupSheetOpen}
         feedbackIds={checkedIds}

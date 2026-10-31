@@ -29,7 +29,9 @@ import {
   selectAdminUnreadCount,
   selectMyFeedback,
 } from '@store/slices/feedbackSlice';
-import FeedbackConversation from '@ui/feedback/FeedbackConversation';
+import FeedbackConversation, {
+  FeedbackReplyBar,
+} from '@ui/feedback/FeedbackConversation';
 import { useFeedbackSheet } from '@ui/feedback/feedbackSheetContext';
 
 const THREAD_TITLE: Record<Feedback['kind'], string> = {
@@ -117,12 +119,16 @@ function Inbox() {
   const items = sortByActivity(mine);
   const openFeedbackItem = items.find((item) => item.id === openId) ?? null;
   useMarkSeenOnOpen(openFeedbackItem);
+  const repliesUnread = items.filter((item) => item.isUnreadBySender).length;
+
+  useEffect(() => {
+    if (!loading && !user) {
+      savePostLoginRedirect(location.pathname + location.search);
+    }
+  }, [loading, user, location.pathname, location.search]);
 
   if (loading) return null;
-  if (!user) {
-    savePostLoginRedirect(location.pathname + location.search);
-    return <Navigate to='/' replace />;
-  }
+  if (!user) return <Navigate to='/' replace />;
 
   const getListBody = () => {
     if (mineStatus === 'loading' && items.length === 0) {
@@ -188,28 +194,34 @@ function Inbox() {
         />
 
         {isAdmin ? (
-          <div className={LIST_CARD_CLASS}>
-            <Button
-              type='button'
-              variant='tertiary'
-              className='h-auto min-h-14 w-full justify-start gap-3 rounded-none px-4! py-3 text-left font-normal'
-              onClick={() => navigate('/admin?view=feedback')}
-            >
-              <span className='text-foreground min-w-0 flex-1 truncate text-sm font-medium'>
-                Feedback from people
-                {adminUnread ? ` · ${adminUnread} new` : ''}
-              </span>
-              <ChevronRight
-                className='text-muted-foreground size-4 shrink-0'
-                aria-hidden='true'
-              />
-            </Button>
-          </div>
+          <section className='space-y-3'>
+            <h2 className='text-foreground text-base font-semibold'>
+              Feedback from people
+              {adminUnread ? ` · ${adminUnread} new` : ''}
+            </h2>
+            <div className={LIST_CARD_CLASS}>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-auto min-h-14 w-full justify-start gap-3 rounded-none px-4! py-3 text-left font-normal'
+                onClick={() => navigate('/admin?view=feedback')}
+              >
+                <span className='text-foreground min-w-0 flex-1 truncate text-sm font-medium'>
+                  Open everyone&apos;s feedback
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            </div>
+          </section>
         ) : null}
 
         <section className='space-y-3'>
           <h2 className='text-foreground text-base font-semibold'>
-            What you&apos;ve sent
+            {isAdmin ? 'Replies to you' : "What you've sent"}
+            {isAdmin && repliesUnread ? ` · ${repliesUnread} new` : ''}
           </h2>
           {getListBody()}
         </section>
@@ -219,22 +231,29 @@ function Inbox() {
         isOpen={openFeedbackItem !== null}
         onClose={() => void setOpenId(null)}
         title={openFeedbackItem ? THREAD_TITLE[openFeedbackItem.kind] : ''}
+        footer={
+          openFeedbackItem ? (
+            <FeedbackReplyBar
+              key={openFeedbackItem.id}
+              label='Add a reply'
+              sendLabel='Send'
+              onReply={(text) =>
+                replyToFeedback({
+                  feedback: openFeedbackItem,
+                  uid: user.uid,
+                  isAdmin: false,
+                  text,
+                })
+              }
+            />
+          ) : undefined
+        }
       >
         {openFeedbackItem ? (
           <FeedbackConversation
             key={openFeedbackItem.id}
             feedback={openFeedbackItem}
             viewer='sender'
-            replyLabel='Add a reply'
-            sendLabel='Send'
-            onReply={(text) =>
-              replyToFeedback({
-                feedback: openFeedbackItem,
-                uid: user.uid,
-                isAdmin: false,
-                text,
-              })
-            }
           />
         ) : null}
       </DetailSheet>

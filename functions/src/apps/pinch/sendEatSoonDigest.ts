@@ -245,6 +245,7 @@ export const sendEatSoonDigest = onSchedule(
           body: message.body,
           url: link,
           usefulForMs: EAT_SOON_USEFUL_FOR_MS,
+          urgency: 'normal',
         });
       },
     );

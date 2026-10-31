@@ -144,6 +144,7 @@ async function deliverReminder(
       body: reminder.body,
       url: resolveReminderLink(reminder),
       usefulForMs: Math.max(0, getReminderExpiresAt(reminder) - Date.now()),
+      urgency: 'high',
     },
   );
 

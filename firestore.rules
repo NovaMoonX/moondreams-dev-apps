@@ -828,6 +828,17 @@ service cloud.firestore {
         return request.auth != null && resource.data.uid == request.auth.uid;
       }
 
+      function isFeedbackContextBounded(context) {
+        return context is map
+          && context.keys().hasOnly(['appId', 'path', 'siteVersion', 'userAgent', 'viewportWidth', 'viewportHeight'])
+          && (context.get('appId', null) == null || (context.appId is string && context.appId.size() <= 40))
+          && context.get('path', null) is string && context.path.size() <= 300
+          && context.get('siteVersion', null) is string && context.siteVersion.size() <= 40
+          && context.get('userAgent', null) is string && context.userAgent.size() <= 400
+          && context.get('viewportWidth', null) is number
+          && context.get('viewportHeight', null) is number;
+      }
+
       allow read: if isFeedbackOwner() || isAdmin();
       allow create: if request.auth != null
         && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt', 'groupId', 'claudeSessionUrl'])
@@ -840,10 +851,11 @@ service cloud.firestore {
         && request.resource.data.text.size() >= 1
         && request.resource.data.text.size() <= 4000
         && request.resource.data.status == 'new'
-        && request.resource.data.isUnreadByAdmin == true
+        && (request.resource.data.isUnreadByAdmin == true
+          || (request.resource.data.isUnreadByAdmin == false && isAdmin()))
         && request.resource.data.isUnreadBySender == false
         && (request.resource.data.authorEmail == null || request.resource.data.authorEmail == request.auth.token.email)
-        && request.resource.data.context is map;
+        && isFeedbackContextBounded(request.resource.data.context);
       allow update: if (isFeedbackOwner()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isUnreadBySender', 'isUnreadByAdmin', 'lastActivityAt'])
           && (request.resource.data.isUnreadBySender == false || request.resource.data.isUnreadBySender == resource.data.isUnreadBySender)
@@ -956,8 +968,9 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy
         && isReminderAudienceKnown()
-        // How long it stays useful: past that the sender drops it and a late push is never delivered.
-        && request.resource.data.get('usefulForMs', 0) is int && request.resource.data.usefulForMs > 0
+        // How long it stays useful: past that the sender drops it and a late push is never delivered. A missing one is the old shape from a stale tab or offline queue.
+        && (!('usefulForMs' in request.resource.data)
+          || (request.resource.data.usefulForMs is int && request.resource.data.usefulForMs > 0))
         // A path inside the app, never another site: a notification opens it on tap.
         && (request.resource.data.get('link', null) == null || request.resource.data.link.matches('/[a-z0-9].*'));
       allow update: if request.auth != null

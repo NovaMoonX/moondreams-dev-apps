@@ -5,6 +5,7 @@ import { useShake } from '@hooks/useShake';
 import { useAuth } from '@hooks/useAuth';
 import { getRegistryAppForPath } from '@lib/app';
 import { buildFeedbackContext } from '@lib/feedback/feedbackWrites';
+import { toSafeFeedbackPath } from '@lib/feedback/feedbackPath';
 import type { FeedbackContext, FeedbackKind } from '@lib/feedback/types';
 import { isMotionAllowed } from '@lib/motion/motionPermission';
 
@@ -20,7 +21,7 @@ interface SheetRequest {
 /** Mounted once in the site layout: owns the feedback sheet, opens it on a shake, and lets any screen open it through `useFeedbackSheet`. Signed out, nothing opens. */
 function FeedbackLauncher({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  const { pathname, search } = useLocation();
+  const { pathname } = useLocation();
   const [request, setRequest] = useState<SheetRequest | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [isShakeOn, setIsShakeOn] = useState(isMotionAllowed);
@@ -32,7 +33,7 @@ function FeedbackLauncher({ children }: { children: ReactNode }) {
       startKind,
       context: buildFeedbackContext({
         appId: getRegistryAppForPath(pathname)?.id ?? null,
-        path: `${pathname}${search}`,
+        path: toSafeFeedbackPath(pathname),
       }),
     });
     setIsOpen(true);
@@ -51,6 +52,7 @@ function FeedbackLauncher({ children }: { children: ReactNode }) {
           context={request.context}
           isShakeOn={isShakeOn}
           onShakeEnabled={() => setIsShakeOn(true)}
+          onShakeOff={() => setIsShakeOn(false)}
           onClose={() => setIsOpen(false)}
         />
       ) : null}

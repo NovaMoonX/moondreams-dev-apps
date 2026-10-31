@@ -6,7 +6,7 @@ export type FeedbackStatus = 'new' | 'looking' | 'planned' | 'done' | 'wont-do';
 export interface FeedbackContext {
   /** The app they were in, or null on the site's own screens (Home, account). */
   appId: string | null;
-  /** Path and query of the screen they were on. */
+  /** Path of the screen they were on, without the query and with share ids replaced. */
   path: string;
   siteVersion: string;
   userAgent: string;
