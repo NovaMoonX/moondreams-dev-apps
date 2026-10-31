@@ -994,43 +994,45 @@ const toRefused = async (error: unknown, fallback: string) => {
   return refused(fallback === "Couldn't reach GitHub." ? "Couldn't merge it." : fallback);
 };
 
-const mergeOnGithub = async (token: string, prNumber: number): Promise<MergeResult> => {
-  const checked = await (async () => {
-    try {
-      const pull = await githubFetch(token, `/pulls/${prNumber}`);
-      if (pull.status === 404) return refused("That pull request doesn't exist.");
-      if (!pull.ok) throw pull;
-      const pr = await readJson(pull);
-      if (pr === null) return refused("Couldn't read that pull request.");
-      const sha = String(isObject(pr.head) ? pr.head.sha : '');
-      const runs = await githubFetch(token, `/commits/${sha}/check-runs?per_page=100`);
-      if (!runs.ok) throw runs;
-      const runsBody = await readJson(runs);
-      const runList = (Array.isArray(runsBody?.check_runs) ? runsBody.check_runs : []).filter(isObject);
-      if (Number(runsBody?.total_count) > runList.length) {
-        return refused('It has more checks than the dashboard reads. Merge it on GitHub.');
-      }
-      const status = await findStatusComment(token, prNumber);
-      const statusBody = typeof status?.body === 'string' ? status.body : null;
-      const refusal = getMergeRefusal({
-        isOpen: pr.state === 'open',
-        labels: (Array.isArray(pr.labels) ? pr.labels : []).filter(isObject).map((label) => String(label.name)),
-        ci: summarizeRuns(runList),
-        isMergeable: typeof pr.mergeable === 'boolean' ? pr.mergeable : null,
-        state: statusBody === null ? null : readState(statusBody),
-        mustDo: statusBody === null ? 'no status' : readMustDo(statusBody),
-        isStatusForHead: statusBody !== null && isHeadingFor(statusBody, sha),
-      });
-      if (refusal !== null) return refused(refusal);
-      const sessionUrl =
-        statusBody?.match(SESSION_MARKER)?.[1] ??
-        (typeof pr.body === 'string' ? pr.body.match(SESSION_LINK)?.at(-1) : null) ??
-        null;
-      return { pr, sha, sessionUrl, statusAt: Date.parse(String(status?.updated_at)) || 0 };
-    } catch (error) {
-      return toRefused(error, "Couldn't reach GitHub.");
+const readGates = async (token: string, prNumber: number) => {
+  try {
+    const pull = await githubFetch(token, `/pulls/${prNumber}`);
+    if (pull.status === 404) return refused("That pull request doesn't exist.");
+    if (!pull.ok) throw pull;
+    const pr = await readJson(pull);
+    if (pr === null) return refused("Couldn't read that pull request.");
+    const sha = String(isObject(pr.head) ? pr.head.sha : '');
+    const runs = await githubFetch(token, `/commits/${sha}/check-runs?per_page=100`);
+    if (!runs.ok) throw runs;
+    const runsBody = await readJson(runs);
+    const runList = (Array.isArray(runsBody?.check_runs) ? runsBody.check_runs : []).filter(isObject);
+    if (Number(runsBody?.total_count) > runList.length) {
+      return refused('It has more checks than the dashboard reads. Merge it on GitHub.');
     }
-  })();
+    const status = await findStatusComment(token, prNumber);
+    const statusBody = typeof status?.body === 'string' ? status.body : null;
+    const refusal = getMergeRefusal({
+      isOpen: pr.state === 'open',
+      labels: (Array.isArray(pr.labels) ? pr.labels : []).filter(isObject).map((label) => String(label.name)),
+      ci: summarizeRuns(runList),
+      isMergeable: typeof pr.mergeable === 'boolean' ? pr.mergeable : null,
+      state: statusBody === null ? null : readState(statusBody),
+      mustDo: statusBody === null ? 'no status' : readMustDo(statusBody),
+      isStatusForHead: statusBody !== null && isHeadingFor(statusBody, sha),
+    });
+    if (refusal !== null) return refused(refusal);
+    const sessionUrl =
+      statusBody?.match(SESSION_MARKER)?.[1] ??
+      (typeof pr.body === 'string' ? pr.body.match(SESSION_LINK)?.at(-1) : null) ??
+      null;
+    return { pr, sha, sessionUrl, statusAt: Date.parse(String(status?.updated_at)) || 0 };
+  } catch (error) {
+    return toRefused(error, "Couldn't reach GitHub.");
+  }
+};
+
+const mergeOnGithub = async (token: string, prNumber: number): Promise<MergeResult> => {
+  const checked = await readGates(token, prNumber);
   if ('ok' in checked) return checked;
   const { pr, sha, sessionUrl, statusAt } = checked;
 
