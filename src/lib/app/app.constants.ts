@@ -4,6 +4,9 @@ export const APP_DESCRIPTION =
 
 export const ADMIN_EMAIL = 'nova@moondreams.dev';
 
+/** How copy names the site's admin to members ("Ask Nova"). */
+export const ADMIN_NAME = 'Nova';
+
 // Site-wide version, shared across every app. The merge workflow works it out and injects it at build time; local builds read 'dev'.
 export const SITE_VERSION =
   typeof __SITE_VERSION__ === 'string' ? __SITE_VERSION__ : 'dev';
