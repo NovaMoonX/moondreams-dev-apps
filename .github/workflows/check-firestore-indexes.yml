@@ -10,6 +10,8 @@ on:
       - 'scripts/checkFirestoreIndexes.ts'
       - 'scripts/checks/**'
       - 'scripts/seeds/**'
+      - 'docs/conventions/pipeline.md'
+      - '.claude/settings.json'
 jobs:
   check_indexes:
     runs-on: ubuntu-latest
@@ -22,6 +24,7 @@ jobs:
       - run: npm ci
       - run: npm run check:indexes
       - run: npm run check:rules-size
+      - run: npm run check:pipeline-map
   check_pinch:
     runs-on: ubuntu-latest
     steps:

@@ -8,6 +8,8 @@ export interface MapNode {
   title: string;
   does: string;
   parts?: { name: string; does: string }[];
+  /** The rows of the pipeline's step table this node draws, by their Step name. */
+  covers?: string[];
 }
 
 export interface MapEdge {
@@ -26,7 +28,12 @@ export const MAP_LANES: { id: MapLane; title: string; intro: string | null }[] =
     },
   ];
 
-// A later change to the pipeline edits these two lists and the screen follows.
+/** Rows of the step table the map leaves out on purpose, with why. */
+export const OFF_MAP: Record<string, string> = {
+  "Take over someone else's PR": 'Only when asked, off the main path.',
+};
+
+// A change to the pipeline edits these lists; a CI check fails a PR that adds a step without placing it here.
 export const MAP_NODES: MapNode[] = [
   {
     id: 'owner',
@@ -37,6 +44,14 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'session',
+    covers: [
+      'Large or multi-issue work',
+      "A new app's MVP",
+      'What a push needs',
+      'Hint to orchestrate',
+      'Fresh-start nudge',
+      'Improving the pipeline',
+    ],
     lane: 'work',
     step: 2,
     title: 'Claude Code session',
@@ -53,6 +68,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'plan',
+    covers: ['Plan an app', 'Create issues', 'Put issues on the board'],
     lane: 'work',
     step: 3,
     title: 'Plan and issues',
@@ -60,6 +76,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'helpers',
+    covers: ['Review'],
     lane: 'work',
     step: 4,
     title: 'Helpers',
@@ -76,6 +93,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'pr',
+    covers: ['Wrap-up', 'Status'],
     lane: 'work',
     step: 5,
     title: 'Pull request',
@@ -90,6 +108,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'dashboard',
+    covers: ['Pipeline view'],
     lane: 'work',
     step: 7,
     title: 'This dashboard',
@@ -111,6 +130,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'keepCurrent',
+    covers: ['Keep PRs current'],
     lane: 'ship',
     step: 1,
     title: 'Keeping PRs current',
@@ -118,6 +138,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'automerge',
+    covers: ['Merge on a standing go'],
     lane: 'ship',
     step: 2,
     title: 'Automerge (on your go)',
@@ -125,6 +146,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'queue',
+    covers: ['One merge at a time'],
     lane: 'ship',
     step: 3,
     title: 'Merge queue',

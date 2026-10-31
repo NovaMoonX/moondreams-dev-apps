@@ -1,4 +1,4 @@
-import { getModelPrice } from '@lib/admin/pipelinePrices';
+import { PRICES_CHECKED_ON, getModelPrice } from '@lib/admin/pipelinePrices';
 import type {
   PipelineCostRow,
   PipelinePhase,
@@ -22,6 +22,7 @@ export const MIN_SLICE_USD = 5;
 /** A long conversation is only worth a nudge while it is still being used. */
 export const LONG_SESSION_ACTIVE_DAYS = 2;
 export const MAX_SUGGESTIONS = 3;
+export const PRICES_STALE_DAYS = 90;
 export const TOP_SESSIONS = 5;
 export const CHART_DAYS = 14;
 export const LOAD_DAYS = 90;
@@ -408,9 +409,28 @@ export function getSuggestions(
       : []),
   ];
 
-  return candidates
-    .sort((a, b) => (b.savingUsd ?? -1) - (a.savingUsd ?? -1))
-    .slice(0, MAX_SUGGESTIONS);
+  const pricesAgeDays = Math.round(
+    (Date.parse(today) - Date.parse(PRICES_CHECKED_ON)) / DAY_MS,
+  );
+  // Out-of-date prices make every other figure wrong, so this card goes first.
+  const pricesCard: Suggestion[] =
+    pricesAgeDays > PRICES_STALE_DAYS
+      ? [
+          {
+            id: 'prices',
+            subject: null,
+            url: null,
+            what: `The list prices were last checked ${pricesAgeDays} days ago`,
+            todo: "Ask a session to check them against Anthropic's current prices and update them",
+            savingUsd: null,
+          },
+        ]
+      : [];
+
+  return [
+    ...pricesCard,
+    ...candidates.sort((a, b) => (b.savingUsd ?? -1) - (a.savingUsd ?? -1)),
+  ].slice(0, MAX_SUGGESTIONS);
 }
 
 export interface TopSession {

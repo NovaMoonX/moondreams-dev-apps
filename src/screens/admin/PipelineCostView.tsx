@@ -12,6 +12,7 @@ import SectionDivider from '@/components/SectionDivider';
 import StatTile from '@/components/StatTile';
 import useNow from '@/hooks/useNow';
 import { APP_REGISTRY } from '@/lib/app/app.registry';
+import { PRICES_CHECKED_ON } from '@lib/admin/pipelinePrices';
 import type { PipelineSessionCost } from '@lib/admin/pipelineTypes';
 import IconTile from '@/ui/IconTile';
 import { formatDateShortUTC } from '@/utils/formatUtils';
@@ -464,8 +465,9 @@ function HowItIsCounted({ sessions }: { sessions: PipelineSessionCost[] }) {
         </p>
         <p>
           Dollars are API-equivalent: the tokens at list prices per million
-          tokens. A model without a price still has its tokens counted, just not
-          its dollars.
+          tokens, as checked on {formatDateShortUTC(toMs(PRICES_CHECKED_ON))}. A
+          model without a price still has its tokens counted, just not its
+          dollars.
         </p>
         {prices.length > 0 ? (
           <table className='w-full text-left text-xs tabular-nums'>

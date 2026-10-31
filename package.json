@@ -55,6 +55,7 @@
     "check:receipts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/receiptSplit.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/receiptReading.ts",
     "check:a-list": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/aListProjection.ts",
     "check:owner-inbox": "node scripts/checks/ownerInbox.ts",
+    "check:pipeline-map": "node scripts/checks/pipelineMap.ts",
     "check:board": "node scripts/checks/board.ts",
     "inbox:build": "node scripts/ownerInbox/run.ts",
     "check:option-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/optionMatch.ts",
