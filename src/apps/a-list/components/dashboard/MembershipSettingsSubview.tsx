@@ -184,7 +184,9 @@ function MembershipSettingsSubview({
       weeklyGoal: weekly.goal,
       monthlyGoal: monthly.goal,
       ticketPriceKind,
-      showReleasesOnCalendar,
+      showReleasesOnCalendar: canShowReleases
+        ? showReleasesOnCalendar
+        : openedWith.showReleasesOnCalendar !== false,
     };
     const openedValues: MembershipEditableFields = {
       ...openedWith,
