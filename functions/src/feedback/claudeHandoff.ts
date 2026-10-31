@@ -1,5 +1,8 @@
 import type { Firestore } from 'firebase-admin/firestore';
-import { HttpsError } from 'firebase-functions/v2/https';
+import {
+  HttpsError,
+  type FunctionsErrorCode,
+} from 'firebase-functions/v2/https';
 
 // Member text is capped before it reaches an agent's prompt.
 const MAX_SENDER_TEXT_CHARS = 4000;
@@ -105,6 +108,16 @@ export function buildFeedbackHandoffText(
 
 const ROUTINE_TIMEOUT_MS = 30_000;
 
+/** `isDefinite` is true when the request surely started no session; false when one may have started (a timeout, a 5xx, an answer with no link). */
+export class RoutineFireError extends HttpsError {
+  readonly isDefinite: boolean;
+
+  constructor(code: FunctionsErrorCode, message: string, isDefinite: boolean) {
+    super(code, message);
+    this.isDefinite = isDefinite;
+  }
+}
+
 /** Starts a session on the connected routine and returns its URL. */
 export async function fireRoutine({
   fireUrl,
@@ -126,21 +139,24 @@ export async function fireRoutine({
     body: JSON.stringify({ text }),
     signal: AbortSignal.timeout(ROUTINE_TIMEOUT_MS),
   }).catch(() => {
-    throw new HttpsError(
+    throw new RoutineFireError(
       'unavailable',
       "Claude didn't answer in time. Try again in a minute.",
+      false,
     );
   });
   if (response.status === 401) {
-    throw new HttpsError(
+    throw new RoutineFireError(
       'failed-precondition',
       'Claude rejected the token: paste a new one in Feedback settings.',
+      true,
     );
   }
   if (!response.ok) {
-    throw new HttpsError(
+    throw new RoutineFireError(
       'unavailable',
       `Claude didn't start a session (status ${response.status}). Try again in a minute.`,
+      response.status < 500,
     );
   }
   const body = (await response.json().catch(() => null)) as Record<
@@ -149,9 +165,10 @@ export async function fireRoutine({
   > | null;
   const sessionUrl = body?.[ROUTINE_SESSION_URL_KEY];
   if (typeof sessionUrl !== 'string') {
-    throw new HttpsError(
+    throw new RoutineFireError(
       'unavailable',
       "Claude didn't start a session (no link came back). Try again in a minute.",
+      false,
     );
   }
   return sessionUrl;

@@ -17,6 +17,7 @@ import {
   isStuckStarting,
   MAX_FIRE_FAILURES,
   PR_CLOSED_NOTE,
+  refundSessionInUsage,
   registerFailure,
   STARTING_STALE_MS,
   type QueuedItem,
@@ -279,6 +280,48 @@ assert.equal(
   null,
   'a re-reported closed PR changes nothing',
 );
+
+// A closed PR cannot take an item that has none; once its own PR is closed, another can.
+const closedOther = { ...pr, isMerged: false, isClosed: true };
+assert.equal(
+  getPrStateUpdate(working, closedOther),
+  null,
+  'a dead PR cannot hijack an item with no PR yet',
+);
+const letGo = {
+  ...owned,
+  agentState: 'needs-you',
+  agentNote: PR_CLOSED_NOTE,
+};
+const other = { ...pr, url: 'https://github.com/o/r/pull/2' };
+assert.equal(
+  getPrStateUpdate(letGo, { ...other, isMerged: false })?.agentPrUrl,
+  other.url,
+  'an open PR replaces the closed one',
+);
+assert.equal(
+  getPrStateUpdate(letGo, { ...other, isMerged: true })?.agentState,
+  'merged',
+  'a merged PR replaces the closed one',
+);
+assert.equal(
+  getPrStateUpdate(letGo, { ...closedOther, url: other.url }),
+  null,
+  'another closed PR does not replace it',
+);
+
+// A definite failure gives the day's session back, only on the day it was counted.
+assert.deepEqual(refundSessionInUsage(used, noon), {
+  day: used?.day,
+  count: DAILY_SESSION_CAP - 1,
+});
+assert.equal(
+  refundSessionInUsage(used, Date.UTC(2026, 9, 29, 23)),
+  used,
+  'a claim from another day refunds nothing',
+);
+assert.equal(refundSessionInUsage(used, undefined), used);
+assert.equal(refundSessionInUsage(null, noon), null);
 
 // Claiming skips what is no longer queued, closed, deleted or a question.
 const claimable = (over: Partial<Parameters<typeof isClaimable>[0] & object>) =>

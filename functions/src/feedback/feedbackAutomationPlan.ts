@@ -129,6 +129,18 @@ export const addSessionToUsage = (
   count: (usage?.day === getUtcDay(now) ? usage.count : 0) + 1,
 });
 
+/** Gives back the session a definite failure used, only while the usage is still on the day it was counted. */
+export const refundSessionInUsage = (
+  usage: SessionUsage | null,
+  claimedAt: number | undefined,
+): SessionUsage | null =>
+  usage &&
+  claimedAt !== undefined &&
+  usage.day === getUtcDay(claimedAt) &&
+  usage.count > 0
+    ? { ...usage, count: usage.count - 1 }
+    : usage;
+
 /** Adds one failed fire to each item; those that reached the limit are to be held. */
 export function registerFailure(
   failures: Record<string, number>,
@@ -172,7 +184,7 @@ export interface PrStateUpdate {
 
 const TRACKED: (string | null)[] = ['working', 'pr-ready', 'needs-you'];
 
-/** What a PR's state changes on an item an automatic session works on, or null when nothing changes (so a re-report never re-flags the bell). Once an item has a PR, only that PR's reports change it. */
+/** What a PR's state changes on an item an automatic session works on, or null when nothing changes (so a re-report never re-flags the bell). Once an item has a PR, only that PR's reports change it, until that PR is closed unmerged: then an open or merged one takes over. With no PR yet, a closed one is ignored. */
 export function getPrStateUpdate(
   item: {
     agentState: string | null;
@@ -183,7 +195,17 @@ export function getPrStateUpdate(
   pr: PrReport,
 ): PrStateUpdate | null {
   if (!TRACKED.includes(item.agentState)) return null;
-  if (item.agentPrUrl !== null && item.agentPrUrl !== pr.url) return null;
+  const isClosedUnmerged = pr.isClosed && !pr.isMerged;
+  if (item.agentPrUrl === null && isClosedUnmerged) return null;
+  const isLockLetGo =
+    item.agentState === 'needs-you' && item.agentNote === PR_CLOSED_NOTE;
+  if (
+    item.agentPrUrl !== null &&
+    item.agentPrUrl !== pr.url &&
+    !(isLockLetGo && !isClosedUnmerged)
+  ) {
+    return null;
+  }
   const agentState: AgentState = pr.isMerged
     ? 'merged'
     : pr.isClosed || pr.needsOwner

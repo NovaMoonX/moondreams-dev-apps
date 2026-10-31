@@ -18,6 +18,7 @@ import {
   fireRoutine,
   readClaudeRoutine,
   readHandoffItems,
+  RoutineFireError,
 } from './claudeHandoff.js';
 import {
   addSessionToUsage,
@@ -33,6 +34,7 @@ import {
   NOT_CONNECTED_NOTE,
   omitIds,
   readUsageDoc,
+  refundSessionInUsage,
   registerFailure,
   RUN_BUDGET_MS,
   STUCK_HELD_NOTE,
@@ -119,6 +121,16 @@ const claimBucket = (firestore: Firestore, ids: string[]) =>
     const claimable = snaps.filter((snap) =>
       isClaimable(snap.exists ? toClaimInput(snap) : null),
     );
+    snaps
+      .filter((snap) => snap.exists && !claimable.includes(snap))
+      .filter((snap) => snap.data()?.agentState === 'queued')
+      .forEach((snap) =>
+        tx.update(snap.ref, {
+          agentState: null,
+          agentQueuedAt: null,
+          agentNote: null,
+        }),
+      );
     if (claimable.length === 0) return { kind: 'none' };
     if (getSessionsLeft(doc.usage, at) === 0) {
       claimable.forEach((snap) =>
@@ -194,7 +206,13 @@ const settleStarted = (
     );
   });
 
-const releaseFailed = (firestore: Firestore, ids: string[], reason: string) =>
+/** A definite failure (nothing was started) counts toward holding and gives the day's session back; an unknown one may have a session behind it, so the items are held and the count stays. */
+const releaseFailed = (
+  firestore: Firestore,
+  ids: string[],
+  reason: string,
+  isDefinite: boolean,
+) =>
   firestore.runTransaction(async (tx) => {
     const [usageSnap, ...snaps] = await tx.getAll(
       usageRef(firestore),
@@ -204,6 +222,20 @@ const releaseFailed = (firestore: Firestore, ids: string[], reason: string) =>
     const starting = snaps.filter(
       (snap) => snap.exists && snap.data()?.agentState === 'starting',
     );
+    if (!isDefinite) {
+      starting.forEach((snap) =>
+        tx.update(snap.ref, {
+          agentState: 'held',
+          agentNote: STUCK_HELD_NOTE,
+          isUnreadByAdmin: true,
+        }),
+      );
+      tx.set(
+        usageRef(firestore),
+        toUsageData({ ...doc, claims: omitIds(doc.claims, ids) }),
+      );
+      return;
+    }
     const next = registerFailure(
       doc.failures,
       starting.map((snap) => snap.id),
@@ -224,6 +256,10 @@ const releaseFailed = (firestore: Firestore, ids: string[], reason: string) =>
       usageRef(firestore),
       toUsageData({
         ...doc,
+        usage: refundSessionInUsage(
+          doc.usage,
+          ids.map((id) => doc.claims[id]).find((at) => at !== undefined),
+        ),
         failures: next.failures,
         claims: omitIds(doc.claims, ids),
       }),
@@ -289,11 +325,13 @@ async function fireClaimed(
   } catch (error) {
     const reason =
       error instanceof HttpsError ? error.message : 'Something went wrong.';
+    const isDefinite = !(error instanceof RoutineFireError) || error.isDefinite;
     logger.error('Automatic Claude session failed', {
       ids: claimedIds,
       reason,
+      isDefinite,
     });
-    await releaseFailed(firestore, claimedIds, reason);
+    await releaseFailed(firestore, claimedIds, reason, isDefinite);
     return null;
   }
 }
@@ -352,8 +390,11 @@ export async function runFeedbackAutomation(firestore: Firestore, now: number) {
   }
   await holdStuckStarting(firestore);
   const routine = await readClaudeRoutine(firestore);
-  const queued = (await readQueued(firestore)).filter((snap) =>
-    ['bug', 'idea'].includes(snap.data().kind),
+  const allQueued = await readQueued(firestore);
+  const queued = allQueued.filter((snap) => isClaimable(toClaimInput(snap)));
+  await clearQueued(
+    firestore,
+    allQueued.filter((snap) => !queued.includes(snap)),
   );
   if (!routine) {
     logger.warn('Feedback automation is on but Claude is not connected');
@@ -369,13 +410,16 @@ export async function runFeedbackAutomation(firestore: Firestore, now: number) {
     }
     return;
   }
-  const closed = queued.filter((snap) =>
-    ['done', 'wont-do'].includes(snap.data().status),
+  const lingering = queued.filter(
+    (snap) => snap.data().agentNote === NOT_CONNECTED_NOTE,
   );
-  await clearQueued(firestore, closed);
-  const open = queued.filter((snap) => !closed.includes(snap));
+  if (lingering.length > 0) {
+    const batch = firestore.batch();
+    lingering.forEach((snap) => batch.update(snap.ref, { agentNote: null }));
+    await batch.commit();
+  }
   const due = bucketQueued(
-    open.map((snap) => ({
+    queued.map((snap) => ({
       id: snap.id,
       kind: snap.data().kind,
       appId: snap.data().context?.appId ?? null,
