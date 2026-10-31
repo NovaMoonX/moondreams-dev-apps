@@ -14,7 +14,7 @@ function GatesClosedNote({ appId, className }: GatesClosedNoteProps) {
   if (!hasClosed) return null;
 
   return (
-    <p className={join('text-muted-foreground text-center text-xs', className)}>
+    <p className={join('text-muted-foreground text-center text-xs text-balance', className)}>
       Some features are turned off for you. Ask {ADMIN_NAME} if you&apos;d like them on.
     </p>
   );

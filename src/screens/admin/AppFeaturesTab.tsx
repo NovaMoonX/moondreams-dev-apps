@@ -166,6 +166,7 @@ function ExceptionPeople({ title, emptyText, uids, users, onAdd, onRemove }: Exc
               <Button
                 variant='tertiary'
                 size='sm'
+                className="relative after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
                 aria-label={`Remove ${profile.displayName || profile.email}`}
                 onClick={() => onRemove(profile.uid)}
               >
