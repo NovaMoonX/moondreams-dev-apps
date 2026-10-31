@@ -37,6 +37,7 @@
     "prebuild": "npm run check:apps",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "typecheck": "tsc -b --force tsconfig.json tsconfig.scripts.json scripts/tsconfig.json",
     "preview": "vite preview",
     "predeploy": "npm run build && npm run preview",
     "cf:worker": "npx wrangler deploy",

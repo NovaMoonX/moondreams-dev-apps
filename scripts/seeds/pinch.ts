@@ -1117,6 +1117,7 @@ const CATALOG_NAMES = new Map(
 );
 
 interface SeedRecipeLike {
+  id: string;
   title: string;
   description: string | null;
   servings: number;

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.scripts.tsbuildinfo",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"]
+  },
+  "include": ["scripts", "src/vite-env.d.ts"]
+}

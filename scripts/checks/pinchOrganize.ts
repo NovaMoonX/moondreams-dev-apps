@@ -675,7 +675,10 @@ const recipeIn = (id: string, ids: string[] | undefined) =>
   );
   assert.deepEqual(sortFavoritesFirst([]), []);
   assert.deepEqual(
-    sortFavoritesFirst([{ id: 'a' }, { id: 'b' }]).map((meal) => meal.id),
+    sortFavoritesFirst<{ id: string; isFavorite?: boolean | null }>([
+      { id: 'a' },
+      { id: 'b' },
+    ]).map((meal) => meal.id),
     ['a', 'b'],
     'with none starred the order is untouched',
   );
