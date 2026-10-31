@@ -466,12 +466,15 @@ const STANDING_ORDER: Standing[] = [
   'waiting',
 ];
 
-/** A PR whose status says it's still in progress asks nothing yet: its questions wait until its reviews are back. */
-export const isStillWorking = (state: string | null | undefined) =>
-  /^in progress\b/i.test(state ?? '');
+const HELD_FOR_MS = 6 * 60 * 60 * 1000;
+
+/** A PR whose status says it's still in progress asks nothing yet, for up to six hours since that status. */
+export const isStillWorking = (status: PrStatus | null, now = Date.now()) =>
+  /^in progress\b/i.test(status?.state ?? '') &&
+  now - Date.parse(status?.updatedAt ?? '') <= HELD_FOR_MS;
 
 const waitingItems = (pr: InboxPr) =>
-  isStillWorking(pr.status?.state)
+  isStillWorking(pr.status)
     ? []
     : (pr.status?.ownerItems ?? []).filter((item) => item.settled === null);
 
@@ -485,7 +488,7 @@ const getStanding = (session: Session): Standing => {
   if (ownerCount(session) > 0) return 'needsYou';
   if (session.prs.some(isBroken)) return 'needsFixing';
   const isMoving = session.prs.some(
-    (pr) => pr.ci === 'running' || /progress/i.test(pr.status?.state ?? ''),
+    (pr) => pr.ci === 'running' || /^in progress\b/i.test(pr.status?.state ?? ''),
   );
   return isMoving ? 'inProgress' : 'waiting';
 };

@@ -58,7 +58,7 @@ phase_of_tool() {
            else "investigating" end)
       elif $t == "Bash" then
         (($i.command // "") as $c
-         | if ($c | test("^\\s*git (commit|push|merge)")) then "building"
+         | if ($c | test("(^|&&|;)\\s*git (commit|push|merge)")) then "building"
            elif ($c | test("pw\\.mjs|playwright|publish-screenshots")) then "screenshots"
            elif ($c | test("\\b(tsc|eslint|prettier)\\b|npm run -?s? ?check:")) then "checks"
            else "investigating" end)
