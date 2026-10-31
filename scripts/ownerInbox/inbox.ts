@@ -468,7 +468,7 @@ const STANDING_ORDER: Standing[] = [
 
 /** A PR whose status says it's still in progress asks nothing yet: its questions wait until its reviews are back. */
 export const isStillWorking = (state: string | null | undefined) =>
-  /in progress/i.test(state ?? '');
+  /^in progress\b/i.test(state ?? '');
 
 const waitingItems = (pr: InboxPr) =>
   isStillWorking(pr.status?.state)

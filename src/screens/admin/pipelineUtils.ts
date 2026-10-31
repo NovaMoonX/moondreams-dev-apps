@@ -177,9 +177,13 @@ const getItemSettled = (
   return item.settled ?? null;
 };
 
-// Its session writes "in progress" until the review sized to the PR is back; its questions wait for that.
+const HELD_FOR_MS = 6 * HOUR_MS;
+
+// Its session writes "in progress" until the review sized to the PR is back; its questions wait for that,
+// but only for a few hours, so a session that stopped can't hide them for good.
 const isReady = (pr: PipelineInboxPr) =>
-  !/in progress/i.test(pr.status?.state ?? '');
+  !/^in progress\b/i.test(pr.status?.state ?? '') ||
+  Date.now() - (pr.status?.updatedAt ?? 0) > HELD_FOR_MS;
 
 const toSafeItems = (
   prs: PipelineInboxPr[],

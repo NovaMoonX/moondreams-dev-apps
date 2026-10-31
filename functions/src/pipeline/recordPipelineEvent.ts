@@ -218,7 +218,11 @@ const writeSession = async (data: Json) => {
     const startedAt = snapshot.get('startedAt') as unknown;
     const previousTurn = snapshot.get('turnStartedAt') as unknown;
     const getTurnStartedAt = () => {
-      if (session.state === 'working') return now;
+      // Only a new prompt starts a turn; a hook from before turnStart starts one on every working report.
+      const isTurnStart =
+        data.turnStart === true ||
+        (data.turnStart === undefined && session.state === 'working');
+      if (isTurnStart) return now;
       return typeof previousTurn === 'number' ? previousTurn : null;
     };
     transaction.set(ref, {
