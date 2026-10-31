@@ -122,7 +122,12 @@ const openCallables = () => {
 
 const run = async () => {
   const first = await deploy();
-  if (first.code === 0) return 0;
+  // A callable a dropped or failed run left private stays private, since the CLI opens only new ones; opening is idempotent.
+  if (first.code === 0) {
+    if (!targets.includes('functions')) return 0;
+    console.log('\nOpening every callable.\n');
+    return openCallables() ? 0 : 1;
+  }
   if (RELEASE_EXISTS.test(first.output)) {
     console.error(
       '\nThe rules release failed. Repeating its update to read the answer:\n',
