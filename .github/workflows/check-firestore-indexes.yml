@@ -61,5 +61,6 @@ jobs:
       - run: npm run check:option-match
       - run: npm run check:waypoint-pushes
       - run: npm run check:notification-expiry
+      - run: npm run check:feedback-handoff
       - run: npm run check:a-list
       - run: npm run check:receipts

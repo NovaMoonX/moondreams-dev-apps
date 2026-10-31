@@ -32,6 +32,20 @@ export interface Feedback {
   createdAt: number;
   /** The last message or status change, which orders both inboxes. */
   lastActivityAt: number;
+  /** The group the admin put it in, or null. An item is in at most one group. */
+  groupId: string | null;
+  /** The last Claude Code session it was sent to; written only by the Function. */
+  claudeSessionUrl: string | null;
+}
+
+/** `feedbackGroups/{id}`: an admin-only bucket of related feedback ("Small fixes"). */
+export interface FeedbackGroup {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  /** The last Claude Code session the whole group was sent to; written only by the Function. */
+  claudeSessionUrl: string | null;
 }
 
 export type FeedbackMessageKind = 'reply' | 'status';

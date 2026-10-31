@@ -1,5 +1,11 @@
 import type { User } from 'firebase/auth';
-import { doc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import {
+  doc,
+  setDoc,
+  updateDoc,
+  writeBatch,
+  type WriteBatch,
+} from 'firebase/firestore';
 
 import { SITE_VERSION } from '@lib/app';
 import { db } from '@lib/firebase/config';
@@ -65,6 +71,8 @@ export async function sendFeedback({
     isUnreadByAdmin: true,
     createdAt: now,
     lastActivityAt: now,
+    groupId: null,
+    claudeSessionUrl: null,
   };
   await setDoc(feedbackRef(id), feedback);
   return id;
@@ -104,6 +112,38 @@ export async function replyToFeedback({
   await batch.commit();
 }
 
+/** Adds one item's status change (the thread message and the update) to a batch. */
+export function addFeedbackStatusChange({
+  batch,
+  feedback,
+  uid,
+  status,
+  now,
+}: {
+  batch: WriteBatch;
+  feedback: Feedback;
+  uid: string;
+  status: FeedbackStatus;
+  now: number;
+}): void {
+  const messageId = generateUuid();
+  const message: FeedbackMessage = {
+    id: messageId,
+    kind: 'status',
+    fromUid: uid,
+    isFromAdmin: true,
+    text: null,
+    status,
+    createdAt: now,
+  };
+  batch.set(messageRef(feedback.id, messageId), message);
+  batch.update(feedbackRef(feedback.id), {
+    status,
+    lastActivityAt: now,
+    isUnreadBySender: true,
+  });
+}
+
 /** Admin only: records the change as a message so the sender's thread shows it. */
 export async function setFeedbackStatus({
   feedback,
@@ -114,24 +154,8 @@ export async function setFeedbackStatus({
   uid: string;
   status: FeedbackStatus;
 }): Promise<void> {
-  const messageId = generateUuid();
-  const now = Date.now();
-  const message: FeedbackMessage = {
-    id: messageId,
-    kind: 'status',
-    fromUid: uid,
-    isFromAdmin: true,
-    text: null,
-    status,
-    createdAt: now,
-  };
   const batch = writeBatch(db);
-  batch.set(messageRef(feedback.id, messageId), message);
-  batch.update(feedbackRef(feedback.id), {
-    status,
-    lastActivityAt: now,
-    isUnreadBySender: true,
-  });
+  addFeedbackStatusChange({ batch, feedback, uid, status, now: Date.now() });
   await batch.commit();
 }
 

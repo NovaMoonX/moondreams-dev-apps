@@ -1,8 +1,7 @@
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 
-import { db } from '@lib/firebase/config';
 import type { FeedbackMessage } from '@lib/feedback/types';
+import { startFeedbackMessagesListener } from '@/store/listeners/feedbackListeners';
 
 interface Loaded {
   feedbackId: string;
@@ -18,19 +17,9 @@ export function useFeedbackMessages(feedbackId: string | null): {
 
   useEffect(() => {
     if (feedbackId === null) return;
-    return onSnapshot(
-      query(
-        collection(db, 'feedback', feedbackId, 'messages'),
-        orderBy('createdAt', 'asc'),
-      ),
-      (snapshot) =>
-        setLoaded({
-          feedbackId,
-          messages: snapshot.docs.map(
-            (docSnap) =>
-              ({ ...docSnap.data(), id: docSnap.id }) as FeedbackMessage,
-          ),
-        }),
+    return startFeedbackMessagesListener(
+      feedbackId,
+      (messages) => setLoaded({ feedbackId, messages }),
       (error) => {
         console.error('Failed to load the conversation:', error);
         setLoaded({ feedbackId, messages: null });

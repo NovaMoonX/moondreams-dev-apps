@@ -822,7 +822,9 @@ service cloud.firestore {
 
       allow read: if isFeedbackOwner() || isAdmin();
       allow create: if request.auth != null
-        && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt'])
+        && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt', 'groupId', 'claudeSessionUrl'])
+        && request.resource.data.groupId == null
+        && request.resource.data.claudeSessionUrl == null
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.id == feedbackId
         && request.resource.data.kind in ['bug', 'idea', 'question']
@@ -839,8 +841,9 @@ service cloud.firestore {
           && (request.resource.data.isUnreadBySender == false || request.resource.data.isUnreadBySender == resource.data.isUnreadBySender)
           && (request.resource.data.isUnreadByAdmin == true || request.resource.data.isUnreadByAdmin == resource.data.isUnreadByAdmin))
         || (isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isUnreadBySender', 'isUnreadByAdmin', 'lastActivityAt'])
-          && request.resource.data.status in ['new', 'looking', 'planned', 'done', 'wont-do']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isUnreadBySender', 'isUnreadByAdmin', 'lastActivityAt', 'groupId'])
+          && request.resource.data.status in ['new', 'looking', 'planned', 'done', 'wont-do']
+          && (request.resource.data.get('groupId', null) == null || request.resource.data.get('groupId', null) is string));
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
@@ -860,6 +863,51 @@ service cloud.firestore {
               && request.resource.data.text.size() >= 1
               && request.resource.data.text.size() <= 4000));
       }
+    }
+
+    // Admin-only buckets of related feedback. `claudeSessionUrl` is written by the Function only.
+    match /feedbackGroups/{groupId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['id', 'name', 'createdAt', 'updatedAt', 'claudeSessionUrl'])
+        && request.resource.data.id == groupId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.createdAt is number
+        && request.resource.data.updatedAt is number
+        && request.resource.data.claudeSessionUrl == null;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
+    }
+
+    // The Claude routine's token: the admin can write it, nobody can read it (only the Function does,
+    // with the admin SDK). The status doc is what the dashboard reads.
+    match /adminSettings/claudeRoutine {
+      allow read: if false;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['fireUrl', 'token', 'updatedAt'])
+        && request.resource.data.fireUrl is string
+        && request.resource.data.fireUrl.matches('^https://api\\.anthropic\\.com/v1/claude_code/routines/[A-Za-z0-9_]+/fire$')
+        && request.resource.data.token is string
+        && request.resource.data.token.size() >= 10
+        && request.resource.data.token.size() <= 400
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
+    }
+
+    match /adminSettings/claudeRoutineStatus {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['isConnected', 'updatedAt'])
+        && request.resource.data.isConnected is bool
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {

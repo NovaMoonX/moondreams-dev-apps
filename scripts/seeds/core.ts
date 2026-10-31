@@ -97,6 +97,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       isUnreadByAdmin: boolean;
       createdHoursAgo: number;
       lastActivityHoursAgo: number;
+      groupId?: string;
     },
   ) => ({
     id,
@@ -118,6 +119,8 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     isUnreadByAdmin: fields.isUnreadByAdmin,
     createdAt: context.now - fields.createdHoursAgo * HOUR_MS,
     lastActivityAt: context.now - fields.lastActivityHoursAgo * HOUR_MS,
+    groupId: fields.groupId ?? null,
+    claudeSessionUrl: null,
   });
   const toFeedbackMessage = (
     id: string,
@@ -148,6 +151,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         isUnreadByAdmin: false,
         createdHoursAgo: 30,
         lastActivityHoursAgo: 2,
+        groupId: 'seed-feedback-group',
       }),
       messages: [
         toFeedbackMessage('seed-feedback-bug-reply', {
@@ -175,6 +179,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         isUnreadByAdmin: true,
         createdHoursAgo: 5,
         lastActivityHoursAgo: 5,
+        groupId: 'seed-feedback-group',
       }),
       messages: [],
     },
@@ -206,6 +211,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       ],
     },
   ];
+  batch.set(context.firestore.doc('feedbackGroups/seed-feedback-group'), {
+    id: 'seed-feedback-group',
+    name: 'Small fixes',
+    createdAt: context.now - 6 * HOUR_MS,
+    updatedAt: context.now - 5 * HOUR_MS,
+    claudeSessionUrl: null,
+  });
   feedbackSeeds.forEach(({ feedback, messages }) => {
     batch.set(context.firestore.doc(`feedback/${feedback.id}`), feedback);
     messages.forEach((message) => {
@@ -472,7 +484,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     authUsers: fixtures.length,
     firestoreDocuments:
       fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + pipelineCosts.length + 1 +
-      feedbackSeeds.reduce((total, { messages }) => total + 1 + messages.length, 0),
+      feedbackSeeds.reduce((total, { messages }) => total + 1 + messages.length, 1),
     realtimePaths: fixtures.length,
   };
 
