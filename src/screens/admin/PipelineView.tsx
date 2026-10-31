@@ -25,18 +25,22 @@ import {
   formatPipelineTime,
   getAnswerSlots,
   getAskedSlots,
+  getMergeTargets,
   getPartialFailureLine,
   type PipelineEntry,
   type PipelineGroup,
   type PipelineGroups,
 } from './pipelineUtils';
 import type { PipelineAnswers } from './usePipelineAnswers';
+import type { PipelineMerge } from './usePipelineMerge';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 interface PipelineViewProps {
   pipeline: PipelineState;
   groups: PipelineGroups;
   now: number;
   answers: PipelineAnswers;
+  merge: PipelineMerge;
   onOpenEntry: (key: string) => void;
 }
 
@@ -65,8 +69,10 @@ function PipelineView({
   groups,
   now,
   answers,
+  merge,
   onOpenEntry,
 }: PipelineViewProps) {
+  const { confirm } = useActionModal();
   const { tab, setTab } = useDashboardUrlState();
   const activeTab: PipelineTabValue = tab ?? 'now';
   const [isAnsweringAll, setIsAnsweringAll] = useState(false);
@@ -80,6 +86,49 @@ function PipelineView({
     ...groups.quiet,
     ...groups.finished,
   ];
+  const mergeTargets = getMergeTargets(allEntries).filter(
+    (target) => merge.getDone(target.prNumber) === null,
+  );
+  const onMergeAll = async () => {
+    const asked = mergeTargets.filter((target) => target.isDriven).length;
+    const direct = mergeTargets.length - asked;
+    const isConfirmed = await confirm({
+      title: `Merge ${mergeTargets.length} ready ${mergeTargets.length === 1 ? 'pull request' : 'pull requests'}?`,
+      message: [
+        asked > 0
+          ? `${asked} ${asked === 1 ? 'session is' : 'sessions are'} asked to merge through the merge line.`
+          : null,
+        direct > 0
+          ? `One pull request no session drives is merged now${direct > 1 ? `; the other ${direct - 1} wait one deploy each` : ''}.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' '),
+      confirmText: 'Merge all',
+    });
+    if (isConfirmed) void merge.mergeAll(mergeTargets);
+  };
+  const mergeAllButton =
+    mergeTargets.length > 0 ? (
+      <Button
+        type='button'
+        variant='secondary'
+        size='sm'
+        rounded='full'
+        className="relative px-3 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+        disabled={merge.isMergingAll}
+        onClick={() => void onMergeAll()}
+      >
+        {merge.isMergingAll
+          ? 'Merging…'
+          : `Merge all ready (${mergeTargets.length})`}
+      </Button>
+    ) : null;
+  const mergeAllNote = merge.allNote ? (
+    <p role='status' className='text-muted-foreground text-sm'>
+      {merge.allNote}
+    </p>
+  ) : null;
   const latestUpdate = Math.max(
     0,
     inbox?.updatedAt ?? 0,
@@ -219,6 +268,13 @@ function PipelineView({
         />
       </div>
 
+      {groups.waiting.length === 0 && (mergeAllButton || mergeAllNote) ? (
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          {mergeAllNote ?? <span />}
+          {mergeAllButton}
+        </div>
+      ) : null}
+
       {isLoading && isEmpty ? (
         <p className='text-muted-foreground text-sm'>Loading sessions…</p>
       ) : null}
@@ -237,27 +293,31 @@ function PipelineView({
 
       {groups.waiting.length > 0 ? (
         <section className='space-y-3'>
-          <div className='flex items-center justify-between gap-3'>
-            <div className='flex items-baseline gap-2'>
+          <div className='flex flex-wrap items-center justify-between gap-x-3 gap-y-2'>
+            <div className='flex items-baseline gap-2 whitespace-nowrap'>
               <h2 className='text-base font-semibold'>Waiting on you</h2>
               <span className='text-muted-foreground text-sm tabular-nums'>
                 {groups.waiting.length}
               </span>
             </div>
-            {answerCount > 0 ? (
-              <Button
-                type='button'
-                variant='secondary'
-                size='sm'
-                rounded='full'
-                className="relative px-3 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
-                onClick={() => setIsAnsweringAll(true)}
-              >
-                Answer all ({answerCount})
-              </Button>
-            ) : null}
+            <div className='flex flex-wrap justify-end gap-2'>
+              {mergeAllButton}
+              {answerCount > 0 ? (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  rounded='full'
+                  className="relative px-3 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                  onClick={() => setIsAnsweringAll(true)}
+                >
+                  Answer all ({answerCount})
+                </Button>
+              ) : null}
+            </div>
           </div>
           <SentLine sent={answers.lastSent} />
+          {mergeAllNote}
           <ul className={LIST_CARD_CLASS}>
             {(isWaitingExpanded
               ? groups.waiting

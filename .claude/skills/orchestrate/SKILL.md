@@ -70,7 +70,7 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
 
 ## Merging a run's PRs
 
-The owner merges, unless they hand the merges over. "Merge them through" (in chat or in a PR comment) lets you merge this run's open PRs down their merge order; it covers the PRs open when it was given, and a PR opened later needs its own go. "automerge" (the `automerge` skill) is a standing go for the PRs a session drives, held back by anything the owner should decide or know. Say in each status comment's Next moves that you are merging, and on whose go.
+The owner merges, unless they hand the merges over. "Merge them through" (in chat or in a PR comment) lets you merge this run's open PRs down their merge order; it covers the PRs open when it was given, and a PR opened later needs its own go. "automerge" (the `automerge` skill) is a standing go for the PRs a session drives, held back by anything the owner should decide or know. Say in each status comment's Next moves that you are merging, and on whose go. A comment from the owner reading `Merge it (from the admin dashboard)` (the Pipeline sheet's Merge button posts it once the dashboard has seen the PR's gates pass) is the owner's go to merge that PR by this procedure: the merge line, the lock and every gate below, never at once.
 
 **One merge into main at a time, across every session.** Every merge, on any go (automerge, "merge them through", a PR the owner asked you to merge), goes through the merge lock, and nothing merges while a deploy runs. The go is permission to join the line, never to merge at once.
 
