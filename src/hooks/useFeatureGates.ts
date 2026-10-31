@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { selectIsGateOpen, setFeatureGatesDoc } from '@store/slices/featureGatesSlice';
-import { startFeatureGatesListener } from '@lib/gates/featureGates';
+import { startFeatureGatesListener } from '@store/listeners/featureGatesListener';
 import { getAppFeatureGates } from '@lib/gates/gates.registry';
 
 /** Keeps an app's feature switches in the store while mounted; call it once in the app's shell. */

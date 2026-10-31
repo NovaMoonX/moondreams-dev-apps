@@ -9,10 +9,12 @@ import { useFeatureGatesSync } from '@/hooks/useFeatureGates';
 import { useAppSelector } from '@/store';
 import UserAvatar from '@/ui/UserAvatar';
 import {
-  type FeatureGateSetting,
+  addGateException,
+  type GateExceptionList,
   type GateRollout,
   readGateSetting,
-  saveGateSetting,
+  removeGateException,
+  saveGateRollout,
 } from '@lib/gates/featureGates';
 import { type FeatureGateEntry, getAppFeatureGates } from '@lib/gates/gates.registry';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
@@ -30,8 +32,6 @@ const ROLLOUT_HINTS: Record<GateRollout, string> = {
   testing: 'Only you, plus people always given it below.',
   everyone: 'Everyone has it, except people kept out below.',
 };
-
-type ExceptionList = 'alwaysOnUids' | 'alwaysOffUids';
 
 interface AppFeaturesTabProps {
   app: AppMetadata;
@@ -72,27 +72,21 @@ function GateCard({ gate, users }: GateCardProps) {
   const setting = readGateSetting(gatesDoc, gate.appId, gate.id);
   const [error, setError] = useState('');
 
-  const save = async (next: FeatureGateSetting) => {
+  const run = async (write: Promise<void>) => {
     setError('');
     try {
-      await saveGateSetting(gate.appId, gate.id, next);
+      await write;
     } catch (saveError) {
       console.error('Failed to save feature switch:', saveError);
       setError("Couldn't save that change. Check your connection.");
     }
   };
 
-  const addTo = (list: ExceptionList, uid: string) => {
-    const other: ExceptionList = list === 'alwaysOnUids' ? 'alwaysOffUids' : 'alwaysOnUids';
-    void save({
-      ...setting,
-      [list]: [...setting[list], uid],
-      [other]: setting[other].filter((entry) => entry !== uid),
-    });
-  };
+  const addTo = (list: GateExceptionList, uid: string) =>
+    void run(addGateException(gate.appId, gate.id, list, uid));
 
-  const removeFrom = (list: ExceptionList, uid: string) =>
-    void save({ ...setting, [list]: setting[list].filter((entry) => entry !== uid) });
+  const removeFrom = (list: GateExceptionList, uid: string) =>
+    void run(removeGateException(gate.appId, gate.id, list, uid));
 
   return (
     <section className={join(CARD_CLASS, 'space-y-4')}>
@@ -106,7 +100,7 @@ function GateCard({ gate, users }: GateCardProps) {
           label='Who has it'
           isThin
           value={setting.rollout}
-          onChange={(rollout) => void save({ ...setting, rollout })}
+          onChange={(rollout) => void run(saveGateRollout(gate.appId, gate.id, rollout))}
           options={ROLLOUT_OPTIONS}
         />
         <p className='text-muted-foreground text-xs'>{ROLLOUT_HINTS[setting.rollout]}</p>

@@ -799,8 +799,9 @@ service cloud.firestore {
       allow create, update: if isUser(uid);
     }
 
-    // An app's feature switches. Every member reads them, since the app checks its own; only uids are
-    // stored, never emails. The checks are client-side only (a beta site), so no other rule reads them.
+    // An app's feature switches. Every member reads them, since the app checks its own, so any member can
+    // see who is given or kept out of a feature (uids map to names through `users`); accepted for the beta
+    // tier. The checks are client-side only, so no other rule reads them.
     match /featureGates/{appId} {
       allow read: if request.auth != null;
       allow write: if isAdmin();

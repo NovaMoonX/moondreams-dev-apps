@@ -32,7 +32,8 @@ export const selectIsAListLoaded = (state: RootState) =>
   state.aList.membership.isLoaded &&
   state.aList.watchlist.isLoaded &&
   state.aList.viewings.isLoaded &&
-  state.aList.theatres.isLoaded;
+  state.aList.theatres.isLoaded &&
+  state.featureGates.byApp['a-list'] !== undefined;
 
 const selectTheatreItems = (state: RootState) => state.aList.theatres.items;
 

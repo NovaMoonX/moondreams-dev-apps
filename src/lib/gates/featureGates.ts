@@ -1,4 +1,9 @@
-import { doc, onSnapshot, setDoc, type Unsubscribe } from 'firebase/firestore';
+import {
+  arrayRemove,
+  arrayUnion,
+  doc,
+  setDoc,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -19,7 +24,6 @@ export interface FeatureGateSetting {
 export interface FeatureGatesDoc {
   appId: string;
   gates: Record<string, FeatureGateSetting>;
-  updatedAt: number | null;
 }
 
 export interface GateViewer {
@@ -34,7 +38,9 @@ function isGateRollout(value: unknown): value is GateRollout {
 }
 
 function toUidList(value: unknown) {
-  return Array.isArray(value) ? value.map(String) : [];
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string')
+    : [];
 }
 
 /** The stored setting for a switch, or its declared default when the admin hasn't set one. */
@@ -72,42 +78,47 @@ export function isGateOpen(
   return isOnByRollout(setting.rollout, viewer);
 }
 
-export function startFeatureGatesListener(
-  appId: string,
-  onChange: (gatesDoc: FeatureGatesDoc | null) => void,
-): Unsubscribe {
-  return onSnapshot(
+export type GateExceptionList = 'alwaysOnUids' | 'alwaysOffUids';
+
+/** Admin only: sets who gets a switch before exceptions, leaving its lists and the app's other switches alone. */
+export async function saveGateRollout(appId: string, gateId: string, rollout: GateRollout) {
+  await setDoc(
     doc(db, 'featureGates', appId),
-    (snapshot) =>
-      onChange(snapshot.exists() ? (snapshot.data() as FeatureGatesDoc) : null),
-    (error) => {
-      console.error('Failed to load feature switches:', error);
-      onChange(null);
-    },
+    { appId, gates: { [gateId]: { rollout, updatedAt: Date.now() } } },
+    { merge: true },
   );
 }
 
-/** Admin only: replaces one switch's setting, leaving the app's other switches alone. */
-export async function saveGateSetting(
+/** Admin only: adds someone to one exception list and takes them off the other, in one write. */
+export async function addGateException(
   appId: string,
   gateId: string,
-  setting: Omit<FeatureGateSetting, 'updatedAt'>,
+  list: GateExceptionList,
+  uid: string,
 ) {
-  const now = Date.now();
+  const other: GateExceptionList = list === 'alwaysOnUids' ? 'alwaysOffUids' : 'alwaysOnUids';
   await setDoc(
     doc(db, 'featureGates', appId),
     {
       appId,
       gates: {
-        [gateId]: {
-          rollout: setting.rollout,
-          alwaysOnUids: Array.from(new Set(setting.alwaysOnUids)),
-          alwaysOffUids: Array.from(new Set(setting.alwaysOffUids)),
-          updatedAt: now,
-        },
+        [gateId]: { [list]: arrayUnion(uid), [other]: arrayRemove(uid), updatedAt: Date.now() },
       },
-      updatedAt: now,
     },
+    { merge: true },
+  );
+}
+
+/** Admin only: takes someone off one exception list. */
+export async function removeGateException(
+  appId: string,
+  gateId: string,
+  list: GateExceptionList,
+  uid: string,
+) {
+  await setDoc(
+    doc(db, 'featureGates', appId),
+    { appId, gates: { [gateId]: { [list]: arrayRemove(uid), updatedAt: Date.now() } } },
     { merge: true },
   );
 }

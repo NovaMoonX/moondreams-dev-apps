@@ -1,6 +1,7 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useHasGatesClosed } from '@/hooks/useFeatureGates';
+import { ADMIN_NAME } from '@lib/app/app.constants';
 
 interface GatesClosedNoteProps {
   appId: string;
@@ -14,7 +15,7 @@ function GatesClosedNote({ appId, className }: GatesClosedNoteProps) {
 
   return (
     <p className={join('text-muted-foreground text-center text-xs', className)}>
-      Some features are turned off for you. Ask Nova if you&apos;d like them on.
+      Some features are turned off for you. Ask {ADMIN_NAME} if you&apos;d like them on.
     </p>
   );
 }
