@@ -19,7 +19,10 @@ import {
   removeGateException,
   saveGateRollout,
 } from '@lib/gates/featureGates';
-import { type FeatureGateEntry, getAppFeatureGates } from '@lib/gates/gates.registry';
+import {
+  type FeatureGateEntry,
+  getAppFeatureGates,
+} from '@lib/gates/gates.registry';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
 import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
@@ -36,16 +39,28 @@ function countPeople(count: number) {
   return count === 1 ? '1 person' : `${count} people`;
 }
 
-function getGateSummary(rollout: GateRollout, givenCount: number, keptOutCount: number) {
-  const label = ROLLOUT_OPTIONS.find((option) => option.value === rollout)?.label ?? rollout;
+function getGateSummary(
+  rollout: GateRollout,
+  givenCount: number,
+  keptOutCount: number,
+) {
+  const label =
+    ROLLOUT_OPTIONS.find((option) => option.value === rollout)?.label ??
+    rollout;
   const given = givenCount > 0 ? `${givenCount} always given it` : null;
   const keptOut = keptOutCount > 0 ? `${keptOutCount} kept out` : null;
   return [label, given, keptOut].filter(Boolean).join(' · ');
 }
 
-function getRolloutHint(rollout: GateRollout, givenCount: number, keptOutCount: number) {
-  const given = givenCount > 0 ? `, plus ${countPeople(givenCount)} always given it` : '';
-  const keptOut = keptOutCount > 0 ? `, except ${countPeople(keptOutCount)} kept out` : '';
+function getRolloutHint(
+  rollout: GateRollout,
+  givenCount: number,
+  keptOutCount: number,
+) {
+  const given =
+    givenCount > 0 ? `, plus ${countPeople(givenCount)} always given it` : '';
+  const keptOut =
+    keptOutCount > 0 ? `, except ${countPeople(keptOutCount)} kept out` : '';
   if (rollout === 'everyone') return `Everyone has it${keptOut}.`;
   if (rollout === 'testing') return `Admins try it first${given}${keptOut}.`;
   return `Nobody has it${given}${keptOut}.`;
@@ -67,7 +82,8 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
     return (
       <div className={CARD_CLASS}>
         <p className='text-muted-foreground text-sm'>
-          This app has no feature switches yet. A switch is added in code, then shows up here.
+          This app has no feature switches yet. A switch is added in code, then
+          shows up here.
         </p>
       </div>
     );
@@ -78,7 +94,8 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
   return (
     <div className='space-y-3'>
       <p className='text-muted-foreground text-sm'>
-        Choose who gets each feature. People kept out never get it, whatever the rollout.
+        Choose who gets each feature. People kept out never get it, whatever the
+        rollout.
       </p>
       <ul className={LIST_CARD_CLASS}>
         {gates.map((gate) => {
@@ -96,7 +113,11 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
                     {gate.label}
                   </span>
                   <span className='text-muted-foreground block truncate text-xs'>
-                    {getGateSummary(setting.rollout, setting.alwaysOnUids.length, setting.alwaysOffUids.length)}
+                    {getGateSummary(
+                      setting.rollout,
+                      setting.alwaysOnUids.length,
+                      setting.alwaysOffUids.length,
+                    )}
                   </span>
                 </span>
                 <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
@@ -122,7 +143,9 @@ interface GateControlsProps {
 }
 
 function GateControls({ gate, users }: GateControlsProps) {
-  const gatesDoc = useAppSelector((state) => state.featureGates.byApp[gate.appId]);
+  const gatesDoc = useAppSelector(
+    (state) => state.featureGates.byApp[gate.appId],
+  );
   const setting = readGateSetting(gatesDoc, gate.appId, gate.id);
   const [error, setError] = useState('');
   const [picking, setPicking] = useState<GateExceptionList | null>(null);
@@ -149,8 +172,14 @@ function GateControls({ gate, users }: GateControlsProps) {
         title={picking === 'alwaysOnUids' ? 'Always give it to' : 'Keep out'}
         users={users}
         currentUids={setting[picking]}
-        otherUids={picking === 'alwaysOnUids' ? setting.alwaysOffUids : setting.alwaysOnUids}
-        otherLabel={picking === 'alwaysOnUids' ? 'Kept out now' : 'Always given it now'}
+        otherUids={
+          picking === 'alwaysOnUids'
+            ? setting.alwaysOffUids
+            : setting.alwaysOnUids
+        }
+        otherLabel={
+          picking === 'alwaysOnUids' ? 'Kept out now' : 'Always given it now'
+        }
         onBack={() => setPicking(null)}
         onPick={(uid) => {
           addTo(picking, uid);
@@ -170,11 +199,17 @@ function GateControls({ gate, users }: GateControlsProps) {
           label='Who has it'
           isThin
           value={setting.rollout}
-          onChange={(rollout) => void run(saveGateRollout(gate.appId, gate.id, rollout))}
+          onChange={(rollout) =>
+            void run(saveGateRollout(gate.appId, gate.id, rollout))
+          }
           options={ROLLOUT_OPTIONS}
         />
         <p className='text-muted-foreground text-xs'>
-          {getRolloutHint(setting.rollout, setting.alwaysOnUids.length, setting.alwaysOffUids.length)}
+          {getRolloutHint(
+            setting.rollout,
+            setting.alwaysOnUids.length,
+            setting.alwaysOffUids.length,
+          )}
         </p>
       </div>
 
@@ -209,9 +244,17 @@ interface ExceptionPeopleProps {
   onRemove: (uid: string) => void;
 }
 
-function ExceptionPeople({ title, emptyText, uids, users, onAdd, onRemove }: ExceptionPeopleProps) {
+function ExceptionPeople({
+  title,
+  emptyText,
+  uids,
+  users,
+  onAdd,
+  onRemove,
+}: ExceptionPeopleProps) {
   const listed = uids.map(
-    (uid) => users.find((profile) => profile.uid === uid) ?? { uid, email: uid },
+    (uid) =>
+      users.find((profile) => profile.uid === uid) ?? { uid, email: uid },
   );
 
   return (
@@ -225,7 +268,10 @@ function ExceptionPeople({ title, emptyText, uids, users, onAdd, onRemove }: Exc
       {listed.length > 0 ? (
         <ul className='divide-border/60 divide-y rounded-xl bg-zinc-50 px-3 dark:bg-zinc-800/60'>
           {listed.map((profile) => (
-            <li key={profile.uid} className='flex items-center justify-between gap-3 py-2.5'>
+            <li
+              key={profile.uid}
+              className='flex items-center justify-between gap-3 py-2.5'
+            >
               <div className='flex min-w-0 items-center gap-3'>
                 <UserAvatar user={profile} size='sm' />
                 <div className='min-w-0'>
@@ -233,7 +279,9 @@ function ExceptionPeople({ title, emptyText, uids, users, onAdd, onRemove }: Exc
                     {profile.displayName || profile.email}
                   </div>
                   {profile.displayName ? (
-                    <div className='text-muted-foreground truncate text-xs'>{profile.email}</div>
+                    <div className='text-muted-foreground truncate text-xs'>
+                      {profile.email}
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -296,7 +344,11 @@ function PersonPicker({
     <div className='space-y-4'>
       <BackLink onBack={onBack} />
       <h4 className='text-foreground text-base font-semibold'>{title}</h4>
-      <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder='Search by name or email' />
+      <SearchInput
+        value={searchTerm}
+        onChange={setSearchTerm}
+        placeholder='Search by name or email'
+      />
       {shown.length === 0 ? (
         <p className='text-muted-foreground text-sm'>Nobody matches that.</p>
       ) : (
@@ -315,7 +367,9 @@ function PersonPicker({
                     {profile.displayName || profile.email}
                   </span>
                   <span className='text-muted-foreground block truncate text-xs'>
-                    {otherUids.includes(profile.uid) ? `${otherLabel} · moves here` : profile.email}
+                    {otherUids.includes(profile.uid)
+                      ? `${otherLabel} · moves here`
+                      : profile.email}
                   </span>
                 </span>
               </Button>

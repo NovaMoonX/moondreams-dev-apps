@@ -23,7 +23,10 @@ export const featureGatesSlice = createSlice({
   reducers: {
     setFeatureGatesDoc(
       state,
-      action: PayloadAction<{ appId: string; gatesDoc: FeatureGatesDoc | null }>,
+      action: PayloadAction<{
+        appId: string;
+        gatesDoc: FeatureGatesDoc | null;
+      }>,
     ) {
       state.byApp[action.payload.appId] = action.payload.gatesDoc;
     },
@@ -38,8 +41,19 @@ export const featureGatesReducer = featureGatesSlice.reducer;
 
 export default featureGatesReducer;
 
-export function selectIsGateOpen(state: RootState, appId: string, gateId: string) {
+export function selectIsGateOpen(
+  state: RootState,
+  appId: string,
+  gateId: string,
+) {
   const user = state.user.currentUser;
-  const setting = readGateSetting(state.featureGates.byApp[appId], appId, gateId);
-  return isGateOpen(setting, user ? { uid: user.uid, isAdmin: user.isAdmin } : null);
+  const setting = readGateSetting(
+    state.featureGates.byApp[appId],
+    appId,
+    gateId,
+  );
+  return isGateOpen(
+    setting,
+    user ? { uid: user.uid, isAdmin: user.isAdmin } : null,
+  );
 }

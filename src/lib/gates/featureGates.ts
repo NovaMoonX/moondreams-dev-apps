@@ -1,9 +1,4 @@
-import {
-  arrayRemove,
-  arrayUnion,
-  doc,
-  setDoc,
-} from 'firebase/firestore';
+import { arrayRemove, arrayUnion, doc, setDoc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -52,7 +47,8 @@ export function readGateSetting(
   const declared = FEATURE_GATES.find(
     (gate) => gate.appId === appId && gate.id === gateId,
   );
-  const stored = gatesDoc?.gates?.[gateId] as Partial<FeatureGateSetting> | undefined;
+  const stored = gatesDoc?.gates?.[gateId] as
+    Partial<FeatureGateSetting> | undefined;
   const fallback = declared?.defaultRollout ?? 'off';
 
   return {
@@ -81,7 +77,11 @@ export function isGateOpen(
 export type GateExceptionList = 'alwaysOnUids' | 'alwaysOffUids';
 
 /** Admin only: sets who gets a switch before exceptions, leaving its lists and the app's other switches alone. */
-export async function saveGateRollout(appId: string, gateId: string, rollout: GateRollout) {
+export async function saveGateRollout(
+  appId: string,
+  gateId: string,
+  rollout: GateRollout,
+) {
   await setDoc(
     doc(db, 'featureGates', appId),
     { appId, gates: { [gateId]: { rollout, updatedAt: Date.now() } } },
@@ -96,13 +96,18 @@ export async function addGateException(
   list: GateExceptionList,
   uid: string,
 ) {
-  const other: GateExceptionList = list === 'alwaysOnUids' ? 'alwaysOffUids' : 'alwaysOnUids';
+  const other: GateExceptionList =
+    list === 'alwaysOnUids' ? 'alwaysOffUids' : 'alwaysOnUids';
   await setDoc(
     doc(db, 'featureGates', appId),
     {
       appId,
       gates: {
-        [gateId]: { [list]: arrayUnion(uid), [other]: arrayRemove(uid), updatedAt: Date.now() },
+        [gateId]: {
+          [list]: arrayUnion(uid),
+          [other]: arrayRemove(uid),
+          updatedAt: Date.now(),
+        },
       },
     },
     { merge: true },
@@ -118,7 +123,10 @@ export async function removeGateException(
 ) {
   await setDoc(
     doc(db, 'featureGates', appId),
-    { appId, gates: { [gateId]: { [list]: arrayRemove(uid), updatedAt: Date.now() } } },
+    {
+      appId,
+      gates: { [gateId]: { [list]: arrayRemove(uid), updatedAt: Date.now() } },
+    },
     { merge: true },
   );
 }

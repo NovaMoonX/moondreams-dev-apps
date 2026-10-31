@@ -1,7 +1,10 @@
 import { useEffect } from 'react';
 
 import { useAppDispatch, useAppSelector } from '@/store';
-import { selectIsGateOpen, setFeatureGatesDoc } from '@store/slices/featureGatesSlice';
+import {
+  selectIsGateOpen,
+  setFeatureGatesDoc,
+} from '@store/slices/featureGatesSlice';
 import { startFeatureGatesListener } from '@store/listeners/featureGatesListener';
 import { getAppFeatureGates } from '@lib/gates/gates.registry';
 
@@ -24,6 +27,8 @@ export function useIsGateOpen(appId: string, gateId: string) {
 /** Whether any of the app's switches is off for the signed-in person. */
 export function useHasGatesClosed(appId: string) {
   return useAppSelector((state) =>
-    getAppFeatureGates(appId).some((gate) => !selectIsGateOpen(state, appId, gate.id)),
+    getAppFeatureGates(appId).some(
+      (gate) => !selectIsGateOpen(state, appId, gate.id),
+    ),
   );
 }
