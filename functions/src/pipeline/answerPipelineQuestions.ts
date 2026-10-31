@@ -545,7 +545,8 @@ const isForOwner = (line: string) =>
 const readSettle = (data: unknown) => {
   if (!isObject(data)) throw invalid('Bad request.');
   const { prNumber, sessionId, outcome } = data;
-  const text = readText(data.text, MAX_QUESTION);
+  // As long as the inbox lets an owner line be.
+  const text = readText(data.text, 1000);
   if (text === null) throw invalid('Say which ask this is.');
   if (typeof outcome !== 'string' || !OUTCOMES.includes(outcome as Outcome)) {
     throw invalid('Bad outcome.');

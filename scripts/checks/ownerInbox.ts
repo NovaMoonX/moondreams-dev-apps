@@ -332,6 +332,7 @@ assert.deepEqual(
   [
     {
       label: '1 · Open the tab',
+      note: null,
       images: [
         { src: 'https://x.test/b1.png', role: 'before' },
         { src: 'https://x.test/a1.png', role: 'after' },
@@ -339,17 +340,34 @@ assert.deepEqual(
     },
     {
       label: '2 · Answer a question',
+      note: null,
       images: [{ src: 'https://x.test/a2.png', role: 'after' }],
     },
     {
       label: 'A caption line',
+      note: null,
       images: [{ src: 'https://x.test/c.png', role: null }],
     },
-    { label: 'Named', images: [{ src: 'https://x.test/d.png', role: null }] },
+    { label: 'Named', note: null, images: [{ src: 'https://x.test/d.png', role: null }] },
   ],
   'every screenshot of the body section in order: table rows by column title, image lines by their alt or the line above, and nothing from after the next heading',
 );
 assert.deepEqual(parseGallery(null), [], 'no body, no gallery');
+const noted = parseGallery(`## Screenshots
+| | Phone |
+|---|---|
+| **History** — opens from any card<br>with its Undo | ![](https://x.test/shot.png) |
+
+![Undo a move — the row's sheet holds it](https://x.test/undo-after.png) ![](https://x.test/undo-before.png)
+`);
+assert.deepEqual(
+  noted.map((step) => [step.label, step.note, step.images.map((image) => image.role)]),
+  [
+    ['History', 'opens from any card with its Undo', [null]],
+    ['Undo a move', "the row's sheet holds it", ['before', 'after']],
+  ],
+  'a label carries its note after an em dash or <br>; a file name says before or after when no column does, and Before comes first',
+);
 const nameless = parseGallery(`## Screenshots
 | Answer all | Sheet (320) | Sent |
 |---|---|---|
@@ -436,6 +454,11 @@ assert.match(
   /- \[x\] Create the MAPS_KEY secret\. \(who: owner\) \(owner: done\)/,
   "a one-line rewrite that drops the tick and the note is the session's, so the tick comes back",
 );
+const undone = ticked.replace(
+  '- [x] Create the MAPS_KEY secret. (who: owner) (owner: done)',
+  '- [ ] Create the MAPS_KEY secret. (who: owner)',
+);
+assert.equal(keepOwnerTicks(ticked, undone), undone, "the dashboard's Undo (box and note off, nothing else) is kept");
 const settledItems = parseStatus(ticked, '').ownerItems;
 assert.deepEqual(
   settledItems.map((item) => [item.text, item.settled]),

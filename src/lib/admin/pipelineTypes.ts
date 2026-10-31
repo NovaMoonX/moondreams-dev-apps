@@ -40,6 +40,8 @@ export interface PipelineGalleryImage {
 
 export interface PipelineGalleryStep {
   label: string;
+  /** A line under the title; null or missing on documents written before notes. */
+  note: string | null;
   images: PipelineGalleryImage[];
 }
 

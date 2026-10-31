@@ -276,7 +276,11 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
     })),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
   },
-  gallery: pr.gallery.map((step) => ({ ...step, label: fromPlain(step.label) })),
+  gallery: pr.gallery.map((step) => ({
+    ...step,
+    label: fromPlain(step.label),
+    note: step.note && fromPlain(step.note),
+  })),
 });
 
 const reportToPipeline = async (list: InboxPr[], merged: MergedPr[]) => {

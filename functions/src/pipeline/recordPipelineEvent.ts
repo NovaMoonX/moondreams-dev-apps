@@ -71,7 +71,16 @@ const toStatus = (value: unknown) => {
     sessionUrl: sessionUrl(value.sessionUrl),
     sessionTitle: textOrNull(value.sessionTitle),
     state: textOrNull(value.state),
-    ownerItems: list(value.ownerItems).map((item) => ({
+    // Lines still waiting go first, so settled ones carried over never push a new ask past the cap.
+    ownerItems: (Array.isArray(value.ownerItems) ? value.ownerItems : [])
+      .filter(isObject)
+      .sort(
+        (a, b) =>
+          Number(typeof a.settled === 'string') -
+          Number(typeof b.settled === 'string'),
+      )
+      .slice(0, MAX_ITEMS)
+      .map((item) => ({
       text: text(item.text),
       options: list(item.options).map((option) => ({
         label: text(option.label),
@@ -100,6 +109,7 @@ const toGallery = (value: unknown) =>
     .filter(isObject)
     .map((step) => ({
       label: text(step.label).slice(0, 120),
+      note: typeof step.note === 'string' ? text(step.note).slice(0, 240) || null : null,
       images: (Array.isArray(step.images) ? step.images : [])
         .slice(0, MAX_STEP_IMAGES)
         .filter(isObject)

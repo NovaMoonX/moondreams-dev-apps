@@ -106,6 +106,8 @@ export interface GalleryImage {
 
 export interface GalleryStep {
   label: string;
+  /** A line under the title, written after `<br>` or ` — ` in the label (`**Undo** — the row's sheet holds it`). */
+  note: string | null;
   images: GalleryImage[];
 }
 
@@ -271,7 +273,11 @@ export function keepOwnerTicks(before: string, after: string): string {
     old.length === next.length &&
     changed.length === 1 &&
     toOwnerBox(old[changed[0]], 0).some((box) => box.isTicked) &&
-    old[changed[0]].replace(/\[[xX]\]/, '[ ]') === next[changed[0]];
+    [
+      old[changed[0]].replace(/\[[xX]\]/, '[ ]'),
+      // The dashboard's Undo also takes off the note it wrote.
+      old[changed[0]].replace(/\[[xX]\]/, '[ ]').replace(OWNER_NOTE, ''),
+    ].includes(next[changed[0]]);
   if (isOwnUntick) return after;
   return next
     .map((line, index) => {
@@ -307,22 +313,49 @@ const toImageUrls = (cell: string) =>
     .sort((a, b) => a.at - b.at)
     .map((image) => image.src);
 
+const ROLE_RANK = { before: 0, none: 1, after: 2 } as const;
+
+// A shot whose column doesn't say still says in its file name (`history-mobile-before.png`).
+const getFileRole = (src: string): GalleryImage['role'] => {
+  const name = src.split('?')[0].split('/').pop() ?? '';
+  if (/(^|[-_.])before([-_.]|$)/i.test(name)) return 'before';
+  if (/(^|[-_.])after([-_.]|$)/i.test(name)) return 'after';
+  return null;
+};
+
 const toImages = (cell: string, role: GalleryImage['role']): GalleryImage[] =>
-  toImageUrls(cell).map((src) => ({ src, role }));
+  toImageUrls(cell).map((src) => ({ src, role: role ?? getFileRole(src) }));
+
+/** A step's pictures with Before first and After last, whatever order they were written in. */
+const toOrdered = (images: GalleryImage[]) =>
+  [...images].sort(
+    (a, b) => ROLE_RANK[a.role ?? 'none'] - ROLE_RANK[b.role ?? 'none'],
+  );
 
 // Cut before escaping, so the cut never lands inside `&amp;`.
-const toLabel = (text: string) =>
+const toLabel = (text: string, max = MAX_LABEL) =>
   toPlain(
     text
       .replace(MARKDOWN_IMAGE, '')
-      .replace(MARKUP_TAG, '')
+      .replace(MARKUP_TAG, ' ')
       .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
       .replace(/^\s*#+\s*/, '')
       .replace(/\*\*|__|`/g, '')
       .replace(/\s+/g, ' ')
       .trim()
-      .slice(0, MAX_LABEL),
+      .slice(0, max),
   );
+
+const MAX_NOTE = 240;
+const NOTE_BREAK = /<br\s*\/?>|\s+—\s+/i;
+
+/** A label and the note written after its first `<br>` or ` — `. */
+const toTitled = (raw: string) => {
+  const at = raw.search(NOTE_BREAK);
+  if (at === -1) return { label: toLabel(raw), note: null };
+  const rest = raw.slice(at).replace(NOTE_BREAK, '');
+  return { label: toLabel(raw.slice(0, at)), note: toLabel(rest, MAX_NOTE) || null };
+};
 
 const toCells = (line: string) =>
   line
@@ -351,14 +384,15 @@ const screenshotLines = (body: string) => {
 const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
   const [first = '', ...rest] = cells;
   if (toImageUrls(first).length === 0) {
-    const images = rest
-      .flatMap((cell, index) =>
+    const images = toOrdered(
+      rest.flatMap((cell, index) =>
         toImages(cell, getRole(headings[index + 1] ?? '')),
-      )
-      .slice(0, MAX_STEP_IMAGES);
+      ),
+    ).slice(0, MAX_STEP_IMAGES);
+    const { label, note } = toTitled(first);
     return images.length === 0
       ? []
-      : [{ label: toLabel(first) || 'Screenshot', images }];
+      : [{ label: label || 'Screenshot', note, images }];
   }
   return cells.flatMap((cell, index) => {
     const images = toImages(cell, getRole(headings[index] ?? ''));
@@ -367,7 +401,8 @@ const toRowSteps = (cells: string[], headings: string[]): GalleryStep[] => {
       : [
           {
             label: toLabel(headings[index] ?? '') || 'Screenshot',
-            images: images.slice(0, MAX_STEP_IMAGES),
+            note: null,
+            images: toOrdered(images).slice(0, MAX_STEP_IMAGES),
           },
         ];
   });
@@ -390,20 +425,25 @@ export function parseGallery(body: string | null): GalleryStep[] {
           steps: [...acc.steps, ...toRowSteps(cells, acc.headings)],
         };
       }
-      const images = toImages(line, null).slice(0, MAX_STEP_IMAGES);
+      const images = toOrdered(toImages(line, null)).slice(0, MAX_STEP_IMAGES);
       if (images.length > 0) {
-        const alt = /!\[([^\]]*)\]/.exec(line)?.[1] ?? '';
+        const alt = toTitled(/!\[([^\]]*)\]/.exec(line)?.[1] ?? '');
+        const above = toTitled(acc.caption);
+        const titled = alt.label ? alt : above;
         return {
           steps: [
             ...acc.steps,
-            { label: toLabel(alt) || acc.caption || 'Screenshot', images },
+            { label: titled.label || 'Screenshot', note: titled.note, images },
           ],
           headings: [],
           caption: '',
         };
       }
-      const words = toLabel(line);
-      return { ...acc, headings: [], caption: words || acc.caption };
+      return {
+        ...acc,
+        headings: [],
+        caption: toLabel(line) ? line : acc.caption,
+      };
     },
     { steps: [], headings: [], caption: '' },
   );

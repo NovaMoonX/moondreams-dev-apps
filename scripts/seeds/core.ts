@@ -242,7 +242,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     labels: ['minor'],
     ci: 'green',
     bodySessionUrl: sessionUrl,
-    gallery: [] as { label: string; images: { src: string; role: 'before' | 'after' | null }[] }[],
+    gallery: [] as { label: string; note: string | null; images: { src: string; role: 'before' | 'after' | null }[] }[],
     status: {
       sessionUrl,
       sessionTitle,
@@ -300,21 +300,25 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         gallery: [
           {
             label: '1 · Open a card',
+            note: null,
             images: [
               { src: 'https://placehold.co/390x844.png?text=Card+before', role: 'before' as const },
               { src: 'https://placehold.co/390x844.png?text=Card+after', role: 'after' as const },
             ],
           },
           {
-            label: '2 · History opens',
+            label: '2 · History opens, every move this card saw in the last 90 days with what it changed',
+            note: 'Moves older than 90 days drop off; the count on the card covers the same window.',
             images: [{ src: 'https://placehold.co/390x844.png?text=History', role: null }],
           },
           {
             label: '3 · Undo a move',
+            note: null,
             images: [{ src: 'https://placehold.co/390x844.png?text=Undo', role: null }],
           },
           {
             label: '4 · Undone',
+            note: null,
             images: [{ src: 'https://placehold.co/390x844.png?text=Undone', role: null }],
           },
         ],

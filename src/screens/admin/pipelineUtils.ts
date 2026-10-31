@@ -70,6 +70,7 @@ export interface GalleryItem {
   id: string;
   step: number | null;
   label: string;
+  note: string | null;
   shots: PipelineGalleryImage[];
 }
 
@@ -219,6 +220,7 @@ const toGalleryItems = (prs: PipelineInboxPr[]): GalleryItem[] =>
               id: `${pr.number}:${index}`,
               step: numbered ? Number(numbered[1]) : null,
               label: numbered ? numbered[2] : step.label,
+              note: step.note ?? null,
               shots,
             },
           ];
@@ -228,6 +230,7 @@ const toGalleryItems = (prs: PipelineInboxPr[]): GalleryItem[] =>
       id: `${pr.number}:status-${index}`,
       step: null,
       label: 'Screenshot',
+      note: null,
       shots: [{ src, role: null }],
     }));
   });
