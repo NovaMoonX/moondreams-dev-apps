@@ -207,8 +207,9 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
   const asked = getAskedSlots(slots);
   const isAllSent = asked.length > 0 && asked.every(answers.isSent);
   const slotPrs = new Set(slots.map((slot) => slot.prNumber));
-  const entryReady = answers.getReadyCount(everySlot);
-  const elsewhereReady = answers.getReadyCount() - entryReady;
+  const entryReady = answers.getReadyCount(slots);
+  const elsewhereReady =
+    answers.getReadyCount() - answers.getReadyCount(everySlot);
   const renderFooter = (entry: PipelineEntry) => {
     const sent = answers.lastSent.filter((pr) => slotPrs.has(pr.prNumber));
     const target = getOpenTarget(entry);
@@ -249,7 +250,7 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
               disabled={
                 entryReady === 0 || answers.isSending || answers.isNotSetUp
               }
-              onClick={() => void answers.send(everySlot)}
+              onClick={() => void answers.send(slots)}
             >
               {answers.isSending ? 'Sending…' : 'Send answers'}
             </Button>

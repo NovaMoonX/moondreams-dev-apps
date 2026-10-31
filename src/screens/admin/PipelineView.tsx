@@ -175,6 +175,9 @@ function PipelineView({
             <span className='text-muted-foreground block truncate pt-0.5 text-xs'>
               {entry.time}
               {askCount >= 2 ? ` · ${askCount} asks` : ''}
+              {entry.decisions.length > 0
+                ? ` · ${entry.decisions.length} ${entry.decisions.length === 1 ? 'decision' : 'decisions'}`
+                : ''}
             </span>
           </span>
           <ChevronRight
