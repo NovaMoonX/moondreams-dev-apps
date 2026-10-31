@@ -75,6 +75,12 @@ function getRolloutHint(
   return `Nobody has it${given}${keptOut}.`;
 }
 
+const ROLLOUT_REACH: Record<GateRollout, string> = {
+  off: 'nobody',
+  testing: 'admins only',
+  everyone: 'everyone',
+};
+
 function getDraftChanges(
   before: GateDraft,
   after: GateDraft,
@@ -82,17 +88,21 @@ function getDraftChanges(
 ) {
   const listChanges = (
     list: GateExceptionList,
+    other: GateExceptionList,
     addedTo: string,
+    movedFrom: string,
     removedFrom: string,
   ) => [
     ...after[list]
       .filter((uid) => !before[list].includes(uid))
-      .map((uid) => `${nameOf(uid)}: ${addedTo}`),
+      .map((uid) =>
+        before[other].includes(uid)
+          ? `${nameOf(uid)}: ${addedTo} (was ${movedFrom})`
+          : `${nameOf(uid)}: ${addedTo}`,
+      ),
     ...before[list]
       .filter(
-        (uid) =>
-          !after[list].includes(uid) &&
-          !after.alwaysOnUids.concat(after.alwaysOffUids).includes(uid),
+        (uid) => !after[list].includes(uid) && !after[other].includes(uid),
       )
       .map((uid) => `${nameOf(uid)}: ${removedFrom}`),
   ];
@@ -102,13 +112,21 @@ function getDraftChanges(
   return [
     ...(after.rollout === before.rollout
       ? []
-      : [`Who has it: ${rolloutLabel}`]),
+      : [`Who has it: ${rolloutLabel} (${ROLLOUT_REACH[after.rollout]})`]),
     ...listChanges(
       'alwaysOnUids',
+      'alwaysOffUids',
       'always given it',
+      'kept out',
       'no longer always given it',
     ),
-    ...listChanges('alwaysOffUids', 'kept out', 'no longer kept out'),
+    ...listChanges(
+      'alwaysOffUids',
+      'alwaysOnUids',
+      'kept out',
+      'always given it',
+      'no longer kept out',
+    ),
   ];
 }
 
@@ -116,6 +134,7 @@ interface OpenGate {
   gateId: string;
   before: GateDraft;
   draft: GateDraft;
+  picking: GateExceptionList | null;
 }
 
 interface AppFeaturesTabProps {
@@ -181,7 +200,7 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
       gateId,
     );
     const before = { rollout, alwaysOnUids, alwaysOffUids };
-    setOpened({ gateId, before, draft: before });
+    setOpened({ gateId, before, draft: before, picking: null });
   };
 
   const save = async () => {
@@ -195,7 +214,10 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
               <li key={change}>{change}</li>
             ))}
           </ul>
-          <p>People see it the next time they open or refresh the site.</p>
+          <p>
+            People, you included, see it the next time they open or refresh the
+            site.
+          </p>
         </div>
       ),
       confirmText: 'Save',
@@ -258,16 +280,12 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
         isOpen={opened !== null}
         onClose={requestClose}
         title={openGate?.label ?? 'Feature'}
+        viewKey={opened?.picking ? 'pick' : 'form'}
         footer={
-          opened ? (
+          opened && opened.picking === null ? (
             <div className='p-4'>
               <ModalFooterActions
-                note={
-                  error ||
-                  (isDirty
-                    ? `${changes.length === 1 ? '1 change' : `${changes.length} changes`} not saved yet`
-                    : null)
-                }
+                note={error || null}
                 cancelAction={
                   <Button
                     type='button'
@@ -285,7 +303,7 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
                     loading={isSaving}
                     onClick={() => void save()}
                   >
-                    Save
+                    {isDirty ? 'Review changes' : 'Save'}
                   </Button>
                 }
               />
@@ -301,6 +319,12 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
             usage={usageQuery.data}
             isUsageError={usageQuery.isError}
             draft={opened.draft}
+            picking={opened.picking}
+            onPickingChange={(picking) =>
+              setOpened((current) =>
+                current ? { ...current, picking } : current,
+              )
+            }
             onDraftChange={(draft) =>
               setOpened((current) =>
                 current ? { ...current, draft } : current,
@@ -320,6 +344,8 @@ interface GateControlsProps {
   usage: AppUsage[] | undefined;
   isUsageError: boolean;
   draft: GateDraft;
+  picking: GateExceptionList | null;
+  onPickingChange: (picking: GateExceptionList | null) => void;
   onDraftChange: (draft: GateDraft) => void;
 }
 
@@ -330,10 +356,10 @@ function GateControls({
   usage,
   isUsageError,
   draft,
+  picking,
+  onPickingChange: setPicking,
   onDraftChange,
 }: GateControlsProps) {
-  const [picking, setPicking] = useState<GateExceptionList | null>(null);
-
   const addTo = (list: GateExceptionList, uid: string) => {
     const other: GateExceptionList =
       list === 'alwaysOnUids' ? 'alwaysOffUids' : 'alwaysOnUids';
@@ -547,10 +573,14 @@ function PersonPicker({
   const shown = isShowingEveryone ? [...appPeople, ...everyoneElse] : appPeople;
 
   const getSubtitle = (profile: UserProfile) => {
-    if (otherUids.includes(profile.uid)) return `${otherLabel} · moves here`;
     const lastActiveAt = lastActiveByUid.get(profile.uid);
-    if (lastActiveAt === undefined) return `Hasn't opened ${appName}`;
-    return `${lastActiveAt >= activeSince ? 'Last active' : 'Quiet since'} ${formatDate(lastActiveAt)}`;
+    const activity =
+      lastActiveAt === undefined
+        ? `Hasn't opened ${appName}`
+        : `${lastActiveAt >= activeSince ? 'Last active' : 'Quiet since'} ${formatDate(lastActiveAt)}`;
+    return otherUids.includes(profile.uid)
+      ? `${otherLabel} · moves here · ${activity}`
+      : activity;
   };
 
   const getEmptyText = () => {
@@ -569,9 +599,8 @@ function PersonPicker({
       <div className='space-y-1'>
         <h4 className='text-foreground text-base font-semibold'>{title}</h4>
         <p className='text-muted-foreground text-sm'>
-          {isShowingEveryone
-            ? `People who use ${appName} come first, most recently active at the top.`
-            : `People who use ${appName}, most recently active first.`}
+          People who&apos;ve opened {appName} come first, most recently active
+          at the top.
         </p>
       </div>
       <SearchInput
