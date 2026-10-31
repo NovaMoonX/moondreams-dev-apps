@@ -57,6 +57,8 @@ export interface BillValues {
 export interface EnvelopeValues {
   amountCents: number | null;
   period: BudgetEnvelopePeriod | null;
+  /** What the envelope holds today, when the document shows a balance. */
+  currentCents: number | null;
 }
 
 export interface GoalValues {
@@ -428,6 +430,7 @@ const toEnvelope = (raw: Raw, toFile: ToFile): BudgetEnvelope => ({
     ...CALENDAR_PERIODS,
     'perPay',
   ]),
+  currentCents: toCents(raw.currentCents),
 });
 
 const toGoal = (raw: Raw, toFile: ToFile): BudgetGoal => ({
@@ -474,7 +477,9 @@ const billDiffers = (a: BillValues, b: BillValues) =>
     : isDifferent(getDueDay(a), getDueDay(b)));
 
 const envelopeDiffers = (a: EnvelopeValues, b: EnvelopeValues) =>
-  isDifferent(a.amountCents, b.amountCents) || isDifferent(a.period, b.period);
+  isDifferent(a.amountCents, b.amountCents) ||
+  isDifferent(a.period, b.period) ||
+  isDifferent(a.currentCents, b.currentCents);
 
 const goalDiffers = (a: GoalValues, b: GoalValues) =>
   isDifferent(a.targetCents, b.targetCents) ||
@@ -667,13 +672,18 @@ export function normalizeBudgetReading(
       ),
     ),
     {
-      pick: ({ amountCents, period }) => ({ amountCents, period }),
+      pick: ({ amountCents, period, currentCents }) => ({
+        amountCents,
+        period,
+        currentCents,
+      }),
       isDifferent: envelopeDiffers,
       fill: (kept, other) => ({
         ...kept,
         ...fillFor(kept, other),
         amountCents: orElse(kept.amountCents, other.amountCents),
         period: orElse(kept.period, other.period),
+        currentCents: orElse(kept.currentCents, other.currentCents),
       }),
       cap: BUDGET_LIMITS.items.envelopes,
     },

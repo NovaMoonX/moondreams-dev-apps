@@ -173,6 +173,7 @@ export function toEnvelopeValue(
           ? { kind: 'everyIncomeDay' }
           : { kind: 'calendar', period, startsOn: today },
     },
+    startingCents: item.currentCents,
   };
 }
 
@@ -225,6 +226,7 @@ const BILL_GROUPS: (keyof BillValues)[][] = [
 const ENVELOPE_GROUPS: (keyof EnvelopeValues)[][] = [
   ['amountCents'],
   ['period'],
+  ['currentCents'],
 ];
 const GOAL_GROUPS: (keyof GoalValues)[][] = [
   ['targetCents'],

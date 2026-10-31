@@ -35,6 +35,8 @@ export interface StartRow {
   isAmountMuted?: boolean;
   /** The source a pay line belongs to, when that source has several. */
   group?: string;
+  /** The row cannot be added until the person looks at it. */
+  isNeedy?: boolean;
 }
 
 const WEEKDAYS = [

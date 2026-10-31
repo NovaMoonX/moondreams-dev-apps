@@ -252,6 +252,9 @@ const sayEnvelope = (values: EnvelopeValues) =>
       : values.period === 'perPay'
         ? 'each pay'
         : CALENDAR_PERIOD_UNITS[values.period],
+    values.currentCents === null
+      ? null
+      : `${formatCents(values.currentCents)} held`,
   ]);
 
 const sayGoal = (values: GoalValues) =>
@@ -420,6 +423,7 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
       id: key,
       name: proposal.name,
       emoji: null,
+      isNeedy: true,
       line:
         proposal.cadence !== null &&
         !proposal.cadence.writtenCents &&
@@ -437,8 +441,16 @@ const toBaseRow = (proposal: Proposal, missing: string[]): StartRow => {
     return toIncomeRow(key, income.sourceName, income.amount, income.schedule);
   }
   if (kind === 'bill') return toBillRow(key, value as BudgetValues['bill']);
-  if (kind === 'envelope')
-    return toEnvelopeRow(key, value as BudgetValues['envelope']);
+  if (kind === 'envelope') {
+    const envelope = value as BudgetValues['envelope'];
+    const row = toEnvelopeRow(key, envelope);
+    return envelope.startingCents
+      ? {
+          ...row,
+          line: `${row.line} · ${BUDGET_WORDS.envelopeHolds(formatCentsShort(envelope.startingCents))}`,
+        }
+      : row;
+  }
   const goal = value as BudgetValues['goal'];
   const row = toGoalRow(key, goal);
   const line = toGoalLine(goal);
@@ -463,6 +475,7 @@ const toRow = (proposal: Proposal, isHidden: boolean): StartRow =>
             ? BUDGET_WORDS.disagreeAgain
             : BUDGET_WORDS.disagree,
         amount: null,
+        isNeedy: true,
       }
     : toBaseRow(proposal, getMissingSteps(proposal.kind, proposal.value));
 
@@ -590,6 +603,8 @@ function BudgetStart({
   const [error, setError] = useState<string | null>(null);
   const [edited, setEdited] = useState<Record<string, Decision>>({});
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
+  const [dropped, setDropped] = useState<ReadonlySet<string>>(new Set());
+  const [isRemovedOpen, setIsRemovedOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [movingKey, setMovingKey] = useState<string | null>(null);
   const [isMoveTipSeen, setIsMoveTipSeen] = useLocalStoragePreference(
@@ -630,6 +645,8 @@ function BudgetStart({
     setForEmojis({});
     setRenaming(null);
     setRemoved(new Set());
+    setDropped(new Set());
+    setIsRemovedOpen(false);
     setSelected(null);
     setForm(null);
     goTo('input');
@@ -698,47 +715,54 @@ function BudgetStart({
   const data = reading ?? EMPTY_BUDGET_READING;
   const readings = getKindReadings(today);
 
-  const proposals: Proposal[] = [
-    ...toProposals(
-      'income',
-      data.incomes,
-      readings.income,
-      edited,
-      removed,
-      forNames,
-    ),
-    ...toProposals(
-      'bill',
-      data.bills,
-      readings.bill,
-      edited,
-      removed,
-      forNames,
-    ),
-    ...toProposals(
-      'envelope',
-      data.envelopes,
-      readings.envelope,
-      edited,
-      removed,
-      forNames,
-    ),
-    ...toProposals(
-      'goal',
-      data.goals,
-      readings.goal,
-      edited,
-      removed,
-      forNames,
-    ),
-  ].map((proposal) => toMovedProposal(proposal, edited));
+  const listProposals = (hidden: ReadonlySet<string>): Proposal[] =>
+    [
+      ...toProposals(
+        'income',
+        data.incomes,
+        readings.income,
+        edited,
+        hidden,
+        forNames,
+      ),
+      ...toProposals(
+        'bill',
+        data.bills,
+        readings.bill,
+        edited,
+        hidden,
+        forNames,
+      ),
+      ...toProposals(
+        'envelope',
+        data.envelopes,
+        readings.envelope,
+        edited,
+        hidden,
+        forNames,
+      ),
+      ...toProposals(
+        'goal',
+        data.goals,
+        readings.goal,
+        edited,
+        hidden,
+        forNames,
+      ),
+    ].map((proposal) => toMovedProposal(proposal, edited));
+  const proposals = listProposals(new Set([...removed, ...dropped]));
+  const droppedProposals =
+    dropped.size === 0
+      ? []
+      : listProposals(new Set()).filter(
+          (proposal) => dropped.has(proposal.key) && !removed.has(proposal.key),
+        );
   const ofKind = (kind: BudgetKind) =>
     proposals.filter((proposal) => proposal.kind === kind);
-  const needing = proposals.filter(
-    (proposal) =>
-      proposal.isUndecided ||
-      getMissingSteps(proposal.kind, proposal.value).length > 0,
-  ).length;
+  const isNeedy = (proposal: Proposal) =>
+    proposal.isUndecided ||
+    getMissingSteps(proposal.kind, proposal.value).length > 0;
+  const needing = proposals.filter(isNeedy).length;
   const undated = ofKind('bill').filter(
     (proposal) =>
       !proposal.isUndecided &&
@@ -1032,7 +1056,14 @@ function BudgetStart({
           ...current,
           [key]: {
             ...current[key],
-            value: next,
+            value:
+              kind === 'envelope'
+                ? {
+                    ...(next as BudgetValues['envelope']),
+                    startingCents: (value as BudgetValues['envelope'])
+                      .startingCents,
+                  }
+                : next,
             versionCount: formProposal.readVersions,
           },
         }));
@@ -1271,6 +1302,21 @@ function BudgetStart({
             {BUDGET_WORDS.moveTipBody}
           </InlineNotice>
         )}
+      {droppedProposals.length > 0 && (
+        <div>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="text-muted-foreground! relative -ml-2 gap-1.5 after:absolute after:inset-x-0 after:-inset-y-2 after:content-['']"
+            onClick={() => setIsRemovedOpen(true)}
+          >
+            <Trash2 className='h-4 w-4' aria-hidden='true' />
+            {BUDGET_WORDS.removedRow(droppedProposals.length)}
+            <ChevronRight className='h-4 w-4' aria-hidden='true' />
+          </Button>
+        </div>
+      )}
       {KINDS.map(({ kind, label, search }) => {
         const list = ofKind(kind);
         const rows =
@@ -1357,13 +1403,28 @@ function BudgetStart({
           </Button>
         </div>
       )}
+      {needing > 0 && !isFolded && (
+        <InlineNotice tone='warning'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='stripped'
+            className='text-foreground! h-auto w-full justify-between gap-2 text-left font-normal'
+            onClick={() => {
+              const first = proposals.find(isNeedy);
+              if (first) setSelected(first.key);
+            }}
+          >
+            {BUDGET_WORDS.needDetails(needing)}
+            <ChevronRight className='h-4 w-4 shrink-0' aria-hidden='true' />
+          </Button>
+        </InlineNotice>
+      )}
       <ModalFooterActions
         note={
-          needing > 0 && !isFolded
-            ? BUDGET_WORDS.needDetails(needing)
-            : needing === 0 && undated > 0 && !isShort
-              ? BUDGET_WORDS.dueLaterNote(undated)
-              : null
+          needing === 0 && undated > 0 && !isShort
+            ? BUDGET_WORDS.dueLaterNote(undated)
+            : null
         }
         cancelAction={
           <Button
@@ -1388,6 +1449,54 @@ function BudgetStart({
           </Button>
         }
       />
+      <DetailSheet
+        isOpen={isRemovedOpen && droppedProposals.length > 0}
+        onClose={() => setIsRemovedOpen(false)}
+        title={BUDGET_WORDS.removedTitle}
+        actions={<ValuesEyeButton />}
+      >
+        <ul className='divide-border divide-y'>
+          {droppedProposals.map((proposal) => {
+            const row = toProposalRow(proposal);
+            return (
+              <li
+                key={proposal.key}
+                className='flex items-center gap-3 py-2 first:pt-0 last:pb-0'
+              >
+                <div className='min-w-0 flex-1 text-sm text-pretty break-words'>
+                  <p className='font-medium'>{proposal.name}</p>
+                  <p className='text-muted-foreground'>
+                    {BUDGET_WORDS.sheetKind[proposal.kind]}
+                    {row.amount && (
+                      <>
+                        {' · '}
+                        <MaskedText>{row.amount}</MaskedText>
+                      </>
+                    )}
+                  </p>
+                </div>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                  aria-label={BUDGET_WORDS.restoreLabel(proposal.name)}
+                  onClick={() =>
+                    setDropped(
+                      (current) =>
+                        new Set(
+                          [...current].filter((key) => key !== proposal.key),
+                        ),
+                    )
+                  }
+                >
+                  {BUDGET_WORDS.restore}
+                </Button>
+              </li>
+            );
+          })}
+        </ul>
+      </DetailSheet>
       <DetailSheet
         isOpen={isNotReadOpen}
         onClose={() => setIsNotReadOpen(false)}
@@ -1663,7 +1772,7 @@ function BudgetStart({
                 label={BUDGET_WORDS.removeOne}
                 onClick={() => {
                   if (selected)
-                    setRemoved((current) => new Set([...current, selected]));
+                    setDropped((current) => new Set([...current, selected]));
                   setSelected(null);
                 }}
               />

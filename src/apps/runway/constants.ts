@@ -1149,8 +1149,13 @@ export const BUDGET_WORDS = {
   } as const,
   needDetails: (count: number) =>
     count === 1
-      ? 'One needs a look. Open it or remove it.'
-      : `${count} need a look. Open them or remove them.`,
+      ? '1 item needs a look. Open it or remove it.'
+      : `${count} items need a look. Open them or remove them.`,
+  removedRow: (count: number) => `Removed items (${count})`,
+  removedTitle: 'Removed items',
+  restore: 'Restore',
+  restoreLabel: (name: string) => `Restore ${name}`,
+  envelopeHolds: (amount: string) => `Holds ${amount}`,
   dueLaterNote: (count: number) =>
     count === 1
       ? 'One bill has no due date yet. Add it later from the plan.'

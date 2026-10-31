@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, TriangleAlert } from 'lucide-react';
 
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -90,6 +90,12 @@ function StartRowList({
                   {row.name}
                 </span>
                 <span className='text-muted-foreground line-clamp-2 block text-sm break-words'>
+                  {row.isNeedy && (
+                    <TriangleAlert
+                      className='text-warning mr-1 inline h-3.5 w-3.5 align-text-bottom'
+                      aria-hidden='true'
+                    />
+                  )}
                   <MaskedText>{row.line}</MaskedText>
                 </span>
               </span>

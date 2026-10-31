@@ -290,6 +290,8 @@ export interface EnvelopeSealed {
   funding: FundingRule;
   /** The group that lists this envelope; a version written before envelopes had groups reads as null. */
   groupId: string | null;
+  /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
 }
 
 /** How a bill is funded: spread over the income days before it is due, or on days the person picked. */

@@ -38,7 +38,7 @@ export interface DraftCommitResult {
   skipped: number;
   /** The ids of the draft's entries that were written. */
   addedIds: string[];
-  /** Goals whose starting amount did not record; they were added without it. */
+  /** Goals and envelopes whose starting amount did not record; they were added without it. */
   unrecordedHoldings: string[];
 }
 
@@ -151,6 +151,7 @@ export async function commitStartDraft(
         continue;
       }
       const { groupId, newGroup } = toGroup(forName, forEmoji);
+      const startingCents = value.startingCents ?? 0;
       const created = await createEnvelope(uid, encryption, {
         startDate: today,
         envelope: {
@@ -158,10 +159,27 @@ export async function commitStartDraft(
           groupId,
           funding: mapFunding(value.funding),
           orderIndex: nextRank(value.priority),
+          ...(existing.startDate !== null ? { startingCents: undefined } : {}),
         },
         newGroup,
       });
       rememberGroup(newGroup, created.groupId);
+      if (existing.startDate !== null && startingCents > 0) {
+        const isRecorded = await recordHolding(
+          uid,
+          encryption,
+          existing.startDate,
+          {
+            holding: 'envelope',
+            refId: created.envelopeId,
+            amountCents: startingCents,
+          },
+        ).catch((error) => {
+          console.error(error);
+          return false;
+        });
+        if (!isRecorded) result.unrecordedHoldings.push(value.name);
+      }
       taken.envelopes.add(norm(value.name));
       result.added += 1;
       result.addedIds.push(id);
