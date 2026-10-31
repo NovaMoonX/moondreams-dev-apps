@@ -12,6 +12,9 @@
     "./runway/drillKeyring.ts",
     "./ownerInbox/inbox.ts",
     "./ownerInbox/run.ts",
-    "./checks/ownerInbox.ts"
+    "./checks/ownerInbox.ts",
+    "./board/board.ts",
+    "./board/run.ts",
+    "./checks/board.ts"
   ]
 }

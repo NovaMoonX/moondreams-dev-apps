@@ -2354,7 +2354,7 @@ export async function seedNineLives(context: SeedContext): Promise<SeedResult> {
       healthRecordCount +
       symptomCount +
       visitCount +
-      2, // seeded ingestion drafts
+      2 + // seeded ingestion drafts
       catConditionCount,
   };
 

@@ -11,7 +11,7 @@ You build exactly what the orchestrator's brief asks, in the files it names, and
 
 1. Read `CLAUDE.md`, every `docs/conventions/` file its "Read before you touch" table names for the files you will change, and the app's `.claude/rules/<id>.md`. Read the code around each change before you write: match its naming, idiom and comment density.
 2. Build to the brief's "done when". When the brief is ambiguous, or the right change needs a file the brief doesn't name, stop and report the question instead of guessing: a wrong guess costs a whole review cycle.
-3. Run the fast checks on what you changed: `npx tsc -b --force`, `npx eslint <changed files>`, `npx prettier --write <changed .ts/.tsx files>` (never Markdown, never untouched files), and any `npm run check:*` the brief names. Fix what fails.
+3. Run the fast checks on what you changed: `npm run typecheck`, `npx eslint <changed files>`, `npx prettier --write <changed .ts/.tsx files>` (never Markdown, never untouched files), and any `npm run check:*` the brief names. Fix what fails.
 4. Never commit, push, open a PR, reseed data or change a file outside the brief. A shared file (`src/components`, `src/hooks`, `src/lib`, `src/utils`, `src/index.css`) reaches every app, so when a fix seems to need one the brief doesn't name, report it with the line you would change instead of changing it: two Runway fix rounds edited `ModalFooterActions` and `FormSheet` for a single screen's spacing, and both edits had to be reverted. If you work in a worktree, leave the changes in it.
 
 Report, in this order: what you built (one line per file), the checks you ran with their result, anything the brief asked for that you did not do and why, and questions. No diff dump: the orchestrator reads the diff itself.
