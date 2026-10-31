@@ -982,9 +982,30 @@ assert.deepEqual(
     keepsGoalTarget('bill', tvGoal, null),
     keepsGoalTarget('bill', tvGoal, 10_000),
     keepsGoalTarget('envelope', tvGoal, null),
+    keepsGoalTarget('bill', { ...tvGoal, targetDate: null }, 10_000),
   ],
-  [true, false, false],
+  [true, false, false, false],
   'a goal keeps its target only as a bill with nothing going in each period',
 );
+(['weekly', 'everyOtherWeek'] as const).forEach((kind) => {
+  const repeating = {
+    ...gas,
+    timing: {
+      kind: 'date' as const,
+      schedule: { kind, anchor: null, monthDays: [] },
+    },
+  };
+  const moved = moveBudgetValue(
+    'bill',
+    'envelope',
+    repeating,
+    today,
+  ) as typeof gasEnvelope;
+  assert.deepEqual(
+    [moved.funding.amount, getMissingSteps('envelope', moved)],
+    [{ kind: 'exact', cents: 9_000 }, []],
+    `a ${kind} bill moved to an envelope keeps its amount`,
+  );
+});
 
 console.log('runwayBudgetReading: ok');

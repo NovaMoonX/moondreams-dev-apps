@@ -374,7 +374,7 @@ export const keepsGoalTarget = (
   monthlyCents: number | null,
 ) => to === 'bill' && toSpread('goal', goal, monthlyCents).cents <= 0;
 
-/** A found bill, envelope or goal as another of the three, keeping its name, emoji and priority and carrying its amount to where that kind keeps one: a repeating amount stays a repeating amount, and a one-off bill and a goal's target trade places. A repeat the new kind can't take (a bill paid per pay or yearly) is left for the person to answer, never guessed. */
+/** A found bill, envelope or goal as another of the three, keeping its name, emoji and priority and carrying its amount to where that kind keeps one: a repeating amount stays a repeating amount, and a one-off bill and a goal's target trade places. An amount the new kind can't read on a period (a one-time or unknown-repeat bill as an envelope, an envelope given money each pay as a bill) is left for the person to answer, never guessed. */
 export function moveBudgetValue(
   from: MovableKind,
   to: MovableKind,
