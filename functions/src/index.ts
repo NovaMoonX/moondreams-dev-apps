@@ -25,6 +25,7 @@ export { fetchLinkMetadata } from './linkMetadata/fetchLinkMetadata.js';
 export { fetchPageContent } from './linkMetadata/fetchPageContent.js';
 export {
   answerPipelineQuestions,
+  mergePipelinePr,
   settlePipelineAsk,
 } from './pipeline/answerPipelineQuestions.js';
 export { recordPipelineEvent } from './pipeline/recordPipelineEvent.js';

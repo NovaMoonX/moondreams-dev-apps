@@ -103,6 +103,13 @@ const toStatus = (value: unknown) => {
             : null,
       }),
     ),
+    // Null when there is no Must do list to read, so the dashboard never takes it for an empty one; not capped at ten, since Merge waits on all of it.
+    mustDo: Array.isArray(value.mustDo)
+      ? value.mustDo
+          .filter((item): item is string => typeof item === 'string')
+          .slice(0, MAX_OWNER_LINES)
+          .map(text)
+      : null,
     goodToKnow: texts(value.goodToKnow),
     screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),

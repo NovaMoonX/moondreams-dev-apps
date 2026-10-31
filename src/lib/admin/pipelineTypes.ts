@@ -32,6 +32,8 @@ export interface PipelineInboxStatus {
   sessionTitle: string | null;
   state: string | null;
   ownerItems: PipelineOwnerItem[];
+  /** The open boxes under "Must do before merge"; null or missing on documents written before it was read. */
+  mustDo: string[] | null;
   goodToKnow: string[];
   screenshots: string[];
   updatedAt: number;

@@ -68,6 +68,17 @@ can_comment() {
   return 1
 }
 
+# Merging a pull request that is already merged is refused as not mergeable (405) once the token may merge, so nothing changes.
+can_merge() {
+  local token="$1" pr status
+  pr=$(GH_TOKEN="$token" gh api "repos/$REPO/pulls?state=closed&per_page=30" --jq '[.[] | select(.merged_at != null)][0].number // empty' 2>/dev/null) || return 2
+  [[ -n "$pr" ]] || return 3
+  status=$(GH_TOKEN="$token" gh api -X PUT "repos/$REPO/pulls/$pr/merge" --input - -i <<<'{"sha":"0000000000000000000000000000000000000000"}' 2>/dev/null | head -1 | awk '{print $2}') || true
+  [[ "$status" == "405" || "$status" == "409" || "$status" == "422" ]] && return 0
+  echo "  GitHub answered $status for a test merge of the already-merged #$pr." >&2
+  return 1
+}
+
 check_token() {
   local token="$1"
   GH_TOKEN="$token" gh api "repos/$REPO" >/dev/null 2>&1 \
@@ -84,6 +95,21 @@ check_token() {
        echo "  Set Pull requests: Read and write and Issues: Read and write, press Update, then run: npm run pipeline:secrets -- check" >&2
        return 1 ;;
   esac
+  result=0
+  can_merge "$token" || result=$?
+  case $result in
+    0) echo "✓ The token can merge pull requests" ;;
+    3) echo "• No merged pull request was found, so merging couldn't be tested." ;;
+    *) echo "• The token can't merge, so Merge from the dashboard works only for pull requests a session drives." >&2
+       echo "  To merge the rest too, edit it (no new token needed): $TOKEN_PAGE → Pipeline answers → Permissions" >&2
+       echo "  Set Contents: Read and write, press Update, then run: npm run pipeline:secrets -- check" >&2 ;;
+  esac
+  if GH_TOKEN="$token" gh api "repos/$REPO/actions/workflows/firebase-hosting-merge.yml/runs?per_page=1" >/dev/null 2>&1; then
+    echo "✓ The token can see whether a deploy is running"
+  else
+    echo "• The token can't read workflow runs, so a merge from the dashboard is refused for pull requests no session drives." >&2
+    echo "  Edit it (no new token needed): $TOKEN_PAGE → Pipeline answers → Permissions → Actions: Read-only → Update" >&2
+  fi
 }
 
 copy_to_clipboard() {
@@ -123,10 +149,10 @@ case "$mode" in
     need gh "Install it from https://cli.github.com"
     signed_in
     [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the token." >&2; exit 1; }
-    url="https://github.com/settings/personal-access-tokens/new?name=Pipeline%20answers&description=Posts%20answers%20from%20the%20admin%20dashboard&target_name=NovaMoonX&expires_in=366&pull_requests=write&issues=write"
+    url="https://github.com/settings/personal-access-tokens/new?name=Pipeline%20answers&description=Posts%20answers%20from%20the%20admin%20dashboard&target_name=NovaMoonX&expires_in=366&pull_requests=write&issues=write&contents=write&actions=read"
     echo "1. A GitHub page opens to make the token. Check these, then press Generate token:"
     echo "   • Repository access: Only select repositories → moondreams-dev-apps"
-    echo "   • Permissions: Pull requests: Read and write, Issues: Read and write"
+    echo "   • Permissions: Pull requests: Read and write, Issues: Read and write, Contents: Read and write, Actions: Read-only"
     echo "   ($url)"
     if [[ -z "${SSH_CONNECTION:-}" ]]; then
       if [[ "$(uname)" == "Darwin" ]]; then open "$url"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 || true; fi
