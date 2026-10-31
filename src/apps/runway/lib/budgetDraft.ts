@@ -336,6 +336,7 @@ export const MOVABLE_KINDS: readonly MovableKind[] = [
 const PERIOD_OF_REPEAT: Partial<Record<Schedule['kind'], CalendarPeriod>> = {
   weekly: 'weekly',
   everyOtherWeek: 'every2Weeks',
+  twiceMonthly: 'twiceMonthly',
   monthly: 'monthly',
 };
 
@@ -368,7 +369,7 @@ const toSpread = (
   };
 };
 
-/** A found bill, envelope or goal as another of the three, keeping its name, emoji and priority and carrying its amount to where that kind keeps one: a repeating amount stays a repeating amount, and a one-off bill and a goal's target trade places. What the new kind needs and the old one never had is left for the person to answer. */
+/** A found bill, envelope or goal as another of the three, keeping its name, emoji and priority and carrying its amount to where that kind keeps one: a repeating amount stays a repeating amount, and a one-off bill and a goal's target trade places. A repeat the new kind can't take (a bill paid per pay or yearly) is left for the person to answer, never guessed. */
 export function moveBudgetValue(
   from: MovableKind,
   to: MovableKind,
@@ -412,7 +413,9 @@ export function moveBudgetValue(
     } satisfies EnvelopeSealed;
   if (to === 'goal') {
     const oneOff =
-      from === 'bill' && period === null ? (value as BillSealed) : null;
+      from === 'bill' && (value as BillSealed).timing.schedule.kind === 'once'
+        ? (value as BillSealed)
+        : null;
     return {
       name,
       emoji,

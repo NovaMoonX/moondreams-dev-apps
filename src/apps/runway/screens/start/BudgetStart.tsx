@@ -74,6 +74,7 @@ import {
   type BudgetKind,
   type BudgetValues,
 } from '@apps/runway/lib/budgetDraft';
+import type { GoalSealed } from '@apps/runway/types';
 import {
   EMPTY_BUDGET_READING,
   type BillValues,
@@ -127,6 +128,8 @@ interface ProposalVersion {
 interface Decision {
   value: BudgetValues[BudgetKind];
   versionCount: number;
+  /** The list the person moved it to, when it isn't the one it was read into. */
+  kind?: MovableKind;
 }
 
 interface Proposal {
@@ -136,6 +139,8 @@ interface Proposal {
   sourceFile: string;
   /** What each file said when the files disagree; empty otherwise. */
   versions: ProposalVersion[];
+  /** How many versions the files gave, kept when a move empties `versions`, so a choice already made stays made. */
+  readVersions: number;
   /** The files disagree and the person has not chosen among the versions they gave. */
   isUndecided: boolean;
   /** The person had chosen, and a file added since disagrees. */
@@ -184,9 +189,9 @@ const isMovable = (kind: BudgetKind): kind is MovableKind => kind !== 'income';
 /** The proposal as the kind the person moved it to: what each file said and a cadence the document wrote belong to the kind it was read as, so they are dropped. */
 const toMovedProposal = (
   proposal: Proposal,
-  moved: Record<string, MovableKind>,
+  edited: Record<string, Decision>,
 ): Proposal => {
-  const kind = moved[proposal.key];
+  const kind = edited[proposal.key]?.kind;
   return kind === undefined || kind === proposal.kind
     ? proposal
     : {
@@ -338,6 +343,7 @@ const toProposals = <K extends BudgetKind, V, T extends ReadItem<V>>(
         ),
         isUndecided,
         isReopened: isUndecided && decision !== undefined,
+        readVersions: item.versions.length,
         monthlyCents: reading.monthly?.(item) ?? null,
         versions: item.versions.map((version) => ({
           sourceFile: version.sourceFile,
@@ -381,13 +387,17 @@ const toValueAmount = ({ kind, value }: Proposal) => {
 };
 
 /** The figure the document gave when the value has none yet: a yearly bill's, or a goal's monthly amount. */
-const toDocumentAmount = ({ kind, cadence, monthlyCents }: Proposal) => {
+const toDocumentAmount = ({ kind, cadence, monthlyCents, value }: Proposal) => {
   if (cadence?.writtenCents)
     return BUDGET_WORDS.amountPerCadence(
       formatCentsShort(cadence.writtenCents),
       cadence.words,
     );
-  return kind === 'goal' && monthlyCents
+  if (kind !== 'goal') return null;
+  const { amount, cadence: every } = (value as BudgetValues['goal']).funding;
+  if (amount.kind === 'exact' && amount.cents > 0 && every.kind === 'calendar')
+    return `${formatCentsShort(amount.cents)} ${CALENDAR_PERIOD_UNITS[every.period]}`;
+  return monthlyCents
     ? BUDGET_WORDS.amountAMonth(formatCentsShort(monthlyCents))
     : null;
 };
@@ -580,7 +590,6 @@ function BudgetStart({
   const [edited, setEdited] = useState<Record<string, Decision>>({});
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
-  const [moved, setMoved] = useState<Record<string, MovableKind>>({});
   const [movingKey, setMovingKey] = useState<string | null>(null);
   const [isMoveTipSeen, setIsMoveTipSeen] = useLocalStoragePreference(
     MOVE_TIP_SEEN_KEY,
@@ -620,7 +629,6 @@ function BudgetStart({
     setForEmojis({});
     setRenaming(null);
     setRemoved(new Set());
-    setMoved({});
     setSelected(null);
     setForm(null);
     goTo('input');
@@ -722,7 +730,7 @@ function BudgetStart({
       removed,
       forNames,
     ),
-  ].map((proposal) => toMovedProposal(proposal, moved));
+  ].map((proposal) => toMovedProposal(proposal, edited));
   const ofKind = (kind: BudgetKind) =>
     proposals.filter((proposal) => proposal.kind === kind);
   const needing = proposals.filter(
@@ -808,54 +816,65 @@ function BudgetStart({
     setFor(keysFor(from), () => to);
   };
   const setValue = (
-    { key, versions }: Proposal,
+    { key, readVersions }: Proposal,
     value: BudgetValues[BudgetKind],
   ) => {
     setEdited((current) => ({
       ...current,
-      [key]: { value, versionCount: versions.length },
+      [key]: { ...current[key], value, versionCount: readVersions },
     }));
     setSelected(null);
   };
   const move = (proposal: Proposal, to: MovableKind) => {
     if (!isMovable(proposal.kind)) return;
-    const { key } = proposal;
-    const before = { moved: moved[key], edited: edited[key] };
-    const restore = <T,>(current: Record<string, T>, value: T | undefined) =>
-      value === undefined
-        ? Object.fromEntries(
-            Object.entries(current).filter(([entry]) => entry !== key),
-          )
-        : { ...current, [key]: value };
-    setEdited((current) => ({
-      ...current,
-      [key]: {
-        value: moveBudgetValue(
-          proposal.kind as MovableKind,
-          to,
-          proposal.value as BudgetValues[MovableKind],
-          today,
-          proposal.monthlyCents,
-        ),
-        versionCount: proposal.versions.length,
-      },
-    }));
-    setMoved((current) => ({ ...current, [key]: to }));
+    const { key, kind: from } = proposal;
+    const before = edited[key];
+    const written: Decision = {
+      value: moveBudgetValue(
+        from,
+        to,
+        proposal.value as BudgetValues[MovableKind],
+        today,
+        proposal.monthlyCents,
+      ),
+      versionCount: proposal.readVersions,
+      kind: to,
+    };
+    setEdited((current) => ({ ...current, [key]: written }));
     setIsMoveTipSeen(true);
     setMovingKey(null);
     setSelected(null);
+    const goal = from === 'goal' ? (proposal.value as GoalSealed) : null;
+    const missing = getMissingSteps(to, written.value);
     addToast({
       title: BUDGET_WORDS.moved(
         proposal.name,
         BUDGET_WORDS.moveKinds[to].article,
       ),
+      description: [
+        goal === null
+          ? null
+          : BUDGET_WORDS.movedDropped(
+              goal.targetCents > 0,
+              (goal.startingCents ?? 0) > 0,
+            ),
+        missing.length === 0
+          ? null
+          : `${toNeeds({ ...proposal, cadence: null }, missing)}.`,
+      ]
+        .filter((line) => line !== null && line !== '')
+        .join(' '),
       type: 'success',
       action: {
         label: BUDGET_WORDS.undo,
-        onClick: () => {
-          setEdited((current) => restore(current, before.edited));
-          setMoved((current) => restore(current, before.moved));
-        },
+        onClick: () =>
+          setEdited((current) => {
+            if (current[key] !== written) return current;
+            if (before !== undefined) return { ...current, [key]: before };
+            return Object.fromEntries(
+              Object.entries(current).filter(([entry]) => entry !== key),
+            );
+          }),
       },
     });
   };
@@ -1009,7 +1028,11 @@ function BudgetStart({
       onSave: (next, nextFor) => {
         setEdited((current) => ({
           ...current,
-          [key]: { value: next, versionCount: formProposal.versions.length },
+          [key]: {
+            ...current[key],
+            value: next,
+            versionCount: formProposal.readVersions,
+          },
         }));
         if (kind === 'bill' || kind === 'envelope')
           setForNames((current) => ({ ...current, [key]: nextFor ?? null }));

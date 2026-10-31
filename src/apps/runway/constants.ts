@@ -1189,6 +1189,14 @@ export const BUDGET_WORDS = {
     },
   } as const,
   moved: (name: string, kind: string) => `${name} is ${kind} now`,
+  movedDropped: (hadTarget: boolean, hadSaved: boolean) =>
+    hadTarget && hadSaved
+      ? "Its target and what's saved aren't kept."
+      : hadTarget
+        ? "Its target isn't kept."
+        : hadSaved
+          ? "What's saved isn't kept."
+          : '',
   moveTipTitle: 'Something in the wrong list?',
   moveTipBody: 'Open it to make it a bill, an envelope or a goal.',
   moveTipDismiss: 'Got it',
