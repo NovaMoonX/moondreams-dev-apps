@@ -68,7 +68,7 @@ can_comment() {
   return 1
 }
 
-# Merging a pull request that is already merged can't change anything; GitHub answers 200 or 405 once the token may merge, and 403 when it may not.
+# Merging a pull request that is already merged can't change anything; GitHub answers 200, 405, 409 or 422 once the token may merge, and 403 when it may not.
 can_merge() {
   local token="$1" pr status
   pr=$(GH_TOKEN="$token" gh api "repos/$REPO/pulls?state=closed&per_page=30" --jq '[.[] | select(.merged_at != null)][0].number // empty' 2>/dev/null) || return 2
