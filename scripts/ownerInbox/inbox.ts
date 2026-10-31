@@ -349,9 +349,10 @@ const toLabel = (text: string, max = MAX_LABEL) =>
 const MAX_NOTE = 240;
 const NOTE_BREAK = /<br\s*\/?>|\s+—\s+/i;
 
-/** A label and the note written after its first `<br>` or ` — `. */
+/** A label and the note written after its first `<br>`, or after ` — ` when the label is bold (a plain dash is punctuation). */
 const toTitled = (raw: string) => {
-  const at = raw.search(NOTE_BREAK);
+  const isBold = /^\s*(\*\*|__|<b>)/i.test(raw);
+  const at = isBold ? raw.search(NOTE_BREAK) : raw.search(/<br\s*\/?>/i);
   if (at === -1) return { label: toLabel(raw), note: null };
   const rest = raw.slice(at).replace(NOTE_BREAK, '');
   return { label: toLabel(raw.slice(0, at)), note: toLabel(rest, MAX_NOTE) || null };
@@ -427,9 +428,8 @@ export function parseGallery(body: string | null): GalleryStep[] {
       }
       const images = toOrdered(toImages(line, null)).slice(0, MAX_STEP_IMAGES);
       if (images.length > 0) {
-        const alt = toTitled(/!\[([^\]]*)\]/.exec(line)?.[1] ?? '');
-        const above = toTitled(acc.caption);
-        const titled = alt.label ? alt : above;
+        const alt = toLabel(/!\[([^\]]*)\]/.exec(line)?.[1] ?? '');
+        const titled = alt ? { label: alt, note: null } : toTitled(acc.caption);
         return {
           steps: [
             ...acc.steps,
@@ -466,8 +466,14 @@ const STANDING_ORDER: Standing[] = [
   'waiting',
 ];
 
+/** A PR whose status says it's still in progress asks nothing yet: its questions wait until its reviews are back. */
+export const isStillWorking = (state: string | null | undefined) =>
+  /in progress/i.test(state ?? '');
+
 const waitingItems = (pr: InboxPr) =>
-  (pr.status?.ownerItems ?? []).filter((item) => item.settled === null);
+  isStillWorking(pr.status?.state)
+    ? []
+    : (pr.status?.ownerItems ?? []).filter((item) => item.settled === null);
 
 const ownerCount = (session: Session) =>
   session.prs.reduce((sum, pr) => sum + waitingItems(pr).length, 0);

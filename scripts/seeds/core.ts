@@ -176,7 +176,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       ],
       minutesAgo: 70,
     },
-    { sessionId: 'session_seedWorking', branch: 'claude/pinch-voice', state: 'working', raisedHands: [], minutesAgo: 2 },
+    { sessionId: 'session_seedWorking', branch: 'claude/pinch-voice', state: 'working', raisedHands: [], phase: 'review', helpers: ['technical-reviewer', 'design-reviewer'], minutesAgo: 2 },
     { sessionId: 'session_seedQuiet', branch: 'claude/a-list-calendar', state: 'working', raisedHands: [], minutesAgo: 95 },
     { sessionId: 'session_seedIdle', branch: 'claude/waypoint-expenses', state: 'idle', raisedHands: [], minutesAgo: 300 },
   ].map(({ minutesAgo, ...session }) => ({
@@ -246,7 +246,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     status: {
       sessionUrl,
       sessionTitle,
-      state: 'in progress',
+      state: 'ready when you are',
       ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean; isTask: boolean }[],
       goodToKnow: [] as string[],
       screenshots: [] as string[],

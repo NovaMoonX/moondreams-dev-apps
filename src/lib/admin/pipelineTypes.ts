@@ -7,6 +7,10 @@ export interface PipelineSession {
   state: PipelineSessionState;
   /** The 🚩 lines from the turn's last reply. */
   raisedHands: string[];
+  /** What it was last doing; missing on documents from older hooks, so read it with `?? null`. */
+  phase: PipelinePhase | null;
+  /** The helper agents still running (their agent types); a turn that ended with helpers out stays `working`. Read with `?? []`. */
+  helpers: string[];
   startedAt: number;
   turnStartedAt: number | null;
   updatedAt: number;
@@ -40,7 +44,7 @@ export interface PipelineGalleryImage {
 
 export interface PipelineGalleryStep {
   label: string;
-  /** A line under the title; null or missing on documents written before notes. */
+  /** A line under the title; missing on documents written before notes, so read it with `?? null`. */
   note: string | null;
   images: PipelineGalleryImage[];
 }

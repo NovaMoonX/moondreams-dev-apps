@@ -32,7 +32,7 @@ const SWIPE_PX = 50;
 function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
   const [index, setIndex] = useState(startIndex);
   const [pick, setPick] = useState({ slide: startIndex, picture: 0 });
-  const [isNoteHidden, setIsNoteHidden] = useState(false);
+  const [hiddenNotes, setHiddenNotes] = useState<number[]>([]);
   const isNarrow = useMediaQuery().isBelow('sm');
   const swipeStart = useRef<number | null>(null);
   const didSwipe = useRef(false);
@@ -85,6 +85,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
   }, [step, onDialogClose]);
 
   if (!slide) return null;
+  const isNoteHidden = hiddenNotes.includes(index);
   const shownPicture = pick.slide === index ? pick.picture : 0;
   const shown = isNarrow
     ? slide.pictures.slice(shownPicture, shownPicture + 1)
@@ -111,7 +112,9 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
             rounded='full'
             aria-label='Show the note'
             className="relative text-white! before:absolute before:-inset-1.5 before:content-['']"
-            onClick={() => setIsNoteHidden(false)}
+            onClick={() =>
+              setHiddenNotes((current) => current.filter((at) => at !== index))
+            }
           >
             <Info className='size-5' aria-hidden='true' />
           </Button>
@@ -192,7 +195,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
               rounded='full'
               aria-label='Hide the note'
               className="relative -my-1 size-7 min-w-7 p-0 text-white! before:absolute before:-inset-1.5 before:content-['']"
-              onClick={() => setIsNoteHidden(true)}
+              onClick={() => setHiddenNotes((current) => [...current, index])}
             >
               <X className='size-4' aria-hidden='true' />
             </Button>

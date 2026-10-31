@@ -4,6 +4,7 @@ import type {
   PipelineInboxPr,
   PipelineMergedPr,
   PipelineOwnerItem,
+  PipelinePhase,
   PipelineSession,
   PipelineSettledAsk,
   PipelineSettleOutcome,
@@ -176,11 +177,15 @@ const getItemSettled = (
   return item.settled ?? null;
 };
 
+// Its session writes "in progress" until the review sized to the PR is back; its questions wait for that.
+const isReady = (pr: PipelineInboxPr) =>
+  !/in progress/i.test(pr.status?.state ?? '');
+
 const toSafeItems = (
   prs: PipelineInboxPr[],
   settled: SettledAskView[],
 ): PipelineOwnerEntryItem[] =>
-  prs.flatMap((pr) =>
+  prs.filter(isReady).flatMap((pr) =>
     (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => {
       const statusAt = pr.status?.updatedAt ?? 0;
       return {
@@ -248,6 +253,27 @@ const toAsk = (line: string) => stripLinks(line).replace(/^🚩\s*/, '');
 
 const ANSWERED_LINE = 'Answered · waiting for the session';
 
+const PHASE_WORDS: Record<PipelinePhase, string> = {
+  planning: 'Planning',
+  building: 'Building',
+  investigating: 'Reading the code',
+  screenshots: 'Taking screenshots',
+  review: 'Reviewing',
+  checks: 'Running checks',
+  conversation: 'Writing to GitHub',
+};
+
+/** "Reviewing · technical reviewer, validator": what a working session is doing, or null when it hasn't said. */
+export function getActivity(session: PipelineSession) {
+  const phase = session.phase ? PHASE_WORDS[session.phase] : null;
+  const helpers = Array.from(new Set(session.helpers ?? [])).map((helper) =>
+    helper.replace(/[-_]+/g, ' '),
+  );
+  const helperWords = helpers.length > 0 ? helpers.join(', ') : null;
+  if (phase && helperWords) return `${phase} · ${helperWords}`;
+  return phase ?? (helperWords ? `Helpers out: ${helperWords}` : null);
+}
+
 function getSubtitle(
   group: PipelineGroup | null,
   asks: string[],
@@ -261,8 +287,11 @@ function getSubtitle(
     const count = asks.length >= 2 ? `${asks.length} asks · ` : '';
     return `${time} · ${count}${asks[0] || 'Waiting on you'}`;
   }
-  if (group === 'working')
-    return `Working since ${formatPipelineTime(session.turnStartedAt ?? session.updatedAt, now)}`;
+  if (group === 'working') {
+    const since = `since ${formatPipelineTime(session.turnStartedAt ?? session.updatedAt, now)}`;
+    const activity = getActivity(session);
+    return activity ? `${activity} · ${since}` : `Working ${since}`;
+  }
   if (group === 'quiet') return `No update since ${time}`;
   return `Finished at ${time}`;
 }
@@ -281,7 +310,8 @@ function getLead(
       session.turnStartedAt ?? session.updatedAt,
       now,
     );
-    return `Working since ${since}${session.branch ? ` on ${session.branch}` : ''}`;
+    const activity = getActivity(session);
+    return `${activity ? `${activity}. ` : ''}Working since ${since}${session.branch ? ` on ${session.branch}` : ''}`;
   }
   if (group === 'quiet')
     return `No update for ${formatSpan(now - session.updatedAt)}. It may have stopped, or be waiting on a permission prompt.`;
@@ -526,7 +556,7 @@ export function buildPipeline(
     entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
   );
   const prEntries = prs
-    .filter((pr) => (pr.status?.ownerItems.length ?? 0) > 0)
+    .filter((pr) => isReady(pr) && (pr.status?.ownerItems.length ?? 0) > 0)
     .filter(
       (pr) =>
         ![pr.status?.sessionUrl, pr.bodySessionUrl].some(

@@ -358,13 +358,17 @@ const noted = parseGallery(`## Screenshots
 |---|---|
 | **History** — opens from any card<br>with its Undo | ![](https://x.test/shot.png) |
 
-![Undo a move — the row's sheet holds it](https://x.test/undo-after.png) ![](https://x.test/undo-before.png)
+**Undo a move** — the row's sheet holds it
+![](https://x.test/undo-after.png) ![](https://x.test/undo-before.png)
+
+![Phone — dark](https://x.test/p.png)
 `);
 assert.deepEqual(
   noted.map((step) => [step.label, step.note, step.images.map((image) => image.role)]),
   [
     ['History', 'opens from any card with its Undo', [null]],
     ['Undo a move', "the row's sheet holds it", ['before', 'after']],
+    ['Phone — dark', null, [null]],
   ],
   'a label carries its note after an em dash or <br>; a file name says before or after when no column does, and Before comes first',
 );
@@ -472,6 +476,17 @@ assert.doesNotMatch(
   buildInbox([pr(7, 'h7', 'main', ticked)], '2026-10-29T17:00:00Z'),
   /MAPS_KEY/,
   'a settled item is not counted or listed in the inbox issue',
+);
+
+assert.doesNotMatch(
+  buildInbox([pr(8, 'h8', 'main', ticked.replace('in progress', 'in progress'))], '2026-10-29T17:00:00Z'),
+  /Pick a header/,
+  'a PR still in progress asks nothing yet',
+);
+assert.match(
+  buildInbox([pr(8, 'h8', 'main', ticked.replace('in progress', 'ready when you are'))], '2026-10-29T17:00:00Z'),
+  /Pick a header/,
+  'once it is ready, its questions show',
 );
 
 console.log('owner inbox: ok');
