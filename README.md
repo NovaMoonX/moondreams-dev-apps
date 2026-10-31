@@ -117,7 +117,7 @@ The worker deploy step runs with `continue-on-error: true`, so if it fails, the 
 
 A 2nd-gen `onCall` function reaches the browser only if its Cloud Run service lets anyone invoke it. The Firebase CLI grants that (`allUsers` → `roles/run.invoker`) on a function's *first* deploy only, and this project's organization policy (domain-restricted sharing) refuses every `allUsers` grant. So the first deploy of a new callable prints `Unable to set the invoker for the IAM policy`, the function is created anyway, and the deploy step fails. A re-run then goes green with the function still private, because a callable's grant isn't tried again on an update, and the browser shows a CORS error.
 
-**What the deploy does about it.** `npm run fb:deploy:smart` reads the CLI's output. When it holds that message it runs `npm run fb:invoker -- --all`, which sets `--no-invoker-iam-check` on every callable's Cloud Run service (a setting on the service, not an IAM binding, so the policy has nothing to refuse), and deploys once more: the function the first run created is now an update, and an update doesn't ask for the grant again. After every deploy that succeeds it also runs `npm run fb:invoker -- --missing`, which lists the Cloud Run services and opens only the callables still private, so one left private by an earlier failed deploy is opened by the next one. A new callable needs nothing by hand. A second failure, or any failure without that message, fails the step as before. If the organization ever allows `allUsers` for this project, the CLI's own grant works and that path never runs.
+**What the deploy does about it.** `npm run fb:deploy:smart` reads the CLI's output. When it holds that message it runs `npm run fb:invoker -- --all`, which sets `--no-invoker-iam-check` on every callable's Cloud Run service (a setting on the service, not an IAM binding, so the policy has nothing to refuse), and deploys once more: the function the first run created is now an update, and an update doesn't ask for the grant again. A new callable needs nothing by hand. A second failure, or any failure without that message, fails the step as before. If the organization ever allows `allUsers` for this project, the CLI's own grant works and that path never runs.
 
 **One-time setup:** the deploy account (the service account in the `FIREBASE_SERVICE_ACCOUNT_MOONDREAMS_DEV_APPS` secret) must be able to update Cloud Run services. If it can't yet, `roles/run.admin` is the simple grant:
 
@@ -128,14 +128,13 @@ gcloud projects add-iam-policy-binding moondreams-dev-apps \
 
 Without it the step fails on a PERMISSION_DENIED from `gcloud` and names the function; the merge workflow signs `gcloud` in as that account first. A re-run of the workflow won't fix the function after that, because it now exists and the deploy skips it without a message, so once the role is granted run `npm run fb:invoker -- --all` yourself.
 
-**What it means:** every callable is reachable by anyone who has its address, exactly as with an `allUsers` grant, so each one checks the caller itself (`request.auth`) except the readers that exist for signed-out visitors (see [functions/README.md](functions/README.md)). The setting doesn't appear in the project's IAM policy, so a scan for `allUsers` won't find it, and the organization constraint `constraints/run.requireInvokerIam`, if it is ever turned on, would block it. It is kept to `onCall` functions: a scheduled or trigger function keeps its IAM check, and the script refuses it (it reads each `export { name, other } from './path.js';` in `functions/src/index.ts`, on one line or several, and stops on any other shape rather than guess). Only `fb:deploy:smart`, which the merge workflow runs, does this: `npm run fb:functions` and `npm run fb:deploy` call the CLI directly, so follow them with `npm run fb:invoker -- --all`.
+**What it means:** every callable is reachable by anyone who has its address, exactly as with an `allUsers` grant, so each one checks the caller itself (`request.auth`) except the readers that exist for signed-out visitors (see [functions/README.md](functions/README.md)). The setting doesn't appear in the project's IAM policy, so a scan for `allUsers` won't find it, and the organization constraint `constraints/run.requireInvokerIam`, if it is ever turned on, would block it. It is kept to `onCall` functions: a scheduled or trigger function keeps its IAM check, and the script refuses it (it also stops if it can't read `functions/src/index.ts`, rather than guess). Only `fb:deploy:smart`, which the merge workflow runs, does this: `npm run fb:functions` and `npm run fb:deploy` call the CLI directly, so follow them with `npm run fb:invoker -- --all`.
 
 **By hand** (a function that skipped the above, or a browser CORS error whose Cloud Run request log shows a `403` on the `OPTIONS` preflight with "The request was not authenticated"). Names are any case; the script lowercases them for Cloud Run, which rejects mixed-case names:
 
 ```bash
 npm run fb:invoker -- getCalendarShare findShowtimes
 npm run fb:invoker -- --all
-npm run fb:invoker -- --missing                # only the callables still private
 npm run fb:invoker -- findShowtimes --dry   # prints the gcloud command without running it
 ```
 
@@ -165,10 +164,6 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 ## Troubleshooting
 
 Problems we've hit before, so we don't hit them again.
-
-### The merge deploy fails after `Unable to set the invoker`, with "has an export this script can't read"
-
-**Symptom:** the deploy for #585 failed at `fb:invoker -- --all`, with `settlePipelineAsk` created but private and Hosting not deployed. **Cause:** `functions/src/index.ts` gained a multi-line `export { answerPipelineQuestions, settlePipelineAsk } from …`, and the invoker script read exports one line at a time, so it refused to run. **Fix:** the script now reads each export statement whole, and every successful deploy runs `fb:invoker -- --missing`, so the next merge opens the private callable and deploys Hosting with no step by hand. **Tell it apart:** the log line "has an export this script can't read" right after "A new callable could not be made public".
 
 ### The merge deploy fails with `Release … cloud.firestore already exists`
 

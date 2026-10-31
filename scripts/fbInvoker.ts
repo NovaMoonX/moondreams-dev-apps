@@ -8,38 +8,26 @@ const PROJECT_ID = (
   }
 ).projects.default;
 
-const indexSource = readFileSync('functions/src/index.ts', 'utf8');
-const exportStatements = indexSource.match(/^export\b[^;]*;/gm) ?? [];
-const exported = exportStatements.flatMap((statement) => {
-  const match = /^export\s*\{([^}]*)\}\s*from\s*'\.\/([^']+)\.js';$/.exec(
-    statement,
-  );
-  if (!match) return [];
-  const names = match[1]
-    .split(',')
-    .map((name) => name.trim())
-    .filter((name) => name.length > 0);
-  return names.every((name) => /^\w+$/.test(name))
-    ? [{ names, path: match[2] }]
-    : [];
+const exportLines = readFileSync('functions/src/index.ts', 'utf8')
+  .split('\n')
+  .filter((line) => line.startsWith('export'));
+const exported = exportLines.flatMap((line) => {
+  const match = /^export \{ (\w+) \} from '\.\/([^']+)\.js';$/.exec(line);
+  return match ? [{ name: match[1], path: match[2] }] : [];
 });
 
-if (exported.length !== exportStatements.length) {
+if (exported.length !== exportLines.length) {
   console.error(
-    "functions/src/index.ts has an export this script can't read, so it can't tell which functions are callable. Keep each one as `export { name, other } from './path.js';`.",
+    "functions/src/index.ts has an export this script can't read, so it can't tell which functions are callable. Keep one `export { name } from './path.js';` per line.",
   );
   process.exit(1);
 }
 
-const isCallableIn = (source: string, name: string) =>
-  new RegExp(`\\bexport\\s+const\\s+${name}\\s*=\\s*onCall\\s*[<(]`).test(
-    source,
-  );
-
-const callables = exported.flatMap(({ names, path }) => {
-  const source = readFileSync(`functions/src/${path}.ts`, 'utf8');
-  return names.filter((name) => isCallableIn(source, name));
-});
+const callables = exported
+  .filter(({ path }) =>
+    /\bonCall\s*[<(]/.test(readFileSync(`functions/src/${path}.ts`, 'utf8')),
+  )
+  .map(({ name }) => name);
 
 if (callables.length === 0) {
   console.error('No callable functions found in functions/src/index.ts.');
@@ -49,10 +37,8 @@ if (callables.length === 0) {
 const args = process.argv.slice(2);
 const isDry = args.includes('--dry');
 const isAll = args.includes('--all');
-const isMissing = args.includes('--missing');
-const FLAGS = ['--dry', '--all', '--missing'];
 const unknownFlags = args.filter(
-  (arg) => arg.startsWith('--') && !FLAGS.includes(arg),
+  (arg) => arg.startsWith('--') && arg !== '--dry' && arg !== '--all',
 );
 const requested = args.filter((arg) => !arg.startsWith('--'));
 const findCallable = (arg: string) =>
@@ -60,8 +46,8 @@ const findCallable = (arg: string) =>
 const unknown = requested.filter((arg) => findCallable(arg) === undefined);
 const problems = [
   ...unknownFlags.map((flag) => `Unknown option: ${flag}.`),
-  ...((isAll ? 1 : 0) + (isMissing ? 1 : 0) + (requested.length > 0 ? 1 : 0) > 1
-    ? ['Give function names, --all or --missing, only one of them.']
+  ...(isAll && requested.length > 0
+    ? ['Give function names or --all, not both.']
     : []),
   ...(unknown.length > 0
     ? [
@@ -70,10 +56,10 @@ const problems = [
     : []),
 ];
 
-if (problems.length > 0 || (requested.length === 0 && !isAll && !isMissing)) {
+if (problems.length > 0 || (requested.length === 0 && !isAll)) {
   problems.forEach((problem) => console.error(problem));
   console.log(
-    `Usage: npm run fb:invoker -- <function> [<function> …] | --all | --missing [--dry]\nCallable functions: ${callables.join(', ')}`,
+    `Usage: npm run fb:invoker -- <function> [<function> …] | --all [--dry]\nCallable functions: ${callables.join(', ')}`,
   );
   process.exit(problems.length > 0 ? 1 : 0);
 }
@@ -106,45 +92,9 @@ const allow = (name: string) => {
   }
 };
 
-interface RunService {
-  metadata: { name: string; annotations?: Record<string, string> };
-}
-
-// `--no-invoker-iam-check` records itself as this annotation on the service.
-const isOpen = (service: RunService) =>
-  service.metadata.annotations?.['run.googleapis.com/invoker-iam-disabled'] ===
-  'true';
-
-const listPrivateCallables = () => {
-  const services = JSON.parse(
-    execFileSync('gcloud', [
-      'run',
-      'services',
-      'list',
-      `--region=${REGION}`,
-      `--project=${PROJECT_ID}`,
-      '--format=json',
-    ]).toString(),
-  ) as RunService[];
-  const openNames = new Set(
-    services.filter(isOpen).map((service) => service.metadata.name),
-  );
-  return callables.filter((name) => !openNames.has(name.toLowerCase()));
-};
-
-const getNames = () => {
-  if (isAll) return callables;
-  if (isMissing) return listPrivateCallables();
-  return Array.from(
-    new Set(requested.flatMap((arg) => findCallable(arg) ?? [])),
-  );
-};
-
-const names = getNames();
-if (names.length === 0) {
-  console.log('✅ Every callable is already public.');
-  process.exit(0);
-}
+const names = isAll
+  ? callables
+  : Array.from(new Set(requested.flatMap((arg) => findCallable(arg) ?? [])));
 const failed = names.filter((name) => !allow(name));
 
 console.log(

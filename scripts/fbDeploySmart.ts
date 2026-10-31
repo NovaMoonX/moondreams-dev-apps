@@ -120,23 +120,13 @@ const openCallables = () => {
   }
 };
 
-// A callable left private by an earlier failed deploy stays private, since the CLI grants access only on create.
-const openPrivateCallables = () => {
-  if (!targets.includes('functions')) return;
-  try {
-    execSync('npm run fb:invoker -- --missing', { stdio: 'inherit' });
-  } catch {
-    console.log(
-      '::error title=Callables may be private::Opening private callables after the deploy failed (see the fb:invoker lines above). The browser gets a CORS error from any that stayed private. Run `npm run fb:invoker -- --all` once gcloud can update Cloud Run services.',
-    );
-  }
-};
-
 const run = async () => {
   const first = await deploy();
+  // A callable a dropped or failed run left private stays private, since the CLI opens only new ones; opening is idempotent.
   if (first.code === 0) {
-    openPrivateCallables();
-    return 0;
+    if (!targets.includes('functions')) return 0;
+    console.log('\nOpening every callable.\n');
+    return openCallables() ? 0 : 1;
   }
   if (RELEASE_EXISTS.test(first.output)) {
     console.error(
@@ -148,7 +138,6 @@ const run = async () => {
     );
     await new Promise((resolve) => setTimeout(resolve, RELEASE_RETRY_WAIT_MS));
     const retry = await deploy();
-    if (retry.code === 0) openPrivateCallables();
     return retry.code;
   }
   if (!INVOKER_FAILURES.some((message) => first.output.includes(message))) {
