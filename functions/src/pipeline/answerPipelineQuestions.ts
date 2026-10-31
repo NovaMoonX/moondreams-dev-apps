@@ -844,7 +844,6 @@ const readOpenQuestion = async (prNumber: number, statusAt: number | null) => {
     );
 };
 
-
 // The emulator's dashboard shows made-up pull requests, so it checks the seeded inbox and posts nothing.
 const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
   const inbox = await getFirestore().doc('pipeline/inbox').get();
