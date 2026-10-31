@@ -1,4 +1,4 @@
-import { doc, writeBatch } from 'firebase/firestore';
+import { doc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -30,4 +30,12 @@ export async function disconnectClaudeRoutine(): Promise<void> {
   batch.delete(routineRef());
   batch.set(statusRef(), { isConnected: false, updatedAt: Date.now() });
   await batch.commit();
+}
+
+/** Admin only: turns Claude working on feedback by itself on or off. */
+export async function setFeedbackAutomation(isOn: boolean): Promise<void> {
+  await setDoc(doc(db, 'adminSettings', 'feedbackAutomation'), {
+    isOn,
+    updatedAt: Date.now(),
+  });
 }

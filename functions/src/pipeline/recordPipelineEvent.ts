@@ -5,6 +5,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions/v2';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { applyFeedbackPrStates } from '../feedback/feedbackAutomation.js';
 import { createOptionalSecretReader } from '../imageSearch/optionalSecret.js';
 import type { FetchLike } from '../imageSearch/types.js';
 
@@ -334,6 +335,33 @@ const writeInbox = async (data: Json) => {
     .set({ prs, updatedAt: Date.now() });
 };
 
+const FEEDBACK_ID = /^[A-Za-z0-9-]{8,64}$/;
+const MAX_FEEDBACK_IDS_PER_PR = 20;
+
+const readFeedbackPrs = (data: Json) => {
+  if (!Array.isArray(data.prs)) throw invalid('Bad prs.');
+  return data.prs
+    .filter(isObject)
+    .slice(0, MAX_PRS)
+    .flatMap((pr) => {
+      const ids = (Array.isArray(pr.feedbackIds) ? pr.feedbackIds : [])
+        .filter(
+          (id): id is string => typeof id === 'string' && FEEDBACK_ID.test(id),
+        )
+        .slice(0, MAX_FEEDBACK_IDS_PER_PR);
+      return typeof pr.url === 'string' && PR_URL.test(pr.url) && ids.length > 0
+        ? [
+            {
+              url: pr.url,
+              feedbackIds: ids,
+              needsOwner: pr.needsOwner === true,
+              isMerged: pr.isMerged === true,
+            },
+          ]
+        : [];
+    });
+};
+
 export const recordPipelineEvent = onCall(
   { region: 'us-central1', maxInstances: 5, timeoutSeconds: 30 },
   async (request) => {
@@ -355,7 +383,9 @@ export const recordPipelineEvent = onCall(
     if (data.kind === 'session') await writeSession(data);
     else if (data.kind === 'cost') await writeCost(data);
     else if (data.kind === 'inbox') await writeInbox(data);
-    else throw invalid('Unknown kind.');
+    else if (data.kind === 'feedback') {
+      await applyFeedbackPrStates(getFirestore(), readFeedbackPrs(data));
+    } else throw invalid('Unknown kind.');
     return { ok: true };
   },
 );

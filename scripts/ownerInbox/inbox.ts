@@ -111,6 +111,8 @@ export interface InboxPr {
   bodySessionUrl: string | null;
   status: PrStatus | null;
   gallery: GalleryStep[];
+  /** The feedback items the PR body links to by their admin URL. */
+  feedbackIds: string[];
 }
 
 const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
@@ -118,6 +120,16 @@ const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
 /** The last Claude session link in a PR body, or null. */
 export const findSessionLink = (body: string | null) =>
   (body ?? '').match(SESSION_LINK)?.at(-1) ?? null;
+
+const FEEDBACK_LINK =
+  /https:\/\/apps\.moondreams\.dev\/admin\?view=feedback&(?:amp;)?feedback=([A-Za-z0-9-]{8,64})/g;
+
+/** The feedback ids a PR body links to, once each. */
+export const findFeedbackIds = (body: string | null) => [
+  ...new Set(
+    [...(body ?? '').matchAll(FEEDBACK_LINK)].map((match) => match[1]),
+  ),
+];
 
 const lines = (text: string) => text.split(/\r?\n/);
 
@@ -204,14 +216,13 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
   };
 }
 
-
 const MAX_STEPS = 30;
 const MAX_STEP_IMAGES = 3;
 const MAX_LABEL = 120;
-const MARKDOWN_IMAGE =
-  /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
 const HTML_IMAGE = /<img[^>]*\bsrc=(?:"([^"\s]+)"|'([^'\s]+)'|([^\s>"']+))/gi;
-const MARKUP_TAG = /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
+const MARKUP_TAG =
+  /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
 
 const toImageUrls = (cell: string) =>
   [

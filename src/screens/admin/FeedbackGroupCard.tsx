@@ -18,9 +18,11 @@ import {
   renameFeedbackGroup,
   setGroupStatus,
 } from '@lib/feedback/feedbackGroupWrites';
+import { getSharedAgentSummary } from '@lib/feedback/feedbackDisplay';
 import type { Feedback, FeedbackGroup } from '@lib/feedback/types';
 
 import { CARD_CLASS } from './constants';
+import FeedbackAgentRow from './FeedbackAgentRow';
 import SendToClaudeButton from './SendToClaudeButton';
 
 const { option } = DropdownMenuFactories;
@@ -54,6 +56,7 @@ function FeedbackGroupCard({
     (item) => item.status !== 'done' && item.status !== 'wont-do',
   ).length;
 
+  const agentSummary = getSharedAgentSummary(items);
   const menuItems =
     openCount > 0 ? [MARK_DONE_ITEM, ...BASE_MENU_ITEMS] : BASE_MENU_ITEMS;
 
@@ -141,6 +144,7 @@ function FeedbackGroupCard({
         />
       </div>
       <div className='mt-3 space-y-3'>
+        {agentSummary ? <FeedbackAgentRow {...agentSummary} /> : null}
         <SendToClaudeButton
           target={{ groupId: group.id }}
           lastSessionUrl={group.claudeSessionUrl}

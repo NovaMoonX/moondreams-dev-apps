@@ -105,6 +105,7 @@ assert.match(
         ci: 'green',
         bodySessionUrl: null,
         gallery: [],
+        feedbackIds: [],
         status: { ...asked, sessionUrl: 'https://claude.ai/code/session_q' },
       },
     ],
@@ -131,6 +132,7 @@ const pr = (
   ci,
   bodySessionUrl: null,
   gallery: [],
+  feedbackIds: [],
   status:
     body === null ? null : parseStatus(body, `2026-10-29T1${number}:00:00Z`),
 });
@@ -361,7 +363,10 @@ const nameless = parseGallery(`## Screenshots
 | Phone \\| dark | ![](https://x.test/(5).png) | ![](https://x.test/6.png) |
 `);
 assert.deepEqual(
-  nameless.map((step) => [step.label, step.images.map((image) => image.src.split('/').pop())]),
+  nameless.map((step) => [
+    step.label,
+    step.images.map((image) => image.src.split('/').pop()),
+  ]),
   [
     ['Answer all', ['1.png']],
     ['Sheet (320)', ['2.png']],
@@ -376,6 +381,10 @@ assert.deepEqual(
   ['before', 'after'],
   'an escaped pipe does not shift the columns',
 );
-assert.deepEqual(parseGallery('## Overview\n![](https://x.test/y.png)'), [], 'only the Screenshots section counts');
+assert.deepEqual(
+  parseGallery('## Overview\n![](https://x.test/y.png)'),
+  [],
+  'only the Screenshots section counts',
+);
 
 console.log('owner inbox: ok');

@@ -2,6 +2,7 @@ import { APP_REGISTRY_ID_MAP } from '@lib/app';
 
 import type {
   Feedback,
+  FeedbackAgentState,
   FeedbackContext,
   FeedbackKind,
   FeedbackStatus,
@@ -73,4 +74,50 @@ export function getContextPlaceName(context: FeedbackContext) {
     SITE_SCREENS.find(([prefix]) => context.path.startsWith(prefix))?.[1] ??
     'The site'
   );
+}
+
+/** The agent's state in the list's words. Queued, merged and no state say nothing there: Done already shows. */
+export const AGENT_STATE_LABEL: Record<FeedbackAgentState, string> = {
+  queued: 'Queued for Claude',
+  working: 'Claude is on it',
+  'pr-ready': 'PR ready',
+  'needs-you': 'Needs you',
+  held: 'Waiting for you',
+  merged: 'PR merged',
+};
+
+const AGENT_URGENCY: FeedbackAgentState[] = [
+  'needs-you',
+  'held',
+  'pr-ready',
+  'working',
+  'queued',
+  'merged',
+];
+
+export interface AgentSummary {
+  state: FeedbackAgentState;
+  note: string | null;
+  sessionUrl: string | null;
+  prUrl: string | null;
+}
+
+/** One session's state across the items that share it (a group), the one that waits longest on the admin first; null when fewer than two items share a session. */
+export function getSharedAgentSummary(items: Feedback[]): AgentSummary | null {
+  const agentItems = items.filter(
+    (item) => item.agentState !== null && item.claudeSessionUrl !== null,
+  );
+  const sessions = new Set(agentItems.map((item) => item.claudeSessionUrl));
+  if (agentItems.length < 2 || sessions.size !== 1) return null;
+  const [lead] = [...agentItems].sort(
+    (a, b) =>
+      AGENT_URGENCY.indexOf(a.agentState as FeedbackAgentState) -
+      AGENT_URGENCY.indexOf(b.agentState as FeedbackAgentState),
+  );
+  return {
+    state: lead.agentState as FeedbackAgentState,
+    note: lead.agentNote,
+    sessionUrl: lead.claudeSessionUrl,
+    prUrl: agentItems.find((item) => item.agentPrUrl)?.agentPrUrl ?? null,
+  };
 }

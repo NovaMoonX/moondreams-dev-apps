@@ -98,6 +98,11 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       createdHoursAgo: number;
       lastActivityHoursAgo: number;
       groupId?: string;
+      agent?: {
+        state: 'working' | 'pr-ready';
+        sessionUrl: string;
+        prUrl: string | null;
+      };
     },
   ) => ({
     id,
@@ -120,7 +125,11 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     createdAt: context.now - fields.createdHoursAgo * HOUR_MS,
     lastActivityAt: context.now - fields.lastActivityHoursAgo * HOUR_MS,
     groupId: fields.groupId ?? null,
-    claudeSessionUrl: null,
+    claudeSessionUrl: fields.agent?.sessionUrl ?? null,
+    agentState: fields.agent?.state ?? null,
+    agentQueuedAt: fields.agent ? context.now - fields.createdHoursAgo * HOUR_MS : null,
+    agentPrUrl: fields.agent?.prUrl ?? null,
+    agentNote: null,
   });
   const toFeedbackMessage = (
     id: string,
@@ -182,6 +191,54 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         groupId: 'seed-feedback-group',
       }),
       messages: [],
+    },
+    {
+      feedback: toFeedback('seed-feedback-bug-working', FIXTURE_USERS.partnerTwo, {
+        kind: 'bug',
+        text: 'The shopping list shows an item twice after I add it from a recipe.',
+        status: 'looking',
+        appId: 'pinch',
+        path: '/pinch',
+        isUnreadBySender: true,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 1,
+        lastActivityHoursAgo: 0.5,
+        agent: { state: 'working', sessionUrl: 'https://claude.ai/code/session_seedfeedbackworking', prUrl: null },
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-bug-working-status', {
+          kind: 'status',
+          text: null,
+          status: 'looking',
+          hoursAgo: 0.5,
+        }),
+      ],
+    },
+    {
+      feedback: toFeedback('seed-feedback-bug-pr', FIXTURE_USERS.partnerOne, {
+        kind: 'bug',
+        text: 'The trip dates show a day early on my phone.',
+        status: 'looking',
+        appId: 'waypoint',
+        path: '/waypoint/trips/seed-trip',
+        isUnreadBySender: true,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 4,
+        lastActivityHoursAgo: 3,
+        agent: {
+          state: 'pr-ready',
+          sessionUrl: 'https://claude.ai/code/session_seedfeedbackpr',
+          prUrl: 'https://github.com/NovaMoonX/moondreams-dev-apps/pull/999',
+        },
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-bug-pr-status', {
+          kind: 'status',
+          text: null,
+          status: 'looking',
+          hoursAgo: 3,
+        }),
+      ],
     },
     {
       feedback: toFeedback('seed-feedback-question', FIXTURE_USERS.partnerTwo, {

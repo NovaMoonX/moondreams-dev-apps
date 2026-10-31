@@ -822,7 +822,7 @@ service cloud.firestore {
     }
 
     // Feedback a member sends the admin. The sender may only clear their own unread flag; status
-    // and the admin's side are the admin's. Messages are append-only.
+    // and the admin's side are the admin's. The `agent*` fields are the Functions' alone. Messages are append-only.
     match /feedback/{feedbackId} {
       function isFeedbackOwner() {
         return request.auth != null && resource.data.uid == request.auth.uid;
@@ -841,9 +841,13 @@ service cloud.firestore {
 
       allow read: if isFeedbackOwner() || isAdmin();
       allow create: if request.auth != null
-        && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt', 'groupId', 'claudeSessionUrl'])
+        && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt', 'groupId', 'claudeSessionUrl', 'agentState', 'agentQueuedAt', 'agentPrUrl', 'agentNote'])
         && request.resource.data.groupId == null
         && request.resource.data.claudeSessionUrl == null
+        && request.resource.data.agentState == null
+        && request.resource.data.agentQueuedAt == null
+        && request.resource.data.agentPrUrl == null
+        && request.resource.data.agentNote == null
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.id == feedbackId
         && request.resource.data.kind in ['bug', 'idea', 'question']
@@ -928,6 +932,21 @@ service cloud.firestore {
         && request.resource.data.isConnected is bool
         && request.resource.data.updatedAt is number;
       allow delete: if isAdmin();
+    }
+
+    // The admin's switch for Claude working on feedback by itself. The Functions read it with the admin SDK.
+    match /adminSettings/feedbackAutomation {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['isOn', 'updatedAt'])
+        && request.resource.data.isOn is bool
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
+    }
+
+    // How many automatic sessions today and which items failed to start: the Functions only.
+    match /adminSettings/feedbackAutomationUsage {
+      allow read, write: if false;
     }
 
     match /users/{userId} {

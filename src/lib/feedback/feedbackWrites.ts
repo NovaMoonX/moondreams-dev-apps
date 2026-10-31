@@ -75,6 +75,10 @@ export async function sendFeedback({
     lastActivityAt: now,
     groupId: null,
     claudeSessionUrl: null,
+    agentState: null,
+    agentQueuedAt: null,
+    agentPrUrl: null,
+    agentNote: null,
   };
   await setDoc(feedbackRef(id), feedback);
   return id;

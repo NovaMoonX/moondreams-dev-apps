@@ -3,7 +3,20 @@ import assert from 'node:assert/strict';
 import {
   buildFeedbackHandoffText,
   type HandoffItem,
-} from '../../functions/src/feedback/startFeedbackClaudeSession.ts';
+} from '../../functions/src/feedback/claudeHandoff.ts';
+import {
+  addSessionToUsage,
+  BATCH_WINDOW_MS,
+  bucketQueued,
+  DAILY_SESSION_CAP,
+  getPrStateUpdate,
+  getSessionsLeft,
+  isBucketDue,
+  MAX_FIRE_FAILURES,
+  registerFailure,
+  type QueuedItem,
+} from '../../functions/src/feedback/feedbackAutomationPlan.ts';
+import { findFeedbackIds } from '../ownerInbox/inbox.ts';
 import { toSafeFeedbackPath } from '../../src/lib/feedback/feedbackPath.ts';
 
 // A stored document carries the sender's identity; it must never reach the text.
@@ -118,5 +131,104 @@ assert.ok(!longText.includes('/p'.repeat(151)), 'path capped');
 assert.equal(toSafeFeedbackPath('/a-list/shared/abc123'), '/a-list/shared/…');
 assert.equal(toSafeFeedbackPath('/pinch/shared/x/y'), '/pinch/shared/…/y');
 assert.equal(toSafeFeedbackPath('/waypoint'), '/waypoint');
+
+// Automatic sessions: bugs from one app within the window share a session.
+const MIN = 60_000;
+const queued = (
+  id: string,
+  kind: string,
+  appId: string | null,
+  minutes: number,
+): QueuedItem => ({ id, kind, appId, queuedAt: minutes * MIN });
+const buckets = bucketQueued([
+  queued('a1', 'bug', 'waypoint', 0),
+  queued('a2', 'bug', 'waypoint', 14),
+  queued('a3', 'bug', 'waypoint', 16),
+  queued('p1', 'bug', 'pinch', 1),
+  queued('s1', 'bug', null, 2),
+  queued('s2', 'bug', null, 3),
+  queued('i1', 'idea', 'waypoint', 4),
+  queued('i2', 'idea', 'waypoint', 5),
+  queued('q1', 'question', 'waypoint', 6),
+]);
+const ids = buckets.map((bucket) => bucket.items.map((item) => item.id));
+assert.deepEqual(
+  ids,
+  [['a1', 'a2'], ['p1'], ['s1', 's2'], ['i1'], ['i2'], ['a3']],
+  'bugs bucket per app inside the window, ideas alone, questions never',
+);
+assert.ok(
+  !ids.flat().includes('q1'),
+  'a question is never queued into a session',
+);
+const [first, , , idea1] = buckets;
+assert.equal(isBucketDue(first, BATCH_WINDOW_MS - 1), false, 'bug waits');
+assert.equal(isBucketDue(first, BATCH_WINDOW_MS), true, 'bug due at 15 min');
+assert.equal(isBucketDue(idea1, idea1.firstQueuedAt), true, 'idea is due now');
+
+// The daily cap counts per UTC day.
+const noon = Date.UTC(2026, 9, 30, 12);
+const used = Array.from({ length: DAILY_SESSION_CAP }).reduce<ReturnType<
+  typeof addSessionToUsage
+> | null>((usage) => addSessionToUsage(usage, noon), null);
+assert.equal(getSessionsLeft(null, noon), DAILY_SESSION_CAP, 'fresh day');
+assert.equal(getSessionsLeft(used, noon), 0, 'cap reached');
+assert.equal(
+  getSessionsLeft(used, Date.UTC(2026, 9, 31, 0, 1)),
+  DAILY_SESSION_CAP,
+  'a new UTC day resets',
+);
+assert.equal(addSessionToUsage(used, Date.UTC(2026, 9, 31)).count, 1);
+
+// A failed fire holds an item only on its third failure.
+const failedOnce = registerFailure({}, ['a', 'b']);
+assert.deepEqual(failedOnce.heldIds, [], 'first failure holds nothing');
+const failedThrice = Array.from({ length: MAX_FIRE_FAILURES - 1 }).reduce<
+  ReturnType<typeof registerFailure>
+>((state) => registerFailure(state.failures, ['a']), failedOnce);
+assert.deepEqual(failedThrice.heldIds, ['a'], 'third failure holds');
+
+// PR state reaches the item once, and a re-report never re-flags the bell.
+const pr = { url: 'https://github.com/o/r/pull/1', needsOwner: false };
+const working = { agentState: 'working', agentPrUrl: null, status: 'looking' };
+assert.equal(
+  getPrStateUpdate(working, { ...pr, isMerged: false })?.agentState,
+  'pr-ready',
+);
+const needs = getPrStateUpdate(working, {
+  ...pr,
+  needsOwner: true,
+  isMerged: false,
+});
+assert.ok(needs?.agentState === 'needs-you' && needs.isUnreadByAdmin);
+assert.equal(
+  getPrStateUpdate(
+    { ...working, agentState: 'needs-you', agentPrUrl: pr.url },
+    { ...pr, needsOwner: true, isMerged: false },
+  ),
+  null,
+  'unchanged report changes nothing',
+);
+const merged = getPrStateUpdate(working, { ...pr, isMerged: true });
+assert.ok(merged?.agentState === 'merged' && merged.isDone);
+assert.equal(
+  getPrStateUpdate({ ...working, status: 'wont-do' }, { ...pr, isMerged: true })
+    ?.isDone,
+  false,
+  'a closed item is not reopened to done',
+);
+assert.equal(
+  getPrStateUpdate({ ...working, agentState: null }, { ...pr, isMerged: true }),
+  null,
+  'a hand-sent item is not tracked',
+);
+
+assert.deepEqual(
+  findFeedbackIds(
+    'Fixes https://apps.moondreams.dev/admin?view=feedback&feedback=abc-12345678 and again https://apps.moondreams.dev/admin?view=feedback&feedback=abc-12345678, also https://apps.moondreams.dev/admin?view=feedback&feedback=def-87654321.',
+  ),
+  ['abc-12345678', 'def-87654321'],
+  'feedback ids in a PR body',
+);
 
 console.log('feedbackHandoff: ok');

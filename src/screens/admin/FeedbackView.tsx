@@ -12,6 +12,7 @@ import { useFeedbackGroups } from '@hooks/useFeedbackGroups';
 import { formatTimeAgo } from '@/utils/timeAgoUtils';
 import { useAllFeedback } from '@hooks/useAllFeedback';
 import {
+  AGENT_STATE_LABEL,
   getContextPlaceName,
   getFirstLine,
   KIND_EMOJI,
@@ -259,6 +260,11 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
                       ? ` · ${groupNames[item.groupId]}`
                       : ''}
                     {` · ${STATUS_LABEL[item.status]}`}
+                    {item.agentState &&
+                    item.agentState !== 'queued' &&
+                    item.agentState !== 'merged'
+                      ? ` · ${AGENT_STATE_LABEL[item.agentState]}`
+                      : ''}
                   </span>
                   <span className='text-foreground mt-0.5 line-clamp-2 text-sm wrap-break-word'>
                     {getFirstLine(item.text)}

@@ -3,14 +3,17 @@ import { useState } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import AppToggle from '@/components/AppToggle';
 import CopyTextButton from '@/components/CopyTextButton';
 import Field from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { useFeedbackAutomation } from '@hooks/useFeedbackAutomation';
 import {
   disconnectClaudeRoutine,
   saveClaudeRoutine,
+  setFeedbackAutomation,
 } from '@lib/feedback/claudeRoutine';
 
 import {
@@ -45,6 +48,7 @@ function ClaudeConnectionSheet({
   const [token, setToken] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isOn: isAutomationOn } = useFeedbackAutomation(isOpen);
   const showUrlError = fireUrl.trim().length > 0 && !isFireUrl(fireUrl);
 
   const handleClose = () => {
@@ -66,6 +70,15 @@ function ClaudeConnectionSheet({
       );
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleAutomationChange = async (isOn: boolean) => {
+    setError(null);
+    try {
+      await setFeedbackAutomation(isOn);
+    } catch {
+      setError("We couldn't change that just now. Try again.");
     }
   };
 
@@ -93,6 +106,24 @@ function ClaudeConnectionSheet({
           starts a new session with the feedback in it. Until then it copies the
           feedback for you to paste.
         </p>
+
+        <div className='flex items-center justify-between gap-3'>
+          <div className='min-w-0'>
+            <div className='text-foreground text-sm font-medium'>
+              Let Claude work on feedback by itself
+            </div>
+            <div className='text-muted-foreground text-xs'>
+              New bugs and the ideas you mark Planned start a session on their
+              own. Every PR stays a draft for you.
+            </div>
+          </div>
+          <AppToggle
+            aria-label='Let Claude work on feedback by itself'
+            checked={isAutomationOn === true}
+            disabled={!isConnected || isAutomationOn === null}
+            onCheckedChange={(isOn) => void handleAutomationChange(isOn)}
+          />
+        </div>
 
         {isConnected ? (
           <div className='space-y-3'>

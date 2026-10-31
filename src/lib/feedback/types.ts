@@ -1,5 +1,9 @@
 export type FeedbackKind = 'bug' | 'idea' | 'question';
 
+/** Where an automatic Claude session has taken a piece of feedback; written only by Functions. */
+export type FeedbackAgentState =
+  'queued' | 'working' | 'pr-ready' | 'needs-you' | 'held' | 'merged';
+
 export type FeedbackStatus = 'new' | 'looking' | 'planned' | 'done' | 'wont-do';
 
 /** Where the person was when they sent it, gathered automatically and shown to them before sending. */
@@ -36,6 +40,20 @@ export interface Feedback {
   groupId: string | null;
   /** The last Claude Code session it was sent to; written only by the Function. */
   claudeSessionUrl: string | null;
+  /** Where the automatic session stands, or null when none has touched it; written only by Functions. */
+  agentState: FeedbackAgentState | null;
+  /** When it was queued for an automatic session. */
+  agentQueuedAt: number | null;
+  /** The draft PR the automatic session opened. */
+  agentPrUrl: string | null;
+  /** Why it is held, in a sentence. */
+  agentNote: string | null;
+}
+
+/** `adminSettings/feedbackAutomation`: the admin's switch for Claude working on feedback by itself. */
+export interface FeedbackAutomationSettings {
+  isOn: boolean;
+  updatedAt: number;
 }
 
 /** `feedbackGroups/{id}`: an admin-only bucket of related feedback ("Small fixes"). */

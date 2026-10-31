@@ -23,6 +23,7 @@ import FeedbackConversation, {
   FeedbackReplyBar,
 } from '@ui/feedback/FeedbackConversation';
 
+import FeedbackAgentRow from './FeedbackAgentRow';
 import FeedbackGroupSheet from './FeedbackGroupSheet';
 import SendToClaudeButton from './SendToClaudeButton';
 
@@ -147,7 +148,15 @@ function FeedbackThreadSheet({
                 />
                 Details
               </summary>
-              <div className='pt-2'>
+              <div className='space-y-3 pt-2'>
+                {feedback.agentState ? (
+                  <FeedbackAgentRow
+                    state={feedback.agentState}
+                    note={feedback.agentNote}
+                    sessionUrl={feedback.claudeSessionUrl}
+                    prUrl={feedback.agentPrUrl}
+                  />
+                ) : null}
                 <FeedbackContextDetails feedback={feedback} />
               </div>
             </details>

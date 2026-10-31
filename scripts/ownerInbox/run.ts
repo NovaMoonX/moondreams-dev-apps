@@ -11,6 +11,7 @@ import {
   INBOX_MARKER,
   STATUS_MARKER,
   buildInbox,
+  findFeedbackIds,
   findSessionLink,
   parseGallery,
   parseStatus,
@@ -74,6 +75,9 @@ interface ApiComment {
   updated_at: string;
   author_association: string;
 }
+interface ApiClosedPull extends ApiPull {
+  merged_at: string | null;
+}
 interface ApiCheckRuns {
   check_runs: CheckRun[];
 }
@@ -113,6 +117,7 @@ const readPr = async (pull: ApiPull): Promise<InboxPr> => {
     bodySessionUrl: findSessionLink(pull.body),
     status: status ? parseStatus(status.body, status.updated_at) : null,
     gallery: parseGallery(pull.body),
+    feedbackIds: findFeedbackIds(pull.body),
   };
 };
 
@@ -171,7 +176,7 @@ const writeInbox = async (body: string) => {
   console.log(`Created #${created.number}`);
 };
 
-type SavedPr = Omit<InboxPr, 'status' | 'gallery'> & {
+type SavedPr = Omit<InboxPr, 'status' | 'gallery' | 'feedbackIds'> & {
   body?: string | null;
   statusBody: string | null;
   statusUpdatedAt: string;
@@ -182,6 +187,7 @@ const readSaved = (path: string): InboxPr[] =>
     ({ body, statusBody, statusUpdatedAt, ...pr }) => ({
       ...pr,
       gallery: parseGallery(body ?? null),
+      feedbackIds: findFeedbackIds(body ?? null),
       status: statusBody ? parseStatus(statusBody, statusUpdatedAt) : null,
     }),
   );
@@ -218,7 +224,10 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
     })),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
   },
-  gallery: pr.gallery.map((step) => ({ ...step, label: fromPlain(step.label) })),
+  gallery: pr.gallery.map((step) => ({
+    ...step,
+    label: fromPlain(step.label),
+  })),
 });
 
 const reportToPipeline = async (list: InboxPr[]) => {
@@ -233,6 +242,45 @@ const reportToPipeline = async (list: InboxPr[]) => {
   if (!response.ok) throw new Error(`status ${response.status}`);
 };
 
+/** Open PRs say whether they wait on the owner; recently merged ones say they merged. Only PRs that link feedback are sent. */
+const readFeedbackReports = async (open: InboxPr[]) => {
+  const merged = (
+    await api<ApiClosedPull[]>(
+      `/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=30`,
+    )
+  ).filter(
+    (pull) => pull.merged_at !== null && pull.head.repo?.full_name === repo,
+  );
+  return [
+    ...open.map((pr) => ({
+      url: pr.url,
+      feedbackIds: pr.feedbackIds,
+      needsOwner: (pr.status?.ownerItems.length ?? 0) > 0,
+      isMerged: false,
+    })),
+    ...merged.map((pull) => ({
+      url: pull.html_url,
+      feedbackIds: findFeedbackIds(pull.body),
+      needsOwner: false,
+      isMerged: true,
+    })),
+  ].filter((pr) => pr.feedbackIds.length > 0);
+};
+
+const reportFeedbackToPipeline = async (list: InboxPr[]) => {
+  const reports = await readFeedbackReports(list);
+  if (reports.length === 0) return;
+  const response = await fetch(pipelineUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      data: { key: pipelineKey, kind: 'feedback', prs: reports },
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`status ${response.status}`);
+};
+
 if (isDryRun) {
   console.log(body);
 } else {
@@ -240,6 +288,9 @@ if (isDryRun) {
   if (pipelineKey) {
     await reportToPipeline(prs).catch((error: Error) =>
       console.log(`::warning::Pipeline view not updated: ${error.message}`),
+    );
+    await reportFeedbackToPipeline(prs).catch((error: Error) =>
+      console.log(`::warning::Feedback not updated: ${error.message}`),
     );
   }
 }

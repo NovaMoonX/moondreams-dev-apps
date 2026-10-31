@@ -28,6 +28,10 @@ const normalize = (id: string, data: unknown): Feedback => {
     id,
     groupId: stored.groupId ?? null,
     claudeSessionUrl: stored.claudeSessionUrl ?? null,
+    agentState: stored.agentState ?? null,
+    agentQueuedAt: stored.agentQueuedAt ?? null,
+    agentPrUrl: stored.agentPrUrl ?? null,
+    agentNote: stored.agentNote ?? null,
   };
 };
 
@@ -129,6 +133,18 @@ export function startClaudeRoutineStatusListener(
   return onSnapshot(
     doc(db, 'adminSettings', 'claudeRoutineStatus'),
     (snapshot) => onChange(snapshot.data()?.isConnected === true),
+    onError,
+  );
+}
+
+/** Whether Claude works on feedback by itself. Admin only. */
+export function startFeedbackAutomationListener(
+  onChange: (isOn: boolean) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'adminSettings', 'feedbackAutomation'),
+    (snapshot) => onChange(snapshot.data()?.isOn === true),
     onError,
   );
 }
