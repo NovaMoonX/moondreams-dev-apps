@@ -10,6 +10,7 @@ import type {
   PipelineSettleOutcome,
 } from '@lib/admin/pipelineTypes';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
+import { toLineMark } from '@lib/admin/pipelineMarks';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -46,10 +47,10 @@ export interface PipelineOwnerEntryItem {
 
 /** A line a session listed for the owner under its pull request's "Decisions I made for you" or "Possible follow-ups". */
 export interface PipelineListed {
-  /** The pull request it was listed on and its place in that list: "<pr>:d<index>" or "<pr>:f<index>". */
+  /** The pull request it was listed on and its place in the list: "<pr>:d<index>" or "<pr>:f<index>". */
   id: string;
   prNumber: number;
-  /** When that pull request's status last changed: an answer sent before this has been read. */
+  /** When that pull request's status last changed; a whole-list mark from before per-line marks hides the list only until then. */
   statusAt: number;
   text: string;
   /** Listed on a pull request that is already merged, so a change becomes an issue. */
@@ -108,7 +109,7 @@ export interface PipelineEntry {
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
   goodToKnow: string[];
-  /** The calls made for the owner that they haven't answered from the dashboard since the status that listed them. Never a reason to hold a merge. */
+  /** The calls made for the owner whose line has no answered mark yet. Never a reason to hold a merge. */
   decisions: PipelineListed[];
   /** The follow-ups suggested to the owner, open on the same terms. */
   followUps: PipelineListed[];
@@ -228,6 +229,32 @@ const toSafeItems = (
     }),
   );
 
+const LIST_MARKS = { decisions: 'd', followUps: 'f' } as const;
+const LEGACY_MARKS = { decisions: 'decisions', followUps: 'followups' } as const;
+
+// A line is hidden once its own mark exists; the old whole-list mark hides a list only until its status is rewritten.
+const toListedLines = (
+  prNumber: number,
+  statusAt: number,
+  texts: string[],
+  list: 'decisions' | 'followUps',
+  answered: Record<string, number>,
+  isMerged: boolean,
+): PipelineListed[] => {
+  if ((answered[`${prNumber}:${LEGACY_MARKS[list]}`] ?? 0) >= statusAt) {
+    return [];
+  }
+  return Array.from(new Set(texts.map((text) => text.trim())))
+    .filter((text) => answered[toLineMark(prNumber, LIST_MARKS[list], text)] === undefined)
+    .map((text, index) => ({
+      id: `${prNumber}:${LIST_MARKS[list]}${index}`,
+      prNumber,
+      statusAt,
+      text,
+      isMerged,
+    }));
+};
+
 const toOpenListed = (
   prs: PipelineInboxPr[],
   answered: Record<string, number>,
@@ -236,18 +263,16 @@ const toOpenListed = (
 ): PipelineListed[] =>
   prs
     .filter((pr) => isReady(pr, now))
-    .flatMap((pr) => {
-      const statusAt = pr.status?.updatedAt ?? 0;
-      const mark = list === 'decisions' ? 'decisions' : 'followups';
-      if ((answered[`${pr.number}:${mark}`] ?? 0) >= statusAt) return [];
-      return (pr.status?.[list] ?? []).map((text, index) => ({
-        id: `${pr.number}:${list === 'decisions' ? 'd' : 'f'}${index}`,
-        prNumber: pr.number,
-        statusAt,
-        text,
-        isMerged: false,
-      }));
-    });
+    .flatMap((pr) =>
+      toListedLines(
+        pr.number,
+        pr.status?.updatedAt ?? 0,
+        pr.status?.[list] ?? [],
+        list,
+        answered,
+        false,
+      ),
+    );
 
 // A merged pull request's status comment is the last one its session wrote; its lines stay the owner's to answer.
 const toMergedListed = (
@@ -255,20 +280,21 @@ const toMergedListed = (
   answered: Record<string, number>,
   list: 'decisions' | 'followUps',
 ): PipelineListed[] =>
-  merged.flatMap((pr) => {
-    const statusAt = pr.statusAt ?? 0;
-    const mark = list === 'decisions' ? 'decisions' : 'followups';
-    if (statusAt === 0 || (answered[`${pr.number}:${mark}`] ?? 0) >= statusAt) {
-      return [];
-    }
-    return (pr[list] ?? []).map((text, index) => ({
-      id: `${pr.number}:${list === 'decisions' ? 'd' : 'f'}${index}`,
-      prNumber: pr.number,
-      statusAt,
-      text,
-      isMerged: true,
-    }));
-  });
+  merged.flatMap((pr) =>
+    pr.statusAt === null || pr.statusAt === 0
+      ? []
+      : toListedLines(pr.number, pr.statusAt, pr[list] ?? [], list, answered, true),
+  );
+
+/** How many lines the pull requests list in all, answered or not, so an answered list can be told from one never written. */
+const countListedLines = (
+  prs: PipelineInboxPr[],
+  merged: PipelineMergedPr[],
+) =>
+  [
+    ...prs.map((pr) => [...(pr.status?.decisions ?? []), ...(pr.status?.followUps ?? [])]),
+    ...merged.map((pr) => [...(pr.decisions ?? []), ...(pr.followUps ?? [])]),
+  ].reduce((sum, texts) => sum + new Set(texts).size, 0);
 
 /** "2 decisions" or "1 follow-up", for a row's meta line. */
 export const toListedWords = (count: number, one: string, many: string) =>
@@ -445,6 +471,8 @@ function toSessionEntry(
     ...toMergedListed(mergedHere, answered, 'followUps'),
   ];
   const isListed = decisions.length + followUps.length > 0;
+  const isListAnswered =
+    !isListed && countListedLines(sessionPrs, mergedHere) > 0;
   // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
   const isReplied =
     sessionPrs[0] !== undefined &&
@@ -461,6 +489,7 @@ function toSessionEntry(
     asks.length === 0 &&
     !isListed &&
     (ownerItems.length < allItems.length ||
+      isListAnswered ||
       (isReplied && session.raisedHands.length > 0));
   const baseGroup = getSessionGroup(session, now);
   const getGroup = (): PipelineGroup | null => {
@@ -670,7 +699,8 @@ const toListedSlots = (
       const listed = all.filter((line) => line.prNumber === prNumber);
       return {
         id: `${entry.key}:${prNumber}:${kind}`,
-        mark: `${prNumber}:${isDecision ? 'decisions' : 'followups'}`,
+        // Each line has its own mark, made when the answer is sent.
+        mark: null,
         prNumber,
         statusAt: listed[0].statusAt,
         question,
@@ -678,7 +708,7 @@ const toListedSlots = (
         options: [],
         isMulti: false,
         kind,
-        lines: listed.map((line) => line.text),
+        lines: Array.from(new Set(listed.map((line) => line.text))),
         isMerged: listed[0].isMerged,
       };
     },

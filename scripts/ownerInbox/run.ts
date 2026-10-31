@@ -211,15 +211,23 @@ const readMergedPrs = async (): Promise<MergedPr[]> => {
     `/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=50`,
   );
   const since = Date.now() - MERGED_KEEP_MS;
-  const recent = pulls.flatMap((pull) =>
-    pull.merged_at && Date.parse(pull.merged_at) >= since
-      ? [{ ...pull, merged_at: pull.merged_at }]
-      : [],
-  );
+  // Newest first, so the receiving size budget keeps the newest PRs' lists.
+  const recent = pulls
+    .flatMap((pull) =>
+      pull.merged_at && Date.parse(pull.merged_at) >= since
+        ? [{ ...pull, merged_at: pull.merged_at }]
+        : [],
+    )
+    .sort((a, b) => Date.parse(b.merged_at) - Date.parse(a.merged_at));
   // One PR at a time, like the open ones; a PR with no session has no one to read its lists, and a failed read leaves only that PR's lists empty.
   return recent.reduce<Promise<MergedPr[]>>(async (done, pull) => {
     const status = findSessionLink(pull.body)
-      ? await readStatusComment(pull.number).catch(() => null)
+      ? await readStatusComment(pull.number).catch((error: Error) => {
+          console.log(
+            `::warning::Status of merged #${pull.number} not read: ${error.message}`,
+          );
+          return null;
+        })
       : null;
     return [...(await done), toMergedPr(pull, status)];
   }, Promise.resolve([]));

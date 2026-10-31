@@ -180,6 +180,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     { sessionId: 'session_seedQuiet', branch: 'claude/a-list-calendar', state: 'working', raisedHands: [], minutesAgo: 95 },
     { sessionId: 'session_seedIdle', branch: 'claude/waypoint-expenses', state: 'idle', raisedHands: [], minutesAgo: 300 },
     { sessionId: 'session_seedDecided', branch: 'claude/nine-lives-weights', state: 'idle', raisedHands: [], minutesAgo: 120 },
+    { sessionId: 'session_seedIdleLists', branch: 'claude/pinch-grocery-sort', state: 'idle', raisedHands: [], minutesAgo: 200 },
   ].map(({ minutesAgo, ...session }) => ({
     ...session,
     url: `https://claude.ai/code/${session.sessionId}`,
@@ -263,6 +264,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const remindersPr = toInboxPr(907, 'Nine Lives: reminder sounds', 'claude/nine-lives-sounds', null, 'Reminder sounds');
   const runwayRedPr = toInboxPr(905, 'Runway: card colours', 'claude/runway-card-colours', pipelineSessions[0].url, 'Runway cards');
   const runwayConflictPr = toInboxPr(906, 'Runway: card order', 'claude/runway-card-order', pipelineSessions[0].url, 'Runway cards');
+  const groceryPr = toInboxPr(909, 'Pinch: sort the grocery list', 'claude/pinch-grocery-sort', pipelineSessions[7].url, 'Grocery sort');
   const pinchRunningPr = toInboxPr(904, 'Pinch: repeat the plan from a week', 'claude/pinch-meal-plan-weeks', pipelineSessions[1].url, 'Pinch meal plan');
   batch.delete(context.firestore.doc('pipeline/answered'));
   batch.delete(context.firestore.doc('pipeline/settled'));
@@ -345,6 +347,16 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         },
       },
       pinchPr,
+      {
+        ...groceryPr,
+        status: {
+          ...groceryPr.status,
+          decisions: [
+            'Items group by store aisle (other option: keep them in the order added)',
+            'Checked items drop to the bottom (other option: stay where they are)',
+          ],
+        },
+      },
       { ...pinchRunningPr, ci: 'running' },
       { ...runwayRedPr, ci: 'red' },
       { ...runwayConflictPr, labels: ['minor', 'merge-conflict'] },

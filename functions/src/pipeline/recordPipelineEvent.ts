@@ -45,6 +45,7 @@ const texts = (value: unknown) =>
     .filter((item): item is string => typeof item === 'string')
     .slice(0, MAX_ITEMS)
     .map(text);
+const uniqueTexts = (value: unknown) => Array.from(new Set(texts(value)));
 // Every address here is drawn as a link or loaded as an image on the admin's screen.
 const httpsUrl = (value: unknown) =>
   typeof value === 'string' &&
@@ -111,8 +112,8 @@ const toStatus = (value: unknown) => {
           .map(text)
       : null,
     goodToKnow: texts(value.goodToKnow),
-    decisions: texts(value.decisions),
-    followUps: texts(value.followUps),
+    decisions: uniqueTexts(value.decisions),
+    followUps: uniqueTexts(value.followUps),
     screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),
   };
@@ -389,8 +390,8 @@ const toMerged = (value: unknown) =>
           mergedAt,
           title: textOrNull(pr.title),
           statusAt: statusAt === 0 ? null : statusAt,
-          decisions: Array.isArray(pr.decisions) ? texts(pr.decisions) : null,
-          followUps: Array.isArray(pr.followUps) ? texts(pr.followUps) : null,
+          decisions: Array.isArray(pr.decisions) ? uniqueTexts(pr.decisions) : null,
+          followUps: Array.isArray(pr.followUps) ? uniqueTexts(pr.followUps) : null,
         },
       ];
     })

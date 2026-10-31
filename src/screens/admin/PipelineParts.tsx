@@ -11,7 +11,7 @@ import {
   Plus,
   TriangleAlert,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -583,7 +583,29 @@ const LISTED_WORDS = {
   },
 };
 
-/** A session's calls for the owner, or the follow-ups it suggests: tick the ones to change or do. They go with the screen's one send. */
+// Scrolled just into view on a phone, where the field isn't focused and the keyboard stays down.
+function TickedNote({ children }: { children: ReactNode }) {
+  const node = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    node.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
+  return (
+    <div ref={node} className='pl-8'>
+      {children}
+    </div>
+  );
+}
+
+/** Said once for each merged pull request that lists calls or follow-ups. */
+export function MergedNote({ prNumber }: { prNumber: number }) {
+  return (
+    <p className='text-muted-foreground text-xs'>
+      #{prNumber} is merged: a change or a picked follow-up opens an issue.
+    </p>
+  );
+}
+
+/** A list of calls made for the owner, or follow-ups: tick the lines to change or do; the rest are kept or left for later. */
 export function DecisionFields({
   slot,
   draft,
@@ -638,7 +660,7 @@ export function DecisionFields({
                 </label>
               </div>
               {isTicked ? (
-                <div className='pl-8'>
+                <TickedNote>
                   <NoteTextField
                     label={words.label}
                     placeholder={words.placeholder}
@@ -648,17 +670,12 @@ export function DecisionFields({
                     rows={2}
                     shouldFocus
                   />
-                </div>
+                </TickedNote>
               ) : null}
             </li>
           );
         })}
       </ul>
-      {slot.isMerged ? (
-        <p className='text-muted-foreground text-xs'>
-          Merged: changes and picked follow-ups open an issue.
-        </p>
-      ) : null}
       {isAtLimit ? (
         <p className='text-muted-foreground text-xs'>
           That is the most one comment holds. Send these first, then tick the

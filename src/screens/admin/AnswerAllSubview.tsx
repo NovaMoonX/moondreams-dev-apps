@@ -9,6 +9,7 @@ import { DISABLED_CLASS } from './constants';
 import {
   AnswerFields,
   DecisionFields,
+  MergedNote,
   NotSetUpLine,
   SentLine,
   UnsureLine,
@@ -72,7 +73,9 @@ function AnswerAllSubview({
     if (readyCount === 0 && !answers.isSending) {
       return 'Pick an option or write an answer first';
     }
-    return sendState.keepNote ?? undefined;
+    return sendState.keepNote ? (
+      <span className='text-balance'>{sendState.keepNote}</span>
+    ) : undefined;
   };
 
   return (
@@ -102,14 +105,21 @@ function AnswerAllSubview({
                   {isListedSlot(slot) ? (
                     <div className='space-y-2'>
                       <p className='text-foreground text-sm font-medium'>
-                        {slot.text}
-                        {slot.isMerged || slots.filter((other) => other.kind === slot.kind).length > 1
-                          ? ` · #${slot.prNumber}${slot.isMerged ? ' · merged' : ''}`
-                          : ''}
+                        {slot.text} · #{slot.prNumber}
+                        {slot.isMerged ? ' · merged' : ''}
                       </p>
                       <p className='text-muted-foreground text-xs'>
                         {getListedIntro(slot.kind === 'followup' ? 'followup' : 'decision')}
                       </p>
+                      {slot.isMerged &&
+                      slots.find(
+                        (other) =>
+                          isListedSlot(other) &&
+                          other.isMerged &&
+                          other.prNumber === slot.prNumber,
+                      ) === slot ? (
+                        <MergedNote prNumber={slot.prNumber} />
+                      ) : null}
                       <DecisionFields
                         slot={slot}
                         draft={answers.getDraft(slot.id)}

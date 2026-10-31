@@ -14,10 +14,13 @@ export interface PipelineIssueRequest {
   kind: 'change' | 'followUp';
   title: string;
   words: string;
+  /** The line's answered mark, which also identifies the issue so a retry never opens it twice. */
+  mark: string;
 }
 
 export interface PipelineIssueResult {
   title: string;
+  mark: string;
   url: string | null;
   isMade: boolean;
 }

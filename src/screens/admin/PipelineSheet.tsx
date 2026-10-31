@@ -14,6 +14,7 @@ import {
   CiBadge,
   DecisionFields,
   DismissibleAsk,
+  MergedNote,
   LinkedText,
   NotSetUpLine,
   SentLine,
@@ -207,9 +208,18 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
       onNote={(note) => answers.setNote(slot.id, note)}
     />
   );
+  const listedSlots = everySlot.filter(isListedSlot);
+  const listedPrs = Array.from(new Set(listedSlots.map((slot) => slot.prNumber)));
+  const mergedPrs = Array.from(
+    new Set(listedSlots.filter((slot) => slot.isMerged).map((slot) => slot.prNumber)),
+  );
+  const firstListedKind = decisionSlots.length > 0 ? 'decision' : 'followup';
   const asked = getAskedSlots(everySlot);
   const isAllSent = asked.length > 0 && asked.every(answers.isSent);
-  const slotPrs = new Set(everySlot.map((slot) => slot.prNumber));
+  const slotPrs = new Set([
+    ...everySlot.map((slot) => slot.prNumber),
+    ...(entry?.prs.map((pr) => pr.number) ?? []),
+  ]);
   const sendState = answers.getSendState(everySlot);
   const entryReady = sendState.readyCount;
   const elsewhereReady =
@@ -232,7 +242,7 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
         {note ? (
           <p
             role='status'
-            className='text-muted-foreground text-xs [overflow-wrap:anywhere]'
+            className='text-muted-foreground text-xs text-balance [overflow-wrap:anywhere]'
           >
             {note}
           </p>
@@ -296,7 +306,7 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
       footer={entry ? renderFooter(entry) : undefined}
     >
       {entry ? (
-        <div className='min-w-0 space-y-5 [overflow-wrap:anywhere]'>
+        <div className='min-w-0 space-y-5 pb-6 [overflow-wrap:anywhere]'>
           <div className='text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-2 text-sm'>
             <span className='flex items-center gap-2'>
               <span className='mx-1 flex'>
@@ -377,11 +387,15 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
                 <p className='text-muted-foreground text-sm'>
                   {getListedIntro(kind)}
                 </p>
+                {kind === firstListedKind
+                  ? mergedPrs.map((prNumber) => (
+                      <MergedNote key={prNumber} prNumber={prNumber} />
+                    ))
+                  : null}
                 <ul className='space-y-5'>
                   {list.map((slot) => (
                     <li key={slot.id} className='space-y-2'>
-                      {slot.isMerged ||
-                      new Set(list.map((other) => other.prNumber)).size > 1 ? (
+                      {listedPrs.length > 1 ? (
                         <p className='text-muted-foreground text-xs font-medium'>
                           #{slot.prNumber}
                           {slot.isMerged ? ' · merged' : ''}

@@ -10,143 +10,38 @@ import {
 } from '@lib/admin/pipelineAnswers';
 
 import {
+  EMPTY_DRAFT as EMPTY,
+  getSendState,
+  isAnswered,
+  isKeepDefault,
+  toIssues,
+  toItems,
+  toMarks,
+  type AnswerDraft,
+} from './pipelineDrafts';
+import {
   getAnswerSlots,
-  isListedSlot,
-  splitOtherOption,
   stripLinks,
   type AnswerSlot,
   type PipelineEntry,
 } from './pipelineUtils';
 
-export interface AnswerDraft {
-  choices: string[];
-  // Null until Other is picked.
-  other: string | null;
-  note: string;
-  // A decision or follow-up slot's ticked lines, keyed by the line's text so a rewritten status can't attach words to another line: what it should be instead (decisions) or what to add (follow-ups).
-  changes: Record<string, string>;
-}
+export type { AnswerDraft };
 
 export interface SentPr {
   prNumber: number;
   url: string | null;
 }
 
-const EMPTY: AnswerDraft = { choices: [], other: null, note: '', changes: {} };
-
-const KEEP_ALL = 'Sounds good, keep them all';
-const KEEP_REST = 'Keep the rest';
-const DO_THIS = 'Do this';
-const NOT_NOW_ALL = 'Not now for all';
-const NOT_NOW_REST = 'Not now for the rest';
-
 export const getChoiceText = (label: string) => stripLinks(label).slice(0, 300);
 
-/** A listed slot's ticked lines still in the list, with their words; a draft for a line that is gone is ignored. */
-export const getTicked = (slot: AnswerSlot, draft: AnswerDraft) =>
-  slot.lines.flatMap((line) =>
-    draft.changes[line] === undefined
-      ? []
-      : [{ line, words: draft.changes[line].trim() }],
-  );
-
-/** A decision ticked to change with nothing yet said about what instead. */
-export const getUnfinishedCount = (slot: AnswerSlot, draft: AnswerDraft) =>
-  slot.kind === 'decision'
-    ? getTicked(slot, draft).filter((row) => row.words === '').length
-    : 0;
-
-/** A decision or follow-up list with nothing ticked: it sends Sounds good or Not now unless the owner touches it. */
-export const isKeepDefault = (slot: AnswerSlot, draft: AnswerDraft) =>
-  isListedSlot(slot) && getTicked(slot, draft).length === 0;
-
-// A listed slot is ready unless a ticked decision still needs words; the rest need any pick or text.
-const isAnswered = (slot: AnswerSlot, draft: AnswerDraft) => {
-  if (isListedSlot(slot)) return getUnfinishedCount(slot, draft) === 0;
-  return (
-    draft.choices.length > 0 ||
-    (draft.other ?? '').trim() !== '' ||
-    draft.note.trim() !== ''
-  );
-};
-
-const toItem = (slot: AnswerSlot, draft: AnswerDraft) => ({
-  question: slot.question,
-  choices: draft.choices,
-  other: (draft.other ?? '').trim() === '' ? null : (draft.other ?? '').trim(),
-  note: draft.note.trim() === '' ? null : draft.note.trim(),
-});
-
-const toLine = (line: string) => stripLinks(line).slice(0, 500);
-
-// Nothing ticked keeps every call; otherwise each ticked call is one item with its words, and the rest are kept in one more.
-const toDecisionItems = (slot: AnswerSlot, draft: AnswerDraft) => {
-  const ticked = getTicked(slot, draft);
-  const keep = (choice: string) => ({
-    question: slot.question,
-    choices: [choice],
-    other: null,
-    note: null,
-  });
-  if (ticked.length === 0) return [keep(KEEP_ALL)];
-  return [
-    ...ticked.map(({ line, words }) => ({
-      question: toLine(line),
-      choices: [],
-      other: words,
-      note: null,
-    })),
-    ...(ticked.length < slot.lines.length ? [keep(KEEP_REST)] : []),
-  ];
-};
-
-// Each ticked follow-up is one item (its note is optional); unticked ones are not now.
-const toFollowUpItems = (slot: AnswerSlot, draft: AnswerDraft) => {
-  const ticked = getTicked(slot, draft);
-  const notNow = (choice: string) => ({
-    question: slot.question,
-    choices: [choice],
-    other: null,
-    note: null,
-  });
-  if (ticked.length === 0) return [notNow(NOT_NOW_ALL)];
-  return [
-    ...ticked.map(({ line, words }) => ({
-      question: toLine(line),
-      choices: [DO_THIS],
-      other: null,
-      note: words === '' ? null : words,
-    })),
-    ...(ticked.length < slot.lines.length ? [notNow(NOT_NOW_REST)] : []),
-  ];
-};
-
-const toItems = (slot: AnswerSlot, draft: AnswerDraft) => {
-  if (slot.kind === 'decision') return toDecisionItems(slot, draft);
-  if (slot.kind === 'followup') return toFollowUpItems(slot, draft);
-  return [toItem(slot, draft)];
-};
-
-// On a merged pull request these become issues: a changed decision and a ticked follow-up.
-const toIssues = (slot: AnswerSlot, draft: AnswerDraft) =>
-  slot.kind === 'decision' || slot.kind === 'followup'
-    ? getTicked(slot, draft).map(({ line, words }) => ({
-        kind: slot.kind === 'decision' ? ('change' as const) : ('followUp' as const),
-        title: splitOtherOption(toLine(line)).choice,
-        words,
-      }))
-    : [];
-
-const toIssueNote = (
-  issues: PipelineIssueResult[],
-  isSample: boolean,
-) => {
+const toIssueNote = (issues: PipelineIssueResult[], isSample: boolean) => {
   if (issues.length === 0) return null;
   const made = issues.filter((issue) => issue.isMade).length;
   const noun = (count: number) => `${count} ${count === 1 ? 'issue' : 'issues'}`;
-  if (isSample) return `Would open ${noun(issues.length)} (merged).`;
+  if (isSample) return `Would open ${noun(issues.length)}.`;
   if (made === issues.length) return `Opened ${noun(made)}.`;
-  return `Opened ${noun(made)}; ${issues.length - made} couldn't be opened. Open them from the PR's comment.`;
+  return `Opened ${noun(made)}; ${issues.length - made} couldn't be opened. Send again to retry them.`;
 };
 
 /** The owner's unsent answers across every waiting entry, and the one send that turns them into a comment per pull request. */
@@ -195,7 +90,7 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
       const draft = getDraft(slot.id);
       const items = toItems(slot, draft);
       const issues = toIssues(slot, draft);
-      const marks = slot.mark === null ? [] : [slot.mark];
+      const marks = toMarks(slot);
       const existing = all.find((entry) => entry.prNumber === slot.prNumber);
       return existing
         ? all.map((entry) =>
@@ -225,7 +120,18 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
       attemptRef.current = null;
       const done = results.filter((result) => result.ok);
       const doneNumbers = new Set(done.map((result) => result.prNumber));
-      const doneSlots = ready.filter((slot) => doneNumbers.has(slot.prNumber));
+      // A line whose issue could not be opened stays unsent, so it can be sent again.
+      const failedPrs = new Set(
+        done
+          .filter(
+            (result) =>
+              !isSample && (result.issues ?? []).some((issue) => !issue.isMade),
+          )
+          .map((result) => result.prNumber),
+      );
+      const doneSlots = ready.filter(
+        (slot) => doneNumbers.has(slot.prNumber) && !failedPrs.has(slot.prNumber),
+      );
       setSentAt((current) => ({
         ...current,
         ...Object.fromEntries(
@@ -340,52 +246,8 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     getTouchedCount: (scope: AnswerSlot[] = slots) =>
       getReady(scope).filter((slot) => !isKeepDefault(slot, getDraft(slot.id)))
         .length,
-    /** What the screen's one send button says and what it tells the owner about the lists it will send untouched. */
-    getSendState: (scope: AnswerSlot[]) => {
-      const touched = getReady(scope).filter(
-        (slot) => !isKeepDefault(slot, getDraft(slot.id)),
-      ).length;
-      const unfinished = scope
-        .filter((slot) => !isSent(slot))
-        .reduce((sum, slot) => sum + getUnfinishedCount(slot, getDraft(slot.id)), 0);
-      const kept = (kind: 'decision' | 'followup') =>
-        scope
-          .filter(
-            (slot) =>
-              slot.kind === kind &&
-              !isSent(slot) &&
-              isKeepDefault(slot, getDraft(slot.id)),
-          )
-          .reduce((sum, slot) => sum + slot.lines.length, 0);
-      const decisions = kept('decision');
-      const followUps = kept('followup');
-      const getLabel = () => {
-        if (touched > 0) return 'Send answers';
-        if (decisions > 0) return 'Sounds good';
-        return followUps > 0 ? 'Not now' : 'Send answers';
-      };
-      return {
-        readyCount: getReady(scope).length,
-        touched,
-        unfinished,
-        label: getLabel(),
-        holdNote:
-          unfinished > 0
-            ? `Say what you'd rather have for ${unfinished} ${unfinished === 1 ? 'decision' : 'decisions'}`
-            : null,
-        keepNote:
-          [
-            decisions > 0
-              ? `Keeping ${decisions} ${decisions === 1 ? 'decision' : 'decisions'} as they are`
-              : null,
-            followUps > 0
-              ? `Leaving ${followUps} ${followUps === 1 ? 'follow-up' : 'follow-ups'} for later`
-              : null,
-          ]
-            .filter((line) => line !== null)
-            .join('; ') || null,
-      };
-    },
+    getSendState: (scope: AnswerSlot[]) =>
+      getSendState(scope, isSent, (slot) => getDraft(slot.id)),
     getReadyCount: (scope: AnswerSlot[] = slots) => getReady(scope).length,
     clear: () => {
       setDrafts({});
