@@ -142,7 +142,7 @@ see "State, data, and performance".
 
 ## 5. Validate
 
-Follow `docs/conventions/validation.md`: `npx tsc -b --force` and `npx eslint .`,
+Follow `docs/conventions/validation.md`: `npm run typecheck` and `npx eslint .`,
 update the app seed, prove backwards compatibility against legacy-shaped
 documents, drive the feature end-to-end in a real browser
 against the emulators, re-drive every pre-existing feature that touches a

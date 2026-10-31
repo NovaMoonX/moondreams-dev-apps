@@ -1,0 +1,24 @@
+name: Typecheck
+on:
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: typecheck-${{ github.head_ref }}
+  cancel-in-progress: true
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - run: npm ci
+      # Scripts import from functions/src, which needs its own packages to typecheck.
+      - run: npm ci --prefix functions
+      - run: npm run typecheck

@@ -12,6 +12,7 @@ import {
 import { MAX_COOK_TIMERS } from '../../src/apps/pinch/constants.ts';
 import type { ResumeTimer } from '../../src/apps/pinch/types.ts';
 import {
+  type LoadedPlannedMeals,
   applyResumePositions,
   buildCookingSnapshot,
   getCookingSessionKey,
@@ -389,7 +390,7 @@ const loadedDays = {
   end: Date.UTC(2026, 11, 1),
 };
 const meals = { ids: new Set(['meal-1']), window: loadedDays };
-const none = { ids: new Set<string>(), window: loadedDays };
+const none: LoadedPlannedMeals = { ids: new Set<string>(), window: loadedDays };
 const plan = resolveCookingResume(snapshot, recipes, meals);
 assert.deepEqual(
   plan && [
@@ -924,7 +925,7 @@ assert.equal(
         ...written.resume,
         captured: Array.from({ length: 61 }, (_, index) => `n${index}`),
       },
-    })?.resume.captured.length,
+    })?.resume.captured?.length,
     0,
     'more than the cap is not trusted',
   );

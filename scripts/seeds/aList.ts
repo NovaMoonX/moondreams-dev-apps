@@ -1,3 +1,4 @@
+import type { Ticket } from '../../src/apps/a-list/types.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -245,7 +246,7 @@ const SEED_PURCHASES: Record<string, object> = {
   },
 };
 
-const SEED_TICKETS: Record<string, object> = {
+const SEED_TICKETS: Record<string, Ticket> = {
   'seed-viewing-matrix': {
     entryMode: 'ITEMIZED',
     format: 'STANDARD',

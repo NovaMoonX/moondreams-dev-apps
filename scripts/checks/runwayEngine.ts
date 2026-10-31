@@ -14,6 +14,7 @@ import {
 import {
   deriveBalances,
   deriveBalancesBefore,
+  getFreeToSpendFigure,
 } from '../../src/apps/runway/engine/balances.ts';
 import {
   collectCardHistory,
@@ -90,14 +91,12 @@ import {
   getRefundLines,
   isInTrackingPeriods,
   splitEvenly,
-  sumLines,
+  sumLines as sumPurchaseLines,
   toChosenLines,
 } from '../../src/apps/runway/engine/purchases.ts';
 import type {
   FundingRule,
-  OpenMove,
   OpenPurchase,
-  OpenRecord,
   RecordLine,
 } from '../../src/apps/runway/types.ts';
 import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
@@ -135,7 +134,6 @@ import {
   reconcileWorking,
   type PriorityItem,
 } from '../../src/apps/runway/engine/priorities.ts';
-import { getVersionStretches } from '../../src/apps/runway/engine/resolve.ts';
 import {
   getDayKeyMonth,
   getHistoryRange,
@@ -197,10 +195,6 @@ import {
   pickPairings,
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
-import {
-  deriveBalances,
-  getFreeToSpendFigure,
-} from '../../src/apps/runway/engine/balances.ts';
 import {
   getStanceCushion,
   lookahead,
@@ -570,6 +564,7 @@ const item = (
   createdAt,
   endedAt: null,
   archivedAt: null,
+  heldReleasedOn: null,
   ...over,
 });
 const version = (
@@ -587,7 +582,7 @@ const version = (
   effectiveFrom,
   effectiveUntil,
   changeId: `c_${id}`,
-  payload: { name },
+  payload: { name, pairings: [] },
 });
 
 {
@@ -714,6 +709,7 @@ const version = (
     createdAt,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   });
   const payVersion = (
     id: string,
@@ -736,6 +732,8 @@ const version = (
       schedule,
       amount: { lowCents: cents, highCents: cents },
       ending,
+      stanceOverride: null,
+      pairings: [],
     },
   });
   const items = [
@@ -880,6 +878,8 @@ const version = (
       schedule,
       amount: { lowCents: 1, highCents: 1 },
       ending: { onDate: null, afterCount: 4 },
+      stanceOverride: null,
+      pairings: [],
     },
   });
   const header = (id: string): PlanItemDoc => ({
@@ -889,6 +889,7 @@ const version = (
     createdAt: 1,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   });
   // Two pay lines, each every other week, a week apart: A on Oct 2, 16, 30 ...; B on Oct 9, 23, Nov 6 ...
   const days = buildComingDays(
@@ -2047,7 +2048,8 @@ const version = (
     'lines, held money and free to spend add up',
   );
   assert.equal(
-    lineOf(held, 'save', 'd2')?.cents + (lineOf(held, 'fun', 'd2')?.cents ?? 0),
+    (lineOf(held, 'save', 'd2')?.cents ?? 0) +
+      (lineOf(held, 'fun', 'd2')?.cents ?? 0),
     0,
     'envelopes below the hold on its pool get only what the hold left',
   );
@@ -2761,6 +2763,7 @@ const version = (
     createdAt: 1,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   };
   const payVersion: OpenVersion = {
     id: 'pay-v1',
@@ -2855,6 +2858,7 @@ const version = (
     amountCents: 120_000,
     paidOn: nov10,
     fromFreeCents: 0,
+    cardId: null,
     ...over,
   });
   const sum = (parts: { cents: number }[]) =>
@@ -3009,7 +3013,10 @@ const version = (
     getUndoMoveId('paid_rent_20261201'),
     'unpaid_paid_rent_20261201',
   );
-  const move = (id: string, over: Partial<OpenMove> = {}): OpenMove => ({
+  const move = (
+    id: string,
+    over: { reversesMoveId?: string | null } = {},
+  ): OpenMove => ({
     id,
     kind: 'billPaid',
     date: dec1,
@@ -3501,7 +3508,7 @@ const version = (
   const today = utc(2026, 10, 23);
   const exactRange = (cents: number) => ({ lowCents: cents, highCents: cents });
   const never = { onDate: null, afterCount: null };
-  const weekly = { kind: 'weekly', anchor: today, monthDays: [] } as const;
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
   const planItems: PlanItemDoc[] = [
     item('pay', 1, { kind: 'payLine', parentId: 'src' }),
     item('src', 1),
@@ -3516,6 +3523,7 @@ const version = (
       amount: { kind: 'exact' as const, cents },
       cadence: { kind: 'everyIncomeDay' as const },
     },
+    groupId: null,
   });
   const base: OpenVersion[] = [
     {
@@ -3868,7 +3876,7 @@ const version = (
 {
   const today = utc(2026, 10, 23);
   const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
-  const weekly = { kind: 'weekly', anchor: today, monthDays: [] } as const;
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
   const planItems: PlanItemDoc[] = [
     item('pay', 1, { kind: 'payLine', parentId: 'src' }),
     item('src', 1),
@@ -3884,6 +3892,7 @@ const version = (
       amount: { kind: 'exact' as const, cents },
       cadence: { kind: 'everyIncomeDay' as const },
     },
+    groupId: null,
   });
   const goalPayload = (state?: 'active' | 'paused') =>
     ({
@@ -4645,17 +4654,16 @@ const version = (
       heldCents: 0,
       freeToSpend: { cents: 0, bySource: [] },
     }) as LookaheadDraft['draft'];
-  const day = (on: number, key = `pay:${on}`) =>
-    ({
-      dayKey: key,
-      payLineId: 'pay',
-      sourceId: 'src',
-      on,
-      sourceName: 'Acme',
-      payLineName: 'Paycheck',
-      amount: exact(100_000),
-      stanceOverride: null,
-    }) as never;
+  const day = (on: number, key = `pay:${on}`): ComingDay => ({
+    dayKey: key,
+    payLineId: 'pay',
+    sourceId: 'src',
+    on,
+    sourceName: 'Acme',
+    payLineName: 'Paycheck',
+    amount: exact(100_000),
+    stanceOverride: null,
+  });
   const run = (
     days: ReturnType<typeof day>[],
     over: Partial<Parameters<typeof lookahead>[0]> = {},
@@ -5589,12 +5597,15 @@ const version = (
       needsHome: false,
       createdAt: on,
       updatedAt: on,
-      amountCents: sumLines(chosen),
+      amountCents: sumPurchaseLines(chosen),
       merchant: null,
       label: null,
       note: null,
       lines: chosen,
       refundOfId,
+      link: null,
+      receiptText: null,
+      expenseId: null,
     };
   };
   const base = {
@@ -5782,7 +5793,7 @@ const version = (
   const oddBack = getRefundLines(5_001, odd, everyone);
   assert.equal(oddBack.kind, 'lines');
   assert.equal(
-    oddBack.kind === 'lines' ? sumLines(oddBack.lines) : 0,
+    oddBack.kind === 'lines' ? sumPurchaseLines(oddBack.lines) : 0,
     -5_001,
     'a split refund returns exactly the amount refunded',
   );
@@ -5954,6 +5965,7 @@ const version = (
     label: null,
     note: null,
     refundOfId: null,
+    paidByCardId: null,
     link: null,
     receiptText: null,
     expenseId: null,
@@ -6336,6 +6348,9 @@ const version = (
       note: null,
       lines,
       refundOfId: null,
+      link: null,
+      receiptText: null,
+      expenseId: null,
     };
   });
 
@@ -6390,29 +6405,27 @@ const version = (
     Object.fromEntries(
       Object.entries(progress)
         .filter(([id]) => kinds[id as keyof typeof kinds] === 'bill')
-        .map(([id, entry]) => [
-          id,
-          {
-            funded: entry.funded
-              .map(
-                (funded) =>
-                  `${funded.dayKey === 'start' ? 's' : 'd'}:${funded.on}:${funded.cents}`,
-              )
-              .sort(),
-            paid: entry.paid
-              .map(
-                (paid) =>
-                  `${paid.moveId}:${paid.dueOn}:${paid.amountCents}:${paid.paidOn}:${paid.fromFreeCents}`,
-              )
-              .sort(),
-          },
-        ])
-        .filter(
-          ([, entry]) =>
-            (entry as { funded: string[]; paid: string[] }).funded.length +
-              (entry as { funded: string[]; paid: string[] }).paid.length >
-            0,
-        ),
+        .map(
+          ([id, entry]) =>
+            [
+              id,
+              {
+                funded: entry.funded
+                  .map(
+                    (funded) =>
+                      `${funded.dayKey === 'start' ? 's' : 'd'}:${funded.on}:${funded.cents}`,
+                  )
+                  .sort(),
+                paid: entry.paid
+                  .map(
+                    (paid) =>
+                      `${paid.moveId}:${paid.dueOn}:${paid.amountCents}:${paid.paidOn}:${paid.fromFreeCents}`,
+                  )
+                  .sort(),
+              },
+            ] as const,
+        )
+        .filter(([, entry]) => entry.funded.length + entry.paid.length > 0),
     );
   const figuresOf = (
     base: ClosingState | null,
@@ -6421,7 +6434,7 @@ const version = (
   ) => {
     const isLive = (month: string) => after === null || month > after;
     const live = entriesOf(ledger, isLive);
-    const liveRecords = live.records;
+    const liveRecords = [...live.records];
     const liveMoves = moves.filter(
       (move) => move.kind === 'start' || isLive(monthOf(move.date)),
     );
@@ -6995,6 +7008,7 @@ const version = (
     shortByDay: {},
     firstShortDay: null,
     incomeEndsOn: null,
+    undated: [],
   });
   const short = (on: number, name: string, shortBy: number) =>
     ({
@@ -7272,10 +7286,16 @@ const version = (
   );
 
   const goalDays = [
-    { dayKey: 'k1', on: utc(2026, 6, 5), moneyCents: 100_000 },
-    { dayKey: 'k2', on: utc(2026, 6, 19), moneyCents: 100_000 },
-    { dayKey: 'k3', on: utc(2026, 7, 3), moneyCents: 100_000 },
-  ];
+    ['k1', utc(2026, 6, 5)],
+    ['k2', utc(2026, 6, 19)],
+    ['k3', utc(2026, 7, 3)],
+  ].map(([dayKey, on]) => ({
+    dayKey: String(dayKey),
+    on: Number(on),
+    moneyCents: 100_000,
+    sourceId: null,
+    amount: { lowCents: 100_000, highCents: 100_000 },
+  }));
   assert.deepEqual(
     planGoalContributions(
       { targetCents: 70_000, heldCents: 0, funding: calendarRule(60_000) },
@@ -7331,9 +7351,14 @@ const version = (
     },
   };
   const novDays = [
-    { dayKey: 'n1', on: utc(2026, 11, 1), moneyCents: 100_000 },
-    { dayKey: 'n2', on: utc(2026, 11, 20), moneyCents: 100_000 },
-  ];
+    { dayKey: 'n1', on: utc(2026, 11, 1) },
+    { dayKey: 'n2', on: utc(2026, 11, 20) },
+  ].map((entry) => ({
+    ...entry,
+    moneyCents: 100_000,
+    sourceId: null,
+    amount: { lowCents: 100_000, highCents: 100_000 },
+  }));
   assert.deepEqual(
     buildDemands(novDays, novDays, [envelopeOf(lateStart)]).map((d) => [
       d.dayKey,
@@ -7561,6 +7586,7 @@ const version = (
     amountCents: 100_000,
     paidOn: utc(2026, 10, 28),
     fromFreeCents: 0,
+    cardId: null,
   };
   const paidOct1 = {
     moveId: 'paid_rent_20261001',
@@ -7568,6 +7594,7 @@ const version = (
     amountCents: 100_000,
     paidOn: utc(2026, 10, 1),
     fromFreeCents: 0,
+    cardId: null,
   };
   const rentOn = (anchor: number): DraftBillInput => ({
     itemId: 'rent',
@@ -7724,6 +7751,7 @@ const version = (
               amountCents: 120_000,
               paidOn: utc(2026, 11, 1),
               fromFreeCents: 90_000,
+              cardId: null,
             },
           ]
         : [],
@@ -7905,6 +7933,9 @@ const version = (
     lines: toChosenLines([{ envelopeId, cents }]),
     refundOfId: null,
     paidByCardId,
+    link: null,
+    receiptText: null,
+    expenseId: null,
   });
   const starts = [
     move('s-money', 'start', start, null, {
@@ -10045,7 +10076,7 @@ console.log('runway engine: ok');
   });
   const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
   const nov = utc(2026, 11, 14);
-  const NO_END = { onDate: null, afterCount: null };
+  const NO_END: Ending = { onDate: null, afterCount: null };
   const member = (
     amount: { lowCents: number; highCents: number },
     schedule: Schedule,

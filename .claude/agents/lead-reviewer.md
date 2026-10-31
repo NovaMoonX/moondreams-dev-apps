@@ -13,7 +13,7 @@ You are the last reader of a large PR before the orchestrator fixes it. You are 
 2. **Verify each finding.** Open the cited code and trace the failure scenario from a real caller or input. Mark it `confirmed`, `plausible` (needs a run you can't do; say which) or `rejected` (with the line that disproves it). Merge duplicates across shards. Reclassify severity where the shard got it wrong.
 3. **Cross-shard pass**, which no shard could do:
    - every contract a shard said it assumed (a field a component reads that a thunk writes, a rule a client write needs, a function's response shape a page parses): check both ends;
-   - files touched by more than one shard: a name declared twice, a constants object split in two, a merge that kept both sides (`npx tsc -b --force` first);
+   - files touched by more than one shard: a name declared twice, a constants object split in two, a merge that kept both sides (`npm run typecheck` first);
    - areas no shard owned (docs, seeds, `functions/README.md`, each app's `.github/instructions` pointer still pointing at its `.claude/rules` file, the PR body's claims);
    - one regression path end to end through the riskiest change.
 4. Do not re-run checks a shard already ran and reported clean, unless its report shows it skipped something.

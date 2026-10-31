@@ -1015,6 +1015,7 @@ async function writeSeedIncome(
   const override: DayOverrideSealed = {
     pairings: null,
     holdResolutions: { 'seed-envelope-trip': 'leaveShort' },
+    payloads: {},
   };
   const bonusDayId = toDayKey(ids.bonus, bonusDay);
   const overrideDoc: IncomeDayDoc = {
@@ -1189,7 +1190,7 @@ async function writeSeedConfirmedDays(
       };
       const confirmedLines = applyLineEdits(
         lines,
-        byLine('edits' in entry ? entry.edits : {}) as Record<string, number>,
+        byLine(entry.edits ?? {}) as Record<string, number>,
         dayId,
       );
       const confirmed: ConfirmedSealed = {
@@ -1213,30 +1214,26 @@ async function writeSeedConfirmedDays(
           ...getLineDifferences(
             lines,
             confirmedLines,
-            byLine('lineNotes' in entry ? entry.lineNotes : {}) as Record<
-              string,
-              string | null
-            >,
+            byLine(entry.lineNotes ?? {}) as Record<string, string | null>,
           ),
         ],
       };
-      const correction =
-        'correction' in entry
-          ? buildCorrection({
-              base: {
-                recordId: `${dayId}_confirmed`,
-                dayId,
-                kind: 'confirmed',
-                stance: 'conservative',
-                arrivedCents,
-                freeToSpendCents: confirmed.freeToSpendCents,
-                lines: confirmedLines,
-              },
+      const correction = entry.correction
+        ? buildCorrection({
+            base: {
+              recordId: `${dayId}_confirmed`,
+              dayId,
+              kind: 'confirmed',
+              stance: 'conservative',
               arrivedCents,
-              edits: byLine(entry.correction.edits) as Record<string, number>,
-              note: entry.correction.note,
-            })
-          : null;
+              freeToSpendCents: confirmed.freeToSpendCents,
+              lines: confirmedLines,
+            },
+            arrivedCents,
+            edits: byLine(entry.correction.edits) as Record<string, number>,
+            note: entry.correction.note,
+          })
+        : null;
       return {
         dayId,
         on,
@@ -1343,6 +1340,7 @@ async function writeSeedPaidAhead(
 const EMPTY_SEED_OVERRIDE: DayOverrideSealed = {
   pairings: null,
   holdResolutions: {},
+  payloads: {},
 };
 
 /** Seven envelopes across Must, Should and Want, all three cadences, a percentage of the day and the rest, sealed the way the app seals them. */
@@ -1879,6 +1877,7 @@ async function writeSeedGoals(
         orderIndex: 1,
         targetCents: 180_000,
         targetDate: today + 50 * DAY_MS,
+        state: 'active',
         funding: { amount: exact(30_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -1891,6 +1890,7 @@ async function writeSeedGoals(
         orderIndex: 1,
         targetCents: 60_000,
         targetDate: null,
+        state: 'active',
         funding: {
           amount: exact(15_000),
           cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
@@ -1906,6 +1906,7 @@ async function writeSeedGoals(
         orderIndex: 2,
         targetCents: 20_000,
         targetDate: today + 30 * DAY_MS,
+        state: 'active',
         funding: { amount: exact(20_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -1918,6 +1919,7 @@ async function writeSeedGoals(
         orderIndex: 3,
         targetCents: 200_000,
         targetDate: null,
+        state: 'active',
         funding: {
           amount: { kind: 'percent', bps: 500, of: 'dayMoney' },
           cadence: { kind: 'everyIncomeDay' },
