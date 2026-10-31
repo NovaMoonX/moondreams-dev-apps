@@ -79,6 +79,10 @@ const toStatus = (value: unknown) => {
       })),
       isMulti: item.isMulti === true,
       isTask: item.isTask === true,
+      settled:
+        item.settled === 'done' || item.settled === 'skipped'
+          ? item.settled
+          : null,
     })),
     goodToKnow: texts(value.goodToKnow),
     screenshots: httpsUrls(value.screenshots),

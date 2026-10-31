@@ -678,7 +678,14 @@ export const settlePipelineAsk = onCall(
       const error = await settleOnGithub(token, prNumber, text, outcome);
       if (error !== null) return { ok: false, error, at: null };
     }
-    const at = await recordSettled({ prNumber, sessionId, text }, outcome);
-    return { ok: true, error: null, at };
+    try {
+      const at = await recordSettled({ prNumber, sessionId, text }, outcome);
+      return { ok: true, error: null, at };
+    } catch (error) {
+      // GitHub already holds the change, which the next inbox rebuild carries; only a 🚩 line has nothing to fall back on.
+      logger.error('settlePipelineAsk: record failed', getErrorName(error));
+      if (prNumber === null) throw new HttpsError('internal', "Couldn't save that.");
+      return { ok: true, error: null, at: Date.now() };
+    }
   },
 );

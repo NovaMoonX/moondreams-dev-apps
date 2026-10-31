@@ -427,4 +427,28 @@ assert.equal(
   'Windows line endings hold',
 );
 
+const reworded = ticked.replace(
+  '- [x] Create the MAPS_KEY secret. (who: owner) (owner: done)',
+  '- [ ] Create the MAPS_KEY secret (who: owner)',
+);
+assert.match(
+  keepOwnerTicks(ticked, reworded),
+  /- \[x\] Create the MAPS_KEY secret\. \(who: owner\) \(owner: done\)/,
+  "a one-line rewrite that drops the tick and the note is the session's, so the tick comes back",
+);
+const settledItems = parseStatus(ticked, '').ownerItems;
+assert.deepEqual(
+  settledItems.map((item) => [item.text, item.settled]),
+  [
+    ['Create the MAPS_KEY secret.', 'done'],
+    ['Pick a header?', null],
+  ],
+  'a box ticked from the dashboard stays listed as settled, for its Undo; a plain tick does not',
+);
+assert.doesNotMatch(
+  buildInbox([pr(7, 'h7', 'main', ticked)], '2026-10-29T17:00:00Z'),
+  /MAPS_KEY/,
+  'a settled item is not counted or listed in the inbox issue',
+);
+
 console.log('owner inbox: ok');

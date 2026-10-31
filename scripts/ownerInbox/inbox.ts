@@ -50,6 +50,8 @@ export interface OwnerItem {
   isMulti: boolean;
   /** A step for the owner to do and tick off rather than a question to answer: tagged `(to do)`, or a line with no options and no question mark. */
   isTask: boolean;
+  /** Ticked from the dashboard (its `(owner: …)` note), shown with an Undo; null while it waits on the owner. */
+  settled: 'done' | 'skipped' | null;
 }
 
 /** A pull request merged lately, so the dashboard stops showing what its session raised before the merge. */
@@ -165,12 +167,19 @@ const bullet = (line: string) =>
   );
 
 const isOpenBox = (line: string) => /^\s*[-*]\s+\[ \]/.test(line);
+const getOwnerNote = (line: string): OwnerItem['settled'] => {
+  if (!/^\s*[-*]\s+\[[xX]\]/.test(line)) return null;
+  if (/\(owner:\s*done\)/i.test(line)) return 'done';
+  return /\(owner:\s*not doing it\)/i.test(line) ? 'skipped' : null;
+};
+const isOwnerBox = (line: string) =>
+  isOpenBox(line) || getOwnerNote(line) !== null;
 const isForOwner = (line: string) =>
   (line.match(/\(who:([^)]*)\)/i)?.[1] ?? '')
     .split(/[,/]/)
     .some((who) => who.trim().toLowerCase() === 'owner');
 
-/** Reads a PR's `📋 Status` comment: its session, state, unchecked owner items, good-to-know notes and latest screenshots. */
+/** Reads a PR's `📋 Status` comment: its session, state, owner items (unchecked, or ticked from the dashboard), good-to-know notes and latest screenshots. */
 export function parseStatus(body: string, updatedAt: string): PrStatus {
   const sessionUrl = body.match(SESSION_MARKER)?.[1] ?? null;
   const titleLine = lines(body).find((line) =>
@@ -183,15 +192,15 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
   const state = toPlain(heading?.split('·')[1]?.trim() ?? '') || null;
   const all = lines(body);
   const ownerItems = all.flatMap((line, index): OwnerItem[] => {
-    if (!isOpenBox(line) || !isForOwner(line)) return [];
+    if (!isOwnerBox(line) || !isForOwner(line)) return [];
     const depth = line.search(/\S/);
     const after = all.slice(index + 1);
     const end = after.findIndex(
       (next) =>
-        next.trim() === '' || next.search(/\S/) <= depth || isOpenBox(next),
+        next.trim() === '' || next.search(/\S/) <= depth || isOwnerBox(next),
     );
     const nested = end === -1 ? after : after.slice(0, end);
-    const text = bullet(line);
+    const text = bullet(line.replace(OWNER_NOTE, ''));
     const options = nested.flatMap(toOption).slice(0, MAX_OPTIONS);
     return [
       {
@@ -199,6 +208,7 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
         options,
         isMulti: PICK_ANY.test(line),
         isTask: TO_DO.test(line) || (options.length === 0 && !text.includes('?')),
+        settled: getOwnerNote(line),
       },
     ];
   });
@@ -261,7 +271,7 @@ export function keepOwnerTicks(before: string, after: string): string {
     old.length === next.length &&
     changed.length === 1 &&
     toOwnerBox(old[changed[0]], 0).some((box) => box.isTicked) &&
-    toOwnerBox(next[changed[0]], 0).some((box) => !box.isTicked);
+    old[changed[0]].replace(/\[[xX]\]/, '[ ]') === next[changed[0]];
   if (isOwnUntick) return after;
   return next
     .map((line, index) => {
@@ -416,8 +426,11 @@ const STANDING_ORDER: Standing[] = [
   'waiting',
 ];
 
+const waitingItems = (pr: InboxPr) =>
+  (pr.status?.ownerItems ?? []).filter((item) => item.settled === null);
+
 const ownerCount = (session: Session) =>
-  session.prs.reduce((sum, pr) => sum + (pr.status?.ownerItems.length ?? 0), 0);
+  session.prs.reduce((sum, pr) => sum + waitingItems(pr).length, 0);
 
 const isBroken = (pr: InboxPr) =>
   pr.ci === 'red' || pr.labels.includes('merge-conflict');
@@ -529,7 +542,7 @@ const stackTree = (session: Session, all: readonly InboxPr[]): string[] => {
 
 const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
   const needs = session.prs.flatMap((pr) =>
-    (pr.status?.ownerItems ?? []).flatMap((item) => [
+    waitingItems(pr).flatMap((item) => [
       `- [#${pr.number}](${pr.url}) ${item.text}`,
       ...item.options.map(
         (option) =>

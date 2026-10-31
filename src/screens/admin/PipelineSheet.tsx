@@ -231,8 +231,8 @@ function PipelineSheet({ entry, onClose, answers, settle }: PipelineSheetProps) 
           {questionItems.length > 0 || questionHands.length > 0 || slots.length > 0 ? (
             <SheetSection title='Needs you'>
               <ul className='space-y-3'>
-                {questionHands.map((hand) => (
-                  <li key={hand.text}>
+                {questionHands.map((hand, index) => (
+                  <li key={`${hand.text}-${index}`}>
                     <DismissibleAsk {...getSettleProps(handTarget(hand), hand.settled)}>
                       <p className='text-foreground pt-1.5 text-sm'>
                         <LinkedText text={hand.text} />
@@ -274,8 +274,8 @@ function PipelineSheet({ entry, onClose, answers, settle }: PipelineSheetProps) 
                     <TaskRow {...getSettleProps(itemTarget(item), item.settled)} />
                   </li>
                 ))}
-                {taskHands.map((hand) => (
-                  <li key={hand.text}>
+                {taskHands.map((hand, index) => (
+                  <li key={`${hand.text}-${index}`}>
                     <TaskRow {...getSettleProps(handTarget(hand), hand.settled)} />
                   </li>
                 ))}

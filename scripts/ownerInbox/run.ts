@@ -226,8 +226,10 @@ const restoreOwnerTicks = async () => {
   if (event.action !== 'edited' || !before || !comment) return;
   if (!TRUSTED.has(comment.author_association)) return;
   if (!comment.body.trimStart().startsWith(STATUS_MARKER)) return;
-  const kept = keepOwnerTicks(before, comment.body);
-  if (kept === comment.body) return;
+  // The run can start minutes after its event, so it works on the comment as it is now, never the event's copy.
+  const live = await api<ApiComment>(`/repos/${repo}/issues/comments/${comment.id}`);
+  const kept = keepOwnerTicks(before, live.body);
+  if (kept === live.body) return;
   await api(`/repos/${repo}/issues/comments/${comment.id}`, {
     method: 'PATCH',
     body: JSON.stringify({ body: kept }),
@@ -270,6 +272,7 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
       })),
       isMulti: item.isMulti,
       isTask: item.isTask,
+      settled: item.settled,
     })),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
   },

@@ -45,8 +45,14 @@ const DOT_CLASS: Record<PipelineGroup, string> = {
 };
 
 const CI_BADGE: Record<string, { words: string; className: string }> = {
-  red: { words: 'Checks failing', className: 'bg-destructive/10 text-destructive' },
-  running: { words: 'Checks running', className: 'bg-warning/15 text-warning-foreground dark:text-warning' },
+  red: {
+    words: 'Checks failing',
+    className: 'bg-destructive/10 text-destructive',
+  },
+  running: {
+    words: 'Checks running',
+    className: 'bg-warning/15 text-warning-foreground dark:text-warning',
+  },
   green: { words: 'Checks passing', className: 'bg-success/10 text-success' },
 };
 
@@ -147,7 +153,9 @@ export function NotSetUpLine() {
     <span className='inline-flex items-center gap-1'>
       <WarningLine>Answering isn&apos;t set up yet.</WarningLine>
       <HelpTip title="Answering isn't set up">
-        Run npm run pipeline:secrets -- token in your terminal: it opens the GitHub page for the token and saves it. Sending works a couple of minutes later.
+        Run npm run pipeline:secrets -- token in your terminal: it opens the
+        GitHub page for the token and saves it. Sending works a couple of
+        minutes later.
       </HelpTip>
     </span>
   );
@@ -355,7 +363,10 @@ export function AnswerFields({
           {pictured.length > 0 ? (
             <ul aria-label='Your choice' className='grid grid-cols-2 gap-3'>
               {pictured.map(({ option, index }, pictureIndex) => (
-                <li key={`${option.label}-${index}`} className='relative min-w-0'>
+                <li
+                  key={`${option.label}-${index}`}
+                  className='relative min-w-0'
+                >
                   <Button
                     type='button'
                     variant='tertiary'
@@ -448,7 +459,10 @@ const ROW_WORDS = {
 
 const getAnswerSummary = (draft: AnswerDraft) => {
   const other = (draft.other ?? '').trim();
-  const picks = [...draft.choices, ...(other === '' ? [] : [`Other: ${other}`])];
+  const picks = [
+    ...draft.choices,
+    ...(other === '' ? [] : [`Other: ${other}`]),
+  ];
   const note = draft.note.trim();
   return [...picks, ...(note === '' ? [] : [note])].join(', ');
 };
@@ -658,14 +672,18 @@ function SetAsideButton({
               isGrouped
               icon={<CircleCheck />}
               label={isTask ? 'I already did it' : 'Already handled'}
-              subtitle={hasPr ? 'Ticked on the PR for the session to see' : undefined}
+              subtitle={
+                hasPr ? 'Ticked on the PR for the session to see' : undefined
+              }
               onClick={() => choose('done')}
             />
             <ActionRow
               isGrouped
               icon={<Ban />}
               label="I'm not doing it"
-              subtitle={hasPr ? 'Ticked on the PR with a note saying so' : undefined}
+              subtitle={
+                hasPr ? 'Ticked on the PR with a note saying so' : undefined
+              }
               onClick={() => choose('skipped')}
             />
           </ActionGroup>
@@ -690,7 +708,7 @@ export function TaskRow({
       <div className='flex items-start gap-3'>
         <Checkbox
           className={TICK_HIT_CLASS}
-          checked={settled !== null}
+          checked={settled === 'done'}
           disabled={isBusy}
           onCheckedChange={(next) => onSettle(next ? 'done' : 'open')}
           aria-label={`Done: ${label}`}
@@ -714,13 +732,15 @@ export function TaskRow({
           ) : null}
         </div>
         {settled === null ? (
-          <SetAsideButton
-            text={text}
-            isTask
-            hasPr={hasPr}
-            isBusy={isBusy}
-            onSettle={onSettle}
-          />
+          <span className='-mt-1.5 flex'>
+            <SetAsideButton
+              text={text}
+              isTask
+              hasPr={hasPr}
+              isBusy={isBusy}
+              onSettle={onSettle}
+            />
+          </span>
         ) : null}
       </div>
       {error ? (

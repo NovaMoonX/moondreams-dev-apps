@@ -58,6 +58,11 @@ export interface SettleTarget {
   text: string;
 }
 
+/** A settled ask as the dashboard holds it: an Undo not yet reflected everywhere is `open`. */
+export type SettledAskView = Omit<PipelineSettledAsk, 'outcome'> & {
+  outcome: PipelineSettleOutcome | 'open';
+};
+
 export const toSettleId = (target: SettleTarget) =>
   `${target.prNumber ?? target.sessionId}:${target.text}`;
 
@@ -155,19 +160,24 @@ const RECOMMENDED = /\s*\(recommended\)/i;
 
 // A status line settled before the session's next status rewrite stays settled; after it, the rewrite (which keeps the owner's ticks) is what counts.
 const getItemSettled = (
-  settled: PipelineSettledAsk[],
+  settled: SettledAskView[],
   prNumber: number,
-  text: string,
+  item: PipelineOwnerItem,
   statusAt: number,
-) =>
-  settled.find(
-    (ask) =>
-      ask.prNumber === prNumber && ask.text === text && ask.at >= statusAt,
-  )?.outcome ?? null;
+) => {
+  const ask = settled.find(
+    (candidate) =>
+      candidate.prNumber === prNumber &&
+      candidate.text === item.text &&
+      candidate.at >= statusAt,
+  );
+  if (ask) return ask.outcome === 'open' ? null : ask.outcome;
+  return item.settled ?? null;
+};
 
 const toSafeItems = (
   prs: PipelineInboxPr[],
-  settled: PipelineSettledAsk[],
+  settled: SettledAskView[],
 ): PipelineOwnerEntryItem[] =>
   prs.flatMap((pr) =>
     (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => {
@@ -184,7 +194,7 @@ const toSafeItems = (
         })),
         isMulti: item.isMulti === true,
         isTask: item.isTask === true,
-        settled: getItemSettled(settled, pr.number, item.text, statusAt),
+        settled: getItemSettled(settled, pr.number, item, statusAt),
       };
     }),
   );
@@ -285,25 +295,28 @@ const isClearedByMerge = (
     (pr) => pr.sessionUrl === session.url && pr.mergedAt >= session.updatedAt,
   );
 
+// Set aside by its words, so a session repeating the same line on a later turn doesn't bring it back.
 const toHands = (
   session: PipelineSession,
-  settled: PipelineSettledAsk[],
+  settled: SettledAskView[],
 ): PipelineHand[] =>
-  session.raisedHands.map((text) => ({
-    text,
-    isTask: !stripLinks(text).includes('?'),
-    settled:
-      settled.find(
-        (ask) => ask.sessionId === session.sessionId && ask.text === text,
-      )?.outcome ?? null,
-  }));
+  session.raisedHands.map((text) => {
+    const outcome = settled.find(
+      (ask) => ask.sessionId === session.sessionId && ask.text === text,
+    )?.outcome;
+    return {
+      text,
+      isTask: !stripLinks(text).includes('?'),
+      settled: outcome === undefined || outcome === 'open' ? null : outcome,
+    };
+  });
 
 function toSessionEntry(
   session: PipelineSession,
   prs: PipelineInboxPr[],
   merged: PipelineMergedPr[],
   answered: Record<string, number>,
-  settled: PipelineSettledAsk[],
+  settled: SettledAskView[],
   now: number,
 ): PipelineEntry {
   const sessionPrs = getSessionPrs(session, prs);
@@ -364,7 +377,7 @@ function toSessionEntry(
 function toPrEntry(
   pr: PipelineInboxPr,
   answered: Record<string, number>,
-  settled: PipelineSettledAsk[],
+  settled: SettledAskView[],
   now: number,
 ): PipelineEntry {
   const status = pr.status;
@@ -495,7 +508,7 @@ export function buildPipeline(
   sessions: PipelineSession[],
   inbox: PipelineInbox | null,
   answered: Record<string, number>,
-  settled: PipelineSettledAsk[],
+  settled: SettledAskView[],
   now: number,
 ) {
   const prs = inbox?.prs ?? [];

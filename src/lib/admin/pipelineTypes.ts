@@ -19,6 +19,8 @@ export interface PipelineOwnerItem {
   isMulti: boolean | null;
   /** A step to tick off rather than a question; null or missing on documents written before to-dos, read with `=== true`. */
   isTask: boolean | null;
+  /** Ticked from the dashboard, read from its line's `(owner: …)` note; null or missing while it waits. */
+  settled: PipelineSettleOutcome | null;
 }
 
 export interface PipelineInboxStatus {
