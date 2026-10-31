@@ -1,4 +1,4 @@
-/** The day the table below was last checked against Anthropic's price list (UTC). */
+/** The day the table below was last checked against Anthropic's price list (UTC); bump it with any price edit. */
 export const PRICES_CHECKED_ON = '2026-10-30';
 
 /** API list prices in dollars per million tokens. A cache write costs 1.25× input for 5 minutes and 2× for an hour. */

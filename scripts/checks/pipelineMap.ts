@@ -31,7 +31,7 @@ const stale = placed.filter((step) => !steps.includes(step));
 assert.deepEqual(
   stale,
   [],
-  `src/screens/admin/pipelineMap.ts names steps pipeline.md no longer has: ${stale.join(', ')}.`,
+  `src/screens/admin/pipelineMap.ts names steps pipeline.md no longer has: ${stale.join(', ')}. If they are still in the table, a non-table line inside it cut the table short.`,
 );
 
 const settings = readFileSync('.claude/settings.json', 'utf8');
