@@ -982,10 +982,22 @@ assert.deepEqual(
     keepsGoalTarget('bill', tvGoal, null),
     keepsGoalTarget('bill', tvGoal, 10_000),
     keepsGoalTarget('envelope', tvGoal, null),
-    keepsGoalTarget('bill', { ...tvGoal, targetDate: null }, 10_000),
+    keepsGoalTarget('bill', { ...tvGoal, targetDate: null }, null),
   ],
-  [true, false, false, false],
+  [true, false, false, true],
   'a goal keeps its target only as a bill with nothing going in each period',
+);
+assert.equal(
+  (
+    moveBudgetValue(
+      'goal',
+      'bill',
+      { ...tvGoal, targetDate: null },
+      today,
+    ) as typeof tv
+  ).timing.schedule.kind,
+  'irregular',
+  'a goal with no date moved to a bill asks how often it repeats',
 );
 (['weekly', 'everyOtherWeek'] as const).forEach((kind) => {
   const repeating = {
