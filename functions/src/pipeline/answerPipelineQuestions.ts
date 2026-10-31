@@ -706,7 +706,8 @@ interface MergeView {
   isStatusForHead: boolean;
   /** Its base has commits its head doesn't, so its green CI never ran on what would land. */
   isBehind: boolean;
-  hasOpenQuestion: boolean;
+  /** Null while the inbox hasn't read the newest status, so its questions aren't known yet. */
+  hasOpenQuestion: boolean | null;
 }
 
 const MERGE_COMMENT = 'Merge it (from the admin dashboard)';
@@ -741,6 +742,7 @@ const getMergeRefusal = (view: MergeView) => {
   if (view.ci !== 'green') return 'No checks have run on it yet.';
   if (view.mustDo === null) return 'Its status has no Must do list yet.';
   if (view.mustDo.length > 0) return 'Must do items are still open.';
+  if (view.hasOpenQuestion === null) return "Its newest status hasn't reached the dashboard yet. Try again in a minute.";
   if (view.hasOpenQuestion) return 'It has an open question for you.';
   if (!view.isStatusForHead) return 'Its status is for an older commit. Wait for its session to update it.';
   if (view.isMergeable === null) return 'GitHub is still checking it for conflicts. Try again in a moment.';
@@ -819,42 +821,29 @@ const refused = (error: string): MergeResult => ({
   isSample: false,
 });
 
-const TO_DO_TAG = /\(to do\)/i;
-const OWNER_TICK = /^\s*[-*]\s+\[[xX]\].*\(owner:\s*(done|not doing it)\)/i;
-
-// Numbered as the inbox numbers them (every open or owner-ticked owner box, in order), since the dashboard's answer marks use that place.
-const readOpenQuestions = (body: string) => {
-  const lines = body.split(/\r?\n/);
-  const boxes = lines.flatMap((line, index) => {
-    const box = BOX_LINE.exec(line);
-    const isOwnerBox = box !== null && (box[2] === ' ' || OWNER_TICK.test(line));
-    return isOwnerBox && isForOwner(line) ? [{ line, next: lines[index + 1] ?? '' }] : [];
-  });
-  return boxes.flatMap(({ line, next }, place) => {
-    if (BOX_LINE.exec(line)?.[2] !== ' ' || TO_DO_TAG.test(line)) return [];
-    const hasOptions = next.search(/\S/) > line.search(/\S/) && /^\s*[-*]\s+/.test(next);
-    return line.includes('?') || hasOptions ? [place] : [];
-  });
-};
-
 const readAnswerMarks = async () => {
   const marks = (await getFirestore().doc('pipeline/answered').get()).get('marks') as unknown;
   return isObject(marks) ? marks : {};
 };
 
-const hasSeededQuestion = async (prNumber: number, status: Json | null) => {
-  if (status === null || !Array.isArray(status.ownerItems)) return false;
+// Read from the inbox's stored list, the one the dashboard shows and numbers its answer marks by; null while the inbox hasn't read the newest status.
+const readOpenQuestion = async (prNumber: number, statusAt: number | null) => {
+  const prs = (await getFirestore().doc('pipeline/inbox').get()).get('prs') as unknown;
+  const pr = (Array.isArray(prs) ? prs : []).filter(isObject).find((candidate) => candidate.number === prNumber);
+  const status = isObject(pr?.status) ? pr.status : null;
+  const storedAt = Number(status?.updatedAt) || 0;
+  if (status === null || (statusAt !== null && storedAt < statusAt)) return null;
   const marks = await readAnswerMarks();
-  const statusAt = Number(status.updatedAt) || 0;
-  return status.ownerItems
+  return (Array.isArray(status.ownerItems) ? status.ownerItems : [])
     .filter(isObject)
     .some(
       (item, index) =>
         item.isTask !== true &&
         typeof item.settled !== 'string' &&
-        Number(marks[`${prNumber}:${index}`] ?? 0) < statusAt,
+        Number(marks[`${prNumber}:${index}`] ?? 0) < storedAt,
     );
 };
+
 
 // The emulator's dashboard shows made-up pull requests, so it checks the seeded inbox and posts nothing.
 const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
@@ -872,7 +861,7 @@ const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
     mustDo: status === null ? 'no status' : Array.isArray(status.mustDo) ? status.mustDo.map(String) : null,
     isStatusForHead: true,
     isBehind: false,
-    hasOpenQuestion: await hasSeededQuestion(prNumber, status),
+    hasOpenQuestion: await readOpenQuestion(prNumber, null),
   });
   if (refusal !== null) return refused(refusal);
   const sessionUrl =
@@ -1092,14 +1081,6 @@ const isBehindBase = async (token: string, pr: Json, sha: string) => {
   return Number((await readJson(response))?.behind_by) > 0;
 };
 
-const hasOpenQuestion = async (prNumber: number, statusBody: string | null, status: Json | null) => {
-  const open = statusBody === null ? [] : readOpenQuestions(statusBody);
-  if (open.length === 0) return false;
-  const marks = await readAnswerMarks();
-  const statusAt = Date.parse(String(status?.updated_at)) || 0;
-  return open.some((place) => Number(marks[`${prNumber}:${place}`] ?? 0) < statusAt);
-};
-
 const readGates = async (token: string, prNumber: number) => {
   try {
     const pull = await githubFetch(token, `/pulls/${prNumber}`);
@@ -1126,7 +1107,8 @@ const readGates = async (token: string, prNumber: number) => {
       mustDo: statusBody === null ? 'no status' : readMustDo(statusBody),
       isStatusForHead: statusBody !== null && isHeadingFor(statusBody, sha),
       isBehind: await isBehindBase(token, pr, sha),
-      hasOpenQuestion: await hasOpenQuestion(prNumber, statusBody, status),
+      hasOpenQuestion:
+        statusBody === null ? false : await readOpenQuestion(prNumber, Date.parse(String(status?.updated_at)) || 0),
     });
     if (refusal !== null) return refused(refusal);
     const sessionUrl =

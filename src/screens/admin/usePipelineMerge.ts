@@ -6,7 +6,7 @@ import type { MergeTarget } from './pipelineUtils';
 
 type MergeDone = 'asked' | 'merged' | 'sample-asked' | 'sample-merged';
 // `unknown`: the reply was lost, so GitHub may have merged it.
-type MergeTry = MergeDone | 'refused' | 'unknown' | 'skipped';
+type MergeTry = MergeDone | 'refused' | 'unknown' | 'skipped' | 'held';
 
 const without = <T>(record: Record<number, T>, key: number) =>
   Object.fromEntries(Object.entries(record).filter(([other]) => Number(other) !== key));
@@ -72,15 +72,16 @@ export function usePipelineMerge() {
       async (earlier, target) => {
         const all = await earlier;
         const isStopped = all.some(({ outcome }) => outcome.endsWith('merged') || outcome === 'unknown');
-        if (isStopped && !target.isDriven) return [...all, { prNumber: target.prNumber, outcome: 'skipped' }];
+        if (isStopped && !target.isDriven) return [...all, { prNumber: target.prNumber, outcome: 'held' }];
         return [...all, { prNumber: target.prNumber, outcome: await merge(target.prNumber) }];
       },
       Promise.resolve([]),
     );
     const count = (match: (outcome: MergeTry) => boolean) => tries.filter(({ outcome }) => match(outcome)).length;
+    const mergedAll = tries.filter(({ outcome }) => outcome.endsWith('merged')).map(({ prNumber }) => `#${prNumber}`);
     const merged = tries.find(({ outcome }) => outcome.endsWith('merged'))?.prNumber ?? null;
     const unsure = tries.find(({ outcome }) => outcome === 'unknown')?.prNumber ?? null;
-    const held = tries.filter(({ outcome }) => outcome === 'skipped').map(({ prNumber }) => prNumber);
+    const held = tries.filter(({ outcome }) => outcome === 'held').map(({ prNumber }) => prNumber);
     const waitLine =
       unsure !== null
         ? `Check #${unsure} on GitHub before merging this one.`
@@ -90,13 +91,14 @@ export function usePipelineMerge() {
     const failed = count((outcome) => outcome === 'refused' || outcome === 'unknown');
     const parts = [
       asked > 0 ? `asked ${plural(asked, 'session', 'sessions')} to merge` : null,
-      merged !== null ? `merged #${merged}` : null,
+      mergedAll.length > 0 ? `merged ${mergedAll.join(', ')}` : null,
       held.length > 0 ? `${plural(held.length, 'waits', 'wait')} for ${unsure !== null ? 'you to check' : 'its deploy'}` : null,
       failed > 0 ? `${plural(failed, "didn't go", "didn't go")}: open each to see why` : null,
     ].filter((part): part is string => part !== null);
     const isSample = tries.some(({ outcome }) => outcome.startsWith('sample'));
     const line = parts.join(' · ');
-    setAllNote(isSample ? `Sample, nothing was changed: ${line}` : line.replace(/^./, (first) => first.toUpperCase()));
+    const note = isSample ? `Sample, nothing was changed: ${line}` : line.replace(/^./, (first) => first.toUpperCase());
+    setAllNote(line === '' ? null : note);
     setIsMergingAll(false);
   };
 
