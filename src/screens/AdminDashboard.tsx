@@ -22,6 +22,7 @@ import AppDetail from './admin/AppDetail';
 import { isSameDraft, toDraft, type AppDraft } from './admin/appDraft';
 import { CANVAS_CLASS, SURFACE_CLASS } from './admin/constants';
 import DashboardNav from './admin/DashboardNav';
+import FeedbackView from './admin/FeedbackView';
 import FirebaseUsageView from './admin/FirebaseUsageView';
 import MembersView from './admin/MembersView';
 import PipelineSheet from './admin/PipelineSheet';
@@ -79,23 +80,32 @@ function AdminDashboard() {
 
   const isMembersOpen = url.view === 'members';
   const isFirebaseOpen = url.view === 'firebase';
+  const isFeedbackOpen = url.view === 'feedback';
   const chosenApp = allApps.find((app) => app.id === url.app);
   // A phone with nothing chosen shows the list, but the wide layout's main view is never empty: it opens on what waits on the owner.
   const isPipelineOpen =
     url.view === 'pipeline' ||
-    (isWide && !isMembersOpen && !isFirebaseOpen && !chosenApp);
+    (isWide &&
+      !isMembersOpen &&
+      !isFirebaseOpen &&
+      !isFeedbackOpen &&
+      !chosenApp);
   const selectedApp =
-    isPipelineOpen || isMembersOpen || isFirebaseOpen ? undefined : chosenApp;
+    isPipelineOpen || isMembersOpen || isFirebaseOpen || isFeedbackOpen
+      ? undefined
+      : chosenApp;
   const getSelected = () => {
     if (isPipelineOpen) return 'pipeline';
     if (isMembersOpen) return 'members';
     if (isFirebaseOpen) return 'firebase';
+    if (isFeedbackOpen) return 'feedback';
     return selectedApp?.id ?? null;
   };
   const selected = getSelected();
   const getDetailTitle = () => {
     if (isPipelineOpen) return 'Pipeline';
     if (isFirebaseOpen) return 'Firebase usage';
+    if (isFeedbackOpen) return 'Feedback';
     return selectedApp?.name ?? 'Members';
   };
 
@@ -121,6 +131,7 @@ function AdminDashboard() {
     if (isPipelineOpen) return pipelineView;
     if (isMembersOpen) return members;
     if (isFirebaseOpen) return firebaseUsage;
+    if (isFeedbackOpen) return feedback;
     return appDetail;
   };
 
@@ -147,6 +158,7 @@ function AdminDashboard() {
       waitingEntries={pipelineGroups.waiting}
       onSelectPipeline={() => url.showPipeline({ isStep })}
       onAnswerEntry={setOpenEntryKey}
+      onSelectFeedback={() => url.showFeedback({ isStep })}
       onSelectMembers={() => url.showMembers({ isStep })}
       onSelectFirebase={() => url.showFirebase({ isStep })}
       onSelectApp={(appId) => url.showApp(appId, { isStep })}
@@ -171,6 +183,9 @@ function AdminDashboard() {
       merge={pipelineMerge}
       onOpenEntry={setOpenEntryKey}
     />
+  );
+  const feedback = (
+    <FeedbackView selectedId={url.feedback} onSelect={url.openFeedback} />
   );
   const firebaseUsage = <FirebaseUsageView apps={allApps} />;
   const appDetail = selectedApp ? (
@@ -213,7 +228,10 @@ function AdminDashboard() {
             className={BAR_CLASS}
             leading={
               <div className='flex min-w-0 flex-1 items-center gap-3'>
-                <SubviewBackButton label='Back to dashboard' onClick={url.goBack} />
+                <SubviewBackButton
+                  label='Back to dashboard'
+                  onClick={url.goBack}
+                />
                 {selectedApp ? (
                   <AppLogo
                     appId={selectedApp.id}
@@ -303,6 +321,11 @@ function AdminDashboard() {
                 <div className='max-w-3xl space-y-4'>
                   <SectionHeader title='Members' />
                   {members}
+                </div>
+              ) : isFeedbackOpen ? (
+                <div className='max-w-3xl space-y-4'>
+                  <SectionHeader title='Feedback' />
+                  {feedback}
                 </div>
               ) : isFirebaseOpen ? (
                 <div className='max-w-3xl space-y-4'>

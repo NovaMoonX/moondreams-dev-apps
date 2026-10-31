@@ -12,6 +12,8 @@ if (getApps().length === 0) {
 }
 
 const DAY_MS = 86_400_000;
+/** The 9 PM note is stale by the next morning's plans; FCM drops it after this. */
+const WRAP_UP_USEFUL_FOR_MS = 3 * 60 * 60 * 1000;
 const STATE_PATH = 'apps/waypoint/pushState';
 const EXPENSE_LIMIT = 50;
 
@@ -51,6 +53,8 @@ async function wrapUpTrip(firestore: Firestore, tripId: string, trip: DocumentDa
   await sendPushToUsers(firestore, getMessaging(), adminUids, {
     ...content,
     url: toAppUrl(getTripLink(tripId, 'expenses')) ?? APP_ORIGIN,
+    usefulForMs: WRAP_UP_USEFUL_FOR_MS,
+    urgency: 'normal',
   });
   return true;
 }

@@ -126,6 +126,8 @@ export interface InboxPr {
   bodySessionUrl: string | null;
   status: PrStatus | null;
   gallery: GalleryStep[];
+  /** The feedback items the PR body links to by their admin URL. */
+  feedbackIds: string[];
 }
 
 const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
@@ -133,6 +135,21 @@ const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
 /** The last Claude session link in a PR body, or null. */
 export const findSessionLink = (body: string | null) =>
   (body ?? '').match(SESSION_LINK)?.at(-1) ?? null;
+
+const FEEDBACK_LINK =
+  /https:\/\/apps\.moondreams\.dev\/admin\?view=feedback&(?:amp;)?feedback=([A-Za-z0-9-]{8,64})/gi;
+
+const RESOLVES_LINE = /^\s*(?:[-*]\s+)?resolves feedback\b/i;
+
+/** The feedback ids a PR body claims, once each: only from lines that start `Resolves feedback` followed by the admin link(s). A link anywhere else is a mention. */
+export const findFeedbackIds = (body: string | null) => [
+  ...new Set(
+    (body ?? '')
+      .split(/\r?\n/)
+      .filter((line) => RESOLVES_LINE.test(line))
+      .flatMap((line) => [...line.matchAll(FEEDBACK_LINK)].map((m) => m[1])),
+  ),
+];
 
 const lines = (text: string) => text.split(/\r?\n/);
 

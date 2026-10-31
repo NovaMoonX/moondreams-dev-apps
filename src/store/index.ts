@@ -13,6 +13,7 @@ import {
   type FeatureGatesState,
   featureGatesReducer,
 } from '@store/slices/featureGatesSlice';
+import { type FeedbackState, feedbackReducer } from '@store/slices/feedbackSlice';
 import { type RemindersState, remindersReducer } from '@store/slices/remindersSlice';
 import { type UserState, userReducer } from '@store/slices/userSlice';
 
@@ -20,6 +21,7 @@ export interface RootState {
   user: UserState;
   reminders: RemindersState;
   featureGates: FeatureGatesState;
+  feedback: FeedbackState;
   nineLives: NineLivesState;
   waypoint: WaypointState;
   aList: AListState;
@@ -32,6 +34,7 @@ export const store = configureStore({
     user: userReducer,
     reminders: remindersReducer,
     featureGates: featureGatesReducer,
+    feedback: feedbackReducer,
     nineLives: nineLivesReducer,
     waypoint: waypointReducer,
     aList: aListReducer,

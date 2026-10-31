@@ -821,6 +821,134 @@ service cloud.firestore {
         && request.resource.data.updatedAt is number;
     }
 
+    // Feedback a member sends the admin. The sender may only clear their own unread flag; status
+    // and the admin's side are the admin's. The `agent*` fields are the Functions' alone. Messages are append-only.
+    match /feedback/{feedbackId} {
+      function isFeedbackOwner() {
+        return request.auth != null && resource.data.uid == request.auth.uid;
+      }
+
+      function isFeedbackContextBounded(context) {
+        return context is map
+          && context.keys().hasOnly(['appId', 'path', 'siteVersion', 'userAgent', 'viewportWidth', 'viewportHeight'])
+          && (context.get('appId', null) == null || (context.appId is string && context.appId.size() <= 40))
+          && context.get('path', null) is string && context.path.size() <= 300
+          && context.get('siteVersion', null) is string && context.siteVersion.size() <= 40
+          && context.get('userAgent', null) is string && context.userAgent.size() <= 400
+          && context.get('viewportWidth', null) is number
+          && context.get('viewportHeight', null) is number;
+      }
+
+      allow read: if isFeedbackOwner() || isAdmin();
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt', 'groupId', 'claudeSessionUrl', 'agentState', 'agentQueuedAt', 'agentPrUrl', 'agentNote'])
+        && request.resource.data.get('groupId', null) == null
+        && request.resource.data.get('claudeSessionUrl', null) == null
+        && request.resource.data.get('agentState', null) == null
+        && request.resource.data.get('agentQueuedAt', null) == null
+        && request.resource.data.get('agentPrUrl', null) == null
+        && request.resource.data.get('agentNote', null) == null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.id == feedbackId
+        && request.resource.data.kind in ['bug', 'idea', 'question']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 4000
+        && request.resource.data.status == 'new'
+        && (request.resource.data.isUnreadByAdmin == true
+          || (request.resource.data.isUnreadByAdmin == false && isAdmin()))
+        && request.resource.data.isUnreadBySender == false
+        && (request.resource.data.authorEmail == null || request.resource.data.authorEmail == request.auth.token.email)
+        && isFeedbackContextBounded(request.resource.data.context);
+      allow update: if (isFeedbackOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isUnreadBySender', 'isUnreadByAdmin', 'lastActivityAt'])
+          && (request.resource.data.isUnreadBySender == false || request.resource.data.isUnreadBySender == resource.data.isUnreadBySender)
+          && (request.resource.data.isUnreadByAdmin == true || request.resource.data.isUnreadByAdmin == resource.data.isUnreadByAdmin))
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isUnreadBySender', 'isUnreadByAdmin', 'lastActivityAt', 'groupId'])
+          && request.resource.data.status in ['new', 'looking', 'planned', 'done', 'wont-do']
+          && (request.resource.data.get('groupId', null) == null || request.resource.data.get('groupId', null) is string));
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        function isParentOwner() {
+          return request.auth != null && get(/databases/$(database)/documents/feedback/$(feedbackId)).data.uid == request.auth.uid;
+        }
+
+        allow read: if isParentOwner() || isAdmin();
+        allow create: if request.auth != null
+          && request.resource.data.fromUid == request.auth.uid
+          && ((isParentOwner()
+              && request.resource.data.isFromAdmin == false
+              && request.resource.data.kind == 'reply')
+            || (isAdmin() && request.resource.data.isFromAdmin == true))
+          && (request.resource.data.kind != 'reply'
+            || (request.resource.data.text is string
+              && request.resource.data.text.size() >= 1
+              && request.resource.data.text.size() <= 4000));
+      }
+    }
+
+    // Admin-only buckets of related feedback. `claudeSessionUrl` is written by the Function only.
+    match /feedbackGroups/{groupId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(['id', 'name', 'createdAt', 'updatedAt', 'claudeSessionUrl'])
+        && request.resource.data.id == groupId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.createdAt is number
+        && request.resource.data.updatedAt is number
+        && request.resource.data.claudeSessionUrl == null;
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() >= 1
+        && request.resource.data.name.size() <= 80
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
+    }
+
+    // The Claude routine's token: the admin can write it, nobody can read it (only the Function does,
+    // with the admin SDK). The status doc is what the dashboard reads.
+    match /adminSettings/claudeRoutine {
+      allow read: if false;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['fireUrl', 'token', 'updatedAt'])
+        && request.resource.data.fireUrl is string
+        && request.resource.data.fireUrl.matches('^https://api\\.anthropic\\.com/v1/claude_code/routines/[A-Za-z0-9_]+/fire$')
+        && request.resource.data.token is string
+        && request.resource.data.token.size() >= 10
+        && request.resource.data.token.size() <= 400
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
+    }
+
+    match /adminSettings/claudeRoutineStatus {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['isConnected', 'updatedAt'])
+        && request.resource.data.isConnected is bool
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
+    }
+
+    // The admin's switch for Claude working on feedback by itself. The Functions read it with the admin SDK.
+    match /adminSettings/feedbackAutomation {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['isOn', 'updatedAt'])
+        && request.resource.data.isOn is bool
+        && request.resource.data.updatedAt is number;
+      allow delete: if isAdmin();
+    }
+
+    // How many automatic sessions today and which items failed to start: the Functions only.
+    match /adminSettings/feedbackAutomationUsage {
+      allow read, write: if false;
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if isUser(userId);
@@ -859,6 +987,9 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy
         && isReminderAudienceKnown()
+        // How long it stays useful: past that the sender drops it and a late push is never delivered. A missing one is the old shape from a stale tab or offline queue.
+        && (!('usefulForMs' in request.resource.data)
+          || (request.resource.data.usefulForMs is int && request.resource.data.usefulForMs > 0))
         // A path inside the app, never another site: a notification opens it on tap.
         && (request.resource.data.get('link', null) == null || request.resource.data.link.matches('/[a-z0-9].*'));
       allow update: if request.auth != null

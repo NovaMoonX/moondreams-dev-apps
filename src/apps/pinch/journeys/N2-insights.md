@@ -15,7 +15,7 @@ I read the screenshots for every count. The text dumps only located elements.
 
 **Caveats.**
 - Headless Chromium refuses the wake lock, so every cooking screen shows "This phone may turn the screen off…". A phone over HTTPS would not show that line, so I don't count it against the app.
-- The shell's seeded reminders from *other* apps toast over Pinch on load (`N2-shots/alex-t00-calendar-with-toasts.png`). I report them once (S20) and otherwise ignore them.
+- In this run the shell's seeded reminders from *other* apps (no longer seeded) toasted over Pinch on load (`N2-shots/alex-t00-calendar-with-toasts.png`). I report them once (S20) and otherwise ignore them.
 - I couldn't see toasts fire without writing. Their inventory comes from the code (§3.6).
 
 ---

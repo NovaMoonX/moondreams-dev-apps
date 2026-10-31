@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   ChevronRight,
   Gauge,
+  MessageSquare,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -15,6 +16,8 @@ import AppLogo from '@/components/AppLogo';
 import SearchInput from '@/components/SearchInput';
 import StatTile from '@/components/StatTile';
 import useNow from '@/hooks/useNow';
+import { useAppSelector } from '@/store';
+import { selectAdminUnreadCount } from '@store/slices/feedbackSlice';
 import {
   accessRequestsQueryOptions,
   isOnAccessList,
@@ -31,10 +34,7 @@ import {
 } from './constants';
 import IconTile from '@/ui/IconTile';
 import { ClaudeMark, GitHubMark } from '@/components/BrandMarks';
-import {
-  getPartialFailureLine,
-  type PipelineEntry,
-} from './pipelineUtils';
+import { getPartialFailureLine, type PipelineEntry } from './pipelineUtils';
 import { getUsageRows } from './usageRows';
 
 const NEEDS_YOU_PREVIEW = 2;
@@ -118,6 +118,7 @@ interface DashboardNavProps {
   waitingEntries: PipelineEntry[];
   onSelectPipeline: () => void;
   onAnswerEntry: (key: string) => void;
+  onSelectFeedback: () => void;
   onSelectMembers: () => void;
   onSelectFirebase: () => void;
   onSelectApp: (appId: string) => void;
@@ -140,6 +141,7 @@ function DashboardNav({
   waitingEntries,
   onSelectPipeline,
   onAnswerEntry,
+  onSelectFeedback,
   onSelectMembers,
   onSelectFirebase,
   onSelectApp,
@@ -187,6 +189,7 @@ function DashboardNav({
       !isLoading && !isUsersError && !failedAppIds.includes(app.id);
     return isMetaUsable ? `${meta} · unsaved` : 'Unsaved changes';
   };
+  const feedbackUnread = useAppSelector(selectAdminUnreadCount);
   const getMembersSubtitle = () => {
     if (isUsersError) return "Couldn't load";
     if (isLoading) return 'Everyone who has signed in';
@@ -303,6 +306,19 @@ function DashboardNav({
         isSelected={selected === 'pipeline'}
         isWide={isWide}
         onClick={onSelectPipeline}
+      />
+      <NavRow
+        leading={
+          <IconTile>
+            <MessageSquare className='size-5' />
+          </IconTile>
+        }
+        title='Feedback'
+        subtitle='Bugs, ideas and questions'
+        badge={feedbackUnread ?? 0}
+        isSelected={selected === 'feedback'}
+        isWide={isWide}
+        onClick={onSelectFeedback}
       />
       <NavRow
         leading={

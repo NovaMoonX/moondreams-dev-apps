@@ -11,6 +11,7 @@ import {
   INBOX_MARKER,
   STATUS_MARKER,
   buildInbox,
+  findFeedbackIds,
   findSessionLink,
   keepOwnerTicks,
   parseGallery,
@@ -78,6 +79,9 @@ interface ApiComment {
   updated_at: string;
   author_association: string;
 }
+interface ApiClosedPull extends ApiPull {
+  merged_at: string | null;
+}
 interface ApiCheckRuns {
   check_runs: CheckRun[];
 }
@@ -117,6 +121,7 @@ const readPr = async (pull: ApiPull): Promise<InboxPr> => {
     bodySessionUrl: findSessionLink(pull.body),
     status: status ? parseStatus(status.body, status.updated_at) : null,
     gallery: parseGallery(pull.body),
+    feedbackIds: findFeedbackIds(pull.body),
   };
 };
 
@@ -175,7 +180,7 @@ const writeInbox = async (body: string) => {
   console.log(`Created #${created.number}`);
 };
 
-type SavedPr = Omit<InboxPr, 'status' | 'gallery'> & {
+type SavedPr = Omit<InboxPr, 'status' | 'gallery' | 'feedbackIds'> & {
   body?: string | null;
   statusBody: string | null;
   statusUpdatedAt: string;
@@ -186,16 +191,19 @@ const readSaved = (path: string): InboxPr[] =>
     ({ body, statusBody, statusUpdatedAt, ...pr }) => ({
       ...pr,
       gallery: parseGallery(body ?? null),
+      feedbackIds: findFeedbackIds(body ?? null),
       status: statusBody ? parseStatus(statusBody, statusUpdatedAt) : null,
     }),
   );
 
 const MERGED_KEEP_MS = 14 * 24 * 60 * 60 * 1000;
 
-const readMergedPrs = async (): Promise<MergedPr[]> => {
-  const pulls = await api<ApiPull[]>(
+const readClosedPrs = () =>
+  api<ApiClosedPull[]>(
     `/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=50`,
   );
+
+const toMergedPrs = (pulls: ApiClosedPull[]): MergedPr[] => {
   const since = Date.now() - MERGED_KEEP_MS;
   return pulls.flatMap((pull) =>
     pull.merged_at && Date.parse(pull.merged_at) >= since
@@ -227,7 +235,9 @@ const restoreOwnerTicks = async () => {
   if (!TRUSTED.has(comment.author_association)) return;
   if (!comment.body.trimStart().startsWith(STATUS_MARKER)) return;
   // The run can start minutes after its event, so it works on the comment as it is now, never the event's copy.
-  const live = await api<ApiComment>(`/repos/${repo}/issues/comments/${comment.id}`);
+  const live = await api<ApiComment>(
+    `/repos/${repo}/issues/comments/${comment.id}`,
+  );
   const kept = keepOwnerTicks(before, live.body);
   if (kept === live.body) return;
   await api(`/repos/${repo}/issues/comments/${comment.id}`, {
@@ -301,17 +311,59 @@ const reportToPipeline = async (list: InboxPr[], merged: MergedPr[]) => {
   if (!response.ok) throw new Error(`status ${response.status}`);
 };
 
+/** Open PRs say whether they wait on the owner; recently closed ones say they merged or were closed without merging. Only same-repo PRs that claim feedback are sent. */
+const toFeedbackReports = (open: InboxPr[], closed: ApiClosedPull[]) => {
+  const own = closed.filter((pull) => pull.head.repo?.full_name === repo);
+  return [
+    ...open.map((pr) => ({
+      url: pr.url,
+      feedbackIds: pr.feedbackIds,
+      needsOwner: (pr.status?.ownerItems.length ?? 0) > 0,
+      isMerged: false,
+      isClosed: false,
+    })),
+    ...own.map((pull) => ({
+      url: pull.html_url,
+      feedbackIds: findFeedbackIds(pull.body),
+      needsOwner: false,
+      isMerged: pull.merged_at !== null,
+      isClosed: pull.merged_at === null,
+    })),
+  ].filter((pr) => pr.feedbackIds.length > 0);
+};
+
+const reportFeedbackToPipeline = async (
+  list: InboxPr[],
+  closed: ApiClosedPull[],
+) => {
+  const reports = toFeedbackReports(list, closed);
+  if (reports.length === 0) return;
+  const response = await fetch(pipelineUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      data: { key: pipelineKey, kind: 'feedback', prs: reports },
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!response.ok) throw new Error(`status ${response.status}`);
+};
+
 if (isDryRun) {
   console.log(body);
 } else {
   await writeInbox(body);
   if (pipelineKey) {
-    const merged = await readMergedPrs().catch((error: Error) => {
-      console.log(`::warning::Merged PRs not read: ${error.message}`);
+    const closed = await readClosedPrs().catch((error: Error) => {
+      console.log(`::warning::Closed PRs not read: ${error.message}`);
       return [];
     });
+    const merged = toMergedPrs(closed);
     await reportToPipeline(prs, merged).catch((error: Error) =>
       console.log(`::warning::Pipeline view not updated: ${error.message}`),
+    );
+    await reportFeedbackToPipeline(prs, closed).catch((error: Error) =>
+      console.log(`::warning::Feedback not updated: ${error.message}`),
     );
   }
 }

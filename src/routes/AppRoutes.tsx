@@ -130,6 +130,14 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'inbox',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: Inbox } = await import('@screens/Inbox');
+          return { Component: Inbox };
+        },
+      },
+      {
         path: 'unauthorized',
         HydrateFallback: Loading,
         lazy: async () => {

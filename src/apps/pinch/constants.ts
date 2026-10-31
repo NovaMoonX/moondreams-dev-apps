@@ -910,6 +910,9 @@ export const REMINDER_KINDS: {
 /** A timer's push goes out this long after its end, so a page that is awake can cancel it first and ring on its own. */
 export const TIMER_PUSH_GRACE_MS = 3000;
 
+/** A timer's push is not worth delivering this long after the timer ended. */
+export const TIMER_PUSH_USEFUL_FOR_MS = 10 * 60 * 1000;
+
 /** What wakes cooking voice, as shown. `COOK_WAKE_SPELLINGS` are the ways a recognizer writes it, in plain text and in one place. Matching is only at the start of what was heard, so a step that says "pepper" or "a pepper mill" never wakes it. */
 export const COOK_WAKE_PHRASE = 'Hey Pepper';
 export const COOK_WAKE_SPELLINGS = [

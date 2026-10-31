@@ -81,6 +81,207 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     });
   });
 
+  // Feedback in each state both inboxes draw: a bug the admin answered (unread by its sender), a new idea (unread by the admin), a finished question.
+  const HOUR_MS = 60 * 60 * 1000;
+  const adminUid = FIXTURE_USERS.admin.uid;
+  const toFeedback = (
+    id: string,
+    sender: (typeof fixtures)[number],
+    fields: {
+      kind: 'bug' | 'idea' | 'question';
+      text: string;
+      status: 'new' | 'looking' | 'planned' | 'done' | 'wont-do';
+      appId: string | null;
+      path: string;
+      isUnreadBySender: boolean;
+      isUnreadByAdmin: boolean;
+      createdHoursAgo: number;
+      lastActivityHoursAgo: number;
+      groupId?: string;
+      agent?: {
+        state: 'working' | 'pr-ready';
+        sessionUrl: string;
+        prUrl: string | null;
+      };
+    },
+  ) => ({
+    id,
+    uid: sender.uid,
+    authorName: sender.displayName,
+    authorEmail: sender.email,
+    kind: fields.kind,
+    text: fields.text,
+    status: fields.status,
+    context: {
+      appId: fields.appId,
+      path: fields.path,
+      siteVersion: 'dev',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+      viewportWidth: 390,
+      viewportHeight: 844,
+    },
+    isUnreadBySender: fields.isUnreadBySender,
+    isUnreadByAdmin: fields.isUnreadByAdmin,
+    createdAt: context.now - fields.createdHoursAgo * HOUR_MS,
+    lastActivityAt: context.now - fields.lastActivityHoursAgo * HOUR_MS,
+    groupId: fields.groupId ?? null,
+    claudeSessionUrl: fields.agent?.sessionUrl ?? null,
+    agentState: fields.agent?.state ?? null,
+    agentQueuedAt: fields.agent ? context.now - fields.createdHoursAgo * HOUR_MS : null,
+    agentPrUrl: fields.agent?.prUrl ?? null,
+    agentNote: null,
+  });
+  const toFeedbackMessage = (
+    id: string,
+    fields: {
+      kind: 'reply' | 'status';
+      text: string | null;
+      status: 'looking' | 'done' | null;
+      hoursAgo: number;
+    },
+  ) => ({
+    id,
+    kind: fields.kind,
+    fromUid: adminUid,
+    isFromAdmin: true,
+    text: fields.text,
+    status: fields.status,
+    createdAt: context.now - fields.hoursAgo * HOUR_MS,
+  });
+  const feedbackSeeds = [
+    {
+      feedback: toFeedback('seed-feedback-bug', FIXTURE_USERS.partnerOne, {
+        kind: 'bug',
+        text: 'The packing list loses my ticked items when I come back to the trip after a few minutes.',
+        status: 'looking',
+        appId: 'waypoint',
+        path: '/waypoint/trips/seed-trip',
+        isUnreadBySender: true,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 30,
+        lastActivityHoursAgo: 2,
+        groupId: 'seed-feedback-group',
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-bug-reply', {
+          kind: 'reply',
+          text: 'Thanks for flagging this. Which phone are you on? I can see it happening when the app wakes up after being closed.',
+          status: null,
+          hoursAgo: 3,
+        }),
+        toFeedbackMessage('seed-feedback-bug-status', {
+          kind: 'status',
+          text: null,
+          status: 'looking',
+          hoursAgo: 2,
+        }),
+      ],
+    },
+    {
+      feedback: toFeedback('seed-feedback-idea', FIXTURE_USERS.nineLivesCaretaker, {
+        kind: 'idea',
+        text: 'It would be great to see all my reminders from every app in one place.',
+        status: 'new',
+        appId: null,
+        path: '/',
+        isUnreadBySender: false,
+        isUnreadByAdmin: true,
+        createdHoursAgo: 5,
+        lastActivityHoursAgo: 5,
+        groupId: 'seed-feedback-group',
+      }),
+      messages: [],
+    },
+    {
+      feedback: toFeedback('seed-feedback-bug-working', FIXTURE_USERS.partnerTwo, {
+        kind: 'bug',
+        text: 'The shopping list shows an item twice after I add it from a recipe.',
+        status: 'looking',
+        appId: 'pinch',
+        path: '/pinch',
+        isUnreadBySender: true,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 1,
+        lastActivityHoursAgo: 0.5,
+        agent: { state: 'working', sessionUrl: 'https://claude.ai/code/session_seedfeedbackworking', prUrl: null },
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-bug-working-status', {
+          kind: 'status',
+          text: null,
+          status: 'looking',
+          hoursAgo: 0.5,
+        }),
+      ],
+    },
+    {
+      feedback: toFeedback('seed-feedback-bug-pr', FIXTURE_USERS.partnerOne, {
+        kind: 'bug',
+        text: 'The trip dates show a day early on my phone.',
+        status: 'looking',
+        appId: 'waypoint',
+        path: '/waypoint/trips/seed-trip',
+        isUnreadBySender: true,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 4,
+        lastActivityHoursAgo: 3,
+        agent: {
+          state: 'pr-ready',
+          sessionUrl: 'https://claude.ai/code/session_seedfeedbackpr',
+          prUrl: 'https://github.com/NovaMoonX/moondreams-dev-apps/pull/999',
+        },
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-bug-pr-status', {
+          kind: 'status',
+          text: null,
+          status: 'looking',
+          hoursAgo: 3,
+        }),
+      ],
+    },
+    {
+      feedback: toFeedback('seed-feedback-question', FIXTURE_USERS.partnerTwo, {
+        kind: 'question',
+        text: "Can two people be in the same household and see each other's cats?",
+        status: 'done',
+        appId: 'nine-lives',
+        path: '/nine-lives',
+        isUnreadBySender: false,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 120,
+        lastActivityHoursAgo: 96,
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-question-reply', {
+          kind: 'reply',
+          text: 'Yes: invite them from the household menu and every cat is shared.',
+          status: null,
+          hoursAgo: 100,
+        }),
+        toFeedbackMessage('seed-feedback-question-status', {
+          kind: 'status',
+          text: null,
+          status: 'done',
+          hoursAgo: 96,
+        }),
+      ],
+    },
+  ];
+  batch.set(context.firestore.doc('feedbackGroups/seed-feedback-group'), {
+    id: 'seed-feedback-group',
+    name: 'Small fixes',
+    createdAt: context.now - 6 * HOUR_MS,
+    updatedAt: context.now - 5 * HOUR_MS,
+    claudeSessionUrl: null,
+  });
+  feedbackSeeds.forEach(({ feedback, messages }) => {
+    batch.set(context.firestore.doc(`feedback/${feedback.id}`), feedback);
+    messages.forEach((message) => {
+      batch.set(context.firestore.doc(`feedback/${feedback.id}/messages/${message.id}`), message);
+    });
+  });
+
   APP_REGISTRY.forEach((app) => {
     const appRef = context.firestore.collection('apps').doc(app.id);
     const createdAt = app.createdAt
@@ -373,7 +574,8 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     ...EMPTY_SEED_RESULT,
     authUsers: fixtures.length,
     firestoreDocuments:
-      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + pipelineCosts.length + 1,
+      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + pipelineCosts.length + 1 +
+      feedbackSeeds.reduce((total, { messages }) => total + 1 + messages.length, 1),
     realtimePaths: fixtures.length,
   };
 

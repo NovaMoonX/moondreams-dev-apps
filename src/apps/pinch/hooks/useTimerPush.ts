@@ -5,7 +5,7 @@ import { isDevicePushOn } from '@/lib/notifications/devicePush';
 import { scheduleReminder } from '@/lib/notifications/scheduleReminder';
 import { useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
-import { TIMER_PUSH_GRACE_MS } from '@apps/pinch/constants';
+import { TIMER_PUSH_GRACE_MS, TIMER_PUSH_USEFUL_FOR_MS } from '@apps/pinch/constants';
 import type { CookTimer } from '@apps/pinch/hooks/useCookTimers';
 import { cancelTimerPush } from '@apps/pinch/lib/timerPush';
 import {
@@ -83,6 +83,7 @@ export function useTimerPush(
         createdBy: uid,
         link: '/pinch',
         inAppToast: false,
+        usefulForMs: TIMER_PUSH_USEFUL_FOR_MS,
       })
         .then(() => setRevision((current) => current + 1))
         .catch((error) => {

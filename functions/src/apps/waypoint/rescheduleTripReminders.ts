@@ -13,6 +13,9 @@ const DAY_MS = 86_400_000;
 const DAYS_OUTSIDE_TRIP = 3;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// The sender runs once a minute, so a shorter window would be dropped before it ran.
+const MIN_REMINDER_USEFUL_FOR_MS = 5 * 60_000;
+
 const WATCHED_TRIP_FIELDS = ['startDate', 'endDate', 'timezone'] as const;
 
 function formatLead(minutes: number) {
@@ -100,7 +103,7 @@ export const rescheduleTripReminders = onDocumentUpdated(
           if (isPending && reminderRef) {
             return [
               (batch: FirebaseFirestore.WriteBatch) =>
-                batch.update(reminderRef, { scheduledFor, link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}` }),
+                batch.update(reminderRef, { scheduledFor, usefulForMs: Math.max(event.reminderMinutesBefore * 60_000, MIN_REMINDER_USEFUL_FOR_MS), link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}` }),
             ];
           }
 
@@ -123,6 +126,7 @@ export const rescheduleTripReminders = onDocumentUpdated(
                 relatedEntityPath: `apps/waypoint/trips/${tripRef.id}/events/${eventDoc.id}`,
                 link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}`,
                 recurrence: 'none',
+                usefulForMs: Math.max(event.reminderMinutesBefore * 60_000, MIN_REMINDER_USEFUL_FOR_MS),
                 createdBy: event.createdBy,
                 createdAt: now,
               }),
