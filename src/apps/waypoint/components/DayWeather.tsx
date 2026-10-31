@@ -29,7 +29,7 @@ function DayWeather({ forecast, hours = [], placeName = null, also = [], isMinim
     const chip = (
       <>
         <WeatherEmoji condition={condition} className='shrink-0 text-sm leading-none' />
-        {label} · {formatTemp(forecast.tempMax)} / {formatTemp(forecast.tempMin)}
+        {formatTemp(forecast.tempMax)} / {formatTemp(forecast.tempMin)}
         {also.length > 0 && (
           <span className='font-medium' title={`${also.length} more ${also.length === 1 ? 'place' : 'places'} on this day`}>
             {' '}
@@ -43,6 +43,7 @@ function DayWeather({ forecast, hours = [], placeName = null, also = [], isMinim
         type='button'
         variant='tertiary'
         size='sm'
+        title={label}
         aria-label={`Open the day's weather: ${label}${placeName ? ` in ${placeName}` : ''}${also.length > 0 ? `, plus ${also.length} more ${also.length === 1 ? 'place' : 'places'}` : ''}`}
         className="text-muted-foreground relative h-auto gap-1.5 p-0! text-xs font-normal after:absolute after:-inset-y-3 after:inset-x-0 after:content-['']"
         onClick={onOpen}
@@ -50,7 +51,9 @@ function DayWeather({ forecast, hours = [], placeName = null, also = [], isMinim
         {chip}
       </Button>
     ) : (
-      <span className='text-muted-foreground inline-flex items-center gap-1.5 text-xs'>{chip}</span>
+      <span className='text-muted-foreground inline-flex items-center gap-1.5 text-xs' title={label}>
+        {chip}
+      </span>
     );
   }
 

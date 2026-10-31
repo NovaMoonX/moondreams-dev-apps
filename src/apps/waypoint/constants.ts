@@ -55,6 +55,7 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   DINING: 'Dining',
   ACTIVITY: 'Activity',
   FREE_TIME: 'Free time',
+  OTHER: 'Other',
 };
 
 export const EVENT_TYPE_EMOJIS: Record<EventType, string> = {
@@ -62,6 +63,7 @@ export const EVENT_TYPE_EMOJIS: Record<EventType, string> = {
   DINING: '🍽️',
   ACTIVITY: '🎒',
   FREE_TIME: '🌤️',
+  OTHER: '📌',
 };
 
 // Badge colors per event type — chosen so each stays legible in both themes
@@ -73,6 +75,7 @@ export const EVENT_TYPE_BADGE_CLASSES: Record<EventType, string> = {
     'bg-emerald-200 text-emerald-900 dark:bg-emerald-900 dark:text-emerald-100',
   FREE_TIME:
     'bg-violet-200 text-violet-900 dark:bg-violet-900 dark:text-violet-100',
+  OTHER: 'bg-slate-200 text-slate-900 dark:bg-slate-800 dark:text-slate-100',
 };
 
 export const ANNOUNCEMENT_SEVERITY_LABELS: Record<AnnouncementSeverity, string> = {
@@ -220,10 +223,10 @@ export const TRANSIT_LOCATION_LABELS: Record<TransitType, string | null> = {
 export const ARRIVE_BY_EVENT_TYPES: readonly EventType[] = ['DINING', 'ACTIVITY'];
 
 // Event types whose cost belongs on an expense: one without an attached expense reads "No expense yet".
-export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
+export const EXPENSE_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING', 'OTHER'];
 
 // Event types whose card shows the progress of the to-dos linked to it, and whose form can link them.
-export const TODO_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING'];
+export const TODO_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY', 'DINING', 'OTHER'];
 
 // Event types whose post-save sheet asks "Does anything need booking ahead?".
 export const BOOKING_TRACKED_EVENT_TYPES: readonly EventType[] = ['ACTIVITY'];
@@ -258,6 +261,7 @@ export const EVENT_LINK_KINDS_BY_TYPE: Record<EventType, readonly EventLinkKind[
   DINING: ['MENU', 'RESERVATION', 'WEBSITE'],
   ACTIVITY: ['BOOKING', 'WEBSITE'],
   FREE_TIME: [],
+  OTHER: ['BOOKING', 'WEBSITE'],
 };
 
 export const MEAL_TYPE_LABELS: Record<MealType, string> = {

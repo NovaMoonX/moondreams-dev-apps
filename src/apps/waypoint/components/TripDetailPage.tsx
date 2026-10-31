@@ -140,6 +140,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   const navTab = isTabPending && pendingTab !== null ? pendingTab : sectionTab;
 
   const [checklistCategory, setChecklistCategory] = useState<ChecklistCategory | 'ALL'>('ALL');
+  const tabsAnchorRef = useRef<HTMLDivElement>(null);
   const setSectionTab = (value: string) => {
     if (value === 'checklist') {
       setChecklistCategory('ALL');
@@ -148,6 +149,11 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     startTabTransition(() => setSelectedTab(value));
     if (hasAppNav) {
       window.scrollTo({ top: 0 });
+    } else if (value !== '') {
+      // Without the phone's separate screens, a tab opened from an overview card is far below it.
+      window.requestAnimationFrame(() =>
+        tabsAnchorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      );
     }
     const nextSearchParams = new URLSearchParams(searchParams);
     if (isValidSectionTab(value)) {
@@ -744,6 +750,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         )}
         {!isIdeaBoardProminent && ideasOverview}
         {!hasAppNav && <hr className='border-border mt-4' />}
+        <div ref={tabsAnchorRef} aria-hidden='true' className='scroll-mt-20' />
         <Tabs
           value={sectionTab}
           onValueChange={setSectionTab}

@@ -88,10 +88,11 @@ export function RentalDetailLines({
       <div className='flex flex-col items-start gap-1'>
         <LocationLink
           {...getPickupLocation(rental)}
+          showCopy={!showTitle}
           label={rental.returnAddress ? `Pickup · ${rental.pickupAddress}` : rental.pickupAddress}
         />
         {rental.returnAddress && (
-          <LocationLink {...getReturnLocation(rental)} label={`Return · ${rental.returnAddress}`} />
+          <LocationLink {...getReturnLocation(rental)} label={`Return · ${rental.returnAddress}`} showCopy={!showTitle} />
         )}
       </div>
       <p className='text-muted-foreground text-sm'>{formatRentalTimeRange(trip, rental)}</p>

@@ -34,6 +34,7 @@ const EVENT_EXPENSE_CATEGORIES: Record<EventType, ExpenseCategory | null> = {
   TRAVEL: 'TRANSPORT',
   ACTIVITY: 'ACTIVITIES',
   FREE_TIME: null,
+  OTHER: 'OTHER',
 };
 
 function getEventEmoji(event: TimelineEvent): string {

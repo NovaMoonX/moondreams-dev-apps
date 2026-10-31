@@ -12,7 +12,7 @@ Namespace root: `apps/waypoint/`
 
 ```typescript
 export type UserRole = 'ADMIN' | 'EDITOR' | 'COMMENTER' | 'VIEWER';
-export type EventType = 'TRAVEL' | 'DINING' | 'ACTIVITY' | 'FREE_TIME';
+export type EventType = 'TRAVEL' | 'DINING' | 'ACTIVITY' | 'FREE_TIME' | 'OTHER';
 export type TransitType = 'FLIGHT' | 'DRIVE' | 'FERRY' | 'TRAIN' | 'WALK' | 'BIKE' | 'SCOOTER' | 'OTHER';
 export type MealType = 'BREAKFAST' | 'LUNCH' | 'DINNER' | 'SNACK';
 export type ActivitySetting = 'INDOOR' | 'OUTDOOR';
@@ -125,6 +125,7 @@ interface TimelineEvent {
   eventType: EventType;
   dayIndex: number | null; // null = "no specific day" (RELATIVE trips only)
   endDayIndex: number | null; // equal to dayIndex for the common single-day case; higher for events spanning multiple days
+  customTypeLabel: string | null; // the person's own name for an OTHER event ("Spa day"), shown wherever the type label shows, falling back to "Other"; null for every other type. Absent on older events — read it with `?? null`
   title: string; // always stored non-empty, but the form never requires one — a blank title is derived on save ("Flight DL 482", the location name, or the event type)
   startTime: string | null; // "HH:mm" wall-clock time on dayIndex, floating — shown the same to every viewer (RELATIVE trips)
   endTime: string | null;

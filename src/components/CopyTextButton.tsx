@@ -12,7 +12,9 @@ interface CopyTextButtonProps {
   text: string;
   label: string;
   copiedLabel?: string;
-  variant?: 'primary' | 'secondary';
+  variant?: 'primary' | 'secondary' | 'tertiary';
+  /** Shows only the icon (the check once copied); `label` stays as its accessible name. */
+  isIconOnly?: boolean;
   className?: string;
   /** Runs when the browser refuses the copy, so the caller can say how to copy it by hand. */
   onFailed?: () => void;
@@ -24,6 +26,7 @@ function CopyTextButton({
   label,
   copiedLabel = 'Copied',
   variant = 'primary',
+  isIconOnly = false,
   className,
   onFailed,
 }: CopyTextButtonProps) {
@@ -52,15 +55,21 @@ function CopyTextButton({
     <Button
       type='button'
       variant={variant}
-      className={join('gap-1.5', className)}
-      onClick={() => void handleClick()}
+      className={join('gap-1.5', isIconOnly && "relative h-7 w-7 shrink-0 p-0! after:absolute after:-inset-1.5 after:content-['']", className)}
+      title={isIconOnly ? label : undefined}
+      onClick={(event) => {
+        event.stopPropagation();
+        void handleClick();
+      }}
     >
       {isCopied ? (
-        <Check className='h-4 w-4' aria-hidden='true' />
+        <Check className={join('h-4 w-4', isIconOnly && 'h-3.5 w-3.5')} aria-hidden='true' />
       ) : (
-        <Copy className='h-4 w-4' aria-hidden='true' />
+        <Copy className={join('h-4 w-4', isIconOnly && 'h-3.5 w-3.5')} aria-hidden='true' />
       )}
-      <span aria-live='polite'>{isCopied ? copiedLabel : label}</span>
+      <span aria-live='polite' className={isIconOnly ? 'sr-only' : undefined}>
+        {isCopied ? copiedLabel : label}
+      </span>
     </Button>
   );
 }

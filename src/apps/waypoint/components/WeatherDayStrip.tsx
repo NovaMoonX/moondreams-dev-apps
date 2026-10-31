@@ -65,7 +65,7 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
               aria-pressed={isSelected}
               aria-label={`${dateLabel}: ${condition.label}, high ${formatTemp(forecast.tempMax)}, low ${formatTemp(forecast.tempMin)}${placeName ? `, in ${placeName}` : ''}${extra > 0 ? `, plus ${extra} more ${extra === 1 ? 'place' : 'places'}` : ''}`}
               className={join(
-                'relative h-auto min-w-18 flex-1 flex-col justify-start gap-1 rounded-md px-1 py-2 text-xs font-normal focus:outline-transparent! focus-visible:outline-foreground!',
+                'relative h-auto min-w-22 flex-1 flex-col justify-start gap-1 rounded-md px-1 py-2 text-xs font-normal focus:outline-transparent! focus-visible:outline-foreground!',
                 dayIndex < todayIndex && 'opacity-60',
                 isToday && 'bg-primary/10',
               )}
@@ -84,7 +84,7 @@ function WeatherDayStrip({ days, startDate, todayIndex, selectedDayIndex, onSele
                 <span className='text-muted-foreground font-normal'> / {formatTemp(forecast.tempMin)}</span>
               </span>
               {placeName && (
-                <span className='text-muted-foreground line-clamp-2 max-w-full px-1 text-center text-[10px] leading-3 break-words' title={placeName}>
+                <span className='text-muted-foreground max-w-full truncate px-1 text-center text-[10px] leading-3' title={placeName}>
                   {placeName}
                 </span>
               )}

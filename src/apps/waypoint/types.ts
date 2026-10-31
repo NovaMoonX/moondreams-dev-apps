@@ -260,7 +260,7 @@ export interface PersonalExpense {
   lastEditedAt: number;
 }
 
-export type EventType = 'TRAVEL' | 'DINING' | 'ACTIVITY' | 'FREE_TIME';
+export type EventType = 'TRAVEL' | 'DINING' | 'ACTIVITY' | 'FREE_TIME' | 'OTHER';
 export type TransitType =
   | 'FLIGHT'
   | 'DRIVE'
@@ -396,6 +396,8 @@ export interface TimelineEvent {
   id: string;
   tripId: string;
   eventType: EventType;
+  /** The person's own name for an `OTHER` event ("Spa day"); `null` otherwise. Absent on events saved before it existed. */
+  customTypeLabel: string | null;
   /** `null` means "no specific day" (`RELATIVE` trips only). `dayIndex` and `endDayIndex` are both set or both null. */
   dayIndex: number | null;
   endDayIndex: number | null;
