@@ -157,7 +157,6 @@ export interface PrReport {
   url: string;
   needsOwner: boolean;
   isMerged: boolean;
-  /** Closed without merging. */
   isClosed: boolean;
 }
 

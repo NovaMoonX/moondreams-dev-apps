@@ -108,7 +108,6 @@ type ClaimResult =
   | { kind: 'capped' }
   | { kind: 'claimed'; snaps: DocumentSnapshot[] };
 
-/** One transaction decides what a session carries: items no longer queued are skipped, the cap is checked, and the rest are marked `starting` before anything is sent. */
 const claimBucket = (firestore: Firestore, ids: string[]) =>
   firestore.runTransaction(async (tx): Promise<ClaimResult> => {
     const at = Date.now();
@@ -154,7 +153,6 @@ const toClaimInput = (snap: DocumentSnapshot) => ({
   status: String(snap.data()?.status),
 });
 
-/** The session started: the items still `starting` move to Working with its link, and a deleted one is skipped. */
 const settleStarted = (
   firestore: Firestore,
   ids: string[],
@@ -196,7 +194,6 @@ const settleStarted = (
     );
   });
 
-/** The session did not start: the items still `starting` go back to the queue, or are held on their third failure. */
 const releaseFailed = (firestore: Firestore, ids: string[], reason: string) =>
   firestore.runTransaction(async (tx) => {
     const [usageSnap, ...snaps] = await tx.getAll(
@@ -277,7 +274,30 @@ const holdStuckStarting = async (firestore: Firestore) => {
   });
 };
 
-/** Returns whether a session was attempted (the run counts attempts). */
+async function fireClaimed(
+  firestore: Firestore,
+  snaps: DocumentSnapshot[],
+  routine: { fireUrl: string; token: string },
+): Promise<string | null> {
+  const claimedIds = snaps.map((snap) => snap.id);
+  try {
+    const { items, messagesById } = await readHandoffItems(firestore, snaps);
+    return await fireRoutine({
+      ...routine,
+      text: buildFeedbackHandoffText(items, messagesById, null),
+    });
+  } catch (error) {
+    const reason =
+      error instanceof HttpsError ? error.message : 'Something went wrong.';
+    logger.error('Automatic Claude session failed', {
+      ids: claimedIds,
+      reason,
+    });
+    await releaseFailed(firestore, claimedIds, reason);
+    return null;
+  }
+}
+
 async function runBucket(
   firestore: Firestore,
   bucket: SessionBucket,
@@ -287,27 +307,7 @@ async function runBucket(
   const claim = await claimBucket(firestore, ids);
   if (claim.kind !== 'claimed') return false;
   const claimedIds = claim.snaps.map((snap) => snap.id);
-  const sessionUrl = await (async () => {
-    try {
-      const { items, messagesById } = await readHandoffItems(
-        firestore,
-        claim.snaps,
-      );
-      return await fireRoutine({
-        ...routine,
-        text: buildFeedbackHandoffText(items, messagesById, null),
-      });
-    } catch (error) {
-      const reason =
-        error instanceof HttpsError ? error.message : 'Something went wrong.';
-      logger.error('Automatic Claude session failed', {
-        ids: claimedIds,
-        reason,
-      });
-      await releaseFailed(firestore, claimedIds, reason);
-      return null;
-    }
-  })();
+  const sessionUrl = await fireClaimed(firestore, claim.snaps, routine);
   if (sessionUrl !== null) {
     // A failed save leaves the items `starting`; the next run holds them as unknown rather than firing again.
     await settleStarted(firestore, claimedIds, sessionUrl).catch((error) =>

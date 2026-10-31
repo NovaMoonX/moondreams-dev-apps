@@ -182,12 +182,12 @@ export async function readHandoffItems(
   const items = snaps
     .map(
       (snap) =>
-        ({ ...snap.data(), id: snap.id }) as Omit<HandoffItem, 'agentState'> & {
-          agentState?: string | null;
-          createdAt: number;
-        },
+        ({
+          ...snap.data(),
+          id: snap.id,
+          agentState: snap.get('agentState') ?? null,
+        }) as HandoffItem & { createdAt: number },
     )
-    .map((item) => ({ ...item, agentState: item.agentState ?? null }))
     .sort((a, b) => a.createdAt - b.createdAt);
   const messageLists = await Promise.all(
     items.map((item) =>
