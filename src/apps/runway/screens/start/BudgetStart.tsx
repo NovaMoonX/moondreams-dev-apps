@@ -855,7 +855,12 @@ function BudgetStart({
         goal === null
           ? null
           : BUDGET_WORDS.movedDropped(
-              goal.targetCents > 0,
+              goal.targetCents > 0 &&
+                !(
+                  to === 'bill' &&
+                  (written.value as BudgetValues['bill']).amount.lowCents ===
+                    goal.targetCents
+                ),
               (goal.startingCents ?? 0) > 0,
             ),
         missing.length === 0

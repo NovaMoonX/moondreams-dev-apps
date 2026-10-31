@@ -346,7 +346,7 @@ const REPEAT_OF_PERIOD: Partial<Record<CalendarPeriod, Schedule['kind']>> = {
   monthly: 'monthly',
 };
 
-/** What an item puts aside each time and how often, which every kind can start from; a goal with no amount of its own uses the monthly figure its document gave. */
+/** What an item puts aside each time and how often, which every kind can start from; a goal with no amount of its own uses the monthly figure its document gave, and a bill with no known repeat gives none, since its amount says nothing about a month. */
 const toSpread = (
   kind: MovableKind,
   value: BudgetValues[MovableKind],
@@ -354,8 +354,9 @@ const toSpread = (
 ): { cents: number; period: CalendarPeriod | null } => {
   if (kind === 'bill') {
     const bill = value as BillSealed;
+    const isUnknown = bill.timing.schedule.kind === 'irregular';
     return {
-      cents: bill.amount.highCents,
+      cents: isUnknown ? 0 : bill.amount.highCents,
       period: PERIOD_OF_REPEAT[bill.timing.schedule.kind] ?? null,
     };
   }

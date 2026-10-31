@@ -939,12 +939,12 @@ assert.deepEqual(
   (moveBudgetValue('bill', 'envelope', twiceBill, today) as typeof gasEnvelope)
     .funding.cadence,
   { kind: 'calendar', period: 'twiceMonthly', startsOn: today },
-  'a twiceBill-a-month bill moved to an envelope keeps twiceBill a month',
+  'a twice-a-month bill moved to an envelope keeps twice a month',
 );
 assert.equal(
   (moveBudgetValue('bill', 'goal', twiceBill, today) as GoalSealed).targetCents,
   0,
-  'only a one-off bill becomes a goal target; a repeating one keeps going in',
+  'only a one-off bill becomes a goal target; a repeating one has none',
 );
 const perPay = {
   ...gasEnvelope,
@@ -957,6 +957,19 @@ assert.deepEqual(
   getMissingSteps('bill', moveBudgetValue('envelope', 'bill', perPay, today)),
   ['repeats'],
   'an envelope given money each pay moved to a bill asks how often, never guesses',
+);
+
+const unknownRepeat = toBillValue(
+  { ...broken.bills[0], amountCents: 120_000, repeats: null, dayOfMonth: null },
+  today,
+);
+assert.deepEqual(
+  getMissingSteps(
+    'envelope',
+    moveBudgetValue('bill', 'envelope', unknownRepeat, today),
+  ),
+  ['amount'],
+  'a bill with no known repeat moved to an envelope asks the amount, never reads it as monthly',
 );
 
 console.log('runwayBudgetReading: ok');
