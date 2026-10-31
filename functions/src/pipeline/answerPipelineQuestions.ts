@@ -713,6 +713,9 @@ const DRIVEN_FOR_MS = 3 * 24 * 60 * 60 * 1000;
 const SESSION_MARKER = /<!--\s*session:\s*(https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)\s*-->/;
 const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
 const DEFAULT_BRANCH = 'main';
+const DASHBOARD_HOLDER = 'owner (admin dashboard)';
+
+class ActionsRefused extends Error {}
 const DEPLOY_WORKFLOW = 'firebase-hosting-merge.yml';
 const LOCK_REF = 'heads/merge-lock';
 // Every lock commit carries git's empty tree, so a lock commit needs no files of its own.
@@ -844,7 +847,7 @@ const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
 
 const readLock = async (token: string) => {
   const ref = await githubFetch(token, `/git/ref/${LOCK_REF}`);
-  if (ref.status === 404) return { sha: null, holder: null };
+  if (ref.status === 404) return { sha: null, holder: null, isOwn: false };
   if (!ref.ok) throw ref;
   const object = (await readJson(ref))?.object;
   const sha = isObject(object) ? String(object.sha) : '';
@@ -854,7 +857,7 @@ const readLock = async (token: string) => {
   const holder = /^merge-lock: free\b/.test(message)
     ? null
     : (message.match(/^pr: #(\d+)/m)?.[1] ?? 'unknown');
-  return { sha, holder };
+  return { sha, holder, isOwn: message.includes(`\nholder: ${DASHBOARD_HOLDER}\n`) };
 };
 
 // Never forced: a branch someone moved since it was read refuses (422), so two takes can't both win.
@@ -881,11 +884,14 @@ const writeLock = async (token: string, parent: string | null, message: string) 
 };
 
 const toLockMessage = (prNumber: number) =>
-  `merge-lock: held\n\npr: #${prNumber}\nholder: owner (admin dashboard)\ntaken: ${new Date().toISOString()}\n`;
+  `merge-lock: held\n\npr: #${prNumber}\nholder: ${DASHBOARD_HOLDER}\ntaken: ${new Date().toISOString()}\n`;
 
+// A release that lost a race is fine when someone else already freed or retook the lock.
 const releaseLock = async (token: string, held: string, prNumber: number) => {
   try {
-    return (await writeLock(token, held, `merge-lock: free\n\nafter: #${prNumber}\n`)) !== null;
+    if ((await writeLock(token, held, `merge-lock: free\n\nafter: #${prNumber}\n`)) !== null) return true;
+    const lock = await readLock(token);
+    return lock.holder !== String(prNumber);
   } catch (error) {
     logger.error('mergePipelinePr: lock not released', error instanceof Response ? error.status : getErrorName(error));
     return false;
@@ -893,6 +899,8 @@ const releaseLock = async (token: string, held: string, prNumber: number) => {
 };
 
 // A queued run waits behind the running one, and a newer queued run cancels it, so a merge waits for both to clear.
+const ACTIONS_REFUSED = `The token can't see whether a deploy is running. Give it Actions: Read-only on ${TOKEN_PAGE} (edit the Pipeline answers token; no new token needed), then try again.`;
+
 const isDeploying = async (token: string) => {
   const responses = await Promise.all(
     ['queued', 'in_progress'].map((state) =>
@@ -900,14 +908,23 @@ const isDeploying = async (token: string) => {
     ),
   );
   const failed = responses.find((response) => !response.ok);
+  if (failed && (failed.status === 401 || failed.status === 403) && !isBusy(failed)) {
+    throw new ActionsRefused();
+  }
   if (failed) throw failed;
   const bodies = await Promise.all(responses.map(readJson));
   return bodies.some((body) => Number(body?.total_count) > 0);
 };
 
+const DEPLOYING = 'A deploy is running. Try again once it finishes.';
+
 const takeLock = async (token: string, prNumber: number) => {
+  if (await isDeploying(token)) return { held: null, error: DEPLOYING };
   const lock = await readLock(token);
-  if (lock.holder === String(prNumber) && lock.sha !== null) return { held: lock.sha, error: null };
+  // Only a lock an earlier dashboard click left behind is reused; a session's lock for the same PR is the session's.
+  if (lock.holder === String(prNumber) && lock.isOwn && lock.sha !== null) {
+    return { held: lock.sha, error: null };
+  }
   if (lock.holder !== null) {
     return {
       held: null,
@@ -917,13 +934,16 @@ const takeLock = async (token: string, prNumber: number) => {
           : `#${lock.holder} is merging. Try again once its deploy finishes.`,
     };
   }
-  if (await isDeploying(token)) {
-    return { held: null, error: 'A deploy is running. Try again once it finishes.' };
-  }
   const held = await writeLock(token, lock.sha, toLockMessage(prNumber));
-  return held === null
-    ? { held: null, error: 'Another merge started just now. Try again once its deploy finishes.' }
-    : { held, error: null };
+  if (held === null) {
+    return { held: null, error: 'Another merge started just now. Try again once its deploy finishes.' };
+  }
+  // A merge that landed just before the take can take a moment to show its deploy, so look once more while holding.
+  if (await isDeploying(token)) {
+    await releaseLock(token, held, prNumber);
+    return { held: null, error: DEPLOYING };
+  }
+  return { held, error: null };
 };
 
 const markReady = async (token: string, nodeId: string) => {
@@ -1084,12 +1104,15 @@ const mergeOnGithub = async (token: string, prNumber: number): Promise<MergeResu
   const lock = isIntoMain
     ? await takeLock(token, prNumber).catch(async (error: unknown) => ({
         held: null,
-        error: (await toRefused(error, "Couldn't take the merge lock.")).error,
+        error:
+          error instanceof ActionsRefused
+            ? ACTIONS_REFUSED
+            : (await toRefused(error, "Couldn't take the merge lock.")).error,
       }))
     : { held: null, error: null };
   if (lock.error !== null) return refused(lock.error);
   const result = await squash(token, pr, prNumber, sha).catch((error: unknown) => toRefused(error, MAYBE_MERGED));
-  // The merge's own deploy is queued by now, and the next taker waits for it, so the lock only has to cover the merge.
+  // The next taker waits for this merge's deploy, so the lock only has to cover the merge itself.
   if (lock.held === null || (await releaseLock(token, lock.held, prNumber))) return result;
   return {
     ...result,
