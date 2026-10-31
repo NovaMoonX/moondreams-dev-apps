@@ -21,6 +21,7 @@ import {
   omitIds,
   PR_CLOSED_NOTE,
   readUsageDoc,
+  STUCK_HELD_NOTE,
   toUsageData,
 } from './feedbackAutomationPlan.js';
 
@@ -38,7 +39,6 @@ export type StartFeedbackClaudeSessionResponse =
 const usageRef = (firestore: Firestore) =>
   firestore.doc('adminSettings/feedbackAutomationUsage');
 
-/** Re-reads the items and refuses any the scheduler is starting; the rest leave the queue and the usage tallies, so the scheduler cannot fire them too. */
 const claimForManualSend = (firestore: Firestore, snaps: DocumentSnapshot[]) =>
   firestore.runTransaction(async (tx): Promise<DocumentSnapshot[]> => {
     const [usageSnap, ...fresh] = await tx.getAll(
@@ -79,29 +79,36 @@ const claimForManualSend = (firestore: Firestore, snaps: DocumentSnapshot[]) =>
     return sendable;
   });
 
-/** Puts back what a send that surely started nothing took from the queue. */
-const giveBackManualSend = (firestore: Firestore, sent: DocumentSnapshot[]) =>
+const settleFailedManualSend = (
+  firestore: Firestore,
+  sent: DocumentSnapshot[],
+  isDefinite: boolean,
+) =>
   firestore.runTransaction(async (tx) => {
     const fresh = await tx.getAll(...sent.map((snap) => snap.ref));
     fresh.forEach((snap, index) => {
       const before = sent[index].data();
       const wasWaiting = ['queued', 'held'].includes(before?.agentState);
       if (
-        wasWaiting &&
+        (wasWaiting || !isDefinite) &&
         snap.exists &&
         snap.data()?.agentState === 'working' &&
         (snap.data()?.claudeSessionUrl ?? null) ===
           (before?.claudeSessionUrl ?? null)
       ) {
-        tx.update(snap.ref, {
-          agentState: before?.agentState,
-          agentNote: before?.agentNote ?? null,
-        });
+        tx.update(
+          snap.ref,
+          isDefinite
+            ? {
+                agentState: before?.agentState,
+                agentNote: before?.agentNote ?? null,
+              }
+            : { agentState: 'held', agentNote: STUCK_HELD_NOTE },
+        );
       }
     });
   });
 
-/** Saves the session link on the items still there and not being started; a deleted item no longer fails the whole write. */
 const recordManualSend = (
   firestore: Firestore,
   sent: DocumentSnapshot[],
@@ -117,6 +124,9 @@ const recordManualSend = (
         tx.update(snap.ref, {
           claudeSessionUrl: sessionUrl,
           agentPrUrl: null,
+          ...(['pr-ready', 'needs-you'].includes(snap.data()?.agentState)
+            ? { agentState: 'working' }
+            : {}),
           ...(snap.data()?.agentNote === PR_CLOSED_NOTE
             ? { agentNote: null }
             : {}),
@@ -252,14 +262,20 @@ export const startFeedbackClaudeSession = onCall(
     };
     const { text, sessionUrl } = await startSession().catch(
       async (error: unknown) => {
-        if (!(error instanceof RoutineFireError) || error.isDefinite) {
-          await giveBackManualSend(firestore, sendable).catch((revertError) => {
-            logger.error('Gave back no items after a failed send', {
-              name: (revertError as Error).name,
+        const isDefinite =
+          !(error instanceof RoutineFireError) || error.isDefinite;
+        await settleFailedManualSend(firestore, sendable, isDefinite).catch(
+          (settleError) => {
+            logger.error('Settled no items after a failed send', {
+              name: (settleError as Error).name,
             });
-          });
-        }
-        throw error;
+          },
+        );
+        if (isDefinite) throw error;
+        throw new HttpsError(
+          'unavailable',
+          "Claude may have started a session anyway, so it's held: check claude.ai/code before sending it again.",
+        );
       },
     );
     await recordManualSend(firestore, sendable, groupRef, sessionUrl).catch(

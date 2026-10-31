@@ -184,7 +184,7 @@ export interface PrStateUpdate {
 
 const TRACKED: (string | null)[] = ['working', 'pr-ready', 'needs-you'];
 
-/** What a PR's state changes on an item an automatic session works on, or null when nothing changes (so a re-report never re-flags the bell). Once an item has a PR, only that PR's reports change it, until that PR is closed unmerged: then an open or merged one takes over. With no PR yet, a closed one is ignored. */
+/** What a PR's report changes on an item an automatic session works on, or null when nothing changes; an item follows only its own PR until that PR closes unmerged. */
 export function getPrStateUpdate(
   item: {
     agentState: string | null;

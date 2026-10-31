@@ -109,6 +109,9 @@ export function buildFeedbackHandoffText(
 const ROUTINE_TIMEOUT_MS = 30_000;
 
 /** `isDefinite` is true when the request surely started no session; false when one may have started (a timeout, a 5xx, an answer with no link). */
+/** Statuses that mean the request was refused before any session could start; anything else may have started one. */
+const DEFINITE_REFUSALS = [400, 401, 403, 404, 422, 429];
+
 export class RoutineFireError extends HttpsError {
   readonly isDefinite: boolean;
 
@@ -156,7 +159,7 @@ export async function fireRoutine({
     throw new RoutineFireError(
       'unavailable',
       `Claude didn't start a session (status ${response.status}). Try again in a minute.`,
-      response.status < 500,
+      DEFINITE_REFUSALS.includes(response.status),
     );
   }
   const body = (await response.json().catch(() => null)) as Record<

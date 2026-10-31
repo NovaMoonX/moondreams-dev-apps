@@ -60,7 +60,6 @@ const isAutomationOn = async (firestore: Firestore) =>
   (await firestore.doc('adminSettings/feedbackAutomation').get()).data()
     ?.isOn === true;
 
-/** Adds the thread message for a status change and returns the fields the item takes, as `addFeedbackStatusChange` does for the admin's own change. */
 function addStatusChange(
   firestore: Firestore,
   set: (ref: DocumentReference, data: object) => unknown,
@@ -206,7 +205,6 @@ const settleStarted = (
     );
   });
 
-/** A definite failure (nothing was started) counts toward holding and gives the day's session back; an unknown one may have a session behind it, so the items are held and the count stays. */
 const releaseFailed = (
   firestore: Firestore,
   ids: string[],
@@ -266,7 +264,6 @@ const releaseFailed = (
     );
   });
 
-/** Items left `starting` by a run that was killed may have a session behind them: they are held and never fired again. */
 const holdStuckStarting = async (firestore: Firestore) => {
   const ids = (
     await firestore
