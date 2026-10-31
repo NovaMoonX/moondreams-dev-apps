@@ -205,6 +205,7 @@ const readSaved = (path: string): InboxPr[] =>
   );
 
 const MERGED_KEEP_MS = 14 * 24 * 60 * 60 * 1000;
+const MERGED_READ_MAX = 20;
 
 const readMergedPrs = async (): Promise<MergedPr[]> => {
   const pulls = await api<ApiPull[]>(
@@ -218,7 +219,9 @@ const readMergedPrs = async (): Promise<MergedPr[]> => {
         ? [{ ...pull, merged_at: pull.merged_at }]
         : [],
     )
-    .sort((a, b) => Date.parse(b.merged_at) - Date.parse(a.merged_at));
+    .sort((a, b) => Date.parse(b.merged_at) - Date.parse(a.merged_at))
+    // Every status edit runs this, so comment reads stay well under the token's hourly budget.
+    .slice(0, MERGED_READ_MAX);
   // One PR at a time, like the open ones; a PR with no session has no one to read its lists, and a failed read leaves only that PR's lists empty.
   return recent.reduce<Promise<MergedPr[]>>(async (done, pull) => {
     const status = findSessionLink(pull.body)

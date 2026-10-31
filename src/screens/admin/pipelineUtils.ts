@@ -244,7 +244,7 @@ const toListedLines = (
   if ((answered[`${prNumber}:${LEGACY_MARKS[list]}`] ?? 0) >= statusAt) {
     return [];
   }
-  return Array.from(new Set(texts.map((text) => text.trim())))
+  return Array.from(new Set(texts.map((text) => text.trim().replace(/\s+/g, ' '))))
     .filter((text) => answered[toLineMark(prNumber, LIST_MARKS[list], text)] === undefined)
     .map((text, index) => ({
       id: `${prNumber}:${LIST_MARKS[list]}${index}`,

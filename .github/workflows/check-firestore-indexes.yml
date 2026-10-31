@@ -12,6 +12,7 @@ on:
       - 'scripts/fbDeploySmart.ts'
       - '.firebaserc'
       - 'scripts/checks/**'
+      - 'scripts/ownerInbox/**'
       - 'scripts/seeds/**'
       - 'docs/conventions/pipeline.md'
       - '.claude/settings.json'

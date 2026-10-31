@@ -228,7 +228,10 @@ const readAnswers = (data: unknown): PrAnswers[] => {
       issues: readIssues(raw.issues, prNumber),
       marks: readMarks(raw.marks, prNumber),
     };
-    if (answer.issues.length > answer.items.length) {
+    if (
+      answer.issues.length > answer.items.length ||
+      new Set(answer.issues.map((issue) => issue.mark)).size !== answer.issues.length
+    ) {
       throw invalid('Bad issue requests.');
     }
     if (toCommentBody(answer.items, '').length > MAX_COMMENT) {
@@ -642,7 +645,7 @@ export const answerPipelineQuestions = onCall(
       // Only a pull request the seeded inbox lists as merged would open issues.
       const inbox = await getFirestore().doc('pipeline/inbox').get();
       const mergedNumbers = new Set(
-        ((inbox.data()?.merged ?? []) as { number?: number }[]).map(
+        ((inbox.data()?.merged ?? []) as { number: number | null }[]).map(
           (pr) => pr.number,
         ),
       );
