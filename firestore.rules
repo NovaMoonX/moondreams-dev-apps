@@ -136,6 +136,9 @@ service cloud.firestore {
     match /pipelineSessions/{sessionId} {
       allow read: if isAdmin();
     }
+    match /pipelineCost/{sessionId} {
+      allow read: if isAdmin();
+    }
     match /pipeline/{docId} {
       allow read: if isAdmin();
     }

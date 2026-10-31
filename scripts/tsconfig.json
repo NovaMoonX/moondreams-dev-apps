@@ -15,6 +15,7 @@
     "./checks/ownerInbox.ts",
     "./board/board.ts",
     "./board/run.ts",
-    "./checks/board.ts"
+    "./checks/board.ts",
+    "./checks/pipelineMap.ts"
   ]
 }

@@ -205,6 +205,122 @@ const writeSession = async (data: Json) => {
   await batch.commit();
 };
 
+const APP_ID = /^[a-z0-9-]{1,40}$/;
+const COST_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const COST_MODEL = /^[a-z0-9.-]{1,60}$/;
+const PHASES = [
+  'planning',
+  'building',
+  'investigating',
+  'screenshots',
+  'review',
+  'checks',
+  'conversation',
+];
+const MAX_COST_ROWS = 600;
+const COST_STALE_MS = 180 * 24 * 60 * 60 * 1000;
+const COST_COUNTS = [
+  'calls',
+  'input',
+  'cacheWrite5m',
+  'cacheWrite1h',
+  'cacheRead',
+  'output',
+] as const;
+
+const isCount = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+
+const toCostRow = (row: unknown) => {
+  if (!isObject(row)) return null;
+  const { day, model, phase } = row;
+  if (
+    typeof day !== 'string' ||
+    !COST_DAY.test(day) ||
+    typeof model !== 'string' ||
+    !COST_MODEL.test(model) ||
+    typeof phase !== 'string' ||
+    !PHASES.includes(phase)
+  ) {
+    return null;
+  }
+  if (COST_COUNTS.some((field) => !isCount(row[field]))) return null;
+  return {
+    day,
+    model,
+    phase,
+    isHelper: row.isHelper === true,
+    ...(Object.fromEntries(
+      COST_COUNTS.map((field) => [field, row[field] as number]),
+    ) as Record<(typeof COST_COUNTS)[number], number>),
+  };
+};
+
+const readCost = (data: Json) => {
+  const { sessionId, url, branch, app, contextTokens, calls, rows } = data;
+  if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) {
+    throw invalid('Bad sessionId.');
+  }
+  if (url !== null && !(typeof url === 'string' && SESSION_URL.test(url))) {
+    throw invalid('Bad url.');
+  }
+  if (
+    branch !== null &&
+    !(typeof branch === 'string' && branch.length <= 200)
+  ) {
+    throw invalid('Bad branch.');
+  }
+  if (app !== null && !(typeof app === 'string' && APP_ID.test(app))) {
+    throw invalid('Bad app.');
+  }
+  if (!isCount(contextTokens) || !isCount(calls)) {
+    throw invalid('Bad counts.');
+  }
+  if (!Array.isArray(rows)) throw invalid('Bad rows.');
+  return {
+    sessionId,
+    url,
+    branch,
+    app,
+    contextTokens,
+    calls,
+    // A very long session can outgrow the cap; its newest days are the ones worth keeping.
+    rows: rows
+      .flatMap((row: unknown) => toCostRow(row) ?? [])
+      .sort((a, b) => b.day.localeCompare(a.day))
+      .slice(0, MAX_COST_ROWS),
+  };
+};
+
+const writeCost = async (data: Json) => {
+  const cost = readCost(data);
+  const db = getFirestore();
+  const ref = db.doc(`pipelineCost/${cost.sessionId}`);
+  const now = Date.now();
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const startedAt = snapshot.get('startedAt') as unknown;
+    const storedCalls = snapshot.get('calls') as unknown;
+    // Two quick turns can report out of order; the older count never replaces a newer one.
+    if (typeof storedCalls === 'number' && storedCalls > cost.calls) return;
+    transaction.set(ref, {
+      ...cost,
+      startedAt: typeof startedAt === 'number' ? startedAt : now,
+      updatedAt: now,
+    });
+  });
+
+  const stale = await db
+    .collection('pipelineCost')
+    .where('updatedAt', '<', now - COST_STALE_MS)
+    .limit(MAX_PRUNED)
+    .get();
+  if (stale.empty) return;
+  const batch = db.batch();
+  stale.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+};
+
 const writeInbox = async (data: Json) => {
   if (!Array.isArray(data.prs)) throw invalid('Bad prs.');
   const all = data.prs.filter(isObject).slice(0, MAX_PRS).map(toPr);
@@ -237,6 +353,7 @@ export const recordPipelineEvent = onCall(
     }
 
     if (data.kind === 'session') await writeSession(data);
+    else if (data.kind === 'cost') await writeCost(data);
     else if (data.kind === 'inbox') await writeInbox(data);
     else throw invalid('Unknown kind.');
     return { ok: true };
