@@ -286,6 +286,8 @@ const income = toIncomeValue(
     name: 'Pay',
     sourceFile: 'a',
     versions: [],
+    own: [],
+    payer: null,
     amountCents: 100_000,
     scheduleKind: 'weekly',
     nextOn: Date.UTC(2026, 9, 1),

@@ -11,7 +11,7 @@ You run checks and report what fails. You never edit, commit or judge design; th
 
 The brief gives you a base (default `origin/main`). Run, from the repo root:
 
-1. `npx tsc -b --force`
+1. `npm run typecheck`
 2. `npx eslint .`
 3. `npm run check:apps`, and when the diff touches them: `npm run check:indexes` (src, functions/src, the index file), `npm run check:rules-size` (`firestore.rules`), and any other `check:*` script in `package.json` whose name matches a changed area.
 4. The repo-rule greps over the added lines only (`git diff <base>...HEAD -U0 | grep '^+'`), each hit with file:line:

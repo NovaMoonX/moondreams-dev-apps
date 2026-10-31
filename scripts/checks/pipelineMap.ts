@@ -9,7 +9,7 @@ const tableLines = doc
   .slice(doc.indexOf('| Step |'))
   .split('\n')
   .slice(2)
-  .filter((line, index, lines) =>
+  .filter((_line, index, lines) =>
     lines.slice(0, index + 1).every((l) => l.startsWith('|')),
   );
 const steps = tableLines.map((line) => line.split('|')[1].trim());

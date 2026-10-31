@@ -1,7 +1,7 @@
 {
   "extends": "../tsconfig.node.json",
   "compilerOptions": {
-    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.scripts.tsbuildinfo"
+    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.scripts-node.tsbuildinfo"
   },
   "include": [
     "./lan.ts",
@@ -12,6 +12,10 @@
     "./runway/drillKeyring.ts",
     "./ownerInbox/inbox.ts",
     "./ownerInbox/run.ts",
-    "./checks/ownerInbox.ts"
+    "./checks/ownerInbox.ts",
+    "./board/board.ts",
+    "./board/run.ts",
+    "./checks/board.ts",
+    "./checks/pipelineMap.ts"
   ]
 }

@@ -130,7 +130,7 @@ For each MVP issue, in order:
 
 ## Validation (every PR)
 
-- **Static checks:** `npx tsc -b --force` and `npx eslint .` must both pass, plus prettier on the app's `.ts`/`.tsx` files.
+- **Static checks:** `npm run typecheck` and `npx eslint .` must both pass, plus prettier on the app's `.ts`/`.tsx` files.
 - **Browser:** drive the feature in a real browser against the emulators.
   - Write a throwaway Playwright script built on `.claude/skills/build-app-mvp/scripts/pw.mjs` from this skill: a 390px viewport, `timezoneId: 'America/Los_Angeles'`, signed in through the dev fixture switcher.
   - Run it through `.claude/skills/build-app-mvp/scripts/runval.sh "node <script>.mjs"`.

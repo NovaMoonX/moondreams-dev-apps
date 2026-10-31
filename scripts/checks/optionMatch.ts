@@ -356,7 +356,7 @@ const cats = named(
   'Jane Mary',
   'Oliver',
 );
-const catId = (name: string) => matchExistingCat(name, cats as never);
+const catId = (name: string | null) => matchExistingCat(name, cats as never);
 assert.equal(catId('LUNA'), 'id0');
 assert.equal(catId('Lucas'), 'id2', 'Lucas is Lucas and not Luca');
 assert.equal(catId('Mia'), 'id3', 'Mia is not Mila');
