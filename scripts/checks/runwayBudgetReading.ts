@@ -4,6 +4,7 @@ import {
   chooseVersion,
   getMissingStep,
   getMissingSteps,
+  moveBudgetValue,
   toBillProposal,
   toEnvelopeProposal,
   toBillValue,
@@ -15,6 +16,7 @@ import {
   cutAtWord,
   normalizeBudgetReading,
 } from '../../src/apps/runway/lib/normalizeBudgetReading.ts';
+import type { GoalSealed } from '../../src/apps/runway/types.ts';
 import { describeBillTiming } from '../../src/apps/runway/utils/billText.ts';
 import { maskFigures } from '../../src/apps/runway/utils/maskText.ts';
 import { nameDocuments } from '../../src/apps/runway/lib/nameDocuments.ts';
@@ -574,8 +576,6 @@ assert.deepEqual(
   'what was cut is said',
 );
 
-console.log('runwayBudgetReading: ok');
-
 assert.equal(
   maskFigures('$300–360 a month'),
   '•••• a month',
@@ -786,3 +786,142 @@ assert.equal(
   '🇨🇦',
   'a proposal carries its purpose emoji',
 );
+
+const subscription = (name: string, amountCents: number | null) => ({
+  ...bill('a.csv', name, amountCents),
+  dayOfMonth: null,
+  forName: 'Entertainment',
+  forEmoji: '📺',
+  partOf: 'Subscriptions ',
+  partOfCents: 9_000,
+});
+const broken = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      bill('a.csv', 'Rent', 160_000),
+      subscription('Netflix', 900),
+      subscription('YT Music', 600),
+      subscription('AMC A-List', 3_000),
+      bill('a.csv', 'Car note', 65_000),
+    ],
+    envelopes: [],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: ['a.csv'] },
+);
+assert.deepEqual(
+  broken.bills.map((entry) => [entry.name, entry.amountCents, entry.forName]),
+  [
+    ['Rent', 160_000, null],
+    ['Netflix', 900, 'Subscriptions'],
+    ['YT Music', 600, 'Subscriptions'],
+    ['AMC A-List', 3_000, 'Subscriptions'],
+    ['Other subscriptions', 4_500, 'Subscriptions'],
+    ['Car note', 65_000, null],
+  ],
+  'a broken-out line is one bill per part under its label, and what the parts leave of its amount stays as one more after them',
+);
+assert.equal(
+  broken.bills[4].dayOfMonth,
+  null,
+  "the rest of a line takes no part's due day",
+);
+const whole = normalizeBudgetReading(
+  {
+    incomes: [],
+    bills: [
+      { ...subscription('Netflix', 4_000), partOfCents: 5_000 },
+      { ...subscription('Hulu', 1_000), partOfCents: 5_000 },
+      { ...subscription('Max', null), partOfCents: 9_000, partOf: 'Streaming' },
+    ],
+    envelopes: [],
+    goals: [],
+    notRead: [],
+  },
+  { fileNames: ['a.csv'] },
+);
+assert.deepEqual(
+  whole.bills.map((entry) => entry.name),
+  ['Netflix', 'Hulu', 'Max'],
+  'parts that add up to the line leave no rest, and a part with no amount leaves the rest unknown',
+);
+
+const gas = toBillValue(
+  { ...broken.bills[0], name: 'Gas', amountCents: 9_000, repeats: 'monthly' },
+  today,
+);
+const gasEnvelope = moveBudgetValue(
+  'bill',
+  'envelope',
+  gas,
+  today,
+) as ReturnType<typeof toEnvelopeProposal>['value'];
+assert.deepEqual(
+  [gasEnvelope.name, gasEnvelope.funding],
+  [
+    'Gas',
+    {
+      amount: { kind: 'exact', cents: 9_000 },
+      cadence: { kind: 'calendar', period: 'monthly', startsOn: today },
+    },
+  ],
+  'a monthly bill moved to an envelope keeps its amount a month',
+);
+const backToBill = moveBudgetValue('envelope', 'bill', gasEnvelope, today);
+assert.deepEqual(
+  [
+    getMissingSteps('bill', backToBill),
+    describeBillTiming((backToBill as typeof gas).timing.schedule),
+  ],
+  [[], describeBillTiming({ kind: 'monthly', anchor: null, monthDays: [] })],
+  'an envelope moved to a bill keeps its amount and repeat, with the due date left for later',
+);
+const bikeGoal = moveBudgetValue('bill', 'goal', gas, today);
+assert.deepEqual(
+  getMissingSteps('goal', bikeGoal),
+  ['target'],
+  'a repeating bill moved to a goal keeps what goes in a month and asks for the target',
+);
+const tv = toBillValue(
+  {
+    ...broken.bills[0],
+    name: 'TV',
+    amountCents: 50_000,
+    repeats: 'once',
+    dayOfMonth: null,
+    dueOn: Date.UTC(2026, 11, 1),
+  },
+  today,
+);
+const tvGoal = moveBudgetValue('bill', 'goal', tv, today) as GoalSealed;
+assert.deepEqual(
+  [tvGoal.targetCents, tvGoal.targetDate],
+  [50_000, Date.UTC(2026, 11, 1)],
+  'a one-off bill moved to a goal becomes its target and date',
+);
+const tvBill = moveBudgetValue('goal', 'bill', tvGoal, today) as typeof tv;
+assert.deepEqual(
+  [
+    tvBill.amount.lowCents,
+    tvBill.timing.schedule.kind,
+    tvBill.timing.schedule.anchor,
+  ],
+  [50_000, 'once', Date.UTC(2026, 11, 1)],
+  'a goal with nothing going in each month moves to a one-off bill for its target',
+);
+const monthlyGoal = moveBudgetValue(
+  'goal',
+  'envelope',
+  { ...tvGoal, targetCents: 0, targetDate: null },
+  today,
+  10_000,
+) as typeof gasEnvelope;
+assert.deepEqual(
+  monthlyGoal.funding.amount,
+  { kind: 'exact', cents: 10_000 },
+  'a goal moved to an envelope uses the monthly figure its document gave',
+);
+
+console.log('runwayBudgetReading: ok');

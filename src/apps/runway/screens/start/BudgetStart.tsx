@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  ArrowLeftRight,
   ChevronRight,
   CircleHelp,
   Eye,
   Loader,
+  Mail,
   Pencil,
+  Receipt,
   Repeat,
   Tag,
+  Target,
   Trash2,
   Upload,
   X,
@@ -19,6 +23,7 @@ import { PillGroup } from '@/components/PillGroup';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import Field from '@/components/forms/Field';
 import HelpTip from '@/components/HelpTip';
@@ -31,6 +36,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useBackStep } from '@/hooks/useBackHistory';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { formatFileSize } from '@/utils/fileUtils';
@@ -56,6 +62,9 @@ import { toDraftSourceId } from '@apps/runway/forms/fundingFlow';
 import {
   chooseVersion,
   getMissingSteps,
+  moveBudgetValue,
+  MOVABLE_KINDS,
+  type MovableKind,
   toBillProposal,
   toMonthlyBillValue,
   toPerMonthCents,
@@ -79,6 +88,7 @@ import { isBudgetFile, readBudget } from '@apps/runway/lib/readBudget';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
+import { ActionTitle } from '@apps/runway/components/ActionSection';
 import SheetHead from '@apps/runway/components/SheetHead';
 import ForRenameSheet from '@apps/runway/screens/start/ForRenameSheet';
 import StartRowList from '@apps/runway/screens/start/StartRowList';
@@ -160,6 +170,36 @@ interface KindReading<K extends BudgetKind, V, T extends ReadItem<V>> {
 }
 
 const KEY_SEPARATOR = ':';
+
+const MOVE_TIP_SEEN_KEY = 'runway.moveTipSeen';
+
+const MOVE_ICONS: Record<MovableKind, ReactNode> = {
+  bill: <Receipt />,
+  envelope: <Mail />,
+  goal: <Target />,
+};
+
+const isMovable = (kind: BudgetKind): kind is MovableKind => kind !== 'income';
+
+/** The proposal as the kind the person moved it to: what each file said and a cadence the document wrote belong to the kind it was read as, so they are dropped. */
+const toMovedProposal = (
+  proposal: Proposal,
+  moved: Record<string, MovableKind>,
+): Proposal => {
+  const kind = moved[proposal.key];
+  return kind === undefined || kind === proposal.kind
+    ? proposal
+    : {
+        ...proposal,
+        kind,
+        versions: [],
+        isUndecided: false,
+        isReopened: false,
+        cadence: null,
+        monthlyCents: kind === 'goal' ? proposal.monthlyCents : null,
+        forName: kind === 'goal' ? null : proposal.forName,
+      };
+};
 
 const SHORT_FOOTER_MAX_HEIGHT = 500;
 
@@ -540,6 +580,12 @@ function BudgetStart({
   const [edited, setEdited] = useState<Record<string, Decision>>({});
   const [removed, setRemoved] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
+  const [moved, setMoved] = useState<Record<string, MovableKind>>({});
+  const [movingKey, setMovingKey] = useState<string | null>(null);
+  const [isMoveTipSeen, setIsMoveTipSeen] = useLocalStoragePreference(
+    MOVE_TIP_SEEN_KEY,
+    false,
+  );
   const [forNames, setForNames] = useState<Record<string, string | null>>({});
   const [forEmojis, setForEmojis] = useState<Record<string, string | null>>({});
   const [renaming, setRenaming] = useState<{
@@ -574,6 +620,7 @@ function BudgetStart({
     setForEmojis({});
     setRenaming(null);
     setRemoved(new Set());
+    setMoved({});
     setSelected(null);
     setForm(null);
     goTo('input');
@@ -675,7 +722,7 @@ function BudgetStart({
       removed,
       forNames,
     ),
-  ];
+  ].map((proposal) => toMovedProposal(proposal, moved));
   const ofKind = (kind: BudgetKind) =>
     proposals.filter((proposal) => proposal.kind === kind);
   const needing = proposals.filter(
@@ -770,8 +817,51 @@ function BudgetStart({
     }));
     setSelected(null);
   };
+  const move = (proposal: Proposal, to: MovableKind) => {
+    if (!isMovable(proposal.kind)) return;
+    const { key } = proposal;
+    const before = { moved: moved[key], edited: edited[key] };
+    const restore = <T,>(current: Record<string, T>, value: T | undefined) =>
+      value === undefined
+        ? Object.fromEntries(
+            Object.entries(current).filter(([entry]) => entry !== key),
+          )
+        : { ...current, [key]: value };
+    setEdited((current) => ({
+      ...current,
+      [key]: {
+        value: moveBudgetValue(
+          proposal.kind as MovableKind,
+          to,
+          proposal.value as BudgetValues[MovableKind],
+          today,
+          proposal.monthlyCents,
+        ),
+        versionCount: proposal.versions.length,
+      },
+    }));
+    setMoved((current) => ({ ...current, [key]: to }));
+    setIsMoveTipSeen(true);
+    setMovingKey(null);
+    setSelected(null);
+    addToast({
+      title: BUDGET_WORDS.moved(
+        proposal.name,
+        BUDGET_WORDS.moveKinds[to].article,
+      ),
+      type: 'success',
+      action: {
+        label: BUDGET_WORDS.undo,
+        onClick: () => {
+          setEdited((current) => restore(current, before.edited));
+          setMoved((current) => restore(current, before.moved));
+        },
+      },
+    });
+  };
   const selectedProposal =
     proposals.find((proposal) => proposal.key === selected) ?? null;
+  const isMoving = selected !== null && movingKey === selected;
   const formProposal =
     form === null
       ? null
@@ -1145,6 +1235,17 @@ function BudgetStart({
       {proposals.length === 0 && (
         <p className='text-muted-foreground text-sm'>{BUDGET_WORDS.empty}</p>
       )}
+      {!isMoveTipSeen &&
+        proposals.some((proposal) => isMovable(proposal.kind)) && (
+          <InlineNotice
+            tone='info'
+            title={BUDGET_WORDS.moveTipTitle}
+            onDismiss={() => setIsMoveTipSeen(true)}
+            dismissLabel={BUDGET_WORDS.moveTipDismiss}
+          >
+            {BUDGET_WORDS.moveTipBody}
+          </InlineNotice>
+        )}
       {KINDS.map(({ kind, label, search }) => {
         const list = ofKind(kind);
         const rows =
@@ -1284,221 +1385,266 @@ function BudgetStart({
       </DetailSheet>
       <DetailSheet
         isOpen={selectedProposal !== null}
-        onClose={() => setSelected(null)}
+        onClose={() => {
+          setMovingKey(null);
+          setSelected(null);
+        }}
         title={selectedProposal?.name ?? ''}
         actions={<ValuesEyeButton />}
       >
-        <div className='space-y-3'>
-          {selectedProposal && selectedRow && !isSelectedNeedy && (
-            <SheetHead
-              label={BUDGET_WORDS.sheetKind[selectedProposal.kind]}
-              isLabelDroppedWhenShort
-              figure={selectedRow.amount ?? undefined}
-              fact={selectedRow.line}
-            />
-          )}
-          {selectedProposal && isSelectedNeedy && (
-            <InlineNotice
-              tone='warning'
-              title={
-                selectedRow?.amount && !isSelectedUndecided ? (
-                  <MaskedText>{selectedRow.amount}</MaskedText>
-                ) : undefined
-              }
-            >
-              {isSelectedUndecided ? (
-                selectedProposal.isReopened ? (
-                  BUDGET_WORDS.chooseVersionAgain
-                ) : (
-                  BUDGET_WORDS.chooseVersion
-                )
-              ) : (
-                <MaskedText>
-                  {toNeeds(selectedProposal, selectedMissing)}
-                </MaskedText>
-              )}
-            </InlineNotice>
-          )}
-          {selectedProposal && (
-            <div className='space-y-1 text-sm'>
-              {!isSelectedUndecided && (
-                <p className='text-muted-foreground'>
-                  {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
-                </p>
-              )}
-              {selectedCadence !== null && (
-                <p className='text-pretty'>
-                  <MaskedText>
-                    {toCadenceNote(selectedProposal) ?? ''}
-                  </MaskedText>
-                </p>
-              )}
-              {selectedProposal.monthlyCents !== null && (
-                <p className='text-pretty'>
-                  <MaskedText>
-                    {BUDGET_WORDS.goalMonthly(
-                      formatCents(selectedProposal.monthlyCents),
-                    )}
-                  </MaskedText>
-                </p>
-              )}
-            </div>
-          )}
-          {selectedProposal && isSelectedUndecided && (
-            <div className='space-y-2'>
-              {isHidden && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  className='gap-1.5'
-                  onClick={toggleHidden}
-                >
-                  <Eye className='h-4 w-4' aria-hidden='true' />
-                  {BUDGET_WORDS.showToCompare}
-                </Button>
-              )}
-              <ul className='space-y-2'>
-                {selectedProposal.versions.map((version) => (
-                  <li
-                    key={version.sourceFile}
-                    className='border-border bg-card flex items-center gap-3 rounded-2xl border p-3'
-                  >
-                    <div className='min-w-0 flex-1 text-sm text-pretty break-words'>
-                      {selectedProposal.isReopened &&
-                        JSON.stringify(version.value) ===
-                          JSON.stringify(selectedProposal.value) && (
-                          <span className='bg-accent text-accent-foreground mb-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium'>
-                            {BUDGET_WORDS.yourChoice}
-                          </span>
-                        )}
-                      <p>
-                        <MaskedText>{version.says}</MaskedText>
-                      </p>
-                    </div>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-                      onClick={() => setValue(selectedProposal, version.value)}
-                    >
-                      {BUDGET_WORDS.useThis}
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {selectedProposal &&
-            (selectedProposal.kind === 'bill' ||
-              selectedProposal.kind === 'envelope') &&
-            forNameList.length > 0 && (
-              <div className='space-y-2'>
-                <p className='text-muted-foreground text-xs'>
-                  {FORM_FLOW_WORDS.groupTitle}
-                </p>
-                <PillGroup
-                  label={FORM_FLOW_WORDS.groupTitle}
-                  options={[
-                    ...forNameList.map((name) => ({
-                      value: name,
-                      label: name,
-                    })),
-                    { value: '', label: FORM_FLOW_WORDS.clearGroup },
-                  ]}
-                  value={selectedProposal.forName ?? ''}
-                  onChange={(name) => {
-                    setFor([selectedProposal.key], () =>
-                      name === '' ? null : name,
-                    );
-                    setSelected(null);
-                  }}
+        {selectedProposal && isMoving ? (
+          <div className='space-y-3'>
+            <BackLink onBack={() => setMovingKey(null)} />
+            <ActionTitle>{BUDGET_WORDS.moveAsk}</ActionTitle>
+            <ActionGroup isRoomy={!isShort}>
+              {MOVABLE_KINDS.filter(
+                (kind) => kind !== selectedProposal.kind,
+              ).map((kind) => (
+                <ActionRow
+                  key={kind}
+                  isGrouped
+                  isRoomy={!isShort}
+                  icon={MOVE_ICONS[kind]}
+                  label={BUDGET_WORDS.moveKinds[kind].label}
+                  subtitle={BUDGET_WORDS.moveKinds[kind].help}
+                  onClick={() => move(selectedProposal, kind)}
                 />
+              ))}
+            </ActionGroup>
+          </div>
+        ) : (
+          <div className='space-y-3'>
+            {selectedProposal && selectedRow && !isSelectedNeedy && (
+              <SheetHead
+                label={BUDGET_WORDS.sheetKind[selectedProposal.kind]}
+                isLabelDroppedWhenShort
+                figure={selectedRow.amount ?? undefined}
+                fact={selectedRow.line}
+              />
+            )}
+            {selectedProposal && isSelectedNeedy && (
+              <InlineNotice
+                tone='warning'
+                title={
+                  selectedRow?.amount && !isSelectedUndecided ? (
+                    <MaskedText>{selectedRow.amount}</MaskedText>
+                  ) : undefined
+                }
+              >
+                {isSelectedUndecided ? (
+                  selectedProposal.isReopened ? (
+                    BUDGET_WORDS.chooseVersionAgain
+                  ) : (
+                    BUDGET_WORDS.chooseVersion
+                  )
+                ) : (
+                  <MaskedText>
+                    {toNeeds(selectedProposal, selectedMissing)}
+                  </MaskedText>
+                )}
+              </InlineNotice>
+            )}
+            {selectedProposal && (
+              <div className='space-y-1 text-sm'>
+                {!isSelectedUndecided && (
+                  <p className='text-muted-foreground'>
+                    {BUDGET_WORDS.sourcePrefix} {selectedProposal.sourceFile}
+                  </p>
+                )}
+                {selectedCadence !== null && (
+                  <p className='text-pretty'>
+                    <MaskedText>
+                      {toCadenceNote(selectedProposal) ?? ''}
+                    </MaskedText>
+                  </p>
+                )}
+                {selectedProposal.monthlyCents !== null && (
+                  <p className='text-pretty'>
+                    <MaskedText>
+                      {BUDGET_WORDS.goalMonthly(
+                        formatCents(selectedProposal.monthlyCents),
+                      )}
+                    </MaskedText>
+                  </p>
+                )}
               </div>
             )}
-          <ActionGroup isRoomy={!isShort}>
-            {selectedProposal && selectedCadence?.perMonthCents != null && (
-              <ActionRow
-                isGrouped
-                isRoomy={!isShort}
-                icon={<Repeat />}
-                label={mask(
-                  BUDGET_WORDS.monthlyOffer(
-                    formatCents(selectedCadence.perMonthCents),
-                  ),
+            {selectedProposal && isSelectedUndecided && (
+              <div className='space-y-2'>
+                {isHidden && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className='gap-1.5'
+                    onClick={toggleHidden}
+                  >
+                    <Eye className='h-4 w-4' aria-hidden='true' />
+                    {BUDGET_WORDS.showToCompare}
+                  </Button>
                 )}
-                subtitle={BUDGET_WORDS.monthlyOfferSub}
-                onClick={() =>
-                  setValue(selectedProposal, selectedCadence.monthly)
-                }
-              />
+                <ul className='space-y-2'>
+                  {selectedProposal.versions.map((version) => (
+                    <li
+                      key={version.sourceFile}
+                      className='border-border bg-card flex items-center gap-3 rounded-2xl border p-3'
+                    >
+                      <div className='min-w-0 flex-1 text-sm text-pretty break-words'>
+                        {selectedProposal.isReopened &&
+                          JSON.stringify(version.value) ===
+                            JSON.stringify(selectedProposal.value) && (
+                            <span className='bg-accent text-accent-foreground mb-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium'>
+                              {BUDGET_WORDS.yourChoice}
+                            </span>
+                          )}
+                        <p>
+                          <MaskedText>{version.says}</MaskedText>
+                        </p>
+                      </div>
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        size='sm'
+                        className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                        onClick={() =>
+                          setValue(selectedProposal, version.value)
+                        }
+                      >
+                        {BUDGET_WORDS.useThis}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {selectedProposal &&
               (selectedProposal.kind === 'bill' ||
-                selectedProposal.kind === 'envelope' ||
-                selectedProposal.kind === 'income') && (
+                selectedProposal.kind === 'envelope') &&
+              forNameList.length > 0 && (
+                <div className='space-y-2'>
+                  <p className='text-muted-foreground text-xs'>
+                    {FORM_FLOW_WORDS.groupTitle}
+                  </p>
+                  <PillGroup
+                    label={FORM_FLOW_WORDS.groupTitle}
+                    options={[
+                      ...forNameList.map((name) => ({
+                        value: name,
+                        label: name,
+                      })),
+                      { value: '', label: FORM_FLOW_WORDS.clearGroup },
+                    ]}
+                    value={selectedProposal.forName ?? ''}
+                    onChange={(name) => {
+                      setFor([selectedProposal.key], () =>
+                        name === '' ? null : name,
+                      );
+                      setSelected(null);
+                    }}
+                  />
+                </div>
+              )}
+            <ActionGroup isRoomy={!isShort}>
+              {selectedProposal && selectedCadence?.perMonthCents != null && (
                 <ActionRow
                   isGrouped
                   isRoomy={!isShort}
-                  icon={<Tag />}
-                  label={
-                    selectedProposal.kind === 'income'
-                      ? BUDGET_WORDS.changePayer
-                      : forNameList.length > 0
-                        ? BUDGET_WORDS.forSomethingElse
-                        : BUDGET_WORDS.changeFor
+                  icon={<Repeat />}
+                  label={mask(
+                    BUDGET_WORDS.monthlyOffer(
+                      formatCents(selectedCadence.perMonthCents),
+                    ),
+                  )}
+                  subtitle={BUDGET_WORDS.monthlyOfferSub}
+                  onClick={() =>
+                    setValue(selectedProposal, selectedCadence.monthly)
                   }
-                  subtitle={
-                    selectedProposal.kind === 'income'
-                      ? (selectedProposal.value as BudgetValues['income'])
-                          .sourceName
-                      : forNameList.length > 0
-                        ? undefined
-                        : FORM_FLOW_WORDS.noGroup
-                  }
-                  hasChevron
-                  onClick={() => {
-                    setForm((current) => ({
-                      key: selectedProposal.key,
-                      token: (current?.token ?? 0) + 1,
-                      step:
-                        selectedProposal.kind === 'income' ? 'source' : 'group',
-                    }));
-                    setSelected(null);
-                  }}
                 />
               )}
-            <ActionRow
-              isGrouped
-              isRoomy={!isShort}
-              icon={<Pencil />}
-              label={BUDGET_WORDS.openToChange}
-              hasChevron
-              onClick={() => {
-                if (!selected) return;
-                setForm((current) => ({
-                  key: selected,
-                  token: (current?.token ?? 0) + 1,
-                  step: null,
-                }));
-                setSelected(null);
-              }}
-            />
-            <ActionRow
-              isGrouped
-              isRoomy={!isShort}
-              isDestructive
-              icon={<Trash2 />}
-              label={BUDGET_WORDS.removeOne}
-              onClick={() => {
-                if (selected)
-                  setRemoved((current) => new Set([...current, selected]));
-                setSelected(null);
-              }}
-            />
-          </ActionGroup>
-        </div>
+              {selectedProposal &&
+                (selectedProposal.kind === 'bill' ||
+                  selectedProposal.kind === 'envelope' ||
+                  selectedProposal.kind === 'income') && (
+                  <ActionRow
+                    isGrouped
+                    isRoomy={!isShort}
+                    icon={<Tag />}
+                    label={
+                      selectedProposal.kind === 'income'
+                        ? BUDGET_WORDS.changePayer
+                        : forNameList.length > 0
+                          ? BUDGET_WORDS.forSomethingElse
+                          : BUDGET_WORDS.changeFor
+                    }
+                    subtitle={
+                      selectedProposal.kind === 'income'
+                        ? (selectedProposal.value as BudgetValues['income'])
+                            .sourceName
+                        : forNameList.length > 0
+                          ? undefined
+                          : FORM_FLOW_WORDS.noGroup
+                    }
+                    hasChevron
+                    onClick={() => {
+                      setForm((current) => ({
+                        key: selectedProposal.key,
+                        token: (current?.token ?? 0) + 1,
+                        step:
+                          selectedProposal.kind === 'income'
+                            ? 'source'
+                            : 'group',
+                      }));
+                      setSelected(null);
+                    }}
+                  />
+                )}
+              {selectedProposal &&
+                isMovable(selectedProposal.kind) &&
+                !isSelectedUndecided && (
+                  <ActionRow
+                    isGrouped
+                    isRoomy={!isShort}
+                    icon={<ArrowLeftRight />}
+                    label={BUDGET_WORDS.moveTo(
+                      MOVABLE_KINDS.filter(
+                        (kind) => kind !== selectedProposal.kind,
+                      ).map((kind) => BUDGET_WORDS.moveKinds[kind].article),
+                    )}
+                    hasChevron
+                    onClick={() => setMovingKey(selectedProposal.key)}
+                  />
+                )}
+              <ActionRow
+                isGrouped
+                isRoomy={!isShort}
+                icon={<Pencil />}
+                label={BUDGET_WORDS.openToChange}
+                hasChevron
+                onClick={() => {
+                  if (!selected) return;
+                  setForm((current) => ({
+                    key: selected,
+                    token: (current?.token ?? 0) + 1,
+                    step: null,
+                  }));
+                  setSelected(null);
+                }}
+              />
+              <ActionRow
+                isGrouped
+                isRoomy={!isShort}
+                isDestructive
+                icon={<Trash2 />}
+                label={BUDGET_WORDS.removeOne}
+                onClick={() => {
+                  if (selected)
+                    setRemoved((current) => new Set([...current, selected]));
+                  setSelected(null);
+                }}
+              />
+            </ActionGroup>
+          </div>
+        )}
       </DetailSheet>
       {renderForm()}
       {renaming !== null && (

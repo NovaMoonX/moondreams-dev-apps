@@ -272,6 +272,44 @@ const unifyForNames = <
   }));
 };
 
+const toPartOf = (raw: Raw) => toName(raw.partOf).toLowerCase();
+
+/** Parts a line's description broke out sit under that line's label, and whatever of its amount they don't add up to stays as one more item, so the plan keeps the whole amount. */
+const withRest = (records: Raw[]): Raw[] =>
+  records.flatMap((record, index) => {
+    const label = toName(record.partOf);
+    if (label === '') return [record];
+    const isSameLine = (other: Raw) =>
+      toPartOf(other) === label.toLowerCase() &&
+      asText(other.sourceFile) === asText(record.sourceFile);
+    const part = { ...record, forName: label };
+    if (records.slice(index + 1).some(isSameLine)) return [part];
+    const parts = records.filter(isSameLine);
+    const total = parts
+      .map((entry) => toCents(entry.partOfCents))
+      .reduce<number | null>(
+        (most, cents) => (cents === null ? most : Math.max(most ?? 0, cents)),
+        null,
+      );
+    const amounts = parts.map((entry) => toCents(entry.amountCents));
+    const sum = amounts.reduce<number>((acc, cents) => acc + (cents ?? 0), 0);
+    const rest = total === null || amounts.includes(null) ? 0 : total - sum;
+    return rest > 0
+      ? [
+          part,
+          {
+            ...part,
+            name: BUDGET_WORDS.restOf(label),
+            amountCents: rest,
+            lowCents: null,
+            highCents: null,
+            dueOn: null,
+            dayOfMonth: null,
+          },
+        ]
+      : [part];
+  });
+
 const toIncome = (raw: Raw, toFile: ToFile): BudgetIncome => {
   const payer = toName(raw.payer) || null;
   const scheduleKind = toOneOf(raw.scheduleKind, INCOME_FREQUENCIES);
@@ -583,7 +621,7 @@ export function normalizeBudgetReading(
   );
   const bills = mergeItems(
     existing.bills,
-    named(asRecords(raw.bills).map((entry) => toBill(entry, toFile))),
+    named(withRest(asRecords(raw.bills)).map((entry) => toBill(entry, toFile))),
     {
       pick: ({
         amountCents,
@@ -623,7 +661,11 @@ export function normalizeBudgetReading(
   );
   const envelopes = mergeItems(
     existing.envelopes,
-    named(asRecords(raw.envelopes).map((entry) => toEnvelope(entry, toFile))),
+    named(
+      withRest(asRecords(raw.envelopes)).map((entry) =>
+        toEnvelope(entry, toFile),
+      ),
+    ),
     {
       pick: ({ amountCents, period }) => ({ amountCents, period }),
       isDifferent: envelopeDiffers,
