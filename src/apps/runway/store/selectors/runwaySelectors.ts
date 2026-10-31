@@ -6,6 +6,8 @@ import {
   describeDay,
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   deriveBillProgress,
   deriveHeldByItem,
@@ -928,6 +930,24 @@ export function computeDraftView(
   return result;
 }
 
+/** What the draft is given as held: an envelope's figure is what the person sees left in it (never below zero, none once released), a goal's is its ledger sum. */
+export const selectDraftHeldByItem = createSelector(
+  [selectHeldByItem, selectBalances, selectItems, () => todayAsUtcDate()],
+  (held, balances, items, today) => ({
+    ...held,
+    ...Object.fromEntries(
+      items
+        .filter((item) => item.kind === 'envelope')
+        .map((item) => [
+          item.id,
+          item.heldReleasedOn !== null && item.heldReleasedOn <= today
+            ? 0
+            : Math.max(0, balances.assignedByItem[item.id] ?? 0),
+        ]),
+    ),
+  }),
+);
+
 /**
  * The draft for one coming income day, computed from the plan and never stored. Drafts are kept by a
  * hash of the resolved versions and held against the versions array itself, so an unrelated change
@@ -941,7 +961,7 @@ export const selectDraft = createSelector(
     selectDays,
     selectDayKey,
     selectToday,
-    selectHeldByItem,
+    selectDraftHeldByItem,
     selectSettledKey,
     selectBillProgress,
   ],

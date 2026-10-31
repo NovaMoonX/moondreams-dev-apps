@@ -64,7 +64,7 @@ function BillsScreen() {
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [openBillId, setOpenBillId] = useState<string | null>(null);
-  const [isUndatedOnly, setIsUndatedOnly] = useState(false);
+  const [narrowedIds, setNarrowedIds] = useState<string[] | null>(null);
 
   const hasSearch = bills.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -82,9 +82,12 @@ function BillsScreen() {
     };
   });
   const undated = listed.filter(({ payload }) => isUndatedBill(payload));
-  const isNarrowed = isUndatedOnly && undated.length > 0;
-  const isShown = ({ payload, payment }: (typeof listed)[number]) =>
-    (!isNarrowed || isUndatedBill(payload)) &&
+  const isNarrowed =
+    narrowedIds !== null &&
+    undated.some(({ item }) => narrowedIds.includes(item.id));
+  const isShown = ({ item, payload, payment }: (typeof listed)[number]) =>
+    (!isNarrowed ||
+      (isUndatedBill(payload) && (narrowedIds ?? []).includes(item.id))) &&
     `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
       .toLowerCase()
       .includes(needle);
@@ -177,7 +180,7 @@ function BillsScreen() {
             <div>
               <RevealChip
                 icon={<X className='h-3.5 w-3.5' aria-hidden='true' />}
-                onClick={() => setIsUndatedOnly(false)}
+                onClick={() => setNarrowedIds(null)}
               >
                 {BILL_WORDS.needsDueDate}
               </RevealChip>
@@ -188,7 +191,7 @@ function BillsScreen() {
               onOpen={() =>
                 undated.length === 1
                   ? openDueBill(undated[0].item.id)
-                  : setIsUndatedOnly(true)
+                  : setNarrowedIds(undated.map(({ item }) => item.id))
               }
             />
           ))}

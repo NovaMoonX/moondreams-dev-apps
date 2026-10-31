@@ -34,7 +34,7 @@ import {
   selectBillProgress,
   selectIsMovesLoaded,
   selectIsRecordsReady,
-  selectHeldByItem,
+  selectDraftHeldByItem,
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -190,7 +190,7 @@ function EffectPreview({
   const versions = useAppSelector((state) => state.runway.versions);
   const openDays = useAppSelector((state) => state.runway.days);
   const stance = useAppSelector(selectStance);
-  const heldByItem = useAppSelector(selectHeldByItem);
+  const heldByItem = useAppSelector(selectDraftHeldByItem);
   const settledKey = useAppSelector(selectSettledKey);
   const billProgress = useAppSelector(selectBillProgress);
   const store = useStore<RootState>();

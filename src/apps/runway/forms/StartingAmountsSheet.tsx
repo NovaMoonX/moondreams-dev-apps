@@ -307,8 +307,11 @@ function StartingAmountsSheet({
       ...bills.flatMap(({ item }) => toHolding('bill', item.id)),
     ];
     const cashCents = parseMoneyToCents(money);
+    const isAmountsChanged =
+      money !== start.money ||
+      JSON.stringify(amounts) !== JSON.stringify(start.amounts);
     return [
-      ...(cashCents === null
+      ...(cashCents === null || !isAmountsChanged
         ? []
         : [
             {
