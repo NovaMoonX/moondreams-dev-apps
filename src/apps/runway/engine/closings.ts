@@ -535,7 +535,7 @@ export function encodeClosing(state: ClosingState): ClosingSealed {
       ]),
     ),
     transfers: state.transfers.map(
-      (entry): [number, string, string | null, Cents, string] => [
+      (entry): [number, string | null, string | null, Cents, string] => [
         toDays(entry.on),
         entry.fromId,
         entry.toId,

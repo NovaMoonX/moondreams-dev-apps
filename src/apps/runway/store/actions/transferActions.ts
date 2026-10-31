@@ -57,11 +57,12 @@ const getChangeDoc = async (
 
 export interface MoveLeftoverInput {
   moveId: string;
-  fromId: string;
+  /** Null takes it from Free to Spend. */
+  fromId: string | null;
   /** Null moves it to Free to Spend. */
   toId: string | null;
   cents: Cents;
-  /** What the source envelope has left as this device reads it. */
+  /** What the source envelope has left as this device reads it; ignored when `fromId` is null. */
   leftCents: Cents;
   note: string | null;
   /** The change-log sentence for this move. */
@@ -69,6 +70,9 @@ export interface MoveLeftoverInput {
   /** What taking it back restores, kept on the log entry so History can offer the Undo. */
   undoText: string;
 }
+
+const getItemIds = (fromId: string | null, toId: string | null) =>
+  [fromId, toId].filter((id): id is string => id !== null);
 
 const isStopped = (item: Partial<PlanItemDoc> | undefined) =>
   item === undefined || (item.archivedAt ?? null) !== null;
@@ -82,7 +86,7 @@ export async function moveLeftover(
   if (input.cents <= 0 || input.cents > MAX_PURCHASE_CENTS) {
     throw new Error('Enter how much to move.');
   }
-  if (input.cents > input.leftCents) {
+  if (input.fromId !== null && input.cents > input.leftCents) {
     throw new Error('That is more than the envelope has left.');
   }
   if (input.toId === input.fromId) {
@@ -104,7 +108,7 @@ export async function moveLeftover(
       encryption,
       input.summary,
       noteText,
-      [input.fromId, ...(input.toId === null ? [] : [input.toId])],
+      getItemIds(input.fromId, input.toId),
       {
         moveId: input.moveId,
         date,
@@ -120,7 +124,9 @@ export async function moveLeftover(
   await runTransaction(db, async (transaction) => {
     const [plan, from, to, existing] = await Promise.all([
       transaction.get(planRef(uid)),
-      transaction.get(itemRef(uid, input.fromId)),
+      input.fromId === null
+        ? Promise.resolve(null)
+        : transaction.get(itemRef(uid, input.fromId)),
       input.toId === null
         ? Promise.resolve(null)
         : transaction.get(itemRef(uid, input.toId)),
@@ -131,7 +137,10 @@ export async function moveLeftover(
     if (data?.startDate == null || data.startDate > date) {
       throw new Error('Money can be moved once your plan has started.');
     }
-    if (isStopped(from.data() as Partial<PlanItemDoc> | undefined)) {
+    if (
+      from !== null &&
+      isStopped(from.data() as Partial<PlanItemDoc> | undefined)
+    ) {
       throw new Error('That envelope was archived.');
     }
     if (
@@ -145,7 +154,7 @@ export async function moveLeftover(
       id: input.moveId,
       kind: 'transfer',
       date,
-      refId: input.fromId,
+      refId: input.fromId ?? input.toId,
       reversesMoveId: null,
       createdAt: Date.now(),
       sealed,
@@ -178,7 +187,7 @@ export async function undoTransfer(
       encryption,
       `${moved.undoText}.`,
       null,
-      [moved.fromId, ...(moved.toId === null ? [] : [moved.toId])],
+      getItemIds(moved.fromId, moved.toId),
       { ...moved, isUndo: true },
     ),
   ]);
@@ -193,7 +202,7 @@ export async function undoTransfer(
       id,
       kind: 'transfer',
       date: moved.date,
-      refId: moved.fromId,
+      refId: moved.fromId ?? moved.toId,
       reversesMoveId: moved.moveId,
       createdAt: Date.now(),
       sealed,

@@ -119,7 +119,9 @@ export function collectCardPaid(
 export interface TransferEntry {
   moveId: string;
   on: DateOnly;
-  fromId: string;
+  /** Null is Free to Spend. */
+  fromId: string | null;
+  /** Null is Free to Spend. */
   toId: string | null;
   cents: Cents;
 }
@@ -155,7 +157,9 @@ export function sumTransfers(
   entries: readonly TransferEntry[],
 ): Record<string, Cents> {
   return entries.reduce<Record<string, Cents>>((sums, entry) => {
-    sums[entry.fromId] = (sums[entry.fromId] ?? 0) - entry.cents;
+    if (entry.fromId !== null) {
+      sums[entry.fromId] = (sums[entry.fromId] ?? 0) - entry.cents;
+    }
     if (entry.toId !== null) {
       sums[entry.toId] = (sums[entry.toId] ?? 0) + entry.cents;
     }

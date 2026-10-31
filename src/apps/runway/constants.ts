@@ -741,6 +741,13 @@ export const HISTORY_WORDS = {
 } as const;
 
 export const START_AMOUNTS_WORDS = {
+  cashLabel: 'Money not in a goal or envelope',
+  cashHint:
+    "What's in your account apart from what your goals and envelopes hold.",
+  goals: 'What each goal holds',
+  envelopes: 'What each envelope holds',
+  bills: 'Already set aside for bills',
+  total: 'Total in your account',
   offline:
     'Saving where things stand needs a connection. Nothing was saved. Try again when you are back online.',
 } as const;
@@ -1315,6 +1322,16 @@ export const MOVE_WORDS = {
   failed: 'This did not save. Nothing was changed.',
   undoFailed: 'That was not undone.',
   offline: 'Moving money needs a connection. Nothing was changed.',
+} as const;
+
+export const SET_HELD_WORDS = {
+  open: 'Set what it holds now',
+  title: (name: string) => `What ${name} holds now`,
+  amount: 'Holds now',
+  needsAmount: 'Enter what it holds.',
+  unchanged: 'That is what it holds already.',
+  action: 'Set what it holds',
+  moved: (name: string) => `Updated what ${name} holds`,
 } as const;
 
 export const PROBLEM_WORDS = {

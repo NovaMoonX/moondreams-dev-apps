@@ -8446,7 +8446,7 @@ const version = (
   const move1 = (
     id: string,
     on: number,
-    fromId: string,
+    fromId: string | null,
     toId: string | null,
     cents: number,
     reverses: string | null = null,
@@ -8510,7 +8510,30 @@ const version = (
     before.freeToSpendCents + 4_000,
     'a move to Free to Spend raises it by exactly the amount',
   );
-  [toEnvelope, toGoal, toFree].forEach((after) => {
+  const fromFree = withMoves(move1('t4', day(3), null, 'fun', 3_000));
+  assert.equal(fromFree.assignedByItem.fun, 5_000);
+  assert.equal(
+    fromFree.freeToSpendCents,
+    before.freeToSpendCents - 3_000,
+    'a move from Free to Spend lowers it by exactly the amount',
+  );
+  assert.deepEqual(
+    withMoves(
+      move1('t4', day(3), null, 'fun', 3_000),
+      move1('ut4', day(3), null, 'fun', 3_000, 't4'),
+    ),
+    before,
+    'a move from Free to Spend can be taken back',
+  );
+  assert.deepEqual(
+    deriveBalancesBefore(
+      { ...base, moves: [...starts, move1('t4', day(3), null, 'fun', 3_000)] },
+      day(3),
+    ).assignedByItem,
+    before.assignedByItem,
+    'the figures at the start of a day leave out a move from Free to Spend',
+  );
+  [toEnvelope, toGoal, toFree, fromFree].forEach((after) => {
     assert.equal(
       after.moneyOnHandCents,
       before.moneyOnHandCents,
