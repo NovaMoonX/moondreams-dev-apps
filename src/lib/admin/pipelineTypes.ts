@@ -35,6 +35,8 @@ export interface PipelineInboxStatus {
   /** The open boxes under "Must do before merge"; null or missing on documents written before it was read. */
   mustDo: string[] | null;
   goodToKnow: string[];
+  /** The calls a session made for the owner; missing on documents written before they were read, so read it with `?? []`. */
+  decisions?: string[] | null;
   screenshots: string[];
   updatedAt: number;
 }
@@ -65,7 +67,7 @@ export interface PipelineInboxPr {
   gallery: PipelineGalleryStep[] | null;
 }
 
-/** When the owner last answered each ask from the dashboard: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines. */
+/** When the owner last answered each ask from the dashboard: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines, "<pr>:decisions" for the calls made for the owner. */
 export interface PipelineAnswered {
   marks: Record<string, number>;
   updatedAt: number;

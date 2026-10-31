@@ -8,6 +8,7 @@ import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { DISABLED_CLASS } from './constants';
 import {
   AnswerFields,
+  DecisionFields,
   NotSetUpLine,
   SentLine,
   UnsureLine,
@@ -94,6 +95,26 @@ function AnswerAllSubview({
                     slot.kind === 'feedback' ? 'border-border border-t pt-4' : undefined
                   }
                 >
+                  {slot.kind === 'decision' ? (
+                    <div className='space-y-2'>
+                      <p className='text-foreground text-sm font-medium'>
+                        {slot.text} on #{slot.prNumber}
+                      </p>
+                      <DecisionFields
+                        slot={slot}
+                        draft={answers.getDraft(slot.id)}
+                        isSent={answers.isSent(slot)}
+                        error={getPrError(slots, slot, answers.errors)}
+                        isSending={answers.isSending}
+                        isDisabled={answers.isNotSetUp}
+                        onChange={(index, words) =>
+                          answers.setChange(slot.id, index, words)
+                        }
+                        onKeepAll={() => void answers.sendKeepAll(slot)}
+                        onSend={() => void answers.send([slot])}
+                      />
+                    </div>
+                  ) : (
                   <AnswerFields
                     slot={slot}
                     draft={answers.getDraft(slot.id)}
@@ -105,6 +126,7 @@ function AnswerAllSubview({
                     onOther={(other) => answers.setOther(slot.id, other)}
                     onNote={(note) => answers.setNote(slot.id, note)}
                   />
+                  )}
                 </li>
               ))}
             </ul>

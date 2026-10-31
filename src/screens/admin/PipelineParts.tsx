@@ -24,7 +24,7 @@ import NoteTextField from '@/components/NoteTextField';
 import { MAX_ANSWER_NOTE } from '@lib/admin/pipelineAnswers';
 import type { PipelineSettleOutcome } from '@lib/admin/pipelineTypes';
 
-import { WAITING_DOT_CLASS } from './constants';
+import { DISABLED_CLASS, WAITING_DOT_CLASS } from './constants';
 import {
   splitLinks,
   stripLinks,
@@ -249,6 +249,10 @@ function FreeTextField({
       label: 'Anything else?',
       placeholder: "Feedback that isn't an answer to a question above",
     },
+    decision: {
+      label: 'What should it be instead?',
+      placeholder: 'What should it be instead?',
+    },
   }[slot.kind];
   return (
     <NoteTextField
@@ -455,6 +459,7 @@ const ROW_WORDS = {
   question: { sheet: 'Answer', empty: 'Not answered yet' },
   reply: { sheet: 'Reply', empty: 'Not answered yet' },
   feedback: { sheet: 'Anything else?', empty: 'Optional' },
+  decision: { sheet: 'Decisions I made for you', empty: 'Sounds good' },
 };
 
 const getAnswerSummary = (draft: AnswerDraft) => {
@@ -550,6 +555,98 @@ export function AnswerRow(props: AnswerFieldsProps) {
           }
         />
       </FormSheet>
+    </div>
+  );
+}
+
+interface DecisionFieldsProps {
+  slot: AnswerSlot;
+  draft: AnswerDraft;
+  isSent: boolean;
+  error: string | null;
+  isSending: boolean;
+  isDisabled: boolean;
+  onChange: (index: number, words: string | null) => void;
+  onKeepAll: () => void;
+  onSend: () => void;
+}
+
+/** The calls a session made for the owner: tick the ones to change and say what instead, or send Sounds good for all. */
+export function DecisionFields({
+  slot,
+  draft,
+  isSent,
+  error,
+  isSending,
+  isDisabled,
+  onChange,
+  onKeepAll,
+  onSend,
+}: DecisionFieldsProps) {
+  const ticked = Object.entries(draft.changes);
+  const isReady = ticked.every(([, words]) => words.trim() !== '');
+  if (isSent) {
+    return (
+      <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+        <Check className='size-4' aria-hidden='true' />
+        Sent · waiting for the session
+      </p>
+    );
+  }
+  return (
+    <div className='space-y-3'>
+      <ul className='space-y-3'>
+        {slot.decisions.map((text, index) => {
+          const isTicked = draft.changes[index] !== undefined;
+          return (
+            <li key={`${text}-${index}`} className='space-y-2'>
+              <div className='flex items-start gap-3'>
+                <Checkbox
+                  className={TICK_HIT_CLASS}
+                  checked={isTicked}
+                  disabled={isSending}
+                  onCheckedChange={(next) => onChange(index, next ? '' : null)}
+                  aria-label={`Change: ${stripLinks(text)}`}
+                />
+                <p className='text-foreground min-w-0 flex-1 text-sm [overflow-wrap:anywhere]'>
+                  <LinkedText text={text} />
+                </p>
+              </div>
+              {isTicked ? (
+                <div className='pl-8'>
+                  <NoteTextField
+                    label='What should it be instead?'
+                    placeholder='What should it be instead?'
+                    value={draft.changes[index]}
+                    onChange={(words) => onChange(index, words)}
+                    maxLength={MAX_ANSWER_NOTE}
+                    rows={2}
+                    shouldFocus
+                  />
+                </div>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      <Button
+        type='button'
+        variant={ticked.length > 0 ? 'primary' : 'secondary'}
+        className={DISABLED_CLASS}
+        disabled={isDisabled || isSending || !isReady}
+        onClick={ticked.length > 0 ? onSend : onKeepAll}
+      >
+        {isSending
+          ? 'Sending…'
+          : ticked.length > 0
+            ? `Send ${ticked.length} ${ticked.length === 1 ? 'change' : 'changes'}`
+            : 'Sounds good'}
+      </Button>
+      {error ? (
+        <p role='alert'>
+          <WarningLine>{error}</WarningLine>
+        </p>
+      ) : null}
     </div>
   );
 }

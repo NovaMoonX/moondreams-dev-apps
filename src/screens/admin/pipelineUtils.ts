@@ -44,6 +44,16 @@ export interface PipelineOwnerEntryItem {
   settled: PipelineSettleOutcome | null;
 }
 
+/** A call a session made for the owner, listed under its pull request's "Decisions I made for you". */
+export interface PipelineDecision {
+  /** The pull request it was listed on and its place in that list: "<pr>:d<index>". */
+  id: string;
+  prNumber: number;
+  /** When that pull request's status last changed: an answer sent before this has been read. */
+  statusAt: number;
+  text: string;
+}
+
 /** A 🚩 line from a session's last reply. */
 export interface PipelineHand {
   text: string;
@@ -96,6 +106,8 @@ export interface PipelineEntry {
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
   goodToKnow: string[];
+  /** The calls made for the owner that they haven't answered from the dashboard since the status that listed them. Never a reason to wait or to hold a merge. */
+  decisions: PipelineDecision[];
   gallery: GalleryItem[];
   at: number;
 }
@@ -211,6 +223,32 @@ const toSafeItems = (
       };
     }),
   );
+
+const toOpenDecisions = (
+  prs: PipelineInboxPr[],
+  answered: Record<string, number>,
+  now: number,
+): PipelineDecision[] =>
+  prs
+    .filter((pr) => isReady(pr, now))
+    .flatMap((pr) => {
+      const statusAt = pr.status?.updatedAt ?? 0;
+      if ((answered[`${pr.number}:decisions`] ?? 0) >= statusAt) return [];
+      return (pr.status?.decisions ?? []).map((text, index) => ({
+        id: `${pr.number}:d${index}`,
+        prNumber: pr.number,
+        statusAt,
+        text,
+      }));
+    });
+
+const toDecisionWords = (count: number) =>
+  `${count} ${count === 1 ? 'decision' : 'decisions'} made for you`;
+
+const withDecisions = (subtitle: string, decisions: PipelineDecision[]) =>
+  decisions.length > 0
+    ? `${subtitle} · ${toDecisionWords(decisions.length)}`
+    : subtitle;
 
 const isOpenAsk = (ask: { settled: PipelineSettleOutcome | null }) =>
   ask.settled === null;
@@ -363,6 +401,7 @@ function toSessionEntry(
   const safePrs = sessionPrs.map(toSafePr);
   const allItems = toSafeItems(sessionPrs, settled, now);
   const ownerItems = getOpenItems(allItems, answered);
+  const decisions = toOpenDecisions(sessionPrs, answered, now);
   // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
   const isReplied =
     sessionPrs[0] !== undefined &&
@@ -402,7 +441,10 @@ function toSessionEntry(
     isPrOnly: false,
     isDriven: now - session.updatedAt <= IDLE_KEEP_MS,
     time,
-    subtitle: getSubtitle(group, asks, time, session, now, isAnswered),
+    subtitle: withDecisions(
+      getSubtitle(group, asks, time, session, now, isAnswered),
+      decisions,
+    ),
     lead: getLead(session, group, now, isAnswered),
     asks,
     sessionId: session.sessionId,
@@ -410,6 +452,7 @@ function toSessionEntry(
     prs: safePrs,
     ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
+    decisions,
     gallery: toGalleryItems(sessionPrs),
     at: session.updatedAt,
   };
@@ -445,13 +488,15 @@ function toPrEntry(
     prs: [safePr],
     ownerItems,
     goodToKnow: status?.goodToKnow ?? [],
+    decisions: toOpenDecisions([pr], answered, now),
     gallery: toGalleryItems([pr]),
     at: status?.updatedAt ?? 0,
   };
 }
 
 // A reply answers 🚩 lines when no question was asked; feedback sits beside the questions, tied to none.
-export type AnswerSlotKind = 'question' | 'reply' | 'feedback';
+// A decision slot is the calls made for the owner on one pull request, kept or changed together.
+export type AnswerSlotKind = 'question' | 'reply' | 'feedback' | 'decision';
 
 export interface AnswerSlot {
   id: string;
@@ -466,10 +511,13 @@ export interface AnswerSlot {
   options: PipelineOption[];
   isMulti: boolean;
   kind: AnswerSlotKind;
+  /** The decisions a decision slot lists, in order; empty for every other kind. */
+  decisions: string[];
 }
 
-/** What the owner can answer on an entry: each question plus one box for anything else, or one reply when only 🚩 lines were raised. */
-export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
+export const DECISIONS_QUESTION = 'Decisions I made for you';
+
+function getAskSlots(entry: PipelineEntry): AnswerSlot[] {
   const [pr] = entry.prs;
   const toFreeSlot = (
     target: PipelinePr,
@@ -484,6 +532,7 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
     options: [],
     isMulti: false,
     kind,
+    decisions: [],
   });
   if (entry.ownerItems.some(isOpenAsk)) {
     const questions = entry.ownerItems
@@ -499,6 +548,7 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
         options: item.options,
         isMulti: item.isMulti,
         kind: 'question',
+        decisions: [],
       }),
     );
     const firstPr = questions[0]?.prNumber ?? entry.ownerItems[0].prNumber;
@@ -511,9 +561,38 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
   return [toFreeSlot(pr, 'reply')];
 }
 
-/** The slots that ask something of the owner, without the optional feedback box. */
+const toDecisionSlots = (entry: PipelineEntry): AnswerSlot[] =>
+  entry.prs.flatMap((target) => {
+    const listed = entry.decisions.filter(
+      (decision) => decision.prNumber === target.number,
+    );
+    return listed.length === 0
+      ? []
+      : [
+          {
+            id: `${entry.key}:${target.number}:decision`,
+            mark: `${target.number}:decisions`,
+            prNumber: target.number,
+            statusAt: listed[0].statusAt,
+            question: DECISIONS_QUESTION,
+            text: DECISIONS_QUESTION,
+            options: [],
+            isMulti: false,
+            kind: 'decision' as const,
+            decisions: listed.map((decision) => decision.text),
+          },
+        ];
+  });
+
+/** What the owner can answer on an entry: each question plus one box for anything else (or one reply when only 🚩 lines were raised), then one slot per pull request for the calls made for them. */
+export const getAnswerSlots = (entry: PipelineEntry): AnswerSlot[] => [
+  ...getAskSlots(entry),
+  ...toDecisionSlots(entry),
+];
+
+/** The slots that ask something of the owner, without the optional feedback box or the calls already made. */
 export const getAskedSlots = (slots: AnswerSlot[]) =>
-  slots.filter((slot) => slot.kind !== 'feedback');
+  slots.filter((slot) => slot.kind !== 'feedback' && slot.kind !== 'decision');
 
 /** A pull request's failure goes under its last question only, once (the feedback box when it asked none). */
 export const getPrError = (

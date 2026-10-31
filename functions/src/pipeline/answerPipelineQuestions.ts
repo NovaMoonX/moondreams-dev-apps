@@ -43,7 +43,7 @@ interface AnswerItem {
 interface PrAnswers {
   prNumber: number;
   items: AnswerItem[];
-  /** Which of the dashboard's asks these answer: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines. */
+  /** Which of the dashboard's asks these answer: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines, "<pr>:decisions" for the calls made for the owner. */
   marks: string[];
 }
 
@@ -126,7 +126,7 @@ const readAttempt = (data: unknown) => {
 
 const readMarks = (raw: unknown, prNumber: number) => {
   if (raw === undefined) return [];
-  const mark = new RegExp(`^${prNumber}:(\\d{1,2}|reply)$`);
+  const mark = new RegExp(`^${prNumber}:(\\d{1,2}|reply|decisions)$`);
   if (
     !Array.isArray(raw) ||
     raw.length > MAX_ITEMS ||

@@ -250,6 +250,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean; isTask: boolean }[],
       mustDo: [] as string[],
       goodToKnow: [] as string[],
+      decisions: [] as string[],
       screenshots: [] as string[],
       updatedAt: context.now - 10 * MINUTE_MS,
     },
@@ -300,6 +301,10 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
           goodToKnow: [
             'The undo sheet was only checked at 390px.',
             "History keeps 90 days; older moves aren't shown.",
+          ],
+          decisions: [
+            'History keeps 90 days of moves (other option: keep every move)',
+            'Undo is on the move\'s sheet, not on the row (other option: an Undo chip on each row)',
           ],
           screenshots: ['https://placehold.co/390x844.png?text=History'],
         },

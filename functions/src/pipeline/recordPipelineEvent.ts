@@ -111,6 +111,7 @@ const toStatus = (value: unknown) => {
           .map(text)
       : null,
     goodToKnow: texts(value.goodToKnow),
+    decisions: texts(value.decisions),
     screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),
   };

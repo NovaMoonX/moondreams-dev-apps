@@ -12,6 +12,7 @@ import type { PipelineSettleOutcome } from '@lib/admin/pipelineTypes';
 import {
   AnswerRow,
   CiBadge,
+  DecisionFields,
   DismissibleAsk,
   LinkedText,
   NotSetUpLine,
@@ -161,7 +162,9 @@ function MergeRow({
 
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
 function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheetProps) {
-  const slots = entry ? getAnswerSlots(entry) : [];
+  const everySlot = entry ? getAnswerSlots(entry) : [];
+  const slots = everySlot.filter((slot) => slot.kind !== 'decision');
+  const decisionSlots = everySlot.filter((slot) => slot.kind === 'decision');
   const ownerItems = entry?.ownerItems ?? [];
   const hands = entry?.hands ?? [];
   const taskItems = ownerItems.filter((item) => item.isTask);
@@ -204,7 +207,7 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
   const asked = getAskedSlots(slots);
   const isAllSent = asked.length > 0 && asked.every(answers.isSent);
   const slotPrs = new Set(slots.map((slot) => slot.prNumber));
-  const entryReady = answers.getReadyCount(slots);
+  const entryReady = answers.getReadyCount(everySlot);
   const elsewhereReady = answers.getReadyCount() - entryReady;
   const renderFooter = (entry: PipelineEntry) => {
     const sent = answers.lastSent.filter((pr) => slotPrs.has(pr.prNumber));
@@ -246,7 +249,7 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
               disabled={
                 entryReady === 0 || answers.isSending || answers.isNotSetUp
               }
-              onClick={() => void answers.send(slots)}
+              onClick={() => void answers.send(everySlot)}
             >
               {answers.isSending ? 'Sending…' : 'Send answers'}
             </Button>
@@ -364,6 +367,33 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
                 {taskHands.map((hand, index) => (
                   <li key={`${hand.text}-${index}`}>
                     <TaskRow {...getSettleProps(handTarget(hand), hand.settled)} />
+                  </li>
+                ))}
+              </ul>
+            </SheetSection>
+          ) : null}
+
+          {decisionSlots.length > 0 ? (
+            <SheetSection title='Decisions I made for you'>
+              <p className='text-muted-foreground text-sm'>
+                Tick any you would rather have another way.
+              </p>
+              <ul className='space-y-5'>
+                {decisionSlots.map((slot) => (
+                  <li key={slot.id}>
+                    <DecisionFields
+                      slot={slot}
+                      draft={answers.getDraft(slot.id)}
+                      isSent={answers.isSent(slot)}
+                      error={getPrError(everySlot, slot, answers.errors)}
+                      isSending={answers.isSending}
+                      isDisabled={answers.isNotSetUp}
+                      onChange={(index, words) =>
+                        answers.setChange(slot.id, index, words)
+                      }
+                      onKeepAll={() => void answers.sendKeepAll(slot)}
+                      onSend={() => void answers.send([slot])}
+                    />
                   </li>
                 ))}
               </ul>
