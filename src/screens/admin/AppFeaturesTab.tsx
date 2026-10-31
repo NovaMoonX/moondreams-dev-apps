@@ -75,12 +75,6 @@ function getRolloutHint(
   return `Nobody has it${given}${keptOut}.`;
 }
 
-const ROLLOUT_REACH: Record<GateRollout, string> = {
-  off: 'nobody',
-  testing: 'admins only',
-  everyone: 'everyone',
-};
-
 function getDraftChanges(
   before: GateDraft,
   after: GateDraft,
@@ -112,7 +106,13 @@ function getDraftChanges(
   return [
     ...(after.rollout === before.rollout
       ? []
-      : [`Who has it: ${rolloutLabel} (${ROLLOUT_REACH[after.rollout]})`]),
+      : [
+          `Who has it: ${rolloutLabel}. ${getRolloutHint(
+            after.rollout,
+            after.alwaysOnUids.length,
+            after.alwaysOffUids.length,
+          )}`,
+        ]),
     ...listChanges(
       'alwaysOnUids',
       'alwaysOffUids',
@@ -162,7 +162,12 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
 
   const nameOf = (personUid: string) => {
     const profile = users.find((candidate) => candidate.uid === personUid);
-    return profile?.displayName || profile?.email || personUid;
+    const name = profile?.displayName || profile?.email || personUid;
+    const isShared =
+      users.filter(
+        (candidate) => (candidate.displayName || candidate.email) === name,
+      ).length > 1;
+    return isShared && profile?.email ? `${name} (${profile.email})` : name;
   };
   const changes = opened
     ? getDraftChanges(opened.before, opened.draft, nameOf)
@@ -210,8 +215,8 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
       message: (
         <div className='space-y-3 text-left'>
           <ul className='list-disc space-y-1 pl-5'>
-            {changes.map((change) => (
-              <li key={change}>{change}</li>
+            {changes.map((change, index) => (
+              <li key={index}>{change}</li>
             ))}
           </ul>
           <p>

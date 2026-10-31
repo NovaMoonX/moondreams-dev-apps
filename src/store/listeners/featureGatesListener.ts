@@ -19,7 +19,7 @@ export function startFeatureGatesListener(
   );
 }
 
-const READ_RETRY_DELAYS_MS = [1_000, 3_000, 9_000];
+const READ_RETRY_DELAYS_MS = [500, 2_000];
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
