@@ -41,7 +41,9 @@ export async function sendBudgetedPush(
   { appId, uids, content, zone, now }: BudgetedPush,
 ): Promise<BudgetedPushResult> {
   const { date, hour } = getLocalClock(now, zone);
-  const verdicts = await Promise.all(uids.map((uid) => spendPush(firestore, appId, uid, date, hour)));
+  const settled = await Promise.allSettled(uids.map((uid) => spendPush(firestore, appId, uid, date, hour)));
+  // A count that couldn't be read never silences everyone else's push; that one person is skipped.
+  const verdicts = settled.map((result) => (result.status === 'fulfilled' ? result.value : 'capped'));
   const allowed = uids.filter((_, index) => verdicts[index] === 'send');
   const devices = allowed.length > 0 ? await sendPushToUsers(firestore, messaging, allowed, content) : 0;
   return {

@@ -32,6 +32,9 @@ interface LinkAttachFieldProps {
   shouldFetchOnMount?: boolean;
 }
 
+// A link whose page couldn't be read isn't looked up again on every open, until the page reloads.
+const triedOnMount = new Set<string>();
+
 /** An app-agnostic URL field that fetches a preview on its own once the text is a valid
  * link — after a typing pause, on paste, or on blur, and once on mount for a link that has
  * none. Never refetched on render. */
@@ -59,7 +62,7 @@ function LinkAttachField({
   // Quiet on purpose: no fetching or error text, and a failure leaves the record as it was.
   useEffect(() => {
     const initialUrl = url.trim();
-    if (!shouldFetchOnMount || preview || !isValidHttpUrl(initialUrl)) {
+    if (!shouldFetchOnMount || preview || !isValidHttpUrl(initialUrl) || triedOnMount.has(initialUrl)) {
       return;
     }
     let isCancelled = false;
@@ -77,7 +80,7 @@ function LinkAttachField({
           fetchedAt: result.fetchedAt,
         });
       })
-      .catch(() => {});
+      .catch(() => triedOnMount.add(initialUrl));
     return () => {
       isCancelled = true;
     };

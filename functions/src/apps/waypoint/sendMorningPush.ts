@@ -139,6 +139,13 @@ async function sendTripMorning(
       }),
     ),
   );
+  if (results.some((result) => result.quiet + result.capped > 0)) {
+    logger.info('Morning push held back', {
+      tripId,
+      quiet: results.reduce((total, result) => total + result.quiet, 0),
+      capped: results.reduce((total, result) => total + result.capped, 0),
+    });
+  }
   return results.reduce((total, result) => total + result.devices, 0);
 }
 

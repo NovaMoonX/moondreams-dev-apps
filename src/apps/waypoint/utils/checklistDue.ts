@@ -23,8 +23,10 @@ export function getShortName(
     return null;
   }
   const [first, ...rest] = name.split(/\s+/);
-  const last = rest[rest.length - 1];
-  return last ? `${first} ${last.charAt(0).toUpperCase()}.` : first;
+  const surname = rest
+    .reverse()
+    .find((word) => /^\p{L}/u.test(word) && !/^(jr|sr|ii|iii|iv)\.?$/i.test(word));
+  return surname ? `${first} ${Array.from(surname)[0].toLocaleUpperCase()}.` : first;
 }
 
 export interface DueInfo {
