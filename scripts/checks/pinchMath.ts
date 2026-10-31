@@ -8841,7 +8841,11 @@ assert.equal(
     source: 'MANUAL' as const,
     sourceId: null,
     care: null,
+    collectionIds: [],
+    categories: [],
+    links: [],
     isArchived: false,
+    isFavorite: false,
     createdAt: 1,
     updatedAt: 1,
   } satisfies Recipe;
@@ -9307,6 +9311,7 @@ assert.equal(
     unit,
     isChecked,
     sources,
+    pantryAddedAt: null,
     createdAt: 1,
     updatedAt: 1,
   });
@@ -9613,6 +9618,7 @@ assert.equal(
         id,
         ingredientId: line.ingredientId,
         unit: line.unit,
+        pantryAddedAt: existing?.pantryAddedAt ?? null,
         createdAt: existing?.createdAt ?? 1,
         ...fields,
         sources: addSources(
@@ -9772,6 +9778,7 @@ assert.equal(
           amount,
           isChecked: false,
           sources: ['S'],
+          pantryAddedAt: null,
           createdAt: 1,
           updatedAt: 1,
         },
@@ -9958,7 +9965,15 @@ assert.equal(
     ],
     'lines with no group come first with no heading, then each group in the order its first line appears, and two spellings of one name are one group',
   );
-  const legacyLines = [
+  interface LegacyLine {
+    id: string;
+    ingredientId: string;
+    amount: number | null;
+    unit: Unit;
+    note: string | null;
+    group?: string | null;
+  }
+  const legacyLines: LegacyLine[] = [
     { id: 'a', ingredientId: 'x', amount: 1, unit: 'TBSP', note: null },
     grp('b', 'y', null),
     grp('c', 'z', '   '),
@@ -10119,12 +10134,20 @@ assert.equal(
       cookMinutes: null,
       description: null,
       ingredients: [
-        { name: 'soy sauce', amount: 2, unit: 'TBSP', note: null, group: null },
+        {
+          name: 'soy sauce',
+          amount: 2,
+          unit: 'TBSP',
+          note: null,
+          alsoCalled: null,
+          group: null,
+        },
         {
           name: 'soy sauce',
           amount: 4,
           unit: 'TBSP',
           note: null,
+          alsoCalled: null,
           group: 'For the chicken',
         },
         {
@@ -10132,6 +10155,7 @@ assert.equal(
           amount: 1,
           unit: 'TBSP',
           note: null,
+          alsoCalled: null,
           group: 'For the chicken',
         },
         {
@@ -10139,6 +10163,7 @@ assert.equal(
           amount: 2,
           unit: 'EACH',
           note: null,
+          alsoCalled: null,
           group: 'For the sauce',
         },
         {
@@ -10146,6 +10171,7 @@ assert.equal(
           amount: 2,
           unit: 'TBSP',
           note: null,
+          alsoCalled: null,
           group: 'For the sauce',
         },
         {
@@ -10153,6 +10179,7 @@ assert.equal(
           amount: 1,
           unit: 'CUP',
           note: null,
+          alsoCalled: null,
           group: null,
         },
       ],
@@ -10519,6 +10546,7 @@ assert.equal(
       cookId: null,
       ...getStepAnchor(steps, stepIndex),
       reason,
+      previous: null,
       createdAt,
       updatedAt: createdAt,
     }) as RecipeNote;

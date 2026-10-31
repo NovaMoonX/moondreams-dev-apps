@@ -412,6 +412,8 @@ const bigKitchen: CookVoiceContext = {
     { id: 'garlic', names: ['Garlic'], isInStep: false },
     { id: 'garlic-salt', names: ['Garlic salt'], isInStep: true },
   ],
+  timers: [],
+  choice: null,
 };
 assert.deepEqual(
   [

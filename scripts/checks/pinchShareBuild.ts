@@ -97,6 +97,7 @@ const makeRecipe = (id: string, overrides: Partial<Recipe> = {}): Recipe => ({
   sourceId: 'src-secret',
   care: { fridgeDays: 3, freezerDays: null, reheat: 'Low heat', tip: null },
   collectionIds: ['col-secret'],
+  categories: [],
   links: [],
   isArchived: false,
   isFavorite: true,
@@ -487,6 +488,7 @@ const meal: Meal = {
     item('INGREDIENT', 'custom-chili', 3),
   ],
   isFavorite: true,
+  categories: [],
   createdAt: 5,
   updatedAt: 90,
 };
