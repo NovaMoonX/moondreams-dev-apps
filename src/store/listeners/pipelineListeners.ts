@@ -10,6 +10,7 @@ import {
 
 import { db } from '@/lib/firebase/config';
 import type {
+  PipelineAnswered,
   PipelineInbox,
   PipelineSession,
   PipelineSessionCost,
@@ -48,6 +49,21 @@ export function startPipelineInboxListener(
     doc(db, 'pipeline', 'inbox'),
     (snapshot) =>
       onChange(snapshot.exists() ? (snapshot.data() as PipelineInbox) : null),
+    onError,
+  );
+}
+
+/** Admin only: when each pull request was last answered from the dashboard. */
+export function startPipelineAnsweredListener(
+  onChange: (answered: PipelineAnswered | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'pipeline', 'answered'),
+    (snapshot) =>
+      onChange(
+        snapshot.exists() ? (snapshot.data() as PipelineAnswered) : null,
+      ),
     onError,
   );
 }

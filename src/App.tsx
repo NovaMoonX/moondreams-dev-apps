@@ -1,4 +1,7 @@
-import { DreamerUIProvider } from '@moondreamsdev/dreamer-ui/providers';
+import {
+  ActionModalProvider,
+  ToastProvider,
+} from '@moondreamsdev/dreamer-ui/providers';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { Provider } from 'react-redux';
 import { RouterProvider } from 'react-router-dom';
@@ -8,6 +11,7 @@ import { TOAST_TYPE_STYLES } from '@components/toastTypeStyles';
 import { AppCatalogProvider } from '@contexts/AppCatalogContext';
 import { AuthProvider } from '@contexts/AuthContext';
 import { NetworkStatusProvider } from '@contexts/NetworkStatusContext';
+import { SiteThemeProvider } from '@contexts/SiteThemeContext';
 import { useDisableAutocomplete } from '@hooks/useDisableAutocomplete';
 import { useReminderSync } from '@hooks/useReminderSync';
 import { SITE_VERSION } from '@lib/app';
@@ -44,17 +48,22 @@ function App() {
         client={queryClient}
         persistOptions={persistOptions}
       >
-        <DreamerUIProvider
-          toast={{ customTypes: TOAST_TYPE_STYLES, customComponent: AppToast }}
-        >
-          <NetworkStatusProvider>
-            <AuthProvider>
-              <AppCatalogProvider>
-                <AppShell />
-              </AppCatalogProvider>
-            </AuthProvider>
-          </NetworkStatusProvider>
-        </DreamerUIProvider>
+        <SiteThemeProvider>
+          <ToastProvider
+            customTypes={TOAST_TYPE_STYLES}
+            customComponent={AppToast}
+          >
+            <ActionModalProvider>
+              <NetworkStatusProvider>
+                <AuthProvider>
+                  <AppCatalogProvider>
+                    <AppShell />
+                  </AppCatalogProvider>
+                </AuthProvider>
+              </NetworkStatusProvider>
+            </ActionModalProvider>
+          </ToastProvider>
+        </SiteThemeProvider>
       </PersistQueryClientProvider>
     </Provider>
   );

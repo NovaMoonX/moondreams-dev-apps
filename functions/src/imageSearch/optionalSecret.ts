@@ -63,7 +63,10 @@ export function createOptionalSecretReader({
       : null;
   };
 
-  return async (name: string, signal: AbortSignal): Promise<string | null> => {
+  const read = async (
+    name: string,
+    signal: AbortSignal,
+  ): Promise<string | null> => {
     const cached = remembered.get(name);
     if (cached && cached.until > now()) return cached.value;
 
@@ -82,4 +85,9 @@ export function createOptionalSecretReader({
     });
     return value;
   };
+
+  // A token that was just refused may have been replaced, so the next call reads it again.
+  return Object.assign(read, {
+    forget: (name: string) => remembered.delete(name),
+  });
 }

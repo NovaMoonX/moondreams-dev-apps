@@ -24,6 +24,7 @@ import { useDashboardUrlState, type PipelineTab } from './useDashboardUrlState';
 import {
   formatPipelineTime,
   getAnswerSlots,
+  getAskedSlots,
   getPartialFailureLine,
   type PipelineEntry,
   type PipelineGroup,
@@ -173,7 +174,7 @@ function PipelineView({
   );
 
   const answerCount = groups.waiting
-    .flatMap(getAnswerSlots)
+    .flatMap((entry) => getAskedSlots(getAnswerSlots(entry)))
     .filter((slot) => !answers.isSent(slot)).length;
   const isEmpty = allEntries.length === 0;
   const isUnknown = (isLoading || hasError) && isEmpty;
