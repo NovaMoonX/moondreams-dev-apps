@@ -90,7 +90,7 @@ const settleFailedManualSend = (
       const before = sent[index].data();
       const wasWaiting = ['queued', 'held'].includes(before?.agentState);
       if (
-        (wasWaiting || !isDefinite) &&
+        wasWaiting &&
         snap.exists &&
         snap.data()?.agentState === 'working' &&
         (snap.data()?.claudeSessionUrl ?? null) ===
@@ -124,10 +124,12 @@ const recordManualSend = (
         tx.update(snap.ref, {
           claudeSessionUrl: sessionUrl,
           agentPrUrl: null,
-          ...(['pr-ready', 'needs-you'].includes(snap.data()?.agentState)
+          ...(['pr-ready', 'needs-you'].includes(snap.data()?.agentState) ||
+          (snap.data()?.agentState === 'held' &&
+            snap.data()?.agentNote === STUCK_HELD_NOTE)
             ? { agentState: 'working' }
             : {}),
-          ...(snap.data()?.agentNote === PR_CLOSED_NOTE
+          ...([PR_CLOSED_NOTE, STUCK_HELD_NOTE].includes(snap.data()?.agentNote)
             ? { agentNote: null }
             : {}),
         }),
@@ -274,7 +276,7 @@ export const startFeedbackClaudeSession = onCall(
         if (isDefinite) throw error;
         throw new HttpsError(
           'unavailable',
-          "Claude may have started a session anyway, so it's held: check claude.ai/code before sending it again.",
+          'Claude may have started a session anyway: check claude.ai/code before sending it again.',
         );
       },
     );
