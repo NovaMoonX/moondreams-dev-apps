@@ -26,6 +26,26 @@
       })();
     </script>
 
+    <!-- Theme before first paint: keep the key and values in step with SiteThemeContext -->
+    <script>
+      (function () {
+        const readTheme = function () {
+          try {
+            return localStorage.getItem('moondreams-theme') || 'system';
+          } catch (error) {
+            return 'system';
+          }
+        };
+        const theme = readTheme();
+        const isDark =
+          theme === 'dark' ||
+          (theme !== 'light' &&
+            window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      })();
+    </script>
+
     <!-- Primary Meta Tags -->
     <meta name="title" content="Moondreams Dev Apps" />
     <meta
