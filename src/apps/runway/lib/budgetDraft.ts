@@ -21,7 +21,9 @@ import type {
 import type { CreateIncomeInput } from '@apps/runway/store/actions/itemActions';
 import type {
   BillSealed,
+  CalendarPeriod,
   EnvelopeSealed,
+  FundingRule,
   GoalSealed,
   MoneyRange,
   Schedule,
@@ -321,3 +323,140 @@ export const getMissingStep = (
 /** Whether the missing piece is the amount, which a row says in words. */
 export const isAmountStep = (step: string | null) =>
   step === 'amount' || step === 'target';
+
+/** The kinds a found item can be moved between; income stays income. */
+export type MovableKind = Exclude<BudgetKind, 'income'>;
+
+export const MOVABLE_KINDS: readonly MovableKind[] = [
+  'bill',
+  'envelope',
+  'goal',
+];
+
+const PERIOD_OF_REPEAT: Partial<Record<Schedule['kind'], CalendarPeriod>> = {
+  weekly: 'weekly',
+  everyOtherWeek: 'every2Weeks',
+  twiceMonthly: 'twiceMonthly',
+  monthly: 'monthly',
+};
+
+const REPEAT_OF_PERIOD: Partial<Record<CalendarPeriod, Schedule['kind']>> = {
+  weekly: 'weekly',
+  every2Weeks: 'everyOtherWeek',
+  monthly: 'monthly',
+};
+
+/** What an item puts aside each time and how often, which every kind can start from; a goal with no amount of its own uses the monthly figure its document gave, and a bill that doesn't repeat on a set period gives none, since its amount says nothing about a month. */
+const toSpread = (
+  kind: MovableKind,
+  value: BudgetValues[MovableKind],
+  monthlyCents: number | null,
+): { cents: number; period: CalendarPeriod | null } => {
+  if (kind === 'bill') {
+    const bill = value as BillSealed;
+    const period = PERIOD_OF_REPEAT[bill.timing.schedule.kind] ?? null;
+    return { cents: period === null ? 0 : bill.amount.highCents, period };
+  }
+  const { funding } = value as EnvelopeSealed | GoalSealed;
+  const cents = funding.amount.kind === 'exact' ? funding.amount.cents : 0;
+  if (kind === 'goal' && cents <= 0 && monthlyCents !== null)
+    return { cents: monthlyCents, period: 'monthly' };
+  return {
+    cents,
+    period: funding.cadence.kind === 'calendar' ? funding.cadence.period : null,
+  };
+};
+
+/** Whether moving a goal to a bill carries its target over as the bill's amount, which happens only when nothing goes into it each period. */
+export const keepsGoalTarget = (
+  to: MovableKind,
+  goal: GoalSealed,
+  monthlyCents: number | null,
+) => to === 'bill' && toSpread('goal', goal, monthlyCents).cents <= 0;
+
+/** A found bill, envelope or goal as another of the three, keeping its name, emoji and priority and carrying its amount to where that kind keeps one: a repeating amount stays a repeating amount, and a one-off bill and a goal's target trade places. An amount the new kind can't read on a period (a one-time or unknown-repeat bill as an envelope, an envelope given money each pay, twice a month or yearly as a bill) is left for the person to answer, never guessed. */
+export function moveBudgetValue(
+  from: MovableKind,
+  to: MovableKind,
+  value: BudgetValues[MovableKind],
+  today: number,
+  monthlyCents: number | null = null,
+): BudgetValues[MovableKind] {
+  if (from === to) return value;
+  const { name, emoji, priority, orderIndex } = value;
+  const groupId = 'groupId' in value ? value.groupId : null;
+  const { cents, period } = toSpread(from, value, monthlyCents);
+  const own = from === 'bill' ? null : (value as EnvelopeSealed | GoalSealed);
+  const keepsFunding =
+    own !== null &&
+    own.funding.amount.kind === 'exact' &&
+    own.funding.amount.cents > 0;
+  const funding: FundingRule = keepsFunding
+    ? own.funding
+    : {
+        amount: { kind: 'exact', cents },
+        cadence: {
+          kind: 'calendar',
+          period: period ?? 'monthly',
+          startsOn: today,
+        },
+      };
+  if (to === 'envelope')
+    return {
+      name,
+      emoji,
+      priority,
+      orderIndex,
+      groupId,
+      funding:
+        funding.cadence.kind === 'none'
+          ? {
+              ...funding,
+              cadence: { kind: 'calendar', period: 'monthly', startsOn: today },
+            }
+          : funding,
+    } satisfies EnvelopeSealed;
+  if (to === 'goal') {
+    const oneOff =
+      from === 'bill' && (value as BillSealed).timing.schedule.kind === 'once'
+        ? (value as BillSealed)
+        : null;
+    return {
+      name,
+      emoji,
+      priority,
+      orderIndex,
+      targetCents: oneOff === null ? 0 : oneOff.amount.highCents,
+      targetDate: oneOff?.timing.schedule.anchor ?? null,
+      funding:
+        oneOff === null
+          ? funding
+          : { amount: { kind: 'exact', cents: 0 }, cadence: { kind: 'none' } },
+      startingCents: null,
+      state: 'active',
+    } satisfies GoalSealed;
+  }
+  const target = from === 'goal' && cents <= 0 ? (value as GoalSealed) : null;
+  const kind: Schedule['kind'] =
+    target !== null
+      ? target.targetDate === null
+        ? 'irregular'
+        : 'once'
+      : ((period === null ? null : REPEAT_OF_PERIOD[period]) ?? 'irregular');
+  const anchor = target?.targetDate ?? null;
+  return {
+    name,
+    emoji,
+    priority,
+    orderIndex,
+    groupId,
+    amount: toRange(target === null ? cents : target.targetCents, null),
+    timing: {
+      kind: 'date',
+      schedule: { kind, anchor, monthDays: monthDaysFor(kind, anchor) },
+    },
+    ending: { onDate: null, afterCount: null },
+    fundedBy: { kind: 'suggested' },
+    stanceOverride: null,
+  } satisfies BillSealed;
+}

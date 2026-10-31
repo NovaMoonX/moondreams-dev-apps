@@ -1166,6 +1166,40 @@ export const BUDGET_WORDS = {
   takeOut: 'Take these out',
   takeOutNote: 'They stay in the list with nothing set.',
   tookOut: (count: number, name: string) => `Took ${count} out of ${name}`,
+  /** The rest of a line whose parts don't add up to its amount: "Other subscriptions". */
+  restOf: (label: string) =>
+    `Other ${/^\p{Lu}\p{Ll}/u.test(label) ? `${label.charAt(0).toLowerCase()}${label.slice(1)}` : label}`,
+  moveTo: (kinds: string[]) => `Make it ${kinds.join(' or ')}`,
+  moveAsk: 'Where does it belong?',
+  moveKinds: {
+    bill: {
+      label: 'A bill',
+      article: 'a bill',
+      help: 'One set amount, charged on a day',
+    },
+    envelope: {
+      label: 'An envelope',
+      article: 'an envelope',
+      help: 'Money you spend bit by bit over the month',
+    },
+    goal: {
+      label: 'A goal',
+      article: 'a goal',
+      help: 'Money you save up toward something',
+    },
+  } as const,
+  moved: (name: string, kind: string) => `${name} is ${kind} now`,
+  movedDropped: (hadTarget: boolean, hadSaved: boolean) =>
+    hadTarget && hadSaved
+      ? "Its target and what's saved aren't kept."
+      : hadTarget
+        ? "Its target isn't kept."
+        : hadSaved
+          ? "What's saved isn't kept."
+          : '',
+  moveTipTitle: 'Something in the wrong list?',
+  moveTipBody: 'Open it to make it a bill, an envelope or a goal.',
+  moveTipDismiss: 'Got it',
   undo: 'Undo',
   renameDone: 'Done',
   leaveTitle: 'Go back?',
