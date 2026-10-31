@@ -10,6 +10,7 @@ import {
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
 import GatesClosedNote from '@/components/GatesClosedNote';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -32,6 +33,7 @@ import {
   MAX_WEEKLY_GOAL,
   TICKET_PRICE_KIND_LABELS,
   TICKET_PRICE_KINDS,
+  CALENDAR_RELEASES_GATE_ID,
 } from '@apps/a-list/constants';
 import {
   updateMembership,
@@ -122,6 +124,7 @@ function MembershipSettingsSubview({
 }: MembershipSettingsSubviewProps) {
   const dispatch = useAppDispatch();
   const now = useNow();
+  const canShowReleases = useIsGateOpen('a-list', CALENDAR_RELEASES_GATE_ID);
   // Only fields the member changed in this form are written, so a concurrent edit to another field survives.
   const [openedWith] = useState(membership);
   const [start] = useState<MembershipDraft>(() => ({
@@ -432,29 +435,33 @@ function MembershipSettingsSubview({
             already saved keep theirs.
           </p>
         </div>
-        <SectionDivider label='📅 Calendar' />
-        <div className='space-y-2'>
-          <Label>Show release days on your calendar?</Label>
-          <div className='flex flex-wrap gap-2'>
-            <Pill
-              isSelected={showReleasesOnCalendar}
-              onClick={() => setShowReleasesOnCalendar(true)}
-            >
-              Show them
-            </Pill>
-            <Pill
-              isSelected={!showReleasesOnCalendar}
-              onClick={() => setShowReleasesOnCalendar(false)}
-            >
-              Hide them
-            </Pill>
-          </div>
-          <p className='text-muted-foreground text-sm'>
-            {showReleasesOnCalendar
-              ? 'The day a movie on your watchlist opens gets a dashed gold outline, until you plan it.'
-              : 'Your calendar shows only what you’ve planned. The Watchlist still shows what opens this week.'}
-          </p>
-        </div>
+        {canShowReleases && (
+          <>
+            <SectionDivider label='📅 Calendar' />
+            <div className='space-y-2'>
+              <Label>Show release days on your calendar?</Label>
+              <div className='flex flex-wrap gap-2'>
+                <Pill
+                  isSelected={showReleasesOnCalendar}
+                  onClick={() => setShowReleasesOnCalendar(true)}
+                >
+                  Show them
+                </Pill>
+                <Pill
+                  isSelected={!showReleasesOnCalendar}
+                  onClick={() => setShowReleasesOnCalendar(false)}
+                >
+                  Hide them
+                </Pill>
+              </div>
+              <p className='text-muted-foreground text-sm'>
+                {showReleasesOnCalendar
+                  ? 'The day a movie on your watchlist opens gets a dashed gold outline, until you plan it.'
+                  : 'Your calendar shows only what you’ve planned. The Watchlist still shows what opens this week.'}
+              </p>
+            </div>
+          </>
+        )}
         <SectionDivider label='🎯 Goals' trailing={<WeekResetHelp />} />
         <Form
           key={formKey}

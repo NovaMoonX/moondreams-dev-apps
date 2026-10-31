@@ -1,8 +1,9 @@
 import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 
+import DetailSheet from '@/components/DetailSheet';
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeatureGatesSync } from '@/hooks/useFeatureGates';
@@ -19,7 +20,7 @@ import {
 import { type FeatureGateEntry, getAppFeatureGates } from '@lib/gates/gates.registry';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
-import { CARD_CLASS } from './constants';
+import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
 
 const ROLLOUT_OPTIONS: { value: GateRollout; label: string }[] = [
   { value: 'off', label: 'Off' },
@@ -29,6 +30,13 @@ const ROLLOUT_OPTIONS: { value: GateRollout; label: string }[] = [
 
 function countPeople(count: number) {
   return count === 1 ? '1 person' : `${count} people`;
+}
+
+function getGateSummary(rollout: GateRollout, givenCount: number, keptOutCount: number) {
+  const label = ROLLOUT_OPTIONS.find((option) => option.value === rollout)?.label ?? rollout;
+  const given = givenCount > 0 ? `${givenCount} always given it` : null;
+  const keptOut = keptOutCount > 0 ? `${keptOutCount} kept out` : null;
+  return [label, given, keptOut].filter(Boolean).join(' · ');
 }
 
 function getRolloutHint(rollout: GateRollout, givenCount: number, keptOutCount: number) {
@@ -47,6 +55,8 @@ interface AppFeaturesTabProps {
 function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
   const { user } = useAuth();
   useFeatureGatesSync(app.id, user?.uid ?? null);
+  const gatesDoc = useAppSelector((state) => state.featureGates.byApp[app.id]);
+  const [openGateId, setOpenGateId] = useState<string | null>(null);
   const gates = getAppFeatureGates(app.id);
 
   if (gates.length === 0) {
@@ -59,21 +69,52 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
     );
   }
 
+  const openGate = gates.find((gate) => gate.id === openGateId) ?? null;
+
   return (
-    <div className='space-y-4'>
-      {gates.map((gate) => (
-        <GateCard key={gate.id} gate={gate} users={users} />
-      ))}
-    </div>
+    <>
+      <ul className={LIST_CARD_CLASS}>
+        {gates.map((gate) => {
+          const setting = readGateSetting(gatesDoc, gate.appId, gate.id);
+          return (
+            <li key={gate.id}>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-auto min-h-16 w-full justify-start gap-3 rounded-none px-4! py-3 text-left font-normal'
+                onClick={() => setOpenGateId(gate.id)}
+              >
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block truncate text-sm font-medium'>
+                    {gate.label}
+                  </span>
+                  <span className='text-muted-foreground block truncate text-xs'>
+                    {getGateSummary(setting.rollout, setting.alwaysOnUids.length, setting.alwaysOffUids.length)}
+                  </span>
+                </span>
+                <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
+              </Button>
+            </li>
+          );
+        })}
+      </ul>
+      <DetailSheet
+        isOpen={openGate !== null}
+        onClose={() => setOpenGateId(null)}
+        title={openGate?.label ?? 'Feature'}
+      >
+        {openGate ? <GateControls gate={openGate} users={users} /> : null}
+      </DetailSheet>
+    </>
   );
 }
 
-interface GateCardProps {
+interface GateControlsProps {
   gate: FeatureGateEntry;
   users: UserProfile[];
 }
 
-function GateCard({ gate, users }: GateCardProps) {
+function GateControls({ gate, users }: GateControlsProps) {
   const gatesDoc = useAppSelector((state) => state.featureGates.byApp[gate.appId]);
   const setting = readGateSetting(gatesDoc, gate.appId, gate.id);
   const [error, setError] = useState('');
@@ -95,11 +136,8 @@ function GateCard({ gate, users }: GateCardProps) {
     void run(removeGateException(gate.appId, gate.id, list, uid));
 
   return (
-    <section className={join(CARD_CLASS, 'space-y-4')}>
-      <div className='space-y-1'>
-        <h4 className='text-foreground text-base font-semibold'>{gate.label}</h4>
-        <p className='text-muted-foreground text-sm'>{gate.description}</p>
-      </div>
+    <div className='space-y-5'>
+      <p className='text-muted-foreground text-sm'>{gate.description}</p>
 
       <div className='space-y-2'>
         <div className='text-foreground text-sm font-medium'>Who has it</div>
@@ -133,7 +171,7 @@ function GateCard({ gate, users }: GateCardProps) {
       />
 
       {error ? <p className='text-destructive text-sm'>{error}</p> : null}
-    </section>
+    </div>
   );
 }
 

@@ -4,6 +4,7 @@ import type { RootState } from '@/store';
 import { selectIsGateOpen } from '@store/slices/featureGatesSlice';
 import {
   ARCHIVE_GATE_ID,
+  CALENDAR_RELEASES_GATE_ID,
   PREVIEWS_WINDOW_AFTER_MINUTES,
   PREVIEWS_WINDOW_BEFORE_MINUTES,
   WATCH_PRIORITIES,
@@ -300,7 +301,7 @@ export const selectWatchlistRows = createSelector(
 /**
  * Release day key → watchlist movies opening that day that aren't seen, archived or planned at all,
  * from today on, Must See first. A passed showing not yet marked seen still counts as planned.
- * Empty when the member turned releases off for the calendar.
+ * Empty when the member turned releases off for the calendar or is kept out of them.
  */
 export const selectOpeningsByDay = createSelector(
   [
@@ -308,9 +309,10 @@ export const selectOpeningsByDay = createSelector(
     selectViewingItems,
     selectMembership,
     (_state: RootState, now: number) => now,
+    (state: RootState) => selectIsGateOpen(state, 'a-list', CALENDAR_RELEASES_GATE_ID),
   ],
-  (rows, viewings, membership, now) => {
-    if (membership?.showReleasesOnCalendar === false) return {};
+  (rows, viewings, membership, now, canShowReleases) => {
+    if (!canShowReleases || membership?.showReleasesOnCalendar === false) return {};
     const todayDay = fromDateInputValue(getDayKey(now)) ?? 0;
     const plannedKeys = new Set(
       viewings

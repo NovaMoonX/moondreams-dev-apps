@@ -23,6 +23,14 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
       'Someone kept out sees their archived movies back on the main list, with no Archive button. Everyone else can move a movie off the list with a reason and find it under Archived.',
     defaultRollout: 'everyone',
   },
+  {
+    id: 'calendar-releases',
+    appId: 'a-list',
+    label: 'Release days on the calendar',
+    description:
+      'Someone kept out sees only what they planned on their calendar, with no setting for release days. Everyone else sees the day a watchlist movie opens outlined in gold, and can hide it in Membership settings.',
+    defaultRollout: 'everyone',
+  },
 ];
 
 export function getAppFeatureGates(appId: string) {
