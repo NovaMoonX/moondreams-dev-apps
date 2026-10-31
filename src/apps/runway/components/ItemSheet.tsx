@@ -16,6 +16,7 @@ import {
   Pencil,
   PiggyBank,
   Play,
+  Ruler,
   ReceiptText,
   ShoppingBag,
   Undo2,
@@ -181,6 +182,8 @@ interface ItemSheetProps {
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
   quickChange?: { label: string; step: string };
+  /** An optional extra's own action row, opening the change at that question. */
+  maxAction?: { label: string; step: string };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -240,6 +243,7 @@ function ItemSheet({
   fact,
   help,
   quickChange,
+  maxAction,
   startsAtStep,
   payment = null,
   onMarked,
@@ -766,6 +770,15 @@ function ItemSheet({
             label={ITEM_SHEET_WORDS.change}
             subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
             onClick={() => openChange(null)}
+          />
+        )}
+        {canChange && maxAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Ruler />}
+            label={maxAction.label}
+            onClick={() => openChange(maxAction.step)}
           />
         )}
         {canChange && goal && goal.funding.cadence.kind !== 'none' && (

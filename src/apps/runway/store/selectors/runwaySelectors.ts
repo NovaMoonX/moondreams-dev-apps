@@ -799,6 +799,9 @@ export function computeDraftView(
           resolvedBills.map(({ version }) => version.id),
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+          resolved.map(({ item, version }) =>
+            version.payload.maxCents === null ? 0 : (heldByItem[item.id] ?? 0),
+          ),
           [...returning].sort(),
           hashText(priorDays.map((entry) => entry.dayKey).join(',')),
           resolvedBills.map(({ item }) => [
@@ -826,6 +829,8 @@ export function computeDraftView(
       priority: payload.priority,
       orderIndex: payload.orderIndex,
       funding: payload.funding,
+      maxCents: payload.maxCents,
+      heldCents: heldByItem[item.id] ?? 0,
     };
   });
   const bills = resolvedBills.map(({ item, version }) => ({

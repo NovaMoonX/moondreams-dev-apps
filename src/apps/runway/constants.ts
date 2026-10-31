@@ -668,6 +668,8 @@ export const BILL_WORDS = {
   waiting: 'Waiting for the rest',
   readyToPay: 'Set aside in full',
   needsDueDate: 'Needs a due date',
+  undatedOne: (name: string) => `${name} needs a due date`,
+  undatedMany: (count: number) => `${count} bills need a due date`,
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
@@ -1370,6 +1372,11 @@ export const FORM_FLOW_WORDS = {
   emojiTitle: 'Pick an emoji, if you like',
   emoji: 'Emoji',
   noEmoji: 'None',
+  maxTitle: 'Stop filling at',
+  max: 'Stop filling at',
+  maxHint: 'It gets nothing more once it holds this much.',
+  noMax: 'No limit',
+  clearMax: 'Remove the limit',
   billAmountTitle: 'How much is it?',
   expenseAmountTitle: 'How much will it be?',
   amount: 'Amount',
@@ -1480,6 +1487,9 @@ export const ITEM_SHEET_R2_WORDS = {
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
   changeAmount: 'Change amount',
+  setMax: 'Set a max',
+  changeMax: 'Change the max',
+  stopsAt: (amount: string) => `Stops at ${amount}`,
   setDueDate: 'Set the due date',
   eachTime: 'Each time',
   balance: 'Balance',
@@ -1744,6 +1754,8 @@ export const GROUP_WORDS = {
   setTip:
     'Tip: say what a bill or envelope is for, like Pets, to see what it costs each month.',
   perMonth: (amount: string) => `${amount} a month`,
+  saved: 'saved',
+  savedOf: 'saved of',
   monthLabel: 'Together, each month',
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,

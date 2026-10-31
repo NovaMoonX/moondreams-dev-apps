@@ -27,6 +27,9 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import PlanTotal from '@apps/runway/components/PlanTotal';
+import { describePlanTotal } from '@apps/runway/utils/billText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 function GoalsScreen() {
@@ -41,6 +44,18 @@ function GoalsScreen() {
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const stance = useAppSelector(selectStance);
   const heldByItem = useAppSelector(selectHeldByItem);
+  const assignedByItem = useAppSelector(selectBalances).assignedByItem;
+  const totalFigure = describePlanTotal({
+    kind: 'saved',
+    savedCents: goals.reduce(
+      (sum, { item }) => sum + Math.max(0, assignedByItem[item.id] ?? 0),
+      0,
+    ),
+    targetCents: goals.reduce(
+      (sum, { version }) => sum + version.payload.targetCents,
+      0,
+    ),
+  });
   const items = useAppSelector((state) => state.runway.items);
   const versions = useAppSelector((state) => state.runway.versions);
   const priorDays = getPriorDays(
@@ -131,6 +146,11 @@ function GoalsScreen() {
     <div className='space-y-4'>
       <SectionHeader
         title='Goals'
+        action={
+          isLoaded && totalFigure ? (
+            <PlanTotal figure={totalFigure} />
+          ) : undefined
+        }
         help={
           isLoaded &&
           goals.length > 0 &&

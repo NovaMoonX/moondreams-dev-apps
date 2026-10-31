@@ -1014,6 +1014,45 @@ const version = (
       overrides,
     });
 
+  // An envelope with a max asks only for the room left under it; the rest flows on.
+  const withMax = (maxCents: number | null, heldCents: number) =>
+    draftOf(
+      [
+        {
+          ...makeEnvelope('capped', 'must', 1, 30_000),
+          maxCents,
+          heldCents,
+        },
+        makeEnvelope('next', 'should', 1, 20_000),
+      ],
+      makeDays(1, 100_000),
+    );
+  const cents = (draft: ReturnType<typeof withMax>) =>
+    draft.lines.map((line) => [line.itemId, line.cents]);
+  assert.deepEqual(
+    cents(withMax(60_000, 60_000)),
+    [['next', 20_000]],
+    'an envelope at its max gets nothing',
+  );
+  assert.deepEqual(
+    cents(withMax(60_000, 50_000)),
+    [
+      ['capped', 10_000],
+      ['next', 20_000],
+    ],
+    'a partly full envelope gets the gap',
+  );
+  assert.deepEqual(
+    cents(withMax(null, 500_000)),
+    [
+      ['capped', 30_000],
+      ['next', 20_000],
+    ],
+    'no max leaves the amount unchanged',
+  );
+  assert.equal(withMax(60_000, 60_000).freeToSpend.cents, 80_000);
+  assert.equal(withMax(60_000, 50_000).freeToSpend.cents, 70_000);
+
   const random = makeRandom(7);
   const randomEnvelopes = (count: number) =>
     Array.from({ length: count }, (_, index) =>
@@ -3524,6 +3563,7 @@ const version = (
       cadence: { kind: 'everyIncomeDay' as const },
     },
     groupId: null,
+    maxCents: null,
   });
   const base: OpenVersion[] = [
     {
@@ -3893,6 +3933,7 @@ const version = (
       cadence: { kind: 'everyIncomeDay' as const },
     },
     groupId: null,
+    maxCents: null,
   });
   const goalPayload = (state?: 'active' | 'paused') =>
     ({

@@ -288,6 +288,8 @@ export interface EnvelopeSealed {
   /** A fractional rank inside the priority tier. */
   orderIndex: number;
   funding: FundingRule;
+  /** The most it should hold; it gets nothing more once it does. A version written before the max reads as null. */
+  maxCents: Cents | null;
   /** The group that lists this envelope; a version written before envelopes had groups reads as null. */
   groupId: string | null;
   /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
