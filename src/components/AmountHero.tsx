@@ -54,6 +54,8 @@ interface AmountHeroProps {
   hint?: ReactNode;
   errorMessage?: string;
   disabled?: boolean;
+  /** Words shown in place of "$0" while the single figure is empty ("No limit"). */
+  emptyText?: string;
 }
 
 /** The figure's type size: as large as fits, stepping down as the amount grows so the widest real value stays on one line at 320px. */
@@ -83,6 +85,8 @@ interface FigureProps {
   isInvalid: boolean;
   disabled?: boolean;
   placeholder?: string;
+  /** Words shown in place of "$0" while the figure is empty, so an empty answer reads as an answer. */
+  emptyText?: string;
 }
 
 function Figure({
@@ -94,10 +98,12 @@ function Figure({
   isInvalid,
   disabled,
   placeholder = '0',
+  emptyText,
 }: FigureProps) {
   const pendingCaret = useRef<number | null>(null);
   useAmountTyping(inputRef);
   const shown = groupDigits(value);
+  const isShowingEmptyText = shown === '' && emptyText !== undefined;
   const settle = () => {
     const settled = toTwoDecimalAmount(value);
     if (settled !== value) onChange(settled);
@@ -128,18 +134,20 @@ function Figure({
         sizeClass,
       )}
     >
-      <span
-        className='text-muted-foreground mt-[0.18em] mr-0.5 text-[0.5em] leading-none'
-        aria-hidden='true'
-      >
-        $
-      </span>
+      {!isShowingEmptyText && (
+        <span
+          className='text-muted-foreground mt-[0.18em] mr-0.5 text-[0.5em] leading-none'
+          aria-hidden='true'
+        >
+          $
+        </span>
+      )}
       <span className='relative inline-block min-w-[1.5ch] leading-tight'>
         <span
           className='invisible block px-0.5 whitespace-pre'
           aria-hidden='true'
         >
-          {shown === '' ? '0' : shown}
+          {shown === '' ? (emptyText ?? '0') : shown}
         </span>
         <Input
           ref={inputRef}
@@ -150,7 +158,7 @@ function Figure({
           size={1}
           aria-label={ariaLabel}
           aria-invalid={isInvalid ? true : undefined}
-          placeholder={placeholder}
+          placeholder={emptyText ?? placeholder}
           value={shown}
           disabled={disabled}
           className={join(
@@ -240,6 +248,7 @@ function AmountHero({
   hint,
   errorMessage,
   disabled,
+  emptyText,
 }: AmountHeroProps) {
   const [isShowingAllWays, setIsShowingAllWays] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -303,6 +312,7 @@ function AmountHero({
             inputRef={inputRef}
             isInvalid={Boolean(errorMessage)}
             disabled={disabled}
+            emptyText={isRange ? undefined : emptyText}
           />
           {isRange && (
             <span className='text-muted-foreground text-xs capitalize'>

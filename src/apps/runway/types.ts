@@ -441,6 +441,8 @@ export interface ChangeMove {
   toId: string | null;
   cents: Cents;
   note: string | null;
+  /** The money came from, or went to, outside the plan: money on hand changed by the same amount. */
+  isOutside: boolean;
   /** The sentence that says what taking it back restores, for the confirm, the toast and the log. */
   undoText: string;
   isUndo: boolean;
@@ -450,7 +452,8 @@ export interface ChangeSealed {
   summary: string;
   /** The person's reason; a change written before notes existed has none. */
   note?: string | null;
-  move?: ChangeMove | null;
+  /** A move written before outside moves existed has no `isOutside`. */
+  move?: (Omit<ChangeMove, 'isOutside'> & { isOutside?: boolean }) | null;
 }
 
 export interface ChangeDoc {
@@ -536,6 +539,8 @@ export interface TransferSealed {
   toId: string | null;
   cents: Cents;
   note: string | null;
+  /** Money from outside the plan into an item, or out of it: money on hand changes by `cents` too. Missing on a move written before it existed, which reads as false. */
+  isOutside: boolean;
 }
 
 export type CardPaymentCovers = 'full' | 'minimum' | 'part';
@@ -645,8 +650,8 @@ export interface ClosingSealed {
   charged: Record<string, Cents>;
   /** `[day, cents, moveId]` for each card payment not undone. */
   cardPaid: Record<string, [number, Cents, string][]>;
-  /** `[day, fromId, toId, cents, moveId]` for each transfer not undone; a null `toId` is Free to Spend. */
-  transfers: [number, string | null, string | null, Cents, string][];
+  /** `[day, fromId, toId, cents, moveId, isOutside]` for each transfer not undone; a null `toId` is Free to Spend. */
+  transfers: [number, string | null, string | null, Cents, string, boolean][];
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

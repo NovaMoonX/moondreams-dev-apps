@@ -403,6 +403,7 @@ function EnvelopeFormBody({
         <div className='space-y-3'>
           <AmountField
             isHero
+            emptyText={FORM_FLOW_WORDS.noMax}
             label={FORM_FLOW_WORDS.max}
             value={formData.max}
             onChange={(max) => set({ max })}

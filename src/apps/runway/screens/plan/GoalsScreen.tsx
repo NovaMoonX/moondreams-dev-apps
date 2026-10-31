@@ -4,13 +4,14 @@ import { Target } from 'lucide-react';
 import EmptyCard from '@/components/EmptyCard';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
-import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
-import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import { formatCents } from '@/utils/moneyUtils';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { GROUP_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
@@ -45,16 +46,17 @@ function GoalsScreen() {
   const stance = useAppSelector(selectStance);
   const heldByItem = useAppSelector(selectHeldByItem);
   const assignedByItem = useAppSelector(selectBalances).assignedByItem;
+  const targetCents = goals.reduce(
+    (sum, { version }) => sum + version.payload.targetCents,
+    0,
+  );
   const totalFigure = describePlanTotal({
     kind: 'saved',
     savedCents: goals.reduce(
       (sum, { item }) => sum + Math.max(0, assignedByItem[item.id] ?? 0),
       0,
     ),
-    targetCents: goals.reduce(
-      (sum, { version }) => sum + version.payload.targetCents,
-      0,
-    ),
+    targetCents,
   });
   const items = useAppSelector((state) => state.runway.items);
   const versions = useAppSelector((state) => state.runway.versions);
@@ -148,17 +150,23 @@ function GoalsScreen() {
         title='Goals'
         action={
           isLoaded && totalFigure ? (
-            <PlanTotal figure={totalFigure} />
+            <PlanTotal
+              figure={totalFigure}
+              helpTitle={GROUP_WORDS.goalsHelpTitle}
+              help={
+                <div className='space-y-2'>
+                  <p>
+                    <MaskedText>
+                      {GROUP_WORDS.savingToward(formatCents(targetCents))}
+                    </MaskedText>
+                  </p>
+                  {hasRangedIncome && (
+                    <RangeBasisNote stance={stance} side='income' />
+                  )}
+                </div>
+              }
+            />
           ) : undefined
-        }
-        help={
-          isLoaded &&
-          goals.length > 0 &&
-          hasRangedIncome && (
-            <HelpTip title='Ranges of pay'>
-              <RangeBasisNote stance={stance} side='income' />
-            </HelpTip>
-          )
         }
       />
       {getBody()}

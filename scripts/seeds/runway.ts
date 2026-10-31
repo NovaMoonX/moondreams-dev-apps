@@ -796,6 +796,7 @@ async function writeSeedStart(
     toId: 'seed-goal-vacation',
     cents: 4_200,
     note: null,
+    isOutside: false,
   };
   batch.set(context.firestore.doc(`${plan}/moves/${transferId}`), {
     id: transferId,

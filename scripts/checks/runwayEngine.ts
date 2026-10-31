@@ -8491,13 +8491,14 @@ const version = (
     toId: string | null,
     cents: number,
     reverses: string | null = null,
+    isOutside = false,
   ) =>
     move(
       id,
       'transfer',
       on,
       fromId,
-      { fromId, toId, cents, note: null },
+      { fromId, toId, cents, note: null, isOutside },
       reverses,
     );
   const starts = [
@@ -8685,6 +8686,85 @@ const version = (
     deriveBalancesBefore(closedInput, day(4)).assignedByItem.fun,
     6_200,
     'after it the move counts',
+  );
+
+  // Money from or to outside the plan changes the money on hand along with the envelope.
+  const outsideIn = withMoves(
+    move1('o1', day(3), null, 'fun', 3_000, null, true),
+  );
+  assert.equal(outsideIn.assignedByItem.fun, 5_000);
+  assert.equal(
+    outsideIn.moneyOnHandCents,
+    before.moneyOnHandCents + 3_000,
+    'money from outside raises the money on hand',
+  );
+  assert.equal(
+    outsideIn.freeToSpendCents,
+    before.freeToSpendCents,
+    'and leaves Free to Spend as it was',
+  );
+  const outsideOut = withMoves(
+    move1('o2', day(3), 'food', null, 4_000, null, true),
+  );
+  assert.equal(outsideOut.assignedByItem.food, 6_000);
+  assert.equal(
+    outsideOut.moneyOnHandCents,
+    before.moneyOnHandCents - 4_000,
+    'money that left the plan lowers the money on hand',
+  );
+  assert.equal(
+    outsideOut.freeToSpendCents,
+    before.freeToSpendCents,
+    'and leaves Free to Spend as it was',
+  );
+  assert.deepEqual(
+    withMoves(
+      move1('o1', day(3), null, 'fun', 3_000, null, true),
+      move1('uo1', day(3), null, 'fun', 3_000, 'o1', true),
+    ),
+    before,
+    'an outside move can be taken back',
+  );
+  assert.equal(
+    deriveBalancesBefore(
+      {
+        ...base,
+        moves: [...starts, move1('o1', day(3), null, 'fun', 3_000, null, true)],
+      },
+      day(3),
+    ).moneyOnHandCents,
+    before.moneyOnHandCents,
+    'the figures at the start of a day leave out an outside move made that day',
+  );
+  const outsideMoves = [
+    move1('o1', day(3), null, 'fun', 3_000, null, true),
+    move1('o2', day(4), 'food', null, 4_000, null, true),
+    move1('o3', day(5), null, 'trip', 700, null, true),
+    move1('uo3', day(5), null, 'trip', 700, 'o3', true),
+  ];
+  const outsideClosed = buildClosing(month, null, {
+    startDate: start,
+    days: [],
+    records: [],
+    moves: outsideMoves,
+    purchases: [],
+    billIds: new Set(),
+  });
+  assert.deepEqual(
+    deriveBalances({ ...base, moves: starts, closing: outsideClosed }),
+    deriveBalances({ ...base, moves: [...starts, ...outsideMoves] }),
+    'an outside move dated in a closed month equals the unclosed result',
+  );
+  assert.deepEqual(
+    decodeClosing(month, encodeClosing(outsideClosed)),
+    outsideClosed,
+    'and reads back sealed with its flag',
+  );
+  assert.equal(
+    deriveBalances({ ...base, moves: starts, closing: outsideClosed })
+      .moneyOnHandCents,
+    before.moneyOnHandCents - 1_000,
+    'the closing counts the outside money on hand',
   );
 
   const overspent = deriveBalances({

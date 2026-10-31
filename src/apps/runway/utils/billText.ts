@@ -160,14 +160,8 @@ export function describePlanTotal(
     ? null
     : {
         amount: formatCents(figure.savedCents),
-        whole:
-          figure.savedCents < figure.targetCents
-            ? formatCents(figure.targetCents)
-            : null,
-        rest:
-          figure.savedCents < figure.targetCents
-            ? GROUP_WORDS.savedOf
-            : GROUP_WORDS.saved,
+        whole: null,
+        rest: GROUP_WORDS.saved,
       };
 }
 

@@ -50,7 +50,11 @@ export async function openMove(
   }
   if (entry.kind === 'transfer') {
     const payload = await read<TransferSealed>(entry.sealed);
-    return { ...base, kind: 'transfer', payload };
+    return {
+      ...base,
+      kind: 'transfer',
+      payload: { ...payload, isOutside: payload.isOutside ?? false },
+    };
   }
   const payload = await read<BillPaidSealed>(entry.sealed);
   return {

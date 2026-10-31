@@ -9,10 +9,12 @@ interface PlanTotalProps {
   figure: NonNullable<ReturnType<typeof describePlanTotal>>;
   /** What the total counts and leaves out, behind an info icon. */
   help?: ReactNode;
+  /** The info icon's title when it is not about how a month is worked out. */
+  helpTitle?: string;
 }
 
 /** The one total on a Plan view's header line, right-aligned and masked until amounts are shown. */
-function PlanTotal({ figure, help }: PlanTotalProps) {
+function PlanTotal({ figure, help, helpTitle }: PlanTotalProps) {
   return (
     <div className='text-muted-foreground flex items-center gap-1 text-sm'>
       <span className='text-right'>
@@ -29,7 +31,9 @@ function PlanTotal({ figure, help }: PlanTotalProps) {
           </>
         )}
       </span>
-      {help && <HelpTip title={GROUP_WORDS.basisTitle}>{help}</HelpTip>}
+      {help && (
+        <HelpTip title={helpTitle ?? GROUP_WORDS.basisTitle}>{help}</HelpTip>
+      )}
     </div>
   );
 }

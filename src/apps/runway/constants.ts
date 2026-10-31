@@ -365,7 +365,7 @@ export const CLOSING_WRITE_CHUNK = 6;
 /** Times one rebuild is tried again after another device changed the plan under it. */
 export const CLOSING_REBUILD_ATTEMPTS = 3;
 /** A closing is stored as this version of its sealed payload; a reader of a different one rebuilds it. */
-export const CLOSING_VERSION = 4;
+export const CLOSING_VERSION = 5;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
@@ -1334,6 +1334,33 @@ export const SET_HELD_WORDS = {
   unchanged: 'That is what it holds already.',
   action: 'Set what it holds',
   moved: (name: string) => `Updated what ${name} holds`,
+  moneyOnHand: 'Money on hand',
+  needsSourceRaise: 'Choose where the money came from.',
+  needsSourceLower: 'Choose where the money went.',
+  outsideIn: {
+    title: 'Money from outside the plan',
+    body: 'Another account, a gift or a correction. Free to Spend stays the same.',
+  },
+  freeOut: {
+    title: 'From Free to Spend',
+    body: (amount: string) => `Your spare cash goes down by ${amount}.`,
+  },
+  outsideOut: {
+    title: 'It left the plan',
+    body: 'Spent elsewhere or moved out. Free to Spend stays the same.',
+  },
+  freeIn: {
+    title: 'Back to Free to Spend',
+    body: (amount: string) => `Your spare cash goes up by ${amount}.`,
+  },
+  summaryOutsideIn: (amount: string, name: string) =>
+    `Added ${amount} to ${name} from outside the plan.`,
+  summaryOutsideOut: (amount: string, name: string) =>
+    `Took ${amount} out of ${name}. It left the plan.`,
+  undoneOutsideIn: (amount: string, name: string) =>
+    `Took ${amount} back out of ${name}`,
+  undoneOutsideOut: (amount: string, name: string) =>
+    `Put ${amount} back in ${name}`,
 } as const;
 
 export const PROBLEM_WORDS = {
@@ -1755,7 +1782,8 @@ export const GROUP_WORDS = {
     'Tip: say what a bill or envelope is for, like Pets, to see what it costs each month.',
   perMonth: (amount: string) => `${amount} a month`,
   saved: 'saved',
-  savedOf: 'saved of',
+  goalsHelpTitle: 'What your goals add up to',
+  savingToward: (amount: string) => `Saving toward ${amount} in all.`,
   monthLabel: 'Together, each month',
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,

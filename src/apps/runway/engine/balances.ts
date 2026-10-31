@@ -23,6 +23,7 @@ import {
   collectPaid,
   collectStarted,
   collectTransferEntries,
+  sumOutsideTransfers,
   sumTransfers,
   settlePaid,
 } from './progress';
@@ -171,10 +172,11 @@ export function deriveBalances(input: BalancesInput): Balances {
       }, {}),
   );
 
-  const transfers = sumTransfers([
+  const transferEntries = [
     ...(base?.transfers ?? []),
     ...collectTransferEntries(input.moves, startDate),
-  ]);
+  ];
+  const transfers = sumTransfers(transferEntries);
 
   const isCard = (id: string) => input.kinds[id] === 'card';
   const itemIds = new Set(
@@ -258,7 +260,8 @@ export function deriveBalances(input: BalancesInput): Balances {
     paidCents -
     spentCents +
     sumValues(charged) -
-    sumValues(cardPaid);
+    sumValues(cardPaid) +
+    sumOutsideTransfers(transferEntries);
   const result: Balances = {
     isStarted: startDate !== null,
     hasMoney: started.money !== null,

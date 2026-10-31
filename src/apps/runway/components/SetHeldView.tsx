@@ -1,7 +1,10 @@
 import { useRef, useState } from 'react';
 
+import { Check } from 'lucide-react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
@@ -46,7 +49,7 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-/** The view an envelope's sheet swaps in to say what it holds now; the difference moves between it and Free to Spend, and money on hand never changes. */
+/** The view an envelope's sheet swaps in to say what it holds now; the person says whether the difference moves with Free to Spend or came from, or left to, outside the plan. */
 function SetHeldView({
   envelopeId,
   name,
@@ -66,6 +69,7 @@ function SetHeldView({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [source, setSource] = useState<'outside' | 'free' | null>(null);
 
   const parsed = parseMoneyToCents(amount);
   const target =
@@ -77,12 +81,36 @@ function SetHeldView({
   const isRaising = difference > 0;
   const fromId = isRaising ? null : envelopeId;
   const toId = isRaising ? envelopeId : null;
-  const blocker =
+  const isOutside = source === 'outside';
+  const amountBlocker =
     target === null
       ? SET_HELD_WORDS.needsAmount
       : difference === 0
         ? SET_HELD_WORDS.unchanged
         : null;
+  const blocker =
+    amountBlocker ??
+    (source === null
+      ? isRaising
+        ? SET_HELD_WORDS.needsSourceRaise
+        : SET_HELD_WORDS.needsSourceLower
+      : null);
+  const money = formatCents(cents);
+  const options = [
+    {
+      choice: 'outside' as const,
+      ...(isRaising ? SET_HELD_WORDS.outsideIn : SET_HELD_WORDS.outsideOut),
+    },
+    {
+      choice: 'free' as const,
+      title: isRaising
+        ? SET_HELD_WORDS.freeOut.title
+        : SET_HELD_WORDS.freeIn.title,
+      body: (isRaising ? SET_HELD_WORDS.freeOut : SET_HELD_WORDS.freeIn).body(
+        money,
+      ),
+    },
+  ];
 
   const before = deriveBalances(inputs);
   const after =
@@ -98,7 +126,7 @@ function SetHeldView({
               refId: envelopeId,
               reversesMoveId: null,
               createdAt: today,
-              payload: { fromId, toId, cents, note: null },
+              payload: { fromId, toId, cents, note: null, isOutside },
             } satisfies OpenMove,
           ],
         })
@@ -110,6 +138,15 @@ function SetHeldView({
       ? []
       : [
           { name, text: change(heldCents, target) },
+          ...(before.hasMoney &&
+          after.moneyOnHandCents !== before.moneyOnHandCents
+            ? [
+                {
+                  name: SET_HELD_WORDS.moneyOnHand,
+                  text: change(before.moneyOnHandCents, after.moneyOnHandCents),
+                },
+              ]
+            : []),
           ...(before.hasMoney &&
           after.freeToSpendCents !== before.freeToSpendCents
             ? [
@@ -127,11 +164,19 @@ function SetHeldView({
       setError(MOVE_WORDS.offline);
       return;
     }
-    const money = formatCents(cents);
     const free = MOVE_WORDS.freeToSpend;
     const fromName = isRaising ? free : name;
     const toName = isRaising ? name : free;
-    const undoText = MOVE_WORDS.undone(money, fromName, toName);
+    const undoText = !isOutside
+      ? MOVE_WORDS.undone(money, fromName, toName)
+      : isRaising
+        ? SET_HELD_WORDS.undoneOutsideIn(money, name)
+        : SET_HELD_WORDS.undoneOutsideOut(money, name);
+    const summary = !isOutside
+      ? MOVE_WORDS.summary(money, fromName, toName)
+      : isRaising
+        ? SET_HELD_WORDS.summaryOutsideIn(money, name)
+        : SET_HELD_WORDS.summaryOutsideOut(money, name);
     isSavingRef.current = true;
     setError(null);
     setIsSaving(true);
@@ -142,9 +187,10 @@ function SetHeldView({
         fromId,
         toId,
         cents,
+        isOutside,
         leftCents: heldCents,
         note: null,
-        summary: MOVE_WORDS.summary(money, fromName, toName),
+        summary,
         undoText,
       });
       addToast({
@@ -160,6 +206,7 @@ function SetHeldView({
               toId,
               cents,
               note: null,
+              isOutside,
               undoText,
             }),
         },
@@ -187,6 +234,48 @@ function SetHeldView({
         onChange={setAmount}
         disabled={isSaving}
       />
+      {amountBlocker === null && (
+        <div className='grid grid-cols-2 gap-2'>
+          {options.map((option) => {
+            const isChosen = source === option.choice;
+            return (
+              <Button
+                key={option.choice}
+                type='button'
+                variant='tertiary'
+                aria-pressed={isChosen}
+                disabled={isSaving}
+                className={join(
+                  'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-1.5! text-left font-normal whitespace-normal',
+                  isChosen &&
+                    'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+                )}
+                onClick={() => setSource(option.choice)}
+              >
+                <span className='flex w-full items-start justify-between gap-2'>
+                  <span className='text-[15px] leading-[1.125rem] font-medium'>
+                    {option.title}
+                  </span>
+                  <span
+                    aria-hidden='true'
+                    className={join(
+                      'grid size-5 shrink-0 place-items-center rounded-full border',
+                      isChosen
+                        ? 'border-primary bg-primary text-primary-foreground'
+                        : 'border-border',
+                    )}
+                  >
+                    {isChosen && <Check className='size-3.5' />}
+                  </span>
+                </span>
+                <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
+                  <MaskedText>{option.body}</MaskedText>
+                </span>
+              </Button>
+            );
+          })}
+        </div>
+      )}
       {rows.length > 0 && (
         <ul
           aria-label='What changes'

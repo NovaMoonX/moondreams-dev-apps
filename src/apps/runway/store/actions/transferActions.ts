@@ -62,6 +62,8 @@ export interface MoveLeftoverInput {
   /** Null moves it to Free to Spend. */
   toId: string | null;
   cents: Cents;
+  /** From, or to, outside the plan rather than Free to Spend. */
+  isOutside: boolean;
   /** What the source envelope has left as this device reads it; ignored when `fromId` is null. */
   leftCents: Cents;
   note: string | null;
@@ -77,7 +79,7 @@ const getItemIds = (fromId: string | null, toId: string | null) =>
 const isStopped = (item: Partial<PlanItemDoc> | undefined) =>
   item === undefined || (item.archivedAt ?? null) !== null;
 
-/** Moves money from an envelope to another envelope, a goal or Free to Spend; money on hand never changes. Resolves with the day it is dated, so an Undo can name it. */
+/** Moves money from an envelope to another envelope, a goal or Free to Spend; money on hand changes only for an `isOutside` move. Resolves with the day it is dated, so an Undo can name it. */
 export async function moveLeftover(
   uid: string,
   encryption: RunwayEncryption,
@@ -101,6 +103,7 @@ export async function moveLeftover(
         toId: input.toId,
         cents: input.cents,
         note: noteText,
+        isOutside: input.isOutside,
       } satisfies TransferSealed,
       encryption,
     ),
@@ -116,6 +119,7 @@ export async function moveLeftover(
         toId: input.toId,
         cents: input.cents,
         note: noteText,
+        isOutside: input.isOutside,
         undoText: input.undoText,
         isUndo: false,
       },
@@ -180,6 +184,7 @@ export async function undoTransfer(
         toId: moved.toId,
         cents: moved.cents,
         note: moved.note,
+        isOutside: moved.isOutside,
       } satisfies TransferSealed,
       encryption,
     ),
