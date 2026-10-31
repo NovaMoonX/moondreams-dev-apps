@@ -480,7 +480,7 @@ assert.doesNotMatch(
 
 const fresh = (body: string): InboxPr => {
   const base = pr(8, 'h8', 'main', body);
-  return { ...base, status: base.status && { ...base.status, updatedAt: new Date().toISOString() } };
+  return { ...base, status: base.status && { ...base.status, updatedAt: '2026-10-29T16:00:00Z' } };
 };
 assert.doesNotMatch(
   buildInbox([fresh(ticked)], '2026-10-29T17:00:00Z'),
@@ -488,7 +488,7 @@ assert.doesNotMatch(
   'a PR still in progress asks nothing yet',
 );
 assert.match(
-  buildInbox([pr(8, 'h8', 'main', ticked)], '2026-10-29T17:00:00Z'),
+  buildInbox([fresh(ticked)], '2026-10-29T23:30:00Z'),
   /Pick a header/,
   'after six hours with no new status, its questions show anyway',
 );

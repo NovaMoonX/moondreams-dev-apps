@@ -209,7 +209,8 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
         text,
         options,
         isMulti: PICK_ANY.test(line),
-        isTask: TO_DO.test(line) || (options.length === 0 && !text.includes('?')),
+        isTask:
+          TO_DO.test(line) || (options.length === 0 && !text.includes('?')),
         settled: getOwnerNote(line),
       },
     ];
@@ -250,7 +251,13 @@ const toOwnerBox = (line: string, index: number) => {
   const match = BOX_LINE.exec(line);
   if (!match || !isForOwner(line)) return [];
   return [
-    { index, lead: match[1], rest: match[3], isTicked: match[2] !== ' ', key: toItemKey(line) },
+    {
+      index,
+      lead: match[1],
+      rest: match[3],
+      isTicked: match[2] !== ' ',
+      key: toItemKey(line),
+    },
   ];
 };
 
@@ -268,7 +275,9 @@ export function keepOwnerTicks(before: string, after: string): string {
       .map((box) => [box.key, box] as const),
   );
   if (ticked.size === 0) return after;
-  const changed = next.flatMap((line, index) => (line === old[index] ? [] : [index]));
+  const changed = next.flatMap((line, index) =>
+    line === old[index] ? [] : [index],
+  );
   const isOwnUntick =
     old.length === next.length &&
     changed.length === 1 &&
@@ -293,10 +302,10 @@ export function keepOwnerTicks(before: string, after: string): string {
 const MAX_STEPS = 30;
 const MAX_STEP_IMAGES = 3;
 const MAX_LABEL = 120;
-const MARKDOWN_IMAGE =
-  /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
+const MARKDOWN_IMAGE = /!\[[^\]]*\]\((https:\/\/(?:[^\s()]|\([^\s()]*\))+)\)/g;
 const HTML_IMAGE = /<img[^>]*\bsrc=(?:"([^"\s]+)"|'([^'\s]+)'|([^\s>"']+))/gi;
-const MARKUP_TAG = /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
+const MARKUP_TAG =
+  /<\/?(?:br|img|b|i|em|strong|code|details|summary|a|span|p)\b[^>]*>/gi;
 
 const toImageUrls = (cell: string) =>
   [
@@ -355,7 +364,10 @@ const toTitled = (raw: string) => {
   const at = isBold ? raw.search(NOTE_BREAK) : raw.search(/<br\s*\/?>/i);
   if (at === -1) return { label: toLabel(raw), note: null };
   const rest = raw.slice(at).replace(NOTE_BREAK, '');
-  return { label: toLabel(raw.slice(0, at)), note: toLabel(rest, MAX_NOTE) || null };
+  return {
+    label: toLabel(raw.slice(0, at)),
+    note: toLabel(rest, MAX_NOTE) || null,
+  };
 };
 
 const toCells = (line: string) =>
@@ -455,6 +467,8 @@ interface Session {
   title: string;
   url: string | null;
   prs: InboxPr[];
+  /** The time the inbox is built for, so a held PR's six hours are counted from one clock. */
+  now: number;
 }
 
 type Standing = 'needsYou' | 'needsFixing' | 'inProgress' | 'waiting';
@@ -473,13 +487,16 @@ export const isStillWorking = (status: PrStatus | null, now = Date.now()) =>
   /^in progress\b/i.test(status?.state ?? '') &&
   now - Date.parse(status?.updatedAt ?? '') <= HELD_FOR_MS;
 
-const waitingItems = (pr: InboxPr) =>
-  isStillWorking(pr.status)
+const waitingItems = (pr: InboxPr, now: number) =>
+  isStillWorking(pr.status, now)
     ? []
     : (pr.status?.ownerItems ?? []).filter((item) => item.settled === null);
 
 const ownerCount = (session: Session) =>
-  session.prs.reduce((sum, pr) => sum + waitingItems(pr).length, 0);
+  session.prs.reduce(
+    (sum, pr) => sum + waitingItems(pr, session.now).length,
+    0,
+  );
 
 const isBroken = (pr: InboxPr) =>
   pr.ci === 'red' || pr.labels.includes('merge-conflict');
@@ -488,7 +505,7 @@ const getStanding = (session: Session): Standing => {
   if (ownerCount(session) > 0) return 'needsYou';
   if (session.prs.some(isBroken)) return 'needsFixing';
   const isMoving = session.prs.some(
-    (pr) => pr.ci === 'running' || /^in progress\b/i.test(pr.status?.state ?? ''),
+    (pr) => pr.ci === 'running' || isStillWorking(pr.status, session.now),
   );
   return isMoving ? 'inProgress' : 'waiting';
 };
@@ -591,7 +608,7 @@ const stackTree = (session: Session, all: readonly InboxPr[]): string[] => {
 
 const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
   const needs = session.prs.flatMap((pr) =>
-    waitingItems(pr).flatMap((item) => [
+    waitingItems(pr, session.now).flatMap((item) => [
       `- [#${pr.number}](${pr.url}) ${item.text}`,
       ...item.options.map(
         (option) =>
@@ -665,7 +682,10 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
 };
 
 /** Groups open PRs by the session that drives them, sessions that need the owner first. */
-export function groupSessions(prs: readonly InboxPr[]): Session[] {
+export function groupSessions(
+  prs: readonly InboxPr[],
+  now = Date.now(),
+): Session[] {
   const sorted = [...prs].sort((a, b) => a.number - b.number);
   const sessions = sorted.reduce<Map<string, Session>>((acc, pr) => {
     const key = pr.status
@@ -681,6 +701,7 @@ export function groupSessions(prs: readonly InboxPr[]): Session[] {
       title,
       url: key === 'none' ? null : key,
       prs: [...(found?.prs ?? []), pr],
+      now,
     });
   }, new Map());
   return [...sessions.values()].sort(
@@ -695,7 +716,7 @@ export function groupSessions(prs: readonly InboxPr[]): Session[] {
 
 /** The inbox issue's body: a one-line switchboard per session, then one folded section per session. */
 export function buildInbox(prs: readonly InboxPr[], now: string): string {
-  const sessions = groupSessions(prs);
+  const sessions = groupSessions(prs, Date.parse(now));
   const total = sessions.reduce((sum, session) => sum + ownerCount(session), 0);
   const headline =
     total === 0
