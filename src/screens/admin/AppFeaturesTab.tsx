@@ -1,10 +1,12 @@
-import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
 
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import { PillGroup } from '@/components/PillGroup';
+import SearchInput from '@/components/SearchInput';
 import { useAuth } from '@/hooks/useAuth';
 import { useFeatureGatesSync } from '@/hooks/useFeatureGates';
 import { useAppSelector } from '@/store';
@@ -21,6 +23,8 @@ import { type FeatureGateEntry, getAppFeatureGates } from '@lib/gates/gates.regi
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
 import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
+
+const PICKER_ROWS = 20;
 
 const ROLLOUT_OPTIONS: { value: GateRollout; label: string }[] = [
   { value: 'off', label: 'Off' },
@@ -72,7 +76,10 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
   const openGate = gates.find((gate) => gate.id === openGateId) ?? null;
 
   return (
-    <>
+    <div className='space-y-3'>
+      <p className='text-muted-foreground text-sm'>
+        Choose who gets each feature. People kept out never get it, whatever the rollout.
+      </p>
       <ul className={LIST_CARD_CLASS}>
         {gates.map((gate) => {
           const setting = readGateSetting(gatesDoc, gate.appId, gate.id);
@@ -105,7 +112,7 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
       >
         {openGate ? <GateControls gate={openGate} users={users} /> : null}
       </DetailSheet>
-    </>
+    </div>
   );
 }
 
@@ -118,6 +125,7 @@ function GateControls({ gate, users }: GateControlsProps) {
   const gatesDoc = useAppSelector((state) => state.featureGates.byApp[gate.appId]);
   const setting = readGateSetting(gatesDoc, gate.appId, gate.id);
   const [error, setError] = useState('');
+  const [picking, setPicking] = useState<GateExceptionList | null>(null);
 
   const run = async (write: Promise<void>) => {
     setError('');
@@ -134,6 +142,23 @@ function GateControls({ gate, users }: GateControlsProps) {
 
   const removeFrom = (list: GateExceptionList, uid: string) =>
     void run(removeGateException(gate.appId, gate.id, list, uid));
+
+  if (picking) {
+    return (
+      <PersonPicker
+        title={picking === 'alwaysOnUids' ? 'Always give it to' : 'Keep out'}
+        users={users}
+        currentUids={setting[picking]}
+        otherUids={picking === 'alwaysOnUids' ? setting.alwaysOffUids : setting.alwaysOnUids}
+        otherLabel={picking === 'alwaysOnUids' ? 'Kept out now' : 'Always given it now'}
+        onBack={() => setPicking(null)}
+        onPick={(uid) => {
+          addTo(picking, uid);
+          setPicking(null);
+        }}
+      />
+    );
+  }
 
   return (
     <div className='space-y-5'>
@@ -155,18 +180,18 @@ function GateControls({ gate, users }: GateControlsProps) {
 
       <ExceptionPeople
         title='Always given it'
-        emptyText='Nobody yet.'
+        emptyText='Nobody'
         uids={setting.alwaysOnUids}
         users={users}
-        onAdd={(uid) => addTo('alwaysOnUids', uid)}
+        onAdd={() => setPicking('alwaysOnUids')}
         onRemove={(uid) => removeFrom('alwaysOnUids', uid)}
       />
       <ExceptionPeople
         title='Kept out'
-        emptyText='Nobody. Kept out wins over everything else.'
+        emptyText='Nobody'
         uids={setting.alwaysOffUids}
         users={users}
-        onAdd={(uid) => addTo('alwaysOffUids', uid)}
+        onAdd={() => setPicking('alwaysOffUids')}
         onRemove={(uid) => removeFrom('alwaysOffUids', uid)}
       />
 
@@ -180,7 +205,7 @@ interface ExceptionPeopleProps {
   emptyText: string;
   uids: string[];
   users: UserProfile[];
-  onAdd: (uid: string) => void;
+  onAdd: () => void;
   onRemove: (uid: string) => void;
 }
 
@@ -188,17 +213,19 @@ function ExceptionPeople({ title, emptyText, uids, users, onAdd, onRemove }: Exc
   const listed = uids.map(
     (uid) => users.find((profile) => profile.uid === uid) ?? { uid, email: uid },
   );
-  const addable = users.filter((profile) => !uids.includes(profile.uid));
 
   return (
     <div className='space-y-2'>
-      <div className='text-foreground text-sm font-medium'>{title}</div>
-      {listed.length === 0 ? (
-        <p className='text-muted-foreground text-xs'>{emptyText}</p>
-      ) : (
-        <div className='divide-border divide-y'>
+      <div className='flex items-baseline justify-between gap-3'>
+        <span className='text-foreground text-sm font-medium'>{title}</span>
+        <span className='text-muted-foreground text-xs'>
+          {listed.length === 0 ? emptyText : countPeople(listed.length)}
+        </span>
+      </div>
+      {listed.length > 0 ? (
+        <ul className='divide-border/60 divide-y rounded-xl bg-zinc-50 px-3 dark:bg-zinc-800/60'>
           {listed.map((profile) => (
-            <div key={profile.uid} className='flex items-center justify-between gap-3 py-2'>
+            <li key={profile.uid} className='flex items-center justify-between gap-3 py-2.5'>
               <div className='flex min-w-0 items-center gap-3'>
                 <UserAvatar user={profile} size='sm' />
                 <div className='min-w-0'>
@@ -219,24 +246,88 @@ function ExceptionPeople({ title, emptyText, uids, users, onAdd, onRemove }: Exc
               >
                 <X className='h-4 w-4' />
               </Button>
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
+      ) : null}
+      <Button
+        type='button'
+        variant='tertiary'
+        className='border-border text-muted-foreground h-10 w-full justify-center gap-1.5 rounded-xl border border-dashed text-sm font-normal'
+        onClick={onAdd}
+      >
+        <Plus className='h-4 w-4' />
+        Add someone
+      </Button>
+    </div>
+  );
+}
+
+interface PersonPickerProps {
+  title: string;
+  users: UserProfile[];
+  currentUids: string[];
+  otherUids: string[];
+  otherLabel: string;
+  onBack: () => void;
+  onPick: (uid: string) => void;
+}
+
+function PersonPicker({
+  title,
+  users,
+  currentUids,
+  otherUids,
+  otherLabel,
+  onBack,
+  onPick,
+}: PersonPickerProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const term = searchTerm.trim().toLowerCase();
+  const shown = users.filter(
+    (profile) =>
+      !currentUids.includes(profile.uid) &&
+      (term === '' ||
+        profile.displayName?.toLowerCase().includes(term) ||
+        profile.email?.toLowerCase().includes(term)),
+  );
+
+  return (
+    <div className='space-y-4'>
+      <BackLink onBack={onBack} />
+      <h4 className='text-foreground text-base font-semibold'>{title}</h4>
+      <SearchInput value={searchTerm} onChange={setSearchTerm} placeholder='Search by name or email' />
+      {shown.length === 0 ? (
+        <p className='text-muted-foreground text-sm'>Nobody matches that.</p>
+      ) : (
+        <ul className='divide-border/60 divide-y'>
+          {shown.slice(0, PICKER_ROWS).map((profile) => (
+            <li key={profile.uid}>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-auto min-h-14 w-full justify-start gap-3 rounded-none px-0! py-2.5 text-left font-normal'
+                onClick={() => onPick(profile.uid)}
+              >
+                <UserAvatar user={profile} size='sm' />
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block truncate text-sm'>
+                    {profile.displayName || profile.email}
+                  </span>
+                  <span className='text-muted-foreground block truncate text-xs'>
+                    {otherUids.includes(profile.uid) ? `${otherLabel} · moves here` : profile.email}
+                  </span>
+                </span>
+              </Button>
+            </li>
+          ))}
+        </ul>
       )}
-      <Select
-        searchable
-        searchPlaceholder='Search by name or email'
-        placeholder='Add someone'
-        options={addable.map((profile) => ({
-          value: profile.uid,
-          text: profile.displayName || profile.email,
-          description: profile.displayName ? profile.email : undefined,
-        }))}
-        value=''
-        onChange={(uid) => {
-          if (uid) onAdd(uid);
-        }}
-      />
+      {shown.length > PICKER_ROWS ? (
+        <p className='text-muted-foreground text-center text-xs'>
+          Showing {PICKER_ROWS} of {shown.length}. Search to find someone else.
+        </p>
+      ) : null}
     </div>
   );
 }
