@@ -4,6 +4,7 @@ import {
   chooseVersion,
   getMissingStep,
   getMissingSteps,
+  keepsGoalTarget,
   moveBudgetValue,
   toBillProposal,
   toEnvelopeProposal,
@@ -970,6 +971,20 @@ assert.deepEqual(
   ),
   ['amount'],
   'a bill with no known repeat moved to an envelope asks the amount, never reads it as monthly',
+);
+assert.deepEqual(
+  getMissingSteps('envelope', moveBudgetValue('bill', 'envelope', tv, today)),
+  ['amount'],
+  'a one-time bill moved to an envelope asks the amount, never reads it as monthly',
+);
+assert.deepEqual(
+  [
+    keepsGoalTarget('bill', tvGoal, null),
+    keepsGoalTarget('bill', tvGoal, 10_000),
+    keepsGoalTarget('envelope', tvGoal, null),
+  ],
+  [true, false, false],
+  'a goal keeps its target only as a bill with nothing going in each period',
 );
 
 console.log('runwayBudgetReading: ok');

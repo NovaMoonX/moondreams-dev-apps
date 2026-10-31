@@ -62,6 +62,7 @@ import { toDraftSourceId } from '@apps/runway/forms/fundingFlow';
 import {
   chooseVersion,
   getMissingSteps,
+  keepsGoalTarget,
   moveBudgetValue,
   MOVABLE_KINDS,
   type MovableKind,
@@ -856,11 +857,7 @@ function BudgetStart({
           ? null
           : BUDGET_WORDS.movedDropped(
               goal.targetCents > 0 &&
-                !(
-                  to === 'bill' &&
-                  (written.value as BudgetValues['bill']).amount.lowCents ===
-                    goal.targetCents
-                ),
+                !keepsGoalTarget(to, goal, proposal.monthlyCents),
               (goal.startingCents ?? 0) > 0,
             ),
         missing.length === 0

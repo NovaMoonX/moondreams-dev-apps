@@ -346,7 +346,7 @@ const REPEAT_OF_PERIOD: Partial<Record<CalendarPeriod, Schedule['kind']>> = {
   monthly: 'monthly',
 };
 
-/** What an item puts aside each time and how often, which every kind can start from; a goal with no amount of its own uses the monthly figure its document gave, and a bill with no known repeat gives none, since its amount says nothing about a month. */
+/** What an item puts aside each time and how often, which every kind can start from; a goal with no amount of its own uses the monthly figure its document gave, and a bill that doesn't repeat on a set period gives none, since its amount says nothing about a month. */
 const toSpread = (
   kind: MovableKind,
   value: BudgetValues[MovableKind],
@@ -354,11 +354,8 @@ const toSpread = (
 ): { cents: number; period: CalendarPeriod | null } => {
   if (kind === 'bill') {
     const bill = value as BillSealed;
-    const isUnknown = bill.timing.schedule.kind === 'irregular';
-    return {
-      cents: isUnknown ? 0 : bill.amount.highCents,
-      period: PERIOD_OF_REPEAT[bill.timing.schedule.kind] ?? null,
-    };
+    const period = PERIOD_OF_REPEAT[bill.timing.schedule.kind] ?? null;
+    return { cents: period === null ? 0 : bill.amount.highCents, period };
   }
   const { funding } = value as EnvelopeSealed | GoalSealed;
   const cents = funding.amount.kind === 'exact' ? funding.amount.cents : 0;
@@ -369,6 +366,13 @@ const toSpread = (
     period: funding.cadence.kind === 'calendar' ? funding.cadence.period : null,
   };
 };
+
+/** Whether moving a goal to a bill carries its target over as the bill's amount, which happens only when nothing goes into it each period. */
+export const keepsGoalTarget = (
+  to: MovableKind,
+  goal: GoalSealed,
+  monthlyCents: number | null,
+) => to === 'bill' && toSpread('goal', goal, monthlyCents).cents <= 0;
 
 /** A found bill, envelope or goal as another of the three, keeping its name, emoji and priority and carrying its amount to where that kind keeps one: a repeating amount stays a repeating amount, and a one-off bill and a goal's target trade places. A repeat the new kind can't take (a bill paid per pay or yearly) is left for the person to answer, never guessed. */
 export function moveBudgetValue(
@@ -422,7 +426,7 @@ export function moveBudgetValue(
       emoji,
       priority,
       orderIndex,
-      targetCents: oneOff === null ? 0 : cents,
+      targetCents: oneOff === null ? 0 : oneOff.amount.highCents,
       targetDate: oneOff?.timing.schedule.anchor ?? null,
       funding:
         oneOff === null
