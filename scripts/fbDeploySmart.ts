@@ -120,9 +120,24 @@ const openCallables = () => {
   }
 };
 
+// A callable left private by an earlier failed deploy stays private, since the CLI grants access only on create.
+const openPrivateCallables = () => {
+  if (!targets.includes('functions')) return;
+  try {
+    execSync('npm run fb:invoker -- --missing', { stdio: 'inherit' });
+  } catch {
+    console.error(
+      '\nSome callables may still be private. Run `npm run fb:invoker -- --all` to open them.',
+    );
+  }
+};
+
 const run = async () => {
   const first = await deploy();
-  if (first.code === 0) return 0;
+  if (first.code === 0) {
+    openPrivateCallables();
+    return 0;
+  }
   if (RELEASE_EXISTS.test(first.output)) {
     console.error(
       '\nThe rules release failed. Repeating its update to read the answer:\n',
