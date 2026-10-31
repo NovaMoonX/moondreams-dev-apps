@@ -1,22 +1,27 @@
 import { useEffect } from 'react';
 
-import { useAppDispatch, useAppSelector } from '@/store';
+import { store, useAppDispatch, useAppSelector } from '@/store';
 import {
   selectIsGateOpen,
   setFeatureGatesDoc,
 } from '@store/slices/featureGatesSlice';
-import { startFeatureGatesListener } from '@store/listeners/featureGatesListener';
+import { readFeatureGates } from '@store/listeners/featureGatesListener';
 import { getAppFeatureGates } from '@lib/gates/gates.registry';
 
-/** Keeps an app's feature switches in the store while mounted; call it once in the app's shell. */
-export function useFeatureGatesSync(appId: string, uid: string | null) {
+/**
+ * Reads an app's feature switches once per page load (and again after an account switch); call it in the app's shell.
+ * A change the admin makes reaches someone only when they refresh, never mid-session.
+ */
+export function useLoadFeatureGates(appId: string, uid: string | null) {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
     if (uid === null) return;
-    return startFeatureGatesListener(appId, (gatesDoc) =>
-      dispatch(setFeatureGatesDoc({ appId, gatesDoc })),
-    );
+    if (store.getState().featureGates.byApp[appId] !== undefined) return;
+    void readFeatureGates(appId).then((gatesDoc) => {
+      if (store.getState().user.currentUser?.uid !== uid) return;
+      dispatch(setFeatureGatesDoc({ appId, gatesDoc }));
+    });
   }, [appId, uid, dispatch]);
 }
 
