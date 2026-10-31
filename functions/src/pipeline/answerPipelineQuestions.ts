@@ -704,6 +704,8 @@ interface MergeView {
   mustDo: string[] | null | 'no status';
   /** The status heading's short sha is the head's, so its Must do list was written for this commit. */
   isStatusForHead: boolean;
+  /** Its base has commits its head doesn't, so its green CI never ran on what would land. */
+  isBehind: boolean;
 }
 
 const MERGE_COMMENT = 'Merge it (from the admin dashboard)';
@@ -711,8 +713,9 @@ const DRIVEN_FOR_MS = 3 * 24 * 60 * 60 * 1000;
 const SESSION_MARKER = /<!--\s*session:\s*(https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)\s*-->/;
 const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
 const DEFAULT_BRANCH = 'main';
+const DEPLOY_WORKFLOW = 'firebase-hosting-merge.yml';
 const LOCK_REF = 'heads/merge-lock';
-// Every lock commit carries git's empty tree, as the sessions' lock script writes them.
+// Every lock commit carries git's empty tree, so a lock commit needs no files of its own.
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const CI_JOB_LEFT_OUT = 'owner-inbox';
 const FAILED_RUNS = ['failure', 'timed_out', 'action_required', 'startup_failure', 'cancelled', 'stale'];
@@ -725,6 +728,9 @@ const getMergeRefusal = (view: MergeView) => {
   if (/^in progress\b/i.test(view.state ?? '')) return 'Its session is still working on it.';
   if (view.labels.includes('merge-conflict') || view.isMergeable === false) {
     return 'It conflicts with its base.';
+  }
+  if (view.labels.includes('behind-base') || view.isBehind) {
+    return "It's behind its base. Its session needs to bring it up to date.";
   }
   if (view.ci === 'running') return 'Checks are still running.';
   if (view.ci === 'red') return 'A check failed.';
@@ -823,6 +829,7 @@ const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
     state: typeof status?.state === 'string' ? status.state : null,
     mustDo: status === null ? 'no status' : Array.isArray(status.mustDo) ? status.mustDo.map(String) : null,
     isStatusForHead: true,
+    isBehind: false,
   });
   if (refusal !== null) return refused(refusal);
   const sessionUrl =
@@ -850,7 +857,7 @@ const readLock = async (token: string) => {
   return { sha, holder };
 };
 
-// Never forced, as the sessions push it: a branch someone moved since it was read refuses (422) and the take fails.
+// Never forced: a branch someone moved since it was read refuses (422), so two takes can't both win.
 const writeLock = async (token: string, parent: string | null, message: string) => {
   const commit = await githubFetch(token, '/git/commits', {
     method: 'POST',
@@ -878,14 +885,29 @@ const toLockMessage = (prNumber: number) =>
 
 const releaseLock = async (token: string, held: string, prNumber: number) => {
   try {
-    await writeLock(token, held, `merge-lock: free\n\nafter: #${prNumber}\n`);
+    return (await writeLock(token, held, `merge-lock: free\n\nafter: #${prNumber}\n`)) !== null;
   } catch (error) {
     logger.error('mergePipelinePr: lock not released', error instanceof Response ? error.status : getErrorName(error));
+    return false;
   }
+};
+
+// A queued run waits behind the running one, and a newer queued run cancels it, so a merge waits for both to clear.
+const isDeploying = async (token: string) => {
+  const responses = await Promise.all(
+    ['queued', 'in_progress'].map((state) =>
+      githubFetch(token, `/actions/workflows/${DEPLOY_WORKFLOW}/runs?status=${state}&per_page=1`),
+    ),
+  );
+  const failed = responses.find((response) => !response.ok);
+  if (failed) throw failed;
+  const bodies = await Promise.all(responses.map(readJson));
+  return bodies.some((body) => Number(body?.total_count) > 0);
 };
 
 const takeLock = async (token: string, prNumber: number) => {
   const lock = await readLock(token);
+  if (lock.holder === String(prNumber) && lock.sha !== null) return { held: lock.sha, error: null };
   if (lock.holder !== null) {
     return {
       held: null,
@@ -894,6 +916,9 @@ const takeLock = async (token: string, prNumber: number) => {
           ? 'Another merge is going through. Try again once its deploy finishes.'
           : `#${lock.holder} is merging. Try again once its deploy finishes.`,
     };
+  }
+  if (await isDeploying(token)) {
+    return { held: null, error: 'A deploy is running. Try again once it finishes.' };
   }
   const held = await writeLock(token, lock.sha, toLockMessage(prNumber));
   return held === null
@@ -954,7 +979,9 @@ const askSession = async (token: string, prNumber: number, since: number, commen
 
 const squash = async (token: string, pr: Json, prNumber: number, sha: string): Promise<MergeResult> => {
   if (pr.draft === true) {
-    const notReady = await markReady(token, String(pr.node_id));
+    const notReady = await markReady(token, String(pr.node_id)).catch(
+      async (error: unknown) => (await toRefused(error, "Couldn't mark it ready for review.")).error,
+    );
     if (notReady !== null) return refused(notReady);
   }
   const merge = await githubFetch(token, `/pulls/${prNumber}/merge`, {
@@ -994,6 +1021,13 @@ const toRefused = async (error: unknown, fallback: string) => {
   return refused(fallback === "Couldn't reach GitHub." ? "Couldn't merge it." : fallback);
 };
 
+const isBehindBase = async (token: string, pr: Json, sha: string) => {
+  const base = isObject(pr.base) ? String(pr.base.ref) : DEFAULT_BRANCH;
+  const response = await githubFetch(token, `/compare/${encodeURIComponent(base)}...${sha}`);
+  if (!response.ok) throw response;
+  return Number((await readJson(response))?.behind_by) > 0;
+};
+
 const readGates = async (token: string, prNumber: number) => {
   try {
     const pull = await githubFetch(token, `/pulls/${prNumber}`);
@@ -1019,6 +1053,7 @@ const readGates = async (token: string, prNumber: number) => {
       state: statusBody === null ? null : readState(statusBody),
       mustDo: statusBody === null ? 'no status' : readMustDo(statusBody),
       isStatusForHead: statusBody !== null && isHeadingFor(statusBody, sha),
+      isBehind: await isBehindBase(token, pr, sha),
     });
     if (refusal !== null) return refused(refusal);
     const sessionUrl =
@@ -1053,14 +1088,13 @@ const mergeOnGithub = async (token: string, prNumber: number): Promise<MergeResu
       }))
     : { held: null, error: null };
   if (lock.error !== null) return refused(lock.error);
-  try {
-    return await squash(token, pr, prNumber, sha);
-  } catch (error) {
-    return toRefused(error, MAYBE_MERGED);
-  } finally {
-    // The deploys queue one at a time on their own, so the lock only has to cover the merge itself.
-    if (lock.held !== null) await releaseLock(token, lock.held, prNumber);
-  }
+  const result = await squash(token, pr, prNumber, sha).catch((error: unknown) => toRefused(error, MAYBE_MERGED));
+  // The merge's own deploy is queued by now, and the next taker waits for it, so the lock only has to cover the merge.
+  if (lock.held === null || (await releaseLock(token, lock.held, prNumber))) return result;
+  return {
+    ...result,
+    error: `${result.error ?? 'Merged'}, but the merge lock is still held. Run npm run merge:lock -- release ${prNumber} so sessions can merge.`,
+  };
 };
 
 /** Merges a pull request from the dashboard: asks its session to when one drives it, otherwise merges it on GitHub, after checking every gate again. */

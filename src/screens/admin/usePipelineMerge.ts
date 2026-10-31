@@ -22,6 +22,8 @@ export function usePipelineMerge() {
       if (result.ok && result.outcome !== null) {
         const outcome: MergeDone = result.isSample ? `sample-${result.outcome}` : result.outcome;
         setDone((current) => ({ ...current, [prNumber]: outcome }));
+        const note = result.error;
+        if (note !== null) setErrors((current) => ({ ...current, [prNumber]: note }));
       } else {
         setErrors((current) => ({ ...current, [prNumber]: result.error ?? "Couldn't merge it." }));
       }

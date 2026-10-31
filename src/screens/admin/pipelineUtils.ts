@@ -549,6 +549,9 @@ export function getMergeBlock(pr: PipelinePr, ownerItems: PipelineOwnerEntryItem
   if (status === null) return 'It has no status comment yet.';
   if (/^in progress\b/i.test(status.state ?? '')) return 'Its session is still working on it.';
   if (pr.labels.includes('merge-conflict')) return 'It conflicts with its base.';
+  if (pr.labels.includes('behind-base')) {
+    return "It's behind its base. Its session needs to bring it up to date.";
+  }
   if (pr.ci === 'running') return 'Checks are still running.';
   if (pr.ci === 'red') return 'A check failed.';
   if (pr.ci !== 'green') return 'No checks have run on it yet.';

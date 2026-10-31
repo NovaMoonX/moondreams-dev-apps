@@ -104,6 +104,12 @@ check_token() {
        echo "  To merge the rest too, edit it (no new token needed): $TOKEN_PAGE → Pipeline answers → Permissions" >&2
        echo "  Set Contents: Read and write, press Update, then run: npm run pipeline:secrets -- check" >&2 ;;
   esac
+  if GH_TOKEN="$token" gh api "repos/$REPO/actions/workflows/firebase-hosting-merge.yml/runs?per_page=1" >/dev/null 2>&1; then
+    echo "✓ The token can see whether a deploy is running"
+  else
+    echo "• The token can't read workflow runs, so a merge from the dashboard is refused for pull requests no session drives." >&2
+    echo "  Edit it (no new token needed): $TOKEN_PAGE → Pipeline answers → Permissions → Actions: Read-only → Update" >&2
+  fi
 }
 
 copy_to_clipboard() {
@@ -143,10 +149,10 @@ case "$mode" in
     need gh "Install it from https://cli.github.com"
     signed_in
     [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the token." >&2; exit 1; }
-    url="https://github.com/settings/personal-access-tokens/new?name=Pipeline%20answers&description=Posts%20answers%20from%20the%20admin%20dashboard&target_name=NovaMoonX&expires_in=366&pull_requests=write&issues=write&contents=write"
+    url="https://github.com/settings/personal-access-tokens/new?name=Pipeline%20answers&description=Posts%20answers%20from%20the%20admin%20dashboard&target_name=NovaMoonX&expires_in=366&pull_requests=write&issues=write&contents=write&actions=read"
     echo "1. A GitHub page opens to make the token. Check these, then press Generate token:"
     echo "   • Repository access: Only select repositories → moondreams-dev-apps"
-    echo "   • Permissions: Pull requests: Read and write, Issues: Read and write, Contents: Read and write"
+    echo "   • Permissions: Pull requests: Read and write, Issues: Read and write, Contents: Read and write, Actions: Read-only"
     echo "   ($url)"
     if [[ -z "${SSH_CONNECTION:-}" ]]; then
       if [[ "$(uname)" == "Darwin" ]]; then open "$url"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 || true; fi
