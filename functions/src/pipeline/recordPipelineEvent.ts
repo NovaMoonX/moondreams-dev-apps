@@ -58,8 +58,24 @@ const httpsUrls = (value: unknown) =>
     .flatMap((item) => httpsUrl(item) ?? []);
 const sessionUrl = (value: unknown) =>
   typeof value === 'string' && SESSION_URL.test(value) ? value : null;
-const list = (value: unknown) =>
-  (Array.isArray(value) ? value : []).slice(0, MAX_ITEMS).filter(isObject);
+const list = (value: unknown, max = MAX_ITEMS) =>
+  (Array.isArray(value) ? value : []).slice(0, max).filter(isObject);
+const MAX_OWNER_LINES = 40;
+const keepWaiting = (items: Json[]) => {
+  const waiting = items.filter(
+    (item) => typeof item.settled !== 'string',
+  ).length;
+  const room = Math.max(0, MAX_ITEMS - waiting);
+  return items
+    .filter(
+      (item, index) =>
+        typeof item.settled !== 'string' ||
+        items
+          .slice(0, index)
+          .filter((other) => typeof other.settled === 'string').length < room,
+    )
+    .slice(0, MAX_ITEMS);
+};
 const toMs = (value: unknown) => {
   const ms = typeof value === 'string' ? Date.parse(value) : NaN;
   return Number.isFinite(ms) ? ms : 0;
@@ -71,14 +87,22 @@ const toStatus = (value: unknown) => {
     sessionUrl: sessionUrl(value.sessionUrl),
     sessionTitle: textOrNull(value.sessionTitle),
     state: textOrNull(value.state),
-    ownerItems: list(value.ownerItems).map((item) => ({
-      text: text(item.text),
-      options: list(item.options).map((option) => ({
-        label: text(option.label),
-        images: httpsUrls(option.images),
-      })),
-      isMulti: item.isMulti === true,
-    })),
+    // Settled lines carried over give way to waiting ones under the cap; the comment's order stays.
+    ownerItems: keepWaiting(list(value.ownerItems, MAX_OWNER_LINES)).map(
+      (item) => ({
+        text: text(item.text),
+        options: list(item.options).map((option) => ({
+          label: text(option.label),
+          images: httpsUrls(option.images),
+        })),
+        isMulti: item.isMulti === true,
+        isTask: item.isTask === true,
+        settled:
+          item.settled === 'done' || item.settled === 'skipped'
+            ? item.settled
+            : null,
+      }),
+    ),
     goodToKnow: texts(value.goodToKnow),
     screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),
@@ -95,6 +119,10 @@ const toGallery = (value: unknown) =>
     .filter(isObject)
     .map((step) => ({
       label: text(step.label).slice(0, 120),
+      note:
+        typeof step.note === 'string'
+          ? text(step.note).slice(0, 240) || null
+          : null,
       images: (Array.isArray(step.images) ? step.images : [])
         .slice(0, MAX_STEP_IMAGES)
         .filter(isObject)
@@ -139,8 +167,10 @@ const isKeyValid = (given: unknown, expected: string) => {
 const invalid = (message: string) =>
   new HttpsError('invalid-argument', message);
 
+const HELPER = /^[A-Za-z0-9_-]{1,40}$/;
+
 const readSession = (data: Json) => {
-  const { sessionId, state, url, branch, raisedHands } = data;
+  const { sessionId, state, url, branch, raisedHands, phase, helpers } = data;
   if (typeof sessionId !== 'string' || !SESSION_ID.test(sessionId)) {
     throw invalid('Bad sessionId.');
   }
@@ -170,6 +200,11 @@ const readSession = (data: Json) => {
     raisedHands: (raisedHands as string[])
       .slice(0, MAX_HANDS)
       .map((hand) => hand.slice(0, MAX_HAND_LENGTH)),
+    // Sent by hooks since phases were reported; an older hook sends neither.
+    phase: typeof phase === 'string' && PHASES.includes(phase) ? phase : null,
+    helpers: (Array.isArray(helpers) ? helpers : [])
+      .filter((helper): helper is string => typeof helper === 'string' && HELPER.test(helper))
+      .slice(0, MAX_ITEMS),
   };
 };
 
@@ -183,8 +218,13 @@ const writeSession = async (data: Json) => {
     const startedAt = snapshot.get('startedAt') as unknown;
     const previousTurn = snapshot.get('turnStartedAt') as unknown;
     const getTurnStartedAt = () => {
-      if (session.state === 'working') return now;
-      return typeof previousTurn === 'number' ? previousTurn : null;
+      // Only a new prompt starts a turn; a hook from before turnStart starts one on every working report.
+      const isTurnStart =
+        data.turnStart === true ||
+        (data.turnStart === undefined && session.state === 'working');
+      if (isTurnStart) return now;
+      // A first report that isn't a prompt still needs a start, or the turn would seem to restart on every pulse.
+      return typeof previousTurn === 'number' ? previousTurn : now;
     };
     transaction.set(ref, {
       ...session,
@@ -321,6 +361,24 @@ const writeCost = async (data: Json) => {
   await batch.commit();
 };
 
+const MAX_MERGED = 50;
+
+const toMerged = (value: unknown) =>
+  (Array.isArray(value) ? value : [])
+    .slice(0, MAX_MERGED)
+    .filter(isObject)
+    .flatMap((pr) => {
+      const mergedAt = toMs(pr.mergedAt);
+      if (typeof pr.number !== 'number' || mergedAt === 0) return [];
+      return [
+        {
+          number: Math.trunc(pr.number),
+          sessionUrl: sessionUrl(pr.sessionUrl),
+          mergedAt,
+        },
+      ];
+    });
+
 const writeInbox = async (data: Json) => {
   if (!Array.isArray(data.prs)) throw invalid('Bad prs.');
   const all = data.prs.filter(isObject).slice(0, MAX_PRS).map(toPr);
@@ -331,7 +389,7 @@ const writeInbox = async (data: Json) => {
   );
   await getFirestore()
     .doc('pipeline/inbox')
-    .set({ prs, updatedAt: Date.now() });
+    .set({ prs, merged: toMerged(data.merged), updatedAt: Date.now() });
 };
 
 export const recordPipelineEvent = onCall(

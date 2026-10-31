@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
-# UserPromptSubmit ("working") and Stop ("stop") hook: tells the admin screen's Pipeline view
-# what this session is doing and which 🚩 questions its last reply raised. Silent and instant
-# without PIPELINE_KEY; the report is sent in the background and never blocks or fails the turn.
-# "stop" also reports the whole session's token use (main transcript plus every helper's), rewritten
-# in full each time so a restart never double-counts.
+# Session state, phase, running helpers and the last reply's 🚩 lines; "tool" reports at most once a minute.
+# Silent without PIPELINE_KEY, sent in the background, never blocks or fails a turn.
+# "stop" also rewrites the session's whole token use, so a restart never double-counts.
 
 [[ -n "${PIPELINE_KEY:-}" ]] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
@@ -21,12 +19,64 @@ else
 fi
 [[ -n "$session_id" ]] || exit 0
 
+if [[ "$mode" == "tool" ]]; then
+  # A helper's own tool calls say nothing about what the session itself is doing.
+  [[ -z "$(echo "$input" | jq -r '.agent_id // empty' 2>/dev/null)" ]] || exit 0
+  stamp="${TMPDIR:-/tmp}/pipeline-pulse-${session_id}"
+  tool=$(echo "$input" | jq -r '.tool_name // empty' 2>/dev/null)
+  # A helper starting is worth a report at once; anything else waits out the minute.
+  if [[ "$tool" != "Agent" && -n "$(find "$stamp" -mmin -1 2>/dev/null)" ]]; then
+    exit 0
+  fi
+  touch "$stamp" 2>/dev/null
+fi
+
 branch=$(git branch --show-current 2>/dev/null)
+transcript=$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
+
+# Helpers still out: background agents not marked finished whose transcript moved in the last 10 minutes,
+# so a helper that died without finishing doesn't keep the session working.
+helpers="[]"
+subagents="${transcript%.jsonl}/subagents"
+if [[ -n "$transcript" && -d "$subagents" ]]; then
+  helpers=$(find "$subagents" -maxdepth 1 -name 'agent-*.jsonl' -mmin -10 2>/dev/null \
+    | sed 's/\.jsonl$/.meta.json/' | xargs -r cat 2>/dev/null \
+    | jq -s -c '[.[] | select(.requestShape == "background" and (.finished // false) == false) | .agentType // "helper"] | .[0:10]' 2>/dev/null)
+  [[ -n "$helpers" ]] || helpers="[]"
+fi
+
+phase_of_tool() {
+  echo "$input" | jq -r '
+    (.tool_name // "") as $t | (.tool_input // {}) as $i
+    | if $t == "Edit" or $t == "Write" or $t == "NotebookEdit" then "building"
+      elif $t == "Agent" then
+        (($i.subagent_type // "") as $a
+         | if ($a | test("reviewer")) then "review"
+           elif $a == "validator" then "checks"
+           elif ($a | test("planner|^Plan$")) then "planning"
+           elif ($a | test("implementer|syncer")) then "building"
+           else "investigating" end)
+      elif $t == "Bash" then
+        (($i.command // "") as $c
+         | if ($c | test("(^|&&|\\|\\||;|\\||\\()\\s*git( -C \\S+)? (commit|push|merge)")) then "building"
+           elif ($c | test("pw\\.mjs|playwright|publish-screenshots")) then "screenshots"
+           elif ($c | test("\\b(tsc|eslint|prettier)\\b|npm run -?s? ?check:")) then "checks"
+           else "investigating" end)
+      elif $t == "Skill" or $t == "EnterPlanMode" or $t == "ExitPlanMode" then "planning"
+      elif ($t | test("^mcp__github")) then "conversation"
+      else "investigating" end' 2>/dev/null
+}
+
+phase=""
+[[ "$mode" == "tool" ]] && phase=$(phase_of_tool)
+# While reviewers or checkers are out, that is what the session is waiting on.
+if echo "$helpers" | jq -e 'any(.[]; test("reviewer"))' >/dev/null 2>&1; then phase="review"
+elif echo "$helpers" | jq -e 'any(.[]; . == "validator")' >/dev/null 2>&1 && [[ -z "$phase" ]]; then phase="checks"
+fi
 
 state="working"
 hands="[]"
 if [[ "$mode" == "stop" ]]; then
-  transcript=$(echo "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
   if [[ -n "$transcript" && -f "$transcript" ]]; then
     # A reply's blocks are separate lines sharing one message id, so gather every text block of the last one.
     hands=$(
@@ -44,8 +94,10 @@ if [[ "$mode" == "stop" ]]; then
     )
     [[ -n "$hands" ]] || hands="[]"
   fi
-  if [[ "$hands" == "[]" ]]; then state="idle"; else state="waiting"; fi
-elif [[ "$mode" != "working" ]]; then
+  if [[ "$helpers" != "[]" ]]; then state="working"
+  elif [[ "$hands" == "[]" ]]; then state="idle"
+  else state="waiting"; fi
+elif [[ "$mode" != "working" && "$mode" != "tool" ]]; then
   exit 0
 fi
 
@@ -56,10 +108,15 @@ body=$(jq -n -c \
   --arg url "$session_url" \
   --arg branch "$branch" \
   --argjson hands "$hands" \
+  --arg phase "$phase" \
+  --argjson helpers "$helpers" \
+  --argjson turnStart "$([[ "$mode" == "working" ]] && echo true || echo false)" \
   '{data: {key: $key, kind: "session", sessionId: $sessionId, state: $state,
     url: (if $url == "" then null else $url end),
     branch: (if $branch == "" then null else $branch end),
-    raisedHands: $hands}}' 2>/dev/null) || exit 0
+    raisedHands: $hands,
+    phase: (if $phase == "" then null else $phase end),
+    helpers: $helpers, turnStart: $turnStart}}' 2>/dev/null) || exit 0
 
 endpoint="${PIPELINE_URL:-https://us-central1-moondreams-dev-apps.cloudfunctions.net/recordPipelineEvent}"
 nohup curl -sS --max-time 8 -X POST -H 'Content-Type: application/json' \

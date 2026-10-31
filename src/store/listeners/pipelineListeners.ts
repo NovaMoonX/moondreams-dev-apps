@@ -14,6 +14,7 @@ import type {
   PipelineInbox,
   PipelineSession,
   PipelineSessionCost,
+  PipelineSettled,
 } from '@/lib/admin/pipelineTypes';
 import { createFirestoreCollectionListener } from '@/store/listeners/createFirestoreCollectionListener';
 
@@ -63,6 +64,21 @@ export function startPipelineAnsweredListener(
     (snapshot) =>
       onChange(
         snapshot.exists() ? (snapshot.data() as PipelineAnswered) : null,
+      ),
+    onError,
+  );
+}
+
+/** Admin only: the asks the owner ticked off or set aside from the dashboard. */
+export function startPipelineSettledListener(
+  onChange: (settled: PipelineSettled | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'pipeline', 'settled'),
+    (snapshot) =>
+      onChange(
+        snapshot.exists() ? (snapshot.data() as PipelineSettled) : null,
       ),
     onError,
   );

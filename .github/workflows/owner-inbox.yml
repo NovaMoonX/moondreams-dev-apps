@@ -1,6 +1,7 @@
 name: Owner inbox
 # Rebuilds the pinned "📥 Owner inbox" issue from every open PR's 📋 Status
-# comment: per session, what needs the owner, the PR stack, new screenshots.
+# comment: per session, what needs the owner, the PR stack, new screenshots. It also ticks
+# again any owner box a status rewrite unticked, and reports lately merged PRs to the dashboard.
 # Plain Node with no install, so a run costs seconds and no model tokens.
 on:
   issue_comment:
@@ -26,7 +27,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
-  pull-requests: read
+  # Write only to tick the owner's boxes again when a session's rewrite of its status comment dropped them.
+  pull-requests: write
   checks: read
   issues: write
 concurrency:
