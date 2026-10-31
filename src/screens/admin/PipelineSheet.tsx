@@ -85,6 +85,9 @@ const MERGE_DONE_WORDS = {
   'sample-merged': 'Sample: it would be merged. Nothing was changed.',
 };
 
+// A failed check or a conflict needs someone to act, unlike checks that are still running.
+const NEEDS_A_FIX = new Set(['A check failed.', 'It conflicts with its base.']);
+
 function MergeRow({
   pr,
   ownerItems,
@@ -105,7 +108,7 @@ function MergeRow({
     if (done) return MERGE_DONE_WORDS[done];
     if (block) return block;
     return isDriven
-      ? 'Ready. Its session merges it when you say so.'
+      ? 'Ready. Its session merges it.'
       : `Ready to squash into ${pr.base}.`;
   };
   const onMerge = async () => {
@@ -113,7 +116,7 @@ function MergeRow({
       title: `Merge #${pr.number}?`,
       message: isDriven
         ? `“${pr.title}” (#${pr.number}). Its session merges it through the merge line once nothing else is merging.`
-        : `“${pr.title}” (#${pr.number}) is squashed into ${pr.base} now${pr.isDraft ? ', after it is marked ready for review' : ''}.`,
+        : `“${pr.title}” (#${pr.number}) is squashed into ${pr.base} now${pr.isDraft ? ', after it is marked ready for review' : ''}${pr.base === 'main' ? ', and the site deploys' : ''}.`,
       confirmText: 'Merge',
     });
     if (isConfirmed) void merge.merge(pr.number);
@@ -124,9 +127,15 @@ function MergeRow({
         <p className='text-foreground truncate text-sm'>
           #{pr.number} {pr.title}
         </p>
-        <p role='status' className='text-muted-foreground text-xs'>
-          {getLine()}
-        </p>
+        {block !== null && NEEDS_A_FIX.has(block) && !done ? (
+          <p role='status'>
+            <WarningLine>{block}</WarningLine>
+          </p>
+        ) : (
+          <p role='status' className='text-muted-foreground text-xs'>
+            {getLine()}
+          </p>
+        )}
         {error ? (
           <p role='alert'>
             <WarningLine>{error}</WarningLine>
@@ -138,7 +147,7 @@ function MergeRow({
         variant='secondary'
         size='sm'
         className={join(
-          "relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']",
+          "relative shrink-0 border border-transparent after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']",
           DISABLED_CLASS,
         )}
         disabled={block !== null || done !== null || isBusy}
