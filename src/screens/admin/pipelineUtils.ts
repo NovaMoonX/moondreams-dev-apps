@@ -2,8 +2,12 @@ import type {
   PipelineGalleryImage,
   PipelineInbox,
   PipelineInboxPr,
+  PipelineMergedPr,
   PipelineOwnerItem,
+  PipelinePhase,
   PipelineSession,
+  PipelineSettledAsk,
+  PipelineSettleOutcome,
 } from '@lib/admin/pipelineTypes';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 
@@ -35,12 +39,39 @@ export interface PipelineOwnerEntryItem {
   text: string;
   options: PipelineOption[];
   isMulti: boolean;
+  isTask: boolean;
+  /** Ticked off or set aside from the dashboard since the status that listed it. */
+  settled: PipelineSettleOutcome | null;
 }
+
+/** A 🚩 line from a session's last reply. */
+export interface PipelineHand {
+  text: string;
+  /** No question mark: something to do, ticked off rather than answered. */
+  isTask: boolean;
+  settled: PipelineSettleOutcome | null;
+}
+
+/** Which ask to tick off or set aside: a status comment's line, or a 🚩 line a session raised. */
+export interface SettleTarget {
+  prNumber: number | null;
+  sessionId: string | null;
+  text: string;
+}
+
+/** A settled ask as the dashboard holds it: an Undo not yet reflected everywhere is `open`. */
+export type SettledAskView = Omit<PipelineSettledAsk, 'outcome'> & {
+  outcome: PipelineSettleOutcome | 'open';
+};
+
+export const toSettleId = (target: SettleTarget) =>
+  `${target.prNumber ?? target.sessionId}:${target.text}`;
 
 export interface GalleryItem {
   id: string;
   step: number | null;
   label: string;
+  note: string | null;
   shots: PipelineGalleryImage[];
 }
 
@@ -51,13 +82,17 @@ export interface PipelineEntry {
   group: PipelineGroup | null;
   /** True for a pull request with no session reporting. */
   isPrOnly: boolean;
+  /** Its session's last report is recent enough for the server to ask it to merge rather than merge itself. */
+  isDriven: boolean;
   /** When it last reported, in the viewer's time. */
   time: string;
   subtitle: string;
   lead: string;
-  /** What it asks of the owner, one plain line each. */
+  /** What it asks of the owner and isn't settled yet, one plain line each. */
   asks: string[];
-  raisedHands: string[];
+  /** The session's id when the entry is a session, for settling its 🚩 lines. */
+  sessionId: string | null;
+  hands: PipelineHand[];
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
   goodToKnow: string[];
@@ -118,7 +153,7 @@ const toSafePr = (pr: PipelineInboxPr): PipelinePr => ({
   url: toHttps(pr.url),
 });
 
-/** The asks the owner hasn't answered from the dashboard since the status that raised them. */
+/** The asks the owner hasn't answered from the dashboard since the status that raised them; settled ones stay, to show with their Undo. */
 const getOpenItems = (
   items: PipelineOwnerEntryItem[],
   answered: Record<string, number>,
@@ -127,21 +162,58 @@ const getOpenItems = (
 
 const RECOMMENDED = /\s*\(recommended\)/i;
 
-const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
-  prs.flatMap((pr) =>
-    (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => ({
-      id: `${pr.number}:${index}`,
-      prNumber: pr.number,
-      statusAt: pr.status?.updatedAt ?? 0,
-      text: item.text,
-      options: item.options.map((option) => ({
-        label: option.label.replace(RECOMMENDED, '').trim(),
-        images: onlyHttps(option.images),
-        isRecommended: RECOMMENDED.test(option.label),
-      })),
-      isMulti: item.isMulti === true,
-    })),
+// A status line settled before the session's next status rewrite stays settled; after it, the rewrite (which keeps the owner's ticks) is what counts.
+const getItemSettled = (
+  settled: SettledAskView[],
+  prNumber: number,
+  item: PipelineOwnerItem,
+  statusAt: number,
+) => {
+  const ask = settled.find(
+    (candidate) =>
+      candidate.prNumber === prNumber &&
+      candidate.text === item.text &&
+      candidate.at >= statusAt,
   );
+  if (ask) return ask.outcome === 'open' ? null : ask.outcome;
+  return item.settled ?? null;
+};
+
+const HELD_FOR_MS = 6 * HOUR_MS;
+
+// Its session writes "in progress" until the review sized to the PR is back; its questions wait for that,
+// but only for a few hours, so a session that stopped can't hide them for good.
+const isReady = (pr: PipelineInboxPr, now: number) =>
+  !/^in progress\b/i.test(pr.status?.state ?? '') ||
+  now - (pr.status?.updatedAt ?? 0) > HELD_FOR_MS;
+
+const toSafeItems = (
+  prs: PipelineInboxPr[],
+  settled: SettledAskView[],
+  now: number,
+): PipelineOwnerEntryItem[] =>
+  prs.filter((pr) => isReady(pr, now)).flatMap((pr) =>
+    (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => {
+      const statusAt = pr.status?.updatedAt ?? 0;
+      return {
+        id: `${pr.number}:${index}`,
+        prNumber: pr.number,
+        statusAt,
+        text: item.text,
+        options: item.options.map((option) => ({
+          label: option.label.replace(RECOMMENDED, '').trim(),
+          images: onlyHttps(option.images),
+          isRecommended: RECOMMENDED.test(option.label),
+        })),
+        isMulti: item.isMulti === true,
+        isTask: item.isTask === true,
+        settled: getItemSettled(settled, pr.number, item, statusAt),
+      };
+    }),
+  );
+
+const isOpenAsk = (ask: { settled: PipelineSettleOutcome | null }) =>
+  ask.settled === null;
 
 // "2 · Pick a day", "2. Pick a day", "2) …", "2: …" or "2 - …"; never "3-day trip" or "1.5x zoom".
 const STEP_LABEL = /^(\d+)(?:\s*·\s*|[.):]\s+|\s+[–—-]\s+)(.+)$/;
@@ -160,6 +232,7 @@ const toGalleryItems = (prs: PipelineInboxPr[]): GalleryItem[] =>
               id: `${pr.number}:${index}`,
               step: numbered ? Number(numbered[1]) : null,
               label: numbered ? numbered[2] : step.label,
+              note: step.note ?? null,
               shots,
             },
           ];
@@ -169,6 +242,7 @@ const toGalleryItems = (prs: PipelineInboxPr[]): GalleryItem[] =>
       id: `${pr.number}:status-${index}`,
       step: null,
       label: 'Screenshot',
+      note: null,
       shots: [{ src, role: null }],
     }));
   });
@@ -186,6 +260,27 @@ const toAsk = (line: string) => stripLinks(line).replace(/^🚩\s*/, '');
 
 const ANSWERED_LINE = 'Answered · waiting for the session';
 
+const PHASE_WORDS: Record<PipelinePhase, string> = {
+  planning: 'Planning',
+  building: 'Building',
+  investigating: 'Reading the code',
+  screenshots: 'Taking screenshots',
+  review: 'Reviewing',
+  checks: 'Running checks',
+  conversation: 'Writing to GitHub',
+};
+
+/** "Reviewing · technical reviewer, validator": what a working session is doing, or null when it hasn't said. */
+export function getActivity(session: PipelineSession) {
+  const phase = session.phase ? PHASE_WORDS[session.phase] : null;
+  const helpers = Array.from(new Set(session.helpers ?? [])).map((helper) =>
+    helper.replace(/[-_]+/g, ' '),
+  );
+  const helperWords = helpers.length > 0 ? helpers.join(', ') : null;
+  if (phase && helperWords) return `${phase} · ${helperWords}`;
+  return phase ?? (helperWords ? `Helpers out: ${helperWords}` : null);
+}
+
 function getSubtitle(
   group: PipelineGroup | null,
   asks: string[],
@@ -199,8 +294,11 @@ function getSubtitle(
     const count = asks.length >= 2 ? `${asks.length} asks · ` : '';
     return `${time} · ${count}${asks[0] || 'Waiting on you'}`;
   }
-  if (group === 'working')
-    return `Working since ${formatPipelineTime(session.turnStartedAt ?? session.updatedAt, now)}`;
+  if (group === 'working') {
+    const since = `since ${formatPipelineTime(session.turnStartedAt ?? session.updatedAt, now)}`;
+    const activity = getActivity(session);
+    return activity ? `${activity} · ${since}` : `Working ${since}`;
+  }
   if (group === 'quiet') return `No update since ${time}`;
   return `Finished at ${time}`;
 }
@@ -219,35 +317,68 @@ function getLead(
       session.turnStartedAt ?? session.updatedAt,
       now,
     );
-    return `Working since ${since}${session.branch ? ` on ${session.branch}` : ''}`;
+    const activity = getActivity(session);
+    return `${activity ? `${activity}. ` : ''}Working since ${since}${session.branch ? ` on ${session.branch}` : ''}`;
   }
   if (group === 'quiet')
     return `No update for ${formatSpan(now - session.updatedAt)}. It may have stopped, or be waiting on a permission prompt.`;
   return `Finished its turn at ${time}.`;
 }
 
+// A merge clears what the session raised before it; a later turn raises again whatever still stands.
+const isClearedByMerge = (
+  session: PipelineSession,
+  merged: PipelineMergedPr[],
+) =>
+  session.url !== null &&
+  merged.some(
+    (pr) => pr.sessionUrl === session.url && pr.mergedAt >= session.updatedAt,
+  );
+
+// Set aside by its words, so a session repeating the same line on a later turn doesn't bring it back.
+const toHands = (
+  session: PipelineSession,
+  settled: SettledAskView[],
+): PipelineHand[] =>
+  session.raisedHands.map((text) => {
+    const outcome = settled.find(
+      (ask) => ask.sessionId === session.sessionId && ask.text === text,
+    )?.outcome;
+    return {
+      text,
+      isTask: !stripLinks(text).includes('?'),
+      settled: outcome === undefined || outcome === 'open' ? null : outcome,
+    };
+  });
+
 function toSessionEntry(
   session: PipelineSession,
   prs: PipelineInboxPr[],
+  merged: PipelineMergedPr[],
   answered: Record<string, number>,
+  settled: SettledAskView[],
   now: number,
 ): PipelineEntry {
   const sessionPrs = getSessionPrs(session, prs);
   const safePrs = sessionPrs.map(toSafePr);
-  const allItems = toSafeItems(sessionPrs);
+  const allItems = toSafeItems(sessionPrs, settled, now);
   const ownerItems = getOpenItems(allItems, answered);
   // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
   const isReplied =
     sessionPrs[0] !== undefined &&
     (answered[`${sessionPrs[0].number}:reply`] ?? 0) >= session.updatedAt;
-  const raisedHands = isReplied ? [] : session.raisedHands;
+  const hands =
+    isReplied || isClearedByMerge(session, merged)
+      ? []
+      : toHands(session, settled);
   const asks =
     allItems.length > 0
-      ? ownerItems.map((item) => toAsk(item.text))
-      : raisedHands.map(toAsk);
+      ? ownerItems.filter(isOpenAsk).map((item) => toAsk(item.text))
+      : hands.filter(isOpenAsk).map((hand) => toAsk(hand.text));
   const isAnswered =
     asks.length === 0 &&
-    (allItems.length > 0 || session.raisedHands.length > 0);
+    (ownerItems.length < allItems.length ||
+      (isReplied && session.raisedHands.length > 0));
   const baseGroup = getSessionGroup(session, now);
   const getGroup = (): PipelineGroup | null => {
     // A finished or quiet session that still holds asks is waiting on the owner.
@@ -269,11 +400,13 @@ function toSessionEntry(
     url: toHttps(session.url),
     group,
     isPrOnly: false,
+    isDriven: now - session.updatedAt <= IDLE_KEEP_MS,
     time,
     subtitle: getSubtitle(group, asks, time, session, now, isAnswered),
     lead: getLead(session, group, now, isAnswered),
     asks,
-    raisedHands,
+    sessionId: session.sessionId,
+    hands: allItems.length > 0 ? [] : hands,
     prs: safePrs,
     ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
@@ -285,24 +418,30 @@ function toSessionEntry(
 function toPrEntry(
   pr: PipelineInboxPr,
   answered: Record<string, number>,
+  settled: SettledAskView[],
   now: number,
 ): PipelineEntry {
   const status = pr.status;
   const safePr = toSafePr(pr);
-  const ownerItems = getOpenItems(toSafeItems([pr]), answered);
-  const asks = ownerItems.map((item) => toAsk(item.text));
+  const ownerItems = getOpenItems(toSafeItems([pr], settled, now), answered);
+  const asks = ownerItems.filter(isOpenAsk).map((item) => toAsk(item.text));
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
+  const isWaiting = asks.length > 0;
   return {
     key: `pr-${pr.number}`,
     name: toSentence(status?.sessionTitle || pr.title),
     url: toHttps(status?.sessionUrl ?? pr.bodySessionUrl),
-    group: 'waiting',
+    group: isWaiting ? 'waiting' : 'finished',
     isPrOnly: true,
+    isDriven: false,
     time,
-    subtitle: `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0] || 'Waiting on you'}`,
-    lead: `Waiting since ${time}`,
+    subtitle: isWaiting
+      ? `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0]}`
+      : `${time} · You handled everything`,
+    lead: isWaiting ? `Waiting since ${time}` : 'You handled everything it asked.',
     asks,
-    raisedHands: [],
+    sessionId: null,
+    hands: [],
     prs: [safePr],
     ownerItems,
     goodToKnow: status?.goodToKnow ?? [],
@@ -346,8 +485,10 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
     isMulti: false,
     kind,
   });
-  if (entry.ownerItems.length > 0) {
-    const questions = entry.ownerItems.map(
+  if (entry.ownerItems.some(isOpenAsk)) {
+    const questions = entry.ownerItems
+      .filter((item) => isOpenAsk(item) && !item.isTask)
+      .map(
       (item): AnswerSlot => ({
         id: item.id,
         mark: item.id,
@@ -360,12 +501,13 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
         kind: 'question',
       }),
     );
+    const firstPr = questions[0]?.prNumber ?? entry.ownerItems[0].prNumber;
     const target =
-      entry.prs.find((candidate) => candidate.number === questions[0].prNumber) ??
-      pr;
+      entry.prs.find((candidate) => candidate.number === firstPr) ?? pr;
     return target ? [...questions, toFreeSlot(target, 'feedback')] : questions;
   }
-  if (!pr || entry.raisedHands.length === 0) return [];
+  const isAsking = entry.hands.some((hand) => isOpenAsk(hand) && !hand.isTask);
+  if (!pr || !isAsking) return [];
   return [toFreeSlot(pr, 'reply')];
 }
 
@@ -401,6 +543,51 @@ export function getEntryActions(entry: PipelineEntry): PipelineAction[] {
 export const getEntryPrUrl = (entry: PipelineEntry) =>
   entry.prs.find((pr) => pr.url !== null)?.url ?? null;
 
+/** Why a pull request can't be merged from the dashboard yet, in the server's words, or null when it can. */
+export function getMergeBlock(pr: PipelinePr, ownerItems: PipelineOwnerEntryItem[]) {
+  const status = pr.status;
+  if (status === null) return 'It has no status comment yet.';
+  if (/^in progress\b/i.test(status.state ?? '')) return 'Its session is still working on it.';
+  if (pr.labels.includes('merge-conflict')) return 'It conflicts with its base.';
+  if (pr.labels.includes('behind-base')) {
+    return "It's behind its base. Its session needs to bring it up to date.";
+  }
+  if (pr.ci === 'running') return 'Checks are still running.';
+  if (pr.ci === 'red') return 'A check failed.';
+  if (pr.ci !== 'green') return 'No checks have run on it yet.';
+  if (!Array.isArray(status.mustDo)) return 'Its status has no Must do list yet.';
+  // A step ticked here a moment ago counts before the inbox reads the ticked comment.
+  const open = status.mustDo.filter(
+    (text) =>
+      !ownerItems.some(
+        (item) => item.prNumber === pr.number && item.text === text && item.settled !== null,
+      ),
+  );
+  if (open.length > 0) return 'Must do items are still open.';
+  const isAsking = ownerItems.some(
+    (item) => item.prNumber === pr.number && !item.isTask && item.settled === null,
+  );
+  return isAsking ? 'It has an open question for you.' : null;
+}
+
+export interface MergeTarget {
+  prNumber: number;
+  isDriven: boolean;
+  base: string;
+}
+
+/** Every pull request on the dashboard that Merge would take now, once each. */
+export const getMergeTargets = (entries: PipelineEntry[]): MergeTarget[] =>
+  Array.from(
+    new Map(
+      entries.flatMap((entry) =>
+        entry.prs
+          .filter((pr) => getMergeBlock(pr, entry.ownerItems) === null)
+          .map((pr) => [pr.number, { prNumber: pr.number, isDriven: entry.isDriven, base: pr.base }] as const),
+      ),
+    ).values(),
+  );
+
 export type PipelineGroups = ReturnType<typeof buildPipeline>;
 
 /** The sessions grouped for the view, newest first; waiting also holds the pull requests that need the owner with no session reporting. */
@@ -408,30 +595,34 @@ export function buildPipeline(
   sessions: PipelineSession[],
   inbox: PipelineInbox | null,
   answered: Record<string, number>,
+  settled: SettledAskView[],
   now: number,
 ) {
   const prs = inbox?.prs ?? [];
+  const merged = inbox?.merged ?? [];
   const entries = [...sessions]
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((session) => toSessionEntry(session, prs, answered, now))
+    .map((session) =>
+      toSessionEntry(session, prs, merged, answered, settled, now),
+    )
     .filter((entry) => entry.group !== null);
   const sessionUrls = new Set(
     entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
   );
   const prEntries = prs
-    .filter((pr) => (pr.status?.ownerItems.length ?? 0) > 0)
+    .filter((pr) => isReady(pr, now) && (pr.status?.ownerItems.length ?? 0) > 0)
     .filter(
       (pr) =>
         ![pr.status?.sessionUrl, pr.bodySessionUrl].some(
           (url) => url && sessionUrls.has(url),
         ),
     )
-    .map((pr) => toPrEntry(pr, answered, now))
+    .map((pr) => toPrEntry(pr, answered, settled, now))
     .filter((entry) => entry.ownerItems.length > 0);
   const inGroup = (group: PipelineGroup) =>
-    entries.filter((entry) => entry.group === group);
+    [...entries, ...prEntries].filter((entry) => entry.group === group);
   return {
-    waiting: [...inGroup('waiting'), ...prEntries].sort((a, b) => b.at - a.at),
+    waiting: inGroup('waiting').sort((a, b) => b.at - a.at),
     working: inGroup('working'),
     quiet: inGroup('quiet'),
     finished: inGroup('finished'),

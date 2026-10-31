@@ -8,6 +8,9 @@ on:
       - 'firestore.rules'
       - 'scripts/checkRulesSize.ts'
       - 'scripts/checkFirestoreIndexes.ts'
+      - 'scripts/fbInvoker.ts'
+      - 'scripts/fbDeploySmart.ts'
+      - '.firebaserc'
       - 'scripts/checks/**'
       - 'scripts/seeds/**'
       - 'docs/conventions/pipeline.md'
@@ -25,6 +28,8 @@ jobs:
       - run: npm run check:indexes
       - run: npm run check:rules-size
       - run: npm run check:pipeline-map
+      # The deploy opens callables by reading this list; a line it can't read stops the deploy after the functions are out.
+      - run: npm run fb:invoker -- --all --dry
   check_pinch:
     runs-on: ubuntu-latest
     steps:

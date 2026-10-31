@@ -16,6 +16,7 @@ function ScreenshotGallery({ items }: { items: GalleryItem[] }) {
 
   const slides: ViewerSlide[] = items.map((item) => ({
     caption: item.step === null ? item.label : `${item.step} · ${item.label}`,
+    note: item.note,
     pictures: item.shots.map((shot) => ({
       src: shot.src,
       label: shot.role ? ROLE_WORDS[shot.role] : null,

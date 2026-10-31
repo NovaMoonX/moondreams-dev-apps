@@ -1,27 +1,41 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { ClaudeMark, GitHubMark } from '@/components/BrandMarks';
 import DetailSheet from '@/components/DetailSheet';
 
 import { DISABLED_CLASS } from './constants';
 import ScreenshotGallery from './ScreenshotGallery';
+import type { PipelineSettleOutcome } from '@lib/admin/pipelineTypes';
+
 import {
   AnswerRow,
   CiBadge,
+  DismissibleAsk,
   LinkedText,
   NotSetUpLine,
   SentLine,
   StatusDot,
+  TaskRow,
   UnsureLine,
   WarningLine,
 } from './PipelineParts';
 import {
   getAnswerSlots,
   getAskedSlots,
+  getMergeBlock,
   getPrError,
+  type AnswerSlot,
   type PipelineEntry,
+  type PipelineHand,
+  type PipelineOwnerEntryItem,
+  type PipelinePr,
+  type SettleTarget,
 } from './pipelineUtils';
 import type { PipelineAnswers } from './usePipelineAnswers';
+import type { PipelineMerge } from './usePipelineMerge';
+import type { PipelineSettle } from './usePipelineSettle';
 
 function SheetSection({
   title,
@@ -60,11 +74,133 @@ interface PipelineSheetProps {
   entry: PipelineEntry | null;
   onClose: () => void;
   answers: PipelineAnswers;
+  settle: PipelineSettle;
+  merge: PipelineMerge;
+}
+
+const MERGE_DONE_WORDS = {
+  asked: 'Asked its session to merge it. It goes through the merge line.',
+  merged: 'Merged.',
+  'sample-asked': 'Sample: its session would be asked. Nothing was posted.',
+  'sample-merged': 'Sample: it would be merged. Nothing was changed.',
+};
+
+// A failed check or a conflict needs someone to act, unlike checks that are still running.
+const NEEDS_A_FIX = new Set(['A check failed.', 'It conflicts with its base.']);
+
+function MergeRow({
+  pr,
+  ownerItems,
+  isDriven,
+  merge,
+}: {
+  pr: PipelinePr;
+  ownerItems: PipelineOwnerEntryItem[];
+  isDriven: boolean;
+  merge: PipelineMerge;
+}) {
+  const { confirm } = useActionModal();
+  const block = getMergeBlock(pr, ownerItems);
+  const done = merge.getDone(pr.number);
+  const error = merge.getError(pr.number);
+  const isBusy = merge.isBusy(pr.number);
+  const getLine = () => {
+    if (done) return MERGE_DONE_WORDS[done];
+    if (block) return block;
+    return isDriven
+      ? 'Ready. Its session merges it.'
+      : `Ready to squash into ${pr.base}.`;
+  };
+  const onMerge = async () => {
+    const isConfirmed = await confirm({
+      title: `Merge #${pr.number}?`,
+      message: isDriven
+        ? `“${pr.title}” (#${pr.number}). Its session merges it through the merge line once nothing else is merging.`
+        : `“${pr.title}” (#${pr.number}) is squashed into ${pr.base} now${pr.isDraft ? ', after it is marked ready for review' : ''}${pr.base === 'main' ? ', and the site deploys' : ''}.`,
+      confirmText: 'Merge',
+    });
+    if (isConfirmed) void merge.merge(pr.number);
+  };
+  return (
+    <div className='flex items-center gap-3'>
+      <div className='min-w-0 flex-1'>
+        <p className='text-foreground truncate text-sm'>
+          #{pr.number} {pr.title}
+        </p>
+        {block !== null && NEEDS_A_FIX.has(block) && !done ? (
+          <p role='status'>
+            <WarningLine>{block}</WarningLine>
+          </p>
+        ) : (
+          <p role='status' className='text-muted-foreground text-xs'>
+            {getLine()}
+          </p>
+        )}
+        {error ? (
+          <p role='alert'>
+            <WarningLine>{error}</WarningLine>
+          </p>
+        ) : null}
+      </div>
+      <Button
+        type='button'
+        variant='secondary'
+        size='sm'
+        className={join(
+          "relative shrink-0 border border-transparent after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']",
+          DISABLED_CLASS,
+        )}
+        disabled={block !== null || done !== null || isBusy}
+        onClick={() => void onMerge()}
+      >
+        {isBusy ? 'Merging…' : 'Merge'}
+      </Button>
+    </div>
+  );
 }
 
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
-function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
+function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheetProps) {
   const slots = entry ? getAnswerSlots(entry) : [];
+  const ownerItems = entry?.ownerItems ?? [];
+  const hands = entry?.hands ?? [];
+  const taskItems = ownerItems.filter((item) => item.isTask);
+  const questionItems = ownerItems.filter((item) => !item.isTask);
+  const taskHands = hands.filter((hand) => hand.isTask);
+  const questionHands = hands.filter((hand) => !hand.isTask);
+  const itemTarget = (item: PipelineOwnerEntryItem): SettleTarget => ({
+    prNumber: item.prNumber,
+    sessionId: null,
+    text: item.text,
+  });
+  const handTarget = (hand: PipelineHand): SettleTarget => ({
+    prNumber: null,
+    sessionId: entry?.sessionId ?? null,
+    text: hand.text,
+  });
+  const getSettleProps = (
+    target: SettleTarget,
+    settled: PipelineOwnerEntryItem['settled'],
+  ) => ({
+    text: target.text,
+    hasPr: target.prNumber !== null,
+    settled,
+    isBusy: settle.isBusy(target),
+    error: settle.getError(target),
+    onSettle: (choice: PipelineSettleOutcome | 'open') =>
+      void settle.settle(target, choice),
+  });
+  const renderAnswerRow = (slot: AnswerSlot) => (
+    <AnswerRow
+      slot={slot}
+      draft={answers.getDraft(slot.id)}
+      isSent={answers.isSent(slot)}
+      error={getPrError(slots, slot, answers.errors)}
+      onChoices={(choices, other) => answers.setChoices(slot.id, choices, other)}
+      onOther={(other) => answers.setOther(slot.id, other)}
+      onNote={(note) => answers.setNote(slot.id, note)}
+    />
+  );
   const asked = getAskedSlots(slots);
   const isAllSent = asked.length > 0 && asked.every(answers.isSent);
   const slotPrs = new Set(slots.map((slot) => slot.prNumber));
@@ -179,52 +315,72 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
             ))}
           </div>
 
-          {slots.length > 0 ? (
+          {questionItems.length > 0 || questionHands.length > 0 || slots.length > 0 ? (
             <SheetSection title='Needs you'>
-              {entry.ownerItems.length === 0 ? (
-                <ul className='space-y-2'>
-                  {entry.raisedHands.map((line, index) => (
+              <ul className='space-y-3'>
+                {questionHands.map((hand, index) => (
+                  <li key={`${hand.text}-${index}`}>
+                    <DismissibleAsk {...getSettleProps(handTarget(hand), hand.settled)}>
+                      <p className='text-foreground pt-1.5 text-sm'>
+                        <LinkedText text={hand.text} />
+                      </p>
+                    </DismissibleAsk>
+                  </li>
+                ))}
+                {questionItems.map((item) => {
+                  const slot = slots.find((candidate) => candidate.id === item.id);
+                  return (
+                    <li key={item.id}>
+                      <DismissibleAsk {...getSettleProps(itemTarget(item), item.settled)}>
+                        {slot ? renderAnswerRow(slot) : null}
+                      </DismissibleAsk>
+                    </li>
+                  );
+                })}
+                {slots
+                  .filter((slot) => slot.kind !== 'question')
+                  .map((slot) => (
                     <li
-                      key={`${line}-${index}`}
-                      className='text-foreground text-sm'
+                      key={slot.id}
+                      className={
+                        slot.kind === 'feedback' ? 'border-border !mt-4 border-t pt-4' : undefined
+                      }
                     >
-                      <LinkedText text={line} />
+                      {renderAnswerRow(slot)}
                     </li>
                   ))}
-                </ul>
-              ) : null}
-              <ul className='space-y-2'>
-                {slots.map((slot) => (
-                  <li
-                    key={slot.id}
-                    className={
-                      slot.kind === 'feedback' ? 'border-border !mt-4 border-t pt-4' : undefined
-                    }
-                  >
-                    <AnswerRow
-                      slot={slot}
-                      draft={answers.getDraft(slot.id)}
-                      isSent={answers.isSent(slot)}
-                      error={getPrError(slots, slot, answers.errors)}
-                      onChoices={(choices, other) =>
-                        answers.setChoices(slot.id, choices, other)
-                      }
-                      onOther={(other) => answers.setOther(slot.id, other)}
-                      onNote={(note) => answers.setNote(slot.id, note)}
-                    />
+              </ul>
+            </SheetSection>
+          ) : null}
+
+          {taskItems.length > 0 || taskHands.length > 0 ? (
+            <SheetSection title='To do'>
+              <ul className='space-y-3'>
+                {taskItems.map((item) => (
+                  <li key={item.id}>
+                    <TaskRow {...getSettleProps(itemTarget(item), item.settled)} />
+                  </li>
+                ))}
+                {taskHands.map((hand, index) => (
+                  <li key={`${hand.text}-${index}`}>
+                    <TaskRow {...getSettleProps(handTarget(hand), hand.settled)} />
                   </li>
                 ))}
               </ul>
             </SheetSection>
-          ) : entry.raisedHands.length > 0 ? (
-            <SheetSection title='Needs you'>
-              <ul className='space-y-2'>
-                {entry.raisedHands.map((line, index) => (
-                  <li
-                    key={`${line}-${index}`}
-                    className='text-foreground text-sm'
-                  >
-                    <LinkedText text={line} />
+          ) : null}
+
+          {entry.prs.length > 0 ? (
+            <SheetSection title='Merge'>
+              <ul className='space-y-3'>
+                {entry.prs.map((pr) => (
+                  <li key={pr.number}>
+                    <MergeRow
+                      pr={pr}
+                      ownerItems={ownerItems}
+                      isDriven={entry.isDriven}
+                      merge={merge}
+                    />
                   </li>
                 ))}
               </ul>
@@ -239,7 +395,7 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
 
           {entry.goodToKnow.length > 0 ? (
             <SheetSection title='Good to know'>
-              <ul className='space-y-1.5'>
+              <ul className='marker:text-muted-foreground list-disc space-y-1.5 pl-5'>
                 {entry.goodToKnow.map((line, index) => (
                   <li
                     key={`${line}-${index}`}

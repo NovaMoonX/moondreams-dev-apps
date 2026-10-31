@@ -13,12 +13,14 @@ import {
   buildInbox,
   findFeedbackIds,
   findSessionLink,
+  keepOwnerTicks,
   parseGallery,
   parseStatus,
   summarizeCi,
   type CheckRun,
   type CiState,
   type InboxPr,
+  type MergedPr,
 } from './inbox.ts';
 
 const INBOX_LABEL = 'owner-inbox';
@@ -69,8 +71,10 @@ interface ApiPull {
   head: { ref: string; sha: string; repo: { full_name: string } | null };
   base: { ref: string };
   labels: { name: string }[];
+  merged_at?: string | null;
 }
 interface ApiComment {
+  id: number;
   body: string;
   updated_at: string;
   author_association: string;
@@ -192,6 +196,58 @@ const readSaved = (path: string): InboxPr[] =>
     }),
   );
 
+const MERGED_KEEP_MS = 14 * 24 * 60 * 60 * 1000;
+
+const readMergedPrs = async (): Promise<MergedPr[]> => {
+  const pulls = await api<ApiPull[]>(
+    `/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=50`,
+  );
+  const since = Date.now() - MERGED_KEEP_MS;
+  return pulls.flatMap((pull) =>
+    pull.merged_at && Date.parse(pull.merged_at) >= since
+      ? [
+          {
+            number: pull.number,
+            sessionUrl: findSessionLink(pull.body),
+            mergedAt: pull.merged_at,
+          },
+        ]
+      : [],
+  );
+};
+
+interface CommentEvent {
+  action?: string;
+  comment?: ApiComment & { author_association: string };
+  changes?: { body?: { from?: string } };
+}
+
+// A session rewriting its status comment can drop the owner's ticks; the edit's previous body says which they were.
+const restoreOwnerTicks = async () => {
+  const path = process.env.GITHUB_EVENT_PATH;
+  if (process.env.GITHUB_EVENT_NAME !== 'issue_comment' || !path) return;
+  const event = JSON.parse(readFileSync(path, 'utf8')) as CommentEvent;
+  const before = event.changes?.body?.from;
+  const comment = event.comment;
+  if (event.action !== 'edited' || !before || !comment) return;
+  if (!TRUSTED.has(comment.author_association)) return;
+  if (!comment.body.trimStart().startsWith(STATUS_MARKER)) return;
+  // The run can start minutes after its event, so it works on the comment as it is now, never the event's copy.
+  const live = await api<ApiComment>(`/repos/${repo}/issues/comments/${comment.id}`);
+  const kept = keepOwnerTicks(before, live.body);
+  if (kept === live.body) return;
+  await api(`/repos/${repo}/issues/comments/${comment.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ body: kept }),
+  });
+  console.log(`Ticked the owner's boxes again on comment ${comment.id}`);
+};
+
+if (!isDryRun) {
+  await restoreOwnerTicks().catch((error: Error) =>
+    console.log(`::warning::Couldn't keep the owner's ticks: ${error.message}`),
+  );
+}
 const prs = fromFile ? readSaved(fromFile) : await readOpenPrs();
 const body = buildInbox(prs, new Date().toISOString());
 const pipelineKey = process.env.PIPELINE_KEY ?? '';
@@ -221,21 +277,30 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
         label: fromPlain(option.label),
       })),
       isMulti: item.isMulti,
+      isTask: item.isTask,
+      settled: item.settled,
     })),
+    mustDo: pr.status.mustDo && pr.status.mustDo.map(fromPlain),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
   },
   gallery: pr.gallery.map((step) => ({
     ...step,
     label: fromPlain(step.label),
+    note: step.note && fromPlain(step.note),
   })),
 });
 
-const reportToPipeline = async (list: InboxPr[]) => {
+const reportToPipeline = async (list: InboxPr[], merged: MergedPr[]) => {
   const response = await fetch(pipelineUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      data: { key: pipelineKey, kind: 'inbox', prs: list.map(toPipelinePr) },
+      data: {
+        key: pipelineKey,
+        kind: 'inbox',
+        prs: list.map(toPipelinePr),
+        merged,
+      },
     }),
     signal: AbortSignal.timeout(20_000),
   });
@@ -286,7 +351,11 @@ if (isDryRun) {
 } else {
   await writeInbox(body);
   if (pipelineKey) {
-    await reportToPipeline(prs).catch((error: Error) =>
+    const merged = await readMergedPrs().catch((error: Error) => {
+      console.log(`::warning::Merged PRs not read: ${error.message}`);
+      return [];
+    });
+    await reportToPipeline(prs, merged).catch((error: Error) =>
       console.log(`::warning::Pipeline view not updated: ${error.message}`),
     );
     await reportFeedbackToPipeline(prs).catch((error: Error) =>

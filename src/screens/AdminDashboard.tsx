@@ -29,6 +29,8 @@ import PipelineSheet from './admin/PipelineSheet';
 import PipelineView from './admin/PipelineView';
 import { buildPipeline, getPipelineSummary } from './admin/pipelineUtils';
 import { usePipelineAnswers } from './admin/usePipelineAnswers';
+import { usePipelineMerge } from './admin/usePipelineMerge';
+import { usePipelineSettle } from './admin/usePipelineSettle';
 import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
 
@@ -55,10 +57,13 @@ function AdminDashboard() {
   // Live, unlike the rest of the dashboard: the sessions change while the owner watches.
   const pipeline = usePipelineSync(isAdmin);
   const now = useNow(60_000);
+  const pipelineSettle = usePipelineSettle(pipeline.settled);
+  const pipelineMerge = usePipelineMerge();
   const pipelineGroups = buildPipeline(
     pipeline.sessions,
     pipeline.inbox,
     pipeline.answered,
+    pipelineSettle.asks,
     now,
   );
   const pipelineSummary = getPipelineSummary(pipelineGroups);
@@ -175,6 +180,7 @@ function AdminDashboard() {
       groups={pipelineGroups}
       now={now}
       answers={pipelineAnswers}
+      merge={pipelineMerge}
       onOpenEntry={setOpenEntryKey}
     />
   );
@@ -204,6 +210,8 @@ function AdminDashboard() {
       entry={openEntry}
       onClose={() => setOpenEntryKey(null)}
       answers={pipelineAnswers}
+      settle={pipelineSettle}
+      merge={pipelineMerge}
     />
   );
 

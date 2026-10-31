@@ -377,7 +377,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       ],
       minutesAgo: 70,
     },
-    { sessionId: 'session_seedWorking', branch: 'claude/pinch-voice', state: 'working', raisedHands: [], minutesAgo: 2 },
+    { sessionId: 'session_seedWorking', branch: 'claude/pinch-voice', state: 'working', raisedHands: [], phase: 'review', helpers: ['technical-reviewer', 'design-reviewer'], minutesAgo: 2 },
     { sessionId: 'session_seedQuiet', branch: 'claude/a-list-calendar', state: 'working', raisedHands: [], minutesAgo: 95 },
     { sessionId: 'session_seedIdle', branch: 'claude/waypoint-expenses', state: 'idle', raisedHands: [], minutesAgo: 300 },
   ].map(({ minutesAgo, ...session }) => ({
@@ -443,12 +443,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     labels: ['minor'],
     ci: 'green',
     bodySessionUrl: sessionUrl,
-    gallery: [] as { label: string; images: { src: string; role: 'before' | 'after' | null }[] }[],
+    gallery: [] as { label: string; note: string | null; images: { src: string; role: 'before' | 'after' | null }[] }[],
     status: {
       sessionUrl,
       sessionTitle,
-      state: 'in progress',
-      ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean }[],
+      state: 'ready when you are',
+      ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean; isTask: boolean }[],
+      mustDo: [] as string[],
       goodToKnow: [] as string[],
       screenshots: [] as string[],
       updatedAt: context.now - 10 * MINUTE_MS,
@@ -457,7 +458,12 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
   const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
   const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
+  const remindersPr = toInboxPr(907, 'Nine Lives: reminder sounds', 'claude/nine-lives-sounds', null, 'Reminder sounds');
+  const runwayRedPr = toInboxPr(905, 'Runway: card colours', 'claude/runway-card-colours', pipelineSessions[0].url, 'Runway cards');
+  const runwayConflictPr = toInboxPr(906, 'Runway: card order', 'claude/runway-card-order', pipelineSessions[0].url, 'Runway cards');
+  const pinchRunningPr = toInboxPr(904, 'Pinch: repeat the plan from a week', 'claude/pinch-meal-plan-weeks', pipelineSessions[1].url, 'Pinch meal plan');
   batch.delete(context.firestore.doc('pipeline/answered'));
+  batch.delete(context.firestore.doc('pipeline/settled'));
   batch.set(context.firestore.doc('pipeline/inbox'), {
     prs: [
       {
@@ -472,6 +478,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
                 { label: 'B, Back above the title', images: ['https://placehold.co/390x844.png?text=B'] },
               ],
               isMulti: false,
+              isTask: false,
+            },
+            {
+              text: 'Create the `RUNWAY_KEY` secret in production before the merge',
+              options: [],
+              isMulti: false,
+              isTask: true,
             },
             {
               text: 'Which cards should show the history count?',
@@ -481,43 +494,64 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
                 { label: 'Goals', images: [] },
               ],
               isMulti: true,
+              isTask: false,
             },
           ],
-          goodToKnow: ['The undo sheet was only checked at 390px.'],
+          mustDo: ['Create the `RUNWAY_KEY` secret in production before the merge'],
+          goodToKnow: [
+            'The undo sheet was only checked at 390px.',
+            "History keeps 90 days; older moves aren't shown.",
+          ],
           screenshots: ['https://placehold.co/390x844.png?text=History'],
         },
         gallery: [
           {
             label: '1 · Open a card',
+            note: null,
             images: [
               { src: 'https://placehold.co/390x844.png?text=Card+before', role: 'before' as const },
               { src: 'https://placehold.co/390x844.png?text=Card+after', role: 'after' as const },
             ],
           },
           {
-            label: '2 · History opens',
+            label: '2 · History opens, every move this card saw in the last 90 days with what it changed',
+            note: 'Moves older than 90 days drop off; the count on the card covers the same window.',
             images: [{ src: 'https://placehold.co/390x844.png?text=History', role: null }],
           },
           {
             label: '3 · Undo a move',
+            note: null,
             images: [{ src: 'https://placehold.co/390x844.png?text=Undo', role: null }],
           },
           {
             label: '4 · Undone',
+            note: null,
             images: [{ src: 'https://placehold.co/390x844.png?text=Undone', role: null }],
           },
         ],
       },
       {
         ...orphanPr,
-        ci: 'red',
         status: {
           ...orphanPr.status,
-          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false }],
+          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false, isTask: false }],
         },
       },
       pinchPr,
+      { ...pinchRunningPr, ci: 'running' },
+      { ...runwayRedPr, ci: 'red' },
+      { ...runwayConflictPr, labels: ['minor', 'merge-conflict'] },
+      {
+        ...remindersPr,
+        status: {
+          ...remindersPr.status,
+          ownerItems: [
+            { text: 'Try the reminder sound on a phone', options: [], isMulti: false, isTask: true, settled: 'done' },
+          ],
+        },
+      },
     ],
+    merged: [],
     updatedAt: context.now - 4 * MINUTE_MS,
   });
 

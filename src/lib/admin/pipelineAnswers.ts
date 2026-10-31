@@ -40,3 +40,42 @@ export async function sendPipelineAnswers(
   const result = await answerPipelineQuestionsCallable({ answers, attempt });
   return { results: result.data.results, isSample: result.data.isSample === true };
 }
+
+export interface PipelineSettleRequest {
+  prNumber: number | null;
+  sessionId: string | null;
+  text: string;
+  outcome: 'done' | 'skipped' | 'open';
+}
+
+const settlePipelineAskCallable = httpsCallable<
+  PipelineSettleRequest,
+  { ok: boolean; error: string | null; at: number | null }
+>(functions, 'settlePipelineAsk', { timeout: 60_000 });
+
+/** Ticks off, sets aside or reopens one ask: in its status comment on GitHub when it has one, and for the dashboard. */
+export async function settlePipelineAsk(request: PipelineSettleRequest) {
+  const result = await settlePipelineAskCallable(request);
+  return result.data;
+}
+
+export interface PipelineMergeResult {
+  ok: boolean;
+  /** `asked`: a comment asked the session driving it to merge; `merged`: merged on GitHub. */
+  outcome: 'asked' | 'merged' | null;
+  url: string | null;
+  error: string | null;
+  isSample: boolean;
+}
+
+const mergePipelinePrCallable = httpsCallable<{ prNumber: number }, PipelineMergeResult>(
+  functions,
+  'mergePipelinePr',
+  { timeout: 120_000 },
+);
+
+/** Merges a pull request, or asks the session driving it to, once the server has checked its gates again. */
+export async function mergePipelinePr(prNumber: number) {
+  const result = await mergePipelinePrCallable({ prNumber });
+  return result.data;
+}
