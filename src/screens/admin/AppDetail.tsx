@@ -2,6 +2,9 @@ import AppLogo from '@/components/AppLogo';
 import { TabPanel, UnderlineTabs } from '@/components/UnderlineTabs';
 import type { AppMetadata, UserProfile } from '@lib/types/appCatalog';
 
+import { getAppFeatureGates } from '@lib/gates/gates.registry';
+
+import AppFeaturesTab from './AppFeaturesTab';
 import type { AppDraft } from './appDraft';
 import AppSettingsTab from './AppSettingsTab';
 import AppUsageTab from './AppUsageTab';
@@ -58,6 +61,9 @@ function AppDetail({
     />
   );
 
+  const hasFeatures = getAppFeatureGates(app.id).length > 0;
+  const features = <AppFeaturesTab key={app.id} app={app} users={users} />;
+
   if (isWide) {
     return (
       <div className='max-w-3xl space-y-8'>
@@ -85,6 +91,12 @@ function AppDetail({
           </div>
           {settings}
         </section>
+        {hasFeatures ? (
+          <section className='space-y-4'>
+            <h3 className='text-foreground text-lg font-semibold'>Features</h3>
+            {features}
+          </section>
+        ) : null}
       </div>
     );
   }
@@ -97,6 +109,7 @@ function AppDetail({
         tabs={[
           { value: 'usage', label: 'Usage' },
           { value: 'settings', label: isDirty ? 'Settings •' : 'Settings' },
+          ...(hasFeatures ? [{ value: 'features' as const, label: 'Features' }] : []),
         ]}
       />
       <TabPanel value='usage' activeValue={section}>
@@ -104,6 +117,9 @@ function AppDetail({
       </TabPanel>
       <TabPanel value='settings' activeValue={section}>
         {settings}
+      </TabPanel>
+      <TabPanel value='features' activeValue={section}>
+        {features}
       </TabPanel>
     </div>
   );

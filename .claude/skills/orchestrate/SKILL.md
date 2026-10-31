@@ -40,7 +40,7 @@ The plan is for the owner, and its job is to lighten their mental load (owner: "
 - **What counts** (the criteria) when the request has them, with any change you made to them in a clause.
 - **Decisions for the owner**, only the ones that are uncertain or risky, each a 🚩 question with your recommendation. When none are left, say "No open decisions."
 
-Leave out the files, selectors, data paths, verification steps, docs to update and review sizing. They are yours to get right, and they belong in the PR's How it works and evidence blocks. Keep paragraphs and nested bullets out of the plan.
+Leave out the files, selectors, data paths, verification steps, docs to update and review sizing. They are yours to get right, and they belong in the PR's How it works and evidence blocks. Keep paragraphs and nested bullets out of the plan. These rules replace plan mode's default template, whose Context, Files and Verification sections never appear; in plan mode the prompt hook states them, and `.claude/hooks/plan-check.sh` (before ExitPlanMode) sends back a plan with paths, code spans, nested bullets, those sections or more than 350 words (owner: "it should not have been missed").
 
 **Back in plan mode with nothing new to plan.** A restarted session can come back in plan mode after the owner approved the plan and switched to Auto, though nobody switched it. When nothing new needs a decision, the plan is one line ("Nothing new: PR #N is built and waiting on you."), never a repeat of what was already agreed (owner: "there's nothing new for me to look at").
 
