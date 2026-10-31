@@ -28,6 +28,7 @@ import { clearUserInfoStore } from '@/hooks/useUserInfo';
 import { ADMIN_EMAIL, APP_REGISTRY, clearAppResume } from '@/lib/app';
 import { recordSiteVisit } from '@/lib/appUsage/appUsage';
 import { grantEmulatorDevAccess } from '@/lib/dev/devAccess';
+import { takeInPlaceSignOut } from '@/lib/dev/devSignOut';
 import { ensureDocExists } from '@/lib/firebase';
 import {
   claimFirestoreLocalData,
@@ -74,16 +75,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       // Firestore is already stopped and the page is about to reload; rendering now would start listeners on it.
       if (isReloadingRef.current) return;
-      // Every account on this device shares Firestore's saved copy, and a read one account is refused
-      // can be saved as "deleted" and hide that document from the next, so each account starts clean.
-      if (firebaseUser && claimFirestoreLocalData(firebaseUser.uid)) {
-        isReloadingRef.current = true;
-        await clearFirestoreLocalData();
-        window.location.reload();
-        return;
-      }
       const nextUserId = firebaseUser?.uid ?? null;
       const previousUserId = previousUserIdRef.current;
+      const { pathname } = window.location;
+      // A shared page reads the same for any account or none, so it stays; anywhere else starts again from Home.
+      const isLeavingPage = pathname !== '/' && !pathname.includes('/shared/');
+      const isSwitchingHome =
+        isSwitchingRef.current && isLeavingPage && Boolean(previousUserId && nextUserId !== previousUserId);
+      // Every account on this device shares Firestore's saved copy, and a read one account is refused
+      // can be saved as "deleted" and hide that document from the next, so each account starts clean.
+      const mustClearSavedData = Boolean(firebaseUser && claimFirestoreLocalData(firebaseUser.uid));
+      if (mustClearSavedData || isSwitchingHome) {
+        isReloadingRef.current = true;
+        if (mustClearSavedData) await clearFirestoreLocalData();
+        if (isSwitchingHome) {
+          window.location.assign('/');
+        } else {
+          window.location.reload();
+        }
+        return;
+      }
 
       if (previousUserId !== undefined && previousUserId !== nextUserId) {
         dispatch(resetAllState());
@@ -97,10 +108,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
       }
 
       previousUserIdRef.current = nextUserId;
-      // Signed out from anywhere (another tab, an expired session): start again from Home, not the app's page.
-      // A shared page reads the same signed out, so it stays.
-      const { pathname } = window.location;
-      if (previousUserId && !nextUserId && pathname !== '/' && !pathname.includes('/shared/')) {
+      // Signed out from anywhere (another tab, an expired session) starts again from Home, not the app's page.
+      const isSigningOutInPlace = takeInPlaceSignOut();
+      if (previousUserId && !nextUserId && isLeavingPage && !isSigningOutInPlace) {
         isReloadingRef.current = true;
         dispatch(setCurrentUser(null));
         setUser(null);
@@ -294,7 +304,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     };
     try {
       const result = await signingIn;
-      // A different account reloads from the auth listener once the saved data is cleared.
+      // A different account lands on Home from the auth listener, once any saved data is cleared.
       if (result.user.uid === previousUid) stayAsBefore();
     } catch (error) {
       stayAsBefore();
