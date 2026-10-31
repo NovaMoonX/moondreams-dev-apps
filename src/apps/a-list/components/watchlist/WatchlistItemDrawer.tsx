@@ -14,6 +14,7 @@ import {
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { generateUuid } from '@/utils';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -33,6 +34,7 @@ import WatchlistDetailsFields, {
   type WatchlistDetailsValues,
 } from '@apps/a-list/components/watchlist/WatchlistDetailsFields';
 import {
+  ARCHIVE_GATE_ID,
   ARCHIVE_REASONS,
   MAX_ARCHIVE_REASON_LENGTH,
 } from '@apps/a-list/constants';
@@ -61,6 +63,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
   const { confirm } = useActionModal();
   const { addToast, removeToast } = useToast();
   const now = useNow();
+  const canArchive = useIsGateOpen('a-list', ARCHIVE_GATE_ID);
   const row = useAppSelector(
     (state) =>
       selectWatchlistRows(state, now).find(
@@ -494,7 +497,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
             >
               <ArchiveRestore className='h-4 w-4' /> Back on my watchlist
             </Button>
-          ) : (
+          ) : canArchive ? (
             <Button
               type='button'
               variant='tertiary'
@@ -503,7 +506,7 @@ function WatchlistItemDrawer({ movieKey, onClose }: WatchlistItemDrawerProps) {
             >
               <Archive className='h-4 w-4' /> Archive
             </Button>
-          )}
+          ) : null}
         </div>
         {error && <p className='text-destructive text-sm'>{error}</p>}
         <Button

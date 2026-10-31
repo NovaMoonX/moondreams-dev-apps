@@ -741,5 +741,6 @@ flowchart LR
 - **Membership cost over time** — not modelled yet: one monthly cost applies to the whole history. Supporting price changes is a planned future goal.
 
 - **Ticket price:** showtimes show Adult prices unless the member picks Senior or Child under Membership settings → Ticket prices.
-- **Archive:** a watchlist movie can be archived with a reason (suggestions such as "No longer in theaters", or their own words) from its drawer; archived movies live under the Archived pill and can be put back.
+- **Archive:** a watchlist movie can be archived with a reason (suggestions such as "No longer in theaters", or their own words) from its drawer; archived movies live under the Archived pill and can be put back. Someone the admin keeps out of archiving sees no Archive action and no Archived pill, their archived movies back on the list, and one quiet line at the bottom of Membership settings: "Some features are turned off for you. Ask Nova if you'd like them on."
+- **Release days on the calendar:** someone the admin keeps out of them sees only what they planned on the calendar and no "Show release days" question in Membership settings, with the same quiet line at the bottom.
 - **Tax from AMC:** when AMC lists the tax on a showing, the ticket form starts with that exact figure; otherwise the tax is filled from the member's usual rate as before.
