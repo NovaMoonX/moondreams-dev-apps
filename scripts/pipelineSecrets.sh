@@ -68,13 +68,13 @@ can_comment() {
   return 1
 }
 
-# Merging a pull request that is already merged is refused as not mergeable (405) once the token may merge, so nothing changes.
+# Merging a pull request that is already merged can't change anything; GitHub answers 200 or 405 once the token may merge, and 403 when it may not.
 can_merge() {
   local token="$1" pr status
   pr=$(GH_TOKEN="$token" gh api "repos/$REPO/pulls?state=closed&per_page=30" --jq '[.[] | select(.merged_at != null)][0].number // empty' 2>/dev/null) || return 2
   [[ -n "$pr" ]] || return 3
   status=$(GH_TOKEN="$token" gh api -X PUT "repos/$REPO/pulls/$pr/merge" --input - -i <<<'{"sha":"0000000000000000000000000000000000000000"}' 2>/dev/null | head -1 | awk '{print $2}') || true
-  [[ "$status" == "405" || "$status" == "409" || "$status" == "422" ]] && return 0
+  [[ "$status" == "200" || "$status" == "405" || "$status" == "409" || "$status" == "422" ]] && return 0
   echo "  GitHub answered $status for a test merge of the already-merged #$pr." >&2
   return 1
 }
