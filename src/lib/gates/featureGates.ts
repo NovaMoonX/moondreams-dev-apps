@@ -1,4 +1,4 @@
-import { arrayRemove, arrayUnion, doc, setDoc } from 'firebase/firestore';
+import { doc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -76,57 +76,73 @@ export function isGateOpen(
 
 export type GateExceptionList = 'alwaysOnUids' | 'alwaysOffUids';
 
-/** Admin only: sets who gets a switch before exceptions, leaving its lists and the app's other switches alone. */
-export async function saveGateRollout(
-  appId: string,
-  gateId: string,
-  rollout: GateRollout,
+/** What the admin chose for one switch, before it is saved. */
+export type GateDraft = Pick<
+  FeatureGateSetting,
+  'rollout' | 'alwaysOnUids' | 'alwaysOffUids'
+>;
+
+function applyListChange(
+  current: string[],
+  before: string[],
+  after: string[],
+  otherAfter: string[],
 ) {
-  await setDoc(
-    doc(db, 'featureGates', appId),
-    { appId, gates: { [gateId]: { rollout, updatedAt: Date.now() } } },
-    { merge: true },
+  const removed = before.filter((uid) => !after.includes(uid));
+  const added = after.filter((uid) => !before.includes(uid));
+  const kept = current.filter(
+    (uid) => !removed.includes(uid) && !otherAfter.includes(uid),
   );
+  return Array.from(new Set([...kept, ...added]));
 }
 
-/** Admin only: adds someone to one exception list and takes them off the other, in one write. */
-export async function addGateException(
+/**
+ * Admin only: saves the difference between what the sheet opened with and what the admin chose,
+ * on top of the stored setting, so a change made elsewhere in the meantime is kept.
+ */
+export async function saveGateDraft(
   appId: string,
   gateId: string,
-  list: GateExceptionList,
-  uid: string,
+  before: GateDraft,
+  after: GateDraft,
 ) {
-  const other: GateExceptionList =
-    list === 'alwaysOnUids' ? 'alwaysOffUids' : 'alwaysOnUids';
-  await setDoc(
-    doc(db, 'featureGates', appId),
-    {
+  const gateRef = doc(db, 'featureGates', appId);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(gateRef);
+    const current = readGateSetting(
+      snapshot.exists() ? (snapshot.data() as FeatureGatesDoc) : null,
       appId,
-      gates: {
-        [gateId]: {
-          [list]: arrayUnion(uid),
-          [other]: arrayRemove(uid),
-          updatedAt: Date.now(),
+      gateId,
+    );
+    const alwaysOnUids = applyListChange(
+      current.alwaysOnUids,
+      before.alwaysOnUids,
+      after.alwaysOnUids,
+      after.alwaysOffUids.filter((uid) => !before.alwaysOffUids.includes(uid)),
+    );
+    const alwaysOffUids = applyListChange(
+      current.alwaysOffUids,
+      before.alwaysOffUids,
+      after.alwaysOffUids,
+      after.alwaysOnUids.filter((uid) => !before.alwaysOnUids.includes(uid)),
+    );
+    transaction.set(
+      gateRef,
+      {
+        appId,
+        gates: {
+          [gateId]: {
+            rollout:
+              after.rollout === before.rollout
+                ? current.rollout
+                : after.rollout,
+            alwaysOnUids,
+            alwaysOffUids,
+            updatedAt: Date.now(),
+          },
         },
       },
-    },
-    { merge: true },
-  );
-}
-
-/** Admin only: takes someone off one exception list. */
-export async function removeGateException(
-  appId: string,
-  gateId: string,
-  list: GateExceptionList,
-  uid: string,
-) {
-  await setDoc(
-    doc(db, 'featureGates', appId),
-    {
-      appId,
-      gates: { [gateId]: { [list]: arrayRemove(uid), updatedAt: Date.now() } },
-    },
-    { merge: true },
-  );
+      { merge: true },
+    );
+  });
 }
