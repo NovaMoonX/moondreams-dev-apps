@@ -19,6 +19,8 @@ import { useUpdateReady } from '@hooks/useUpdateReady';
 import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AppNavPanel from '@ui/AppNavPanel';
 import AuthAvatar from '@ui/AuthAvatar';
+import FeedbackLauncher from '@ui/feedback/FeedbackLauncher';
+import InboxBell from '@ui/feedback/InboxBell';
 import OfflineBanner from '@ui/OfflineBanner';
 
 /** A link's page never names what it shows: its title is the same for every link. */
@@ -101,6 +103,7 @@ function Layout() {
   const isSiteCanvas =
     pathname === '/' ||
     pathname === '/account' ||
+    pathname === '/inbox' ||
     pathname === '/admin' ||
     pathname.startsWith('/admin/');
   const [navOpenKey, setNavOpenKey] = useState<string | null>(null);
@@ -121,47 +124,50 @@ function Layout() {
   }, []);
 
   return (
-    <div className='transition-colors duration-200'>
-      <LocationSync />
-      <PostLoginRedirectHandler />
+    <FeedbackLauncher>
+      <div className='transition-colors duration-200'>
+        <LocationSync />
+        <PostLoginRedirectHandler />
 
-      <OfflineBanner />
-      <EmulatorStatus />
+        <OfflineBanner />
+        <EmulatorStatus />
 
-      {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
-      <div
-        data-site-chrome=''
-        className={join(
-          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 max-[380px]:gap-2 max-md:pointer-events-auto max-md:h-16 max-md:py-2 max-md:backdrop-blur md:absolute md:px-6',
-          isSiteCanvas
-            ? 'max-md:bg-muted/80 dark:max-md:bg-background/80'
-            : 'max-md:bg-background/80',
-          isBannerVisible ? 'top-9' : 'top-0',
-          isHeaderHidden &&
-            (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
-        )}
-        {...swipeToOpen}
-      >
-        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
-          <AppNavPanel
-            isOpen={isNavOpen}
-            onOpenChange={(isOpen) =>
-              setNavOpenKey(isOpen ? locationKey : null)
-            }
-          />
+        {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
+        <div
+          data-site-chrome=''
+          className={join(
+            'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 max-[380px]:gap-2 max-md:pointer-events-auto max-md:h-16 max-md:py-2 max-md:backdrop-blur md:absolute md:px-6',
+            isSiteCanvas
+              ? 'max-md:bg-muted/80 dark:max-md:bg-background/80'
+              : 'max-md:bg-background/80',
+            isBannerVisible ? 'top-9' : 'top-0',
+            isHeaderHidden &&
+              (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
+          )}
+          {...swipeToOpen}
+        >
+          <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
+            <AppNavPanel
+              isOpen={isNavOpen}
+              onOpenChange={(isOpen) =>
+                setNavOpenKey(isOpen ? locationKey : null)
+              }
+            />
+          </div>
+
+          <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
+            <DevAccountSwitcher />
+          </div>
+
+          <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-end gap-1'>
+            <InboxBell />
+            <AuthAvatar />
+          </div>
         </div>
 
-        <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
-          <DevAccountSwitcher />
-        </div>
-
-        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-end'>
-          <AuthAvatar />
-        </div>
+        <Outlet />
       </div>
-
-      <Outlet />
-    </div>
+    </FeedbackLauncher>
   );
 }
 

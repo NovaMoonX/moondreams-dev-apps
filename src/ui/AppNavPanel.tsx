@@ -2,13 +2,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, House, Menu } from 'lucide-react';
+import { Check, House, Menu, MessageSquarePlus } from 'lucide-react';
 
 import AppLogo from '@components/AppLogo';
 import SideSheet from '@components/SideSheet';
 import { useAppCatalog } from '@hooks/useAppCatalog';
 import { useAuth } from '@hooks/useAuth';
 import { getAppResumePath } from '@lib/app';
+import { useFeedbackSheet } from '@ui/feedback/feedbackSheetContext';
 import IconTile from '@ui/IconTile';
 import ThemePicker from '@ui/ThemePicker';
 
@@ -29,6 +30,7 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { apps } = useAppCatalog();
+  const { open: openFeedback } = useFeedbackSheet();
 
   const isHome = pathname === '/';
   const currentApp =
@@ -139,6 +141,32 @@ function AppNavPanel({ isOpen, onOpenChange }: AppNavPanelProps) {
                 })}
               </ul>
             </div>
+            {user ? (
+              <ul>
+                <li>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='stripped'
+                    className={rowClassName(false)}
+                    onClick={() => {
+                      close();
+                      openFeedback(null);
+                    }}
+                  >
+                    <IconTile>
+                      <MessageSquarePlus className='size-5' />
+                    </IconTile>
+                    <span className='flex min-w-0 flex-1 flex-col'>
+                      <span className='truncate'>Send feedback</span>
+                      <span className='text-muted-foreground truncate text-xs'>
+                        A bug, an idea or a question
+                      </span>
+                    </span>
+                  </Button>
+                </li>
+              </ul>
+            ) : null}
           </nav>
         )}
       </SideSheet>

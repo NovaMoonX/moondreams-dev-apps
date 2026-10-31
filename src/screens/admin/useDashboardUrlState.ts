@@ -1,7 +1,7 @@
 import { parseAsString, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
-const VIEWS = ['apps', 'pipeline', 'members', 'firebase'] as const;
+const VIEWS = ['apps', 'pipeline', 'members', 'firebase', 'feedback'] as const;
 const TABS = ['cost', 'how'] as const;
 const SECTIONS = ['usage', 'settings'] as const;
 
@@ -14,6 +14,7 @@ const URL_KEYS = {
   section: parseAsStringLiteral(SECTIONS),
   tab: parseAsStringLiteral(TABS),
   member: parseAsString,
+  feedback: parseAsString,
 };
 
 interface DashboardUrlValues {
@@ -22,6 +23,7 @@ interface DashboardUrlValues {
   section: DashboardSection | null;
   tab: PipelineTab | null;
   member: string | null;
+  feedback: string | null;
 }
 
 const CLEARED: DashboardUrlValues = {
@@ -30,6 +32,7 @@ const CLEARED: DashboardUrlValues = {
   section: null,
   tab: null,
   member: null,
+  feedback: null,
 };
 
 interface NavigateOptions {
@@ -58,25 +61,66 @@ export function useDashboardUrlState() {
 
   const showPipeline = (options?: NavigateOptions) =>
     update(
-      { view: 'pipeline', app: null, section: null, tab: null, member: null },
+      {
+        view: 'pipeline',
+        app: null,
+        section: null,
+        tab: null,
+        member: null,
+        feedback: null,
+      },
       options,
     );
 
   const showMembers = (options?: NavigateOptions) =>
     update(
-      { view: 'members', app: null, section: null, tab: null, member: null },
+      {
+        view: 'members',
+        app: null,
+        section: null,
+        tab: null,
+        member: null,
+        feedback: null,
+      },
       options,
     );
 
   const showFirebase = (options?: NavigateOptions) =>
     update(
-      { view: 'firebase', app: null, section: null, tab: null, member: null },
+      {
+        view: 'firebase',
+        app: null,
+        section: null,
+        tab: null,
+        member: null,
+        feedback: null,
+      },
+      options,
+    );
+
+  const showFeedback = (options?: NavigateOptions) =>
+    update(
+      {
+        view: 'feedback',
+        app: null,
+        section: null,
+        tab: null,
+        member: null,
+        feedback: null,
+      },
       options,
     );
 
   const showApp = (appId: string, options?: NavigateOptions) =>
     update(
-      { view: 'apps', app: appId, section: null, tab: null, member: null },
+      {
+        view: 'apps',
+        app: appId,
+        section: null,
+        tab: null,
+        member: null,
+        feedback: null,
+      },
       options,
     );
 
@@ -88,6 +132,9 @@ export function useDashboardUrlState() {
 
   const openMember = (uid: string | null) =>
     setState({ member: uid }, { history: 'replace' });
+
+  const openFeedback = (id: string | null) =>
+    setState({ feedback: id }, { history: 'replace' });
 
   const goBack = () => {
     if (window.history.state?.dashboardStep) {
@@ -103,13 +150,16 @@ export function useDashboardUrlState() {
     section: state.section ?? 'usage',
     tab: state.tab,
     member: state.member,
+    feedback: state.feedback,
     showPipeline,
     showMembers,
     showFirebase,
+    showFeedback,
     showApp,
     setSection,
     setTab,
     openMember,
+    openFeedback,
     goBack,
   };
 }
