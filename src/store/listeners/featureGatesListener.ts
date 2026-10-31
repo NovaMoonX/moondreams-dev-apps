@@ -19,12 +19,25 @@ export function startFeatureGatesListener(
   );
 }
 
-export async function readFeatureGates(appId: string) {
+const READ_RETRY_DELAYS_MS = [1_000, 3_000, 9_000];
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** One read of an app's switches, retried a few times before it settles on the declared defaults. */
+export async function readFeatureGates(
+  appId: string,
+  attempt = 0,
+): Promise<FeatureGatesDoc | null> {
   try {
     const snapshot = await getDoc(doc(db, 'featureGates', appId));
     return snapshot.exists() ? (snapshot.data() as FeatureGatesDoc) : null;
   } catch (error) {
-    console.error('Failed to load feature switches:', error);
-    return null;
+    const delay = READ_RETRY_DELAYS_MS[attempt];
+    if (delay === undefined) {
+      console.error('Failed to load feature switches:', error);
+      return null;
+    }
+    await wait(delay);
+    return readFeatureGates(appId, attempt + 1);
   }
 }

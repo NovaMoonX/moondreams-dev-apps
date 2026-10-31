@@ -126,7 +126,9 @@ interface AppFeaturesTabProps {
 function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const [gatesDoc, setGatesDoc] = useState<FeatureGatesDoc | null>(null);
+  const [gatesDoc, setGatesDoc] = useState<FeatureGatesDoc | null | undefined>(
+    undefined,
+  );
   const [opened, setOpened] = useState<OpenGate | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
@@ -228,6 +230,7 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
               <Button
                 type='button'
                 variant='tertiary'
+                disabled={gatesDoc === undefined}
                 className='h-auto min-h-16 w-full justify-start gap-3 rounded-none px-4! py-3 text-left font-normal'
                 onClick={() => openSheet(gate.id)}
               >
@@ -236,11 +239,13 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
                     {gate.label}
                   </span>
                   <span className='text-muted-foreground block truncate text-xs'>
-                    {getGateSummary(
-                      setting.rollout,
-                      setting.alwaysOnUids.length,
-                      setting.alwaysOffUids.length,
-                    )}
+                    {gatesDoc === undefined
+                      ? 'Loading…'
+                      : getGateSummary(
+                          setting.rollout,
+                          setting.alwaysOnUids.length,
+                          setting.alwaysOffUids.length,
+                        )}
                   </span>
                 </span>
                 <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
@@ -294,6 +299,7 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
             appName={app.name}
             users={users}
             usage={usageQuery.data}
+            isUsageError={usageQuery.isError}
             draft={opened.draft}
             onDraftChange={(draft) =>
               setOpened((current) =>
@@ -312,6 +318,7 @@ interface GateControlsProps {
   appName: string;
   users: UserProfile[];
   usage: AppUsage[] | undefined;
+  isUsageError: boolean;
   draft: GateDraft;
   onDraftChange: (draft: GateDraft) => void;
 }
@@ -321,6 +328,7 @@ function GateControls({
   appName,
   users,
   usage,
+  isUsageError,
   draft,
   onDraftChange,
 }: GateControlsProps) {
@@ -349,6 +357,7 @@ function GateControls({
         title={picking === 'alwaysOnUids' ? 'Always give it to' : 'Keep out'}
         users={users}
         usage={usage}
+        isUsageError={isUsageError}
         currentUids={draft[picking]}
         otherUids={
           picking === 'alwaysOnUids' ? draft.alwaysOffUids : draft.alwaysOnUids
@@ -488,6 +497,7 @@ interface PersonPickerProps {
   title: string;
   users: UserProfile[];
   usage: AppUsage[] | undefined;
+  isUsageError: boolean;
   currentUids: string[];
   otherUids: string[];
   otherLabel: string;
@@ -500,6 +510,7 @@ function PersonPicker({
   title,
   users,
   usage,
+  isUsageError,
   currentUids,
   otherUids,
   otherLabel,
@@ -543,6 +554,8 @@ function PersonPicker({
   };
 
   const getEmptyText = () => {
+    if (isUsageError && !isShowingEveryone)
+      return `Couldn't load who uses ${appName}. Show everyone instead.`;
     if (usage === undefined && !isShowingEveryone) return 'Loading…';
     if (term !== '') return 'Nobody matches that.';
     return isShowingEveryone
@@ -599,7 +612,7 @@ function PersonPicker({
       ) : null}
       {!isShowingEveryone && everyoneElse.length > 0 ? (
         <ShowMoreButton onClick={() => setIsShowingEveryone(true)}>
-          {term === ''
+          {term === '' || isUsageError
             ? `Show everyone (${everyoneElse.length} more)`
             : `Show ${everyoneElse.length} more who haven't opened ${appName}`}
         </ShowMoreButton>
