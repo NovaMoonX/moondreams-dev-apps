@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { useQueryClient } from '@tanstack/react-query';
@@ -28,10 +28,16 @@ interface LinkAttachFieldProps {
   startRevealed?: boolean;
   /** Fires on every keystroke with the typed text, ahead of the (async) preview fetch. */
   onDraftChange?: (draft: string) => void;
+  /** Looks up the preview of a link that arrives without one (a prefilled or older record). On by default. */
+  shouldFetchOnMount?: boolean;
 }
 
+// A link whose page couldn't be read isn't looked up again on every open, until the page reloads.
+const triedOnMount = new Set<string>();
+
 /** An app-agnostic URL field that fetches a preview on its own once the text is a valid
- * link — after a typing pause, on paste, or on blur. Never refetched on render. */
+ * link — after a typing pause, on paste, or on blur, and once on mount for a link that has
+ * none. Never refetched on render. */
 function LinkAttachField({
   url,
   preview,
@@ -43,6 +49,7 @@ function LinkAttachField({
   addLabel = '+ Add link',
   startRevealed = false,
   onDraftChange,
+  shouldFetchOnMount = true,
 }: LinkAttachFieldProps) {
   const queryClient = useQueryClient();
   const [draftUrl, setDraftUrl] = useState(url);
@@ -51,6 +58,36 @@ function LinkAttachField({
   const [isRevealed, setIsRevealed] = useState(startRevealed);
   const latestDraftRef = useRef(url.trim());
   const justPastedRef = useRef(false);
+
+  // Quiet on purpose: no fetching or error text, and a failure leaves the record as it was.
+  useEffect(() => {
+    const initialUrl = url.trim();
+    if (!shouldFetchOnMount || preview || !isValidHttpUrl(initialUrl) || triedOnMount.has(initialUrl)) {
+      return;
+    }
+    let isCancelled = false;
+    queryClient
+      .fetchQuery(linkMetadataQueryOptions(initialUrl))
+      .then((result) => {
+        if (isCancelled || latestDraftRef.current !== initialUrl) {
+          return;
+        }
+        onChange(initialUrl, {
+          title: result.title,
+          description: result.description,
+          imageUrl: result.imageUrl,
+          siteName: result.siteName,
+          fetchedAt: result.fetchedAt,
+        });
+      })
+      .catch(() => triedOnMount.add(initialUrl));
+    return () => {
+      isCancelled = true;
+    };
+    // Mount only: later changes are the field's own typing, paste and blur paths. Callers
+    // merge `onChange` into their draft, so the first render's callback is still current.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // `commit` = the user is done with the field (paste/blur): keep the link even if no
   // preview loads. A typing-pause fetch that fails may just be a half-typed URL, so it

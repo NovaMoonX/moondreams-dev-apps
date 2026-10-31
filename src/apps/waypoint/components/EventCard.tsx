@@ -220,7 +220,7 @@ export function EventDetailLines({
           {event.arriveByNote && <p className='text-muted-foreground pl-7 italic'>{event.arriveByNote}</p>}
         </div>
       )}
-      {locationLabel && <LocationLink {...getEventNavigationLocation(event)} label={locationLabel} />}
+      {locationLabel && <LocationLink {...getEventNavigationLocation(event)} label={locationLabel} showCopy={!showTitle} />}
       {(event.venueOpenTime || event.venueCloseTime) && (
         <p className='text-muted-foreground text-sm'>
           Open {event.venueOpenTime ? formatClockTime(event.venueOpenTime) : '?'} -{' '}

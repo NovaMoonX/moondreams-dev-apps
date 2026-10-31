@@ -89,7 +89,7 @@ function getEventRow({ trip, memberNames }: TimelineMarkdownSource, event: Timel
           .filter(({ label, value }) => !(label === 'Route' && value.includes('…')))
           .map(({ label, value }) => `${label}: ${esc(value)}`)
       : [];
-  const title = esc(event.title.trim() || event.locationName || EVENT_TYPE_LABELS[event.eventType]);
+  const title = esc(event.title.trim() || event.locationName || (event.eventType === 'OTHER' && event.customTypeLabel?.trim()) || EVENT_TYPE_LABELS[event.eventType]);
   const emoji = (transitType && TRANSIT_TYPE_EMOJIS[transitType]) || EVENT_TYPE_EMOJIS[event.eventType];
   const detailLines = compact([
     kind,

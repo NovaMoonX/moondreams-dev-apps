@@ -142,7 +142,7 @@ function LogisticsDetailSheet({ trip, subject, onClose }: LogisticsDetailSheetPr
             {label && <p className='text-muted-foreground text-xs font-semibold tracking-wide uppercase'>{label}</p>}
             <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
               {address ? (
-                <LocationLink locationName={name} address={address} latitude={latitude} longitude={longitude} label={address} />
+                <LocationLink showCopy locationName={name} address={address} latitude={latitude} longitude={longitude} label={address} />
               ) : null}
             </div>
           </div>

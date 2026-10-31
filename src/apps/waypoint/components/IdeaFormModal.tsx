@@ -174,6 +174,7 @@ function IdeaExtrasFields({ extras, isRestaurant, trip, onChange }: IdeaExtrasFi
             preview={null}
             label=''
             startRevealed
+            shouldFetchOnMount={false}
             onChange={(url) => onChange({ ...extras, link: { enabled: true, value: url, draft: url } })}
             onDraftChange={(draft) =>
               onChange({ ...extras, link: { ...extras.link, enabled: true, draft } })

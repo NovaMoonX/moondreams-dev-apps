@@ -17,11 +17,11 @@ export interface EventBadge {
   className: string;
 }
 
-type BadgeSource = Pick<TimelineEvent, 'eventType' | 'eventDetails'>;
+type BadgeSource = Pick<TimelineEvent, 'eventType' | 'eventDetails'> & Partial<Pick<TimelineEvent, 'customTypeLabel'>>;
 
 /** How an event announces its kind: a travel event shows its transit type and a dining event its
  * meal (each with its own color) rather than the generic badge. */
-export function getEventBadge({ eventType, eventDetails }: BadgeSource): EventBadge {
+export function getEventBadge({ eventType, eventDetails, customTypeLabel }: BadgeSource): EventBadge {
   if (eventType === 'TRAVEL' && eventDetails && 'transitType' in eventDetails) {
     const { transitType } = eventDetails;
     if (TRANSIT_TYPE_LABELS[transitType]) {
@@ -44,7 +44,7 @@ export function getEventBadge({ eventType, eventDetails }: BadgeSource): EventBa
   }
   return {
     emoji: EVENT_TYPE_EMOJIS[eventType],
-    label: EVENT_TYPE_LABELS[eventType],
+    label: (eventType === 'OTHER' && customTypeLabel?.trim()) || EVENT_TYPE_LABELS[eventType],
     className: EVENT_TYPE_BADGE_CLASSES[eventType],
   };
 }

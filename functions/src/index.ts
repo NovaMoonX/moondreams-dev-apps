@@ -19,6 +19,7 @@ export { shiftTripDates } from './apps/waypoint/shiftTripDates.js';
 export { notifyTripAnnouncement } from './apps/waypoint/notifyTripAnnouncement.js';
 export { notifyTripIdea } from './apps/waypoint/notifyTripIdea.js';
 export { sendExpenseWrapUp } from './apps/waypoint/sendExpenseWrapUp.js';
+export { sendMorningPush } from './apps/waypoint/sendMorningPush.js';
 export { registerAppUsage } from './appUsage/registerAppUsage.js';
 export { getFirebaseUsage } from './firebaseUsage/getFirebaseUsage.js';
 export { fetchLinkMetadata } from './linkMetadata/fetchLinkMetadata.js';

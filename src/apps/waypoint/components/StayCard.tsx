@@ -75,7 +75,7 @@ export function StayDetailLines({
           />
         )}
       </div>
-      <LocationLink {...getStayNavigationLocation(stay)} label={stay.address} />
+      <LocationLink {...getStayNavigationLocation(stay)} label={stay.address} showCopy={!showTitle} />
       <p className='text-muted-foreground text-sm'>
         {formatStayTimeRange(trip, stay)}
       </p>

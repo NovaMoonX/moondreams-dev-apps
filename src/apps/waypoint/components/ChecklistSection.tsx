@@ -9,11 +9,15 @@ import {
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { getBucketLabel, getDayCount, groupByIndexBucket } from '@/utils/dateRangeUtils';
+import {
+  getBucketLabel,
+  getDayCount,
+  groupByIndexBucket,
+} from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import AppToggle from '@/components/AppToggle';
 import UserAvatar from '@/ui/UserAvatar';
@@ -23,7 +27,12 @@ import SectionHeader from '@/components/SectionHeader';
 import SearchInput from '@/components/SearchInput';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import { Link2, Lock, Users } from 'lucide-react';
-import { CHECKLIST_CATEGORIES, CHECKLIST_CATEGORY_EMOJIS, CHECKLIST_CATEGORY_LABELS, LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
+import {
+  CHECKLIST_CATEGORIES,
+  CHECKLIST_CATEGORY_EMOJIS,
+  CHECKLIST_CATEGORY_LABELS,
+  LIST_SEARCH_THRESHOLD,
+} from '@apps/waypoint/constants';
 import type {
   ChecklistCategory,
   ChecklistItem,
@@ -35,7 +44,16 @@ import {
   toggleChecklistItem,
   updateChecklistItem,
 } from '@apps/waypoint/store/actions/checklistActions';
-import { selectPersonalChecklistItems, selectTimelineEvents } from '@apps/waypoint/store/selectors';
+import {
+  selectPersonalChecklistItems,
+  selectTimelineEvents,
+} from '@apps/waypoint/store/selectors';
+import {
+  getChecklistSummary,
+  getDueInfo,
+  getShortName,
+  getWhoLabel,
+} from '@apps/waypoint/utils/checklistDue';
 import {
   canEditExistingItem,
   hasTripRole,
@@ -52,7 +70,8 @@ interface ChecklistSectionProps {
 function getChecklistCategoryLabel(item: ChecklistItem): string {
   return item.category === 'OTHER' && item.customCategoryLabel
     ? item.customCategoryLabel
-    : (CHECKLIST_CATEGORY_LABELS[item.category] ?? CHECKLIST_CATEGORY_LABELS.OTHER);
+    : (CHECKLIST_CATEGORY_LABELS[item.category] ??
+        CHECKLIST_CATEGORY_LABELS.OTHER);
 }
 
 export default function ChecklistSection({
@@ -76,21 +95,35 @@ export default function ChecklistSection({
     () => allPersonalItems.filter((item) => item.tripId === trip.id),
     [allPersonalItems, trip.id],
   );
-  const items = useMemo(() => [...sharedItems, ...personalItems], [sharedItems, personalItems]);
+  const items = useMemo(
+    () => [...sharedItems, ...personalItems],
+    [sharedItems, personalItems],
+  );
   const events = useAppSelector(selectTimelineEvents);
-  const eventTitles = useMemo(() => new Map(events.map((event) => [event.id, event.title])), [events]);
+  const eventTitles = useMemo(
+    () => new Map(events.map((event) => [event.id, event.title])),
+    [events],
+  );
   const getLinkedTitle = (item: ChecklistItem) =>
-    item.linkedTo?.kind === 'EVENT' ? (eventTitles.get(item.linkedTo.id) ?? null) : null;
-  const privateIds = useMemo(() => new Set(personalItems.map((item) => item.id)), [personalItems]);
+    item.linkedTo?.kind === 'EVENT'
+      ? (eventTitles.get(item.linkedTo.id) ?? null)
+      : null;
+  const privateIds = useMemo(
+    () => new Set(personalItems.map((item) => item.id)),
+    [personalItems],
+  );
   const isPrivateItem = (item: ChecklistItem) => privateIds.has(item.id);
   const memberIds = Object.keys(trip.members);
   const members = useUserInfo(memberIds)?.map ?? {};
   const canEdit = hasTripRole(trip, currentUserId, ['ADMIN', 'EDITOR']);
   const canEditExisting = canEditExistingItem(trip, currentUserId);
-  const mayModify = (item: ChecklistItem) => isPrivateItem(item) || canEditExisting;
+  const mayModify = (item: ChecklistItem) =>
+    isPrivateItem(item) || canEditExisting;
 
   const mayToggle = (item: ChecklistItem) =>
-    isPrivateItem(item) || canEditExisting || item.assignedToUids.includes(currentUserId);
+    isPrivateItem(item) ||
+    canEditExisting ||
+    item.assignedToUids.includes(currentUserId);
 
   const showSearch = items.length >= LIST_SEARCH_THRESHOLD;
   const needle = showSearch ? query.trim().toLowerCase() : '';
@@ -98,10 +131,12 @@ export default function ChecklistSection({
     () =>
       items.filter(
         (item) =>
-          (!assignedToMeOnly || privateIds.has(item.id) || item.assignedToUids.includes(currentUserId)) &&
+          (!assignedToMeOnly ||
+            privateIds.has(item.id) ||
+            item.assignedToUids.includes(currentUserId)) &&
           (needle === '' ||
-            [item.title, item.note ?? '', getChecklistCategoryLabel(item)].some((text) =>
-              text.toLowerCase().includes(needle),
+            [item.title, item.note ?? '', getChecklistCategoryLabel(item)].some(
+              (text) => text.toLowerCase().includes(needle),
             )),
       ),
     [assignedToMeOnly, currentUserId, items, needle, privateIds],
@@ -109,17 +144,30 @@ export default function ChecklistSection({
   const categoryCounts = useMemo(
     () =>
       searchedItems.reduce<Partial<Record<ChecklistCategory, number>>>(
-        (counts, item) => ({ ...counts, [item.category]: (counts[item.category] ?? 0) + (item.isCompleted ? 0 : 1) }),
+        (counts, item) => ({
+          ...counts,
+          [item.category]:
+            (counts[item.category] ?? 0) + (item.isCompleted ? 0 : 1),
+        }),
         {},
       ),
     [searchedItems],
   );
-  const presentCategories = CHECKLIST_CATEGORIES.filter((category) => searchedItems.some((item) => item.category === category));
+  const presentCategories = CHECKLIST_CATEGORIES.filter((category) =>
+    searchedItems.some((item) => item.category === category),
+  );
   const usedCategories = new Set(items.map((item) => item.category));
   const showCategoryFilter = usedCategories.size > 1;
-  const categoryFilter = categoryPick !== 'ALL' && presentCategories.includes(categoryPick) ? categoryPick : 'ALL';
+  const categoryFilter =
+    categoryPick !== 'ALL' && presentCategories.includes(categoryPick)
+      ? categoryPick
+      : 'ALL';
   const categoryOptions: PillOption<ChecklistCategory | 'ALL'>[] = [
-    { value: 'ALL', label: 'All', detail: String(searchedItems.filter((item) => !item.isCompleted).length) },
+    {
+      value: 'ALL',
+      label: 'All',
+      detail: String(searchedItems.filter((item) => !item.isCompleted).length),
+    },
     ...presentCategories.map((category) => ({
       value: category,
       label: CHECKLIST_CATEGORY_LABELS[category],
@@ -128,12 +176,21 @@ export default function ChecklistSection({
     })),
   ];
   const visibleItems = useMemo(
-    () => (categoryFilter === 'ALL' ? searchedItems : searchedItems.filter((item) => item.category === categoryFilter)),
+    () =>
+      categoryFilter === 'ALL'
+        ? searchedItems
+        : searchedItems.filter((item) => item.category === categoryFilter),
     [categoryFilter, searchedItems],
   );
   const dayCount = getDayCount(trip.startDate, trip.endDate);
   const dayGroups = useMemo(
-    () => groupByIndexBucket(visibleItems, (item) => item.completeByDayIndex, dayCount, Number.POSITIVE_INFINITY),
+    () =>
+      groupByIndexBucket(
+        visibleItems,
+        (item) => item.completeByDayIndex,
+        dayCount,
+        Number.POSITIVE_INFINITY,
+      ),
     [visibleItems, dayCount],
   );
 
@@ -206,7 +263,12 @@ export default function ChecklistSection({
     setIsSubmitting(true);
     try {
       await dispatch(
-        deleteChecklistItem({ trip, uid: currentUserId, itemId: item.id, isPrivate: isPrivateItem(item) }),
+        deleteChecklistItem({
+          trip,
+          uid: currentUserId,
+          itemId: item.id,
+          isPrivate: isPrivateItem(item),
+        }),
       ).unwrap();
       setIsModalOpen(false);
       setEditingItem(null);
@@ -220,6 +282,16 @@ export default function ChecklistSection({
       setIsSubmitting(false);
     }
   };
+
+  const now = useNow();
+  const getName = (uid: string) => getShortName(members[uid]?.displayName);
+  const summary = getChecklistSummary(
+    items,
+    currentUserId,
+    trip.startDate,
+    now,
+    isPrivateItem,
+  );
 
   const detailItem = items.find((item) => item.id === detailItemId) ?? null;
 
@@ -239,6 +311,7 @@ export default function ChecklistSection({
           </Button>
         }
       />
+      <p className='text-sm font-medium'>{summary}</p>
       <div
         className='bg-muted h-2 overflow-hidden rounded-full'
         role='progressbar'
@@ -252,7 +325,13 @@ export default function ChecklistSection({
           style={{ width: `${completionPercent}%` }}
         />
       </div>
-      {showSearch && <SearchInput value={query} onChange={setQuery} placeholder='Search the checklist' />}
+      {showSearch && (
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder='Search the checklist'
+        />
+      )}
       {showCategoryFilter && (
         <PillGroup
           label='Filter by category'
@@ -282,9 +361,32 @@ export default function ChecklistSection({
         <div className='space-y-4'>
           {dayGroups.map(({ bucket, items: dayItems }) => (
             <div key={bucket} className='space-y-2'>
-              <SectionDivider label={getBucketLabel(bucket, trip.startDate, dayCount)} />
+              <SectionDivider
+                label={getBucketLabel(bucket, trip.startDate, dayCount)}
+              />
               <ul className='divide-border divide-y'>
                 {dayItems.map((item) => {
+                  const due = getDueInfo(
+                    trip.startDate,
+                    item.completeByDayIndex,
+                    now,
+                  );
+                  const doneBy = item.markedCompletedByUid;
+                  const status = item.isCompleted
+                    ? doneBy === null
+                      ? 'Done'
+                      : `Done by ${doneBy === currentUserId ? 'you' : (getName(doneBy) ?? 'a trip member')}`
+                    : [
+                        getWhoLabel(
+                          item,
+                          currentUserId,
+                          isPrivateItem(item),
+                          getName,
+                        ),
+                        due?.label,
+                      ]
+                        .filter(Boolean)
+                        .join(' · ');
                   const assignedUsers = item.assignedToUids
                     .map((uid) => members[uid])
                     .filter(Boolean);
@@ -313,7 +415,10 @@ export default function ChecklistSection({
                           </span>
                         </Tooltip>
                         <div
-                          className={join('min-w-0', isPhone && mayModify(item) && 'cursor-pointer')}
+                          className={join(
+                            'min-w-0',
+                            isPhone && mayModify(item) && 'cursor-pointer',
+                          )}
                           {...(isPhone && mayModify(item)
                             ? {
                                 role: 'button',
@@ -321,7 +426,10 @@ export default function ChecklistSection({
                                 'aria-label': `Details for ${item.title}`,
                                 onClick: () => setDetailItemId(item.id),
                                 onKeyDown: (event: KeyboardEvent) => {
-                                  if (event.key === 'Enter' || event.key === ' ') {
+                                  if (
+                                    event.key === 'Enter' ||
+                                    event.key === ' '
+                                  ) {
                                     event.preventDefault();
                                     setDetailItemId(item.id);
                                   }
@@ -350,22 +458,41 @@ export default function ChecklistSection({
                             )}
                           </div>
                           <p className='text-muted-foreground mt-0.5 text-sm'>
-                            <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[item.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
+                            <span aria-hidden='true'>
+                              {CHECKLIST_CATEGORY_EMOJIS[item.category] ??
+                                CHECKLIST_CATEGORY_EMOJIS.OTHER}
+                            </span>{' '}
                             {getChecklistCategoryLabel(item)}
+                          </p>
+                          <p
+                            className={join(
+                              'mt-0.5 truncate text-sm',
+                              !item.isCompleted && due?.isOverdue
+                                ? 'text-foreground font-medium'
+                                : 'text-muted-foreground',
+                            )}
+                          >
+                            {status}
                           </p>
                           {getLinkedTitle(item) && (
                             <p className='text-muted-foreground mt-0.5 line-clamp-2 text-sm'>
-                              <Link2 className='mr-1 inline h-3.5 w-3.5 align-[-2px]' aria-hidden='true' />
+                              <Link2
+                                className='mr-1 inline h-3.5 w-3.5 align-[-2px]'
+                                aria-hidden='true'
+                              />
                               For {getLinkedTitle(item)}
                             </p>
                           )}
                           {item.note && (
-                            <p className='text-muted-foreground mt-1 truncate text-sm italic'>{item.note}</p>
+                            <p className='text-muted-foreground mt-1 truncate text-sm italic'>
+                              {item.note}
+                            </p>
                           )}
                         </div>
                       </div>
                       <div className='flex shrink-0 items-center gap-1'>
-                        {isPrivateItem(item) ? null : assignedUsers.length > 0 ? (
+                        {isPrivateItem(item) ? null : assignedUsers.length >
+                          0 ? (
                           assignedUsers.map((user) => (
                             <UserAvatar key={user.uid} user={user} size='sm' />
                           ))
@@ -427,12 +554,18 @@ export default function ChecklistSection({
         {detailItem && (
           <div className='space-y-2 pb-2'>
             <p className='text-muted-foreground text-sm'>
-              <span aria-hidden='true'>{CHECKLIST_CATEGORY_EMOJIS[detailItem.category] ?? CHECKLIST_CATEGORY_EMOJIS.OTHER}</span>{' '}
+              <span aria-hidden='true'>
+                {CHECKLIST_CATEGORY_EMOJIS[detailItem.category] ??
+                  CHECKLIST_CATEGORY_EMOJIS.OTHER}
+              </span>{' '}
               {getChecklistCategoryLabel(detailItem)}
             </p>
             {getLinkedTitle(detailItem) && (
               <p className='text-muted-foreground text-sm'>
-                <Link2 className='mr-1 inline h-3.5 w-3.5 align-[-2px]' aria-hidden='true' />
+                <Link2
+                  className='mr-1 inline h-3.5 w-3.5 align-[-2px]'
+                  aria-hidden='true'
+                />
                 For {getLinkedTitle(detailItem)}
               </p>
             )}
@@ -442,7 +575,11 @@ export default function ChecklistSection({
                 Private
               </p>
             )}
-            {detailItem.note && <p className='text-muted-foreground text-sm italic'>{detailItem.note}</p>}
+            {detailItem.note && (
+              <p className='text-muted-foreground text-sm italic'>
+                {detailItem.note}
+              </p>
+            )}
           </div>
         )}
       </Drawer>

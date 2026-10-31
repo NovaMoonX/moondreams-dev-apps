@@ -188,6 +188,8 @@ function clampReminderMinutes(hours: number, minutes: number) {
 
 interface EventDraft {
   eventType: EventType;
+  /** The person's own name for an Other plan; blank falls back to "Other". */
+  customTypeLabel: string;
   title: string;
   hasTitle: boolean;
   dayIndex: number | null;
@@ -241,6 +243,7 @@ const LINK_ATTACHABLE_EVENT_TYPES: readonly EventType[] = [
   'DINING',
   'ACTIVITY',
   'TRAVEL',
+  'OTHER',
 ];
 
 const NO_DAY_VALUE = 'none';
@@ -346,6 +349,9 @@ function getDerivedTitle(draft: EventDraft): string {
   }
   if (draft.eventType === 'DINING') {
     return MEAL_TYPE_LABELS[draft.quickField as MealType] ?? EVENT_TYPE_LABELS.DINING;
+  }
+  if (draft.eventType === 'OTHER') {
+    return draft.customTypeLabel.trim() || EVENT_TYPE_LABELS.OTHER;
   }
   return EVENT_TYPE_LABELS[draft.eventType];
 }
@@ -460,6 +466,7 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined, initial
   const newDayIndex = initialDayIndex ?? getDefaultDayIndex(trip);
   return {
     eventType: event?.eventType ?? 'ACTIVITY',
+    customTypeLabel: event?.customTypeLabel ?? '',
     title: '',
     hasTitle: false,
     dayIndex: event ? (time?.dayIndex ?? null) : newDayIndex,
@@ -892,6 +899,7 @@ function EventFormModal({
     try {
       await onSubmit({
         eventType: draft.eventType,
+        customTypeLabel: draft.eventType === 'OTHER' ? draft.customTypeLabel.trim() || null : null,
         ...timeFields,
         title,
         locationName: draft.locationName,
@@ -1009,7 +1017,7 @@ function EventFormModal({
   const reminderText = getReminderText();
 
   const isLinkable = LINK_ATTACHABLE_EVENT_TYPES.includes(draft.eventType);
-  const isPlaceEvent = draft.eventType === 'DINING' || draft.eventType === 'ACTIVITY';
+  const isPlaceEvent = draft.eventType === 'DINING' || draft.eventType === 'ACTIVITY' || draft.eventType === 'OTHER';
   const attendeesLabel = isTravel ? "Who's traveling" : "Who's coming";
   const transitType = draft.quickField as TransitType;
   const isLocationVisible = isTravel
@@ -1239,6 +1247,17 @@ function EventFormModal({
                 </Pill>
               ))}
             </PillRow>
+          )}
+          {draft.eventType === 'OTHER' && (
+            <div className='space-y-1.5'>
+              <Label>What kind of plan?</Label>
+              <Input
+                placeholder='Spa day'
+                maxLength={40}
+                value={draft.customTypeLabel}
+                onChange={(changeEvent) => updateDraft({ customTypeLabel: changeEvent.target.value })}
+              />
+            </div>
           )}
           {draft.eventType === 'DINING' && (
             <PillRow label='Meal'>
