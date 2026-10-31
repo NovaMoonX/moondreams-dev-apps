@@ -1,10 +1,12 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Checkbox, Select } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Sparkles } from 'lucide-react';
 import { useState } from 'react';
 
 import { PillGroup } from '@/components/PillGroup';
 import useNow from '@/hooks/useNow';
+import { useClaudeRoutineStatus } from '@hooks/useClaudeRoutineStatus';
+import { useFeedbackGroups } from '@hooks/useFeedbackGroups';
 import { formatTimeAgo } from '@/utils/timeAgoUtils';
 import { useAllFeedback } from '@hooks/useAllFeedback';
 import {
@@ -20,11 +22,16 @@ import type {
   FeedbackStatus,
 } from '@lib/feedback/types';
 
+import ClaudeConnectionSheet from './ClaudeConnectionSheet';
 import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
+import FeedbackGroupCard from './FeedbackGroupCard';
+import FeedbackGroupSheet from './FeedbackGroupSheet';
 import FeedbackThreadSheet from './FeedbackThreadSheet';
 
 type StatusFilter = 'open' | 'done' | 'wont-do' | 'all';
 type KindFilter = FeedbackKind | 'all';
+/** `all`, `none` (not grouped), or a group's id. */
+type GroupFilter = string;
 
 const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'open', label: 'Open' },
@@ -62,12 +69,51 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
   const now = useNow(60_000);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [kindFilter, setKindFilter] = useState<KindFilter>('all');
+  const [groupFilter, setGroupFilter] = useState<GroupFilter>('all');
+  const { groups } = useFeedbackGroups(true);
+  const { isConnected } = useClaudeRoutineStatus(true);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<string[]>([]);
+  const [isGroupSheetOpen, setIsGroupSheetOpen] = useState(false);
 
+  const activeGroup = groups.find((group) => group.id === groupFilter) ?? null;
+  const effectiveGroupFilter =
+    groupFilter === 'all' || groupFilter === 'none' || activeGroup
+      ? groupFilter
+      : 'all';
+  const groupNames = Object.fromEntries(
+    groups.map((group) => [group.id, group.name]),
+  );
   const visible = sortByActivity(items).filter(
     (item) =>
       matchesStatus(item, statusFilter) &&
-      (kindFilter === 'all' || item.kind === kindFilter),
+      (kindFilter === 'all' || item.kind === kindFilter) &&
+      (effectiveGroupFilter === 'all' ||
+        (effectiveGroupFilter === 'none'
+          ? item.groupId === null
+          : item.groupId === effectiveGroupFilter)),
   );
+  const groupItems = activeGroup
+    ? items.filter((item) => item.groupId === activeGroup.id)
+    : [];
+  const groupOptions = [
+    { text: 'All groups', value: 'all' },
+    { text: 'Not grouped', value: 'none' },
+    ...groups.map((group) => ({ text: group.name, value: group.id })),
+  ];
+  const checkedCount = checkedIds.length;
+
+  const stopSelecting = () => {
+    setIsSelecting(false);
+    setCheckedIds([]);
+  };
+  const toggleChecked = (id: string) =>
+    setCheckedIds((current) =>
+      current.includes(id)
+        ? current.filter((checkedId) => checkedId !== id)
+        : [...current, id],
+    );
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
   const getEmptyText = () => {
@@ -82,6 +128,27 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
 
   return (
     <div className='max-w-3xl space-y-4'>
+      <div className='flex items-center justify-between gap-2'>
+        <Button
+          type='button'
+          variant='base'
+          size='sm'
+          className="text-muted-foreground relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+          onClick={() => setIsSettingsOpen(true)}
+        >
+          <Sparkles className='size-4' aria-hidden='true' />
+          {isConnected ? 'Claude connected' : 'Connect Claude'}
+        </Button>
+        <Button
+          type='button'
+          variant='base'
+          size='sm'
+          className="text-primary relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+          onClick={() => (isSelecting ? stopSelecting() : setIsSelecting(true))}
+        >
+          {isSelecting ? 'Cancel' : 'Select'}
+        </Button>
+      </div>
       <div className='space-y-3'>
         <PillGroup
           label='Status'
@@ -97,7 +164,23 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
           value={kindFilter}
           onChange={setKindFilter}
         />
+        <Select
+          aria-label='Group'
+          options={groupOptions}
+          value={effectiveGroupFilter}
+          onChange={setGroupFilter}
+        />
       </div>
+
+      {activeGroup ? (
+        <FeedbackGroupCard
+          key={activeGroup.id}
+          group={activeGroup}
+          items={groupItems}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          onRemoved={() => setGroupFilter('all')}
+        />
+      ) : null}
 
       {status === 'error' && items.length > 0 ? (
         <p role='status' className='text-muted-foreground text-sm'>
@@ -112,12 +195,26 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
       ) : (
         <ul className={LIST_CARD_CLASS}>
           {visible.map((item) => (
-            <li key={item.id}>
+            <li key={item.id} className='flex items-stretch'>
+              {isSelecting ? (
+                <span className='flex w-12 shrink-0 items-center justify-center pl-2'>
+                  <Checkbox
+                    checked={checkedIds.includes(item.id)}
+                    onCheckedChange={() => toggleChecked(item.id)}
+                    aria-label={`Select ${getSenderName(item)}`}
+                  />
+                </span>
+              ) : null}
               <Button
                 type='button'
                 variant='tertiary'
-                className='h-auto min-h-16 w-full justify-start gap-3 rounded-none px-4! py-3 text-left font-normal'
-                onClick={() => onSelect(item.id)}
+                className={join(
+                  'h-auto min-h-16 min-w-0 flex-1 justify-start gap-3 rounded-none py-3 text-left font-normal',
+                  isSelecting ? 'pr-4! pl-2!' : 'px-4!',
+                )}
+                onClick={() =>
+                  isSelecting ? toggleChecked(item.id) : onSelect(item.id)
+                }
               >
                 <span aria-hidden='true' className='text-xl'>
                   {KIND_EMOJI[item.kind]}
@@ -132,6 +229,9 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
                   <span className='text-muted-foreground block truncate text-xs'>
                     {KIND_LABEL[item.kind]} ·{' '}
                     {getContextPlaceName(item.context)}
+                    {item.groupId && groupNames[item.groupId]
+                      ? ` · ${groupNames[item.groupId]}`
+                      : ''}
                   </span>
                   <span className='text-foreground mt-0.5 line-clamp-2 text-sm wrap-break-word'>
                     {getFirstLine(item.text)}
@@ -154,9 +254,43 @@ function FeedbackView({ selectedId, onSelect }: FeedbackViewProps) {
         </ul>
       )}
 
+      {isSelecting ? (
+        <div className='bg-popover border-border sticky bottom-3 z-10 flex items-center justify-between gap-3 rounded-2xl border p-3 shadow-lg'>
+          <p className='text-sm' role='status'>
+            {checkedCount} selected
+          </p>
+          <Button
+            type='button'
+            size='sm'
+            disabled={checkedCount === 0}
+            onClick={() => setIsGroupSheetOpen(true)}
+          >
+            Add to group
+          </Button>
+        </div>
+      ) : null}
+
+      <FeedbackGroupSheet
+        isOpen={isGroupSheetOpen}
+        feedbackIds={checkedIds}
+        groups={groups}
+        currentGroupId={null}
+        onClose={() => setIsGroupSheetOpen(false)}
+        onDone={() => {
+          setIsGroupSheetOpen(false);
+          stopSelecting();
+        }}
+      />
+      <ClaudeConnectionSheet
+        isOpen={isSettingsOpen}
+        isConnected={isConnected}
+        onClose={() => setIsSettingsOpen(false)}
+      />
       <FeedbackThreadSheet
         feedback={selected}
         senderName={selected ? getSenderName(selected) : ''}
+        groups={groups}
+        onOpenSettings={() => setIsSettingsOpen(true)}
         onClose={() => onSelect(null)}
       />
     </div>

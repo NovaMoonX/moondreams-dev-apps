@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
+
 import DetailSheet from '@/components/DetailSheet';
 import InlineNotice from '@/components/InlineNotice';
 import { PillGroup } from '@/components/PillGroup';
@@ -10,12 +13,21 @@ import {
   replyToFeedback,
   setFeedbackStatus,
 } from '@lib/feedback/feedbackWrites';
-import type { Feedback, FeedbackStatus } from '@lib/feedback/types';
+import type {
+  Feedback,
+  FeedbackGroup,
+  FeedbackStatus,
+} from '@lib/feedback/types';
 import FeedbackConversation from '@ui/feedback/FeedbackConversation';
+
+import FeedbackGroupSheet from './FeedbackGroupSheet';
+import SendToClaudeButton from './SendToClaudeButton';
 
 interface FeedbackThreadSheetProps {
   feedback: Feedback | null;
   senderName: string;
+  groups: FeedbackGroup[];
+  onOpenSettings: () => void;
   onClose: () => void;
 }
 
@@ -23,10 +35,13 @@ interface FeedbackThreadSheetProps {
 function FeedbackThreadSheet({
   feedback,
   senderName,
+  groups,
+  onOpenSettings,
   onClose,
 }: FeedbackThreadSheetProps) {
   const { user } = useAuth();
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [isGroupOpen, setIsGroupOpen] = useState(false);
   const markedRef = useRef<string | null>(null);
   const unreadKey =
     feedback?.isUnreadByAdmin === true
@@ -58,6 +73,18 @@ function FeedbackThreadSheet({
       isOpen={feedback !== null}
       onClose={onClose}
       title={senderName}
+      footer={
+        feedback ? (
+          <div className='px-6 pt-3 pb-[calc(1.5rem+env(safe-area-inset-bottom))]'>
+            <SendToClaudeButton
+              key={feedback.id}
+              target={{ feedbackIds: [feedback.id] }}
+              lastSessionUrl={feedback.claudeSessionUrl}
+              onOpenSettings={onOpenSettings}
+            />
+          </div>
+        ) : undefined
+      }
     >
       {feedback && user ? (
         <div key={feedback.id} className='space-y-4'>
@@ -73,6 +100,32 @@ function FeedbackThreadSheet({
               <InlineNotice tone='warning'>{statusError}</InlineNotice>
             ) : null}
           </div>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='h-auto min-h-11 w-full justify-start gap-2 px-0! py-2 text-left font-normal'
+            onClick={() => setIsGroupOpen(true)}
+          >
+            <span className='min-w-0 flex-1 truncate'>
+              Group:{' '}
+              <span className='font-medium'>
+                {groups.find((group) => group.id === feedback.groupId)?.name ??
+                  'Not in a group'}
+              </span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+          <FeedbackGroupSheet
+            isOpen={isGroupOpen}
+            feedbackIds={[feedback.id]}
+            groups={groups}
+            currentGroupId={feedback.groupId}
+            onClose={() => setIsGroupOpen(false)}
+            onDone={() => setIsGroupOpen(false)}
+          />
           <FeedbackConversation
             feedback={feedback}
             viewer='admin'

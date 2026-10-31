@@ -16,6 +16,8 @@ A collection of beta apps built to fit whatever felt useful, fun, or simply inte
 
 On a phone, Home shows your apps like a home screen; press and hold one to read about it or star it, and starred apps come first on Home and in the menu. Apps you don't have yet but can ask for are listed under "Ask for access". Your avatar opens an account card, like Google's: switch to another account you've used on this device, add one or sign out (switching and signing out both take you back to Home); "Manage your account" opens your account page (name, photo, the accounts on this device, and resetting this device's saved data). The header's menu (the hamburger, top left) slides in every app you can open, and apps that keep their place in the URL (A-List's tabs, Waypoint's trips) reopen where you last left them. Swipe right on the header to open it and left to close.
 
+Anyone signed in can send feedback from anywhere (the menu, or shake the phone): a bug, an idea or a question, with the screen it came from. Replies and updates land in the header's bell, the inbox. The owner's admin dashboard has a Feedback view that works like an inbox: filter it, group related items (a "Small fixes" box), mark a group done, and send an item or a group to a new Claude Code session. How to connect Claude once is in the "Claude connection" sheet on that view.
+
 ## Quick start
 
 ```bash
