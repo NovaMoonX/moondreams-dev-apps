@@ -126,8 +126,8 @@ const openPrivateCallables = () => {
   try {
     execSync('npm run fb:invoker -- --missing', { stdio: 'inherit' });
   } catch {
-    console.error(
-      '\nSome callables may still be private. Run `npm run fb:invoker -- --all` to open them.',
+    console.log(
+      '::error title=Callables may be private::Opening private callables after the deploy failed (see the fb:invoker lines above). The browser gets a CORS error from any that stayed private. Run `npm run fb:invoker -- --all` once gcloud can update Cloud Run services.',
     );
   }
 };
@@ -148,6 +148,7 @@ const run = async () => {
     );
     await new Promise((resolve) => setTimeout(resolve, RELEASE_RETRY_WAIT_MS));
     const retry = await deploy();
+    if (retry.code === 0) openPrivateCallables();
     return retry.code;
   }
   if (!INVOKER_FAILURES.some((message) => first.output.includes(message))) {
