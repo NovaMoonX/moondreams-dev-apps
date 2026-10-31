@@ -69,7 +69,10 @@ function SetHeldView({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<'outside' | 'free' | null>(null);
+  const [picked, setPicked] = useState<{
+    choice: 'outside' | 'free';
+    isRaising: boolean;
+  } | null>(null);
 
   const parsed = parseMoneyToCents(amount);
   const target =
@@ -79,6 +82,7 @@ function SetHeldView({
   const difference = target === null ? 0 : target - heldCents;
   const cents = Math.abs(difference);
   const isRaising = difference > 0;
+  const source = picked?.isRaising === isRaising ? picked.choice : null;
   const fromId = isRaising ? null : envelopeId;
   const toId = isRaising ? envelopeId : null;
   const isOutside = source === 'outside';
@@ -250,7 +254,7 @@ function SetHeldView({
                   isChosen &&
                     'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
                 )}
-                onClick={() => setSource(option.choice)}
+                onClick={() => setPicked({ choice: option.choice, isRaising })}
               >
                 <span className='flex w-full items-start justify-between gap-2'>
                   <span className='text-[15px] leading-[1.125rem] font-medium'>
