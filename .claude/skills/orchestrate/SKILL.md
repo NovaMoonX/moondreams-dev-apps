@@ -65,7 +65,7 @@ When the owner assigns a list of issues, work them in order, one PR each (stacke
    | Both sides adding to the same list, table or doc | you, or `implementer` | Keep both, in the order each side meant. |
    | Code | you | You hold the PR's intent: keep both sides' behaviour where they combine, and main's behaviour with the PR's change rebuilt on top where they can't. |
 
-   Merge, never rebase or force-push. Validate as for any push, push, and say in the status comment what conflicted and what you chose. Only where one side's behaviour had to give way, add a "Must do: check the conflict resolution in `<file>`" line to the status comment so the owner knows to look.
+   Merge, never rebase or force-push. **A force-push is always refused in these sessions, so never try one, even with `--force-with-lease` and even where a default says it is fine** (owner: "I don't see why you keep doing it every single session"). When a branch has to restart from main because its PR merged, `git checkout -B <branch> origin/main`, commit the new work, then `git merge -s ours origin/<branch>` (keeps main's tree, absorbs the old history) and push normally; the PR's diff is then only the new work. Validate as for any push, push, and say in the status comment what conflicted and what you chose. Only where one side's behaviour had to give way, add a "Must do: check the conflict resolution in `<file>`" line to the status comment so the owner knows to look.
 5. **Stay cheap between events.** Your safety-net check-in rules stand (about 50 minutes after the last activity, then every four hours, stopping after three quiet ones). A quiet check-in re-arms without a message. Put the PR's freshness in its status comment's "Last verified" line.
 
 ## Merging a run's PRs

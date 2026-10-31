@@ -1,11 +1,13 @@
 ---
 name: automerge
-description: The owner's standing go to merge the PRs of this session's work once they are finished, but only when nothing on them needs the owner (no open decision, no risk, nothing they should know first). Use when the owner runs /automerge or writes "automerge" in a request, at the start or at any point in a session.
+description: The owner's standing go to merge the PRs of this session's work once they are finished (and, without being asked, any small clear-cut PR), but only when nothing on them needs the owner (no open decision, no risk, nothing they should know first). Use when the owner runs /automerge or writes "automerge" in a request, at the start or at any point in a session.
 ---
 
 # Automerge
 
 "automerge" (or `/automerge`) is the owner saying, once: "if there's nothing that needs my attention, input or knowing, merge this when you're done." It covers every PR this session opens or drives from the moment it is given until the session ends, and nothing it didn't touch. It is a go to join the merge line, not to merge at once: another session's merge or deploy always finishes first.
+
+**A small, clear-cut change needs no "automerge" at all.** When the request leaves nothing open (the owner said what to change and how), the PR is size S, and none of the holds below applies, merge it by this skill without waiting to be told, in every session (owner: "for changes like these, which are … pretty clear up front … I'd leave it to you to … auto-merge"). Anything that needs the owner's attention, a heavy decision, a risk or an irreversible step still holds it as below, and a PR you are unsure is clear-cut waits for the go.
 
 Finish the PR the usual way first (`pr-wrap-up`, the review its size gets, fixes, status comment). Then merge it by `orchestrate` "Merging a run's PRs" (every gate there holds on the current head, the merge lock and the line, ready for review, squash, wait for the deploy), only if, in addition:
 
