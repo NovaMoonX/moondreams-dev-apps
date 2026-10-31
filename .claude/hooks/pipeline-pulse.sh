@@ -2,6 +2,8 @@
 # UserPromptSubmit ("working") and Stop ("stop") hook: tells the admin screen's Pipeline view
 # what this session is doing and which 🚩 questions its last reply raised. Silent and instant
 # without PIPELINE_KEY; the report is sent in the background and never blocks or fails the turn.
+# "stop" also reports the whole session's token use (main transcript plus every helper's), rewritten
+# in full each time so a restart never double-counts.
 
 [[ -n "${PIPELINE_KEY:-}" ]] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
@@ -62,4 +64,83 @@ body=$(jq -n -c \
 endpoint="${PIPELINE_URL:-https://us-central1-moondreams-dev-apps.cloudfunctions.net/recordPipelineEvent}"
 nohup curl -sS --max-time 8 -X POST -H 'Content-Type: application/json' \
   --data "$body" "$endpoint" >/dev/null 2>&1 &
+
+[[ "$mode" == "stop" && -n "${transcript:-}" && -f "$transcript" ]] || exit 0
+
+# One reply is several transcript lines sharing a message id and usage: count usage once, gather tools from all.
+shared_defs='
+  def replies:
+    [.[] | select(.type == "assistant" and .message.model != "<synthetic>" and .message.usage != null and .message.id != null)]
+    | group_by(.message.id)
+    | map({ts: .[0].timestamp, model: .[0].message.model,
+           usage: (map(.message.usage) | reduce .[] as $u ({}; . as $acc | $u | with_entries(.value = (if (.value | type) == "number" then ([.value, ($acc[.key] // 0)] | max) else .value end)) | $acc + .)),
+           tools: [.[].message.content[]? | select(.type == "tool_use")]})
+    | sort_by(.ts);
+  def written: (.usage.cache_creation_input_tokens // ((.usage.cache_creation.ephemeral_5m_input_tokens // 0) + (.usage.cache_creation.ephemeral_1h_input_tokens // 0)));
+  def edited_apps:
+    [.[].tools[] | select(.name == "Edit" or .name == "Write") | (.input.file_path // "")
+     | capture("src/apps/(?<id>[a-z0-9-]{1,40})/").id?];
+  def row($phase; $isHelper):
+    {day: .ts[0:10], model: .model, phase: $phase, isHelper: $isHelper, calls: 1,
+     input: (.usage.input_tokens // 0),
+     cacheWrite5m: (.usage.cache_creation.ephemeral_5m_input_tokens // (if .usage.cache_creation then 0 else written end)),
+     cacheWrite1h: (.usage.cache_creation.ephemeral_1h_input_tokens // 0),
+     cacheRead: (.usage.cache_read_input_tokens // 0),
+     output: (.usage.output_tokens // 0)};
+'
+main_program="$shared_defs"'
+  def uses($names): any(.tools[]; .name as $n | $names | index($n));
+  def phase:
+    if any(.tools[]; .name == "Bash" and ((.input.command // "") | test("pw\\.mjs|playwright|publish-screenshots"))) then "screenshots"
+    elif uses(["Edit", "Write", "NotebookEdit"]) then "building"
+    elif uses(["Agent", "EnterPlanMode", "ExitPlanMode"]) or any(.tools[]; .name == "Skill" and ((.input.skill // "") | IN("plan-app", "orchestrate"))) then "planning"
+    elif uses(["Read", "Grep", "Glob", "WebFetch", "WebSearch", "Bash", "ToolSearch"]) then "investigating"
+    else "conversation" end;
+  replies as $r
+  | {
+      apps: ($r | edited_apps),
+      contextTokens: ($r | last | (if . == null then 0 else ((.usage.input_tokens // 0) + (.usage.cache_read_input_tokens // 0) + written) end)),
+      calls: ($r | length),
+      rows: [$r[] | row(phase; false)]
+    }'
+helper_program="$shared_defs"'replies | {apps: edited_apps, rows: map(row($phase; true))}'
+
+(
+  base="${transcript%.jsonl}"
+  # Everything that grows with the session goes through files: one argument over 128 KB fails quietly.
+  trap '' HUP
+  work=$(mktemp -d) || exit 0
+  trap 'rm -rf "$work"' EXIT
+  for file in "$base"/subagents/agent-*.jsonl; do
+    [[ -f "$file" ]] || continue
+    agent_type=$(jq -r '.agentType // empty' "${file%.jsonl}.meta.json" 2>/dev/null)
+    case "$agent_type" in
+      implementer | pr-syncer | stack-pr-reviewer) phase="building" ;;
+      validator) phase="checks" ;;
+      technical-reviewer | product-reviewer | design-reviewer | lead-reviewer) phase="review" ;;
+      product-planner | design-planner | tech-planner | Plan) phase="planning" ;;
+      *) phase="investigating" ;;
+    esac
+    jq -s -c --arg phase "$phase" "$helper_program" "$file" 2>/dev/null
+  done >"$work/helpers.jsonl"
+  jq -s -c "$main_program" "$transcript" 2>/dev/null | jq -c \
+    --arg key "$PIPELINE_KEY" \
+    --arg sessionId "$session_id" \
+    --arg url "$session_url" \
+    --arg branch "$branch" \
+    --slurpfile helpers "$work/helpers.jsonl" \
+    '{data: {key: $key, kind: "cost", sessionId: $sessionId,
+      url: (if $url == "" then null else $url end),
+      branch: (if $branch == "" then null else $branch end),
+      app: (.apps + [$helpers[].apps[]] | group_by(.) | sort_by(length) | last | (if . == null then null else .[0] end)),
+      contextTokens: .contextTokens, calls: .calls,
+      rows: (.rows + [$helpers[].rows[]]
+        | group_by([.day, .model, .phase, .isHelper])
+        | map(.[0] + {calls: (map(.calls) | add), input: (map(.input) | add), cacheWrite5m: (map(.cacheWrite5m) | add),
+                      cacheWrite1h: (map(.cacheWrite1h) | add), cacheRead: (map(.cacheRead) | add), output: (map(.output) | add)}))}}' \
+    >"$work/body.json" 2>/dev/null
+  [[ -s "$work/body.json" ]] || exit 0
+  curl -sS --max-time 8 -X POST -H 'Content-Type: application/json' \
+    --data @"$work/body.json" "$endpoint" >/dev/null 2>&1
+) >/dev/null 2>&1 &
 exit 0

@@ -189,6 +189,49 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   pipelineSessions.forEach((session) => {
     batch.set(context.firestore.doc(`pipelineSessions/${session.sessionId}`), session);
   });
+  // Token use per session, spread over the last 30 days: Opus on the main thread, Sonnet and Haiku as helpers.
+  const PHASE_MODELS = [
+    ['planning', 'claude-opus-5-5', 3],
+    ['building', 'claude-sonnet-5-5', 10],
+    ['investigating', 'claude-haiku-5-5', 8],
+    ['screenshots', 'claude-opus-5-5', 2],
+    ['review', 'claude-sonnet-5-5', 4],
+    ['checks', 'claude-haiku-5-5', 3],
+    ['conversation', 'claude-opus-5-5', 5],
+  ] as const;
+  const pipelineCosts = [
+    { sessionId: 'session_seedWaiting', app: null, daysAgo: [1, 0], scale: 3, contextTokens: 182000, calls: 140 },
+    { sessionId: 'session_seedWaitingTwo', app: 'pinch', daysAgo: [4, 3, 2], scale: 4, contextTokens: 215000, calls: 260 },
+    { sessionId: 'session_seedWaitingThree', app: 'waypoint', daysAgo: [9, 8], scale: 5, contextTokens: 310000, calls: 410 },
+    { sessionId: 'session_seedWorking', app: 'pinch', daysAgo: [0], scale: 2, contextTokens: 96000, calls: 75 },
+    { sessionId: 'session_seedQuiet', app: 'a-list', daysAgo: [14, 13, 12], scale: 4, contextTokens: 240000, calls: 330 },
+    { sessionId: 'session_seedIdle', app: 'waypoint', daysAgo: [20, 19], scale: 3, contextTokens: 150000, calls: 190 },
+    { sessionId: 'session_seedFinishedA', app: 'a-list', daysAgo: [27, 26], scale: 6, contextTokens: 275000, calls: 520 },
+    { sessionId: 'session_seedLongRun', app: null, daysAgo: [6, 5, 4, 3, 2, 1, 0], scale: 14, contextTokens: 540000, calls: 1900 },
+  ].map(({ daysAgo, scale, ...cost }) => ({
+    ...cost,
+    url: `https://claude.ai/code/${cost.sessionId}`,
+    branch: `claude/${cost.sessionId.replace('session_seed', 'seed-').toLowerCase()}`,
+    rows: daysAgo.flatMap((ago) =>
+      PHASE_MODELS.map(([phase, model, weight]) => ({
+        day: new Date(context.now - ago * DAY_MS).toISOString().slice(0, 10),
+        model,
+        phase,
+        isHelper: model !== 'claude-opus-5-5',
+        calls: weight * scale * 4,
+        input: weight * scale * 900,
+        cacheWrite5m: weight * scale * 12_000,
+        cacheWrite1h: weight * scale * 20_000,
+        cacheRead: weight * scale * 700_000,
+        output: weight * scale * 9_000,
+      })),
+    ),
+    startedAt: context.now - (Math.max(...daysAgo) + 1) * DAY_MS,
+    updatedAt: context.now - Math.min(...daysAgo) * DAY_MS,
+  }));
+  pipelineCosts.forEach((cost) => {
+    batch.set(context.firestore.doc(`pipelineCost/${cost.sessionId}`), cost);
+  });
   const toInboxPr = (number: number, title: string, head: string, sessionUrl: string | null, sessionTitle: string) => ({
     number,
     title,
@@ -296,7 +339,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     ...EMPTY_SEED_RESULT,
     authUsers: fixtures.length,
     firestoreDocuments:
-      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + 1,
+      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + pipelineCosts.length + 1,
     realtimePaths: fixtures.length,
   };
 
