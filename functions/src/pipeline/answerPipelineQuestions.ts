@@ -939,11 +939,15 @@ const takeLock = async (token: string, prNumber: number) => {
     return { held: null, error: 'Another merge started just now. Try again once its deploy finishes.' };
   }
   // A merge that landed just before the take can take a moment to show its deploy, so look once more while holding.
-  if (await isDeploying(token)) {
-    await releaseLock(token, held, prNumber);
-    return { held: null, error: DEPLOYING };
-  }
-  return { held, error: null };
+  // A failed look counts as a deploy, so the lock is never kept on an answer it couldn't read.
+  if (!(await isDeploying(token).catch(() => true))) return { held, error: null };
+  const isFreed = await releaseLock(token, held, prNumber);
+  return {
+    held: null,
+    error: isFreed
+      ? DEPLOYING
+      : `${DEPLOYING} The merge lock is still held: run npm run merge:lock -- release ${prNumber} so sessions can merge.`,
+  };
 };
 
 const markReady = async (token: string, nodeId: string) => {
