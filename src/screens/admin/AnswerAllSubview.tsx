@@ -66,7 +66,7 @@ function AnswerAllSubview({
     if (answers.sendNote) return <WarningLine>{answers.sendNote}</WarningLine>;
     if (answers.unsure.length > 0) return <UnsureLine prs={answers.unsure} />;
     return readyCount === 0 && !answers.isSending
-      ? 'Pick an option or add a note first'
+      ? 'Pick an option or write an answer first'
       : undefined;
   };
 
@@ -74,8 +74,9 @@ function AnswerAllSubview({
     <Subview overlay title='Answer all' onClose={requestClose}>
       <div className='space-y-6 pb-6'>
         <p className='text-muted-foreground text-sm'>
-          Pick an option, add a note, or both. Each pull request gets your
-          answers as one comment.
+          Pick an option or write your own, and add anything else under each
+          session&apos;s questions. Each pull request gets your answers as one
+          comment.
         </p>
         {groups.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
@@ -87,13 +88,21 @@ function AnswerAllSubview({
             <SectionDivider label={entry.name} />
             <ul className='space-y-5'>
               {slots.map((slot) => (
-                <li key={slot.id}>
+                <li
+                  key={slot.id}
+                  className={
+                    slot.kind === 'feedback' ? 'border-border border-t pt-4' : undefined
+                  }
+                >
                   <AnswerFields
                     slot={slot}
                     draft={answers.getDraft(slot.id)}
                     isSent={answers.isSent(slot)}
                     error={getPrError(slots, slot, answers.errors)}
-                    onChoice={(choice) => answers.setChoice(slot.id, choice)}
+                    onChoices={(choices, other) =>
+                      answers.setChoices(slot.id, choices, other)
+                    }
+                    onOther={(other) => answers.setOther(slot.id, other)}
                     onNote={(note) => answers.setNote(slot.id, note)}
                   />
                 </li>

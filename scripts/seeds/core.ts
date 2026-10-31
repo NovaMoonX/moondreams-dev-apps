@@ -204,14 +204,16 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       sessionUrl,
       sessionTitle,
       state: 'in progress',
-      ownerItems: [] as { text: string; options: { label: string; images: string[] }[] }[],
+      ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean }[],
       goodToKnow: [] as string[],
       screenshots: [] as string[],
       updatedAt: context.now - 10 * MINUTE_MS,
     },
   });
   const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
+  const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
   const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
+  batch.delete(context.firestore.doc('pipeline/answered'));
   batch.set(context.firestore.doc('pipeline/inbox'), {
     prs: [
       {
@@ -225,6 +227,16 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
                 { label: 'A, Back on the title line', images: ['https://placehold.co/390x844.png?text=A'] },
                 { label: 'B, Back above the title', images: ['https://placehold.co/390x844.png?text=B'] },
               ],
+              isMulti: false,
+            },
+            {
+              text: 'Which cards should show the history count?',
+              options: [
+                { label: 'Bills (Recommended)', images: [] },
+                { label: 'Envelopes', images: [] },
+                { label: 'Goals', images: [] },
+              ],
+              isMulti: true,
             },
           ],
           goodToKnow: ['The undo sheet was only checked at 390px.'],
@@ -257,9 +269,10 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         ci: 'red',
         status: {
           ...orphanPr.status,
-          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [] }],
+          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false }],
         },
       },
+      pinchPr,
     ],
     updatedAt: context.now - 4 * MINUTE_MS,
   });

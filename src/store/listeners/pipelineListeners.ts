@@ -6,7 +6,11 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
-import type { PipelineInbox, PipelineSession } from '@/lib/admin/pipelineTypes';
+import type {
+  PipelineAnswered,
+  PipelineInbox,
+  PipelineSession,
+} from '@/lib/admin/pipelineTypes';
 import { createFirestoreCollectionListener } from '@/store/listeners/createFirestoreCollectionListener';
 
 /** Admin only: the Claude Code sessions that report their state. */
@@ -31,6 +35,21 @@ export function startPipelineInboxListener(
     doc(db, 'pipeline', 'inbox'),
     (snapshot) =>
       onChange(snapshot.exists() ? (snapshot.data() as PipelineInbox) : null),
+    onError,
+  );
+}
+
+/** Admin only: when each pull request was last answered from the dashboard. */
+export function startPipelineAnsweredListener(
+  onChange: (answered: PipelineAnswered | null) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(db, 'pipeline', 'answered'),
+    (snapshot) =>
+      onChange(
+        snapshot.exists() ? (snapshot.data() as PipelineAnswered) : null,
+      ),
     onError,
   );
 }

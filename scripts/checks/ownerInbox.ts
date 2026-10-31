@@ -76,6 +76,21 @@ assert.deepEqual(
   ],
   'a question carries the screenshots indented under it, and only those',
 );
+const multi = parseStatus(
+  `**Should do**
+- [ ] Which screens get the new header? (pick any) (who: owner)
+  - Home
+  - Settings
+`,
+  '',
+).ownerItems[0];
+assert.equal(multi.isMulti, true, '(pick any) makes a multi-select question');
+assert.equal(
+  multi.text,
+  'Which screens get the new header?',
+  'the marker is not part of the question',
+);
+assert.equal(asked.ownerItems[0].isMulti, false, 'one pick by default');
 assert.match(
   buildInbox(
     [

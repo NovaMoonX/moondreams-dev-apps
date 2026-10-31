@@ -23,6 +23,7 @@ export interface PipelinePr extends Omit<PipelineInboxPr, 'url'> {
 export interface PipelineOption {
   label: string;
   images: string[];
+  isRecommended: boolean;
 }
 
 export interface PipelineOwnerEntryItem {
@@ -33,6 +34,7 @@ export interface PipelineOwnerEntryItem {
   statusAt: number;
   text: string;
   options: PipelineOption[];
+  isMulti: boolean;
 }
 
 export interface GalleryItem {
@@ -116,6 +118,15 @@ const toSafePr = (pr: PipelineInboxPr): PipelinePr => ({
   url: toHttps(pr.url),
 });
 
+/** The asks the owner hasn't answered from the dashboard since the status that raised them. */
+const getOpenItems = (
+  items: PipelineOwnerEntryItem[],
+  answered: Record<string, number>,
+) =>
+  items.filter((item) => (answered[item.id] ?? 0) < item.statusAt);
+
+const RECOMMENDED = /\s*\(recommended\)/i;
+
 const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
   prs.flatMap((pr) =>
     (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => ({
@@ -124,9 +135,11 @@ const toSafeItems = (prs: PipelineInboxPr[]): PipelineOwnerEntryItem[] =>
       statusAt: pr.status?.updatedAt ?? 0,
       text: item.text,
       options: item.options.map((option) => ({
-        label: option.label,
+        label: option.label.replace(RECOMMENDED, '').trim(),
         images: onlyHttps(option.images),
+        isRecommended: RECOMMENDED.test(option.label),
       })),
+      isMulti: item.isMulti === true,
     })),
   );
 
@@ -171,13 +184,17 @@ const toBranchWords = (branch: string | null) =>
 
 const toAsk = (line: string) => stripLinks(line).replace(/^🚩\s*/, '');
 
+const ANSWERED_LINE = 'Answered · waiting for the session';
+
 function getSubtitle(
   group: PipelineGroup | null,
   asks: string[],
   time: string,
   session: PipelineSession,
   now: number,
+  isAnswered: boolean,
 ) {
+  if (isAnswered && group !== 'working') return `${time} · You answered`;
   if (group === 'waiting') {
     const count = asks.length >= 2 ? `${asks.length} asks · ` : '';
     return `${time} · ${count}${asks[0] || 'Waiting on you'}`;
@@ -192,8 +209,10 @@ function getLead(
   session: PipelineSession,
   group: PipelineGroup | null,
   now: number,
+  isAnswered: boolean,
 ) {
   const time = formatPipelineTime(session.updatedAt, now);
+  if (isAnswered && group !== 'working') return `${ANSWERED_LINE}.`;
   if (group === 'waiting') return `Waiting since ${time}`;
   if (group === 'working') {
     const since = formatPipelineTime(
@@ -210,21 +229,34 @@ function getLead(
 function toSessionEntry(
   session: PipelineSession,
   prs: PipelineInboxPr[],
+  answered: Record<string, number>,
   now: number,
 ): PipelineEntry {
   const sessionPrs = getSessionPrs(session, prs);
   const safePrs = sessionPrs.map(toSafePr);
-  const ownerItems = toSafeItems(sessionPrs);
+  const allItems = toSafeItems(sessionPrs);
+  const ownerItems = getOpenItems(allItems, answered);
+  // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
+  const isReplied =
+    sessionPrs[0] !== undefined &&
+    (answered[`${sessionPrs[0].number}:reply`] ?? 0) >= session.updatedAt;
+  const raisedHands = isReplied ? [] : session.raisedHands;
   const asks =
-    ownerItems.length > 0
+    allItems.length > 0
       ? ownerItems.map((item) => toAsk(item.text))
-      : session.raisedHands.map(toAsk);
+      : raisedHands.map(toAsk);
+  const isAnswered =
+    asks.length === 0 &&
+    (allItems.length > 0 || session.raisedHands.length > 0);
   const baseGroup = getSessionGroup(session, now);
-  // A finished or quiet session that still holds asks is waiting on the owner.
-  const group =
-    asks.length > 0 && (baseGroup === 'finished' || baseGroup === 'quiet')
-      ? 'waiting'
-      : baseGroup;
+  const getGroup = (): PipelineGroup | null => {
+    // A finished or quiet session that still holds asks is waiting on the owner.
+    if (asks.length > 0 && (baseGroup === 'finished' || baseGroup === 'quiet'))
+      return 'waiting';
+    if (baseGroup !== 'waiting' || asks.length > 0) return baseGroup;
+    return now - session.updatedAt > IDLE_KEEP_MS ? null : 'finished';
+  };
+  const group = getGroup();
   const time = formatPipelineTime(session.updatedAt, now);
   const title = sessionPrs.find((pr) => pr.status?.sessionTitle)?.status
     ?.sessionTitle;
@@ -238,10 +270,10 @@ function toSessionEntry(
     group,
     isPrOnly: false,
     time,
-    subtitle: getSubtitle(group, asks, time, session, now),
-    lead: getLead(session, group, now),
+    subtitle: getSubtitle(group, asks, time, session, now, isAnswered),
+    lead: getLead(session, group, now, isAnswered),
     asks,
-    raisedHands: session.raisedHands,
+    raisedHands,
     prs: safePrs,
     ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
@@ -250,10 +282,14 @@ function toSessionEntry(
   };
 }
 
-function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
+function toPrEntry(
+  pr: PipelineInboxPr,
+  answered: Record<string, number>,
+  now: number,
+): PipelineEntry {
   const status = pr.status;
   const safePr = toSafePr(pr);
-  const ownerItems = toSafeItems([pr]);
+  const ownerItems = getOpenItems(toSafeItems([pr]), answered);
   const asks = ownerItems.map((item) => toAsk(item.text));
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
   return {
@@ -275,8 +311,13 @@ function toPrEntry(pr: PipelineInboxPr, now: number): PipelineEntry {
   };
 }
 
+// A reply answers 🚩 lines when no question was asked; feedback sits beside the questions, tied to none.
+export type AnswerSlotKind = 'question' | 'reply' | 'feedback';
+
 export interface AnswerSlot {
   id: string;
+  /** What the server records once it is sent, so the ask stops counting as waiting. */
+  mark: string | null;
   prNumber: number;
   statusAt: number;
   /** Plain text, as it is sent. */
@@ -284,47 +325,66 @@ export interface AnswerSlot {
   /** The question as the owner reads it, links and all. */
   text: string;
   options: PipelineOption[];
-  /** No question was asked: a note answers the 🚩 lines as a whole. */
-  isReply: boolean;
+  isMulti: boolean;
+  kind: AnswerSlotKind;
 }
 
-/** What the owner can answer on an entry: each question, or one reply on the first pull request when only 🚩 lines were raised. */
+/** What the owner can answer on an entry: each question plus one box for anything else, or one reply when only 🚩 lines were raised. */
 export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
-  if (entry.ownerItems.length > 0) {
-    return entry.ownerItems.map((item) => ({
-      id: item.id,
-      prNumber: item.prNumber,
-      statusAt: item.statusAt,
-      question: stripLinks(item.text).slice(0, 500),
-      text: item.text,
-      options: item.options,
-      isReply: false,
-    }));
-  }
   const [pr] = entry.prs;
+  const toFreeSlot = (
+    target: PipelinePr,
+    kind: AnswerSlotKind,
+  ): AnswerSlot => ({
+    id: `${entry.key}:${target.number}:${kind}`,
+    mark: kind === 'reply' ? `${target.number}:reply` : null,
+    prNumber: target.number,
+    statusAt: target.status?.updatedAt ?? 0,
+    question: kind === 'reply' ? 'Reply to what was raised' : 'Anything else',
+    text: kind === 'reply' ? `Reply on #${target.number}` : 'Anything else?',
+    options: [],
+    isMulti: false,
+    kind,
+  });
+  if (entry.ownerItems.length > 0) {
+    const questions = entry.ownerItems.map(
+      (item): AnswerSlot => ({
+        id: item.id,
+        mark: item.id,
+        prNumber: item.prNumber,
+        statusAt: item.statusAt,
+        question: stripLinks(item.text).slice(0, 500),
+        text: item.text,
+        options: item.options,
+        isMulti: item.isMulti,
+        kind: 'question',
+      }),
+    );
+    const target =
+      entry.prs.find((candidate) => candidate.number === questions[0].prNumber) ??
+      pr;
+    return target ? [...questions, toFreeSlot(target, 'feedback')] : questions;
+  }
   if (!pr || entry.raisedHands.length === 0) return [];
-  return [
-    {
-      id: `${pr.number}:reply`,
-      prNumber: pr.number,
-      statusAt: pr.status?.updatedAt ?? 0,
-      question: 'Reply to what was raised',
-      text: `Reply on #${pr.number}`,
-      options: [],
-      isReply: true,
-    },
-  ];
+  return [toFreeSlot(pr, 'reply')];
 }
 
-/** A pull request's failure goes under its last question only, once. */
+/** The slots that ask something of the owner, without the optional feedback box. */
+export const getAskedSlots = (slots: AnswerSlot[]) =>
+  slots.filter((slot) => slot.kind !== 'feedback');
+
+/** A pull request's failure goes under its last question only, once (the feedback box when it asked none). */
 export const getPrError = (
   slots: AnswerSlot[],
   slot: AnswerSlot,
   errors: Record<number, string>,
-) =>
-  slots.filter((other) => other.prNumber === slot.prNumber).at(-1) === slot
+) => {
+  const onPr = slots.filter((other) => other.prNumber === slot.prNumber);
+  const asked = getAskedSlots(onPr);
+  return (asked.length > 0 ? asked : onPr).at(-1) === slot
     ? (errors[slot.prNumber] ?? null)
     : null;
+};
 
 export interface PipelineAction {
   label: string;
@@ -347,12 +407,13 @@ export type PipelineGroups = ReturnType<typeof buildPipeline>;
 export function buildPipeline(
   sessions: PipelineSession[],
   inbox: PipelineInbox | null,
+  answered: Record<string, number>,
   now: number,
 ) {
   const prs = inbox?.prs ?? [];
   const entries = [...sessions]
     .sort((a, b) => b.updatedAt - a.updatedAt)
-    .map((session) => toSessionEntry(session, prs, now))
+    .map((session) => toSessionEntry(session, prs, answered, now))
     .filter((entry) => entry.group !== null);
   const sessionUrls = new Set(
     entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
@@ -365,7 +426,8 @@ export function buildPipeline(
           (url) => url && sessionUrls.has(url),
         ),
     )
-    .map((pr) => toPrEntry(pr, now));
+    .map((pr) => toPrEntry(pr, answered, now))
+    .filter((entry) => entry.ownerItems.length > 0);
   const inGroup = (group: PipelineGroup) =>
     entries.filter((entry) => entry.group === group);
   return {

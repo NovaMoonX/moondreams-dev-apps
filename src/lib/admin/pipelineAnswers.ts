@@ -4,13 +4,16 @@ import { functions } from '@lib/firebase/config';
 
 export interface PipelineAnswerItem {
   question: string;
-  choice: string | null;
+  choices: string[];
+  other: string | null;
   note: string | null;
 }
 
 export interface PipelineAnswersForPr {
   prNumber: number;
   items: PipelineAnswerItem[];
+  /** The asks these answer, so the dashboard stops counting them. */
+  marks: string[];
 }
 
 export interface PipelineAnswerResult {

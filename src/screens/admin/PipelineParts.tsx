@@ -1,11 +1,20 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, Maximize2, Plus, TriangleAlert } from 'lucide-react';
+import {
+  Check,
+  ChevronRight,
+  Maximize2,
+  PenLine,
+  Plus,
+  TriangleAlert,
+} from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
 import FallbackImage from '@/components/FallbackImage';
 import HelpTip from '@/components/HelpTip';
+import FormSheet from '@/components/FormSheet';
 import ImageViewer from '@/components/ImageViewer';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { MAX_ANSWER_NOTE } from '@lib/admin/pipelineAnswers';
 
@@ -92,15 +101,18 @@ const getEdgeClass = (isSelected: boolean) =>
 function LetterChip({
   letter,
   isSelected,
+  isMulti,
 }: {
-  letter: string;
+  letter: ReactNode;
   isSelected: boolean;
+  isMulti: boolean;
 }) {
   return (
     <span
       aria-hidden='true'
       className={join(
-        'flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold',
+        'flex size-6 shrink-0 items-center justify-center text-xs font-semibold',
+        isMulti ? 'rounded-md' : 'rounded-full',
         isSelected
           ? 'bg-indigo-600 text-white dark:bg-indigo-400 dark:text-zinc-900'
           : 'bg-muted text-muted-foreground',
@@ -168,29 +180,109 @@ interface AnswerFieldsProps {
   draft: AnswerDraft;
   isSent: boolean;
   error: string | null;
-  onChoice: (choice: string | null) => void;
+  onChoices: (choices: string[], other: string | null) => void;
+  onOther: (other: string) => void;
   onNote: (note: string) => void;
+  isExpanded?: boolean;
 }
 
-/** One question with its options as tappable rows (a picture makes its option a card), an optional note, and what happened when it was sent. */
+const ROW_CLASS =
+  'h-auto min-h-11 w-full justify-start gap-3 rounded-xl border px-3 py-2 text-left font-normal';
+
+// Inline after a no-break space, so a wrapping label carries its last word down with the tag instead of indenting it.
+function RecommendedTag() {
+  return (
+    <>
+      {'\u00a0'}
+      <span className='bg-muted text-muted-foreground rounded-full px-1.5 py-px text-[11px] font-medium whitespace-nowrap'>
+        Recommended
+      </span>
+    </>
+  );
+}
+
+function FreeTextField({
+  slot,
+  value,
+  onChange,
+  isExpanded,
+}: {
+  slot: AnswerSlot;
+  value: string;
+  onChange: (value: string) => void;
+  isExpanded: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  if (slot.kind === 'feedback' && !isOpen && !isExpanded && value === '') {
+    return (
+      <Button
+        type='button'
+        variant='outline'
+        size='sm'
+        rounded='full'
+        className="relative gap-1 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+        onClick={() => setIsOpen(true)}
+      >
+        <Plus className='size-3.5' aria-hidden='true' />
+        Add other feedback
+      </Button>
+    );
+  }
+  const words = {
+    question: { label: 'Your answer', placeholder: 'Your answer' },
+    reply: { label: 'Your reply', placeholder: 'Answer what was raised' },
+    feedback: {
+      label: 'Anything else?',
+      placeholder: "Feedback that isn't an answer to a question above",
+    },
+  }[slot.kind];
+  return (
+    <NoteTextField
+      label={words.label}
+      placeholder={words.placeholder}
+      value={value}
+      onChange={onChange}
+      maxLength={MAX_ANSWER_NOTE}
+      rows={isExpanded ? 4 : 2}
+      shouldFocus={isOpen || isExpanded}
+    />
+  );
+}
+
+/** One question as tappable options with an Other row for a typed answer, or a free-text box. */
 export function AnswerFields({
   slot,
   draft,
   isSent,
   error,
-  onChoice,
+  onChoices,
+  onOther,
   onNote,
+  isExpanded = false,
 }: AnswerFieldsProps) {
-  const [isNoteOpen, setIsNoteOpen] = useState(false);
   const [previewAt, setPreviewAt] = useState<number | null>(null);
+  const [isOtherFocus, setIsOtherFocus] = useState(false);
   const options = slot.options.slice(0, LETTERS.length);
-  const chosen = options.findIndex(
-    (option) => getChoiceText(option.label) === draft.choice,
-  );
-  const isNoteShown =
-    slot.isReply || options.length === 0 || isNoteOpen || draft.note !== '';
-  const toggle = (index: number) =>
-    onChoice(index === chosen ? null : getChoiceText(options[index].label));
+  const isChosen = (index: number) =>
+    draft.choices.includes(getChoiceText(options[index].label));
+  const isOther = draft.other !== null;
+  const toggle = (index: number) => {
+    const text = getChoiceText(options[index].label);
+    if (slot.isMulti) {
+      onChoices(
+        isChosen(index)
+          ? draft.choices.filter((choice) => choice !== text)
+          : [...draft.choices, text],
+        draft.other,
+      );
+      return;
+    }
+    onChoices(isChosen(index) ? [] : [text], null);
+  };
+  const toggleOther = () => {
+    setIsOtherFocus(!isOther);
+    onChoices(slot.isMulti ? draft.choices : [], isOther ? null : '');
+  };
   const indexed = options.map((option, index) => ({ option, index }));
   const plain = indexed.filter(({ option }) => option.images.length === 0);
   const pictured = indexed.filter(({ option }) => option.images.length > 0);
@@ -198,22 +290,36 @@ export function AnswerFields({
     caption: `${LETTERS[index]} · ${stripLinks(option.label)}`,
     pictures: [{ src: option.images[0], label: null }],
   }));
-
-  const getNoteLabel = () => {
-    if (slot.isReply) return 'Your reply';
-    return options.length > 0 ? 'Your note' : 'Your answer';
-  };
+  const hasOptions = options.length > 0;
 
   return (
     <div className='space-y-2'>
-      <p className='text-foreground text-sm font-medium [overflow-wrap:anywhere]'>
-        <LinkedText text={slot.text} />
-      </p>
+      {slot.kind === 'question' ? (
+        <div className='space-y-0.5'>
+          <p className='text-foreground text-sm font-medium [overflow-wrap:anywhere]'>
+            <LinkedText text={slot.text} />
+          </p>
+          {hasOptions ? (
+            <p className='text-muted-foreground text-xs'>
+              {slot.isMulti
+                ? 'Pick any, or write your own'
+                : 'Pick one, or write your own'}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {isSent ? (
         <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
           <Check className='size-4' aria-hidden='true' />
           Sent · waiting for the session
         </p>
+      ) : !hasOptions ? (
+        <FreeTextField
+          slot={slot}
+          value={draft.note}
+          onChange={onNote}
+          isExpanded={isExpanded}
+        />
       ) : (
         <>
           {plain.length > 0 ? (
@@ -223,19 +329,18 @@ export function AnswerFields({
                   key={`${option.label}-${index}`}
                   type='button'
                   variant='tertiary'
-                  aria-pressed={index === chosen}
-                  className={join(
-                    'h-auto min-h-11 w-full justify-start gap-3 rounded-xl border px-3 py-2 text-left font-normal',
-                    getEdgeClass(index === chosen),
-                  )}
+                  aria-pressed={isChosen(index)}
+                  className={join(ROW_CLASS, getEdgeClass(isChosen(index)))}
                   onClick={() => toggle(index)}
                 >
                   <LetterChip
                     letter={LETTERS[index]}
-                    isSelected={index === chosen}
+                    isSelected={isChosen(index)}
+                    isMulti={slot.isMulti}
                   />
                   <span className='text-foreground min-w-0 flex-1 text-sm'>
                     {stripLinks(option.label)}
+                    {option.isRecommended ? <RecommendedTag /> : null}
                   </span>
                 </Button>
               ))}
@@ -248,10 +353,10 @@ export function AnswerFields({
                   <Button
                     type='button'
                     variant='tertiary'
-                    aria-pressed={index === chosen}
+                    aria-pressed={isChosen(index)}
                     className={join(
                       'h-auto w-full min-w-0 flex-col items-stretch justify-start gap-1.5 rounded-xl border p-1.5 text-left font-normal',
-                      getEdgeClass(index === chosen),
+                      getEdgeClass(isChosen(index)),
                     )}
                     onClick={() => toggle(index)}
                   >
@@ -260,9 +365,14 @@ export function AnswerFields({
                       alt=''
                       className='h-28 w-full rounded-lg object-cover object-top'
                     />
-                    <span className='text-foreground line-clamp-2 px-1 pb-0.5 text-xs font-medium [overflow-wrap:anywhere]'>
+                    <span className='text-foreground line-clamp-2 px-1 pr-8 pb-0.5 text-xs font-medium [overflow-wrap:anywhere]'>
                       {LETTERS[index]} · {stripLinks(option.label)}
                     </span>
+                    {option.isRecommended ? (
+                      <span className='px-0.5 pb-1 text-left leading-none'>
+                        <RecommendedTag />
+                      </span>
+                    ) : null}
                   </Button>
                   <Button
                     type='button'
@@ -279,6 +389,33 @@ export function AnswerFields({
               ))}
             </ul>
           ) : null}
+          <Button
+            type='button'
+            variant='tertiary'
+            aria-pressed={isOther}
+            className={join(ROW_CLASS, getEdgeClass(isOther))}
+            onClick={toggleOther}
+          >
+            <LetterChip
+              letter={<PenLine className='size-3' />}
+              isSelected={isOther}
+              isMulti={slot.isMulti}
+            />
+            <span className='text-foreground min-w-0 flex-1 text-sm'>
+              Other
+            </span>
+          </Button>
+          {isOther ? (
+            <NoteTextField
+              label='Your answer'
+              placeholder='Write your own answer'
+              value={draft.other ?? ''}
+              onChange={onOther}
+              maxLength={MAX_ANSWER_NOTE}
+              rows={2}
+              shouldFocus={isOtherFocus}
+            />
+          ) : null}
           {previewAt !== null ? (
             <ImageViewer
               slides={previews}
@@ -286,35 +423,6 @@ export function AnswerFields({
               onClose={() => setPreviewAt(null)}
             />
           ) : null}
-          {isNoteShown ? (
-            <NoteTextField
-              label={getNoteLabel()}
-              placeholder={
-                slot.isReply
-                  ? 'Answer what was raised'
-                  : options.length > 0
-                    ? 'Something to add, or something else entirely'
-                    : 'Your answer'
-              }
-              value={draft.note}
-              onChange={onNote}
-              maxLength={MAX_ANSWER_NOTE}
-              rows={2}
-              shouldFocus={isNoteOpen}
-            />
-          ) : (
-            <Button
-              type='button'
-              variant='outline'
-              size='sm'
-              rounded='full'
-              className="relative gap-1 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
-              onClick={() => setIsNoteOpen(true)}
-            >
-              <Plus className='size-3.5' aria-hidden='true' />
-              Add a note
-            </Button>
-          )}
         </>
       )}
       {error ? (
@@ -322,6 +430,106 @@ export function AnswerFields({
           <WarningLine>{error}</WarningLine>
         </p>
       ) : null}
+    </div>
+  );
+}
+
+const ROW_WORDS = {
+  question: { sheet: 'Answer', empty: 'Not answered yet' },
+  reply: { sheet: 'Reply', empty: 'Not answered yet' },
+  feedback: { sheet: 'Anything else?', empty: 'Optional' },
+};
+
+const getAnswerSummary = (draft: AnswerDraft) => {
+  const other = (draft.other ?? '').trim();
+  const picks = [...draft.choices, ...(other === '' ? [] : [`Other: ${other}`])];
+  const note = draft.note.trim();
+  return [...picks, ...(note === '' ? [] : [note])].join(', ');
+};
+
+/** A question as one summary row whose fields open in a drawer over the sheet. */
+export function AnswerRow(props: AnswerFieldsProps) {
+  const { slot, draft, isSent, error } = props;
+  const [isOpen, setIsOpen] = useState(false);
+  const words = ROW_WORDS[slot.kind];
+  const summary = getAnswerSummary(draft);
+  const heading =
+    slot.kind === 'question'
+      ? stripLinks(slot.text)
+      : slot.kind === 'reply'
+        ? 'Your reply'
+        : 'Anything else?';
+
+  const getStatus = () => {
+    if (isSent) {
+      return (
+        <span className='text-muted-foreground inline-flex items-center gap-1'>
+          <Check className='size-3.5' aria-hidden='true' />
+          Sent · waiting for the session
+        </span>
+      );
+    }
+    return summary === '' ? (
+      <span className='text-muted-foreground'>{words.empty}</span>
+    ) : (
+      <span className='text-foreground'>{summary}</span>
+    );
+  };
+
+  return (
+    <div className='space-y-1.5'>
+      <Button
+        type='button'
+        variant='tertiary'
+        className={join(
+          ROW_CLASS,
+          'gap-2 py-2.5',
+          summary !== '' && !isSent ? getEdgeClass(true) : 'border-border',
+        )}
+        disabled={isSent}
+        onClick={() => setIsOpen(true)}
+      >
+        <span className='flex min-w-0 flex-1 flex-col gap-0.5'>
+          <span className='text-foreground line-clamp-2 text-sm font-medium [overflow-wrap:anywhere]'>
+            {heading}
+          </span>
+          <span className='line-clamp-1 text-xs [overflow-wrap:anywhere]'>
+            {getStatus()}
+          </span>
+        </span>
+        {isSent ? null : (
+          <ChevronRight
+            className='text-muted-foreground size-4 shrink-0'
+            aria-hidden='true'
+          />
+        )}
+      </Button>
+      {error ? (
+        <p role='alert'>
+          <WarningLine>{error}</WarningLine>
+        </p>
+      ) : null}
+      <FormSheet
+        isOpen={isOpen}
+        isDrawerWhenShort
+        onClose={() => setIsOpen(false)}
+        title={words.sheet}
+      >
+        <div className='space-y-4 pb-2'>
+          <AnswerFields {...props} error={null} isExpanded />
+        </div>
+        <ModalFooterActions
+          rightActions={
+            <Button
+              type='button'
+              variant='primary'
+              onClick={() => setIsOpen(false)}
+            >
+              Done
+            </Button>
+          }
+        />
+      </FormSheet>
     </div>
   );
 }

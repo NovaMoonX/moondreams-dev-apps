@@ -2,6 +2,7 @@
 # Sets up the secrets the admin dashboard's Pipeline needs, from the owner's own machine.
 #   npm run pipeline:secrets -- key     # PIPELINE_KEY: Firebase, GitHub Actions, and the value to paste into Claude Code
 #   npm run pipeline:secrets -- token   # PIPELINE_GITHUB_TOKEN: answering from the dashboard
+#   npm run pipeline:secrets -- check   # tests the saved token, after editing its permissions on GitHub
 # Needs the firebase and gh CLIs signed in; gcloud is used for the read grant when it is installed.
 set -euo pipefail
 
@@ -54,6 +55,37 @@ report_failure() {
 }
 trap report_failure EXIT
 
+TOKEN_PAGE="https://github.com/settings/personal-access-tokens"
+
+# An empty comment is refused as invalid (422) once the token may comment, so nothing is ever posted.
+can_comment() {
+  local token="$1" pr status
+  pr=$(GH_TOKEN="$token" gh api "repos/$REPO/pulls?state=open&per_page=1" --jq '.[0].number // empty' 2>/dev/null) || return 2
+  [[ -n "$pr" ]] || return 3
+  status=$(GH_TOKEN="$token" gh api -X POST "repos/$REPO/issues/$pr/comments" --input - -i <<<'{}' 2>/dev/null | head -1 | awk '{print $2}') || true
+  [[ "$status" == "422" ]] && return 0
+  echo "  GitHub answered $status for a test comment on #$pr." >&2
+  return 1
+}
+
+check_token() {
+  local token="$1"
+  GH_TOKEN="$token" gh api "repos/$REPO" >/dev/null 2>&1 \
+    || { echo "✗ That token can't see this repo: it has expired, was revoked, or doesn't have moondreams-dev-apps selected." >&2; return 1; }
+  local result=0
+  can_comment "$token" || result=$?
+  case $result in
+    0) echo "✓ The token can comment on pull requests" ;;
+    2) echo "✗ The token can't list this repo's pull requests. Edit it: $TOKEN_PAGE → Pipeline answers → Permissions → Pull requests: Read and write → Update." >&2
+       return 1 ;;
+    3) echo "• No pull request is open, so commenting couldn't be tested. The token can read the repo; run npm run pipeline:secrets -- check once a pull request is open." ;;
+    *) echo "✗ The token can read the repo but can't comment on pull requests." >&2
+       echo "  Edit it (no new token needed): $TOKEN_PAGE → Pipeline answers → Permissions" >&2
+       echo "  Set Pull requests: Read and write and Issues: Read and write, press Update, then run: npm run pipeline:secrets -- check" >&2
+       return 1 ;;
+  esac
+}
+
 copy_to_clipboard() {
   if command -v pbcopy >/dev/null 2>&1; then printf %s "$1" | pbcopy && return 0; fi
   if command -v wl-copy >/dev/null 2>&1; then printf %s "$1" | wl-copy && return 0; fi
@@ -91,10 +123,10 @@ case "$mode" in
     need gh "Install it from https://cli.github.com"
     signed_in
     [[ -t 0 ]] || { echo "✗ Run this in a terminal, so you can paste the token." >&2; exit 1; }
-    url="https://github.com/settings/personal-access-tokens/new?name=Pipeline%20answers&description=Posts%20answers%20from%20the%20admin%20dashboard&target_name=NovaMoonX&expires_in=366&pull_requests=read&issues=write"
+    url="https://github.com/settings/personal-access-tokens/new?name=Pipeline%20answers&description=Posts%20answers%20from%20the%20admin%20dashboard&target_name=NovaMoonX&expires_in=366&pull_requests=write&issues=write"
     echo "1. A GitHub page opens to make the token. Check these, then press Generate token:"
     echo "   • Repository access: Only select repositories → moondreams-dev-apps"
-    echo "   • Permissions: Pull requests: Read-only, Issues: Read and write"
+    echo "   • Permissions: Pull requests: Read and write, Issues: Read and write"
     echo "   ($url)"
     if [[ -z "${SSH_CONNECTION:-}" ]]; then
       if [[ "$(uname)" == "Darwin" ]]; then open "$url"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$url" >/dev/null 2>&1 || true; fi
@@ -103,8 +135,7 @@ case "$mode" in
     read -rs token || true
     echo
     [[ "$token" == github_pat_* ]] || { echo "✗ That isn't a fine-grained token (they start with github_pat_); nothing was saved." >&2; exit 1; }
-    GH_TOKEN="$token" gh api "repos/$REPO/issues?per_page=1" >/dev/null 2>&1 \
-      || { echo "✗ That token can't read this repo's issues. Check it has moondreams-dev-apps selected and Issues: Read and write; nothing was saved." >&2; exit 1; }
+    check_token "$token" || { echo "  Nothing was saved." >&2; exit 1; }
     set_firebase_secret PIPELINE_GITHUB_TOKEN "$token"
     done_steps+=("Firebase")
     grant_read PIPELINE_GITHUB_TOKEN
@@ -112,9 +143,19 @@ case "$mode" in
     echo "✓ Done. Answering from the dashboard works from the next send (give it a couple of minutes)."
     echo "  The token expires in a year: run this again then, and the dashboard says so if a send is refused."
     ;;
+  check)
+    trap - EXIT
+    need firebase "Install it with: npm install -g firebase-tools"
+    need gh "Install it from https://cli.github.com"
+    signed_in
+    token=$(firebase functions:secrets:access PIPELINE_GITHUB_TOKEN --project "$PROJECT" 2>/dev/null) \
+      || { echo "✗ No token is saved yet. Run: npm run pipeline:secrets -- token" >&2; exit 1; }
+    check_token "$token" || exit 1
+    echo "  Sending from the dashboard uses this token; edits to its permissions apply straight away."
+    ;;
   *)
     trap - EXIT
-    echo "Use: npm run pipeline:secrets -- key    or    npm run pipeline:secrets -- token" >&2
+    echo "Use: npm run pipeline:secrets -- key, -- token, or -- check" >&2
     exit 1
     ;;
 esac

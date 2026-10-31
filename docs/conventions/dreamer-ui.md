@@ -76,7 +76,7 @@ Import providers from \`@moondreamsdev/dreamer-ui/providers\`:
 
 - **ToastProvider**: Required for \`useToast\` hook. Wrap your app to enable toast notifications.
 - **ActionModalProvider**: Required for \`useActionModal\` hook. Wrap your app to enable action modals.
-- **DreamerUIProvider**: Combines \`ToastProvider\` and \`ActionModalProvider\`. Wrap your app with this provider for both functionalities.
+- **DreamerUIProvider**: Combines Dreamer UI's own `ThemeProvider` with `ToastProvider` and `ActionModalProvider`. The site does not use it: `App.tsx` nests `ToastProvider` and `ActionModalProvider` inside `@contexts/SiteThemeContext`, which serves Dreamer UI's `ThemeContext` (so `useTheme` works everywhere) with Auto / Light / Dark. Dreamer UI's provider saved an explicit light or dark on the first tap of its toggle and never went back to the device, and it set the class after first paint. Theme choice lives in the side menu's `ThemePicker`; `index.html` applies it before paint from the same `moondreams-theme` key. A throwaway harness page may still use `DreamerUIProvider`.
 
 ## Component Factories
 
