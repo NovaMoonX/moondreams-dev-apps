@@ -1,6 +1,11 @@
 name: Typecheck
 on:
   pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: typecheck-${{ github.head_ref }}
+  cancel-in-progress: true
 jobs:
   typecheck:
     runs-on: ubuntu-latest
