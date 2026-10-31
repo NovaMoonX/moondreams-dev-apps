@@ -690,3 +690,276 @@ export const settlePipelineAsk = onCall(
     }
   },
 );
+
+type MergeOutcome = 'asked' | 'merged';
+
+interface MergeView {
+  isOpen: boolean;
+  labels: string[];
+  ci: string;
+  /** False when GitHub found a conflict with the base; null while it is still working that out. */
+  isMergeable: boolean | null;
+  state: string | null;
+  /** The open boxes under "Must do before merge", or null when there is no status comment. */
+  mustDo: string[] | null;
+}
+
+const MERGE_COMMENT = 'Merge it (from the admin dashboard)';
+const DRIVEN_FOR_MS = 3 * 24 * 60 * 60 * 1000;
+const SESSION_MARKER = /<!--\s*session:\s*(https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+)\s*-->/;
+const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
+const DEFAULT_BRANCH = 'main';
+const CI_JOB_LEFT_OUT = 'owner-inbox';
+const FAILED_RUNS = ['failure', 'timed_out', 'action_required', 'startup_failure', 'cancelled', 'stale'];
+
+// The same wording as the dashboard's disabled button, so a refusal here reads like the reason shown there.
+const getMergeRefusal = (view: MergeView) => {
+  if (!view.isOpen) return 'That pull request is already closed.';
+  if (view.mustDo === null) return 'It has no status comment yet.';
+  if (/^in progress\b/i.test(view.state ?? '')) return 'Its session is still working on it.';
+  if (view.labels.includes('merge-conflict') || view.isMergeable === false) {
+    return 'It conflicts with its base.';
+  }
+  if (view.ci === 'running') return 'Checks are still running.';
+  if (view.ci === 'red') return 'A check failed.';
+  if (view.ci !== 'green') return 'No checks have run on it yet.';
+  if (view.mustDo.length > 0) return 'Must do items are still open.';
+  return null;
+};
+
+/** The open boxes under the status comment's "Must do before merge" heading, up to the next bold heading. */
+const readMustDo = (body: string) => {
+  const lines = body.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^\s*\*\*must do before merge/i.test(line));
+  if (start === -1) return [];
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^\s*(\*\*[^*]+\*\*|##)/.test(line));
+  return (end === -1 ? rest : rest.slice(0, end)).filter((line) => /^\s*[-*]\s+\[ \]/.test(line));
+};
+
+const readState = (body: string) =>
+  body
+    .split(/\r?\n/)
+    .find((line) => /^##\s+📋\s*Status/.test(line))
+    ?.split('·')[1]
+    ?.trim() ?? null;
+
+// Each check's latest run counts, as the inbox reads it, so a re-run replaces a failure.
+const summarizeRuns = (runs: Json[]) => {
+  const latest = [
+    ...runs
+      .filter((run) => run.name !== CI_JOB_LEFT_OUT)
+      .reduce<Map<string, Json>>((acc, run) => {
+        const kept = acc.get(String(run.name));
+        return kept && Number(kept.id) > Number(run.id) ? acc : new Map(acc).set(String(run.name), run);
+      }, new Map())
+      .values(),
+  ];
+  if (latest.length === 0) return 'none';
+  if (latest.some((run) => FAILED_RUNS.includes(String(run.conclusion)))) return 'red';
+  return latest.some((run) => run.status !== 'completed') ? 'running' : 'green';
+};
+
+/** Whether a session that reported in the last few days drives the pull request, so it merges through the merge line. */
+const isDrivenBySession = async (sessionUrl: string | null) => {
+  if (sessionUrl === null) return false;
+  const sessions = await getFirestore()
+    .collection('pipelineSessions')
+    .where('url', '==', sessionUrl)
+    .get();
+  return sessions.docs.some((doc) => {
+    const updatedAt = doc.get('updatedAt') as unknown;
+    return typeof updatedAt === 'number' && Date.now() - updatedAt <= DRIVEN_FOR_MS;
+  });
+};
+
+const readMergeRequest = (data: unknown) => {
+  const prNumber = isObject(data) ? data.prNumber : null;
+  if (typeof prNumber !== 'number' || !Number.isInteger(prNumber) || prNumber <= 0) {
+    throw invalid('Bad pull request number.');
+  }
+  return prNumber;
+};
+
+interface MergeResult {
+  ok: boolean;
+  outcome: MergeOutcome | null;
+  url: string | null;
+  error: string | null;
+  isSample: boolean;
+}
+
+const refused = (error: string): MergeResult => ({
+  ok: false,
+  outcome: null,
+  url: null,
+  error,
+  isSample: false,
+});
+
+// The emulator's dashboard shows made-up pull requests, so it checks the seeded inbox and posts nothing.
+const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
+  const inbox = await getFirestore().doc('pipeline/inbox').get();
+  const prs = inbox.get('prs') as unknown;
+  const pr = (Array.isArray(prs) ? prs : []).filter(isObject).find((candidate) => candidate.number === prNumber);
+  if (!pr) return refused("That pull request doesn't exist.");
+  const status = isObject(pr.status) ? pr.status : null;
+  const refusal = getMergeRefusal({
+    isOpen: true,
+    labels: Array.isArray(pr.labels) ? pr.labels.map(String) : [],
+    ci: String(pr.ci),
+    isMergeable: null,
+    state: typeof status?.state === 'string' ? status.state : null,
+    mustDo: status === null ? null : Array.isArray(status.mustDo) ? status.mustDo.map(String) : [],
+  });
+  if (refusal !== null) return refused(refusal);
+  const sessionUrl =
+    typeof status?.sessionUrl === 'string'
+      ? status.sessionUrl
+      : typeof pr.bodySessionUrl === 'string'
+        ? pr.bodySessionUrl
+        : null;
+  const outcome: MergeOutcome = (await isDrivenBySession(sessionUrl)) ? 'asked' : 'merged';
+  return { ok: true, outcome, url: null, error: null, isSample: true };
+};
+
+const toGithubError = async (response: Response, action: string) => {
+  if (isBusy(response)) return BUSY;
+  if (response.status === 401 || response.status === 403) {
+    return forgetAndRefuse(response, action);
+  }
+  return null;
+};
+
+/** Who holds the merge lock, read from the lock branch's last commit; null when it is free. */
+const readLockHolder = async (token: string) => {
+  const response = await githubFetch(token, '/branches/merge-lock');
+  if (response.status === 404) return null;
+  if (!response.ok) throw response;
+  const body = await readJson(response);
+  const commit = isObject(body?.commit) && isObject(body.commit.commit) ? body.commit.commit : null;
+  const message = typeof commit?.message === 'string' ? commit.message : '';
+  if (/^merge-lock: free\b/.test(message)) return null;
+  return message.match(/^pr: #(\d+)/m)?.[1] ?? 'unknown';
+};
+
+const markReady = async (token: string, nodeId: string) => {
+  const response = await fetch('https://api.github.com/graphql', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      query:
+        'mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { isDraft } } }',
+      variables: { id: nodeId },
+    }),
+    signal: AbortSignal.timeout(GITHUB_TIMEOUT_MS),
+  });
+  if (!response.ok) throw response;
+  const body = await readJson(response);
+  return !Array.isArray(body?.errors) || body.errors.length === 0;
+};
+
+const mergeOnGithub = async (token: string, prNumber: number): Promise<MergeResult> => {
+  try {
+    const pull = await githubFetch(token, `/pulls/${prNumber}`);
+    if (pull.status === 404) return refused("That pull request doesn't exist.");
+    if (!pull.ok) throw pull;
+    const pr = await readJson(pull);
+    if (pr === null) return refused("Couldn't read that pull request.");
+    const head = isObject(pr.head) ? pr.head : {};
+    const base = isObject(pr.base) ? pr.base : {};
+    const sha = String(head.sha);
+    const runs = await githubFetch(token, `/commits/${sha}/check-runs?per_page=100`);
+    if (!runs.ok) throw runs;
+    const runsBody = await readJson(runs);
+    const status = await findStatusComment(token, prNumber);
+    const statusBody = typeof status?.body === 'string' ? status.body : null;
+    const refusal = getMergeRefusal({
+      isOpen: pr.state === 'open',
+      labels: (Array.isArray(pr.labels) ? pr.labels : []).filter(isObject).map((label) => String(label.name)),
+      ci: summarizeRuns((Array.isArray(runsBody?.check_runs) ? runsBody.check_runs : []).filter(isObject)),
+      isMergeable: typeof pr.mergeable === 'boolean' ? pr.mergeable : null,
+      state: statusBody === null ? null : readState(statusBody),
+      mustDo: statusBody === null ? null : readMustDo(statusBody),
+    });
+    if (refusal !== null) return refused(refusal);
+
+    const sessionUrl =
+      statusBody?.match(SESSION_MARKER)?.[1] ??
+      (typeof pr.body === 'string' ? pr.body.match(SESSION_LINK)?.at(-1) : null) ??
+      null;
+    if (await isDrivenBySession(sessionUrl)) {
+      const comment = await githubFetch(token, `/issues/${prNumber}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ body: MERGE_COMMENT }),
+      });
+      if (!comment.ok) throw comment;
+      const posted = await readJson(comment);
+      return {
+        ok: true,
+        outcome: 'asked',
+        url: typeof posted?.html_url === 'string' ? posted.html_url : null,
+        error: null,
+        isSample: false,
+      };
+    }
+
+    if (base.ref === DEFAULT_BRANCH) {
+      const holder = await readLockHolder(token);
+      if (holder !== null && holder !== String(prNumber)) {
+        return refused(
+          holder === 'unknown'
+            ? 'Another merge is going through. Try again once its deploy finishes.'
+            : `#${holder} is merging. Try again once its deploy finishes.`,
+        );
+      }
+    }
+    if (pr.draft === true && !(await markReady(token, String(pr.node_id)))) {
+      return refused("Couldn't mark it ready for review.");
+    }
+    const merge = await githubFetch(token, `/pulls/${prNumber}/merge`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        sha,
+        merge_method: 'squash',
+        commit_title: `${String(pr.title)} (#${prNumber})`,
+      }),
+    });
+    if (merge.status === 409) return refused('Someone pushed to it just now. Check it again before merging.');
+    if (merge.status === 405 || merge.status === 422) {
+      const body = await readJson(merge);
+      logger.warn('mergePipelinePr: GitHub would not merge', merge.status, body?.message);
+      return refused("GitHub won't merge it yet: a required check or review may still be missing.");
+    }
+    if (!merge.ok) throw merge;
+    return {
+      ok: true,
+      outcome: 'merged',
+      url: typeof pr.html_url === 'string' ? pr.html_url : null,
+      error: null,
+      isSample: false,
+    };
+  } catch (error) {
+    if (!(error instanceof Response)) {
+      logger.warn('mergePipelinePr: request failed', getErrorName(error));
+      return refused("Couldn't reach GitHub.");
+    }
+    logger.warn('mergePipelinePr: GitHub refused', error.status);
+    return refused((await toGithubError(error, 'merge pull requests')) ?? "Couldn't merge it.");
+  }
+};
+
+/** Merges a pull request from the dashboard: asks its session to when one drives it, otherwise merges it on GitHub, after checking every gate again. */
+export const mergePipelinePr = onCall(
+  { ...CALLABLE_OPTIONS, timeoutSeconds: 60 },
+  async (request) => {
+    assertAdmin(request.auth);
+    const prNumber = readMergeRequest(request.data);
+    if (isRunningInEmulator()) return rehearseMerge(prNumber);
+    const token = await readSecret('PIPELINE_GITHUB_TOKEN', AbortSignal.timeout(10_000));
+    if (token === null) {
+      throw new HttpsError('failed-precondition', "Merging from the dashboard isn't set up yet.");
+    }
+    return mergeOnGithub(token, prNumber);
+  },
+);

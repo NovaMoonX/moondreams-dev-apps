@@ -82,6 +82,8 @@ export interface PipelineEntry {
   group: PipelineGroup | null;
   /** True for a pull request with no session reporting. */
   isPrOnly: boolean;
+  /** A session that reported in the last few days drives its pull requests, so a merge goes through it. */
+  isDriven: boolean;
   /** When it last reported, in the viewer's time. */
   time: string;
   subtitle: string;
@@ -397,6 +399,7 @@ function toSessionEntry(
     url: toHttps(session.url),
     group,
     isPrOnly: false,
+    isDriven: now - session.updatedAt <= IDLE_KEEP_MS,
     time,
     subtitle: getSubtitle(group, asks, time, session, now, isAnswered),
     lead: getLead(session, group, now, isAnswered),
@@ -429,6 +432,7 @@ function toPrEntry(
     url: toHttps(status?.sessionUrl ?? pr.bodySessionUrl),
     group: isWaiting ? 'waiting' : 'finished',
     isPrOnly: true,
+    isDriven: false,
     time,
     subtitle: isWaiting
       ? `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0]}`
@@ -537,6 +541,27 @@ export function getEntryActions(entry: PipelineEntry): PipelineAction[] {
 
 export const getEntryPrUrl = (entry: PipelineEntry) =>
   entry.prs.find((pr) => pr.url !== null)?.url ?? null;
+
+/** Why a pull request can't be merged from the dashboard yet, in the server's words, or null when it can. */
+export function getMergeBlock(pr: PipelinePr, ownerItems: PipelineOwnerEntryItem[]) {
+  const status = pr.status;
+  if (status === null) return 'It has no status comment yet.';
+  if (/^in progress\b/i.test(status.state ?? '')) return 'Its session is still working on it.';
+  if (pr.labels.includes('merge-conflict')) return 'It conflicts with its base.';
+  if (pr.ci === 'running') return 'Checks are still running.';
+  if (pr.ci === 'red') return 'A check failed.';
+  if (pr.ci !== 'green') return 'No checks have run on it yet.';
+  if (!Array.isArray(status.mustDo)) return 'Waiting for its Must do list to be read.';
+  // A step ticked here a moment ago counts before the inbox reads the ticked comment.
+  const open = status.mustDo.filter(
+    (text) =>
+      !ownerItems.some(
+        (item) => item.prNumber === pr.number && item.text === text && item.settled !== null,
+      ),
+  );
+  if (open.length === 0) return null;
+  return open.length === 1 ? 'A Must do item is still open.' : `${open.length} Must do items are still open.`;
+}
 
 export type PipelineGroups = ReturnType<typeof buildPipeline>;
 

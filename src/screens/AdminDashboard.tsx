@@ -28,6 +28,7 @@ import PipelineSheet from './admin/PipelineSheet';
 import PipelineView from './admin/PipelineView';
 import { buildPipeline, getPipelineSummary } from './admin/pipelineUtils';
 import { usePipelineAnswers } from './admin/usePipelineAnswers';
+import { usePipelineMerge } from './admin/usePipelineMerge';
 import { usePipelineSettle } from './admin/usePipelineSettle';
 import { useAllAppUsage } from './admin/useAllAppUsage';
 import { useDashboardUrlState } from './admin/useDashboardUrlState';
@@ -56,6 +57,7 @@ function AdminDashboard() {
   const pipeline = usePipelineSync(isAdmin);
   const now = useNow(60_000);
   const pipelineSettle = usePipelineSettle(pipeline.settled);
+  const pipelineMerge = usePipelineMerge();
   const pipelineGroups = buildPipeline(
     pipeline.sessions,
     pipeline.inbox,
@@ -193,6 +195,7 @@ function AdminDashboard() {
       onClose={() => setOpenEntryKey(null)}
       answers={pipelineAnswers}
       settle={pipelineSettle}
+      merge={pipelineMerge}
     />
   );
 

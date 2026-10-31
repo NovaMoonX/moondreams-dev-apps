@@ -248,6 +248,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       sessionTitle,
       state: 'ready when you are',
       ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean; isTask: boolean }[],
+      mustDo: [] as string[],
       goodToKnow: [] as string[],
       screenshots: [] as string[],
       updatedAt: context.now - 10 * MINUTE_MS,
@@ -256,6 +257,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
   const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
   const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
+  const pinchRunningPr = toInboxPr(904, 'Pinch: repeat the plan from a week', 'claude/pinch-meal-plan-weeks', pipelineSessions[1].url, 'Pinch meal plan');
   batch.delete(context.firestore.doc('pipeline/answered'));
   batch.delete(context.firestore.doc('pipeline/settled'));
   batch.set(context.firestore.doc('pipeline/inbox'), {
@@ -291,6 +293,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
               isTask: false,
             },
           ],
+          mustDo: ['Create the `RUNWAY_KEY` secret in production before the merge'],
           goodToKnow: [
             'The undo sheet was only checked at 390px.',
             "History keeps 90 days; older moves aren't shown.",
@@ -325,13 +328,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       },
       {
         ...orphanPr,
-        ci: 'red',
         status: {
           ...orphanPr.status,
           ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false, isTask: false }],
         },
       },
       pinchPr,
+      { ...pinchRunningPr, ci: 'running' },
     ],
     merged: [],
     updatedAt: context.now - 4 * MINUTE_MS,

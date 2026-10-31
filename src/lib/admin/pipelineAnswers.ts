@@ -58,3 +58,24 @@ export async function settlePipelineAsk(request: PipelineSettleRequest) {
   const result = await settlePipelineAskCallable(request);
   return result.data;
 }
+
+export interface PipelineMergeResult {
+  ok: boolean;
+  /** `asked`: a comment asked the session driving it to merge; `merged`: merged on GitHub. */
+  outcome: 'asked' | 'merged' | null;
+  url: string | null;
+  error: string | null;
+  isSample: boolean;
+}
+
+const mergePipelinePrCallable = httpsCallable<{ prNumber: number }, PipelineMergeResult>(
+  functions,
+  'mergePipelinePr',
+  { timeout: 60_000 },
+);
+
+/** Merges a pull request, or asks the session driving it to, once the server has checked its gates again. */
+export async function mergePipelinePr(prNumber: number) {
+  const result = await mergePipelinePrCallable({ prNumber });
+  return result.data;
+}

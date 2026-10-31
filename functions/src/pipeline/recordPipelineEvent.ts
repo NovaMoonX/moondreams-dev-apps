@@ -103,6 +103,8 @@ const toStatus = (value: unknown) => {
             : null,
       }),
     ),
+    // Null on a status read before the Must do list was sent, so the dashboard doesn't take it for an empty one.
+    mustDo: Array.isArray(value.mustDo) ? texts(value.mustDo) : null,
     goodToKnow: texts(value.goodToKnow),
     screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),

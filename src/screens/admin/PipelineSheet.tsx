@@ -1,4 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { ClaudeMark, GitHubMark } from '@/components/BrandMarks';
 import DetailSheet from '@/components/DetailSheet';
@@ -22,14 +24,17 @@ import {
 import {
   getAnswerSlots,
   getAskedSlots,
+  getMergeBlock,
   getPrError,
   type AnswerSlot,
   type PipelineEntry,
   type PipelineHand,
   type PipelineOwnerEntryItem,
+  type PipelinePr,
   type SettleTarget,
 } from './pipelineUtils';
 import type { PipelineAnswers } from './usePipelineAnswers';
+import type { PipelineMerge } from './usePipelineMerge';
 import type { PipelineSettle } from './usePipelineSettle';
 
 function SheetSection({
@@ -70,10 +75,78 @@ interface PipelineSheetProps {
   onClose: () => void;
   answers: PipelineAnswers;
   settle: PipelineSettle;
+  merge: PipelineMerge;
+}
+
+const MERGE_DONE_WORDS = {
+  asked: 'Asked its session to merge it. It goes through the merge line.',
+  merged: 'Merged.',
+};
+
+function MergeRow({
+  pr,
+  ownerItems,
+  isDriven,
+  merge,
+}: {
+  pr: PipelinePr;
+  ownerItems: PipelineOwnerEntryItem[];
+  isDriven: boolean;
+  merge: PipelineMerge;
+}) {
+  const { confirm } = useActionModal();
+  const block = getMergeBlock(pr, ownerItems);
+  const done = merge.getDone(pr.number);
+  const error = merge.getError(pr.number);
+  const isBusy = merge.isBusy(pr.number);
+  const getLine = () => {
+    if (done) return MERGE_DONE_WORDS[done];
+    if (block) return block;
+    return isDriven
+      ? 'Ready. Its session merges it when you say so.'
+      : `Ready to squash into ${pr.base}.`;
+  };
+  const onMerge = async () => {
+    const isConfirmed = await confirm({
+      title: `Merge #${pr.number}?`,
+      message: isDriven
+        ? `“${pr.title}” (#${pr.number}). Its session merges it through the merge line once nothing else is merging.`
+        : `“${pr.title}” (#${pr.number}) is squashed into ${pr.base} now${pr.isDraft ? ', after it is marked ready for review' : ''}.`,
+      confirmText: 'Merge',
+    });
+    if (isConfirmed) void merge.merge(pr.number);
+  };
+  return (
+    <div className='flex items-center gap-3'>
+      <div className='min-w-0 flex-1'>
+        <p className='text-foreground truncate text-sm'>
+          #{pr.number} {pr.title}
+        </p>
+        <p role='status' className='text-muted-foreground text-xs'>
+          {getLine()}
+        </p>
+        {error ? (
+          <p role='alert'>
+            <WarningLine>{error}</WarningLine>
+          </p>
+        ) : null}
+      </div>
+      <Button
+        type='button'
+        variant='secondary'
+        size='sm'
+        className={join('shrink-0', DISABLED_CLASS)}
+        disabled={block !== null || done !== null || isBusy}
+        onClick={() => void onMerge()}
+      >
+        {isBusy ? 'Merging…' : 'Merge'}
+      </Button>
+    </div>
+  );
 }
 
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
-function PipelineSheet({ entry, onClose, answers, settle }: PipelineSheetProps) {
+function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheetProps) {
   const slots = entry ? getAnswerSlots(entry) : [];
   const ownerItems = entry?.ownerItems ?? [];
   const hands = entry?.hands ?? [];
@@ -277,6 +350,23 @@ function PipelineSheet({ entry, onClose, answers, settle }: PipelineSheetProps) 
                 {taskHands.map((hand, index) => (
                   <li key={`${hand.text}-${index}`}>
                     <TaskRow {...getSettleProps(handTarget(hand), hand.settled)} />
+                  </li>
+                ))}
+              </ul>
+            </SheetSection>
+          ) : null}
+
+          {entry.prs.length > 0 ? (
+            <SheetSection title='Merge'>
+              <ul className='space-y-3'>
+                {entry.prs.map((pr) => (
+                  <li key={pr.number}>
+                    <MergeRow
+                      pr={pr}
+                      ownerItems={ownerItems}
+                      isDriven={entry.isDriven}
+                      merge={merge}
+                    />
                   </li>
                 ))}
               </ul>

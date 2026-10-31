@@ -47,6 +47,11 @@ assert.deepEqual(
   ['Merge #1 first.', 'Decide where Back sits, see the screenshots'],
   'only unchecked owner items, without their (who:) tag, text after it kept',
 );
+assert.deepEqual(
+  parsed.mustDo,
+  ['Merge #1 first.'],
+  'only the open boxes under Must do, whoever they are for',
+);
 assert.deepEqual(parsed.goodToKnow, ['Nothing that writes was driven.']);
 assert.equal(parsed.screenshots.length, 2, 'every screenshot URL on the line');
 
@@ -56,6 +61,7 @@ const legacy = parseStatus(
 );
 assert.equal(legacy.sessionUrl, null, 'a status with no session marker');
 assert.deepEqual(legacy.ownerItems, []);
+assert.deepEqual(legacy.mustDo, [], 'no Must do section is nothing open');
 const asked = parseStatus(
   `**Should do**
 - [ ] Keep the quiet card line, or make it a box? (who: owner)
