@@ -78,6 +78,7 @@ const toStatus = (value: unknown) => {
         images: httpsUrls(option.images),
       })),
       isMulti: item.isMulti === true,
+      isTask: item.isTask === true,
     })),
     goodToKnow: texts(value.goodToKnow),
     screenshots: httpsUrls(value.screenshots),
@@ -321,6 +322,24 @@ const writeCost = async (data: Json) => {
   await batch.commit();
 };
 
+const MAX_MERGED = 50;
+
+const toMerged = (value: unknown) =>
+  (Array.isArray(value) ? value : [])
+    .slice(0, MAX_MERGED)
+    .filter(isObject)
+    .flatMap((pr) => {
+      const mergedAt = toMs(pr.mergedAt);
+      if (typeof pr.number !== 'number' || mergedAt === 0) return [];
+      return [
+        {
+          number: Math.trunc(pr.number),
+          sessionUrl: sessionUrl(pr.sessionUrl),
+          mergedAt,
+        },
+      ];
+    });
+
 const writeInbox = async (data: Json) => {
   if (!Array.isArray(data.prs)) throw invalid('Bad prs.');
   const all = data.prs.filter(isObject).slice(0, MAX_PRS).map(toPr);
@@ -331,7 +350,7 @@ const writeInbox = async (data: Json) => {
   );
   await getFirestore()
     .doc('pipeline/inbox')
-    .set({ prs, updatedAt: Date.now() });
+    .set({ prs, merged: toMerged(data.merged), updatedAt: Date.now() });
 };
 
 export const recordPipelineEvent = onCall(

@@ -48,6 +48,15 @@ export interface OwnerItem {
   /** The options on the lines indented under it, each with its words and its screenshots, so the question and the screens it is about sit together. */
   options: { label: string; images: string[] }[];
   isMulti: boolean;
+  /** A step for the owner to do and tick off rather than a question to answer: tagged `(to do)`, or a line with no options and no question mark. */
+  isTask: boolean;
+}
+
+/** A pull request merged lately, so the dashboard stops showing what its session raised before the merge. */
+export interface MergedPr {
+  number: number;
+  sessionUrl: string | null;
+  mergedAt: string;
 }
 
 const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;
@@ -142,6 +151,8 @@ export const toPlain = (text: string) =>
     .replace(/@(?=\w)/g, '@\u200b');
 
 const PICK_ANY = /\s*\(pick any\)/i;
+const TO_DO = /\s*\(to do\)/i;
+const OWNER_NOTE = /\s*\(owner:[^)]*\)/gi;
 
 const bullet = (line: string) =>
   toPlain(
@@ -149,6 +160,7 @@ const bullet = (line: string) =>
       .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
       .replace(/\s*\(who:[^)]*\)/i, '')
       .replace(PICK_ANY, '')
+      .replace(TO_DO, '')
       .trim(),
   );
 
@@ -179,11 +191,14 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
         next.trim() === '' || next.search(/\S/) <= depth || isOpenBox(next),
     );
     const nested = end === -1 ? after : after.slice(0, end);
+    const text = bullet(line);
+    const options = nested.flatMap(toOption).slice(0, MAX_OPTIONS);
     return [
       {
-        text: bullet(line),
-        options: nested.flatMap(toOption).slice(0, MAX_OPTIONS),
+        text,
+        options,
         isMulti: PICK_ANY.test(line),
+        isTask: TO_DO.test(line) || (options.length === 0 && !text.includes('?')),
       },
     ];
   });
@@ -204,6 +219,60 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
   };
 }
 
+const BOX_LINE = /^(\s*[-*]\s+)\[([ xX])\]\s+(.*?)\r?$/;
+
+/** An owner line's identity across rewrites: its words without the box, the tags or the owner's note, in lower case. */
+export const toItemKey = (line: string) =>
+  line
+    .replace(/^\s*[-*]\s+(\[[ xX]\]\s+)?/, '')
+    .replace(/\s*\(who:[^)]*\)/gi, '')
+    .replace(PICK_ANY, '')
+    .replace(TO_DO, '')
+    .replace(OWNER_NOTE, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/[.!]+$/, '')
+    .toLowerCase();
+
+const toOwnerBox = (line: string, index: number) => {
+  const match = BOX_LINE.exec(line);
+  if (!match || !isForOwner(line)) return [];
+  return [
+    { index, lead: match[1], rest: match[3], isTicked: match[2] !== ' ', key: toItemKey(line) },
+  ];
+};
+
+/**
+ * The status comment as just edited, with every owner box that was ticked before and is still listed ticked again.
+ * An edit that only unticks one box is the owner changing their mind, and stays.
+ */
+export function keepOwnerTicks(before: string, after: string): string {
+  const old = before.split('\n');
+  const next = after.split('\n');
+  const ticked = new Map(
+    old
+      .flatMap(toOwnerBox)
+      .filter((box) => box.isTicked)
+      .map((box) => [box.key, box] as const),
+  );
+  if (ticked.size === 0) return after;
+  const changed = next.flatMap((line, index) => (line === old[index] ? [] : [index]));
+  const isOwnUntick =
+    old.length === next.length &&
+    changed.length === 1 &&
+    toOwnerBox(old[changed[0]], 0).some((box) => box.isTicked) &&
+    toOwnerBox(next[changed[0]], 0).some((box) => !box.isTicked);
+  if (isOwnUntick) return after;
+  return next
+    .map((line, index) => {
+      const [box] = toOwnerBox(line, index);
+      const kept = box && !box.isTicked ? ticked.get(box.key) : undefined;
+      if (!kept) return line;
+      const ending = line.endsWith('\r') ? '\r' : '';
+      return `${box.lead}[x] ${kept.rest}${ending}`;
+    })
+    .join('\n');
+}
 
 const MAX_STEPS = 30;
 const MAX_STEP_IMAGES = 3;

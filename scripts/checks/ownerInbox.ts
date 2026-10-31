@@ -6,6 +6,7 @@ import {
   findSessionLink,
   parseGallery,
   groupSessions,
+  keepOwnerTicks,
   parseStatus,
   summarizeCi,
   type InboxPr,
@@ -377,5 +378,53 @@ assert.deepEqual(
   'an escaped pipe does not shift the columns',
 );
 assert.deepEqual(parseGallery('## Overview\n![](https://x.test/y.png)'), [], 'only the Screenshots section counts');
+
+assert.deepEqual(
+  asked.ownerItems.map((item) => item.isTask),
+  [false, true],
+  'a line with no options and no question mark is a step to tick off',
+);
+const tagged = parseStatus(
+  '**Must do before merge**\n- [ ] Decide on the copy, see #3 (to do) (who: owner)\n',
+  '',
+).ownerItems[0];
+assert.equal(tagged.isTask, true, '(to do) makes a step');
+assert.equal(tagged.text, 'Decide on the copy, see #3', 'the tag is not part of the step');
+
+const ticked = `<!-- pr-status -->
+## 📋 Status · in progress · aaa1111
+**Must do before merge**
+- [x] Create the MAPS_KEY secret. (who: owner) (owner: done)
+- [x] Fix the red check (who: me)
+- [ ] Pick a header? (who: owner)
+**Since last update:** one`;
+const rewrite = `<!-- pr-status -->
+## 📋 Status · in progress · bbb2222
+**Must do before merge**
+- [ ] Create the MAPS_KEY secret (who: owner)
+- [ ] Fix the red check (who: me)
+- [ ] Pick a header? (who: owner)
+- [ ] Try it on a phone (who: owner)
+**Since last update:** two`;
+assert.equal(
+  keepOwnerTicks(ticked, rewrite),
+  rewrite.replace(
+    '- [ ] Create the MAPS_KEY secret (who: owner)',
+    '- [x] Create the MAPS_KEY secret. (who: owner) (owner: done)',
+  ),
+  "a rewrite that unticks the owner's box gets it back, with the note; the session's own boxes and new lines are left alone",
+);
+const ownUntick = ticked.replace('- [x] Create', '- [ ] Create');
+assert.equal(keepOwnerTicks(ticked, ownUntick), ownUntick, 'the owner unticking one box is kept');
+assert.equal(
+  keepOwnerTicks(ticked, rewrite.replace(/^- \[ \] Create.*\n/m, '')),
+  rewrite.replace(/^- \[ \] Create.*\n/m, ''),
+  'a line the session dropped stays dropped',
+);
+assert.equal(
+  keepOwnerTicks(ticked.replace(/\n/g, '\r\n'), rewrite.replace(/\n/g, '\r\n')).split('\r\n')[3],
+  '- [x] Create the MAPS_KEY secret. (who: owner) (owner: done)',
+  'Windows line endings hold',
+);
 
 console.log('owner inbox: ok');

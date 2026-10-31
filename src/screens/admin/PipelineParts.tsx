@@ -1,8 +1,11 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
+  Ban,
   Check,
   ChevronRight,
+  CircleCheck,
+  Ellipsis,
   Maximize2,
   PenLine,
   Plus,
@@ -10,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import FallbackImage from '@/components/FallbackImage';
 import HelpTip from '@/components/HelpTip';
 import FormSheet from '@/components/FormSheet';
@@ -17,6 +22,7 @@ import ImageViewer from '@/components/ImageViewer';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { MAX_ANSWER_NOTE } from '@lib/admin/pipelineAnswers';
+import type { PipelineSettleOutcome } from '@lib/admin/pipelineTypes';
 
 import { WAITING_DOT_CLASS } from './constants';
 import {
@@ -558,5 +564,222 @@ export function SentLine({ sent }: { sent: SentPr[] }) {
         </span>
       ))}
     </p>
+  );
+}
+
+type SettleChoice = PipelineSettleOutcome | 'open';
+
+interface SettleProps {
+  text: string;
+  /** Listed in a status comment, so settling it ticks its line there for the session to read. */
+  hasPr: boolean;
+  settled: PipelineSettleOutcome | null;
+  isBusy: boolean;
+  error: string | null;
+  onSettle: (choice: SettleChoice) => void;
+}
+
+// A 20px box gets a 40px hit area from a pseudo-element.
+const TICK_HIT_CLASS =
+  "relative mt-0.5 before:absolute before:-inset-[10px] before:content-['']";
+
+function SettledLine({
+  words,
+  isBusy,
+  onUndo,
+}: {
+  words: string;
+  isBusy: boolean;
+  onUndo: () => void;
+}) {
+  return (
+    <span className='text-muted-foreground flex items-center gap-2 text-xs'>
+      <Check className='size-3.5 shrink-0' aria-hidden='true' />
+      {words}
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className="text-primary relative h-auto px-1 py-0 text-xs before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+        disabled={isBusy}
+        onClick={onUndo}
+      >
+        Undo
+      </Button>
+    </span>
+  );
+}
+
+/** A quiet ⋯ that opens a small sheet to say it's handled or not happening, so the ask stops waiting. */
+function SetAsideButton({
+  text,
+  isTask,
+  hasPr,
+  isBusy,
+  onSettle,
+}: {
+  text: string;
+  isTask: boolean;
+  hasPr: boolean;
+  isBusy: boolean;
+  onSettle: (choice: PipelineSettleOutcome) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const choose = (choice: PipelineSettleOutcome) => {
+    setIsOpen(false);
+    onSettle(choice);
+  };
+  return (
+    <>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='icon'
+        rounded='full'
+        aria-label={`Set aside: ${stripLinks(text)}`}
+        className="text-muted-foreground relative size-8 min-w-8 shrink-0 p-0 after:absolute after:-inset-1 after:content-['']"
+        disabled={isBusy}
+        onClick={() => setIsOpen(true)}
+      >
+        <Ellipsis className='size-4' aria-hidden='true' />
+      </Button>
+      <FormSheet
+        isOpen={isOpen}
+        isDrawerWhenShort
+        onClose={() => setIsOpen(false)}
+        title='Set this aside'
+      >
+        <div className='space-y-3 pb-2'>
+          <p className='text-muted-foreground text-sm [overflow-wrap:anywhere]'>
+            {stripLinks(text)}
+          </p>
+          <ActionGroup>
+            <ActionRow
+              isGrouped
+              icon={<CircleCheck />}
+              label={isTask ? 'I already did it' : 'Already handled'}
+              subtitle={hasPr ? 'Ticked on the PR for the session to see' : undefined}
+              onClick={() => choose('done')}
+            />
+            <ActionRow
+              isGrouped
+              icon={<Ban />}
+              label="I'm not doing it"
+              subtitle={hasPr ? 'Ticked on the PR with a note saying so' : undefined}
+              onClick={() => choose('skipped')}
+            />
+          </ActionGroup>
+        </div>
+      </FormSheet>
+    </>
+  );
+}
+
+/** One step for the owner as a box to tick; ticking it ticks its line on GitHub too, and the menu sets it aside instead. */
+export function TaskRow({
+  text,
+  hasPr,
+  settled,
+  isBusy,
+  error,
+  onSettle,
+}: SettleProps) {
+  const label = stripLinks(text);
+  return (
+    <div className='space-y-1'>
+      <div className='flex items-start gap-3'>
+        <Checkbox
+          className={TICK_HIT_CLASS}
+          checked={settled !== null}
+          disabled={isBusy}
+          onCheckedChange={(next) => onSettle(next ? 'done' : 'open')}
+          aria-label={`Done: ${label}`}
+        />
+        <div className='min-w-0 flex-1 space-y-0.5'>
+          <p
+            className={join(
+              'text-sm [overflow-wrap:anywhere]',
+              settled === null ? 'text-foreground' : 'text-muted-foreground',
+              settled === 'done' && 'line-through',
+            )}
+          >
+            <LinkedText text={text} />
+          </p>
+          {settled !== null ? (
+            <SettledLine
+              words={settled === 'done' ? 'Done' : 'Not doing it'}
+              isBusy={isBusy}
+              onUndo={() => onSettle('open')}
+            />
+          ) : null}
+        </div>
+        {settled === null ? (
+          <SetAsideButton
+            text={text}
+            isTask
+            hasPr={hasPr}
+            isBusy={isBusy}
+            onSettle={onSettle}
+          />
+        ) : null}
+      </div>
+      {error ? (
+        <p role='alert'>
+          <WarningLine>{error}</WarningLine>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/** A question with a menu to set it aside; once set aside it shows as one muted line with its Undo. */
+export function DismissibleAsk({
+  text,
+  hasPr,
+  settled,
+  isBusy,
+  error,
+  onSettle,
+  children,
+}: SettleProps & { children: ReactNode }) {
+  if (settled !== null) {
+    return (
+      <div className='space-y-0.5'>
+        <p className='text-muted-foreground text-sm [overflow-wrap:anywhere]'>
+          {stripLinks(text)}
+        </p>
+        <SettledLine
+          words={settled === 'done' ? 'Already handled' : 'Not doing it'}
+          isBusy={isBusy}
+          onUndo={() => onSettle('open')}
+        />
+        {error ? (
+          <p role='alert'>
+            <WarningLine>{error}</WarningLine>
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+  return (
+    <div className='space-y-1'>
+      <div className='flex items-start gap-2'>
+        <div className='min-w-0 flex-1'>{children}</div>
+        <span className='mt-1.5 flex'>
+          <SetAsideButton
+            text={text}
+            isTask={false}
+            hasPr={hasPr}
+            isBusy={isBusy}
+            onSettle={onSettle}
+          />
+        </span>
+      </div>
+      {error ? (
+        <p role='alert'>
+          <WarningLine>{error}</WarningLine>
+        </p>
+      ) : null}
+    </div>
   );
 }

@@ -17,6 +17,8 @@ export interface PipelineOwnerItem {
   options: { label: string; images: string[] }[];
   /** Null or missing on documents written before multi-select questions; read with `=== true`. */
   isMulti: boolean | null;
+  /** A step to tick off rather than a question; null or missing on documents written before to-dos, read with `=== true`. */
+  isTask: boolean | null;
 }
 
 export interface PipelineInboxStatus {
@@ -59,8 +61,35 @@ export interface PipelineAnswered {
   updatedAt: number;
 }
 
+/** A pull request merged in the last two weeks: what its session raised before the merge stops waiting. */
+export interface PipelineMergedPr {
+  number: number;
+  sessionUrl: string | null;
+  mergedAt: number;
+}
+
 export interface PipelineInbox {
   prs: PipelineInboxPr[];
+  /** Null or missing on documents written before merges were reported. */
+  merged: PipelineMergedPr[] | null;
+  updatedAt: number;
+}
+
+export type PipelineSettleOutcome = 'done' | 'skipped';
+
+/** An ask the owner ticked off or set aside from the dashboard. */
+export interface PipelineSettledAsk {
+  /** The pull request whose status comment lists it, or null for a 🚩 line a session raised in chat. */
+  prNumber: number | null;
+  sessionId: string | null;
+  /** The ask's words exactly as the dashboard showed them. */
+  text: string;
+  outcome: PipelineSettleOutcome;
+  at: number;
+}
+
+export interface PipelineSettled {
+  asks: PipelineSettledAsk[];
   updatedAt: number;
 }
 

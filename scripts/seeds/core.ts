@@ -247,7 +247,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       sessionUrl,
       sessionTitle,
       state: 'in progress',
-      ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean }[],
+      ownerItems: [] as { text: string; options: { label: string; images: string[] }[]; isMulti: boolean; isTask: boolean }[],
       goodToKnow: [] as string[],
       screenshots: [] as string[],
       updatedAt: context.now - 10 * MINUTE_MS,
@@ -257,6 +257,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
   const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
   batch.delete(context.firestore.doc('pipeline/answered'));
+  batch.delete(context.firestore.doc('pipeline/settled'));
   batch.set(context.firestore.doc('pipeline/inbox'), {
     prs: [
       {
@@ -271,6 +272,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
                 { label: 'B, Back above the title', images: ['https://placehold.co/390x844.png?text=B'] },
               ],
               isMulti: false,
+              isTask: false,
+            },
+            {
+              text: 'Create the `RUNWAY_KEY` secret in production before the merge',
+              options: [],
+              isMulti: false,
+              isTask: true,
             },
             {
               text: 'Which cards should show the history count?',
@@ -280,9 +288,13 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
                 { label: 'Goals', images: [] },
               ],
               isMulti: true,
+              isTask: false,
             },
           ],
-          goodToKnow: ['The undo sheet was only checked at 390px.'],
+          goodToKnow: [
+            'The undo sheet was only checked at 390px.',
+            "History keeps 90 days; older moves aren't shown.",
+          ],
           screenshots: ['https://placehold.co/390x844.png?text=History'],
         },
         gallery: [
@@ -312,11 +324,12 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         ci: 'red',
         status: {
           ...orphanPr.status,
-          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false }],
+          ownerItems: [{ text: 'Should a reminder repeat after a missed visit?', options: [], isMulti: false, isTask: false }],
         },
       },
       pinchPr,
     ],
+    merged: [],
     updatedAt: context.now - 4 * MINUTE_MS,
   });
 

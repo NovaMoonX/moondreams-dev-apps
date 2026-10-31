@@ -5,13 +5,17 @@ import DetailSheet from '@/components/DetailSheet';
 
 import { DISABLED_CLASS } from './constants';
 import ScreenshotGallery from './ScreenshotGallery';
+import type { PipelineSettleOutcome } from '@lib/admin/pipelineTypes';
+
 import {
   AnswerRow,
   CiBadge,
+  DismissibleAsk,
   LinkedText,
   NotSetUpLine,
   SentLine,
   StatusDot,
+  TaskRow,
   UnsureLine,
   WarningLine,
 } from './PipelineParts';
@@ -19,9 +23,14 @@ import {
   getAnswerSlots,
   getAskedSlots,
   getPrError,
+  type AnswerSlot,
   type PipelineEntry,
+  type PipelineHand,
+  type PipelineOwnerEntryItem,
+  type SettleTarget,
 } from './pipelineUtils';
 import type { PipelineAnswers } from './usePipelineAnswers';
+import type { PipelineSettle } from './usePipelineSettle';
 
 function SheetSection({
   title,
@@ -60,11 +69,51 @@ interface PipelineSheetProps {
   entry: PipelineEntry | null;
   onClose: () => void;
   answers: PipelineAnswers;
+  settle: PipelineSettle;
 }
 
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
-function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
+function PipelineSheet({ entry, onClose, answers, settle }: PipelineSheetProps) {
   const slots = entry ? getAnswerSlots(entry) : [];
+  const ownerItems = entry?.ownerItems ?? [];
+  const hands = entry?.hands ?? [];
+  const taskItems = ownerItems.filter((item) => item.isTask);
+  const questionItems = ownerItems.filter((item) => !item.isTask);
+  const taskHands = hands.filter((hand) => hand.isTask);
+  const questionHands = hands.filter((hand) => !hand.isTask);
+  const itemTarget = (item: PipelineOwnerEntryItem): SettleTarget => ({
+    prNumber: item.prNumber,
+    sessionId: null,
+    text: item.text,
+  });
+  const handTarget = (hand: PipelineHand): SettleTarget => ({
+    prNumber: null,
+    sessionId: entry?.sessionId ?? null,
+    text: hand.text,
+  });
+  const getSettleProps = (
+    target: SettleTarget,
+    settled: PipelineOwnerEntryItem['settled'],
+  ) => ({
+    text: target.text,
+    hasPr: target.prNumber !== null,
+    settled,
+    isBusy: settle.isBusy(target),
+    error: settle.getError(target),
+    onSettle: (choice: PipelineSettleOutcome | 'open') =>
+      void settle.settle(target, choice),
+  });
+  const renderAnswerRow = (slot: AnswerSlot) => (
+    <AnswerRow
+      slot={slot}
+      draft={answers.getDraft(slot.id)}
+      isSent={answers.isSent(slot)}
+      error={getPrError(slots, slot, answers.errors)}
+      onChoices={(choices, other) => answers.setChoices(slot.id, choices, other)}
+      onOther={(other) => answers.setOther(slot.id, other)}
+      onNote={(note) => answers.setNote(slot.id, note)}
+    />
+  );
   const asked = getAskedSlots(slots);
   const isAllSent = asked.length > 0 && asked.every(answers.isSent);
   const slotPrs = new Set(slots.map((slot) => slot.prNumber));
@@ -179,52 +228,55 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
             ))}
           </div>
 
-          {slots.length > 0 ? (
+          {questionItems.length > 0 || questionHands.length > 0 || slots.length > 0 ? (
             <SheetSection title='Needs you'>
-              {entry.ownerItems.length === 0 ? (
-                <ul className='space-y-2'>
-                  {entry.raisedHands.map((line, index) => (
-                    <li
-                      key={`${line}-${index}`}
-                      className='text-foreground text-sm'
-                    >
-                      <LinkedText text={line} />
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <ul className='space-y-2'>
-                {slots.map((slot) => (
-                  <li
-                    key={slot.id}
-                    className={
-                      slot.kind === 'feedback' ? 'border-border !mt-4 border-t pt-4' : undefined
-                    }
-                  >
-                    <AnswerRow
-                      slot={slot}
-                      draft={answers.getDraft(slot.id)}
-                      isSent={answers.isSent(slot)}
-                      error={getPrError(slots, slot, answers.errors)}
-                      onChoices={(choices, other) =>
-                        answers.setChoices(slot.id, choices, other)
-                      }
-                      onOther={(other) => answers.setOther(slot.id, other)}
-                      onNote={(note) => answers.setNote(slot.id, note)}
-                    />
+              <ul className='space-y-3'>
+                {questionHands.map((hand) => (
+                  <li key={hand.text}>
+                    <DismissibleAsk {...getSettleProps(handTarget(hand), hand.settled)}>
+                      <p className='text-foreground pt-1.5 text-sm'>
+                        <LinkedText text={hand.text} />
+                      </p>
+                    </DismissibleAsk>
                   </li>
                 ))}
+                {questionItems.map((item) => {
+                  const slot = slots.find((candidate) => candidate.id === item.id);
+                  return (
+                    <li key={item.id}>
+                      <DismissibleAsk {...getSettleProps(itemTarget(item), item.settled)}>
+                        {slot ? renderAnswerRow(slot) : null}
+                      </DismissibleAsk>
+                    </li>
+                  );
+                })}
+                {slots
+                  .filter((slot) => slot.kind !== 'question')
+                  .map((slot) => (
+                    <li
+                      key={slot.id}
+                      className={
+                        slot.kind === 'feedback' ? 'border-border !mt-4 border-t pt-4' : undefined
+                      }
+                    >
+                      {renderAnswerRow(slot)}
+                    </li>
+                  ))}
               </ul>
             </SheetSection>
-          ) : entry.raisedHands.length > 0 ? (
-            <SheetSection title='Needs you'>
-              <ul className='space-y-2'>
-                {entry.raisedHands.map((line, index) => (
-                  <li
-                    key={`${line}-${index}`}
-                    className='text-foreground text-sm'
-                  >
-                    <LinkedText text={line} />
+          ) : null}
+
+          {taskItems.length > 0 || taskHands.length > 0 ? (
+            <SheetSection title='To do'>
+              <ul className='space-y-3'>
+                {taskItems.map((item) => (
+                  <li key={item.id}>
+                    <TaskRow {...getSettleProps(itemTarget(item), item.settled)} />
+                  </li>
+                ))}
+                {taskHands.map((hand) => (
+                  <li key={hand.text}>
+                    <TaskRow {...getSettleProps(handTarget(hand), hand.settled)} />
                   </li>
                 ))}
               </ul>
@@ -239,7 +291,7 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
 
           {entry.goodToKnow.length > 0 ? (
             <SheetSection title='Good to know'>
-              <ul className='space-y-1.5'>
+              <ul className='marker:text-muted-foreground list-disc space-y-1.5 pl-5'>
                 {entry.goodToKnow.map((line, index) => (
                   <li
                     key={`${line}-${index}`}
