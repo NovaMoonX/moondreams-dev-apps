@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 const VIEWS = ['apps', 'pipeline', 'members', 'firebase'] as const;
 const TABS = ['cost', 'how'] as const;
-const SECTIONS = ['usage', 'settings'] as const;
+const SECTIONS = ['usage', 'settings', 'features'] as const;
 
 export type DashboardSection = (typeof SECTIONS)[number];
 export type PipelineTab = (typeof TABS)[number];
