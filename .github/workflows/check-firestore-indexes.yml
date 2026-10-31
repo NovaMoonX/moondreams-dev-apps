@@ -12,6 +12,7 @@ on:
       - 'scripts/fbDeploySmart.ts'
       - '.firebaserc'
       - 'scripts/checks/**'
+      - 'scripts/ownerInbox/**'
       - 'scripts/seeds/**'
       - 'docs/conventions/pipeline.md'
       - '.claude/settings.json'
@@ -28,6 +29,8 @@ jobs:
       - run: npm run check:indexes
       - run: npm run check:rules-size
       - run: npm run check:pipeline-map
+      - run: npm run check:pipeline-answers
+      - run: npm run check:owner-inbox
       # The deploy opens callables by reading this list; a line it can't read stops the deploy after the functions are out.
       - run: npm run fb:invoker -- --all --dry
   check_pinch:

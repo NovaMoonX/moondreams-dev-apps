@@ -16,6 +16,7 @@ import {
   parseGallery,
   parseStatus,
   summarizeCi,
+  toMergedPr,
   type CheckRun,
   type CiState,
   type InboxPr,
@@ -94,6 +95,19 @@ const getCi = async (sha: string): Promise<CiState> => {
     `/repos/${repo}/commits/${sha}/check-runs?per_page=100`,
   );
   return summarizeCi(runs);
+};
+
+const readStatusComment = async (number: number) => {
+  const comments = await apiAll<ApiComment>(
+    `/repos/${repo}/issues/${number}/comments`,
+  );
+  return (
+    comments.findLast(
+      (comment) =>
+        comment.body.trimStart().startsWith(STATUS_MARKER) &&
+        TRUSTED.has(comment.author_association),
+    ) ?? null
+  );
 };
 
 const readPr = async (pull: ApiPull): Promise<InboxPr> => {
@@ -191,23 +205,35 @@ const readSaved = (path: string): InboxPr[] =>
   );
 
 const MERGED_KEEP_MS = 14 * 24 * 60 * 60 * 1000;
+const MERGED_READ_MAX = 20;
 
 const readMergedPrs = async (): Promise<MergedPr[]> => {
   const pulls = await api<ApiPull[]>(
     `/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=50`,
   );
   const since = Date.now() - MERGED_KEEP_MS;
-  return pulls.flatMap((pull) =>
-    pull.merged_at && Date.parse(pull.merged_at) >= since
-      ? [
-          {
-            number: pull.number,
-            sessionUrl: findSessionLink(pull.body),
-            mergedAt: pull.merged_at,
-          },
-        ]
-      : [],
-  );
+  // Newest first, so the receiving size budget keeps the newest PRs' lists.
+  const recent = pulls
+    .flatMap((pull) =>
+      pull.merged_at && Date.parse(pull.merged_at) >= since
+        ? [{ ...pull, merged_at: pull.merged_at }]
+        : [],
+    )
+    .sort((a, b) => Date.parse(b.merged_at) - Date.parse(a.merged_at))
+    // Every status edit runs this, so comment reads stay well under the token's hourly budget.
+    .slice(0, MERGED_READ_MAX);
+  // One PR at a time, like the open ones; a PR with no session has no one to read its lists, and a failed read leaves only that PR's lists empty.
+  return recent.reduce<Promise<MergedPr[]>>(async (done, pull) => {
+    const status = findSessionLink(pull.body)
+      ? await readStatusComment(pull.number).catch((error: Error) => {
+          console.log(
+            `::warning::Status of merged #${pull.number} not read: ${error.message}`,
+          );
+          return null;
+        })
+      : null;
+    return [...(await done), toMergedPr(pull, status)];
+  }, Promise.resolve([]));
 };
 
 interface CommentEvent {
@@ -276,6 +302,8 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
     })),
     mustDo: pr.status.mustDo && pr.status.mustDo.map(fromPlain),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
+    decisions: pr.status.decisions.map(fromPlain),
+    followUps: pr.status.followUps.map(fromPlain),
   },
   gallery: pr.gallery.map((step) => ({
     ...step,
@@ -293,7 +321,12 @@ const reportToPipeline = async (list: InboxPr[], merged: MergedPr[]) => {
         key: pipelineKey,
         kind: 'inbox',
         prs: list.map(toPipelinePr),
-        merged,
+        merged: merged.map((pr) => ({
+          ...pr,
+          title: pr.title && fromPlain(pr.title),
+          decisions: pr.decisions.map(fromPlain),
+          followUps: pr.followUps.map(fromPlain),
+        })),
       },
     }),
     signal: AbortSignal.timeout(20_000),

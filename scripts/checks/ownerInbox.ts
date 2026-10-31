@@ -8,6 +8,7 @@ import {
   groupSessions,
   keepOwnerTicks,
   parseStatus,
+  toMergedPr,
   summarizeCi,
   type InboxPr,
 } from '../ownerInbox/inbox.ts';
@@ -30,7 +31,15 @@ ${extra}
 const parsed = parseStatus(
   status(
     's1',
-    `**Good to know**
+    `**Decisions I made for you**
+- Haircuts are named as envelopes in the prompt (other option: leave them to the model)
+- Totals round down (other option: round to nearest)
+
+**Possible follow-ups**
+- Let a vet visit add a weigh-in
+- Round the chart's axis
+
+**Good to know**
 - Nothing that writes was driven.
 
 **New screenshots**
@@ -54,12 +63,45 @@ assert.deepEqual(
 );
 assert.deepEqual(parsed.goodToKnow, ['Nothing that writes was driven.']);
 assert.equal(parsed.screenshots.length, 2, 'every screenshot URL on the line');
+assert.deepEqual(parsed.decisions, [
+  'Haircuts are named as envelopes in the prompt (other option: leave them to the model)',
+  'Totals round down (other option: round to nearest)',
+], 'the Decisions I made for you bullets, and not the Good to know ones');
+assert.deepEqual(
+  parsed.followUps,
+  ['Let a vet visit add a weigh-in', "Round the chart's axis"],
+  'the Possible follow-ups bullets, apart from the decisions before them',
+);
+
+const merged = toMergedPr(
+  {
+    number: 12,
+    title: 'Weights & charts',
+    body: 'https://claude.ai/code/session_s1',
+    merged_at: '2026-10-29T10:00:00Z',
+  },
+  {
+    body: status('s1', '**Decisions I made for you**\n- Round down (other option: round up)\n\n**Possible follow-ups**\n- Add a chart\n'),
+    updated_at: '2026-10-29T09:00:00Z',
+  },
+);
+assert.deepEqual(merged.decisions, ['Round down (other option: round up)']);
+assert.deepEqual(merged.followUps, ['Add a chart']);
+assert.equal(merged.statusAt, '2026-10-29T09:00:00Z');
+assert.equal(merged.sessionUrl, 'https://claude.ai/code/session_s1');
+const bare = toMergedPr(
+  { number: 13, title: 'T', body: null, merged_at: '2026-10-29T10:00:00Z' },
+  null,
+);
+assert.deepEqual([bare.decisions, bare.followUps, bare.statusAt], [[], [], null], 'a merged PR with no status comment has empty lists');
 
 const legacy = parseStatus(
   '<!-- pr-status -->\n## 📋 Status · blocked · 1\n',
   '',
 );
 assert.equal(legacy.sessionUrl, null, 'a status with no session marker');
+assert.deepEqual(legacy.decisions, [], 'no Decisions section is an empty list');
+assert.deepEqual(legacy.followUps, [], 'no follow-ups section is an empty list');
 assert.deepEqual(legacy.ownerItems, []);
 assert.equal(legacy.mustDo, null, 'no Must do heading is not read as nothing open');
 const asked = parseStatus(
@@ -166,6 +208,22 @@ assert.deepEqual(
 );
 
 const inbox = buildInbox(prs, '2026-10-29T17:00:00Z');
+assert.match(
+  buildInbox(
+    [
+      pr(
+        5,
+        'decided',
+        'main',
+        status('s5', '**Decisions I made for you**\n- Haircuts are named as envelopes\n- Totals round down\n'),
+      ),
+    ],
+    '2026-10-29T17:00:00Z',
+  ),
+  /<summary>Decisions I made for you \(2\)<\/summary>\n\n- #5: Haircuts are named/,
+  'the calls made for the owner sit in their own fold',
+);
+assert.doesNotMatch(inbox, /Decisions I made for you/, 'no fold without any');
 assert.ok(
   inbox.startsWith(INBOX_MARKER),
   'the marker that finds the issue again',

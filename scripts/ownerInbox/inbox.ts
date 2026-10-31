@@ -59,6 +59,34 @@ export interface MergedPr {
   number: number;
   sessionUrl: string | null;
   mergedAt: string;
+  title: string | null;
+  /** When its status comment was last edited, so an answer sent after it is known to have read it. */
+  statusAt: string | null;
+  /** The status comment's decisions and follow-ups, still the owner's to change after the merge. */
+  decisions: string[];
+  followUps: string[];
+}
+
+/** A merged PR with the lists from its last status comment (empty when it has none). */
+export function toMergedPr(
+  pull: {
+    number: number;
+    title: string;
+    body: string | null;
+    merged_at: string;
+  },
+  status: { body: string; updated_at: string } | null,
+): MergedPr {
+  const parsed = status ? parseStatus(status.body, status.updated_at) : null;
+  return {
+    number: pull.number,
+    sessionUrl: findSessionLink(pull.body),
+    mergedAt: pull.merged_at,
+    title: toPlain(pull.title),
+    statusAt: parsed ? parsed.updatedAt : null,
+    decisions: parsed?.decisions ?? [],
+    followUps: parsed?.followUps ?? [],
+  };
 }
 
 const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;
@@ -97,6 +125,10 @@ export interface PrStatus {
   /** The open boxes under "Must do before merge", whoever they are for, or null with no such heading: the dashboard's Merge waits on none being left. */
   mustDo: string[] | null;
   goodToKnow: string[];
+  /** The calls a session made on the owner's behalf, under "Decisions I made for you": one line each, with the other option. */
+  decisions: string[];
+  /** Work the session suggests under "Possible follow-ups", one line each. */
+  followUps: string[];
   screenshots: string[];
   updatedAt: string;
 }
@@ -228,6 +260,12 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
   const goodToKnow = section(body, 'Good to know')
     .filter((line) => /^\s*[-*]\s+/.test(line))
     .map(bullet);
+  const decisions = section(body, 'Decisions I made for you')
+    .filter((line) => /^\s*[-*]\s+/.test(line))
+    .map(bullet);
+  const followUps = section(body, 'Possible follow-ups')
+    .filter((line) => /^\s*[-*]\s+/.test(line))
+    .map(bullet);
   const screenshots = section(body, 'New screenshots')
     .join(' ')
     .match(IMAGE_URL);
@@ -238,6 +276,8 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     ownerItems,
     mustDo,
     goodToKnow,
+    decisions,
+    followUps,
     screenshots: screenshots ?? [],
     updatedAt,
   };
@@ -658,6 +698,9 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
         ]
       : []),
   ];
+  const decisions = session.prs.flatMap((pr) =>
+    (pr.status?.decisions ?? []).map((line) => `- #${pr.number}: ${line}`),
+  );
   const isOpen = getStanding(session) === 'needsYou';
   return [
     `<details${isOpen ? ' open' : ''}><summary>${switchboardLine(session, true)}</summary>`,
@@ -674,6 +717,16 @@ const sessionBlock = (session: Session, all: readonly InboxPr[]): string[] => {
           ...(allShots.length > MAX_SHOTS
             ? ['', `and ${allShots.length - MAX_SHOTS} more in the PRs`]
             : []),
+          '',
+        ]
+      : []),
+    ...(decisions.length > 0
+      ? [
+          `<details><summary>Decisions I made for you (${decisions.length})</summary>`,
+          '',
+          ...decisions,
+          '',
+          '</details>',
           '',
         ]
       : []),

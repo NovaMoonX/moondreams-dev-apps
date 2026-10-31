@@ -45,6 +45,7 @@ const texts = (value: unknown) =>
     .filter((item): item is string => typeof item === 'string')
     .slice(0, MAX_ITEMS)
     .map(text);
+const uniqueTexts = (value: unknown) => Array.from(new Set(texts(value)));
 // Every address here is drawn as a link or loaded as an image on the admin's screen.
 const httpsUrl = (value: unknown) =>
   typeof value === 'string' &&
@@ -111,6 +112,8 @@ const toStatus = (value: unknown) => {
           .map(text)
       : null,
     goodToKnow: texts(value.goodToKnow),
+    decisions: uniqueTexts(value.decisions),
+    followUps: uniqueTexts(value.followUps),
     screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),
   };
@@ -369,6 +372,8 @@ const writeCost = async (data: Json) => {
 };
 
 const MAX_MERGED = 50;
+// The merged PRs' lists are the part that can grow, so the newest keep theirs until this many bytes.
+const MAX_MERGED_LIST_BYTES = 150_000;
 
 const toMerged = (value: unknown) =>
   (Array.isArray(value) ? value : [])
@@ -377,26 +382,46 @@ const toMerged = (value: unknown) =>
     .flatMap((pr) => {
       const mergedAt = toMs(pr.mergedAt);
       if (typeof pr.number !== 'number' || mergedAt === 0) return [];
+      const statusAt = toMs(pr.statusAt);
       return [
         {
           number: Math.trunc(pr.number),
           sessionUrl: sessionUrl(pr.sessionUrl),
           mergedAt,
+          title: textOrNull(pr.title),
+          statusAt: statusAt === 0 ? null : statusAt,
+          decisions: Array.isArray(pr.decisions) ? uniqueTexts(pr.decisions) : null,
+          followUps: Array.isArray(pr.followUps) ? uniqueTexts(pr.followUps) : null,
         },
       ];
-    });
+    })
+    .reduce<{ kept: unknown[]; bytes: number }>(
+      (acc, pr) => {
+        const lists = JSON.stringify([pr.decisions, pr.followUps]).length;
+        const isOver = acc.bytes + lists > MAX_MERGED_LIST_BYTES;
+        return {
+          kept: [
+            ...acc.kept,
+            isOver ? { ...pr, decisions: null, followUps: null } : pr,
+          ],
+          bytes: isOver ? acc.bytes : acc.bytes + lists,
+        };
+      },
+      { kept: [], bytes: 0 },
+    ).kept;
 
 const writeInbox = async (data: Json) => {
   if (!Array.isArray(data.prs)) throw invalid('Bad prs.');
   const all = data.prs.filter(isObject).slice(0, MAX_PRS).map(toPr);
   // Firestore refuses a document over 1 MiB, so the oldest PRs give way rather than the whole write.
+  const merged = toMerged(data.merged);
+  const room = MAX_DOC_BYTES - JSON.stringify(merged).length;
   const prs = all.filter(
-    (_, index) =>
-      JSON.stringify(all.slice(0, index + 1)).length <= MAX_DOC_BYTES,
+    (_, index) => JSON.stringify(all.slice(0, index + 1)).length <= room,
   );
   await getFirestore()
     .doc('pipeline/inbox')
-    .set({ prs, merged: toMerged(data.merged), updatedAt: Date.now() });
+    .set({ prs, merged, updatedAt: Date.now() });
 };
 
 export const recordPipelineEvent = onCall(

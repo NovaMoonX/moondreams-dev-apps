@@ -11,7 +11,7 @@ import {
   Plus,
   TriangleAlert,
 } from 'lucide-react';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -27,6 +27,7 @@ import type { PipelineSettleOutcome } from '@lib/admin/pipelineTypes';
 import { WAITING_DOT_CLASS } from './constants';
 import {
   splitLinks,
+  splitOtherOption,
   stripLinks,
   type AnswerSlot,
   type PipelineGroup,
@@ -249,6 +250,8 @@ function FreeTextField({
       label: 'Anything else?',
       placeholder: "Feedback that isn't an answer to a question above",
     },
+    decision: LISTED_WORDS.decision,
+    followup: LISTED_WORDS.followup,
   }[slot.kind];
   return (
     <NoteTextField
@@ -455,6 +458,8 @@ const ROW_WORDS = {
   question: { sheet: 'Answer', empty: 'Not answered yet' },
   reply: { sheet: 'Reply', empty: 'Not answered yet' },
   feedback: { sheet: 'Anything else?', empty: 'Optional' },
+  decision: { sheet: 'Decisions I made for you', empty: 'Sounds good' },
+  followup: { sheet: 'Possible follow-ups', empty: 'Not now' },
 };
 
 const getAnswerSummary = (draft: AnswerDraft) => {
@@ -554,8 +559,146 @@ export function AnswerRow(props: AnswerFieldsProps) {
   );
 }
 
+interface DecisionFieldsProps {
+  slot: AnswerSlot;
+  draft: AnswerDraft;
+  isSent: boolean;
+  error: string | null;
+  isSending: boolean;
+  /** One comment holds no more answers, so no further line can be ticked. */
+  isAtLimit: boolean;
+  onChange: (line: string, words: string | null) => void;
+}
+
+const LISTED_WORDS = {
+  decision: {
+    label: 'What should it be instead?',
+    placeholder: "Say what you'd rather have",
+    isRequired: true,
+  },
+  followup: {
+    label: 'Anything to add?',
+    placeholder: 'Optional: a detail or how soon',
+    isRequired: false,
+  },
+};
+
+// Scrolled just into view on a phone, where the field isn't focused and the keyboard stays down.
+function TickedNote({ children }: { children: ReactNode }) {
+  const node = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    node.current?.scrollIntoView({ block: 'nearest' });
+  }, []);
+  return (
+    <div ref={node} className='pl-8'>
+      {children}
+    </div>
+  );
+}
+
+/** Said once for each merged pull request that lists calls or follow-ups. */
+export function MergedNote({ prNumber }: { prNumber: number }) {
+  return (
+    <p className='text-muted-foreground text-xs'>
+      #{prNumber} is merged: a change or a picked follow-up opens an issue.
+    </p>
+  );
+}
+
+/** A list of calls made for the owner, or follow-ups: tick the lines to change or do; the rest are kept or left for later. */
+export function DecisionFields({
+  slot,
+  draft,
+  isSent,
+  error,
+  isSending,
+  isAtLimit,
+  onChange,
+}: DecisionFieldsProps) {
+  const kind = slot.kind === 'followup' ? 'followup' : 'decision';
+  const words = LISTED_WORDS[kind];
+  if (isSent) {
+    return (
+      <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
+        <Check className='size-4' aria-hidden='true' />
+        Sent · waiting for the session
+      </p>
+    );
+  }
+  return (
+    <div className='space-y-3'>
+      <ul className='space-y-3'>
+        {slot.lines.map((text, index) => {
+          const isTicked = draft.changes[text] !== undefined;
+          const { choice, other } =
+            kind === 'decision'
+              ? splitOtherOption(text)
+              : { choice: text, other: null };
+          const id = `${slot.id}-${index}`;
+          return (
+            <li key={text} className='space-y-2'>
+              <div className='flex items-start gap-3'>
+                <Checkbox
+                  id={id}
+                  className={TICK_HIT_CLASS}
+                  checked={isTicked}
+                  disabled={isSending || (isAtLimit && !isTicked)}
+                  onCheckedChange={(next) => onChange(text, next ? '' : null)}
+                />
+                <label
+                  htmlFor={id}
+                  className='min-w-0 flex-1 cursor-pointer py-0.5'
+                >
+                  <span className='text-foreground block text-sm [overflow-wrap:anywhere]'>
+                    <LinkedText text={choice} />
+                  </span>
+                  {other ? (
+                    <span className='text-muted-foreground block pt-0.5 text-xs [overflow-wrap:anywhere]'>
+                      Other option: {stripLinks(other)}
+                    </span>
+                  ) : null}
+                </label>
+              </div>
+              {isTicked ? (
+                <TickedNote>
+                  <NoteTextField
+                    label={words.label}
+                    placeholder={words.placeholder}
+                    value={draft.changes[text]}
+                    onChange={(next) => onChange(text, next)}
+                    maxLength={MAX_ANSWER_NOTE}
+                    rows={2}
+                    shouldFocus
+                  />
+                </TickedNote>
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {isAtLimit ? (
+        <p className='text-muted-foreground text-xs'>
+          That is the most one comment holds. Send these first, then tick the
+          rest.
+        </p>
+      ) : null}
+      {error ? (
+        <p role='alert'>
+          <WarningLine>{error}</WarningLine>
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 /** Where the answers went, each pull request a link to its new comment. */
-export function SentLine({ sent }: { sent: SentPr[] }) {
+export function SentLine({
+  sent,
+  issueNote = null,
+}: {
+  sent: SentPr[];
+  issueNote?: string | null;
+}) {
   if (sent.length === 0) return null;
   return (
     <p role='status' className='text-muted-foreground text-sm'>
@@ -577,6 +720,7 @@ export function SentLine({ sent }: { sent: SentPr[] }) {
           )}
         </span>
       ))}
+      {issueNote ? `. ${issueNote}` : ''}
     </p>
   );
 }

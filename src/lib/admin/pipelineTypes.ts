@@ -35,6 +35,10 @@ export interface PipelineInboxStatus {
   /** The open boxes under "Must do before merge"; null or missing on documents written before it was read. */
   mustDo: string[] | null;
   goodToKnow: string[];
+  /** The calls a session made for the owner; null when the document predates them. */
+  decisions: string[] | null;
+  /** Work the session suggests the owner might want next; null when the document predates it. */
+  followUps: string[] | null;
   screenshots: string[];
   updatedAt: number;
 }
@@ -65,7 +69,7 @@ export interface PipelineInboxPr {
   gallery: PipelineGalleryStep[] | null;
 }
 
-/** When the owner last answered each ask from the dashboard: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines. */
+/** When each ask was last answered: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines, "<pr>:d:<hash>" and "<pr>:f:<hash>" for one decision or follow-up line (a line stays answered whichever comment lists it), and the old whole-list "<pr>:decisions" and "<pr>:followups", which hide a list only until its status is rewritten. */
 export interface PipelineAnswered {
   marks: Record<string, number>;
   updatedAt: number;
@@ -76,6 +80,12 @@ export interface PipelineMergedPr {
   number: number;
   sessionUrl: string | null;
   mergedAt: number;
+  /** The fields below are missing on documents written before merged PRs kept their lists; read them as null. */
+  title: string | null;
+  /** When its status comment last changed. */
+  statusAt: number | null;
+  decisions: string[] | null;
+  followUps: string[] | null;
 }
 
 export interface PipelineInbox {

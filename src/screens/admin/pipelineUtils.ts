@@ -10,6 +10,7 @@ import type {
   PipelineSettleOutcome,
 } from '@lib/admin/pipelineTypes';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
+import { toLineMark } from '@lib/admin/pipelineMarks';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -42,6 +43,18 @@ export interface PipelineOwnerEntryItem {
   isTask: boolean;
   /** Ticked off or set aside from the dashboard since the status that listed it. */
   settled: PipelineSettleOutcome | null;
+}
+
+/** A line a session listed for the owner under its pull request's "Decisions I made for you" or "Possible follow-ups". */
+export interface PipelineListed {
+  /** The pull request it was listed on and its place in the list: "<pr>:d<index>" or "<pr>:f<index>". */
+  id: string;
+  prNumber: number;
+  /** When that pull request's status last changed; a whole-list mark from before per-line marks hides the list only until then. */
+  statusAt: number;
+  text: string;
+  /** Listed on a pull request that is already merged, so a change becomes an issue. */
+  isMerged: boolean;
 }
 
 /** A 🚩 line from a session's last reply. */
@@ -96,6 +109,10 @@ export interface PipelineEntry {
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
   goodToKnow: string[];
+  /** The calls made for the owner whose line has no answered mark yet. Never a reason to hold a merge. */
+  decisions: PipelineListed[];
+  /** The follow-ups suggested to the owner, open on the same terms. */
+  followUps: PipelineListed[];
   gallery: GalleryItem[];
   at: number;
 }
@@ -211,6 +228,85 @@ const toSafeItems = (
       };
     }),
   );
+
+const LIST_MARKS = { decisions: 'd', followUps: 'f' } as const;
+const LEGACY_MARKS = { decisions: 'decisions', followUps: 'followups' } as const;
+
+// A line is hidden once its own mark exists; the old whole-list mark hides a list only until its status is rewritten.
+const toListedLines = (
+  prNumber: number,
+  statusAt: number,
+  texts: string[],
+  list: 'decisions' | 'followUps',
+  answered: Record<string, number>,
+  isMerged: boolean,
+): PipelineListed[] => {
+  if ((answered[`${prNumber}:${LEGACY_MARKS[list]}`] ?? 0) >= statusAt) {
+    return [];
+  }
+  return Array.from(new Set(texts.map((text) => text.trim().replace(/\s+/g, ' '))))
+    .filter((text) => answered[toLineMark(prNumber, LIST_MARKS[list], text)] === undefined)
+    .map((text, index) => ({
+      id: `${prNumber}:${LIST_MARKS[list]}${index}`,
+      prNumber,
+      statusAt,
+      text,
+      isMerged,
+    }));
+};
+
+const toOpenListed = (
+  prs: PipelineInboxPr[],
+  answered: Record<string, number>,
+  now: number,
+  list: 'decisions' | 'followUps',
+): PipelineListed[] =>
+  prs
+    .filter((pr) => isReady(pr, now))
+    .flatMap((pr) =>
+      toListedLines(
+        pr.number,
+        pr.status?.updatedAt ?? 0,
+        pr.status?.[list] ?? [],
+        list,
+        answered,
+        false,
+      ),
+    );
+
+// A merged pull request's status comment is the last one its session wrote; its lines stay the owner's to answer.
+const toMergedListed = (
+  merged: PipelineMergedPr[],
+  answered: Record<string, number>,
+  list: 'decisions' | 'followUps',
+): PipelineListed[] =>
+  merged.flatMap((pr) =>
+    pr.statusAt === null || pr.statusAt === 0
+      ? []
+      : toListedLines(pr.number, pr.statusAt, pr[list] ?? [], list, answered, true),
+  );
+
+/** How many lines the pull requests list in all, answered or not, so an answered list can be told from one never written. */
+const countListedLines = (
+  prs: PipelineInboxPr[],
+  merged: PipelineMergedPr[],
+) =>
+  [
+    ...prs.map((pr) => [...(pr.status?.decisions ?? []), ...(pr.status?.followUps ?? [])]),
+    ...merged.map((pr) => [...(pr.decisions ?? []), ...(pr.followUps ?? [])]),
+  ].reduce((sum, texts) => sum + new Set(texts).size, 0);
+
+/** "2 decisions" or "1 follow-up", for a row's meta line. */
+export const toListedWords = (count: number, one: string, many: string) =>
+  `${count} ${count === 1 ? one : many}`;
+
+/** A decision's words and the other option written in its trailing "(other option: …)". */
+export function splitOtherOption(text: string) {
+  const match = /^(.*?)\s*\((?:the )?other option:\s*(.*)\)\s*$/is.exec(text);
+  return match
+    ? { choice: match[1], other: match[2] }
+    : { choice: text, other: null };
+}
 
 const isOpenAsk = (ask: { settled: PipelineSettleOutcome | null }) =>
   ask.settled === null;
@@ -363,6 +459,20 @@ function toSessionEntry(
   const safePrs = sessionPrs.map(toSafePr);
   const allItems = toSafeItems(sessionPrs, settled, now);
   const ownerItems = getOpenItems(allItems, answered);
+  const mergedHere = merged.filter(
+    (pr) => session.url !== null && pr.sessionUrl === session.url,
+  );
+  const decisions = [
+    ...toOpenListed(sessionPrs, answered, now, 'decisions'),
+    ...toMergedListed(mergedHere, answered, 'decisions'),
+  ];
+  const followUps = [
+    ...toOpenListed(sessionPrs, answered, now, 'followUps'),
+    ...toMergedListed(mergedHere, answered, 'followUps'),
+  ];
+  const isListed = decisions.length + followUps.length > 0;
+  const isListAnswered =
+    !isListed && countListedLines(sessionPrs, mergedHere) > 0;
   // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
   const isReplied =
     sessionPrs[0] !== undefined &&
@@ -377,10 +487,14 @@ function toSessionEntry(
       : hands.filter(isOpenAsk).map((hand) => toAsk(hand.text));
   const isAnswered =
     asks.length === 0 &&
+    !isListed &&
     (ownerItems.length < allItems.length ||
+      isListAnswered ||
       (isReplied && session.raisedHands.length > 0));
   const baseGroup = getSessionGroup(session, now);
   const getGroup = (): PipelineGroup | null => {
+    // Calls and follow-ups outlast the idle window, so they never drop off unanswered.
+    if (isListed && baseGroup !== 'working') return 'waiting';
     // A finished or quiet session that still holds asks is waiting on the owner.
     if (asks.length > 0 && (baseGroup === 'finished' || baseGroup === 'quiet'))
       return 'waiting';
@@ -410,6 +524,8 @@ function toSessionEntry(
     prs: safePrs,
     ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
+    decisions,
+    followUps,
     gallery: toGalleryItems(sessionPrs),
     at: session.updatedAt,
   };
@@ -425,8 +541,10 @@ function toPrEntry(
   const safePr = toSafePr(pr);
   const ownerItems = getOpenItems(toSafeItems([pr], settled, now), answered);
   const asks = ownerItems.filter(isOpenAsk).map((item) => toAsk(item.text));
+  const decisions = toOpenListed([pr], answered, now, 'decisions');
+  const followUps = toOpenListed([pr], answered, now, 'followUps');
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
-  const isWaiting = asks.length > 0;
+  const isWaiting = asks.length > 0 || decisions.length + followUps.length > 0;
   return {
     key: `pr-${pr.number}`,
     name: toSentence(status?.sessionTitle || pr.title),
@@ -436,7 +554,7 @@ function toPrEntry(
     isDriven: false,
     time,
     subtitle: isWaiting
-      ? `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0]}`
+      ? `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0] ?? 'Waiting on you'}`
       : `${time} · You handled everything`,
     lead: isWaiting ? `Waiting since ${time}` : 'You handled everything it asked.',
     asks,
@@ -445,13 +563,54 @@ function toPrEntry(
     prs: [safePr],
     ownerItems,
     goodToKnow: status?.goodToKnow ?? [],
+    decisions,
+    followUps,
     gallery: toGalleryItems([pr]),
     at: status?.updatedAt ?? 0,
   };
 }
 
+/** A merged pull request no session entry covers: just its calls and follow-ups, answered here. */
+function toMergedEntry(
+  pr: PipelineMergedPr,
+  answered: Record<string, number>,
+  now: number,
+): PipelineEntry {
+  const decisions = toMergedListed([pr], answered, 'decisions');
+  const followUps = toMergedListed([pr], answered, 'followUps');
+  const at = pr.statusAt ?? pr.mergedAt;
+  const time = formatPipelineTime(at, now);
+  return {
+    key: `pr-${pr.number}`,
+    name: toSentence(pr.title ?? `Pull request #${pr.number}`),
+    url: toHttps(pr.sessionUrl),
+    group: 'waiting',
+    isPrOnly: true,
+    isDriven: false,
+    time,
+    subtitle: `${time} · Merged`,
+    lead: `Merged ${formatPipelineTime(pr.mergedAt, now)}`,
+    asks: [],
+    sessionId: null,
+    hands: [],
+    prs: [],
+    ownerItems: [],
+    goodToKnow: [],
+    decisions,
+    followUps,
+    gallery: [],
+    at,
+  };
+}
+
 // A reply answers 🚩 lines when no question was asked; feedback sits beside the questions, tied to none.
-export type AnswerSlotKind = 'question' | 'reply' | 'feedback';
+// A decision or follow-up slot is one pull request's list, kept or changed (done or left) together.
+export type AnswerSlotKind =
+  | 'question'
+  | 'reply'
+  | 'feedback'
+  | 'decision'
+  | 'followup';
 
 export interface AnswerSlot {
   id: string;
@@ -466,10 +625,15 @@ export interface AnswerSlot {
   options: PipelineOption[];
   isMulti: boolean;
   kind: AnswerSlotKind;
+  /** The lines a decision or follow-up slot lists, in order; empty for every other kind. */
+  lines: string[];
+  /** The list sits on a merged pull request: a change or a picked follow-up opens an issue. */
+  isMerged: boolean;
 }
 
-/** What the owner can answer on an entry: each question plus one box for anything else, or one reply when only 🚩 lines were raised. */
-export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
+export const DECISIONS_QUESTION = 'Decisions I made for you';
+
+function getAskSlots(entry: PipelineEntry): AnswerSlot[] {
   const [pr] = entry.prs;
   const toFreeSlot = (
     target: PipelinePr,
@@ -484,6 +648,8 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
     options: [],
     isMulti: false,
     kind,
+    lines: [],
+    isMerged: false,
   });
   if (entry.ownerItems.some(isOpenAsk)) {
     const questions = entry.ownerItems
@@ -499,6 +665,8 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
         options: item.options,
         isMulti: item.isMulti,
         kind: 'question',
+        lines: [],
+        isMerged: false,
       }),
     );
     const firstPr = questions[0]?.prNumber ?? entry.ownerItems[0].prNumber;
@@ -511,9 +679,60 @@ export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
   return [toFreeSlot(pr, 'reply')];
 }
 
+/** The line under a decisions or follow-ups heading. */
+export const getListedIntro = (kind: 'decision' | 'followup') =>
+  kind === 'decision'
+    ? 'Tick any you would rather have another way.'
+    : 'Tick any you want done.';
+
+export const FOLLOWUPS_QUESTION = 'Possible follow-ups';
+
+const toListedSlots = (
+  entry: PipelineEntry,
+  kind: 'decision' | 'followup',
+): AnswerSlot[] => {
+  const isDecision = kind === 'decision';
+  const all = isDecision ? entry.decisions : entry.followUps;
+  const question = isDecision ? DECISIONS_QUESTION : FOLLOWUPS_QUESTION;
+  return Array.from(new Set(all.map((line) => line.prNumber))).map(
+    (prNumber) => {
+      const listed = all.filter((line) => line.prNumber === prNumber);
+      return {
+        id: `${entry.key}:${prNumber}:${kind}`,
+        // Each line has its own mark, made when the answer is sent.
+        mark: null,
+        prNumber,
+        statusAt: listed[0].statusAt,
+        question,
+        text: question,
+        options: [],
+        isMulti: false,
+        kind,
+        lines: Array.from(new Set(listed.map((line) => line.text))),
+        isMerged: listed[0].isMerged,
+      };
+    },
+  );
+};
+
+/** What the owner can answer on an entry: each question, then one slot per pull request for its calls and for its follow-ups, then one box for anything else (or one reply when only 🚩 lines were raised). */
+export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
+  const asks = getAskSlots(entry);
+  return [
+    ...asks.filter((slot) => slot.kind !== 'feedback'),
+    ...toListedSlots(entry, 'decision'),
+    ...toListedSlots(entry, 'followup'),
+    ...asks.filter((slot) => slot.kind === 'feedback'),
+  ];
+}
+
 /** The slots that ask something of the owner, without the optional feedback box. */
 export const getAskedSlots = (slots: AnswerSlot[]) =>
   slots.filter((slot) => slot.kind !== 'feedback');
+
+/** The slots whose lines are ticked to change or do rather than answered. */
+export const isListedSlot = (slot: AnswerSlot) =>
+  slot.kind === 'decision' || slot.kind === 'followup';
 
 /** A pull request's failure goes under its last question only, once (the feedback box when it asked none). */
 export const getPrError = (
@@ -610,7 +829,13 @@ export function buildPipeline(
     entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
   );
   const prEntries = prs
-    .filter((pr) => isReady(pr, now) && (pr.status?.ownerItems.length ?? 0) > 0)
+    .filter(
+      (pr) =>
+        isReady(pr, now) &&
+        ((pr.status?.ownerItems.length ?? 0) > 0 ||
+          (pr.status?.decisions ?? []).length > 0 ||
+          (pr.status?.followUps ?? []).length > 0),
+    )
     .filter(
       (pr) =>
         ![pr.status?.sessionUrl, pr.bodySessionUrl].some(
@@ -618,9 +843,17 @@ export function buildPipeline(
         ),
     )
     .map((pr) => toPrEntry(pr, answered, settled, now))
-    .filter((entry) => entry.ownerItems.length > 0);
+    .filter(
+      (entry) =>
+        entry.ownerItems.length > 0 ||
+        entry.decisions.length + entry.followUps.length > 0,
+    );
+  const mergedEntries = merged
+    .filter((pr) => !(pr.sessionUrl && sessionUrls.has(pr.sessionUrl)))
+    .map((pr) => toMergedEntry(pr, answered, now))
+    .filter((entry) => entry.decisions.length + entry.followUps.length > 0);
   const inGroup = (group: PipelineGroup) =>
-    [...entries, ...prEntries].filter((entry) => entry.group === group);
+    [...entries, ...prEntries, ...mergedEntries].filter((entry) => entry.group === group);
   return {
     waiting: inGroup('waiting').sort((a, b) => b.at - a.at),
     working: inGroup('working'),

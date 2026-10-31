@@ -27,6 +27,7 @@ import {
   getAskedSlots,
   getMergeTargets,
   getPartialFailureLine,
+  toListedWords,
   type PipelineEntry,
   type PipelineGroup,
   type PipelineGroups,
@@ -170,11 +171,17 @@ function PipelineView({
               {entry.name}
             </span>
             <span className='text-muted-foreground block truncate text-xs'>
-              {firstAsk || 'Waiting on you'}
+              {firstAsk || (entry.decisions.length > 0 ? 'Calls made for you' : 'Follow-ups to look at')}
             </span>
             <span className='text-muted-foreground block truncate pt-0.5 text-xs'>
               {entry.time}
               {askCount >= 2 ? ` · ${askCount} asks` : ''}
+              {entry.decisions.length > 0
+                ? ` · ${toListedWords(entry.decisions.length, 'decision', 'decisions')}`
+                : ''}
+              {entry.followUps.length > 0
+                ? ` · ${toListedWords(entry.followUps.length, 'follow-up', 'follow-ups')}`
+                : ''}
             </span>
           </span>
           <ChevronRight
@@ -316,7 +323,7 @@ function PipelineView({
               ) : null}
             </div>
           </div>
-          <SentLine sent={answers.lastSent} />
+          <SentLine sent={answers.lastSent} issueNote={answers.issueNote} />
           {mergeAllNote}
           <ul className={LIST_CARD_CLASS}>
             {(isWaitingExpanded
