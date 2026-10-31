@@ -34,6 +34,10 @@ const parsed = parseStatus(
 - Haircuts are named as envelopes in the prompt (other option: leave them to the model)
 - Totals round down (other option: round to nearest)
 
+**Possible follow-ups**
+- Let a vet visit add a weigh-in
+- Round the chart's axis
+
 **Good to know**
 - Nothing that writes was driven.
 
@@ -62,6 +66,11 @@ assert.deepEqual(parsed.decisions, [
   'Haircuts are named as envelopes in the prompt (other option: leave them to the model)',
   'Totals round down (other option: round to nearest)',
 ], 'the Decisions I made for you bullets, and not the Good to know ones');
+assert.deepEqual(
+  parsed.followUps,
+  ['Let a vet visit add a weigh-in', "Round the chart's axis"],
+  'the Possible follow-ups bullets, apart from the decisions before them',
+);
 
 const legacy = parseStatus(
   '<!-- pr-status -->\n## 📋 Status · blocked · 1\n',
@@ -69,6 +78,7 @@ const legacy = parseStatus(
 );
 assert.equal(legacy.sessionUrl, null, 'a status with no session marker');
 assert.deepEqual(legacy.decisions, [], 'no Decisions section is an empty list');
+assert.deepEqual(legacy.followUps, [], 'no follow-ups section is an empty list');
 assert.deepEqual(legacy.ownerItems, []);
 assert.equal(legacy.mustDo, null, 'no Must do heading is not read as nothing open');
 const asked = parseStatus(

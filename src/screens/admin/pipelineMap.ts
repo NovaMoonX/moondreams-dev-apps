@@ -110,7 +110,7 @@ export const MAP_NODES: MapNode[] = [
   },
   {
     id: 'dashboard',
-    covers: ['Pipeline view'],
+    covers: ['Pipeline view', 'Decisions and follow-ups'],
     lane: 'work',
     step: 7,
     title: 'This dashboard',

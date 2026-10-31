@@ -24,9 +24,10 @@ import NoteTextField from '@/components/NoteTextField';
 import { MAX_ANSWER_NOTE } from '@lib/admin/pipelineAnswers';
 import type { PipelineSettleOutcome } from '@lib/admin/pipelineTypes';
 
-import { DISABLED_CLASS, WAITING_DOT_CLASS } from './constants';
+import { WAITING_DOT_CLASS } from './constants';
 import {
   splitLinks,
+  splitOtherOption,
   stripLinks,
   type AnswerSlot,
   type PipelineGroup,
@@ -249,10 +250,8 @@ function FreeTextField({
       label: 'Anything else?',
       placeholder: "Feedback that isn't an answer to a question above",
     },
-    decision: {
-      label: 'What should it be instead?',
-      placeholder: 'What should it be instead?',
-    },
+    decision: LISTED_WORDS.decision,
+    followup: LISTED_WORDS.followup,
   }[slot.kind];
   return (
     <NoteTextField
@@ -460,6 +459,7 @@ const ROW_WORDS = {
   reply: { sheet: 'Reply', empty: 'Not answered yet' },
   feedback: { sheet: 'Anything else?', empty: 'Optional' },
   decision: { sheet: 'Decisions I made for you', empty: 'Sounds good' },
+  followup: { sheet: 'Possible follow-ups', empty: 'Not now' },
 };
 
 const getAnswerSummary = (draft: AnswerDraft) => {
@@ -565,26 +565,36 @@ interface DecisionFieldsProps {
   isSent: boolean;
   error: string | null;
   isSending: boolean;
-  isDisabled: boolean;
-  onChange: (index: number, words: string | null) => void;
-  onKeepAll: () => void;
-  onSend: () => void;
+  /** One comment holds no more answers, so no further line can be ticked. */
+  isAtLimit: boolean;
+  onChange: (line: string, words: string | null) => void;
 }
 
-/** The calls a session made for the owner: tick the ones to change and say what instead, or send Sounds good for all. */
+const LISTED_WORDS = {
+  decision: {
+    label: 'What should it be instead?',
+    placeholder: "Say what you'd rather have",
+    isRequired: true,
+  },
+  followup: {
+    label: 'Anything to add?',
+    placeholder: 'Optional: a detail or how soon',
+    isRequired: false,
+  },
+};
+
+/** A session's calls for the owner, or the follow-ups it suggests: tick the ones to change or do. They go with the screen's one send. */
 export function DecisionFields({
   slot,
   draft,
   isSent,
   error,
   isSending,
-  isDisabled,
+  isAtLimit,
   onChange,
-  onKeepAll,
-  onSend,
 }: DecisionFieldsProps) {
-  const ticked = Object.entries(draft.changes);
-  const isReady = ticked.every(([, words]) => words.trim() !== '');
+  const kind = slot.kind === 'followup' ? 'followup' : 'decision';
+  const words = LISTED_WORDS[kind];
   if (isSent) {
     return (
       <p className='text-muted-foreground flex items-center gap-1.5 text-sm'>
@@ -596,29 +606,44 @@ export function DecisionFields({
   return (
     <div className='space-y-3'>
       <ul className='space-y-3'>
-        {slot.decisions.map((text, index) => {
-          const isTicked = draft.changes[index] !== undefined;
+        {slot.lines.map((text, index) => {
+          const isTicked = draft.changes[text] !== undefined;
+          const { choice, other } =
+            kind === 'decision'
+              ? splitOtherOption(text)
+              : { choice: text, other: null };
+          const id = `${slot.id}-${index}`;
           return (
-            <li key={`${text}-${index}`} className='space-y-2'>
+            <li key={text} className='space-y-2'>
               <div className='flex items-start gap-3'>
                 <Checkbox
+                  id={id}
                   className={TICK_HIT_CLASS}
                   checked={isTicked}
-                  disabled={isSending}
-                  onCheckedChange={(next) => onChange(index, next ? '' : null)}
-                  aria-label={`Change: ${stripLinks(text)}`}
+                  disabled={isSending || (isAtLimit && !isTicked)}
+                  onCheckedChange={(next) => onChange(text, next ? '' : null)}
                 />
-                <p className='text-foreground min-w-0 flex-1 text-sm [overflow-wrap:anywhere]'>
-                  <LinkedText text={text} />
-                </p>
+                <label
+                  htmlFor={id}
+                  className='min-w-0 flex-1 cursor-pointer py-0.5'
+                >
+                  <span className='text-foreground block text-sm [overflow-wrap:anywhere]'>
+                    <LinkedText text={choice} />
+                  </span>
+                  {other ? (
+                    <span className='text-muted-foreground block pt-0.5 text-xs [overflow-wrap:anywhere]'>
+                      Other option: {stripLinks(other)}
+                    </span>
+                  ) : null}
+                </label>
               </div>
               {isTicked ? (
                 <div className='pl-8'>
                   <NoteTextField
-                    label='What should it be instead?'
-                    placeholder='What should it be instead?'
-                    value={draft.changes[index]}
-                    onChange={(words) => onChange(index, words)}
+                    label={words.label}
+                    placeholder={words.placeholder}
+                    value={draft.changes[text]}
+                    onChange={(next) => onChange(text, next)}
                     maxLength={MAX_ANSWER_NOTE}
                     rows={2}
                     shouldFocus
@@ -629,19 +654,12 @@ export function DecisionFields({
           );
         })}
       </ul>
-      <Button
-        type='button'
-        variant={ticked.length > 0 ? 'primary' : 'secondary'}
-        className={DISABLED_CLASS}
-        disabled={isDisabled || isSending || !isReady}
-        onClick={ticked.length > 0 ? onSend : onKeepAll}
-      >
-        {isSending
-          ? 'Sending…'
-          : ticked.length > 0
-            ? `Send ${ticked.length} ${ticked.length === 1 ? 'change' : 'changes'}`
-            : 'Sounds good'}
-      </Button>
+      {isAtLimit ? (
+        <p className='text-muted-foreground text-xs'>
+          That is the most one comment holds. Send these first, then tick the
+          rest.
+        </p>
+      ) : null}
       {error ? (
         <p role='alert'>
           <WarningLine>{error}</WarningLine>
@@ -652,7 +670,13 @@ export function DecisionFields({
 }
 
 /** Where the answers went, each pull request a link to its new comment. */
-export function SentLine({ sent }: { sent: SentPr[] }) {
+export function SentLine({
+  sent,
+  issueNote = null,
+}: {
+  sent: SentPr[];
+  issueNote?: string | null;
+}) {
   if (sent.length === 0) return null;
   return (
     <p role='status' className='text-muted-foreground text-sm'>
@@ -674,6 +698,7 @@ export function SentLine({ sent }: { sent: SentPr[] }) {
           )}
         </span>
       ))}
+      {issueNote ? `. ${issueNote}` : ''}
     </p>
   );
 }

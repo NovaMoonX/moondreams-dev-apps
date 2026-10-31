@@ -99,6 +99,8 @@ export interface PrStatus {
   goodToKnow: string[];
   /** The calls a session made on the owner's behalf, under "Decisions I made for you": one line each, with the other option. */
   decisions: string[];
+  /** Work the session suggests under "Possible follow-ups", one line each. */
+  followUps: string[];
   screenshots: string[];
   updatedAt: string;
 }
@@ -233,6 +235,9 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
   const decisions = section(body, 'Decisions I made for you')
     .filter((line) => /^\s*[-*]\s+/.test(line))
     .map(bullet);
+  const followUps = section(body, 'Possible follow-ups')
+    .filter((line) => /^\s*[-*]\s+/.test(line))
+    .map(bullet);
   const screenshots = section(body, 'New screenshots')
     .join(' ')
     .match(IMAGE_URL);
@@ -244,6 +249,7 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     mustDo,
     goodToKnow,
     decisions,
+    followUps,
     screenshots: screenshots ?? [],
     updatedAt,
   };

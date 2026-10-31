@@ -24,8 +24,9 @@ const ADMIN_EMAIL = 'nova@moondreams.dev';
 const REPO = 'NovaMoonX/moondreams-dev-apps';
 const GITHUB_TIMEOUT_MS = 15_000;
 const MAX_PRS = 20;
-// Up to 20 questions on a pull request, and the dashboard's Anything else box.
+// Up to 20 questions, decisions and follow-ups on a pull request (the dashboard caps its ticks), and the dashboard's Anything else box.
 const MAX_ITEMS = 21;
+const MAX_ISSUE_TITLE = 200;
 const MAX_QUESTION = 500;
 const MAX_CHOICE = 300;
 const MAX_CHOICES = 26;
@@ -40,9 +41,25 @@ interface AnswerItem {
   note: string | null;
 }
 
+/** A change to a decision or a follow-up the owner picked, opened as a GitHub issue when the pull request is already merged. */
+interface IssueRequest {
+  kind: 'change' | 'followUp';
+  /** The decision or follow-up without its other-option part. */
+  title: string;
+  /** What the owner wrote, or empty. */
+  words: string;
+}
+
+interface IssueResult {
+  title: string;
+  url: string | null;
+  isMade: boolean;
+}
+
 interface PrAnswers {
   prNumber: number;
   items: AnswerItem[];
+  issues: IssueRequest[];
   /** Which of the dashboard's asks these answer: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines, "<pr>:decisions" for the calls made for the owner. */
   marks: string[];
 }
@@ -54,6 +71,8 @@ interface PrResult {
   /** When the comment was posted, in the server's time. */
   postedAt: number | null;
   error: string | null;
+  /** The issues a merged pull request's answers became (or would, in the emulator). */
+  issues: IssueResult[];
 }
 
 type Json = Record<string, unknown>;
@@ -126,7 +145,7 @@ const readAttempt = (data: unknown) => {
 
 const readMarks = (raw: unknown, prNumber: number) => {
   if (raw === undefined) return [];
-  const mark = new RegExp(`^${prNumber}:(\\d{1,2}|reply|decisions)$`);
+  const mark = new RegExp(`^${prNumber}:(\\d{1,2}|reply|decisions|followups)$`);
   if (
     !Array.isArray(raw) ||
     raw.length > MAX_ITEMS ||
@@ -135,6 +154,28 @@ const readMarks = (raw: unknown, prNumber: number) => {
     throw invalid('Bad answer marks.');
   }
   return Array.from(new Set(raw as string[]));
+};
+
+const readIssues = (raw: unknown): IssueRequest[] => {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_ITEMS) {
+    throw invalid('Bad issue requests.');
+  }
+  return raw.map((entry: unknown) => {
+    if (
+      !isObject(entry) ||
+      (entry.kind !== 'change' && entry.kind !== 'followUp')
+    ) {
+      throw invalid('Bad issue request.');
+    }
+    const title = neutralise(collapse(readText(entry.title, MAX_QUESTION)));
+    if (title === null) throw invalid('Each issue needs its title.');
+    return {
+      kind: entry.kind,
+      title: title.slice(0, MAX_ISSUE_TITLE),
+      words: neutralise(readText(entry.words, MAX_NOTE)) ?? '',
+    };
+  });
 };
 
 const readAnswers = (data: unknown): PrAnswers[] => {
@@ -164,6 +205,7 @@ const readAnswers = (data: unknown): PrAnswers[] => {
     const answer = {
       prNumber,
       items: items.map(readItem),
+      issues: readIssues(raw.issues),
       marks: readMarks(raw.marks, prNumber),
     };
     if (toCommentBody(answer.items, '').length > MAX_COMMENT) {
@@ -334,10 +376,54 @@ const readRecentComments = async (
   return bodies.flat().filter(isObject);
 };
 
+// One issue each; a failure is reported and never fails the send, since the comment is already posted.
+const openIssues = async (
+  token: string,
+  prNumber: number,
+  commentUrl: string | null,
+  requests: IssueRequest[],
+): Promise<IssueResult[]> =>
+  Promise.all(
+    requests.map(async ({ kind, title, words }): Promise<IssueResult> => {
+      const heading =
+        kind === 'change'
+          ? `Change from #${prNumber}: ${title}`
+          : `Follow-up from #${prNumber}: ${title}`;
+      const body = [
+        words === '' ? '(No details added.)' : defang(words),
+        '',
+        `From #${prNumber}: https://github.com/${REPO}/pull/${prNumber}`,
+        ...(commentUrl === null ? [] : [`The owner's answer: ${commentUrl}`]),
+      ].join('\n');
+      try {
+        const response = await githubFetch(token, '/issues', {
+          method: 'POST',
+          body: JSON.stringify({
+            title: heading.slice(0, MAX_ISSUE_TITLE),
+            body,
+          }),
+        });
+        if (!response.ok) {
+          logger.warn('answerPipelineQuestions: issue failed', response.status);
+          return { title: heading, url: null, isMade: false };
+        }
+        const made = await readJson(response);
+        return {
+          title: heading,
+          url: typeof made?.html_url === 'string' ? made.html_url : null,
+          isMade: true,
+        };
+      } catch (error) {
+        logger.warn('answerPipelineQuestions: issue failed', getErrorName(error));
+        return { title: heading, url: null, isMade: false };
+      }
+    }),
+  );
+
 const postAnswers = async (
   token: string,
   attempt: string,
-  { prNumber, items }: PrAnswers,
+  { prNumber, items, issues }: PrAnswers,
 ): Promise<PrResult> => {
   const fail = (error: string): PrResult => ({
     prNumber,
@@ -345,6 +431,7 @@ const postAnswers = async (
     url: null,
     postedAt: null,
     error,
+    issues: [],
   });
   const marker = toMarker(attempt, items);
   try {
@@ -360,7 +447,9 @@ const postAnswers = async (
       );
     }
     const pullBody = await readJson(pull);
-    if (pullBody?.state !== 'open') {
+    // A merged pull request still takes the comment, and its changes become issues.
+    const isMerged = pullBody?.merged === true;
+    if (pullBody?.state !== 'open' && !isMerged) {
       return fail('That pull request is already closed.');
     }
 
@@ -382,6 +471,7 @@ const postAnswers = async (
         url: typeof earlier.html_url === 'string' ? earlier.html_url : null,
         postedAt: Number.isNaN(created) ? Date.now() : created,
         error: null,
+        issues: [],
       };
     }
 
@@ -399,12 +489,17 @@ const postAnswers = async (
     }
     const posted = await readJson(comment);
     const createdAt = Date.parse(String(posted?.created_at));
+    const commentUrl =
+      typeof posted?.html_url === 'string' ? posted.html_url : null;
     return {
       prNumber,
       ok: true,
-      url: typeof posted?.html_url === 'string' ? posted.html_url : null,
+      url: commentUrl,
       postedAt: Number.isNaN(createdAt) ? Date.now() : createdAt,
       error: null,
+      issues: isMerged
+        ? await openIssues(token, prNumber, commentUrl, issues)
+        : [],
     };
   } catch (error) {
     logger.warn('answerPipelineQuestions: request failed', getErrorName(error));
@@ -442,12 +537,13 @@ export const answerPipelineQuestions = onCall(
     // The emulator's dashboard shows made-up pull requests, so it rehearses the send and posts nothing.
     if (isRunningInEmulator()) {
       const sample = answers.map(
-        ({ prNumber }): PrResult => ({
+        ({ prNumber, issues }): PrResult => ({
           prNumber,
           ok: true,
           url: null,
           postedAt: Date.now(),
           error: null,
+          issues: issues.map(({ title }) => ({ title, url: null, isMade: false })),
         }),
       );
       await recordAnswered(answers, sample);
@@ -492,6 +588,7 @@ export const answerPipelineQuestions = onCall(
             url: null,
             postedAt: null,
             error: "Couldn't reach GitHub.",
+            issues: [],
           },
     );
     await recordAnswered(answers, results);

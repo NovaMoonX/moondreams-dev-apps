@@ -26,7 +26,9 @@ import {
   getAnswerSlots,
   getAskedSlots,
   getMergeBlock,
+  getListedIntro,
   getPrError,
+  isListedSlot,
   type AnswerSlot,
   type PipelineEntry,
   type PipelineHand,
@@ -163,8 +165,9 @@ function MergeRow({
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
 function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheetProps) {
   const everySlot = entry ? getAnswerSlots(entry) : [];
-  const slots = everySlot.filter((slot) => slot.kind !== 'decision');
+  const slots = everySlot.filter((slot) => !isListedSlot(slot));
   const decisionSlots = everySlot.filter((slot) => slot.kind === 'decision');
+  const followUpSlots = everySlot.filter((slot) => slot.kind === 'followup');
   const ownerItems = entry?.ownerItems ?? [];
   const hands = entry?.hands ?? [];
   const taskItems = ownerItems.filter((item) => item.isTask);
@@ -198,27 +201,32 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
       slot={slot}
       draft={answers.getDraft(slot.id)}
       isSent={answers.isSent(slot)}
-      error={getPrError(slots, slot, answers.errors)}
+      error={getPrError(everySlot, slot, answers.errors)}
       onChoices={(choices, other) => answers.setChoices(slot.id, choices, other)}
       onOther={(other) => answers.setOther(slot.id, other)}
       onNote={(note) => answers.setNote(slot.id, note)}
     />
   );
-  const asked = getAskedSlots(slots);
+  const asked = getAskedSlots(everySlot);
   const isAllSent = asked.length > 0 && asked.every(answers.isSent);
-  const slotPrs = new Set(slots.map((slot) => slot.prNumber));
-  const entryReady = answers.getReadyCount(slots);
+  const slotPrs = new Set(everySlot.map((slot) => slot.prNumber));
+  const sendState = answers.getSendState(everySlot);
+  const entryReady = sendState.readyCount;
   const elsewhereReady =
-    answers.getReadyCount() - answers.getReadyCount(everySlot);
+    answers.getTouchedCount() - answers.getTouchedCount(everySlot);
   const renderFooter = (entry: PipelineEntry) => {
     const sent = answers.lastSent.filter((pr) => slotPrs.has(pr.prNumber));
     const target = getOpenTarget(entry);
-    if (slots.length === 0 && target === null) return undefined;
-    const note = answers.isNotSetUp ? (
-      <NotSetUpLine />
-    ) : slots.length > 0 && entryReady === 0 && !answers.isSending && !isAllSent ? (
-      'Pick an option or write an answer first'
-    ) : null;
+    if (everySlot.length === 0 && target === null) return undefined;
+    const getNote = () => {
+      if (answers.isNotSetUp) return <NotSetUpLine />;
+      if (sendState.holdNote) return sendState.holdNote;
+      if (everySlot.length > 0 && entryReady === 0 && !answers.isSending && !isAllSent) {
+        return 'Pick an option or write an answer first';
+      }
+      return sendState.keepNote;
+    };
+    const note = getNote();
     return (
       <div className='space-y-2 px-4 sm:px-0'>
         {note ? (
@@ -235,24 +243,27 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
               href={target.href}
               target='_blank'
               rel='noreferrer'
-              variant={slots.length > 0 ? 'secondary' : 'primary'}
+              variant={everySlot.length > 0 ? 'secondary' : 'primary'}
               className='gap-2'
             >
               {target.mark}
               {target.label}
             </Button>
           ) : null}
-          {slots.length > 0 ? (
+          {everySlot.length > 0 ? (
             <Button
               type='button'
               variant='primary'
               className={DISABLED_CLASS}
               disabled={
-                entryReady === 0 || answers.isSending || answers.isNotSetUp
+                entryReady === 0 ||
+                sendState.unfinished > 0 ||
+                answers.isSending ||
+                answers.isNotSetUp
               }
-              onClick={() => void answers.send(slots)}
+              onClick={() => void answers.send(everySlot)}
             >
-              {answers.isSending ? 'Sending…' : 'Send answers'}
+              {answers.isSending ? 'Sending…' : sendState.label}
             </Button>
           ) : null}
         </div>
@@ -266,7 +277,7 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
             <UnsureLine prs={answers.unsure} />
           </p>
         ) : null}
-        <SentLine sent={sent} />
+        <SentLine sent={sent} issueNote={answers.issueNote} />
         {elsewhereReady > 0 ? (
           <p className='text-muted-foreground text-xs'>
             {elsewhereReady} {elsewhereReady === 1 ? 'answer' : 'answers'} ready
@@ -357,6 +368,41 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
             </SheetSection>
           ) : null}
 
+          {[
+            { title: 'Decisions I made for you', kind: 'decision' as const, list: decisionSlots },
+            { title: 'Possible follow-ups', kind: 'followup' as const, list: followUpSlots },
+          ].map(({ title, kind, list }) =>
+            list.length > 0 ? (
+              <SheetSection key={kind} title={title}>
+                <p className='text-muted-foreground text-sm'>
+                  {getListedIntro(kind)}
+                </p>
+                <ul className='space-y-5'>
+                  {list.map((slot) => (
+                    <li key={slot.id} className='space-y-2'>
+                      {new Set(list.map((other) => other.prNumber)).size > 1 ? (
+                        <p className='text-muted-foreground text-xs font-medium'>
+                          #{slot.prNumber}
+                        </p>
+                      ) : null}
+                      <DecisionFields
+                        slot={slot}
+                        draft={answers.getDraft(slot.id)}
+                        isSent={answers.isSent(slot)}
+                        error={getPrError(everySlot, slot, answers.errors)}
+                        isSending={answers.isSending}
+                        isAtLimit={answers.isAtLimit(slot.prNumber)}
+                        onChange={(line, words) =>
+                          answers.setChange(slot.id, line, words)
+                        }
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </SheetSection>
+            ) : null,
+          )}
+
           {taskItems.length > 0 || taskHands.length > 0 ? (
             <SheetSection title='To do'>
               <ul className='space-y-3'>
@@ -368,33 +414,6 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
                 {taskHands.map((hand, index) => (
                   <li key={`${hand.text}-${index}`}>
                     <TaskRow {...getSettleProps(handTarget(hand), hand.settled)} />
-                  </li>
-                ))}
-              </ul>
-            </SheetSection>
-          ) : null}
-
-          {decisionSlots.length > 0 ? (
-            <SheetSection title='Decisions I made for you'>
-              <p className='text-muted-foreground text-sm'>
-                Tick any you would rather have another way.
-              </p>
-              <ul className='space-y-5'>
-                {decisionSlots.map((slot) => (
-                  <li key={slot.id}>
-                    <DecisionFields
-                      slot={slot}
-                      draft={answers.getDraft(slot.id)}
-                      isSent={answers.isSent(slot)}
-                      error={getPrError(everySlot, slot, answers.errors)}
-                      isSending={answers.isSending}
-                      isDisabled={answers.isNotSetUp}
-                      onChange={(index, words) =>
-                        answers.setChange(slot.id, index, words)
-                      }
-                      onKeepAll={() => void answers.sendKeepAll(slot)}
-                      onSend={() => void answers.send([slot])}
-                    />
                   </li>
                 ))}
               </ul>

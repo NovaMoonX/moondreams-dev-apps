@@ -112,6 +112,7 @@ const toStatus = (value: unknown) => {
       : null,
     goodToKnow: texts(value.goodToKnow),
     decisions: texts(value.decisions),
+    followUps: texts(value.followUps),
     screenshots: httpsUrls(value.screenshots),
     updatedAt: toMs(value.updatedAt),
   };

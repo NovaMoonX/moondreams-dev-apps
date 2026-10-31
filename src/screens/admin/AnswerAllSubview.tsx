@@ -16,7 +16,9 @@ import {
 } from './PipelineParts';
 import {
   getAnswerSlots,
+  getListedIntro,
   getPrError,
+  isListedSlot,
   type PipelineEntry,
 } from './pipelineUtils';
 import type { PipelineAnswers } from './usePipelineAnswers';
@@ -36,9 +38,11 @@ function AnswerAllSubview({
   const groups = entries
     .map((entry) => ({ entry, slots: getAnswerSlots(entry) }))
     .filter((group) => group.slots.length > 0);
-  const readyCount = answers.getReadyCount();
+  const everySlot = groups.flatMap((group) => group.slots);
+  const sendState = answers.getSendState(everySlot);
+  const readyCount = sendState.readyCount;
   const requestClose = useDiscardGuard({
-    isDirty: readyCount > 0,
+    isDirty: answers.getTouchedCount(everySlot) > 0,
     onClose: () => {
       answers.clear();
       onClose();
@@ -50,25 +54,25 @@ function AnswerAllSubview({
   });
 
   const handleSend = async () => {
-    const isAllSent = await answers.send(
-      groups.flatMap((group) => group.slots),
-    );
+    const isAllSent = await answers.send(everySlot);
     if (isAllSent) onClose();
   };
 
   const getSendLabel = () => {
     if (answers.isSending) return 'Sending…';
-    if (readyCount === 0) return 'Send answers';
-    return `Send ${readyCount} ${readyCount === 1 ? 'answer' : 'answers'}`;
+    if (sendState.touched === 0) return sendState.label;
+    return `Send ${sendState.touched} ${sendState.touched === 1 ? 'answer' : 'answers'}`;
   };
 
   const getFooterNote = () => {
     if (answers.isNotSetUp) return <NotSetUpLine />;
     if (answers.sendNote) return <WarningLine>{answers.sendNote}</WarningLine>;
     if (answers.unsure.length > 0) return <UnsureLine prs={answers.unsure} />;
-    return readyCount === 0 && !answers.isSending
-      ? 'Pick an option or write an answer first'
-      : undefined;
+    if (sendState.holdNote) return sendState.holdNote;
+    if (readyCount === 0 && !answers.isSending) {
+      return 'Pick an option or write an answer first';
+    }
+    return sendState.keepNote ?? undefined;
   };
 
   return (
@@ -95,10 +99,14 @@ function AnswerAllSubview({
                     slot.kind === 'feedback' ? 'border-border border-t pt-4' : undefined
                   }
                 >
-                  {slot.kind === 'decision' ? (
+                  {isListedSlot(slot) ? (
                     <div className='space-y-2'>
                       <p className='text-foreground text-sm font-medium'>
-                        {slot.text} on #{slot.prNumber}
+                        {slot.text}
+                        {entry.prs.length > 1 ? ` · #${slot.prNumber}` : ''}
+                      </p>
+                      <p className='text-muted-foreground text-xs'>
+                        {getListedIntro(slot.kind === 'followup' ? 'followup' : 'decision')}
                       </p>
                       <DecisionFields
                         slot={slot}
@@ -106,12 +114,10 @@ function AnswerAllSubview({
                         isSent={answers.isSent(slot)}
                         error={getPrError(slots, slot, answers.errors)}
                         isSending={answers.isSending}
-                        isDisabled={answers.isNotSetUp}
-                        onChange={(index, words) =>
-                          answers.setChange(slot.id, index, words)
+                        isAtLimit={answers.isAtLimit(slot.prNumber)}
+                        onChange={(line, words) =>
+                          answers.setChange(slot.id, line, words)
                         }
-                        onKeepAll={() => void answers.sendKeepAll(slot)}
-                        onSend={() => void answers.send([slot])}
                       />
                     </div>
                   ) : (
@@ -132,7 +138,7 @@ function AnswerAllSubview({
             </ul>
           </section>
         ))}
-        <SentLine sent={answers.lastSent} />
+        <SentLine sent={answers.lastSent} issueNote={answers.issueNote} />
       </div>
       <ModalFooterActions
         note={getFooterNote()}
@@ -143,7 +149,10 @@ function AnswerAllSubview({
               variant='primary'
               className={DISABLED_CLASS}
               disabled={
-                readyCount === 0 || answers.isSending || answers.isNotSetUp
+                readyCount === 0 ||
+                sendState.unfinished > 0 ||
+                answers.isSending ||
+                answers.isNotSetUp
               }
               onClick={() => void handleSend()}
             >

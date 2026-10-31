@@ -9,9 +9,23 @@ export interface PipelineAnswerItem {
   note: string | null;
 }
 
+/** A decision to change or a follow-up to do, opened as an issue when the pull request is already merged. */
+export interface PipelineIssueRequest {
+  kind: 'change' | 'followUp';
+  title: string;
+  words: string;
+}
+
+export interface PipelineIssueResult {
+  title: string;
+  url: string | null;
+  isMade: boolean;
+}
+
 export interface PipelineAnswersForPr {
   prNumber: number;
   items: PipelineAnswerItem[];
+  issues: PipelineIssueRequest[];
   /** The asks these answer, so the dashboard stops counting them. */
   marks: string[];
 }
@@ -23,9 +37,13 @@ export interface PipelineAnswerResult {
   /** When the comment was posted, in the server's time. */
   postedAt: number | null;
   error: string | null;
+  /** The issues a merged pull request's answers became; empty on an open one. */
+  issues: PipelineIssueResult[];
 }
 
 export const MAX_ANSWER_NOTE = 2000;
+/** The most answers one comment holds. */
+export const MAX_ANSWER_ITEMS = 21;
 
 const answerPipelineQuestionsCallable = httpsCallable<
   { answers: PipelineAnswersForPr[]; attempt: string },

@@ -44,9 +44,9 @@ export interface PipelineOwnerEntryItem {
   settled: PipelineSettleOutcome | null;
 }
 
-/** A call a session made for the owner, listed under its pull request's "Decisions I made for you". */
-export interface PipelineDecision {
-  /** The pull request it was listed on and its place in that list: "<pr>:d<index>". */
+/** A line a session listed for the owner under its pull request's "Decisions I made for you" or "Possible follow-ups". */
+export interface PipelineListed {
+  /** The pull request it was listed on and its place in that list: "<pr>:d<index>" or "<pr>:f<index>". */
   id: string;
   prNumber: number;
   /** When that pull request's status last changed: an answer sent before this has been read. */
@@ -106,8 +106,10 @@ export interface PipelineEntry {
   prs: PipelinePr[];
   ownerItems: PipelineOwnerEntryItem[];
   goodToKnow: string[];
-  /** The calls made for the owner that they haven't answered from the dashboard since the status that listed them. Never a reason to wait or to hold a merge. */
-  decisions: PipelineDecision[];
+  /** The calls made for the owner that they haven't answered from the dashboard since the status that listed them. Never a reason to hold a merge. */
+  decisions: PipelineListed[];
+  /** The follow-ups suggested to the owner, open on the same terms. */
+  followUps: PipelineListed[];
   gallery: GalleryItem[];
   at: number;
 }
@@ -224,31 +226,37 @@ const toSafeItems = (
     }),
   );
 
-const toOpenDecisions = (
+const toOpenListed = (
   prs: PipelineInboxPr[],
   answered: Record<string, number>,
   now: number,
-): PipelineDecision[] =>
+  list: 'decisions' | 'followUps',
+): PipelineListed[] =>
   prs
     .filter((pr) => isReady(pr, now))
     .flatMap((pr) => {
       const statusAt = pr.status?.updatedAt ?? 0;
-      if ((answered[`${pr.number}:decisions`] ?? 0) >= statusAt) return [];
-      return (pr.status?.decisions ?? []).map((text, index) => ({
-        id: `${pr.number}:d${index}`,
+      const mark = list === 'decisions' ? 'decisions' : 'followups';
+      if ((answered[`${pr.number}:${mark}`] ?? 0) >= statusAt) return [];
+      return (pr.status?.[list] ?? []).map((text, index) => ({
+        id: `${pr.number}:${list === 'decisions' ? 'd' : 'f'}${index}`,
         prNumber: pr.number,
         statusAt,
         text,
       }));
     });
 
-const toDecisionWords = (count: number) =>
-  `${count} ${count === 1 ? 'decision' : 'decisions'} made for you`;
+/** "2 decisions" or "1 follow-up", for a row's meta line. */
+export const toListedWords = (count: number, one: string, many: string) =>
+  `${count} ${count === 1 ? one : many}`;
 
-const withDecisions = (subtitle: string, decisions: PipelineDecision[]) =>
-  decisions.length > 0
-    ? `${subtitle} · ${toDecisionWords(decisions.length)}`
-    : subtitle;
+/** A decision's words and the other option written in its trailing "(other option: …)". */
+export function splitOtherOption(text: string) {
+  const match = /^(.*?)\s*\((?:the )?other option:\s*(.*)\)\s*$/is.exec(text);
+  return match
+    ? { choice: match[1], other: match[2] }
+    : { choice: text, other: null };
+}
 
 const isOpenAsk = (ask: { settled: PipelineSettleOutcome | null }) =>
   ask.settled === null;
@@ -401,7 +409,9 @@ function toSessionEntry(
   const safePrs = sessionPrs.map(toSafePr);
   const allItems = toSafeItems(sessionPrs, settled, now);
   const ownerItems = getOpenItems(allItems, answered);
-  const decisions = toOpenDecisions(sessionPrs, answered, now);
+  const decisions = toOpenListed(sessionPrs, answered, now, 'decisions');
+  const followUps = toOpenListed(sessionPrs, answered, now, 'followUps');
+  const isListed = decisions.length + followUps.length > 0;
   // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
   const isReplied =
     sessionPrs[0] !== undefined &&
@@ -416,10 +426,13 @@ function toSessionEntry(
       : hands.filter(isOpenAsk).map((hand) => toAsk(hand.text));
   const isAnswered =
     asks.length === 0 &&
+    !isListed &&
     (ownerItems.length < allItems.length ||
       (isReplied && session.raisedHands.length > 0));
   const baseGroup = getSessionGroup(session, now);
   const getGroup = (): PipelineGroup | null => {
+    // Calls and follow-ups outlast the idle window, so they never drop off unanswered.
+    if (isListed && baseGroup !== 'working') return 'waiting';
     // A finished or quiet session that still holds asks is waiting on the owner.
     if (asks.length > 0 && (baseGroup === 'finished' || baseGroup === 'quiet'))
       return 'waiting';
@@ -441,10 +454,7 @@ function toSessionEntry(
     isPrOnly: false,
     isDriven: now - session.updatedAt <= IDLE_KEEP_MS,
     time,
-    subtitle: withDecisions(
-      getSubtitle(group, asks, time, session, now, isAnswered),
-      decisions,
-    ),
+    subtitle: getSubtitle(group, asks, time, session, now, isAnswered),
     lead: getLead(session, group, now, isAnswered),
     asks,
     sessionId: session.sessionId,
@@ -453,6 +463,7 @@ function toSessionEntry(
     ownerItems,
     goodToKnow: unique(sessionPrs.flatMap((pr) => pr.status?.goodToKnow ?? [])),
     decisions,
+    followUps,
     gallery: toGalleryItems(sessionPrs),
     at: session.updatedAt,
   };
@@ -468,8 +479,10 @@ function toPrEntry(
   const safePr = toSafePr(pr);
   const ownerItems = getOpenItems(toSafeItems([pr], settled, now), answered);
   const asks = ownerItems.filter(isOpenAsk).map((item) => toAsk(item.text));
+  const decisions = toOpenListed([pr], answered, now, 'decisions');
+  const followUps = toOpenListed([pr], answered, now, 'followUps');
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
-  const isWaiting = asks.length > 0;
+  const isWaiting = asks.length > 0 || decisions.length + followUps.length > 0;
   return {
     key: `pr-${pr.number}`,
     name: toSentence(status?.sessionTitle || pr.title),
@@ -479,7 +492,7 @@ function toPrEntry(
     isDriven: false,
     time,
     subtitle: isWaiting
-      ? `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0]}`
+      ? `${time} · ${asks.length >= 2 ? `${asks.length} asks · ` : ''}${asks[0] ?? 'Waiting on you'}`
       : `${time} · You handled everything`,
     lead: isWaiting ? `Waiting since ${time}` : 'You handled everything it asked.',
     asks,
@@ -488,15 +501,21 @@ function toPrEntry(
     prs: [safePr],
     ownerItems,
     goodToKnow: status?.goodToKnow ?? [],
-    decisions: toOpenDecisions([pr], answered, now),
+    decisions,
+    followUps,
     gallery: toGalleryItems([pr]),
     at: status?.updatedAt ?? 0,
   };
 }
 
 // A reply answers 🚩 lines when no question was asked; feedback sits beside the questions, tied to none.
-// A decision slot is the calls made for the owner on one pull request, kept or changed together.
-export type AnswerSlotKind = 'question' | 'reply' | 'feedback' | 'decision';
+// A decision or follow-up slot is one pull request's list, kept or changed (done or left) together.
+export type AnswerSlotKind =
+  | 'question'
+  | 'reply'
+  | 'feedback'
+  | 'decision'
+  | 'followup';
 
 export interface AnswerSlot {
   id: string;
@@ -511,8 +530,8 @@ export interface AnswerSlot {
   options: PipelineOption[];
   isMulti: boolean;
   kind: AnswerSlotKind;
-  /** The decisions a decision slot lists, in order; empty for every other kind. */
-  decisions: string[];
+  /** The lines a decision or follow-up slot lists, in order; empty for every other kind. */
+  lines: string[];
 }
 
 export const DECISIONS_QUESTION = 'Decisions I made for you';
@@ -532,7 +551,7 @@ function getAskSlots(entry: PipelineEntry): AnswerSlot[] {
     options: [],
     isMulti: false,
     kind,
-    decisions: [],
+    lines: [],
   });
   if (entry.ownerItems.some(isOpenAsk)) {
     const questions = entry.ownerItems
@@ -548,7 +567,7 @@ function getAskSlots(entry: PipelineEntry): AnswerSlot[] {
         options: item.options,
         isMulti: item.isMulti,
         kind: 'question',
-        decisions: [],
+        lines: [],
       }),
     );
     const firstPr = questions[0]?.prNumber ?? entry.ownerItems[0].prNumber;
@@ -561,38 +580,60 @@ function getAskSlots(entry: PipelineEntry): AnswerSlot[] {
   return [toFreeSlot(pr, 'reply')];
 }
 
-const toDecisionSlots = (entry: PipelineEntry): AnswerSlot[] =>
-  entry.prs.flatMap((target) => {
-    const listed = entry.decisions.filter(
-      (decision) => decision.prNumber === target.number,
-    );
+/** The line under a decisions or follow-ups heading. */
+export const getListedIntro = (kind: 'decision' | 'followup') =>
+  kind === 'decision'
+    ? 'Tick any you would rather have another way.'
+    : 'Tick any you want done.';
+
+export const FOLLOWUPS_QUESTION = 'Possible follow-ups';
+
+const toListedSlots = (
+  entry: PipelineEntry,
+  kind: 'decision' | 'followup',
+): AnswerSlot[] => {
+  const isDecision = kind === 'decision';
+  const all = isDecision ? entry.decisions : entry.followUps;
+  const question = isDecision ? DECISIONS_QUESTION : FOLLOWUPS_QUESTION;
+  return entry.prs.flatMap((target) => {
+    const listed = all.filter((line) => line.prNumber === target.number);
     return listed.length === 0
       ? []
       : [
           {
-            id: `${entry.key}:${target.number}:decision`,
-            mark: `${target.number}:decisions`,
+            id: `${entry.key}:${target.number}:${kind}`,
+            mark: `${target.number}:${isDecision ? 'decisions' : 'followups'}`,
             prNumber: target.number,
             statusAt: listed[0].statusAt,
-            question: DECISIONS_QUESTION,
-            text: DECISIONS_QUESTION,
+            question,
+            text: question,
             options: [],
             isMulti: false,
-            kind: 'decision' as const,
-            decisions: listed.map((decision) => decision.text),
+            kind,
+            lines: listed.map((line) => line.text),
           },
         ];
   });
+};
 
-/** What the owner can answer on an entry: each question plus one box for anything else (or one reply when only 🚩 lines were raised), then one slot per pull request for the calls made for them. */
-export const getAnswerSlots = (entry: PipelineEntry): AnswerSlot[] => [
-  ...getAskSlots(entry),
-  ...toDecisionSlots(entry),
-];
+/** What the owner can answer on an entry: each question, then one slot per pull request for its calls and for its follow-ups, then one box for anything else (or one reply when only 🚩 lines were raised). */
+export function getAnswerSlots(entry: PipelineEntry): AnswerSlot[] {
+  const asks = getAskSlots(entry);
+  return [
+    ...asks.filter((slot) => slot.kind !== 'feedback'),
+    ...toListedSlots(entry, 'decision'),
+    ...toListedSlots(entry, 'followup'),
+    ...asks.filter((slot) => slot.kind === 'feedback'),
+  ];
+}
 
-/** The slots that ask something of the owner, without the optional feedback box or the calls already made. */
+/** The slots that ask something of the owner, without the optional feedback box. */
 export const getAskedSlots = (slots: AnswerSlot[]) =>
-  slots.filter((slot) => slot.kind !== 'feedback' && slot.kind !== 'decision');
+  slots.filter((slot) => slot.kind !== 'feedback');
+
+/** The slots whose lines are ticked to change or do rather than answered. */
+export const isListedSlot = (slot: AnswerSlot) =>
+  slot.kind === 'decision' || slot.kind === 'followup';
 
 /** A pull request's failure goes under its last question only, once (the feedback box when it asked none). */
 export const getPrError = (
@@ -689,7 +730,13 @@ export function buildPipeline(
     entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
   );
   const prEntries = prs
-    .filter((pr) => isReady(pr, now) && (pr.status?.ownerItems.length ?? 0) > 0)
+    .filter(
+      (pr) =>
+        isReady(pr, now) &&
+        ((pr.status?.ownerItems.length ?? 0) > 0 ||
+          (pr.status?.decisions ?? []).length > 0 ||
+          (pr.status?.followUps ?? []).length > 0),
+    )
     .filter(
       (pr) =>
         ![pr.status?.sessionUrl, pr.bodySessionUrl].some(
@@ -697,7 +744,11 @@ export function buildPipeline(
         ),
     )
     .map((pr) => toPrEntry(pr, answered, settled, now))
-    .filter((entry) => entry.ownerItems.length > 0);
+    .filter(
+      (entry) =>
+        entry.ownerItems.length > 0 ||
+        entry.decisions.length + entry.followUps.length > 0,
+    );
   const inGroup = (group: PipelineGroup) =>
     [...entries, ...prEntries].filter((entry) => entry.group === group);
   return {

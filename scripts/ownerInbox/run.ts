@@ -277,6 +277,7 @@ const toPipelinePr = (pr: InboxPr): InboxPr => ({
     mustDo: pr.status.mustDo && pr.status.mustDo.map(fromPlain),
     goodToKnow: pr.status.goodToKnow.map(fromPlain),
     decisions: pr.status.decisions.map(fromPlain),
+    followUps: pr.status.followUps.map(fromPlain),
   },
   gallery: pr.gallery.map((step) => ({
     ...step,
