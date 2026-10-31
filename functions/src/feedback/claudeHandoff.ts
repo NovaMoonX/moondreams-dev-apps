@@ -185,7 +185,9 @@ export async function readHandoffItems(
         ({
           ...snap.data(),
           id: snap.id,
-          agentState: snap.get('agentState') ?? null,
+          agentState:
+            (snap.data() as Record<string, unknown> | undefined)?.agentState ??
+            null,
         }) as HandoffItem & { createdAt: number },
     )
     .sort((a, b) => a.createdAt - b.createdAt);
