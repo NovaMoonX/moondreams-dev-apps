@@ -9,6 +9,8 @@ interface GroupTotalHelpProps {
   /** The total is a range and amounts are showing. */
   hasRange: boolean;
   stance: Stance;
+  /** Whose range it is; a group's is expenses. */
+  side?: 'income' | 'expense';
   /** What a heading counts when the group has the other kind too; the sheet counts both. */
   only?: {
     kind: 'bills' | 'envelopes';
@@ -23,6 +25,7 @@ function GroupTotalHelp({
   total,
   hasRange,
   stance,
+  side = 'expense',
   only,
 }: GroupTotalHelpProps) {
   return (
@@ -41,7 +44,7 @@ function GroupTotalHelp({
       {hasRange && (
         <>
           <p>{GROUP_WORDS.rangeTotal}</p>
-          <RangeBasisNote stance={stance} side='expense' />
+          <RangeBasisNote stance={stance} side={side} />
         </>
       )}
     </>

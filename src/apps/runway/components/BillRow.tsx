@@ -12,7 +12,7 @@ import {
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
-import { describeBillRepeat } from '@apps/runway/utils/billText';
+import { describeBillRepeat, isUndatedBill } from '@apps/runway/utils/billText';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
 interface BillRowProps {
@@ -71,7 +71,7 @@ function BillRow({
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
-  const isUndated = bill.timing.schedule.anchor === null;
+  const isUndated = isUndatedBill(bill);
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
   const dueLine = isOutsideTotal
     ? `${getDueLine(payment, isUndated)} · ${GROUP_WORDS.oneTimeNote}`
@@ -82,6 +82,7 @@ function BillRow({
       name={bill.name}
       emoji={emoji}
       detail={detailOverride ?? dueLine}
+      isDetailWarning={isUndated && detailOverride === null}
       figure={amount}
       ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}
       onOpen={reorder ? undefined : onOpen}

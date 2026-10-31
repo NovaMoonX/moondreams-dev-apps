@@ -365,7 +365,7 @@ export const CLOSING_WRITE_CHUNK = 6;
 /** Times one rebuild is tried again after another device changed the plan under it. */
 export const CLOSING_REBUILD_ATTEMPTS = 3;
 /** A closing is stored as this version of its sealed payload; a reader of a different one rebuilds it. */
-export const CLOSING_VERSION = 4;
+export const CLOSING_VERSION = 5;
 /** Days an unconfirmed income day stays on the list after its date. */
 export const OVERDUE_DAYS = 14;
 export const MAX_NOTE_LENGTH = 300;
@@ -668,6 +668,8 @@ export const BILL_WORDS = {
   waiting: 'Waiting for the rest',
   readyToPay: 'Set aside in full',
   needsDueDate: 'Needs a due date',
+  undatedOne: (name: string) => `${name} needs a due date`,
+  undatedMany: (count: number) => `${count} bills need a due date`,
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
@@ -741,6 +743,13 @@ export const HISTORY_WORDS = {
 } as const;
 
 export const START_AMOUNTS_WORDS = {
+  cashLabel: 'Money not in a goal or envelope',
+  cashHint:
+    "What's in your account apart from what your goals and envelopes hold.",
+  goals: 'What each goal holds',
+  envelopes: 'What each envelope holds',
+  bills: 'Already set aside for bills',
+  total: 'Total in your account',
   offline:
     'Saving where things stand needs a connection. Nothing was saved. Try again when you are back online.',
 } as const;
@@ -1149,8 +1158,13 @@ export const BUDGET_WORDS = {
   } as const,
   needDetails: (count: number) =>
     count === 1
-      ? 'One needs a look. Open it or remove it.'
-      : `${count} need a look. Open them or remove them.`,
+      ? '1 item needs a look. Open it or remove it.'
+      : `${count} items need a look. Open them or remove them.`,
+  removedRow: (count: number) => `Removed items (${count})`,
+  removedTitle: 'Removed items',
+  restore: 'Restore',
+  restoreLabel: (name: string) => `Restore ${name}`,
+  envelopeHolds: (amount: string) => `Holds ${amount}`,
   dueLaterNote: (count: number) =>
     count === 1
       ? 'One bill has no due date yet. Add it later from the plan.'
@@ -1312,6 +1326,43 @@ export const MOVE_WORDS = {
   offline: 'Moving money needs a connection. Nothing was changed.',
 } as const;
 
+export const SET_HELD_WORDS = {
+  open: 'Set what it holds now',
+  title: (name: string) => `What ${name} holds now`,
+  amount: 'Holds now',
+  needsAmount: 'Enter what it holds.',
+  unchanged: 'That is what it holds already.',
+  action: 'Set what it holds',
+  moved: (name: string) => `Updated what ${name} holds`,
+  moneyOnHand: 'Money on hand',
+  needsSourceRaise: 'Choose where the money came from.',
+  needsSourceLower: 'Choose where the money went.',
+  outsideIn: {
+    title: 'Money from outside the plan',
+    body: 'Another account, a gift or a correction. Free to Spend stays the same.',
+  },
+  freeOut: {
+    title: 'From Free to Spend',
+    body: (amount: string) => `Your spare cash goes down by ${amount}.`,
+  },
+  outsideOut: {
+    title: 'It left the plan',
+    body: 'Spent elsewhere or moved out. Free to Spend stays the same.',
+  },
+  freeIn: {
+    title: 'Back to Free to Spend',
+    body: (amount: string) => `Your spare cash goes up by ${amount}.`,
+  },
+  summaryOutsideIn: (amount: string, name: string) =>
+    `Added ${amount} to ${name} from outside the plan.`,
+  summaryOutsideOut: (amount: string, name: string) =>
+    `Took ${amount} out of ${name}. It left the plan.`,
+  undoneOutsideIn: (amount: string, name: string) =>
+    `Took ${amount} back out of ${name}`,
+  undoneOutsideOut: (amount: string, name: string) =>
+    `Put ${amount} back in ${name}`,
+} as const;
+
 export const PROBLEM_WORDS = {
   title: 'Things to fix',
   one: '1 thing to fix',
@@ -1348,6 +1399,11 @@ export const FORM_FLOW_WORDS = {
   emojiTitle: 'Pick an emoji, if you like',
   emoji: 'Emoji',
   noEmoji: 'None',
+  maxTitle: 'Stop filling at',
+  max: 'Stop filling at',
+  maxHint: 'It gets nothing more once it holds this much.',
+  noMax: 'No limit',
+  clearMax: 'Remove the limit',
   billAmountTitle: 'How much is it?',
   expenseAmountTitle: 'How much will it be?',
   amount: 'Amount',
@@ -1458,6 +1514,9 @@ export const ITEM_SHEET_R2_WORDS = {
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
   changeAmount: 'Change amount',
+  setMax: 'Set a max',
+  changeMax: 'Change the max',
+  stopsAt: (amount: string) => `Stops at ${amount}`,
   setDueDate: 'Set the due date',
   eachTime: 'Each time',
   balance: 'Balance',
@@ -1722,6 +1781,9 @@ export const GROUP_WORDS = {
   setTip:
     'Tip: say what a bill or envelope is for, like Pets, to see what it costs each month.',
   perMonth: (amount: string) => `${amount} a month`,
+  saved: 'saved',
+  goalsHelpTitle: 'What your goals add up to',
+  savingToward: (amount: string) => `Saving toward ${amount} in all.`,
   monthLabel: 'Together, each month',
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,

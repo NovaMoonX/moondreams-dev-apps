@@ -254,6 +254,7 @@ async function writeSeedKeptEnvelope(
     priority: 'want',
     orderIndex: 11,
     groupId: null,
+    maxCents: null,
     funding: {
       amount: { kind: 'exact', cents: 6_000 },
       cadence: { kind: 'everyIncomeDay' },
@@ -344,6 +345,7 @@ async function writeSeedLifecycle(
     priority: 'want',
     orderIndex,
     groupId: null,
+    maxCents: null,
     funding: funding(cents),
   });
   const phonePlan: BillSealed = {
@@ -405,6 +407,7 @@ async function writeSeedLifecycle(
         priority: 'should',
         orderIndex: 2.5,
         groupId: null,
+        maxCents: null,
         funding: funding(150_000),
       } satisfies EnvelopeSealed,
     },
@@ -793,6 +796,7 @@ async function writeSeedStart(
     toId: 'seed-goal-vacation',
     cents: 4_200,
     note: null,
+    isOutside: false,
   };
   batch.set(context.firestore.doc(`${plan}/moves/${transferId}`), {
     id: transferId,
@@ -1367,6 +1371,7 @@ async function writeSeedEnvelopes(
         priority: 'must',
         orderIndex: 1,
         groupId: null,
+        maxCents: null,
         funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -1378,6 +1383,7 @@ async function writeSeedEnvelopes(
         priority: 'must',
         orderIndex: 2,
         groupId: null,
+        maxCents: null,
         funding: {
           amount: exact(6_000),
           cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
@@ -1392,6 +1398,7 @@ async function writeSeedEnvelopes(
         priority: 'should',
         orderIndex: 1,
         groupId: null,
+        maxCents: null,
         funding: { amount: exact(5_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -1403,6 +1410,7 @@ async function writeSeedEnvelopes(
         priority: 'should',
         orderIndex: 2,
         groupId: null,
+        maxCents: null,
         funding: {
           amount: exact(4_000),
           cadence: { kind: 'everyNth', n: 3, anchorDayKey: paydayKey(0) },
@@ -1417,6 +1425,7 @@ async function writeSeedEnvelopes(
         priority: 'want',
         orderIndex: 1,
         groupId: null,
+        maxCents: null,
         funding: {
           amount: exact(20_000),
           cadence: {
@@ -1434,6 +1443,7 @@ async function writeSeedEnvelopes(
         priority: 'should',
         orderIndex: 3,
         groupId: null,
+        maxCents: null,
         funding: {
           amount: { kind: 'percent', bps: 1_000, of: 'dayMoney' },
           cadence: { kind: 'everyIncomeDay' },
@@ -1448,6 +1458,7 @@ async function writeSeedEnvelopes(
         priority: 'want',
         orderIndex: 2,
         groupId: null,
+        maxCents: null,
         funding: {
           amount: { kind: 'rest' },
           cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
@@ -1462,6 +1473,7 @@ async function writeSeedEnvelopes(
         priority: 'must',
         orderIndex: 3,
         groupId: null,
+        maxCents: null,
         funding: {
           amount: exact(9_500),
           cadence: {
@@ -1482,6 +1494,7 @@ async function writeSeedEnvelopes(
               priority: 'want' as const,
               orderIndex: 3,
               groupId: null,
+              maxCents: null,
               funding: {
                 amount: exact(2_000),
                 cadence: {

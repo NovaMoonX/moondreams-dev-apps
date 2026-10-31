@@ -10,6 +10,10 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
+import PlanTotal from '@apps/runway/components/PlanTotal';
+import { usePlanTotals } from '@apps/runway/hooks/useGroupFigures';
+import { describePlanTotal } from '@apps/runway/utils/billText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { ITEM_SHEET_R2_WORDS, SCHEDULE_LABELS } from '@apps/runway/constants';
@@ -189,6 +193,8 @@ function IncomeScreen() {
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const isLoaded = useAppSelector(selectIsPlanItemsLoaded);
+  const total = usePlanTotals(today).income;
+  const totalFigure = describePlanTotal({ kind: 'monthly', total });
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
   const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -250,7 +256,28 @@ function IncomeScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title='Income' />
+      <SectionHeader
+        title='Income'
+        action={
+          isLoaded && totalFigure ? (
+            <PlanTotal
+              figure={totalFigure}
+              help={
+                total.total.lowCents !== total.total.highCents ||
+                total.oneTime.count > 0 ||
+                total.uncounted > 0 ? (
+                  <GroupTotalHelp
+                    total={total}
+                    hasRange={total.total.lowCents !== total.total.highCents}
+                    stance={stance}
+                    side='income'
+                  />
+                ) : undefined
+              }
+            />
+          ) : undefined
+        }
+      />
       {getBody()}
       <FloatingAction
         label='Add income'

@@ -6,6 +6,8 @@ import {
   describeDay,
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   deriveBillProgress,
   deriveHeldByItem,
@@ -799,6 +801,9 @@ export function computeDraftView(
           resolvedBills.map(({ version }) => version.id),
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+          resolved.map(({ item, version }) =>
+            version.payload.maxCents === null ? 0 : (heldByItem[item.id] ?? 0),
+          ),
           [...returning].sort(),
           hashText(priorDays.map((entry) => entry.dayKey).join(',')),
           resolvedBills.map(({ item }) => [
@@ -826,6 +831,8 @@ export function computeDraftView(
       priority: payload.priority,
       orderIndex: payload.orderIndex,
       funding: payload.funding,
+      maxCents: payload.maxCents,
+      heldCents: heldByItem[item.id] ?? 0,
     };
   });
   const bills = resolvedBills.map(({ item, version }) => ({
@@ -923,6 +930,24 @@ export function computeDraftView(
   return result;
 }
 
+/** What the draft is given as held: an envelope's figure is what the person sees left in it (never below zero, none once released), a goal's is its ledger sum. */
+export const selectDraftHeldByItem = createSelector(
+  [selectHeldByItem, selectBalances, selectItems, () => todayAsUtcDate()],
+  (held, balances, items, today) => ({
+    ...held,
+    ...Object.fromEntries(
+      items
+        .filter((item) => item.kind === 'envelope')
+        .map((item) => [
+          item.id,
+          item.heldReleasedOn !== null && item.heldReleasedOn <= today
+            ? 0
+            : Math.max(0, balances.assignedByItem[item.id] ?? 0),
+        ]),
+    ),
+  }),
+);
+
 /**
  * The draft for one coming income day, computed from the plan and never stored. Drafts are kept by a
  * hash of the resolved versions and held against the versions array itself, so an unrelated change
@@ -936,7 +961,7 @@ export const selectDraft = createSelector(
     selectDays,
     selectDayKey,
     selectToday,
-    selectHeldByItem,
+    selectDraftHeldByItem,
     selectSettledKey,
     selectBillProgress,
   ],

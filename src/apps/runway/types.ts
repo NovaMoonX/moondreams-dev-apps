@@ -288,8 +288,12 @@ export interface EnvelopeSealed {
   /** A fractional rank inside the priority tier. */
   orderIndex: number;
   funding: FundingRule;
+  /** The most it should hold; it gets nothing more once it does. A version written before the max reads as null. */
+  maxCents: Cents | null;
   /** The group that lists this envelope; a version written before envelopes had groups reads as null. */
   groupId: string | null;
+  /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
 }
 
 /** How a bill is funded: spread over the income days before it is due, or on days the person picked. */
@@ -432,10 +436,13 @@ export interface PlanVersionDoc {
 export interface ChangeMove {
   moveId: string;
   date: DateOnly;
-  fromId: string;
+  /** Null is Free to Spend. */
+  fromId: string | null;
   toId: string | null;
   cents: Cents;
   note: string | null;
+  /** The money came from, or went to, outside the plan: money on hand changed by the same amount. */
+  isOutside: boolean;
   /** The sentence that says what taking it back restores, for the confirm, the toast and the log. */
   undoText: string;
   isUndo: boolean;
@@ -445,7 +452,8 @@ export interface ChangeSealed {
   summary: string;
   /** The person's reason; a change written before notes existed has none. */
   note?: string | null;
-  move?: ChangeMove | null;
+  /** A move written before outside moves existed has no `isOutside`. */
+  move?: (Omit<ChangeMove, 'isOutside'> & { isOutside?: boolean }) | null;
 }
 
 export interface ChangeDoc {
@@ -524,12 +532,15 @@ export interface CardPaymentSealed {
   covers?: CardPaymentCovers;
 }
 
-/** Money moved between buckets: `refId` is `fromId`, `toId` null is Free to Spend. A move that names it in `reversesMoveId` takes it back. */
+/** Money moved between buckets: `refId` is `fromId`, or `toId` when `fromId` is null; `toId` null is Free to Spend. A move that names it in `reversesMoveId` takes it back. */
 export interface TransferSealed {
-  fromId: string;
+  /** Null is Free to Spend, so `toId` is then an item. */
+  fromId: string | null;
   toId: string | null;
   cents: Cents;
   note: string | null;
+  /** Money from outside the plan into an item, or out of it: money on hand changes by `cents` too. Missing on a move written before it existed, which reads as false. */
+  isOutside: boolean;
 }
 
 export type CardPaymentCovers = 'full' | 'minimum' | 'part';
@@ -639,8 +650,8 @@ export interface ClosingSealed {
   charged: Record<string, Cents>;
   /** `[day, cents, moveId]` for each card payment not undone. */
   cardPaid: Record<string, [number, Cents, string][]>;
-  /** `[day, fromId, toId, cents, moveId]` for each transfer not undone; a null `toId` is Free to Spend. */
-  transfers: [number, string, string | null, Cents, string][];
+  /** `[day, fromId, toId, cents, moveId, isOutside]` for each transfer not undone; a null `toId` is Free to Spend. */
+  transfers: [number, string | null, string | null, Cents, string, boolean][];
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

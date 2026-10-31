@@ -1,22 +1,34 @@
 import { useState, type CSSProperties } from 'react';
-import { Receipt } from 'lucide-react';
+import { Receipt, X } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
 import LazyMount from '@/components/LazyMount';
+import RevealChip from '@/components/RevealChip';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
-import { GROUP_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import {
+  BILL_WORDS,
+  GROUP_WORDS,
+  RUNWAY_SEARCH_THRESHOLD,
+} from '@apps/runway/constants';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
+import PlanTotal from '@apps/runway/components/PlanTotal';
+import UndatedBillsRow from '@apps/runway/components/UndatedBillsRow';
+import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import GroupHeading from '@apps/runway/components/GroupHeading';
-import { useGroupFigures } from '@apps/runway/hooks/useGroupFigures';
+import {
+  useGroupFigures,
+  usePlanTotals,
+} from '@apps/runway/hooks/useGroupFigures';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
+import { describePlanTotal, isUndatedBill } from '@apps/runway/utils/billText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
 import {
@@ -45,12 +57,14 @@ function BillsScreen() {
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);
-  const { addRequest, clearAdd, dueBillId, closeDueBill } = useRunwayUrlState();
+  const { addRequest, clearAdd, dueBillId, closeDueBill, openDueBill } =
+    useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'bill';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [openBillId, setOpenBillId] = useState<string | null>(null);
+  const [narrowedIds, setNarrowedIds] = useState<string[] | null>(null);
 
   const hasSearch = bills.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -67,10 +81,18 @@ function BillsScreen() {
       groupId: groupId !== null && groupIds.has(groupId) ? groupId : null,
     };
   });
-  const isShown = ({ payload, payment }: (typeof listed)[number]) =>
+  const undated = listed.filter(({ payload }) => isUndatedBill(payload));
+  const isNarrowed =
+    narrowedIds !== null &&
+    undated.some(({ item }) => narrowedIds.includes(item.id));
+  const isShown = ({ item, payload, payment }: (typeof listed)[number]) =>
+    (!isNarrowed ||
+      (isUndatedBill(payload) && (narrowedIds ?? []).includes(item.id))) &&
     `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
       .toLowerCase()
       .includes(needle);
+  const total = usePlanTotals(today).bills;
+  const totalFigure = describePlanTotal({ kind: 'monthly', total });
   const visible = listed.filter(isShown);
   const figuresByGroup = useGroupFigures(today);
   const sections = figuresByGroup
@@ -84,6 +106,7 @@ function BillsScreen() {
       ({ figures, rows }) =>
         rows.length > 0 ||
         (needle === '' &&
+          !isNarrowed &&
           figures.bills.length + figures.envelopes.length === 0),
     );
   const isShowingTip =
@@ -152,6 +175,26 @@ function BillsScreen() {
     }
     return (
       <div className='space-y-3'>
+        {undated.length > 0 &&
+          (isNarrowed ? (
+            <div>
+              <RevealChip
+                icon={<X className='h-3.5 w-3.5' aria-hidden='true' />}
+                onClick={() => setNarrowedIds(null)}
+              >
+                {BILL_WORDS.needsDueDate}
+              </RevealChip>
+            </div>
+          ) : (
+            <UndatedBillsRow
+              names={undated.map(({ payload }) => payload.name)}
+              onOpen={() =>
+                undated.length === 1
+                  ? openDueBill(undated[0].item.id)
+                  : setNarrowedIds(undated.map(({ item }) => item.id))
+              }
+            />
+          ))}
         {hasSearch && (
           <SearchInput
             value={query}
@@ -192,7 +235,23 @@ function BillsScreen() {
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title='Bills' />
+      <SectionHeader
+        title='Bills'
+        action={
+          isLoaded && totalFigure ? (
+            <PlanTotal
+              figure={totalFigure}
+              help={
+                <GroupTotalHelp
+                  total={total}
+                  hasRange={total.total.lowCents !== total.total.highCents}
+                  stance={stance}
+                />
+              }
+            />
+          ) : undefined
+        }
+      />
       {getBody()}
       {isLoaded && <StoppedHoldingList kind='bill' today={today} />}
       <FloatingAction

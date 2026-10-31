@@ -166,6 +166,7 @@ export function toEnvelopeValue(
     priority: 'should',
     orderIndex: 0,
     groupId: null,
+    maxCents: null,
     funding: {
       amount: { kind: 'exact', cents: item.amountCents ?? 0 },
       cadence:
@@ -173,6 +174,7 @@ export function toEnvelopeValue(
           ? { kind: 'everyIncomeDay' }
           : { kind: 'calendar', period, startsOn: today },
     },
+    startingCents: item.currentCents,
   };
 }
 
@@ -225,6 +227,7 @@ const BILL_GROUPS: (keyof BillValues)[][] = [
 const ENVELOPE_GROUPS: (keyof EnvelopeValues)[][] = [
   ['amountCents'],
   ['period'],
+  ['currentCents'],
 ];
 const GOAL_GROUPS: (keyof GoalValues)[][] = [
   ['targetCents'],
@@ -408,6 +411,7 @@ export function moveBudgetValue(
       priority,
       orderIndex,
       groupId,
+      maxCents: null,
       funding:
         funding.cadence.kind === 'none'
           ? {

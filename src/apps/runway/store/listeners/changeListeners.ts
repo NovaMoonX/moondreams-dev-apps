@@ -39,7 +39,9 @@ async function openChange(
       ...base,
       summary: payload.summary,
       note: payload.note ?? null,
-      move: payload.move ?? null,
+      move: payload.move
+        ? { ...payload.move, isOutside: payload.move.isOutside ?? false }
+        : null,
       isUnreadable: false,
     };
   } catch {

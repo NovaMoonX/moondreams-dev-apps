@@ -70,6 +70,10 @@ export interface DraftEnvelopeInput {
   priority: Priority;
   orderIndex: number;
   funding: FundingRule;
+  /** The most the envelope should hold; it asks for nothing once it holds this much. */
+  maxCents?: Cents | null;
+  /** What it holds before any planned day, which a max counts against. */
+  heldCents?: Cents;
 }
 
 export interface DraftGoalInput extends DraftEnvelopeInput {
@@ -123,7 +127,7 @@ export interface Demand {
   cadence: DraftCadence;
   bill: BillShare | null;
   ask: DraftAsk;
-  /** A `rest` demand's ceiling (a goal's target left); null for no ceiling. */
+  /** A `rest` demand's ceiling (a goal's target left, an envelope's room under its max); null for no ceiling. */
   capCents: Cents | null;
 }
 
@@ -226,22 +230,45 @@ export function buildDemands(
   const envelopeDemands = envelopes.flatMap((envelope) => {
     const funded = selectRuleDays(envelope.funding, chronological);
     const calendar = getCalendarCents(envelope.funding, funded, priorDays);
-    return funded
-      .filter((day) => planned.has(day.dayKey))
-      .map((day): Demand => ({
+    const isRest = envelope.funding.amount.kind === 'rest';
+    const max = envelope.maxCents ?? null;
+    const asked = (day: (typeof funded)[number]) =>
+      calendar
+        ? (calendar.get(day.dayKey) ?? 0)
+        : getDemandCents(envelope.funding, moneyOf(day));
+    const walked = funded.reduce<{
+      room: Cents;
+      parts: { day: (typeof funded)[number]; cents: Cents; room: Cents }[];
+    }>(
+      (acc, day) => {
+        const cents = Math.min(asked(day), acc.room);
+        return {
+          room: max === null || isRest ? acc.room : acc.room - cents,
+          parts: [...acc.parts, { day, cents, room: acc.room }],
+        };
+      },
+      {
+        room:
+          max === null
+            ? Number.MAX_SAFE_INTEGER
+            : Math.max(0, max - (envelope.heldCents ?? 0)),
+        parts: [],
+      },
+    ).parts;
+    return walked
+      .filter(({ day }) => planned.has(day.dayKey))
+      .map(({ day, cents, room }): Demand => ({
         dayKey: day.dayKey,
         itemId: envelope.itemId,
         tier: envelope.priority,
         dueBeforeNext: false,
         orderIndex: envelope.orderIndex,
         createdAt: envelope.createdAt,
-        cents: calendar
-          ? (calendar.get(day.dayKey) ?? 0)
-          : getDemandCents(envelope.funding, moneyOf(day)),
+        cents,
         cadence: cadenceCode(envelope.funding.cadence),
         bill: null,
         ask: getAsk(envelope.funding),
-        capCents: null,
+        capCents: isRest && max !== null ? room : null,
       }));
   });
   const goalDemands = goals.flatMap((goal) =>

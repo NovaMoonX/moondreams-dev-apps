@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 
 import EmojiField from '@/components/EmojiField';
 import SuggestionChips from '@/components/SuggestionChips';
+import AmountField from '@/components/AmountField';
+import RevealChip from '@/components/RevealChip';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
@@ -23,6 +25,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
   ENVELOPE_QUICK_PICKS,
@@ -92,6 +99,8 @@ interface EnvelopeFormData extends FundingFormData {
   emoji: string | null;
   /** An existing group's id, `NEW_CHOICE` while naming one, or '' for none. */
   group: { choice: string; newText: string };
+  /** Dollars as typed; empty for no limit. */
+  max: string;
 }
 
 const parseEnvelopeDraftFields = (stored: unknown) =>
@@ -101,6 +110,7 @@ const parseEnvelopeDraftFields = (stored: unknown) =>
     priority: isNullableOneOf(PRIORITIES),
     emoji: isNullableText,
     group: isPickOrCreate,
+    max: isText,
   });
 
 const parseEnvelopeDraft = (stored: unknown) =>
@@ -125,7 +135,14 @@ interface EnvelopeFormProps {
 }
 
 export type EnvelopeStepId =
-  'name' | 'often' | 'amount' | 'cadence' | 'group' | 'priority' | 'emoji';
+  | 'name'
+  | 'often'
+  | 'amount'
+  | 'cadence'
+  | 'group'
+  | 'priority'
+  | 'emoji'
+  | 'max';
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
@@ -138,6 +155,7 @@ const EMPTY_ENVELOPE: EnvelopeSealed = {
   priority: 'should',
   orderIndex: 0,
   groupId: null,
+  maxCents: null,
   funding: {
     amount: { kind: 'exact', cents: 0 },
     cadence: { kind: 'everyIncomeDay' },
@@ -150,6 +168,7 @@ const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => ({
   priority: payload.priority,
   emoji: payload.emoji,
   group: { choice: payload.groupId ?? '', newText: '' },
+  max: centsToInputValue(payload.maxCents),
 });
 
 const INITIAL_DATA: EnvelopeFormData = {
@@ -158,6 +177,7 @@ const INITIAL_DATA: EnvelopeFormData = {
   priority: 'should',
   emoji: null,
   group: { choice: '', newText: '' },
+  max: '',
 };
 
 const getBlocker = (data: EnvelopeFormData, hasDays: boolean) => {
@@ -165,6 +185,8 @@ const getBlocker = (data: EnvelopeFormData, hasDays: boolean) => {
     return FORM_FLOW_WORDS.nameGroup;
   if (data.name.trim() === '') return 'Name the envelope.';
   if (data.priority === null) return 'Pick how much it matters.';
+  if (data.max.trim() !== '' && !(parseMoneyToCents(data.max) ?? 0))
+    return FORM_FLOW_WORDS.badAmount;
   return getFundingBlocker(data, hasDays);
 };
 
@@ -257,6 +279,7 @@ function EnvelopeFormBody({
     draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much does it get ${unit}?`,
   });
+  const maxCents = parseMoneyToCents(formData.max);
   const steps: QuestionStep[] = [
     {
       id: 'name',
@@ -368,6 +391,32 @@ function EnvelopeFormBody({
         />
       ),
     },
+    {
+      id: 'max',
+      title: FORM_FLOW_WORDS.maxTitle,
+      summaryLabel: FORM_FLOW_WORDS.max,
+      summaryValue:
+        maxCents === null ? FORM_FLOW_WORDS.noMax : formatCents(maxCents),
+      isAnswered: true,
+      isPreAnswered: true,
+      render: () => (
+        <div className='space-y-3'>
+          <AmountField
+            isHero
+            emptyText={FORM_FLOW_WORDS.noMax}
+            label={FORM_FLOW_WORDS.max}
+            value={formData.max}
+            onChange={(max) => set({ max })}
+            hint={FORM_FLOW_WORDS.maxHint}
+          />
+          {formData.max !== '' && (
+            <RevealChip onClick={() => set({ max: '' })}>
+              {FORM_FLOW_WORDS.clearMax}
+            </RevealChip>
+          )}
+        </div>
+      ),
+    },
   ];
   const [isAll, setIsAll] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -401,6 +450,7 @@ function EnvelopeFormBody({
       priority,
       orderIndex,
       groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
+      maxCents: parseMoneyToCents(data.max) || null,
       funding,
     };
     return result;

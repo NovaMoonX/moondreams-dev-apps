@@ -20,7 +20,7 @@ import {
   selectBillProgress,
   selectBills,
   selectComingDays,
-  selectHeldByItem,
+  selectDraftHeldByItem,
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -126,7 +126,7 @@ export const selectLookahead = createSelector(
     selectOpenDays,
     selectStance,
     selectOn,
-    selectHeldByItem,
+    selectDraftHeldByItem,
     selectSettledKey,
     selectBillProgress,
     selectStartDate,

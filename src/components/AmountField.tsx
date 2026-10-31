@@ -50,6 +50,8 @@ interface AmountFieldProps {
   hint?: ReactNode;
   errorMessage?: string;
   placeholder?: string;
+  /** A hero figure's words while it is empty, in place of "$0" ("No limit"). */
+  emptyText?: string;
   /** Draws the amount as the screen's large centred figure, the other modes as chips under it. */
   isHero?: boolean;
   /** A hero figure takes focus once its sheet settles, on a phone. */
@@ -108,6 +110,7 @@ function AmountField({
   hint,
   errorMessage,
   placeholder = '0.00',
+  emptyText,
   isHero = false,
   autoFocus,
   suffix,
@@ -168,6 +171,7 @@ function AmountField({
           suffix={suffix}
           hint={shownHint}
           errorMessage={errorMessage}
+          emptyText={emptyText}
         />
       );
     }

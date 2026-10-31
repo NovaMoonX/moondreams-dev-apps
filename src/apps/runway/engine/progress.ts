@@ -119,9 +119,13 @@ export function collectCardPaid(
 export interface TransferEntry {
   moveId: string;
   on: DateOnly;
-  fromId: string;
+  /** Null is Free to Spend. */
+  fromId: string | null;
+  /** Null is Free to Spend. */
   toId: string | null;
   cents: Cents;
+  /** Money that came from, or went to, outside the plan. */
+  isOutside: boolean;
 }
 
 export function collectTransferEntries(
@@ -145,17 +149,32 @@ export function collectTransferEntries(
             fromId: move.payload.fromId,
             toId: move.payload.toId,
             cents: move.payload.cents,
+            isOutside: move.payload.isOutside === true,
           },
         ],
   );
 }
+
+/** What outside transfers added to (positive) or took from (negative) the money on hand. */
+export const sumOutsideTransfers = (entries: readonly TransferEntry[]): Cents =>
+  entries.reduce(
+    (sum, entry) =>
+      !entry.isOutside
+        ? sum
+        : sum +
+          (entry.toId !== null ? entry.cents : 0) -
+          (entry.fromId !== null ? entry.cents : 0),
+    0,
+  );
 
 /** What transfers added to (positive) or took from (negative) each item. */
 export function sumTransfers(
   entries: readonly TransferEntry[],
 ): Record<string, Cents> {
   return entries.reduce<Record<string, Cents>>((sums, entry) => {
-    sums[entry.fromId] = (sums[entry.fromId] ?? 0) - entry.cents;
+    if (entry.fromId !== null) {
+      sums[entry.fromId] = (sums[entry.fromId] ?? 0) - entry.cents;
+    }
     if (entry.toId !== null) {
       sums[entry.toId] = (sums[entry.toId] ?? 0) + entry.cents;
     }

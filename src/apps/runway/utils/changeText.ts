@@ -196,6 +196,16 @@ const getParts = (
             ),
           ]
         : []),
+      ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
+        ? [
+            diff(
+              'Stops at',
+              (goalBefore as EnvelopeSealed).maxCents ?? null,
+              (goalAfter as EnvelopeSealed).maxCents ?? null,
+              (value) => (value === null ? 'no limit' : formatCents(value)),
+            ),
+          ]
+        : []),
       ...('targetCents' in goalBefore && 'targetCents' in goalAfter
         ? [
             diff(

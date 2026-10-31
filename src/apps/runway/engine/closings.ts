@@ -535,12 +535,15 @@ export function encodeClosing(state: ClosingState): ClosingSealed {
       ]),
     ),
     transfers: state.transfers.map(
-      (entry): [number, string, string | null, Cents, string] => [
+      (
+        entry,
+      ): [number, string | null, string | null, Cents, string, boolean] => [
         toDays(entry.on),
         entry.fromId,
         entry.toId,
         entry.cents,
         entry.moveId,
+        entry.isOutside,
       ],
     ),
   };
@@ -606,13 +609,16 @@ export function decodeClosing(
         })),
       ]),
     ),
-    transfers: sealed.transfers.map(([day, fromId, toId, cents, moveId]) => ({
-      moveId,
-      on: day * DAY_MS,
-      fromId,
-      toId,
-      cents,
-    })),
+    transfers: sealed.transfers.map(
+      ([day, fromId, toId, cents, moveId, isOutside]) => ({
+        moveId,
+        on: day * DAY_MS,
+        fromId,
+        toId,
+        cents,
+        isOutside,
+      }),
+    ),
   };
   return result;
 }

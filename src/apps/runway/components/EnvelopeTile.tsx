@@ -140,6 +140,9 @@ function EnvelopeTile({
           fact={[
             PRIORITY_LABELS[envelope.priority],
             isPlan && eachTime ? null : funding,
+            envelope.maxCents === null
+              ? null
+              : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
             isPlan && cents !== 0 ? `${value} ${word}` : null,
           ]
             .filter(Boolean)
@@ -148,6 +151,13 @@ function EnvelopeTile({
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.changeAmount,
             step: 'amount',
+          }}
+          maxAction={{
+            label:
+              envelope.maxCents === null
+                ? ITEM_SHEET_R2_WORDS.setMax
+                : ITEM_SHEET_R2_WORDS.changeMax,
+            step: 'max',
           }}
           onClose={() => setIsOpen(false)}
         />

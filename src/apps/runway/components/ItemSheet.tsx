@@ -8,6 +8,7 @@ import {
   FolderOpen,
   HandCoins,
   ArrowRightLeft,
+  Scale,
   CircleMinus,
   History,
   Link2,
@@ -15,6 +16,7 @@ import {
   Pencil,
   PiggyBank,
   Play,
+  Ruler,
   ReceiptText,
   ShoppingBag,
   Undo2,
@@ -51,6 +53,7 @@ import GoalBalanceView, {
   GoalBalanceDoor,
 } from '@apps/runway/components/GoalBalanceView';
 import MoveLeftoverView from '@apps/runway/components/MoveLeftoverView';
+import SetHeldView from '@apps/runway/components/SetHeldView';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
@@ -81,6 +84,7 @@ import {
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
   MOVE_WORDS,
+  SET_HELD_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
@@ -156,7 +160,8 @@ type View =
   | 'purchases'
   | 'check'
   | 'group'
-  | 'move';
+  | 'move'
+  | 'setHeld';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 interface ItemSheetProps {
@@ -177,6 +182,8 @@ interface ItemSheetProps {
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
   quickChange?: { label: string; step: string };
+  /** An optional extra's own action row, opening the change at that question. */
+  maxAction?: { label: string; step: string };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -221,6 +228,7 @@ const VIEW_NOTES: Record<View, string> = {
   check: '',
   group: '',
   move: '',
+  setHeld: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -235,6 +243,7 @@ function ItemSheet({
   fact,
   help,
   quickChange,
+  maxAction,
   startsAtStep,
   payment = null,
   onMarked,
@@ -763,6 +772,15 @@ function ItemSheet({
             onClick={() => openChange(null)}
           />
         )}
+        {canChange && maxAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Ruler />}
+            label={maxAction.label}
+            onClick={() => openChange(maxAction.step)}
+          />
+        )}
         {canChange && goal && goal.funding.cadence.kind !== 'none' && (
           <ActionRow
             isGrouped
@@ -788,6 +806,15 @@ function ItemSheet({
             icon={<ArrowRightLeft />}
             label={MOVE_WORDS.open}
             onClick={() => goTo('move')}
+          />
+        )}
+        {canChange && itemKind === 'envelope' && isArchivable && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Scale />}
+            label={SET_HELD_WORDS.open}
+            onClick={() => goTo('setHeld')}
           />
         )}
         {hasBillRow && payment && (
@@ -1048,6 +1075,16 @@ function ItemSheet({
     />
   );
 
+  const setHeldView = (
+    <SetHeldView
+      envelopeId={itemId}
+      name={payload.name}
+      heldCents={heldCents}
+      today={today}
+      onBack={() => goTo('menu')}
+    />
+  );
+
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
@@ -1181,7 +1218,9 @@ function ItemSheet({
               ? groupView
               : view === 'move'
                 ? moveView
-                : action
+                : view === 'setHeld'
+                  ? setHeldView
+                  : action
         }
       >
         {menu}

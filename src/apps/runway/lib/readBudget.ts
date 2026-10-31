@@ -141,6 +141,9 @@ const responseSchema = {
         [...CALENDAR_PERIODS, 'perPay'],
         'What the amount covers: a calendar period, or perPay when it is given for each paycheck.',
       ),
+      currentCents: cents(
+        'What the envelope holds today, in cents, if the file shows a balance for it. Null otherwise.',
+      ),
     }),
     goals: list({
       sourceFile: SOURCE,

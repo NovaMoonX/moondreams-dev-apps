@@ -7,6 +7,7 @@ import type {
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
+  Cents,
   GroupSealed,
   OpenVersion,
   Pairing,
@@ -64,7 +65,10 @@ async function openVersion(
   }
   if (version.kind === 'envelope') {
     const payload = await read<
-      Omit<EnvelopeSealed, 'groupId'> & { groupId?: string | null }
+      Omit<EnvelopeSealed, 'groupId' | 'maxCents'> & {
+        groupId?: string | null;
+        maxCents?: Cents | null;
+      }
     >(version.sealed);
     return {
       ...base,
@@ -72,6 +76,7 @@ async function openVersion(
       payload: {
         ...payload,
         funding: normalizeFunding(payload.funding),
+        maxCents: payload.maxCents ?? null,
         groupId: payload.groupId ?? null,
       },
     };

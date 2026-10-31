@@ -417,12 +417,22 @@ export function buildDraft(input: DraftInput): Draft {
     allDemands.map((demand) => [`${demand.dayKey}:${demand.itemId}`, demand]),
   );
   const resolutions = input.overrides.holdResolutions ?? {};
-  const goalNeeds = new Map(
-    input.plan.goals.map((goal) => [
+  const goalNeeds = new Map([
+    ...input.plan.envelopes.flatMap((envelope): [string, Cents][] =>
+      envelope.maxCents == null
+        ? []
+        : [
+            [
+              envelope.itemId,
+              Math.max(0, envelope.maxCents - (envelope.heldCents ?? 0)),
+            ],
+          ],
+    ),
+    ...input.plan.goals.map((goal): [string, Cents] => [
       goal.itemId,
       Math.max(0, goal.targetCents - goal.heldCents),
     ]),
-  );
+  ]);
   const pairedIds = new Set(
     days.flatMap((day) =>
       pickPairings(day).map((pairing) => pairing.targetItemId),

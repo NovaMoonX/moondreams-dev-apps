@@ -37,6 +37,7 @@ import {
 } from '@apps/runway/store/actions/moveActions';
 import {
   selectBills,
+  selectEnvelopes,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -168,6 +169,7 @@ function StartingAmountsSheet({
   const plan = useAppSelector((state) => state.runway.plan);
   const moves = useAppSelector((state) => state.runway.moves);
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
 
   const started = collectStarted(moves, plan?.startDate ?? null);
@@ -175,7 +177,18 @@ function StartingAmountsSheet({
     cents === undefined ? '' : (cents / 100).toFixed(2);
   const [start] = useState<StartingAmountsDraft>(() => ({
     date: toDateInputValue(plan?.startDate ?? today),
-    money: toText(started.money ?? undefined),
+    money: toText(
+      started.money === null
+        ? undefined
+        : Math.max(
+            0,
+            started.money -
+              [...goals, ...envelopes, ...bills].reduce(
+                (sum, { item }) => sum + (started.byItem[item.id] ?? 0),
+                0,
+              ),
+          ),
+    ),
     amounts: Object.fromEntries(
       Object.entries(started.byItem).map(([id, cents]) => [id, toText(cents)]),
     ),
@@ -189,6 +202,7 @@ function StartingAmountsSheet({
       const known = new Set([
         ...Object.keys(started.byItem),
         ...goals.map(({ item }) => item.id),
+        ...envelopes.map(({ item }) => item.id),
         ...bills.map(({ item }) => item.id),
       ]);
       return {
@@ -215,6 +229,26 @@ function StartingAmountsSheet({
       ? [{ id: item.id, cents: version.payload.startingCents ?? 0 }]
       : [],
   );
+  const askedEnvelopes = envelopes.filter(
+    ({ item, version }) =>
+      started.byItem[item.id] === undefined &&
+      (version.payload.startingCents ?? null) === null,
+  );
+  const carriedEnvelopes = envelopes.flatMap(({ item, version }) =>
+    started.byItem[item.id] === undefined &&
+    (version.payload.startingCents ?? 0) > 0
+      ? [{ id: item.id, cents: version.payload.startingCents ?? 0 }]
+      : [],
+  );
+  const shownIds = new Set(
+    [...askedGoals, ...askedEnvelopes, ...bills].map(({ item }) => item.id),
+  );
+  const carriedIds = new Set(
+    [...carriedGoals, ...carriedEnvelopes].map(({ id }) => id),
+  );
+  const keptCents = [...goals, ...envelopes]
+    .filter(({ item }) => !shownIds.has(item.id) && !carriedIds.has(item.id))
+    .reduce((sum, { item }) => sum + (started.byItem[item.id] ?? 0), 0);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const snapshot = JSON.stringify({ date, money, amounts });
@@ -246,7 +280,7 @@ function StartingAmountsSheet({
   const startDate = fromDateInputValue(date) ?? null;
   const getHoldings = (): StartHoldingInput[] => {
     const toHolding = (
-      holding: 'goal' | 'bill',
+      holding: 'goal' | 'bill' | 'envelope',
       id: string,
     ): StartHoldingInput[] => {
       const cents = parseMoneyToCents(amounts[id] ?? '');
@@ -257,23 +291,44 @@ function StartingAmountsSheet({
       }
       return [{ holding, refId: id, amountCents: cents }];
     };
-    const moneyCents = parseMoneyToCents(money);
-    return [
-      ...(moneyCents === null
-        ? []
-        : [
-            { holding: 'money' as const, refId: null, amountCents: moneyCents },
-          ]),
+    const itemHoldings = [
       ...askedGoals.flatMap(({ item }) => toHolding('goal', item.id)),
       ...carriedGoals.map(({ id, cents }) => ({
         holding: 'goal' as const,
         refId: id,
         amountCents: cents,
       })),
+      ...askedEnvelopes.flatMap(({ item }) => toHolding('envelope', item.id)),
+      ...carriedEnvelopes.map(({ id, cents }) => ({
+        holding: 'envelope' as const,
+        refId: id,
+        amountCents: cents,
+      })),
       ...bills.flatMap(({ item }) => toHolding('bill', item.id)),
+    ];
+    const cashCents = parseMoneyToCents(money);
+    const isAmountsChanged =
+      money !== start.money ||
+      JSON.stringify(amounts) !== JSON.stringify(start.amounts);
+    return [
+      ...(cashCents === null || !isAmountsChanged
+        ? []
+        : [
+            {
+              holding: 'money' as const,
+              refId: null,
+              amountCents:
+                cashCents +
+                keptCents +
+                itemHoldings.reduce((sum, entry) => sum + entry.amountCents, 0),
+            },
+          ]),
+      ...itemHoldings,
     ];
   };
   const holdings = getHoldings();
+  const totalCents =
+    holdings.find((entry) => entry.holding === 'money')?.amountCents ?? null;
   const note =
     startDate === null || startDate > today
       ? 'Pick today or an earlier day.'
@@ -312,10 +367,10 @@ function StartingAmountsSheet({
         />
       )}
       <AmountHero
-        label={FORM_FLOW_WORDS.moneyOnHand}
+        label={START_AMOUNTS_WORDS.cashLabel}
         value={money}
         onChange={setMoney}
-        hint='What you have to plan with.'
+        hint={START_AMOUNTS_WORDS.cashHint}
       />
       <FoldedDateField
         label={FORM_FLOW_WORDS.asOf}
@@ -325,7 +380,7 @@ function StartingAmountsSheet({
         max={toDateInputValue(today)}
       />
       <AmountList
-        label='What each goal holds'
+        label={START_AMOUNTS_WORDS.goals}
         rows={askedGoals.map(({ item, version }) => ({
           id: item.id,
           name: version.payload.name,
@@ -336,7 +391,18 @@ function StartingAmountsSheet({
         }
       />
       <AmountList
-        label='Already set aside for bills'
+        label={START_AMOUNTS_WORDS.envelopes}
+        rows={askedEnvelopes.map(({ item, version }) => ({
+          id: item.id,
+          name: version.payload.name,
+        }))}
+        values={amounts}
+        onChange={(id, value) =>
+          setAmounts((current) => ({ ...current, [id]: value }))
+        }
+      />
+      <AmountList
+        label={START_AMOUNTS_WORDS.bills}
         rows={bills.map(({ item, version }) => ({
           id: item.id,
           name: version.payload.name,
@@ -346,6 +412,12 @@ function StartingAmountsSheet({
           setAmounts((current) => ({ ...current, [id]: value }))
         }
       />
+      {totalCents !== null && (
+        <p className='text-muted-foreground flex justify-between gap-3 text-sm'>
+          <span>{START_AMOUNTS_WORDS.total}</span>
+          <SensitiveValue>{formatCents(totalCents)}</SensitiveValue>
+        </p>
+      )}
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}

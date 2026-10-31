@@ -140,3 +140,31 @@ export function describeBillProgress(payment: BillPayment) {
   const days = payment.fundedDays + payment.parts.length;
   return `${formatCents(fundedCents)} of ${formatCents(totalCents)} set aside · ${payment.fundedDays} of ${days} income days`;
 }
+
+/** The one total on a Plan view's header line: a usual month's figure, or what goals hold against what they aim for. `amount` and `whole` are the private parts. */
+export function describePlanTotal(
+  figure:
+    | { kind: 'monthly'; total: GroupTotal }
+    | { kind: 'saved'; savedCents: number; targetCents: number },
+) {
+  if (figure.kind === 'monthly') {
+    return figure.total.total.highCents === 0
+      ? null
+      : {
+          amount: describeGroupTotal(figure.total.total),
+          whole: null,
+          rest: 'a month',
+        };
+  }
+  return figure.targetCents === 0
+    ? null
+    : {
+        amount: formatCents(figure.savedCents),
+        whole: null,
+        rest: GROUP_WORDS.saved,
+      };
+}
+
+/** A bill with no due date yet, which the plan sets nothing aside for. */
+export const isUndatedBill = (bill: { timing: { schedule: Schedule } }) =>
+  bill.timing.schedule.anchor === null;
