@@ -19,6 +19,11 @@ else
 fi
 [[ -n "$session_id" ]] || exit 0
 
+if [[ "$mode" == "working" ]]; then
+  # These end without a Stop, so a working report would wipe the last reply's 🚩 lines with nothing to raise them again.
+  echo "$input" | jq -e '(.prompt // "") | test("^\\s*/(compact|clear)\\b")' >/dev/null 2>&1 && exit 0
+fi
+
 if [[ "$mode" == "tool" ]]; then
   # A helper's own tool calls say nothing about what the session itself is doing.
   [[ -z "$(echo "$input" | jq -r '.agent_id // empty' 2>/dev/null)" ]] || exit 0
