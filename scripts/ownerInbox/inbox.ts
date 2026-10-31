@@ -94,6 +94,8 @@ export interface PrStatus {
   /** The word after "Status ·" in the heading: ready to merge, blocked, in progress. */
   state: string | null;
   ownerItems: OwnerItem[];
+  /** The open boxes under "Must do before merge", whoever they are for, or null with no such heading: the dashboard's Merge waits on none being left. */
+  mustDo: string[] | null;
   goodToKnow: string[];
   screenshots: string[];
   updatedAt: string;
@@ -215,6 +217,14 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
       },
     ];
   });
+  const hasMustDo = all.some((line) =>
+    /^\s*\*\*must do before merge/i.test(line),
+  );
+  const mustDo = hasMustDo
+    ? section(body, 'Must do before merge')
+        .filter(isOpenBox)
+        .map((line) => bullet(line.replace(OWNER_NOTE, '')))
+    : null;
   const goodToKnow = section(body, 'Good to know')
     .filter((line) => /^\s*[-*]\s+/.test(line))
     .map(bullet);
@@ -226,6 +236,7 @@ export function parseStatus(body: string, updatedAt: string): PrStatus {
     sessionTitle,
     state,
     ownerItems,
+    mustDo,
     goodToKnow,
     screenshots: screenshots ?? [],
     updatedAt,
