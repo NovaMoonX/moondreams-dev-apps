@@ -654,6 +654,11 @@ export function DecisionFields({
           );
         })}
       </ul>
+      {slot.isMerged ? (
+        <p className='text-muted-foreground text-xs'>
+          Merged: changes and picked follow-ups open an issue.
+        </p>
+      ) : null}
       {isAtLimit ? (
         <p className='text-muted-foreground text-xs'>
           That is the most one comment holds. Send these first, then tick the

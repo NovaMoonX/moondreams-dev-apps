@@ -103,7 +103,9 @@ function AnswerAllSubview({
                     <div className='space-y-2'>
                       <p className='text-foreground text-sm font-medium'>
                         {slot.text}
-                        {entry.prs.length > 1 ? ` · #${slot.prNumber}` : ''}
+                        {slot.isMerged || slots.filter((other) => other.kind === slot.kind).length > 1
+                          ? ` · #${slot.prNumber}${slot.isMerged ? ' · merged' : ''}`
+                          : ''}
                       </p>
                       <p className='text-muted-foreground text-xs'>
                         {getListedIntro(slot.kind === 'followup' ? 'followup' : 'decision')}

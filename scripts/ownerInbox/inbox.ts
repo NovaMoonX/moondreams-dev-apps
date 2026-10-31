@@ -59,6 +59,34 @@ export interface MergedPr {
   number: number;
   sessionUrl: string | null;
   mergedAt: string;
+  title: string | null;
+  /** When its status comment was last edited, so an answer sent after it is known to have read it. */
+  statusAt: string | null;
+  /** The status comment's decisions and follow-ups, still the owner's to change after the merge. */
+  decisions: string[];
+  followUps: string[];
+}
+
+/** A merged PR with the lists from its last status comment (empty when it has none). */
+export function toMergedPr(
+  pull: {
+    number: number;
+    title: string;
+    body: string | null;
+    merged_at: string;
+  },
+  status: { body: string; updated_at: string } | null,
+): MergedPr {
+  const parsed = status ? parseStatus(status.body, status.updated_at) : null;
+  return {
+    number: pull.number,
+    sessionUrl: findSessionLink(pull.body),
+    mergedAt: pull.merged_at,
+    title: toPlain(pull.title),
+    statusAt: parsed ? parsed.updatedAt : null,
+    decisions: parsed?.decisions ?? [],
+    followUps: parsed?.followUps ?? [],
+  };
 }
 
 const IMAGE_URL = /https:\/\/[^\s)"'<>`]+/g;

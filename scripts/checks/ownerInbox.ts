@@ -8,6 +8,7 @@ import {
   groupSessions,
   keepOwnerTicks,
   parseStatus,
+  toMergedPr,
   summarizeCi,
   type InboxPr,
 } from '../ownerInbox/inbox.ts';
@@ -71,6 +72,28 @@ assert.deepEqual(
   ['Let a vet visit add a weigh-in', "Round the chart's axis"],
   'the Possible follow-ups bullets, apart from the decisions before them',
 );
+
+const merged = toMergedPr(
+  {
+    number: 12,
+    title: 'Weights & charts',
+    body: 'https://claude.ai/code/session_s1',
+    merged_at: '2026-10-29T10:00:00Z',
+  },
+  {
+    body: status('s1', '**Decisions I made for you**\n- Round down (other option: round up)\n\n**Possible follow-ups**\n- Add a chart\n'),
+    updated_at: '2026-10-29T09:00:00Z',
+  },
+);
+assert.deepEqual(merged.decisions, ['Round down (other option: round up)']);
+assert.deepEqual(merged.followUps, ['Add a chart']);
+assert.equal(merged.statusAt, '2026-10-29T09:00:00Z');
+assert.equal(merged.sessionUrl, 'https://claude.ai/code/session_s1');
+const bare = toMergedPr(
+  { number: 13, title: 'T', body: null, merged_at: '2026-10-29T10:00:00Z' },
+  null,
+);
+assert.deepEqual([bare.decisions, bare.followUps, bare.statusAt], [[], [], null], 'a merged PR with no status comment has empty lists');
 
 const legacy = parseStatus(
   '<!-- pr-status -->\n## 📋 Status · blocked · 1\n',

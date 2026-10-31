@@ -380,9 +380,11 @@ function PipelineSheet({ entry, onClose, answers, settle, merge }: PipelineSheet
                 <ul className='space-y-5'>
                   {list.map((slot) => (
                     <li key={slot.id} className='space-y-2'>
-                      {new Set(list.map((other) => other.prNumber)).size > 1 ? (
+                      {slot.isMerged ||
+                      new Set(list.map((other) => other.prNumber)).size > 1 ? (
                         <p className='text-muted-foreground text-xs font-medium'>
                           #{slot.prNumber}
+                          {slot.isMerged ? ' · merged' : ''}
                         </p>
                       ) : null}
                       <DecisionFields

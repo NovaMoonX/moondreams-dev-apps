@@ -16,6 +16,7 @@ import {
   parseGallery,
   parseStatus,
   summarizeCi,
+  toMergedPr,
   type CheckRun,
   type CiState,
   type InboxPr,
@@ -94,6 +95,19 @@ const getCi = async (sha: string): Promise<CiState> => {
     `/repos/${repo}/commits/${sha}/check-runs?per_page=100`,
   );
   return summarizeCi(runs);
+};
+
+const readStatusComment = async (number: number) => {
+  const comments = await apiAll<ApiComment>(
+    `/repos/${repo}/issues/${number}/comments`,
+  );
+  return (
+    comments.findLast(
+      (comment) =>
+        comment.body.trimStart().startsWith(STATUS_MARKER) &&
+        TRUSTED.has(comment.author_association),
+    ) ?? null
+  );
 };
 
 const readPr = async (pull: ApiPull): Promise<InboxPr> => {
@@ -197,17 +211,18 @@ const readMergedPrs = async (): Promise<MergedPr[]> => {
     `/repos/${repo}/pulls?state=closed&sort=updated&direction=desc&per_page=50`,
   );
   const since = Date.now() - MERGED_KEEP_MS;
-  return pulls.flatMap((pull) =>
+  const recent = pulls.flatMap((pull) =>
     pull.merged_at && Date.parse(pull.merged_at) >= since
-      ? [
-          {
-            number: pull.number,
-            sessionUrl: findSessionLink(pull.body),
-            mergedAt: pull.merged_at,
-          },
-        ]
+      ? [{ ...pull, merged_at: pull.merged_at }]
       : [],
   );
+  // One PR at a time, like the open ones; a PR with no session has no one to read its lists, and a failed read leaves only that PR's lists empty.
+  return recent.reduce<Promise<MergedPr[]>>(async (done, pull) => {
+    const status = findSessionLink(pull.body)
+      ? await readStatusComment(pull.number).catch(() => null)
+      : null;
+    return [...(await done), toMergedPr(pull, status)];
+  }, Promise.resolve([]));
 };
 
 interface CommentEvent {
@@ -295,7 +310,12 @@ const reportToPipeline = async (list: InboxPr[], merged: MergedPr[]) => {
         key: pipelineKey,
         kind: 'inbox',
         prs: list.map(toPipelinePr),
-        merged,
+        merged: merged.map((pr) => ({
+          ...pr,
+          title: pr.title && fromPlain(pr.title),
+          decisions: pr.decisions.map(fromPlain),
+          followUps: pr.followUps.map(fromPlain),
+        })),
       },
     }),
     signal: AbortSignal.timeout(20_000),

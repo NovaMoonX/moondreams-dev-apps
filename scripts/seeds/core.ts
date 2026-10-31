@@ -263,7 +263,6 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const remindersPr = toInboxPr(907, 'Nine Lives: reminder sounds', 'claude/nine-lives-sounds', null, 'Reminder sounds');
   const runwayRedPr = toInboxPr(905, 'Runway: card colours', 'claude/runway-card-colours', pipelineSessions[0].url, 'Runway cards');
   const runwayConflictPr = toInboxPr(906, 'Runway: card order', 'claude/runway-card-order', pipelineSessions[0].url, 'Runway cards');
-  const weightsPr = toInboxPr(908, 'Nine Lives: weight chart', 'claude/nine-lives-weights', pipelineSessions[6].url, 'Cat weight chart');
   const pinchRunningPr = toInboxPr(904, 'Pinch: repeat the plan from a week', 'claude/pinch-meal-plan-weeks', pipelineSessions[1].url, 'Pinch meal plan');
   batch.delete(context.firestore.doc('pipeline/answered'));
   batch.delete(context.firestore.doc('pipeline/settled'));
@@ -346,17 +345,6 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         },
       },
       pinchPr,
-      {
-        ...weightsPr,
-        status: {
-          ...weightsPr.status,
-          decisions: [
-            "The chart starts at the first weigh-in, not at birth (other option: start at the cat's birthday)",
-            "Weights show in pounds with one decimal (other option: follow the phone's units)",
-          ],
-          followUps: ['Let a vet visit add a weigh-in', 'Show a gentle note when the weight drops 10% in a month'],
-        },
-      },
       { ...pinchRunningPr, ci: 'running' },
       { ...runwayRedPr, ci: 'red' },
       { ...runwayConflictPr, labels: ['minor', 'merge-conflict'] },
@@ -370,7 +358,20 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
         },
       },
     ],
-    merged: [{ number: 908, sessionUrl: pipelineSessions[6].url, mergedAt: context.now - 30 * MINUTE_MS }],
+    merged: [
+      {
+        number: 908,
+        sessionUrl: pipelineSessions[6].url,
+        mergedAt: context.now - 30 * MINUTE_MS,
+        title: 'Nine Lives: weight chart',
+        statusAt: context.now - 35 * MINUTE_MS,
+        decisions: [
+          "The chart starts at the first weigh-in, not at birth (other option: start at the cat's birthday)",
+          "Weights show in pounds with one decimal (other option: follow the phone's units)",
+        ],
+        followUps: ['Let a vet visit add a weigh-in', 'Show a gentle note when the weight drops 10% in a month'],
+      },
+    ],
     updatedAt: context.now - 4 * MINUTE_MS,
   });
 

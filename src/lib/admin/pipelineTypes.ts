@@ -80,6 +80,12 @@ export interface PipelineMergedPr {
   number: number;
   sessionUrl: string | null;
   mergedAt: number;
+  /** The fields below are missing on documents written before merged PRs kept their lists; read them as null. */
+  title: string | null;
+  /** When its status comment last changed. */
+  statusAt: number | null;
+  decisions: string[] | null;
+  followUps: string[] | null;
 }
 
 export interface PipelineInbox {
