@@ -57,12 +57,14 @@ export function usePlanTotals(
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const payLines = useResolvedPayLines(today);
+  // A month from today, so items starting later this month or early next one still count late in a month.
+  const usualMonth = today + 30 * 86_400_000;
   return {
-    income: monthlyTotal(payLines, today),
-    bills: monthlyTotal(bills.map(toBillMember), today),
+    income: monthlyTotal(payLines, usualMonth),
+    bills: monthlyTotal(bills.map(toBillMember), usualMonth),
     envelopes: monthlyTotal(
       [],
-      today,
+      usualMonth,
       envelopes.map((envelope) => toEnvelopeMember(envelope, today, payLines)),
     ),
   };
