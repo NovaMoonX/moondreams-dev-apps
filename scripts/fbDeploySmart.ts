@@ -120,24 +120,12 @@ const openCallables = () => {
   }
 };
 
-// A callable the deploy created but couldn't open stays private on every later deploy, so a change to the list of functions opens them all again.
-const isFunctionListChanged = () => {
-  try {
-    return (
-      execSync('git diff --name-only HEAD~1 HEAD -- functions/src/index.ts')
-        .toString()
-        .trim() !== ''
-    );
-  } catch {
-    return false;
-  }
-};
-
 const run = async () => {
   const first = await deploy();
+  // A callable a dropped or failed run left private stays private, since the CLI opens only new ones; opening is idempotent.
   if (first.code === 0) {
-    if (!targets.includes('functions') || !isFunctionListChanged()) return 0;
-    console.log('\nThe list of functions changed. Opening every callable.\n');
+    if (!targets.includes('functions')) return 0;
+    console.log('\nOpening every callable.\n');
     return openCallables() ? 0 : 1;
   }
   if (RELEASE_EXISTS.test(first.output)) {
