@@ -14,6 +14,7 @@ import {
 import {
   deriveBalances,
   deriveBalancesBefore,
+  getFreeToSpendFigure,
 } from '../../src/apps/runway/engine/balances.ts';
 import {
   collectCardHistory,
@@ -90,14 +91,12 @@ import {
   getRefundLines,
   isInTrackingPeriods,
   splitEvenly,
-  sumLines,
+  sumLines as sumPurchaseLines,
   toChosenLines,
 } from '../../src/apps/runway/engine/purchases.ts';
 import type {
   FundingRule,
-  OpenMove,
   OpenPurchase,
-  OpenRecord,
   RecordLine,
 } from '../../src/apps/runway/types.ts';
 import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
@@ -135,7 +134,6 @@ import {
   reconcileWorking,
   type PriorityItem,
 } from '../../src/apps/runway/engine/priorities.ts';
-import { getVersionStretches } from '../../src/apps/runway/engine/resolve.ts';
 import {
   getDayKeyMonth,
   getHistoryRange,
@@ -197,10 +195,6 @@ import {
   pickPairings,
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
-import {
-  deriveBalances,
-  getFreeToSpendFigure,
-} from '../../src/apps/runway/engine/balances.ts';
 import {
   getStanceCushion,
   lookahead,
@@ -570,6 +564,7 @@ const item = (
   createdAt,
   endedAt: null,
   archivedAt: null,
+  heldReleasedOn: null,
   ...over,
 });
 const version = (
@@ -587,7 +582,7 @@ const version = (
   effectiveFrom,
   effectiveUntil,
   changeId: `c_${id}`,
-  payload: { name },
+  payload: { name, pairings: [] },
 });
 
 {
@@ -714,6 +709,7 @@ const version = (
     createdAt,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   });
   const payVersion = (
     id: string,
@@ -736,6 +732,8 @@ const version = (
       schedule,
       amount: { lowCents: cents, highCents: cents },
       ending,
+      stanceOverride: null,
+      pairings: [],
     },
   });
   const items = [
@@ -880,6 +878,8 @@ const version = (
       schedule,
       amount: { lowCents: 1, highCents: 1 },
       ending: { onDate: null, afterCount: 4 },
+      stanceOverride: null,
+      pairings: [],
     },
   });
   const header = (id: string): PlanItemDoc => ({
@@ -889,6 +889,7 @@ const version = (
     createdAt: 1,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   });
   // Two pay lines, each every other week, a week apart: A on Oct 2, 16, 30 ...; B on Oct 9, 23, Nov 6 ...
   const days = buildComingDays(
@@ -2047,7 +2048,8 @@ const version = (
     'lines, held money and free to spend add up',
   );
   assert.equal(
-    lineOf(held, 'save', 'd2')?.cents + (lineOf(held, 'fun', 'd2')?.cents ?? 0),
+    (lineOf(held, 'save', 'd2')?.cents ?? 0) +
+      (lineOf(held, 'fun', 'd2')?.cents ?? 0),
     0,
     'envelopes below the hold on its pool get only what the hold left',
   );
@@ -2761,6 +2763,7 @@ const version = (
     createdAt: 1,
     endedAt: null,
     archivedAt: null,
+    heldReleasedOn: null,
   };
   const payVersion: OpenVersion = {
     id: 'pay-v1',
@@ -2855,6 +2858,7 @@ const version = (
     amountCents: 120_000,
     paidOn: nov10,
     fromFreeCents: 0,
+    cardId: null,
     ...over,
   });
   const sum = (parts: { cents: number }[]) =>
@@ -3009,7 +3013,10 @@ const version = (
     getUndoMoveId('paid_rent_20261201'),
     'unpaid_paid_rent_20261201',
   );
-  const move = (id: string, over: Partial<OpenMove> = {}): OpenMove => ({
+  const move = (
+    id: string,
+    over: { reversesMoveId?: string | null } = {},
+  ): OpenMove => ({
     id,
     kind: 'billPaid',
     date: dec1,
@@ -3501,7 +3508,7 @@ const version = (
   const today = utc(2026, 10, 23);
   const exactRange = (cents: number) => ({ lowCents: cents, highCents: cents });
   const never = { onDate: null, afterCount: null };
-  const weekly = { kind: 'weekly', anchor: today, monthDays: [] } as const;
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
   const planItems: PlanItemDoc[] = [
     item('pay', 1, { kind: 'payLine', parentId: 'src' }),
     item('src', 1),
@@ -3516,6 +3523,7 @@ const version = (
       amount: { kind: 'exact' as const, cents },
       cadence: { kind: 'everyIncomeDay' as const },
     },
+    groupId: null,
   });
   const base: OpenVersion[] = [
     {
@@ -3868,7 +3876,7 @@ const version = (
 {
   const today = utc(2026, 10, 23);
   const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
-  const weekly = { kind: 'weekly', anchor: today, monthDays: [] } as const;
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
   const planItems: PlanItemDoc[] = [
     item('pay', 1, { kind: 'payLine', parentId: 'src' }),
     item('src', 1),
@@ -5589,7 +5597,7 @@ const version = (
       needsHome: false,
       createdAt: on,
       updatedAt: on,
-      amountCents: sumLines(chosen),
+      amountCents: sumPurchaseLines(chosen),
       merchant: null,
       label: null,
       note: null,
@@ -7561,6 +7569,7 @@ const version = (
     amountCents: 100_000,
     paidOn: utc(2026, 10, 28),
     fromFreeCents: 0,
+    cardId: null,
   };
   const paidOct1 = {
     moveId: 'paid_rent_20261001',
@@ -7568,6 +7577,7 @@ const version = (
     amountCents: 100_000,
     paidOn: utc(2026, 10, 1),
     fromFreeCents: 0,
+    cardId: null,
   };
   const rentOn = (anchor: number): DraftBillInput => ({
     itemId: 'rent',
@@ -7724,6 +7734,7 @@ const version = (
               amountCents: 120_000,
               paidOn: utc(2026, 11, 1),
               fromFreeCents: 90_000,
+              cardId: null,
             },
           ]
         : [],

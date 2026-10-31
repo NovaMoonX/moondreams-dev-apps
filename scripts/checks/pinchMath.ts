@@ -217,6 +217,7 @@ import type {
   PlannedSnapshot,
   Product,
   Recipe,
+  RecipeIngredient,
   RecipeNote,
   ResolvedIngredient,
   ShoppingItem,
@@ -669,6 +670,8 @@ const shopItem = (
   amount,
   unit,
   isChecked,
+  sources: [],
+  pantryAddedAt: null,
   createdAt: 1,
   updatedAt: 1,
 });
@@ -1806,7 +1809,7 @@ const longerAdobo = {
   ...adoboRecipe,
   ingredients: adoboRecipe.ingredients.map((line) => ({
     ...line,
-    amount: line.amount * 2,
+    amount: line.amount === null ? null : line.amount * 2,
   })),
 } as Recipe;
 const pricedFixed = buildSnapshot(fixedMeal.items, nowContext, 1000);
@@ -1876,7 +1879,7 @@ const recipeLine = (
   amount: number,
   unit: Unit,
   note: string | null = null,
-) => ({ id, ingredientId, amount, unit, note });
+): RecipeIngredient => ({ id, ingredientId, amount, unit, note, group: null });
 const baseRecipe: RecipeContent = {
   title: 'Adobo chicken',
   description: 'Sticky and tangy.',
@@ -2233,7 +2236,7 @@ const manyBase = { ...baseRecipe, ingredients: manyLines(12) };
 const manyAfter = (changed: number) => ({
   ...baseRecipe,
   ingredients: manyLines(12).map((line, index) =>
-    index < changed ? { ...line, amount: line.amount + 1 } : line,
+    index < changed ? { ...line, amount: (line.amount ?? 0) + 1 } : line,
   ),
 });
 assert.equal(
@@ -2433,7 +2436,7 @@ const mutations: ((r: RecipeContent) => RecipeContent)[] = [
   (r) => ({
     ...r,
     ingredients: r.ingredients.map((l, i) =>
-      i === 0 ? { ...l, amount: l.amount + 1 } : l,
+      i === 0 ? { ...l, amount: (l.amount ?? 0) + 1 } : l,
     ),
   }),
   (r) => ({
@@ -2994,8 +2997,18 @@ const reading: ExtractedRecipe = {
   prepMinutes: 10,
   cookMinutes: 40,
   description: 'Soy and vinegar, braised.',
-  ingredients: [{ name: 'chicken thigh', amount: 2, unit: 'LB', note: null }],
+  ingredients: [
+    {
+      name: 'chicken thigh',
+      amount: 2,
+      unit: 'LB',
+      note: null,
+      alsoCalled: null,
+      group: null,
+    },
+  ],
   steps: ['Braise.'],
+  care: null,
   unread: [],
 };
 const linkIdea = idea({
@@ -3661,6 +3674,7 @@ const cookInput = {
   eatBy: dayOf(30),
 };
 const fromCook = buildContainer(cookInput, 8000);
+const fromCookInput = { ...fromCook, madeServings: cookInput.madeServings };
 assert.deepEqual(
   [
     fromCook.history.map((entry) => [entry.kind, entry.servings]),
@@ -3703,17 +3717,17 @@ assert.equal(
 );
 assert.deepEqual(
   [
-    getNewContainerProblem({ ...fromCook, title: ' ' }, 0),
-    getNewContainerProblem({ ...fromCook, mealId: 'meal' }, 0),
-    getNewContainerProblem({ ...fromCook, servings: 0 }, 0),
-    getNewContainerProblem({ ...fromCook, servings: 1.5 }, 0),
+    getNewContainerProblem({ ...fromCookInput, title: ' ' }, 0),
+    getNewContainerProblem({ ...fromCookInput, mealId: 'meal' }, 0),
+    getNewContainerProblem({ ...fromCookInput, servings: 0 }, 0),
+    getNewContainerProblem({ ...fromCookInput, servings: 1.5 }, 0),
     getNewContainerProblem(
-      { ...fromCook, servings: MAX_CONTAINER_SERVINGS + 1 },
+      { ...fromCookInput, servings: MAX_CONTAINER_SERVINGS + 1 },
       0,
     ),
-    getNewContainerProblem({ ...fromCook, eatBy: dayOf(30) + 5 }, 0),
-    getNewContainerProblem(fromCook, 500),
-    getNewContainerProblem(fromCook, 499),
+    getNewContainerProblem({ ...fromCookInput, eatBy: dayOf(30) + 5 }, 0),
+    getNewContainerProblem(fromCookInput, 500),
+    getNewContainerProblem(fromCookInput, 499),
   ].map((problem) => problem !== null),
   [true, true, true, true, true, true, true, false],
   'a new container needs a name, one source, whole servings from 1 to 100, a whole-day eat-by, and room on the list',
@@ -3739,7 +3753,7 @@ assert.deepEqual([0, 1, 100, 101, 2.5].map(isValidContainerServings), [
 ]);
 
 const longTitle = buildContainer(
-  { ...fromCook, title: `  ${'Sheet-pan chicken '.repeat(9)}` },
+  { ...fromCookInput, title: `  ${'Sheet-pan chicken '.repeat(9)}` },
   8000,
 ).title;
 assert.deepEqual(
@@ -4050,8 +4064,6 @@ assert.deepEqual(
     {
       fridge: 0,
       freezer: 3,
-      containers: 1,
-      nearestEatBy: dayOf(30),
       fridgeEatBy: null,
       freezerEatBy: dayOf(30),
     },
@@ -4188,16 +4200,16 @@ assert.deepEqual(
 );
 assert.deepEqual(
   [
-    getNewContainersProblem([fromCook, fromCook, fromCook, fromCook], 496),
-    getNewContainersProblem([fromCook, fromCook, fromCook, fromCook], 497),
-    getNewContainersProblem([fromCook], 499),
-    getNewContainersProblem([fromCook], 500),
+    getNewContainersProblem([fromCookInput, fromCookInput, fromCookInput, fromCookInput], 496),
+    getNewContainersProblem([fromCookInput, fromCookInput, fromCookInput, fromCookInput], 497),
+    getNewContainersProblem([fromCookInput], 499),
+    getNewContainersProblem([fromCookInput], 500),
   ].map((problem) => problem !== null),
   [false, true, false, true],
   'the soft cap counts containers: a batch has to fit under it',
 );
 assert.match(
-  getNewContainersProblem([fromCook, fromCook], 499) ?? '',
+  getNewContainersProblem([fromCookInput, fromCookInput], 499) ?? '',
   /pass the 500/,
   'a batch past the cap says how many you can keep',
 );
@@ -4229,7 +4241,14 @@ assert.deepEqual(
 
 const stockOf = (name: string, fridge: number, freezer: number) => ({
   name,
-  summary: { fridge, freezer, containers: 1, nearestEatBy: null },
+  summary: {
+    fridge,
+    freezer,
+    containers: 1,
+    nearestEatBy: null,
+    fridgeEatBy: null,
+    freezerEatBy: null,
+  },
 });
 assert.deepEqual(
   [
@@ -6563,11 +6582,11 @@ assert.deepEqual(
 
 const shopLineRows = shopGroupLines(
   [
-    { ingredientId: 'cat-doritos', amount: 4.5, unit: 'OZ' },
-    { ingredientId: 'cat-garlic', amount: 6, unit: 'EACH' },
-    { ingredientId: 'cat-doritos', amount: 28, unit: 'G' },
-    { ingredientId: 'cat-garlic', amount: 2, unit: 'TSP' },
-    { ingredientId: 'cat-salt', amount: 0.25, unit: 'TSP' },
+    { ingredientId: 'cat-doritos', amount: 4.5, unit: 'OZ' , source: null },
+    { ingredientId: 'cat-garlic', amount: 6, unit: 'EACH' , source: null },
+    { ingredientId: 'cat-doritos', amount: 28, unit: 'G' , source: null },
+    { ingredientId: 'cat-garlic', amount: 2, unit: 'TSP' , source: null },
+    { ingredientId: 'cat-salt', amount: 0.25, unit: 'TSP' , source: null },
   ],
   new Map([
     [
@@ -7257,7 +7276,7 @@ assert.deepEqual(
   srcLines.map((line) => [
     line.ingredientId,
     line.source,
-    Math.round(line.amount * 1000) / 1000,
+    Math.round((line.amount ?? 0) * 1000) / 1000,
   ]),
   [
     ['rice', 'thu', 0.667],
@@ -8303,7 +8322,7 @@ assert.equal(
     amount: number | null,
     unit: Unit,
     note: string | null = null,
-  ) => ({ id, ingredientId, amount, unit, note });
+  ): RecipeIngredient => ({ id, ingredientId, amount, unit, note, group: null });
   const amtRecipe = (
     id: string,
     servings: number,
@@ -8547,7 +8566,7 @@ assert.equal(
   );
   assert.deepEqual(
     groupShopLines(
-      [{ ingredientId: 'parsley', amount: null, unit: 'EACH' }],
+      [{ ingredientId: 'parsley', amount: null, unit: 'EACH', source: null }],
       amtById,
     ).map((row) => [row.name, row.amountText]),
     [['Parsley', null]],
@@ -8607,8 +8626,8 @@ assert.equal(
   );
   const amtSheetRows = groupShopLines(
     [
-      { ingredientId: 'parsley', amount: null, unit: 'EACH' },
-      { ingredientId: 'thigh', amount: 1, unit: 'EACH' },
+      { ingredientId: 'parsley', amount: null, unit: 'EACH', source: null },
+      { ingredientId: 'thigh', amount: 1, unit: 'EACH', source: null },
     ],
     amtById,
   );
@@ -8715,10 +8734,38 @@ assert.equal(
       cookMinutes: null,
       description: null,
       ingredients: [
-        { name: 'eggs', amount: 6, unit: 'EACH', note: null },
-        { name: 'salt', amount: null, unit: null, note: 'to taste' },
-        { name: 'parsley', amount: null, unit: null, note: 'a handful' },
-        { name: 'salt', amount: null, unit: null, note: 'to taste' },
+        {
+          name: 'eggs',
+          amount: 6,
+          unit: 'EACH',
+          note: null,
+          alsoCalled: null,
+          group: null,
+        },
+        {
+          name: 'salt',
+          amount: null,
+          unit: null,
+          note: 'to taste',
+          alsoCalled: null,
+          group: null,
+        },
+        {
+          name: 'parsley',
+          amount: null,
+          unit: null,
+          note: 'a handful',
+          alsoCalled: null,
+          group: null,
+        },
+        {
+          name: 'salt',
+          amount: null,
+          unit: null,
+          note: 'to taste',
+          alsoCalled: null,
+          group: null,
+        },
       ],
       steps: [],
       care: null,
