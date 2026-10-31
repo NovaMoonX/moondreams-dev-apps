@@ -9,6 +9,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { signOutInPlace } from '@/lib/dev/devSignOut';
 import {
   FIXTURE_PASSWORD,
   FIXTURE_USERS,
@@ -67,7 +68,7 @@ export function DevAccountSwitcher() {
 
   const handleItemSelect = (value: string) => {
     if (value === 'signout') {
-      void auth.signOut();
+      void signOutInPlace();
       return;
     }
 
