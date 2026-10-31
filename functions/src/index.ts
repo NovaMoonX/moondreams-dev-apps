@@ -16,6 +16,7 @@ export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { deleteTrip } from './apps/waypoint/deleteTrip.js';
 export { rescheduleTripReminders } from './apps/waypoint/rescheduleTripReminders.js';
 export { shiftTripDates } from './apps/waypoint/shiftTripDates.js';
+export { notifyFeedbackReply } from './feedback/notifyFeedbackReply.js';
 export { notifyTripAnnouncement } from './apps/waypoint/notifyTripAnnouncement.js';
 export { notifyTripIdea } from './apps/waypoint/notifyTripIdea.js';
 export { sendExpenseWrapUp } from './apps/waypoint/sendExpenseWrapUp.js';

@@ -813,6 +813,55 @@ service cloud.firestore {
         && request.resource.data.updatedAt is number;
     }
 
+    // Feedback a member sends the admin. The sender may only clear their own unread flag; status
+    // and the admin's side are the admin's. Messages are append-only.
+    match /feedback/{feedbackId} {
+      function isFeedbackOwner() {
+        return request.auth != null && resource.data.uid == request.auth.uid;
+      }
+
+      allow read: if isFeedbackOwner() || isAdmin();
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.id == feedbackId
+        && request.resource.data.kind in ['bug', 'idea', 'question']
+        && request.resource.data.text is string
+        && request.resource.data.text.size() >= 1
+        && request.resource.data.text.size() <= 4000
+        && request.resource.data.status == 'new'
+        && request.resource.data.isUnreadByAdmin == true
+        && request.resource.data.isUnreadBySender == false
+        && (request.resource.data.authorEmail == null || request.resource.data.authorEmail == request.auth.token.email)
+        && request.resource.data.context is map;
+      allow update: if (isFeedbackOwner()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isUnreadBySender', 'isUnreadByAdmin', 'lastActivityAt'])
+          && (request.resource.data.isUnreadBySender == false || request.resource.data.isUnreadBySender == resource.data.isUnreadBySender)
+          && (request.resource.data.isUnreadByAdmin == true || request.resource.data.isUnreadByAdmin == resource.data.isUnreadByAdmin))
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'isUnreadBySender', 'isUnreadByAdmin', 'lastActivityAt'])
+          && request.resource.data.status in ['new', 'looking', 'planned', 'done', 'wont-do']);
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        function isParentOwner() {
+          return request.auth != null && get(/databases/$(database)/documents/feedback/$(feedbackId)).data.uid == request.auth.uid;
+        }
+
+        allow read: if isParentOwner() || isAdmin();
+        allow create: if request.auth != null
+          && request.resource.data.fromUid == request.auth.uid
+          && ((isParentOwner()
+              && request.resource.data.isFromAdmin == false
+              && request.resource.data.kind == 'reply')
+            || (isAdmin() && request.resource.data.isFromAdmin == true))
+          && (request.resource.data.kind != 'reply'
+            || (request.resource.data.text is string
+              && request.resource.data.text.size() >= 1
+              && request.resource.data.text.size() <= 4000));
+      }
+    }
+
     match /users/{userId} {
       allow read: if request.auth != null;
       allow write: if isUser(userId);

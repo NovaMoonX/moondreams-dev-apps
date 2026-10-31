@@ -13,6 +13,7 @@ import { AuthProvider } from '@contexts/AuthContext';
 import { NetworkStatusProvider } from '@contexts/NetworkStatusContext';
 import { SiteThemeProvider } from '@contexts/SiteThemeContext';
 import { useDisableAutocomplete } from '@hooks/useDisableAutocomplete';
+import { useFeedbackSync } from '@hooks/useFeedbackSync';
 import { useReminderSync } from '@hooks/useReminderSync';
 import { SITE_VERSION } from '@lib/app';
 import {
@@ -29,6 +30,7 @@ import { store } from '@store/index';
 function AppShell() {
   useDisableAutocomplete();
   useReminderSync();
+  useFeedbackSync();
 
   return <RouterProvider router={router} />;
 }

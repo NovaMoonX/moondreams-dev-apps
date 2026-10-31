@@ -81,6 +81,138 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     });
   });
 
+  // Feedback in each state both inboxes draw: a bug the admin answered (unread by its sender), a new idea (unread by the admin), a finished question.
+  const HOUR_MS = 60 * 60 * 1000;
+  const adminUid = FIXTURE_USERS.admin.uid;
+  const toFeedback = (
+    id: string,
+    sender: (typeof fixtures)[number],
+    fields: {
+      kind: 'bug' | 'idea' | 'question';
+      text: string;
+      status: 'new' | 'looking' | 'planned' | 'done' | 'wont-do';
+      appId: string | null;
+      path: string;
+      isUnreadBySender: boolean;
+      isUnreadByAdmin: boolean;
+      createdHoursAgo: number;
+      lastActivityHoursAgo: number;
+    },
+  ) => ({
+    id,
+    uid: sender.uid,
+    authorName: sender.displayName,
+    authorEmail: sender.email,
+    kind: fields.kind,
+    text: fields.text,
+    status: fields.status,
+    context: {
+      appId: fields.appId,
+      path: fields.path,
+      siteVersion: 'dev',
+      userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148',
+      viewportWidth: 390,
+      viewportHeight: 844,
+    },
+    isUnreadBySender: fields.isUnreadBySender,
+    isUnreadByAdmin: fields.isUnreadByAdmin,
+    createdAt: context.now - fields.createdHoursAgo * HOUR_MS,
+    lastActivityAt: context.now - fields.lastActivityHoursAgo * HOUR_MS,
+  });
+  const toFeedbackMessage = (
+    id: string,
+    fields: {
+      kind: 'reply' | 'status';
+      text: string | null;
+      status: 'looking' | 'done' | null;
+      hoursAgo: number;
+    },
+  ) => ({
+    id,
+    kind: fields.kind,
+    fromUid: adminUid,
+    isFromAdmin: true,
+    text: fields.text,
+    status: fields.status,
+    createdAt: context.now - fields.hoursAgo * HOUR_MS,
+  });
+  const feedbackSeeds = [
+    {
+      feedback: toFeedback('seed-feedback-bug', FIXTURE_USERS.partnerOne, {
+        kind: 'bug',
+        text: 'The packing list loses my ticked items when I come back to the trip after a few minutes.',
+        status: 'looking',
+        appId: 'waypoint',
+        path: '/waypoint/trips/seed-trip',
+        isUnreadBySender: true,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 30,
+        lastActivityHoursAgo: 2,
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-bug-reply', {
+          kind: 'reply',
+          text: 'Thanks for flagging this. Which phone are you on? I can see it happening when the app wakes up after being closed.',
+          status: null,
+          hoursAgo: 3,
+        }),
+        toFeedbackMessage('seed-feedback-bug-status', {
+          kind: 'status',
+          text: null,
+          status: 'looking',
+          hoursAgo: 2,
+        }),
+      ],
+    },
+    {
+      feedback: toFeedback('seed-feedback-idea', FIXTURE_USERS.nineLivesCaretaker, {
+        kind: 'idea',
+        text: 'It would be great to see all my reminders from every app in one place.',
+        status: 'new',
+        appId: null,
+        path: '/',
+        isUnreadBySender: false,
+        isUnreadByAdmin: true,
+        createdHoursAgo: 5,
+        lastActivityHoursAgo: 5,
+      }),
+      messages: [],
+    },
+    {
+      feedback: toFeedback('seed-feedback-question', FIXTURE_USERS.partnerTwo, {
+        kind: 'question',
+        text: "Can two people be in the same household and see each other's cats?",
+        status: 'done',
+        appId: 'nine-lives',
+        path: '/nine-lives',
+        isUnreadBySender: false,
+        isUnreadByAdmin: false,
+        createdHoursAgo: 120,
+        lastActivityHoursAgo: 96,
+      }),
+      messages: [
+        toFeedbackMessage('seed-feedback-question-reply', {
+          kind: 'reply',
+          text: 'Yes: invite them from the household menu and every cat is shared.',
+          status: null,
+          hoursAgo: 100,
+        }),
+        toFeedbackMessage('seed-feedback-question-status', {
+          kind: 'status',
+          text: null,
+          status: 'done',
+          hoursAgo: 96,
+        }),
+      ],
+    },
+  ];
+  feedbackSeeds.forEach(({ feedback, messages }) => {
+    batch.set(context.firestore.doc(`feedback/${feedback.id}`), feedback);
+    messages.forEach((message) => {
+      batch.set(context.firestore.doc(`feedback/${feedback.id}/messages/${message.id}`), message);
+    });
+  });
+
   APP_REGISTRY.forEach((app) => {
     const appRef = context.firestore.collection('apps').doc(app.id);
     const createdAt = app.createdAt
@@ -339,7 +471,8 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
     ...EMPTY_SEED_RESULT,
     authUsers: fixtures.length,
     firestoreDocuments:
-      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + pipelineCosts.length + 1,
+      fixtures.length + APP_REGISTRY.length + usageEntries.length + visitedFixtures.length + pipelineSessions.length + pipelineCosts.length + 1 +
+      feedbackSeeds.reduce((total, { messages }) => total + 1 + messages.length, 0),
     realtimePaths: fixtures.length,
   };
 
