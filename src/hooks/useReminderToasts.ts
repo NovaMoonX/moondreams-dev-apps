@@ -7,6 +7,7 @@ import { APP_REGISTRY_ID_MAP } from '@lib/app';
 import { TOAST_APP_LABELS } from '@components/toastTypeStyles';
 import { isUsingFirebaseEmulators } from '@/lib/firebase/config';
 import { hasDialogOnTop } from '@/utils/dialogUtils';
+import { isReminderStillUseful } from '@/lib/notifications/reminderExpiry';
 import type { Reminder, ReminderStatus } from '@/lib/notifications/types';
 import { useAppSelector } from '@/store';
 
@@ -17,7 +18,8 @@ const FORCE_TOAST_ENABLED =
 /** Bridges the global `reminders` slice into in-app toasts: a reminder this page
  * has seen as not yet sent that flips to `sent` pops a toast. One that first
  * appears already `sent` (the first snapshot after a reload, another device's
- * history) never does, so reloading doesn't replay old ones. One marked
+ * history) never does, so reloading doesn't replay old ones, and one past its
+ * useful window (`usefulForMs`) never does. One marked
  * `inAppToast: false` never does either. */
 export function useReminderToasts() {
   const reminders = useAppSelector((state) => state.reminders.items);
@@ -33,6 +35,7 @@ export function useReminderToasts() {
     (reminder: Reminder, duration = REMINDER_TOAST_DURATION_MS) => {
       if (
         reminder.inAppToast === false ||
+        !isReminderStillUseful(reminder, Date.now()) ||
         shownIdsRef.current.has(reminder.id)
       ) {
         return;
@@ -89,6 +92,7 @@ export function useReminderToasts() {
         relatedEntityPath: null,
         link: '/waypoint',
         recurrence: 'none',
+        usefulForMs: 60 * 60 * 1000,
         inAppToast: null,
         createdBy: '',
         createdAt: Date.now(),

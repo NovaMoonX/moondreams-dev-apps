@@ -4,6 +4,7 @@ import {
   type DocumentData,
   type DocumentReference,
   type Firestore,
+  type QueryDocumentSnapshot,
 } from 'firebase-admin/firestore';
 import { getMessaging, type Messaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions';
@@ -31,10 +32,21 @@ if (getApps().length === 0) {
 const POLL_INTERVAL_MINUTES = 1;
 const POLL_INTERVAL_MS = POLL_INTERVAL_MINUTES * 60 * 1000;
 
-// A reminder this far overdue is no longer useful ("starting in 20 minutes"
+// A reminder past its `usefulForMs` is no longer useful ("starting in 20 minutes"
 // an hour late is wrong), and it is how an outage or a missing index would
-// otherwise flush its whole backlog to people's phones at once.
-const STALE_AFTER_MS = 30 * 60 * 1000;
+// otherwise flush its whole backlog to people's phones at once. One saved before
+// `usefulForMs` existed gets this long.
+const DEFAULT_USEFUL_FOR_MS = 30 * 60 * 1000;
+
+/** When a reminder stops being worth sending. */
+export function getReminderExpiresAt(reminder: DocumentData): number {
+  const usefulForMs = reminder.usefulForMs;
+
+  return (
+    (reminder.scheduledFor as number) +
+    (typeof usefulForMs === 'number' ? usefulForMs : DEFAULT_USEFUL_FOR_MS)
+  );
+}
 
 const APP_PATHS: Record<string, string> = {
   'worth-the-wait': '/worth-the-wait',
@@ -55,7 +67,9 @@ export function resolveReminderLink(reminder: DocumentData): string {
     return own;
   }
 
-  const tripId = /^apps\/waypoint\/trips\/([^/]+)\//.exec(String(reminder.relatedEntityPath ?? ''))?.[1];
+  const tripId = /^apps\/waypoint\/trips\/([^/]+)\//.exec(
+    String(reminder.relatedEntityPath ?? ''),
+  )?.[1];
   const fallback = tripId
     ? toAppUrl(`/waypoint?trip=${encodeURIComponent(tripId)}`)
     : toAppUrl(APP_PATHS[reminder.appId as string] ?? '/');
@@ -121,11 +135,17 @@ async function deliverReminder(
   ref: DocumentReference<DocumentData>,
   reminder: DocumentData,
 ): Promise<void> {
-  await sendPushToUsers(firestore, messaging, normalizeUids(reminder.targetUids), {
-    title: reminder.title,
-    body: reminder.body,
-    url: resolveReminderLink(reminder),
-  });
+  await sendPushToUsers(
+    firestore,
+    messaging,
+    normalizeUids(reminder.targetUids),
+    {
+      title: reminder.title,
+      body: reminder.body,
+      url: resolveReminderLink(reminder),
+      usefulForMs: Math.max(0, getReminderExpiresAt(reminder) - Date.now()),
+    },
+  );
 
   if (reminder.recurrence === 'yearly') {
     const nextOccurrence = new Date(reminder.scheduledFor as number);
@@ -153,7 +173,6 @@ export const sendScheduledReminders = onSchedule(
     const messaging = getMessaging();
     const now = Date.now();
     const windowEnd = now + POLL_INTERVAL_MS;
-    const staleBefore = now - STALE_AFTER_MS;
 
     // Housekeeping runs beside the sending and never holds it up or fails it.
     const pruning = pruneFinishedReminders(firestore, now)
@@ -162,7 +181,9 @@ export const sendScheduledReminders = onSchedule(
           logger.info('Pruned finished reminders', { count });
         }
       })
-      .catch((error) => logger.error('Pruning finished reminders failed', error));
+      .catch((error) =>
+        logger.error('Pruning finished reminders failed', error),
+      );
 
     // Looks ahead to everything due within this poll window, not just what's
     // already due, then waits out each one's exact remaining delay before
@@ -179,19 +200,24 @@ export const sendScheduledReminders = onSchedule(
       return;
     }
 
-    const staleDocs = dueRemindersSnapshot.docs.filter(
-      (reminderDoc) => (reminderDoc.get('scheduledFor') as number) < staleBefore,
-    );
+    // The query can't filter on a per-reminder window, so the split happens here.
+    const isStale = (reminderDoc: QueryDocumentSnapshot) =>
+      now > getReminderExpiresAt(reminderDoc.data());
+    const staleDocs = dueRemindersSnapshot.docs.filter(isStale);
     const upcomingDocs = dueRemindersSnapshot.docs.filter(
-      (reminderDoc) => (reminderDoc.get('scheduledFor') as number) >= staleBefore,
+      (reminderDoc) => !isStale(reminderDoc),
     );
 
     if (staleDocs.length > 0) {
-      logger.info('Settling overdue reminders without sending', { count: staleDocs.length });
+      logger.info('Settling overdue reminders without sending', {
+        count: staleDocs.length,
+      });
     }
 
     await Promise.all([
-      ...staleDocs.map((reminderDoc) => settleStaleReminder(reminderDoc.ref, reminderDoc.data(), now)),
+      ...staleDocs.map((reminderDoc) =>
+        settleStaleReminder(reminderDoc.ref, reminderDoc.data(), now),
+      ),
       ...upcomingDocs.map(async (reminderDoc) => {
         const claimed = await claimReminder(firestore, reminderDoc.ref);
 
@@ -199,7 +225,10 @@ export const sendScheduledReminders = onSchedule(
           return;
         }
 
-        const delayMs = Math.max(0, (claimed.scheduledFor as number) - Date.now());
+        const delayMs = Math.max(
+          0,
+          (claimed.scheduledFor as number) - Date.now(),
+        );
 
         if (delayMs > 0) {
           await new Promise((resolve) => setTimeout(resolve, delayMs));

@@ -11,6 +11,9 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
+/** An announcement is still news for a day; FCM drops the push after this. */
+const ANNOUNCEMENT_USEFUL_FOR_MS = 24 * 60 * 60 * 1000;
+
 /** Pushes a new announcement to everyone on the trip except the Admin who posted it. */
 export const notifyTripAnnouncement = onDocumentCreated(
   { document: 'apps/waypoint/trips/{tripId}/announcements/{announcementId}', region: 'us-central1' },
@@ -40,6 +43,7 @@ export const notifyTripAnnouncement = onDocumentCreated(
       const devices = await sendPushToUsers(firestore, getMessaging(), targetUids, {
         ...content,
         url: toAppUrl(getTripLink(event.params.tripId)) ?? APP_ORIGIN,
+        usefulForMs: ANNOUNCEMENT_USEFUL_FOR_MS,
       });
       logger.info('Trip announcement pushed', { devices });
     } catch (error) {

@@ -118,6 +118,8 @@ export const PREVIEWS_WINDOW_BEFORE_MINUTES = 10;
 export const PREVIEWS_WINDOW_AFTER_MINUTES = 30;
 /** Push sent this long after a planned showing starts, once the trailers are rolling. */
 export const TRAILER_REMINDER_DELAY_MINUTES = 5;
+/** The previews push is still worth sending this long after its time; the trailers are over by then. */
+export const TRAILER_REMINDER_USEFUL_FOR_MINUTES = 20;
 /** AMC's week turns over on Friday (5), when new releases open; the calendar grid itself still starts on Sunday. */
 export const WEEK_STARTS_ON = 5;
 

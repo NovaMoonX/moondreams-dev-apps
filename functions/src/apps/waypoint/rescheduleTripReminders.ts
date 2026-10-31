@@ -100,7 +100,7 @@ export const rescheduleTripReminders = onDocumentUpdated(
           if (isPending && reminderRef) {
             return [
               (batch: FirebaseFirestore.WriteBatch) =>
-                batch.update(reminderRef, { scheduledFor, link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}` }),
+                batch.update(reminderRef, { scheduledFor, usefulForMs: event.reminderMinutesBefore * 60_000, link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}` }),
             ];
           }
 
@@ -123,6 +123,7 @@ export const rescheduleTripReminders = onDocumentUpdated(
                 relatedEntityPath: `apps/waypoint/trips/${tripRef.id}/events/${eventDoc.id}`,
                 link: `/waypoint?trip=${encodeURIComponent(tripRef.id)}`,
                 recurrence: 'none',
+                usefulForMs: event.reminderMinutesBefore * 60_000,
                 createdBy: event.createdBy,
                 createdAt: now,
               }),

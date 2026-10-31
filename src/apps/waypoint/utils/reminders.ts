@@ -72,6 +72,7 @@ export async function scheduleEventReminder({
       createdBy: uid,
       relatedEntityPath: `apps/waypoint/trips/${trip.id}/events/${event.id}`,
       link: `/waypoint?trip=${encodeURIComponent(trip.id)}`,
+      usefulForMs: event.reminderMinutesBefore * 60_000,
     });
     return reminder.id;
   } catch {

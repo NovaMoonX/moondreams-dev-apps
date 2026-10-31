@@ -2,7 +2,10 @@ import { doc, collection } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { cancelReminder, scheduleReminder } from '@/lib/notifications/scheduleReminder';
-import { TRAILER_REMINDER_DELAY_MINUTES } from '@apps/a-list/constants';
+import {
+  TRAILER_REMINDER_DELAY_MINUTES,
+  TRAILER_REMINDER_USEFUL_FOR_MINUTES,
+} from '@apps/a-list/constants';
 
 /** Whether a showing's trailer push is still ahead of us. */
 export function isTrailerReminderAhead(showtimeAt: number) {
@@ -44,6 +47,7 @@ export async function scheduleTrailerReminder({
       createdBy: uid,
       relatedEntityPath: `apps/a-list/memberships/${uid}/viewings/${viewingId}`,
       link: '/a-list?tab=watchlist',
+      usefulForMs: TRAILER_REMINDER_USEFUL_FOR_MINUTES * 60_000,
     });
   } catch {
     // Stored id then points at nothing, and cancelling it later is just as quiet.

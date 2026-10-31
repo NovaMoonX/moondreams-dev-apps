@@ -1104,7 +1104,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
     linkPreview: null,
     reminderMinutesBefore: 20,
     reminderEnabled: true,
-    reminderId: 'seed-waypoint-reminder-alex',
+    reminderId: null,
     isArchived: false,
     archivedBy: null,
     archivedAt: null,
@@ -1575,22 +1575,6 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       createdAt: joinedAt,
     }),
   ]);
-
-  await context.firestore.collection('reminders').doc('seed-waypoint-reminder-alex').set({
-    id: 'seed-waypoint-reminder-alex',
-    appId: 'waypoint',
-    targetUids: [alex.uid],
-    title: 'Lunch at Salt Creek',
-    body: 'Starting in 20 minutes.',
-    scheduledFor: context.now + 15_000,
-    status: 'pending',
-    channels: ['push'],
-    relatedEntityPath: `apps/waypoint/trips/${ACTIVE_TRIP_ID}/events/active-trip-lunch`,
-    link: `/waypoint?trip=${ACTIVE_TRIP_ID}`,
-    recurrence: 'none',
-    createdBy: alex.uid,
-    createdAt: context.now,
-  });
 
   const eveningTripTitle = 'Skagit Valley Day Trip';
   const eveningTripStart = startOfToday - DAY_MS;

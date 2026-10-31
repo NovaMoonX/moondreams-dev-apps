@@ -31,6 +31,13 @@ export interface PushContent {
   body: string;
   /** Absolute, on the app's own origin: what a tap opens. */
   url: string;
+  /** How long from now the push still matters. FCM drops it undelivered after that, so a phone that was off never shows it late. */
+  usefulForMs: number;
+}
+
+/** The seconds FCM holds an undelivered push for: the window rounded up, at least one (FCM's default is four weeks, and zero would mean "now or never"). */
+export function toPushTtlSeconds(usefulForMs: number): number {
+  return Math.max(1, Math.ceil(usefulForMs / 1000));
 }
 
 /** The error codes with which FCM says a device token will never work again: the app was removed, the browser's permission was withdrawn or the token was replaced. */
@@ -99,7 +106,13 @@ export async function sendPushToUsers(
     const { responses } = await messaging.sendEachForMulticast({
       tokens: devices.map((device) => device.token),
       notification: { title: content.title, body: content.body },
-      webpush: { fcmOptions: { link: content.url } },
+      webpush: {
+        headers: {
+          TTL: String(toPushTtlSeconds(content.usefulForMs)),
+          Urgency: 'high',
+        },
+        fcmOptions: { link: content.url },
+      },
     });
     const dead = getDeadTokens(devices, responses);
 

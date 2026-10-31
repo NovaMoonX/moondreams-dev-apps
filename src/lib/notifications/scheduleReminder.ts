@@ -16,6 +16,8 @@ export interface ScheduleReminderInput {
   relatedEntityPath?: string | null;
   /** Same-origin path and query the notification opens (`/waypoint?trip=…`). Required so a new call site can't forget it. */
   link: string;
+  /** How long after `scheduledFor` the reminder still matters; later than that it is dropped instead of delivered. Required so a new call site has to decide. */
+  usefulForMs: number;
   /** `'yearly'` re-fires this same reminder on the same month/day every year (e.g. a birthday) instead of firing once. Defaults to `'none'`. */
   recurrence?: ReminderRecurrence;
   /** `false` when the calling page already tells the person by itself, so the in-app toast skips this one. Defaults to toasting. */
@@ -40,6 +42,7 @@ export async function scheduleReminder(input: ScheduleReminderInput): Promise<Re
     relatedEntityPath: input.relatedEntityPath ?? null,
     link: input.link,
     recurrence: input.recurrence ?? 'none',
+    usefulForMs: input.usefulForMs,
     inAppToast: input.inAppToast ?? null,
     createdBy: input.createdBy,
     createdAt: Date.now(),

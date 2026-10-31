@@ -21,6 +21,8 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
+/** The note is for the morning it names; FCM drops it after this. */
+const EAT_SOON_USEFUL_FOR_MS = 4 * 60 * 60 * 1000;
 const SETTINGS_PATH = 'apps/pinch/settings';
 const BOX_LIMIT = 100;
 const PACKAGE_LIMIT = 100;
@@ -242,6 +244,7 @@ export const sendEatSoonDigest = onSchedule(
           title: message.title,
           body: message.body,
           url: link,
+          usefulForMs: EAT_SOON_USEFUL_FOR_MS,
         });
       },
     );

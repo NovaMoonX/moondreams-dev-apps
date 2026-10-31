@@ -11,6 +11,9 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
+/** A new idea is worth a nudge for a day; FCM drops the push after this. */
+const IDEA_USEFUL_FOR_MS = 24 * 60 * 60 * 1000;
+
 /** Pushes a new idea to everyone on the trip except the member who added it. */
 export const notifyTripIdea = onDocumentCreated(
   { document: 'apps/waypoint/trips/{tripId}/ideas/{ideaId}', region: 'us-central1' },
@@ -38,6 +41,7 @@ export const notifyTripIdea = onDocumentCreated(
       const devices = await sendPushToUsers(firestore, getMessaging(), targetUids, {
         ...content,
         url: toAppUrl(getTripLink(event.params.tripId, 'ideas')) ?? APP_ORIGIN,
+        usefulForMs: IDEA_USEFUL_FOR_MS,
       });
       logger.info('Trip idea pushed', { devices });
     } catch (error) {

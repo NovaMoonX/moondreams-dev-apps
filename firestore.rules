@@ -851,6 +851,8 @@ service cloud.firestore {
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy
         && isReminderAudienceKnown()
+        // How long it stays useful: past that the sender drops it and a late push is never delivered.
+        && request.resource.data.get('usefulForMs', 0) is int && request.resource.data.usefulForMs > 0
         // A path inside the app, never another site: a notification opens it on tap.
         && (request.resource.data.get('link', null) == null || request.resource.data.link.matches('/[a-z0-9].*'));
       allow update: if request.auth != null

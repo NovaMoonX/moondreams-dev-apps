@@ -3,6 +3,8 @@ import type { ReminderRecurrence } from '@/lib/notifications/types';
 import type { RootState } from '@/store';
 
 export const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+/** A household reminder (a vaccine due, a birthday) still matters for the rest of that day. */
+const REMINDER_USEFUL_FOR_MS = 12 * 60 * 60 * 1000;
 
 export interface ReminderSpec {
   title: string;
@@ -49,6 +51,7 @@ export async function scheduleEntityReminders(
           relatedEntityPath: spec.relatedEntityPath,
           link: '/nine-lives',
           recurrence: spec.recurrence,
+          usefulForMs: REMINDER_USEFUL_FOR_MS,
         });
 
         return reminder.id;
