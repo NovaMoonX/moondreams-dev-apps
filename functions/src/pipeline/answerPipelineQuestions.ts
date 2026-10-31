@@ -706,6 +706,7 @@ interface MergeView {
   isStatusForHead: boolean;
   /** Its base has commits its head doesn't, so its green CI never ran on what would land. */
   isBehind: boolean;
+  hasOpenQuestion: boolean;
 }
 
 const MERGE_COMMENT = 'Merge it (from the admin dashboard)';
@@ -740,6 +741,7 @@ const getMergeRefusal = (view: MergeView) => {
   if (view.ci !== 'green') return 'No checks have run on it yet.';
   if (view.mustDo === null) return 'Its status has no Must do list yet.';
   if (view.mustDo.length > 0) return 'Must do items are still open.';
+  if (view.hasOpenQuestion) return 'It has an open question for you.';
   if (!view.isStatusForHead) return 'Its status is for an older commit. Wait for its session to update it.';
   if (view.isMergeable === null) return 'GitHub is still checking it for conflicts. Try again in a moment.';
   return null;
@@ -817,6 +819,51 @@ const refused = (error: string): MergeResult => ({
   isSample: false,
 });
 
+const ANSWER_MARKER = '<!-- pipeline-answer:';
+const TO_DO_TAG = /\(to do\)/i;
+
+/** The owner's open questions in a status comment, by the same key the dashboard's answers carry. */
+const readOpenQuestions = (body: string) => {
+  const lines = body.split(/\r?\n/);
+  return lines.flatMap((line, index) => {
+    const box = BOX_LINE.exec(line);
+    if (!box || box[2] !== ' ' || !isForOwner(line) || TO_DO_TAG.test(line)) return [];
+    const next = lines[index + 1] ?? '';
+    const hasOptions = next.search(/\S/) > line.search(/\S/) && /^\s*[-*]\s+/.test(next);
+    return line.includes('?') || hasOptions ? [toItemKey(line)] : [];
+  });
+};
+
+// An answer sent from the dashboard after the status counts, before the session has read it and rewritten the status.
+const readAnsweredSince = (comments: Json[], since: number) =>
+  new Set(
+    comments
+      .filter(
+        (comment) =>
+          typeof comment.body === 'string' &&
+          comment.body.includes(ANSWER_MARKER) &&
+          Date.parse(String(comment.created_at)) >= since,
+      )
+      .flatMap((comment) =>
+        [...String(comment.body).matchAll(/^- \*\*(.+?)\*\*/gm)].map((match) => toItemKey(match[1])),
+      ),
+  );
+
+const hasSeededQuestion = async (prNumber: number, status: Json | null) => {
+  if (status === null || !Array.isArray(status.ownerItems)) return false;
+  const answered = (await getFirestore().doc('pipeline/answered').get()).get('marks') as unknown;
+  const marks = isObject(answered) ? answered : {};
+  const statusAt = Number(status.updatedAt) || 0;
+  return status.ownerItems
+    .filter(isObject)
+    .some(
+      (item, index) =>
+        item.isTask !== true &&
+        typeof item.settled !== 'string' &&
+        Number(marks[`${prNumber}:${index}`] ?? 0) < statusAt,
+    );
+};
+
 // The emulator's dashboard shows made-up pull requests, so it checks the seeded inbox and posts nothing.
 const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
   const inbox = await getFirestore().doc('pipeline/inbox').get();
@@ -833,6 +880,7 @@ const rehearseMerge = async (prNumber: number): Promise<MergeResult> => {
     mustDo: status === null ? 'no status' : Array.isArray(status.mustDo) ? status.mustDo.map(String) : null,
     isStatusForHead: true,
     isBehind: false,
+    hasOpenQuestion: await hasSeededQuestion(prNumber, status),
   });
   if (refusal !== null) return refused(refusal);
   const sessionUrl =
@@ -1052,6 +1100,21 @@ const isBehindBase = async (token: string, pr: Json, sha: string) => {
   return Number((await readJson(response))?.behind_by) > 0;
 };
 
+const hasOpenQuestion = async (
+  token: string,
+  prNumber: number,
+  pr: Json,
+  statusBody: string | null,
+  status: Json | null,
+) => {
+  const open = statusBody === null ? [] : readOpenQuestions(statusBody);
+  if (open.length === 0) return false;
+  const comments = await readRecentComments(token, prNumber, typeof pr.comments === 'number' ? pr.comments : 0);
+  if (comments === null) throw new Error('comments unread');
+  const answered = readAnsweredSince(comments, Date.parse(String(status?.updated_at)) || 0);
+  return open.some((key) => !answered.has(key));
+};
+
 const readGates = async (token: string, prNumber: number) => {
   try {
     const pull = await githubFetch(token, `/pulls/${prNumber}`);
@@ -1078,6 +1141,7 @@ const readGates = async (token: string, prNumber: number) => {
       mustDo: statusBody === null ? 'no status' : readMustDo(statusBody),
       isStatusForHead: statusBody !== null && isHeadingFor(statusBody, sha),
       isBehind: await isBehindBase(token, pr, sha),
+      hasOpenQuestion: await hasOpenQuestion(token, prNumber, pr, statusBody, status),
     });
     if (refusal !== null) return refused(refusal);
     const sessionUrl =

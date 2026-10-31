@@ -563,8 +563,30 @@ export function getMergeBlock(pr: PipelinePr, ownerItems: PipelineOwnerEntryItem
         (item) => item.prNumber === pr.number && item.text === text && item.settled !== null,
       ),
   );
-  return open.length === 0 ? null : 'Must do items are still open.';
+  if (open.length > 0) return 'Must do items are still open.';
+  const isAsking = ownerItems.some(
+    (item) => item.prNumber === pr.number && !item.isTask && item.settled === null,
+  );
+  return isAsking ? 'It has an open question for you.' : null;
 }
+
+export interface MergeTarget {
+  prNumber: number;
+  isDriven: boolean;
+  base: string;
+}
+
+/** Every pull request on the dashboard that Merge would take now, once each. */
+export const getMergeTargets = (entries: PipelineEntry[]): MergeTarget[] =>
+  Array.from(
+    new Map(
+      entries.flatMap((entry) =>
+        entry.prs
+          .filter((pr) => getMergeBlock(pr, entry.ownerItems) === null)
+          .map((pr) => [pr.number, { prNumber: pr.number, isDriven: entry.isDriven, base: pr.base }] as const),
+      ),
+    ).values(),
+  );
 
 export type PipelineGroups = ReturnType<typeof buildPipeline>;
 

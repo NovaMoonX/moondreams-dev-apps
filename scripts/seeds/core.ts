@@ -257,6 +257,7 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
   const runwayPr = toInboxPr(901, 'Runway: history sheet', 'claude/runway-cards', pipelineSessions[0].url, 'Runway cards');
   const pinchPr = toInboxPr(903, 'Pinch: meal plan repeats', 'claude/pinch-meal-plan', pipelineSessions[1].url, 'Pinch meal plan');
   const orphanPr = toInboxPr(902, 'Nine Lives: visit reminders', 'claude/nine-lives-visits', null, 'Visit reminders');
+  const remindersPr = toInboxPr(907, 'Nine Lives: reminder sounds', 'claude/nine-lives-sounds', null, 'Reminder sounds');
   const runwayRedPr = toInboxPr(905, 'Runway: card colours', 'claude/runway-card-colours', pipelineSessions[0].url, 'Runway cards');
   const runwayConflictPr = toInboxPr(906, 'Runway: card order', 'claude/runway-card-order', pipelineSessions[0].url, 'Runway cards');
   const pinchRunningPr = toInboxPr(904, 'Pinch: repeat the plan from a week', 'claude/pinch-meal-plan-weeks', pipelineSessions[1].url, 'Pinch meal plan');
@@ -339,6 +340,15 @@ export async function seedCore(context: SeedContext): Promise<SeedResult> {
       { ...pinchRunningPr, ci: 'running' },
       { ...runwayRedPr, ci: 'red' },
       { ...runwayConflictPr, labels: ['minor', 'merge-conflict'] },
+      {
+        ...remindersPr,
+        status: {
+          ...remindersPr.status,
+          ownerItems: [
+            { text: 'Try the reminder sound on a phone', options: [], isMulti: false, isTask: true, settled: 'done' },
+          ],
+        },
+      },
     ],
     merged: [],
     updatedAt: context.now - 4 * MINUTE_MS,

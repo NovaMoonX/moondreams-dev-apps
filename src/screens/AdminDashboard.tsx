@@ -168,6 +168,7 @@ function AdminDashboard() {
       groups={pipelineGroups}
       now={now}
       answers={pipelineAnswers}
+      merge={pipelineMerge}
       onOpenEntry={setOpenEntryKey}
     />
   );
