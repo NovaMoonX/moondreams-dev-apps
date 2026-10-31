@@ -20,7 +20,7 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     appId: 'a-list',
     label: 'Archive movies',
     description:
-      'Move a movie off the list with a reason, and find it again under Archived. Kept out, archived movies show on the main list.',
+      'Someone kept out sees their archived movies back on the main list, with no Archive button. Everyone else can move a movie off the list with a reason and find it under Archived.',
     defaultRollout: 'everyone',
   },
 ];

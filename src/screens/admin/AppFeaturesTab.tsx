@@ -27,11 +27,17 @@ const ROLLOUT_OPTIONS: { value: GateRollout; label: string }[] = [
   { value: 'everyone', label: 'Everyone' },
 ];
 
-const ROLLOUT_HINTS: Record<GateRollout, string> = {
-  off: 'Nobody has it, except people always given it below.',
-  testing: 'Only you, plus people always given it below.',
-  everyone: 'Everyone has it, except people kept out below.',
-};
+function countPeople(count: number) {
+  return count === 1 ? '1 person' : `${count} people`;
+}
+
+function getRolloutHint(rollout: GateRollout, givenCount: number, keptOutCount: number) {
+  const given = givenCount > 0 ? `, plus ${countPeople(givenCount)} always given it` : '';
+  const keptOut = keptOutCount > 0 ? `, except ${countPeople(keptOutCount)} kept out` : '';
+  if (rollout === 'everyone') return `Everyone has it${keptOut}.`;
+  if (rollout === 'testing') return `Admins try it first${given}${keptOut}.`;
+  return `Nobody has it${given}${keptOut}.`;
+}
 
 interface AppFeaturesTabProps {
   app: AppMetadata;
@@ -96,6 +102,7 @@ function GateCard({ gate, users }: GateCardProps) {
       </div>
 
       <div className='space-y-2'>
+        <div className='text-foreground text-sm font-medium'>Who has it</div>
         <PillGroup<GateRollout>
           label='Who has it'
           isThin
@@ -103,7 +110,9 @@ function GateCard({ gate, users }: GateCardProps) {
           onChange={(rollout) => void run(saveGateRollout(gate.appId, gate.id, rollout))}
           options={ROLLOUT_OPTIONS}
         />
-        <p className='text-muted-foreground text-xs'>{ROLLOUT_HINTS[setting.rollout]}</p>
+        <p className='text-muted-foreground text-xs'>
+          {getRolloutHint(setting.rollout, setting.alwaysOnUids.length, setting.alwaysOffUids.length)}
+        </p>
       </div>
 
       <ExceptionPeople
@@ -116,7 +125,7 @@ function GateCard({ gate, users }: GateCardProps) {
       />
       <ExceptionPeople
         title='Kept out'
-        emptyText='Nobody. Being kept out wins over everything else.'
+        emptyText='Nobody. Kept out wins over everything else.'
         uids={setting.alwaysOffUids}
         users={users}
         onAdd={(uid) => addTo('alwaysOffUids', uid)}
