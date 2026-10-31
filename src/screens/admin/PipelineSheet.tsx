@@ -6,7 +6,7 @@ import DetailSheet from '@/components/DetailSheet';
 import { DISABLED_CLASS } from './constants';
 import ScreenshotGallery from './ScreenshotGallery';
 import {
-  AnswerFields,
+  AnswerRow,
   CiBadge,
   LinkedText,
   NotSetUpLine,
@@ -17,6 +17,7 @@ import {
 } from './PipelineParts';
 import {
   getAnswerSlots,
+  getAskedSlots,
   getPrError,
   type PipelineEntry,
 } from './pipelineUtils';
@@ -64,7 +65,8 @@ interface PipelineSheetProps {
 /** One session's (or one pull request's) asks, links and screenshots, so the list itself stays one quiet row each. */
 function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
   const slots = entry ? getAnswerSlots(entry) : [];
-  const isAllSent = slots.length > 0 && slots.every(answers.isSent);
+  const asked = getAskedSlots(slots);
+  const isAllSent = asked.length > 0 && asked.every(answers.isSent);
   const slotPrs = new Set(slots.map((slot) => slot.prNumber));
   const entryReady = answers.getReadyCount(slots);
   const elsewhereReady = answers.getReadyCount() - entryReady;
@@ -75,7 +77,7 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
     const note = answers.isNotSetUp ? (
       <NotSetUpLine />
     ) : slots.length > 0 && entryReady === 0 && !answers.isSending && !isAllSent ? (
-      'Pick an option or add a note first'
+      'Pick an option or write an answer first'
     ) : null;
     return (
       <div className='space-y-2 px-4 sm:px-0'>
@@ -191,15 +193,23 @@ function PipelineSheet({ entry, onClose, answers }: PipelineSheetProps) {
                   ))}
                 </ul>
               ) : null}
-              <ul className='space-y-5'>
+              <ul className='space-y-2'>
                 {slots.map((slot) => (
-                  <li key={slot.id}>
-                    <AnswerFields
+                  <li
+                    key={slot.id}
+                    className={
+                      slot.kind === 'feedback' ? 'border-border !mt-4 border-t pt-4' : undefined
+                    }
+                  >
+                    <AnswerRow
                       slot={slot}
                       draft={answers.getDraft(slot.id)}
                       isSent={answers.isSent(slot)}
                       error={getPrError(slots, slot, answers.errors)}
-                      onChoice={(choice) => answers.setChoice(slot.id, choice)}
+                      onChoices={(choices, other) =>
+                        answers.setChoices(slot.id, choices, other)
+                      }
+                      onOther={(other) => answers.setOther(slot.id, other)}
                       onNote={(note) => answers.setNote(slot.id, note)}
                     />
                   </li>

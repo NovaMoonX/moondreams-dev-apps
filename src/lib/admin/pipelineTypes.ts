@@ -15,6 +15,8 @@ export interface PipelineSession {
 export interface PipelineOwnerItem {
   text: string;
   options: { label: string; images: string[] }[];
+  /** Null or missing on documents written before multi-select questions; read with `=== true`. */
+  isMulti: boolean | null;
 }
 
 export interface PipelineInboxStatus {
@@ -49,6 +51,12 @@ export interface PipelineInboxPr {
   bodySessionUrl: string | null;
   status: PipelineInboxStatus | null;
   gallery: PipelineGalleryStep[] | null;
+}
+
+/** When the owner last answered each ask from the dashboard: "<pr>:<index>" for a question, "<pr>:reply" for 🚩 lines. */
+export interface PipelineAnswered {
+  marks: Record<string, number>;
+  updatedAt: number;
 }
 
 export interface PipelineInbox {

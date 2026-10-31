@@ -15,7 +15,9 @@ import {
 } from './pipelineUtils';
 
 export interface AnswerDraft {
-  choice: string | null;
+  choices: string[];
+  // Null until Other is picked.
+  other: string | null;
   note: string;
 }
 
@@ -24,16 +26,20 @@ export interface SentPr {
   url: string | null;
 }
 
-const EMPTY: AnswerDraft = { choice: null, note: '' };
+const EMPTY: AnswerDraft = { choices: [], other: null, note: '' };
 
 export const getChoiceText = (label: string) => stripLinks(label).slice(0, 300);
 
 const isAnswered = (draft: AnswerDraft | undefined) =>
-  draft !== undefined && (draft.choice !== null || draft.note.trim() !== '');
+  draft !== undefined &&
+  (draft.choices.length > 0 ||
+    (draft.other ?? '').trim() !== '' ||
+    draft.note.trim() !== '');
 
 const toItem = (slot: AnswerSlot, draft: AnswerDraft) => ({
   question: slot.question,
-  choice: draft.choice,
+  choices: draft.choices,
+  other: (draft.other ?? '').trim() === '' ? null : (draft.other ?? '').trim(),
   note: draft.note.trim() === '' ? null : draft.note.trim(),
 });
 
@@ -54,8 +60,11 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
 
   const slots = entries.flatMap(getAnswerSlots);
   // A sent answer shows as sent until its pull request's status comment is newer than the send.
+  // Feedback can be sent again at once, so it never waits on the next status.
   const isSent = (slot: AnswerSlot) =>
-    sentAt[slot.id] !== undefined && slot.statusAt <= sentAt[slot.id];
+    slot.kind !== 'feedback' &&
+    sentAt[slot.id] !== undefined &&
+    slot.statusAt <= sentAt[slot.id];
   const getDraft = (id: string) => drafts[id] ?? EMPTY;
   const getReady = (scope: AnswerSlot[]) =>
     scope.filter((slot) => !isSent(slot) && isAnswered(drafts[slot.id]));
@@ -71,14 +80,19 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     if (ready.length === 0 || sendingRef.current) return false;
     const answers = ready.reduce<PipelineAnswersForPr[]>((all, slot) => {
       const item = toItem(slot, getDraft(slot.id));
+      const marks = slot.mark === null ? [] : [slot.mark];
       const existing = all.find((entry) => entry.prNumber === slot.prNumber);
       return existing
         ? all.map((entry) =>
             entry === existing
-              ? { ...entry, items: [...entry.items, item] }
+              ? {
+                  ...entry,
+                  items: [...entry.items, item],
+                  marks: [...entry.marks, ...marks],
+                }
               : entry,
           )
-        : [...all, { prNumber: slot.prNumber, items: [item] }];
+        : [...all, { prNumber: slot.prNumber, items: [item], marks }];
     }, []);
     sendingRef.current = true;
     setIsSending(true);
@@ -177,7 +191,9 @@ export function usePipelineAnswers(entries: PipelineEntry[]) {
     isNotSetUp,
     isSent,
     getDraft,
-    setChoice: (id: string, choice: string | null) => setDraft(id, { choice }),
+    setChoices: (id: string, choices: string[], other: string | null) =>
+      setDraft(id, { choices, other }),
+    setOther: (id: string, other: string) => setDraft(id, { other }),
     setNote: (id: string, note: string) => setDraft(id, { note }),
     getReadyCount: (scope: AnswerSlot[] = slots) => getReady(scope).length,
     clear: () => {

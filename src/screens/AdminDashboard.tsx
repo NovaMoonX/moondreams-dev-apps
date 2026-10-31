@@ -54,7 +54,12 @@ function AdminDashboard() {
   // Live, unlike the rest of the dashboard: the sessions change while the owner watches.
   const pipeline = usePipelineSync(isAdmin);
   const now = useNow(60_000);
-  const pipelineGroups = buildPipeline(pipeline.sessions, pipeline.inbox, now);
+  const pipelineGroups = buildPipeline(
+    pipeline.sessions,
+    pipeline.inbox,
+    pipeline.answered,
+    now,
+  );
   const pipelineSummary = getPipelineSummary(pipelineGroups);
   const pipelineAnswers = usePipelineAnswers(pipelineGroups.waiting);
   const [openEntryKey, setOpenEntryKey] = useState<string | null>(null);
