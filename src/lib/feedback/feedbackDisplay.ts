@@ -79,6 +79,7 @@ export function getContextPlaceName(context: FeedbackContext) {
 /** The agent's state in the list's words. Queued, merged and no state say nothing there: Done already shows. */
 export const AGENT_STATE_LABEL: Record<FeedbackAgentState, string> = {
   queued: 'Queued for Claude',
+  starting: 'Starting a session',
   working: 'Claude is on it',
   'pr-ready': 'PR ready',
   'needs-you': 'Needs you',
@@ -90,6 +91,7 @@ const AGENT_URGENCY: FeedbackAgentState[] = [
   'needs-you',
   'held',
   'pr-ready',
+  'starting',
   'working',
   'queued',
   'merged',

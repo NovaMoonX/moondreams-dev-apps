@@ -211,7 +211,10 @@ const readSession = (data: Json) => {
     // Sent by hooks since phases were reported; an older hook sends neither.
     phase: typeof phase === 'string' && PHASES.includes(phase) ? phase : null,
     helpers: (Array.isArray(helpers) ? helpers : [])
-      .filter((helper): helper is string => typeof helper === 'string' && HELPER.test(helper))
+      .filter(
+        (helper): helper is string =>
+          typeof helper === 'string' && HELPER.test(helper),
+      )
       .slice(0, MAX_ITEMS),
   };
 };
@@ -421,6 +424,7 @@ const readFeedbackPrs = (data: Json) => {
               feedbackIds: ids,
               needsOwner: pr.needsOwner === true,
               isMerged: pr.isMerged === true,
+              isClosed: pr.isClosed === true,
             },
           ]
         : [];

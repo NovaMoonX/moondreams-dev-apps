@@ -2,7 +2,13 @@ export type FeedbackKind = 'bug' | 'idea' | 'question';
 
 /** Where an automatic Claude session has taken a piece of feedback; written only by Functions. */
 export type FeedbackAgentState =
-  'queued' | 'working' | 'pr-ready' | 'needs-you' | 'held' | 'merged';
+  | 'queued'
+  | 'starting'
+  | 'working'
+  | 'pr-ready'
+  | 'needs-you'
+  | 'held'
+  | 'merged';
 
 export type FeedbackStatus = 'new' | 'looking' | 'planned' | 'done' | 'wont-do';
 

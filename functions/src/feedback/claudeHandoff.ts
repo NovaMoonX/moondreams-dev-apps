@@ -19,7 +19,7 @@ export interface HandoffItem {
   kind: string;
   status: string;
   text: string;
-  agentState?: string | null;
+  agentState: string | null;
   context: {
     appId: string | null;
     path: string;
@@ -182,10 +182,12 @@ export async function readHandoffItems(
   const items = snaps
     .map(
       (snap) =>
-        ({ ...snap.data(), id: snap.id }) as HandoffItem & {
+        ({ ...snap.data(), id: snap.id }) as Omit<HandoffItem, 'agentState'> & {
+          agentState?: string | null;
           createdAt: number;
         },
     )
+    .map((item) => ({ ...item, agentState: item.agentState ?? null }))
     .sort((a, b) => a.createdAt - b.createdAt);
   const messageLists = await Promise.all(
     items.map((item) =>

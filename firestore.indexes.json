@@ -9,6 +9,14 @@
       ]
     },
     {
+      "collectionGroup": "feedback",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "agentState", "order": "ASCENDING" },
+        { "fieldPath": "agentQueuedAt", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "reminders",
       "queryScope": "COLLECTION",
       "fields": [

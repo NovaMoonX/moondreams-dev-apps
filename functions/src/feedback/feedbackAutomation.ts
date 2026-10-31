@@ -3,9 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
   getFirestore,
-  type QueryDocumentSnapshot,
+  type DocumentReference,
+  type DocumentSnapshot,
   type Firestore,
-  type WriteBatch,
+  type Transaction,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { HttpsError } from 'firebase-functions/v2/https';
@@ -22,14 +23,22 @@ import {
   addSessionToUsage,
   bucketQueued,
   CAP_HELD_NOTE,
+  getMaxFireAttempts,
   getPrStateUpdate,
   getSessionsLeft,
   isBucketDue,
+  isClaimable,
+  isStuckStarting,
   MAX_FIRE_FAILURES,
+  NOT_CONNECTED_NOTE,
+  omitIds,
+  readUsageDoc,
   registerFailure,
+  RUN_BUDGET_MS,
+  STUCK_HELD_NOTE,
+  toUsageData,
   type PrReport,
   type SessionBucket,
-  type SessionUsage,
 } from './feedbackAutomationPlan.js';
 
 if (getApps().length === 0) {
@@ -38,8 +47,12 @@ if (getApps().length === 0) {
 
 const AUTOMATION_UID = 'claude-automation';
 const MAX_QUEUED_READ = 100;
+const MAX_STARTING_READ = 50;
 const usageRef = (firestore: Firestore) =>
   firestore.doc('adminSettings/feedbackAutomationUsage');
+
+const itemRef = (firestore: Firestore, id: string) =>
+  firestore.doc(`feedback/${id}`);
 
 const isAutomationOn = async (firestore: Firestore) =>
   (await firestore.doc('adminSettings/feedbackAutomation').get()).data()
@@ -48,13 +61,13 @@ const isAutomationOn = async (firestore: Firestore) =>
 /** Adds the thread message for a status change and returns the fields the item takes, as `addFeedbackStatusChange` does for the admin's own change. */
 function addStatusChange(
   firestore: Firestore,
-  batch: WriteBatch,
+  set: (ref: DocumentReference, data: object) => unknown,
   feedbackId: string,
   status: string,
   now: number,
 ) {
   const messageId = randomUUID();
-  batch.set(firestore.doc(`feedback/${feedbackId}/messages/${messageId}`), {
+  set(firestore.doc(`feedback/${feedbackId}/messages/${messageId}`), {
     id: messageId,
     kind: 'status',
     fromUid: AUTOMATION_UID,
@@ -90,114 +103,277 @@ export const queueFeedbackForAutomation = onDocumentWritten(
   },
 );
 
-interface RunState {
-  usage: SessionUsage | null;
-  failures: Record<string, number>;
+type ClaimResult =
+  | { kind: 'none' }
+  | { kind: 'capped' }
+  | { kind: 'claimed'; snaps: DocumentSnapshot[] };
+
+/** One transaction decides what a session carries: items no longer queued are skipped, the cap is checked, and the rest are marked `starting` before anything is sent. */
+const claimBucket = (firestore: Firestore, ids: string[]) =>
+  firestore.runTransaction(async (tx): Promise<ClaimResult> => {
+    const at = Date.now();
+    const [usageSnap, ...snaps] = await tx.getAll(
+      usageRef(firestore),
+      ...ids.map((id) => itemRef(firestore, id)),
+    );
+    const doc = readUsageDoc(usageSnap.data());
+    const claimable = snaps.filter((snap) =>
+      isClaimable(snap.exists ? toClaimInput(snap) : null),
+    );
+    if (claimable.length === 0) return { kind: 'none' };
+    if (getSessionsLeft(doc.usage, at) === 0) {
+      claimable.forEach((snap) =>
+        tx.update(snap.ref, {
+          agentState: 'held',
+          agentNote: CAP_HELD_NOTE,
+          isUnreadByAdmin: true,
+        }),
+      );
+      return { kind: 'capped' };
+    }
+    claimable.forEach((snap) =>
+      tx.update(snap.ref, { agentState: 'starting', agentNote: null }),
+    );
+    tx.set(
+      usageRef(firestore),
+      toUsageData({
+        ...doc,
+        usage: addSessionToUsage(doc.usage, at),
+        claims: {
+          ...doc.claims,
+          ...Object.fromEntries(claimable.map((snap) => [snap.id, at])),
+        },
+      }),
+    );
+    return { kind: 'claimed', snaps: claimable };
+  });
+
+const toClaimInput = (snap: DocumentSnapshot) => ({
+  agentState: (snap.data()?.agentState ?? null) as string | null,
+  kind: String(snap.data()?.kind),
+  status: String(snap.data()?.status),
+});
+
+/** The session started: the items still `starting` move to Working with its link, and a deleted one is skipped. */
+const settleStarted = (
+  firestore: Firestore,
+  ids: string[],
+  sessionUrl: string,
+) =>
+  firestore.runTransaction(async (tx: Transaction) => {
+    const at = Date.now();
+    const [usageSnap, ...snaps] = await tx.getAll(
+      usageRef(firestore),
+      ...ids.map((id) => itemRef(firestore, id)),
+    );
+    const doc = readUsageDoc(usageSnap.data());
+    snaps
+      .filter((snap) => snap.exists && snap.data()?.agentState === 'starting')
+      .forEach((snap) => {
+        const status = snap.data()?.status;
+        tx.update(snap.ref, {
+          agentState: 'working',
+          agentNote: null,
+          claudeSessionUrl: sessionUrl,
+          ...(status === 'new' || status === 'planned'
+            ? addStatusChange(
+                firestore,
+                (ref, data) => tx.set(ref, data),
+                snap.id,
+                'looking',
+                at,
+              )
+            : {}),
+        });
+      });
+    tx.set(
+      usageRef(firestore),
+      toUsageData({
+        ...doc,
+        failures: omitIds(doc.failures, ids),
+        claims: omitIds(doc.claims, ids),
+      }),
+    );
+  });
+
+/** The session did not start: the items still `starting` go back to the queue, or are held on their third failure. */
+const releaseFailed = (firestore: Firestore, ids: string[], reason: string) =>
+  firestore.runTransaction(async (tx) => {
+    const [usageSnap, ...snaps] = await tx.getAll(
+      usageRef(firestore),
+      ...ids.map((id) => itemRef(firestore, id)),
+    );
+    const doc = readUsageDoc(usageSnap.data());
+    const starting = snaps.filter(
+      (snap) => snap.exists && snap.data()?.agentState === 'starting',
+    );
+    const next = registerFailure(
+      doc.failures,
+      starting.map((snap) => snap.id),
+    );
+    starting.forEach((snap) =>
+      tx.update(
+        snap.ref,
+        next.heldIds.includes(snap.id)
+          ? {
+              agentState: 'held',
+              agentNote: `Claude didn't start after ${MAX_FIRE_FAILURES} tries. ${reason}`,
+              isUnreadByAdmin: true,
+            }
+          : { agentState: 'queued', agentNote: null },
+      ),
+    );
+    tx.set(
+      usageRef(firestore),
+      toUsageData({
+        ...doc,
+        failures: next.failures,
+        claims: omitIds(doc.claims, ids),
+      }),
+    );
+  });
+
+/** Items left `starting` by a run that was killed may have a session behind them: they are held and never fired again. */
+const holdStuckStarting = async (firestore: Firestore) => {
+  const ids = (
+    await firestore
+      .collection('feedback')
+      .where('agentState', '==', 'starting')
+      .limit(MAX_STARTING_READ)
+      .get()
+  ).docs.map((snap) => snap.id);
+  if (ids.length === 0) return;
+  await firestore.runTransaction(async (tx) => {
+    const at = Date.now();
+    const [usageSnap, ...snaps] = await tx.getAll(
+      usageRef(firestore),
+      ...ids.map((id) => itemRef(firestore, id)),
+    );
+    const doc = readUsageDoc(usageSnap.data());
+    const stuck = snaps.filter(
+      (snap) =>
+        snap.exists &&
+        snap.data()?.agentState === 'starting' &&
+        isStuckStarting(doc.claims[snap.id], at),
+    );
+    if (stuck.length === 0) return;
+    stuck.forEach((snap) =>
+      tx.update(snap.ref, {
+        agentState: 'held',
+        agentNote: STUCK_HELD_NOTE,
+        isUnreadByAdmin: true,
+      }),
+    );
+    tx.set(
+      usageRef(firestore),
+      toUsageData({
+        ...doc,
+        claims: omitIds(
+          doc.claims,
+          stuck.map((snap) => snap.id),
+        ),
+      }),
+    );
+  });
+};
+
+/** Returns whether a session was attempted (the run counts attempts). */
+async function runBucket(
+  firestore: Firestore,
+  bucket: SessionBucket,
+  routine: { fireUrl: string; token: string },
+): Promise<boolean> {
+  const ids = bucket.items.map((item) => item.id);
+  const claim = await claimBucket(firestore, ids);
+  if (claim.kind !== 'claimed') return false;
+  const claimedIds = claim.snaps.map((snap) => snap.id);
+  const sessionUrl = await (async () => {
+    try {
+      const { items, messagesById } = await readHandoffItems(
+        firestore,
+        claim.snaps,
+      );
+      return await fireRoutine({
+        ...routine,
+        text: buildFeedbackHandoffText(items, messagesById, null),
+      });
+    } catch (error) {
+      const reason =
+        error instanceof HttpsError ? error.message : 'Something went wrong.';
+      logger.error('Automatic Claude session failed', {
+        ids: claimedIds,
+        reason,
+      });
+      await releaseFailed(firestore, claimedIds, reason);
+      return null;
+    }
+  })();
+  if (sessionUrl !== null) {
+    // A failed save leaves the items `starting`; the next run holds them as unknown rather than firing again.
+    await settleStarted(firestore, claimedIds, sessionUrl).catch((error) =>
+      logger.error('Saved no state after Claude started a session', {
+        ids: claimedIds,
+        name: (error as Error).name,
+      }),
+    );
+  }
+  return true;
 }
 
-const holdItems = async (firestore: Firestore, ids: string[], note: string) => {
+const clearQueued = async (firestore: Firestore, snaps: DocumentSnapshot[]) => {
+  if (snaps.length === 0) return;
   const batch = firestore.batch();
-  ids.forEach((id) =>
-    batch.update(firestore.doc(`feedback/${id}`), {
-      agentState: 'held',
-      agentNote: note,
-      isUnreadByAdmin: true,
+  snaps.forEach((snap) =>
+    batch.update(snap.ref, {
+      agentState: null,
+      agentQueuedAt: null,
+      agentNote: null,
     }),
   );
   await batch.commit();
 };
 
-async function fireBucket({
-  firestore,
-  bucket,
-  snaps,
-  routine,
-  state,
-  now,
-}: {
-  firestore: Firestore;
-  bucket: SessionBucket;
-  snaps: Map<string, QueryDocumentSnapshot>;
-  routine: { fireUrl: string; token: string };
-  state: RunState;
-  now: number;
-}): Promise<RunState> {
-  const ids = bucket.items.map((item) => item.id);
-  const bucketSnaps = ids.flatMap((id) => snaps.get(id) ?? []);
-  try {
-    const { items, messagesById } = await readHandoffItems(
-      firestore,
-      bucketSnaps,
-    );
-    const sessionUrl = await fireRoutine({
-      ...routine,
-      text: buildFeedbackHandoffText(items, messagesById, null),
-    });
-    const usage = addSessionToUsage(state.usage, now);
-    const failures = Object.fromEntries(
-      Object.entries(state.failures).filter(([id]) => !ids.includes(id)),
-    );
-    const batch = firestore.batch();
-    items.forEach((item) =>
-      batch.update(firestore.doc(`feedback/${item.id}`), {
-        agentState: 'working',
-        agentNote: null,
-        claudeSessionUrl: sessionUrl,
-        ...(item.status === 'new' || item.status === 'planned'
-          ? addStatusChange(firestore, batch, item.id, 'looking', now)
-          : {}),
-      }),
-    );
-    batch.set(usageRef(firestore), { ...usage, failures });
-    await batch.commit();
-    return { usage, failures };
-  } catch (error) {
-    const reason =
-      error instanceof HttpsError ? error.message : 'Something went wrong.';
-    logger.error('Automatic Claude session failed', { ids, reason });
-    const next = registerFailure(state.failures, ids);
-    await usageRef(firestore).set({
-      ...(state.usage ?? { day: '', count: 0 }),
-      failures: next.failures,
-    });
-    if (next.heldIds.length > 0) {
-      await holdItems(
-        firestore,
-        next.heldIds,
-        `Claude didn't start after ${MAX_FIRE_FAILURES} tries. ${reason}`,
-      );
-    }
-    return { usage: state.usage, failures: next.failures };
-  }
-}
-
-/** Starts the sessions that are due: bugs wait out their batch window, ideas go on the next run, and over the day's cap the items wait for the admin. */
-export async function runFeedbackAutomation(firestore: Firestore, now: number) {
-  if (!(await isAutomationOn(firestore))) return;
-  const routine = await readClaudeRoutine(firestore);
-  if (!routine) {
-    logger.warn('Feedback automation is on but Claude is not connected');
-    return;
-  }
-  const queued = (
+const readQueued = async (firestore: Firestore) =>
+  (
     await firestore
       .collection('feedback')
       .where('agentState', '==', 'queued')
+      .orderBy('agentQueuedAt', 'asc')
       .limit(MAX_QUEUED_READ)
       .get()
   ).docs;
+
+/** Starts the sessions that are due: bugs wait out their batch window, ideas go on the next run, and over the day's cap the items wait for the admin. */
+export async function runFeedbackAutomation(firestore: Firestore, now: number) {
+  const startedAt = Date.now();
+  if (!(await isAutomationOn(firestore))) {
+    await clearQueued(firestore, await readQueued(firestore));
+    return;
+  }
+  await holdStuckStarting(firestore);
+  const routine = await readClaudeRoutine(firestore);
+  const queued = (await readQueued(firestore)).filter((snap) =>
+    ['bug', 'idea'].includes(snap.data().kind),
+  );
+  if (!routine) {
+    logger.warn('Feedback automation is on but Claude is not connected');
+    const unnoted = queued.filter(
+      (snap) => snap.data().agentNote !== NOT_CONNECTED_NOTE,
+    );
+    if (unnoted.length > 0) {
+      const batch = firestore.batch();
+      unnoted.forEach((snap) =>
+        batch.update(snap.ref, { agentNote: NOT_CONNECTED_NOTE }),
+      );
+      await batch.commit();
+    }
+    return;
+  }
   const closed = queued.filter((snap) =>
     ['done', 'wont-do'].includes(snap.data().status),
   );
-  if (closed.length > 0) {
-    const batch = firestore.batch();
-    closed.forEach((snap) =>
-      batch.update(snap.ref, { agentState: null, agentQueuedAt: null }),
-    );
-    await batch.commit();
-  }
+  await clearQueued(firestore, closed);
   const open = queued.filter((snap) => !closed.includes(snap));
-  const snaps = new Map(open.map((snap) => [snap.id, snap]));
   const due = bucketQueued(
     open.map((snap) => ({
       id: snap.id,
@@ -208,26 +384,23 @@ export async function runFeedbackAutomation(firestore: Firestore, now: number) {
   ).filter((bucket) => isBucketDue(bucket, now));
   if (due.length === 0) return;
 
-  const stored = (await usageRef(firestore).get()).data();
-  const initial: RunState = {
-    usage:
-      typeof stored?.day === 'string' && typeof stored.count === 'number'
-        ? { day: stored.day, count: stored.count }
-        : null,
-    failures: stored?.failures ?? {},
-  };
+  const { usage } = readUsageDoc((await usageRef(firestore).get()).data());
+  const maxAttempts = getMaxFireAttempts(getSessionsLeft(usage, startedAt));
   await due.reduce(async (previous, bucket) => {
-    const state = await previous;
-    if (getSessionsLeft(state.usage, now) === 0) {
-      await holdItems(
-        firestore,
-        bucket.items.map((item) => item.id),
-        CAP_HELD_NOTE,
-      );
-      return state;
+    const attempts = await previous;
+    if (attempts >= maxAttempts || Date.now() - startedAt > RUN_BUDGET_MS) {
+      return attempts;
     }
-    return fireBucket({ firestore, bucket, snaps, routine, state, now });
-  }, Promise.resolve(initial));
+    try {
+      return attempts + ((await runBucket(firestore, bucket, routine)) ? 1 : 0);
+    } catch (error) {
+      logger.error('Automatic Claude session left a bucket undone', {
+        ids: bucket.items.map((item) => item.id),
+        name: (error as Error).name,
+      });
+      return attempts + 1;
+    }
+  }, Promise.resolve(0));
 }
 
 export const runFeedbackAutomationEvery5Minutes = onSchedule(
@@ -235,6 +408,7 @@ export const runFeedbackAutomationEvery5Minutes = onSchedule(
     schedule: 'every 5 minutes',
     region: 'us-central1',
     maxInstances: 1,
+    concurrency: 1,
     timeoutSeconds: 300,
   },
   async () => {
@@ -257,7 +431,7 @@ export async function applyFeedbackPrStates(
     if (pr.feedbackIds.length === 0) return;
     const snaps = await firestore.getAll(
       ...pr.feedbackIds.map((id) => firestore.doc(`feedback/${id}`)),
-      { fieldMask: ['agentState', 'agentPrUrl', 'status'] },
+      { fieldMask: ['agentState', 'agentPrUrl', 'agentNote', 'status'] },
     );
     const batch = firestore.batch();
     const changed = snaps.flatMap((snap) => {
@@ -267,6 +441,7 @@ export async function applyFeedbackPrStates(
             {
               agentState: data.agentState ?? null,
               agentPrUrl: data.agentPrUrl ?? null,
+              agentNote: data.agentNote ?? null,
               status: data.status,
             },
             pr,
@@ -276,9 +451,16 @@ export async function applyFeedbackPrStates(
       batch.update(snap.ref, {
         agentState: update.agentState,
         agentPrUrl: update.agentPrUrl,
+        agentNote: update.agentNote,
         ...(update.isUnreadByAdmin ? { isUnreadByAdmin: true } : {}),
         ...(update.isDone
-          ? addStatusChange(firestore, batch, snap.id, 'done', now)
+          ? addStatusChange(
+              firestore,
+              (ref, data) => batch.set(ref, data),
+              snap.id,
+              'done',
+              now,
+            )
           : {}),
       });
       return [snap.id];

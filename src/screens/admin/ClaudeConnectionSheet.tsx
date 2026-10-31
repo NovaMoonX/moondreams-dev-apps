@@ -59,6 +59,10 @@ function ClaudeConnectionSheet({
   };
 
   const handleSave = async () => {
+    if (!navigator.onLine) {
+      setError("You're offline. Connect to the internet, then save again.");
+      return;
+    }
     setIsSaving(true);
     setError(null);
     try {
@@ -102,9 +106,9 @@ function ClaudeConnectionSheet({
     <FormSheet isOpen={isOpen} onClose={handleClose} title='Claude connection'>
       <div className='space-y-4'>
         <p className='text-muted-foreground text-sm'>
-          Connect a Claude Code routine once, and &ldquo;Send to Claude&rdquo;
-          starts a new session with the feedback in it. Until then it copies the
-          feedback for you to paste.
+          {isConnected
+            ? 'Claude is connected: “Send to Claude” starts a new session with the feedback in it.'
+            : 'Connect a Claude Code routine once, and “Send to Claude” starts a new session with the feedback in it. Until then it copies the feedback for you to paste.'}
         </p>
 
         <div className='flex items-center justify-between gap-3'>

@@ -842,12 +842,12 @@ service cloud.firestore {
       allow read: if isFeedbackOwner() || isAdmin();
       allow create: if request.auth != null
         && request.resource.data.keys().hasOnly(['id', 'uid', 'authorName', 'authorEmail', 'kind', 'text', 'status', 'context', 'isUnreadBySender', 'isUnreadByAdmin', 'createdAt', 'lastActivityAt', 'groupId', 'claudeSessionUrl', 'agentState', 'agentQueuedAt', 'agentPrUrl', 'agentNote'])
-        && request.resource.data.groupId == null
-        && request.resource.data.claudeSessionUrl == null
-        && request.resource.data.agentState == null
-        && request.resource.data.agentQueuedAt == null
-        && request.resource.data.agentPrUrl == null
-        && request.resource.data.agentNote == null
+        && request.resource.data.get('groupId', null) == null
+        && request.resource.data.get('claudeSessionUrl', null) == null
+        && request.resource.data.get('agentState', null) == null
+        && request.resource.data.get('agentQueuedAt', null) == null
+        && request.resource.data.get('agentPrUrl', null) == null
+        && request.resource.data.get('agentNote', null) == null
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.id == feedbackId
         && request.resource.data.kind in ['bug', 'idea', 'question']

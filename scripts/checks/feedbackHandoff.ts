@@ -9,11 +9,16 @@ import {
   BATCH_WINDOW_MS,
   bucketQueued,
   DAILY_SESSION_CAP,
+  getMaxFireAttempts,
   getPrStateUpdate,
   getSessionsLeft,
   isBucketDue,
+  isClaimable,
+  isStuckStarting,
   MAX_FIRE_FAILURES,
+  PR_CLOSED_NOTE,
   registerFailure,
+  STARTING_STALE_MS,
   type QueuedItem,
 } from '../../functions/src/feedback/feedbackAutomationPlan.ts';
 import { findFeedbackIds } from '../ownerInbox/inbox.ts';
@@ -27,6 +32,7 @@ const item = (id: string, kind: string, text: string): HandoffItem => ({
   kind,
   status: 'looking',
   text,
+  agentState: null,
   context: {
     appId: 'waypoint',
     path: '/waypoint/trips/t1?tab=days',
@@ -189,8 +195,17 @@ const failedThrice = Array.from({ length: MAX_FIRE_FAILURES - 1 }).reduce<
 assert.deepEqual(failedThrice.heldIds, ['a'], 'third failure holds');
 
 // PR state reaches the item once, and a re-report never re-flags the bell.
-const pr = { url: 'https://github.com/o/r/pull/1', needsOwner: false };
-const working = { agentState: 'working', agentPrUrl: null, status: 'looking' };
+const pr = {
+  url: 'https://github.com/o/r/pull/1',
+  needsOwner: false,
+  isClosed: false,
+};
+const working = {
+  agentState: 'working',
+  agentPrUrl: null,
+  agentNote: null,
+  status: 'looking',
+};
 assert.equal(
   getPrStateUpdate(working, { ...pr, isMerged: false })?.agentState,
   'pr-ready',
@@ -223,12 +238,90 @@ assert.equal(
   'a hand-sent item is not tracked',
 );
 
+// Once an item has a PR, only that PR's reports change it.
+const owned = { ...working, agentState: 'pr-ready', agentPrUrl: pr.url };
+assert.equal(
+  getPrStateUpdate(owned, {
+    ...pr,
+    url: 'https://github.com/o/r/pull/2',
+    isMerged: true,
+  }),
+  null,
+  'another PR cannot move an item that has its PR',
+);
+assert.equal(
+  getPrStateUpdate(owned, { ...pr, isMerged: true })?.agentState,
+  'merged',
+  'its own PR can',
+);
+
+// A PR closed without merging hands the item back to the admin, once.
+const closedUnmerged = getPrStateUpdate(owned, {
+  ...pr,
+  isMerged: false,
+  isClosed: true,
+});
+assert.ok(
+  closedUnmerged?.agentState === 'needs-you' &&
+    closedUnmerged.agentNote === PR_CLOSED_NOTE &&
+    closedUnmerged.isUnreadByAdmin &&
+    !closedUnmerged.isDone,
+);
+assert.equal(
+  getPrStateUpdate(
+    {
+      ...owned,
+      agentState: 'needs-you',
+      agentNote: PR_CLOSED_NOTE,
+    },
+    { ...pr, isMerged: false, isClosed: true },
+  ),
+  null,
+  'a re-reported closed PR changes nothing',
+);
+
+// Claiming skips what is no longer queued, closed, deleted or a question.
+const claimable = (over: Partial<Parameters<typeof isClaimable>[0] & object>) =>
+  isClaimable({ agentState: 'queued', kind: 'bug', status: 'new', ...over });
+assert.equal(claimable({}), true, 'a queued bug');
+assert.equal(
+  claimable({ kind: 'idea', status: 'planned' }),
+  true,
+  'planned idea',
+);
+assert.equal(
+  claimable({ kind: 'idea', status: 'looking' }),
+  false,
+  'idea no longer planned',
+);
+assert.equal(claimable({ status: 'done' }), false, 'closed');
+assert.equal(claimable({ status: 'wont-do' }), false, 'closed');
+assert.equal(claimable({ agentState: 'starting' }), false, 'already claimed');
+assert.equal(claimable({ agentState: 'working' }), false, 'already working');
+assert.equal(
+  claimable({ agentState: 'held' }),
+  false,
+  'held waits for the admin',
+);
+assert.equal(claimable({ kind: 'question' }), false, 'a question');
+assert.equal(isClaimable(null), false, 'deleted');
+
+// A `starting` item is stuck after ten minutes, or with no claim on record.
+assert.equal(isStuckStarting(1000, 1000 + STARTING_STALE_MS), false);
+assert.equal(isStuckStarting(1000, 1001 + STARTING_STALE_MS), true);
+assert.equal(isStuckStarting(undefined, 1000), true, 'no claim on record');
+assert.equal(getMaxFireAttempts(3), 5, 'cap remaining plus two');
+
+// Only an explicit "Resolves feedback" line claims an item.
+const link = (id: string) =>
+  `https://apps.moondreams.dev/admin?view=feedback&feedback=${id}`;
 assert.deepEqual(
   findFeedbackIds(
-    'Fixes https://apps.moondreams.dev/admin?view=feedback&feedback=abc-12345678 and again https://apps.moondreams.dev/admin?view=feedback&feedback=abc-12345678, also https://apps.moondreams.dev/admin?view=feedback&feedback=def-87654321.',
+    `Intro mentions ${link('zzz-99999999')}\n\nResolves feedback ${link('abc-12345678')}\nresolves FEEDBACK ${link('def-87654321')} and ${link('abc-12345678')}, ${link('ghi-11112222')}.\n- Resolves feedback ${link('jkl-33334444')}\nSee also ${link('mno-55556666')}`,
   ),
-  ['abc-12345678', 'def-87654321'],
-  'feedback ids in a PR body',
+  ['abc-12345678', 'def-87654321', 'ghi-11112222', 'jkl-33334444'],
+  'only Resolves feedback lines, each id once, any case',
 );
+assert.deepEqual(findFeedbackIds(null), []);
 
 console.log('feedbackHandoff: ok');

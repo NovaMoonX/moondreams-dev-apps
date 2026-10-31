@@ -137,12 +137,17 @@ export const findSessionLink = (body: string | null) =>
   (body ?? '').match(SESSION_LINK)?.at(-1) ?? null;
 
 const FEEDBACK_LINK =
-  /https:\/\/apps\.moondreams\.dev\/admin\?view=feedback&(?:amp;)?feedback=([A-Za-z0-9-]{8,64})/g;
+  /https:\/\/apps\.moondreams\.dev\/admin\?view=feedback&(?:amp;)?feedback=([A-Za-z0-9-]{8,64})/gi;
 
-/** The feedback ids a PR body links to, once each. */
+const RESOLVES_LINE = /^\s*(?:[-*]\s+)?resolves feedback\b/i;
+
+/** The feedback ids a PR body claims, once each: only from lines that start `Resolves feedback` followed by the admin link(s). A link anywhere else is a mention. */
 export const findFeedbackIds = (body: string | null) => [
   ...new Set(
-    [...(body ?? '').matchAll(FEEDBACK_LINK)].map((match) => match[1]),
+    (body ?? '')
+      .split(/\r?\n/)
+      .filter((line) => RESOLVES_LINE.test(line))
+      .flatMap((line) => [...line.matchAll(FEEDBACK_LINK)].map((m) => m[1])),
   ),
 ];
 

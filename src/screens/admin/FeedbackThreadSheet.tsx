@@ -153,7 +153,7 @@ function FeedbackThreadSheet({
                   <FeedbackAgentRow
                     state={feedback.agentState}
                     note={feedback.agentNote}
-                    sessionUrl={feedback.claudeSessionUrl}
+                    sessionUrl={null}
                     prUrl={feedback.agentPrUrl}
                   />
                 ) : null}

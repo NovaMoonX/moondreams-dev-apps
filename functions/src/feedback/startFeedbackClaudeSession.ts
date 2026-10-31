@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import { FieldPath, FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
@@ -139,6 +139,21 @@ export const startFeedbackClaudeSession = onCall(
     await batch.commit().catch((error) => {
       logger.error('Saved no session link on the feedback', error);
     });
+    const heldIds = items
+      .filter((item) => item.agentState === 'held')
+      .map((item) => item.id);
+    await Promise.all(
+      heldIds.map((id) =>
+        firestore
+          .doc('adminSettings/feedbackAutomationUsage')
+          .update(new FieldPath('failures', id), FieldValue.delete())
+          .catch((error) => {
+            logger.error('Cleared no failure count', {
+              name: (error as Error).name,
+            });
+          }),
+      ),
+    );
     return { text, sessionUrl };
   },
 );
