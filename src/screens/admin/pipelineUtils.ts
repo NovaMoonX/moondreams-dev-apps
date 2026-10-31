@@ -183,15 +183,16 @@ const HELD_FOR_MS = 6 * HOUR_MS;
 
 // Its session writes "in progress" until the review sized to the PR is back; its questions wait for that,
 // but only for a few hours, so a session that stopped can't hide them for good.
-const isReady = (pr: PipelineInboxPr) =>
+const isReady = (pr: PipelineInboxPr, now: number) =>
   !/^in progress\b/i.test(pr.status?.state ?? '') ||
-  Date.now() - (pr.status?.updatedAt ?? 0) > HELD_FOR_MS;
+  now - (pr.status?.updatedAt ?? 0) > HELD_FOR_MS;
 
 const toSafeItems = (
   prs: PipelineInboxPr[],
   settled: SettledAskView[],
+  now: number,
 ): PipelineOwnerEntryItem[] =>
-  prs.filter(isReady).flatMap((pr) =>
+  prs.filter((pr) => isReady(pr, now)).flatMap((pr) =>
     (pr.status?.ownerItems ?? []).map((item: PipelineOwnerItem, index) => {
       const statusAt = pr.status?.updatedAt ?? 0;
       return {
@@ -360,7 +361,7 @@ function toSessionEntry(
 ): PipelineEntry {
   const sessionPrs = getSessionPrs(session, prs);
   const safePrs = sessionPrs.map(toSafePr);
-  const allItems = toSafeItems(sessionPrs, settled);
+  const allItems = toSafeItems(sessionPrs, settled, now);
   const ownerItems = getOpenItems(allItems, answered);
   // A reply to 🚩 lines goes to the first pull request, after the turn that raised them.
   const isReplied =
@@ -422,7 +423,7 @@ function toPrEntry(
 ): PipelineEntry {
   const status = pr.status;
   const safePr = toSafePr(pr);
-  const ownerItems = getOpenItems(toSafeItems([pr], settled), answered);
+  const ownerItems = getOpenItems(toSafeItems([pr], settled, now), answered);
   const asks = ownerItems.filter(isOpenAsk).map((item) => toAsk(item.text));
   const time = formatPipelineTime(status?.updatedAt ?? 0, now);
   const isWaiting = asks.length > 0;
@@ -584,7 +585,7 @@ export function buildPipeline(
     entries.flatMap((entry) => (entry.url === null ? [] : [entry.url])),
   );
   const prEntries = prs
-    .filter((pr) => isReady(pr) && (pr.status?.ownerItems.length ?? 0) > 0)
+    .filter((pr) => isReady(pr, now) && (pr.status?.ownerItems.length ?? 0) > 0)
     .filter(
       (pr) =>
         ![pr.status?.sessionUrl, pr.bodySessionUrl].some(

@@ -230,7 +230,8 @@ const writeSession = async (data: Json) => {
         data.turnStart === true ||
         (data.turnStart === undefined && session.state === 'working');
       if (isTurnStart) return now;
-      return typeof previousTurn === 'number' ? previousTurn : null;
+      // A first report that isn't a prompt still needs a start, or the turn would seem to restart on every pulse.
+      return typeof previousTurn === 'number' ? previousTurn : now;
     };
     transaction.set(ref, {
       ...session,

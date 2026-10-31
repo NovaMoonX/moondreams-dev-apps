@@ -484,10 +484,19 @@ assert.doesNotMatch(
   'a settled item is not counted or listed in the inbox issue',
 );
 
+const fresh = (body: string): InboxPr => {
+  const base = pr(8, 'h8', 'main', body);
+  return { ...base, status: base.status && { ...base.status, updatedAt: '2026-10-29T16:00:00Z' } };
+};
 assert.doesNotMatch(
-  buildInbox([pr(8, 'h8', 'main', ticked.replace('in progress', 'in progress'))], '2026-10-29T17:00:00Z'),
+  buildInbox([fresh(ticked)], '2026-10-29T17:00:00Z'),
   /Pick a header/,
   'a PR still in progress asks nothing yet',
+);
+assert.match(
+  buildInbox([fresh(ticked)], '2026-10-29T23:30:00Z'),
+  /Pick a header/,
+  'after six hours with no new status, its questions show anyway',
 );
 assert.match(
   buildInbox([pr(8, 'h8', 'main', ticked.replace('in progress', 'ready when you are'))], '2026-10-29T17:00:00Z'),
