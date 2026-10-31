@@ -1,5 +1,9 @@
 import type { DocumentData } from 'firebase-admin/firestore';
 
+import { getLocalClock } from '../../notifications/localClock.js';
+
+export { getLocalClock };
+
 const DAY_MS = 86_400_000;
 
 /** The local hour a trip's day is wrapped up, in the trip's own time zone. */
@@ -24,11 +28,14 @@ export function getAdminUids(trip: DocumentData): string[] {
     .map(([uid]) => uid);
 }
 
-/** A profile's display name can be the person's email (the sign-in fallback), which a push must never carry. */
+/** A profile's display name can be the person's email (the sign-in fallback), which a push must never carry. A full name reads as first name and last initial ("Alex R."); one word stays as it is. */
 export function getSafeName(displayName: unknown): string {
-  return typeof displayName === 'string' && displayName.trim() && !displayName.includes('@')
-    ? displayName.trim()
-    : 'Someone';
+  if (typeof displayName !== 'string' || !displayName.trim() || displayName.includes('@')) {
+    return 'Someone';
+  }
+  const words = displayName.trim().split(/\s+/);
+  const lastInitial = words.length > 1 ? Array.from(words[words.length - 1])[0]?.toLocaleUpperCase() : null;
+  return lastInitial ? `${words[0]} ${lastInitial}.` : words[0];
 }
 
 export function getTripLink(tripId: string, tab: string | null = null): string {
@@ -52,27 +59,6 @@ export function getIdeaPush(idea: DocumentData, authorName: string, tripTitle: u
     title: typeof tripTitle === 'string' && tripTitle ? `New idea for ${clip(tripTitle, 60)}` : 'New trip idea',
     body: `${authorName} suggested ${clip(String(idea.title ?? ''), 80)}`,
   };
-}
-
-/** The wall-clock date ("YYYY-MM-DD") and hour in an IANA zone; an unknown zone reads as UTC. */
-export function getLocalClock(now: number, timeZone: string | null): { date: string; hour: number } {
-  const read = (zone: string) => {
-    const parts = new Intl.DateTimeFormat('en-CA', {
-      timeZone: zone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      hourCycle: 'h23',
-    }).formatToParts(new Date(now));
-    const part = (type: string) => parts.find((entry) => entry.type === type)?.value ?? '00';
-    return { date: `${part('year')}-${part('month')}-${part('day')}`, hour: Number(part('hour')) };
-  };
-  try {
-    return read(timeZone ?? 'UTC');
-  } catch {
-    return read('UTC');
-  }
 }
 
 export interface WrapUpDay {

@@ -4,7 +4,8 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions';
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 
-import { APP_ORIGIN, sendPushToUsers, toAppUrl } from '../../notifications/sendPush.js';
+import { sendBudgetedPush } from '../../notifications/sendBudgetedPush.js';
+import { APP_ORIGIN, toAppUrl } from '../../notifications/sendPush.js';
 import { getIdeaPush, getMemberUids, getSafeName, getTripLink } from './tripPushes.js';
 
 if (getApps().length === 0) {
@@ -35,11 +36,14 @@ export const notifyTripIdea = onDocumentCreated(
     try {
       const author = typeof idea.addedByUid === 'string' ? await firestore.doc(`users/${idea.addedByUid}`).get().catch(() => null) : null;
       const content = getIdeaPush(idea, getSafeName(author?.get('displayName')), trip.title);
-      const devices = await sendPushToUsers(firestore, getMessaging(), targetUids, {
-        ...content,
-        url: toAppUrl(getTripLink(event.params.tripId, 'ideas')) ?? APP_ORIGIN,
+      const result = await sendBudgetedPush(firestore, getMessaging(), {
+        appId: 'waypoint',
+        uids: targetUids,
+        content: { ...content, url: toAppUrl(getTripLink(event.params.tripId, 'ideas')) ?? APP_ORIGIN },
+        zone: typeof trip.timezone === 'string' ? trip.timezone : null,
+        now: Date.now(),
       });
-      logger.info('Trip idea pushed', { devices });
+      logger.info('Trip idea pushed', result);
     } catch (error) {
       logger.error('Trip idea push failed', {
         error: error instanceof Error ? error.message : String(error),

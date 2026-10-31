@@ -4,7 +4,8 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
-import { APP_ORIGIN, sendPushToUsers, toAppUrl } from '../../notifications/sendPush.js';
+import { sendBudgetedPush } from '../../notifications/sendBudgetedPush.js';
+import { APP_ORIGIN, toAppUrl } from '../../notifications/sendPush.js';
 import { getAdminUids, getTripLink, getWrapUpDay, getWrapUpPush } from './tripPushes.js';
 
 if (getApps().length === 0) {
@@ -48,9 +49,12 @@ async function wrapUpTrip(firestore: Firestore, tripId: string, trip: DocumentDa
     expenses.docs.map((expense) => String(expense.get('title') ?? 'An expense')),
     trip.title,
   );
-  await sendPushToUsers(firestore, getMessaging(), adminUids, {
-    ...content,
-    url: toAppUrl(getTripLink(tripId, 'expenses')) ?? APP_ORIGIN,
+  await sendBudgetedPush(firestore, getMessaging(), {
+    appId: 'waypoint',
+    uids: adminUids,
+    content: { ...content, url: toAppUrl(getTripLink(tripId, 'expenses')) ?? APP_ORIGIN },
+    zone: typeof trip.timezone === 'string' ? trip.timezone : null,
+    now,
   });
   return true;
 }

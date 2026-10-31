@@ -729,6 +729,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         {(hasAppNav ? sectionTab === '' : true) && (
           <ChecklistOverview
             trip={trip}
+            currentUserId={currentUserId}
             onOpen={(category) => {
               setSectionTab('checklist');
               setChecklistCategory(category);
