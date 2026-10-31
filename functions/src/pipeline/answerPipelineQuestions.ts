@@ -712,7 +712,7 @@ const SESSION_MARKER = /<!--\s*session:\s*(https:\/\/claude\.ai\/code\/session_[
 const SESSION_LINK = /https:\/\/claude\.ai\/code\/session_[A-Za-z0-9]+/g;
 const DEFAULT_BRANCH = 'main';
 const LOCK_REF = 'heads/merge-lock';
-// The lock branch's commits all carry git's empty tree, as `scripts/mergeLock.sh` writes them.
+// Every lock commit carries git's empty tree, as the sessions' lock script writes them.
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const CI_JOB_LEFT_OUT = 'owner-inbox';
 const FAILED_RUNS = ['failure', 'timed_out', 'action_required', 'startup_failure', 'cancelled', 'stale'];
@@ -850,7 +850,7 @@ const readLock = async (token: string) => {
   return { sha, holder };
 };
 
-// Never forced, as `mergeLock.sh` pushes it: a branch someone moved since it was read refuses (422) and the take fails.
+// Never forced, as the sessions push it: a branch someone moved since it was read refuses (422) and the take fails.
 const writeLock = async (token: string, parent: string | null, message: string) => {
   const commit = await githubFetch(token, '/git/commits', {
     method: 'POST',
