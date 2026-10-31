@@ -61,7 +61,7 @@ const legacy = parseStatus(
 );
 assert.equal(legacy.sessionUrl, null, 'a status with no session marker');
 assert.deepEqual(legacy.ownerItems, []);
-assert.deepEqual(legacy.mustDo, [], 'no Must do section is nothing open');
+assert.equal(legacy.mustDo, null, 'no Must do heading is not read as nothing open');
 const asked = parseStatus(
   `**Should do**
 - [ ] Keep the quiet card line, or make it a box? (who: owner)

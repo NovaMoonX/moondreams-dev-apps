@@ -82,7 +82,7 @@ export interface PipelineEntry {
   group: PipelineGroup | null;
   /** True for a pull request with no session reporting. */
   isPrOnly: boolean;
-  /** A session that reported in the last few days drives its pull requests, so a merge goes through it. */
+  /** Its session's last report is recent enough for the server to ask it to merge rather than merge itself. */
   isDriven: boolean;
   /** When it last reported, in the viewer's time. */
   time: string;
@@ -551,7 +551,7 @@ export function getMergeBlock(pr: PipelinePr, ownerItems: PipelineOwnerEntryItem
   if (pr.ci === 'running') return 'Checks are still running.';
   if (pr.ci === 'red') return 'A check failed.';
   if (pr.ci !== 'green') return 'No checks have run on it yet.';
-  if (!Array.isArray(status.mustDo)) return 'Waiting for its Must do list to be read.';
+  if (!Array.isArray(status.mustDo)) return 'Its status has no Must do list yet.';
   // A step ticked here a moment ago counts before the inbox reads the ticked comment.
   const open = status.mustDo.filter(
     (text) =>
@@ -559,8 +559,7 @@ export function getMergeBlock(pr: PipelinePr, ownerItems: PipelineOwnerEntryItem
         (item) => item.prNumber === pr.number && item.text === text && item.settled !== null,
       ),
   );
-  if (open.length === 0) return null;
-  return open.length === 1 ? 'A Must do item is still open.' : `${open.length} Must do items are still open.`;
+  return open.length === 0 ? null : 'Must do items are still open.';
 }
 
 export type PipelineGroups = ReturnType<typeof buildPipeline>;

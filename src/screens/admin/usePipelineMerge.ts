@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { mergePipelinePr } from '@lib/admin/pipelineAnswers';
 
-type MergeDone = 'asked' | 'merged';
+type MergeDone = 'asked' | 'merged' | 'sample-asked' | 'sample-merged';
 
 const without = <T>(record: Record<number, T>, key: number) =>
   Object.fromEntries(Object.entries(record).filter(([other]) => Number(other) !== key));
@@ -20,19 +20,22 @@ export function usePipelineMerge() {
     try {
       const result = await mergePipelinePr(prNumber);
       if (result.ok && result.outcome !== null) {
-        const outcome = result.outcome;
+        const outcome: MergeDone = result.isSample ? `sample-${result.outcome}` : result.outcome;
         setDone((current) => ({ ...current, [prNumber]: outcome }));
       } else {
         setErrors((current) => ({ ...current, [prNumber]: result.error ?? "Couldn't merge it." }));
       }
     } catch (error) {
       const code = (error as { code?: unknown }).code;
+      // A dropped connection or a timeout can come after GitHub merged it, so only a refusal before the call says nothing happened.
       setErrors((current) => ({
         ...current,
         [prNumber]:
           code === 'functions/failed-precondition'
             ? "Merging isn't set up yet."
-            : "Couldn't reach the server. Nothing was merged.",
+            : code === 'functions/permission-denied' || code === 'functions/invalid-argument'
+              ? "The server refused it. Nothing was merged."
+              : "Couldn't hear back from the server. Open the pull request to check before trying again.",
       }));
     } finally {
       setBusy((current) => without(current, prNumber));

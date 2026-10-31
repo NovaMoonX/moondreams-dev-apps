@@ -81,6 +81,8 @@ interface PipelineSheetProps {
 const MERGE_DONE_WORDS = {
   asked: 'Asked its session to merge it. It goes through the merge line.',
   merged: 'Merged.',
+  'sample-asked': 'Sample: its session would be asked. Nothing was posted.',
+  'sample-merged': 'Sample: it would be merged. Nothing was changed.',
 };
 
 function MergeRow({
@@ -135,7 +137,10 @@ function MergeRow({
         type='button'
         variant='secondary'
         size='sm'
-        className={join('shrink-0', DISABLED_CLASS)}
+        className={join(
+          "relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']",
+          DISABLED_CLASS,
+        )}
         disabled={block !== null || done !== null || isBusy}
         onClick={() => void onMerge()}
       >

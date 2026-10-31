@@ -71,7 +71,7 @@ export interface PipelineMergeResult {
 const mergePipelinePrCallable = httpsCallable<{ prNumber: number }, PipelineMergeResult>(
   functions,
   'mergePipelinePr',
-  { timeout: 60_000 },
+  { timeout: 120_000 },
 );
 
 /** Merges a pull request, or asks the session driving it to, once the server has checked its gates again. */
