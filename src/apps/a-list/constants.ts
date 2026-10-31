@@ -10,6 +10,9 @@ import type {
   WatchPriority,
 } from '@apps/a-list/types';
 
+/** The feature switch for archiving (`FEATURE_GATES`). */
+export const ARCHIVE_GATE_ID = 'archive';
+
 export const A_LIST_TABS: AListTab[] = ['dashboard', 'calendar', 'watchlist'];
 export const DEFAULT_A_LIST_TAB: AListTab = 'calendar';
 

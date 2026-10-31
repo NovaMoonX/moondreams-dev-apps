@@ -9,6 +9,7 @@ import {
 
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useUnsavedWork } from '@/hooks/useUnsavedWork';
+import GatesClosedNote from '@/components/GatesClosedNote';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -511,6 +512,7 @@ function MembershipSettingsSubview({
             </>
           }
         />
+        <GatesClosedNote appId='a-list' className='pt-2' />
       </div>
     </Subview>
   );

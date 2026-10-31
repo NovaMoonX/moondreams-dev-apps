@@ -799,6 +799,13 @@ service cloud.firestore {
       allow create, update: if isUser(uid);
     }
 
+    // An app's feature switches. Every member reads them, since the app checks its own; only uids are
+    // stored, never emails. The checks are client-side only (a beta site), so no other rule reads them.
+    match /featureGates/{appId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
     // A member's private site settings (the apps they starred). Kept out of `users`, which every member can read.
     match /userPrefs/{uid} {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());

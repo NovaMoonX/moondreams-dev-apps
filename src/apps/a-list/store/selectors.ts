@@ -1,7 +1,9 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
+import { selectIsGateOpen } from '@store/slices/featureGatesSlice';
 import {
+  ARCHIVE_GATE_ID,
   PREVIEWS_WINDOW_AFTER_MINUTES,
   PREVIEWS_WINDOW_BEFORE_MINUTES,
   WATCH_PRIORITIES,
@@ -72,8 +74,15 @@ const selectWatchlistState = (state: RootState) => state.aList.watchlist.items;
 
 /** By priority, then release date (undated last), then title. */
 export const selectWatchlistItems = createSelector(
-  [selectWatchlistState],
-  (items) => {
+  [
+    selectWatchlistState,
+    (state: RootState) => selectIsGateOpen(state, 'a-list', ARCHIVE_GATE_ID),
+  ],
+  (stored, canArchive) => {
+    // Kept out of archiving, an archived movie reads as on the list; its stored archive stays for if they're let back in.
+    const items = canArchive
+      ? stored
+      : stored.map((item) => ({ ...item, archivedAt: null, archiveReason: null }));
     const result = [...items].sort((left, right) => {
       const byPriority =
         WATCH_PRIORITIES.indexOf(left.priority) -

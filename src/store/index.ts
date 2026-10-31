@@ -9,12 +9,17 @@ import {
   type RunwayState,
 } from '@apps/runway/store/runwaySlice';
 import { type WaypointState, waypointReducer } from '@apps/waypoint/store';
+import {
+  type FeatureGatesState,
+  featureGatesReducer,
+} from '@store/slices/featureGatesSlice';
 import { type RemindersState, remindersReducer } from '@store/slices/remindersSlice';
 import { type UserState, userReducer } from '@store/slices/userSlice';
 
 export interface RootState {
   user: UserState;
   reminders: RemindersState;
+  featureGates: FeatureGatesState;
   nineLives: NineLivesState;
   waypoint: WaypointState;
   aList: AListState;
@@ -26,6 +31,7 @@ export const store = configureStore({
   reducer: {
     user: userReducer,
     reminders: remindersReducer,
+    featureGates: featureGatesReducer,
     nineLives: nineLivesReducer,
     waypoint: waypointReducer,
     aList: aListReducer,
