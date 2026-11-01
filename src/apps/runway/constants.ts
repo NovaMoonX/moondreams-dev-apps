@@ -1786,8 +1786,8 @@ export const GROUP_WORDS = {
   dueNothingToChange: 'Every bill here already has this due date.',
   dueSkipped: (count: number) =>
     count === 1
-      ? '1 bill stays as it is: it is paid or ends before this day.'
-      : `${count} bills stay as they are: paid or ending before this day.`,
+      ? '1 bill keeps its own date: it is paid, ends first or repeats its own way.'
+      : `${count} bills keep their own dates: paid, ending first or repeating their own way.`,
   dueReplaceTitle: 'Replace their due dates?',
   dueReplaceBody: (names: string[], count: number, date: string) =>
     names.length > 0 && count <= 3

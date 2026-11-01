@@ -88,6 +88,14 @@ const startingOptions = [
 ];
 
 /** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
+/** Repeats whose dates come from the due date alone; a twice-a-month or irregular bill, or one that ends after a count, keeps its own. */
+const SETTABLE_KINDS: readonly string[] = [
+  'once',
+  'weekly',
+  'everyOtherWeek',
+  'monthly',
+];
+
 function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -240,16 +248,32 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const isPaidOnce = ({ item, version }: (typeof bills)[number]) =>
     version.payload.timing.schedule.kind === 'once' &&
     (payments[item.id] ?? []).some((payment) => payment.paid);
+  const isSettable = ({ version }: (typeof bills)[number]) => {
+    const { schedule } = version.payload.timing;
+    return (
+      SETTABLE_KINDS.includes(schedule.kind) &&
+      version.payload.ending.afterCount === null
+    );
+  };
+  const isSameDue = ({ version }: (typeof bills)[number]) => {
+    const { schedule } = version.payload.timing;
+    if (dueDate === undefined || schedule.anchor === null) return false;
+    if (schedule.anchor === dueDate) return true;
+    return (
+      schedule.kind === 'monthly' &&
+      schedule.anchor <= dueDate &&
+      schedule.monthDays[0] === new Date(dueDate).getUTCDate()
+    );
+  };
   const eligibleBills = bills.filter(
     (bill) =>
+      isSettable(bill) &&
       !isPaidOnce(bill) &&
       (dueDate === undefined ||
         bill.version.payload.ending.onDate === null ||
         bill.version.payload.ending.onDate >= dueDate),
   );
-  const changingBills = eligibleBills.filter(
-    ({ version }) => version.payload.timing.schedule.anchor !== dueDate,
-  );
+  const changingBills = eligibleBills.filter((bill) => !isSameDue(bill));
   const replacedBills = changingBills.filter(
     ({ version }) => version.payload.timing.schedule.anchor !== null,
   );
@@ -279,6 +303,10 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
           const { schedule } = bill.timing;
           const next: BillSealed = {
             ...bill,
+            fundedBy:
+              bill.fundedBy.kind === 'chosen'
+                ? { kind: 'suggested' }
+                : bill.fundedBy,
             timing: {
               kind: 'date',
               schedule: {
