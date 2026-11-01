@@ -107,7 +107,10 @@ import {
   computeDraftView,
   selectReachedEndingsKey,
 } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
-import { describeHoldsBlocks } from '../../src/apps/runway/utils/lookaheadText.ts';
+import {
+  describeHoldsBlocks,
+  getCreatedProblems,
+} from '../../src/apps/runway/utils/lookaheadText.ts';
 import {
   describeChange,
   isMoneylessChange,
@@ -9372,6 +9375,46 @@ const version = (
     ),
     false,
     'a problem a bill already had, moved to another day, is not created by the change',
+  );
+  const short = (on: number, shortBy: number) => ({
+    kind: 'short' as const,
+    on,
+    dayKey: `d${on}`,
+    itemId: 'rent',
+    name: 'Rent',
+    shortBy,
+    isBill: true,
+    tier: 'must' as const,
+  });
+  const created = (
+    before: (typeof water | ReturnType<typeof short>)[],
+    after: (typeof water | ReturnType<typeof short>)[],
+  ) => getCreatedProblems(before, after);
+  assert.equal(
+    created([short(2_000, 5_000)], [short(1_000, 5_000)]).length,
+    1,
+    "a shortfall that moves earlier is the change's",
+  );
+  assert.equal(
+    created([short(2_000, 5_000)], [short(2_000, 5_000), short(3_000, 5_000)])
+      .length,
+    1,
+    "an extra day is the change's",
+  );
+  assert.equal(
+    created([short(2_000, 5_000)], [short(2_000, 6_000)])[0]?.grewBy,
+    1_000,
+    'a bigger shortfall names how much more',
+  );
+  assert.equal(
+    created([short(2_000, 5_000)], [short(2_500, 5_000)]).length,
+    0,
+    'the same shortfall moved later is old',
+  );
+  assert.equal(
+    created([water], [{ ...water, on: 500 }]).length,
+    1,
+    "a no-income problem on an earlier day is the change's",
   );
 }
 

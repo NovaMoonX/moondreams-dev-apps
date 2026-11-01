@@ -171,6 +171,7 @@ function describeChangeProblem(
   problem: LookaheadProblem,
   more: number,
   isHidden: boolean,
+  grewBy: number | null = null,
 ) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
@@ -196,16 +197,75 @@ function describeChangeProblem(
       figure: null,
     };
   }
-  const figure = formatCentsShort(problem.shortBy);
+  const figure = formatCentsShort(grewBy ?? problem.shortBy);
   return {
-    text: `With this change, the plan leaves ${name} ${figure} short on ${on}.${tail}`,
+    text: `With this change, the plan leaves ${name} ${figure}${grewBy === null ? '' : ' more'} short on ${on}.${tail}`,
     figure,
   };
 }
 
-/** Which item has which kind of problem, whatever day it falls on, so a due date that only moves a problem it already had creates nothing new; a shortfall counts again only when it grows. */
 const getProblemKey = (problem: LookaheadProblem) =>
   `${problem.kind}:${problem.kind === 'short' ? problem.itemId : problem.billId}`;
+
+export interface CreatedProblem {
+  problem: LookaheadProblem;
+  /** For a shortfall that already existed and grew: how much more it is short; null for a problem that is new. */
+  grewBy: number | null;
+}
+
+/**
+ * The problems a change creates or makes worse, matched one to one against what the plan already had:
+ * a problem is old only when the same item has the same kind on the same day or earlier with at least
+ * the same shortfall. A problem on an earlier day, an extra day or a bigger shortfall is the change's.
+ */
+export function getCreatedProblems(
+  before: readonly LookaheadProblem[],
+  after: readonly LookaheadProblem[],
+): CreatedProblem[] {
+  const sortedAfter = [...after].sort((a, b) => a.on - b.on);
+  const result = sortedAfter.reduce<{
+    used: readonly LookaheadProblem[];
+    created: CreatedProblem[];
+  }>(
+    (acc, candidate) => {
+      const key = getProblemKey(candidate);
+      const matches = before.filter(
+        (entry) =>
+          !acc.used.includes(entry) &&
+          getProblemKey(entry) === key &&
+          entry.on <= candidate.on,
+      );
+      const covers = matches.find(
+        (entry) =>
+          candidate.kind !== 'short' ||
+          (entry.kind === 'short' && entry.shortBy >= candidate.shortBy),
+      );
+      if (covers) return { ...acc, used: [...acc.used, covers] };
+      const [grown] = matches
+        .filter((entry) => entry.kind === 'short')
+        .sort(
+          (a, b) =>
+            (b.kind === 'short' ? b.shortBy : 0) -
+            (a.kind === 'short' ? a.shortBy : 0),
+        );
+      return {
+        used: grown ? [...acc.used, grown] : acc.used,
+        created: [
+          ...acc.created,
+          {
+            problem: candidate,
+            grewBy:
+              grown && grown.kind === 'short' && candidate.kind === 'short'
+                ? candidate.shortBy - grown.shortBy
+                : null,
+          },
+        ],
+      };
+    },
+    { used: [], created: [] },
+  );
+  return result.created;
+}
 
 /** What a change does to how far the plan holds, as separate blocks: the plan holding is one idea, a shortfall another. */
 export function describeHoldsBlocks(
@@ -228,23 +288,20 @@ export function describeHoldsBlocks(
   if (isSameLookahead(before, after)) {
     return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
-  const created = after.problems.filter((candidate) => {
-    const had = before.problems.filter(
-      (entry) => getProblemKey(entry) === getProblemKey(candidate),
-    );
-    if (candidate.kind !== 'short') return had.length === 0;
-    const worst = Math.max(
-      0,
-      ...had.map((entry) => (entry.kind === 'short' ? entry.shortBy : 0)),
-    );
-    return had.length === 0 || candidate.shortBy > worst;
-  });
-  const [first] = sortProblems(created);
+  const created = getCreatedProblems(before.problems, after.problems).sort(
+    (a, b) => (sortProblems([a.problem, b.problem])[0] === a.problem ? -1 : 1),
+  );
+  const [first] = created;
   const problem: HoldsBlock[] = first
     ? [
         {
           tone: 'warning',
-          ...describeChangeProblem(first, created.length - 1, isHidden),
+          ...describeChangeProblem(
+            first.problem,
+            created.length - 1,
+            isHidden,
+            first.grewBy,
+          ),
         },
       ]
     : [];

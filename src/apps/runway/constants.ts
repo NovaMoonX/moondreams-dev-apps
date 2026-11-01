@@ -1524,6 +1524,7 @@ export const FORM_FLOW_WORDS = {
   linesAsPlanned: 'As planned',
   linesChanged: (count: number) => `${count} changed`,
   pastDay: 'Pick today or a day to come.',
+  dayPassed: 'That day has passed.',
   pickRepeat: 'Pick how often it repeats.',
   badAmount: 'Enter an amount above $0, like 45.00.',
   overLimit: 'That is more than an amount can be here.',

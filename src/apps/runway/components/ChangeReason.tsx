@@ -1,5 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import InlineNotice from '@/components/InlineNotice';
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
@@ -24,7 +25,8 @@ interface ChangeReasonProps {
 
 /** Asked where the edit is saved, in place of the form: starter chips, one box, and a save that works with no answer. */
 function ChangeReason({ flow, onClose }: ChangeReasonProps) {
-  const { note, setNote, isSaving, error, summaryText, replaced } = flow;
+  const { note, setNote, isSaving, error, summaryText, replaced, warningText } =
+    flow;
   const allCards = useAppSelector(selectAllCards);
   const mask = useMaskedText();
   const replacedText = describeReplaced(replaced, getCardNamer(allCards));
@@ -44,6 +46,7 @@ function ChangeReason({ flow, onClose }: ChangeReasonProps) {
           </p>
         )}
       </div>
+      {warningText && <InlineNotice tone='warning'>{warningText}</InlineNotice>}
       <SuggestionChips
         label={CHANGE_WORDS.reasonPicks}
         suggestions={CHANGE_REASON_CHIPS[flow.kind]}

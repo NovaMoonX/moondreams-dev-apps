@@ -442,6 +442,8 @@ function BillFormBody({
     editing !== undefined &&
     formData.funding === startData.funding &&
     formData.startDate === startData.startDate &&
+    formData.frequency === startData.frequency &&
+    formData.isLater === startData.isLater &&
     JSON.stringify(formData.dayKeys) === JSON.stringify(startData.dayKeys);
   const blocker = getBlocker(
     formData,
@@ -571,9 +573,6 @@ function BillFormBody({
         dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
       render: ({ moveOn }) => (
         <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>
-            {isDueWord ? 'Due' : 'Starts'}
-          </p>
           <DateInput
             variant='outline'
             aria-label={isDueWord ? 'Due' : 'Starts'}
@@ -588,6 +587,11 @@ function BillFormBody({
               })
             }
           />
+          {editing && dueDate !== undefined && dueDate < today && (
+            <p className='text-muted-foreground text-sm'>
+              {FORM_FLOW_WORDS.dayPassed}
+            </p>
+          )}
           {canLater && !formData.isLater && (
             <RevealChip
               onClick={() => {

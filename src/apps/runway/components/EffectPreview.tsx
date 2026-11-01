@@ -310,6 +310,8 @@ function EffectPreview({
       );
     }
     if (days.length === 0) {
+      if (holdsText?.blocks.some((block) => block.tone === 'warning'))
+        return null;
       if (describeLead !== undefined && holdsText?.isSame !== true) return null;
       return emptyText ? (
         <InlineNotice tone='info'>
@@ -469,11 +471,18 @@ function EffectPreview({
       {!isLeadShown &&
         shownBlocks.map((block) =>
           isHidden && block.tone === 'warning' ? (
-            <NeedsALookRow key={block.text} />
+            <div key={block.text} data-change-warning=''>
+              <NeedsALookRow />
+            </div>
           ) : (
-            <InlineNotice key={block.text} tone={block.tone}>
-              {renderFigure(block)}
-            </InlineNotice>
+            <div
+              key={block.text}
+              data-change-warning={block.tone === 'warning' ? '' : undefined}
+            >
+              <InlineNotice tone={block.tone}>
+                {renderFigure(block)}
+              </InlineNotice>
+            </div>
           ),
         )}
     </ActionSection>

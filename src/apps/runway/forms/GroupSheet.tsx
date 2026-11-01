@@ -43,10 +43,7 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import SheetHead from '@apps/runway/components/SheetHead';
-import {
-  ActionSection,
-  ActionTitle,
-} from '@apps/runway/components/ActionSection';
+import { ActionTitle } from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
@@ -641,7 +638,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
           <>
             <BackLink onBack={() => setIsSettingDue(false)} />
             <ActionTitle>{GROUP_WORDS.dueQuestion}</ActionTitle>
-            <ActionSection caption={GROUP_WORDS.dueCaption}>
+            <div>
               <DateInput
                 variant='outline'
                 aria-label={GROUP_WORDS.dueCaption}
@@ -649,7 +646,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                 value={dueText}
                 onChange={(event) => setDueText(event.target.value)}
               />
-            </ActionSection>
+            </div>
             {skippedCount > 0 && (
               <p className='text-muted-foreground text-sm'>
                 {GROUP_WORDS.dueSkipped(skippedCount)}
@@ -871,25 +868,25 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                       settableBills.length === billCount,
                     )
                   }
-                  trailing={
-                    dueRecord?.undo ? (
-                      <Button
-                        type='button'
-                        variant='tertiary'
-                        size='sm'
-                        className="relative after:absolute after:-inset-2 after:content-['']"
-                        onClick={() => void undoDueDates(dueRecord.undo ?? [])}
-                      >
-                        {ITEM_SHEET_R2_WORDS.undo}
-                      </Button>
-                    ) : undefined
-                  }
                   onClick={() => {
                     setDueText('');
                     setError(null);
                     setIsSettingDue(true);
                   }}
                 />
+              )}
+              {dueRecord?.undo && (
+                <div className='px-3 py-1 pl-11'>
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    className="relative px-2! after:absolute after:-inset-2 after:content-['']"
+                    onClick={() => void undoDueDates(dueRecord.undo ?? [])}
+                  >
+                    {ITEM_SHEET_R2_WORDS.undo}
+                  </Button>
+                </div>
               )}
               <ActionRow
                 isGrouped

@@ -12,7 +12,6 @@ import { ITEM_SHEET_R2_WORDS } from '@apps/runway/constants';
 
 const MONEY_STEPS = ['amount', 'target', 'max'];
 const SHORT_SCREEN_ROWS = 2;
-const LANDSCAPE_ROWS = 1;
 
 interface QuickChangeProps {
   step: QuestionStep;
@@ -46,7 +45,7 @@ function QuickChange({
   const isLandscape = useIsShortScreen(419);
   const shownIds = rowIds.slice(
     0,
-    isLandscape ? LANDSCAPE_ROWS : isShort ? SHORT_SCREEN_ROWS : rowIds.length,
+    isShort && !isLandscape ? SHORT_SCREEN_ROWS : rowIds.length,
   );
   const rows = shownIds
     .map((id) => flow.steps.find((other) => other.id === id))
@@ -78,7 +77,7 @@ function QuickChange({
       aria-label={step.title}
       data-sensitive={isMoney ? '' : undefined}
     >
-      <h3 className='text-2xl leading-tight font-semibold break-words [@media(max-height:419px)]:text-base [@media(min-height:420px)_and_(max-height:599px)]:text-lg'>
+      <h3 className='text-2xl leading-tight font-semibold break-words [@media(max-height:419px)]:hidden [@media(min-height:420px)_and_(max-height:599px)]:text-lg'>
         {step.title}
       </h3>
       {isMoney && isHidden ? (
@@ -103,7 +102,9 @@ function QuickChange({
       ) : (
         <>
           {rows.length > 0 && (
-            <QuestionFlow flow={toRows(rows)} shouldFocus={false} />
+            <div className='[@media(max-height:419px)]:[&_.space-y-2]:grid [@media(max-height:419px)]:[&_.space-y-2]:grid-cols-3 [@media(max-height:419px)]:[&_.space-y-2]:gap-2 [@media(max-height:419px)]:[&_.space-y-2>*]:m-0!'>
+              <QuestionFlow flow={toRows(rows)} shouldFocus={false} />
+            </div>
           )}
           {after}
           {rest.length > 0 && (

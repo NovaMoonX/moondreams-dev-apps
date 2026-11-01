@@ -1,6 +1,5 @@
 import { use } from 'react';
 
-import { CHANGE_WORDS } from '@apps/runway/constants';
 import { useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import EffectPreview from '@apps/runway/components/EffectPreview';
@@ -12,6 +11,7 @@ import {
   selectPairedBy,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardNamer } from '@apps/runway/utils/cardText';
+import type { FundingRule } from '@apps/runway/types';
 import { describeReplaced } from '@apps/runway/utils/changeText';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 
@@ -25,7 +25,12 @@ function ChangeSection({ isIdleShown = false }: { isIdleShown?: boolean }) {
   if (!value || value.flow.isMoneyless) return null;
   if (value.flow.isUnchanged && !isIdleShown) return null;
   const { flow, kind, itemId } = value;
-  const pairedText = describePairedBy(pairedBy[itemId] ?? []);
+  const pairedText = describePairedBy(
+    pairedBy[itemId] ?? [],
+    flow.candidate !== null && 'funding' in flow.candidate
+      ? (flow.candidate.funding as FundingRule)
+      : undefined,
+  );
   const replacedText = describeReplaced(flow.replaced, getCardNamer(allCards));
 
   return (
@@ -43,14 +48,13 @@ function ChangeSection({ isIdleShown = false }: { isIdleShown?: boolean }) {
           {mask(replacedText)}
         </p>
       )}
-      <EffectPreview
-        isCompact
-        changeJson={flow.changeJson}
-        emptyText={pairedText ?? undefined}
-        waitingText={
-          flow.isUnchanged ? CHANGE_WORDS.previewUntouched : undefined
-        }
-      />
+      {!flow.isUnchanged && (
+        <EffectPreview
+          isCompact
+          changeJson={flow.changeJson}
+          emptyText={pairedText ?? undefined}
+        />
+      )}
     </div>
   );
 }
