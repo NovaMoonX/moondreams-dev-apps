@@ -53,7 +53,7 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
     store?.imagePath ?? null,
     store?.updatedAt ?? 0,
   );
-  const upload = useImageUpload(null);
+  const upload = useImageUpload(null, 'thumbnail');
   const [isRemoved, setIsRemoved] = useState(false);
   const [name, setName] = useState(store?.name ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,13 +103,14 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
     setError(null);
     setIsSubmitting(true);
     try {
+      const imageFile = await upload.readyFile();
       await dispatch(
         saveStore({
           uid,
           id: store?.id ?? null,
           name,
-          imageFile: upload.file,
-          removeImage: isRemoved && upload.file === null,
+          imageFile,
+          removeImage: isRemoved && imageFile === null,
         }),
       ).unwrap();
       onClose();
@@ -135,8 +136,9 @@ function OwnStoreForm({ uid, store, onClose }: OwnStoreFormProps) {
           initials={name.trim().charAt(0).toUpperCase()}
           error={upload.error}
           disabled={isSubmitting}
+          loading={upload.isPreparing}
           onSelect={(file) => {
-            upload.pick(file);
+            void upload.pick(file);
             setIsRemoved(false);
           }}
           onRemove={() => {

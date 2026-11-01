@@ -14,7 +14,7 @@ interface ChangePhotoModalProps {
 /** Rendered only while open so the staged photo resets each time. */
 function ChangePhotoModal({ user, onClose }: ChangePhotoModalProps) {
   const profilePhoto = useProfilePhoto();
-  const photoUpload = useImageUpload(profilePhoto.customPhotoURL);
+  const photoUpload = useImageUpload(profilePhoto.customPhotoURL, 'avatar');
   const displayName = user.displayName ?? user.email ?? 'User';
   const hasChange =
     Boolean(photoUpload.file) ||
@@ -48,7 +48,7 @@ function ChangePhotoModal({ user, onClose }: ChangePhotoModalProps) {
         {
           label: 'Save',
           onClick: handleSave,
-          disabled: !hasChange,
+          disabled: !hasChange || photoUpload.isPreparing,
           loading: profilePhoto.isWorking,
         },
       ]}
@@ -63,8 +63,8 @@ function ChangePhotoModal({ user, onClose }: ChangePhotoModalProps) {
           fallbackUrl={profilePhoto.providerPhotoURL}
           initials={getInitials(displayName)}
           error={photoUpload.error ?? profilePhoto.error}
-          loading={profilePhoto.isWorking}
-          onSelect={photoUpload.pick}
+          loading={profilePhoto.isWorking || photoUpload.isPreparing}
+          onSelect={(file) => void photoUpload.pick(file)}
           onRemove={photoUpload.clear}
         />
       </div>

@@ -7,10 +7,9 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
-import { resizeImageToWebp } from '@/utils/imageCompression';
+import { compressImageForUse } from '@/utils/imageCompression';
 import { getComparableUrl, getWebLinkHost } from '@/utils/urlUtils';
 import {
-  IDEA_PHOTO_MAX_DIMENSION,
   MAX_IDEA_NOTE_LENGTH,
   MAX_IDEA_TITLE_LENGTH,
   SOFT_MAX_IDEAS,
@@ -53,8 +52,8 @@ const getWriteMessage = (error: unknown, fallback: string) => {
 const getNote = (note: string | null) => note?.trim() || null;
 
 const resizeIdeaPhoto = async (file: File) => {
-  const resized = await resizeImageToWebp(file, IDEA_PHOTO_MAX_DIMENSION);
-  if (resized.type !== 'image/webp') {
+  const resized = await compressImageForUse(file, 'photo');
+  if (resized === null) {
     throw new Error(BAD_PHOTO);
   }
   return resized;
