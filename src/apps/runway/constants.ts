@@ -1817,8 +1817,7 @@ export const GROUP_WORDS = {
       ? `For all ${count} bills in this group`
       : `For the ${count} bills it can change`,
   duePickDay: 'Pick a day to continue',
-  dueUndone: (count: number) =>
-    `Put back the due ${count === 1 ? 'date' : 'dates'} on ${count} ${count === 1 ? 'bill' : 'bills'}`,
+  dueUndone: 'Due dates put back',
   dueUndoPartial: (done: number, total: number, failed: string[]) =>
     `Put back ${done} of ${total} due dates. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not change back.`,
   dueUndoStale: (names: string[]) =>
@@ -1839,8 +1838,8 @@ export const GROUP_WORDS = {
         ? bills.join(', ').replace(/, ([^,]*)$/, ' and $1')
         : `${bills.slice(0, 2).join(', ')} and ${bills.length - 2} more`
     } already ${bills.length === 1 ? 'has a due date' : 'have due dates'}. Replace ${bills.length === 1 ? 'it' : 'them'} with ${date}?${repeats ? ` ${repeats}` : ''}`,
-  dueDone: (count: number) =>
-    `Set on ${count} ${count === 1 ? 'bill' : 'bills'}`,
+  dueDone: (count: number, date: string) =>
+    `Due ${date} on ${count} ${count === 1 ? 'bill' : 'bills'}`,
   dueReplace: 'Replace',
   dueToast: (count: number) =>
     `Set the due date on ${count} ${count === 1 ? 'bill' : 'bills'}`,

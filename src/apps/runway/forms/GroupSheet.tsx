@@ -403,7 +403,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
       const done = untouched.length - failed.length;
       const isClean = failed.length === 0 && stale.length === 0;
       const title = isClean
-        ? GROUP_WORDS.dueUndone(done)
+        ? GROUP_WORDS.dueUndone
         : GROUP_WORDS.dueUndoPartial(done, written.length, [
             ...failed,
             ...stale,
@@ -517,7 +517,10 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
         .filter((_, index) => results[index].status === 'rejected')
         .map((plan) => plan.name);
       if (saved.length > 0) {
-        setDueRecord({ note: GROUP_WORDS.dueDone(saved.length), undo: saved });
+        setDueRecord({
+          note: GROUP_WORDS.dueDone(saved.length, formatDateShortUTC(dueDate)),
+          undo: saved,
+        });
         addToast({
           title: GROUP_WORDS.dueToast(saved.length),
           type: 'success',
@@ -858,7 +861,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
               {settableBills.length > 0 && (
                 <ActionRow
                   isGrouped
-                  hasChevron
+                  hasChevron={!dueRecord?.undo}
                   icon={<CalendarDays />}
                   label={GROUP_WORDS.setDue}
                   subtitle={
@@ -868,25 +871,26 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                       settableBills.length === billCount,
                     )
                   }
+                  trailing={
+                    dueRecord?.undo ? (
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        size='sm'
+                        rounded='full'
+                        className="relative after:absolute after:-inset-1.5 after:content-['']"
+                        onClick={() => void undoDueDates(dueRecord.undo ?? [])}
+                      >
+                        {ITEM_SHEET_R2_WORDS.undo}
+                      </Button>
+                    ) : undefined
+                  }
                   onClick={() => {
                     setDueText('');
                     setError(null);
                     setIsSettingDue(true);
                   }}
                 />
-              )}
-              {dueRecord?.undo && (
-                <div className='px-3 py-1 pl-11'>
-                  <Button
-                    type='button'
-                    variant='tertiary'
-                    size='sm'
-                    className="relative px-2! after:absolute after:-inset-2 after:content-['']"
-                    onClick={() => void undoDueDates(dueRecord.undo ?? [])}
-                  >
-                    {ITEM_SHEET_R2_WORDS.undo}
-                  </Button>
-                </div>
               )}
               <ActionRow
                 isGrouped

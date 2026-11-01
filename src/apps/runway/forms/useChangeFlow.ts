@@ -211,7 +211,12 @@ export function useChangeFlow({
       ? null
       : getChangeJson(itemId, kind, candidate, span, plan);
   const replaced = isMoneyless ? [] : (plan?.replaced ?? []);
-  const { text: warningText, hint: warningHint } = useWarningHint(changeJson);
+  const [warningBox, setWarningBox] = useState<HTMLElement | null>(null);
+  const {
+    text: warningText,
+    hint: warningHint,
+    holds,
+  } = useWarningHint(changeJson, warningBox);
   const getSummary = (name: string) => {
     const words = summaryText || 'Updated';
     if (isMoneyless) return `${name}: ${words}.`;
@@ -343,6 +348,8 @@ export function useChangeFlow({
     candidate,
     warningHint,
     warningText,
+    setWarningBox,
+    holds,
     getBlocker,
     from,
     setFrom,

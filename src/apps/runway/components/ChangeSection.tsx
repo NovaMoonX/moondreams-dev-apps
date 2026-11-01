@@ -25,6 +25,7 @@ function ChangeSection({ isIdleShown = false }: { isIdleShown?: boolean }) {
   if (!value || value.flow.isMoneyless) return null;
   if (value.flow.isUnchanged && !isIdleShown) return null;
   const { flow, kind, itemId } = value;
+  const { setWarningBox } = flow;
   const pairedText = describePairedBy(
     pairedBy[itemId] ?? [],
     flow.candidate !== null && 'funding' in flow.candidate
@@ -34,7 +35,7 @@ function ChangeSection({ isIdleShown = false }: { isIdleShown?: boolean }) {
   const replacedText = describeReplaced(flow.replaced, getCardNamer(allCards));
 
   return (
-    <div className='space-y-3'>
+    <div ref={setWarningBox} className='space-y-3'>
       <FromWhenPicker
         value={flow.from}
         onChange={flow.setFrom}
@@ -53,6 +54,7 @@ function ChangeSection({ isIdleShown = false }: { isIdleShown?: boolean }) {
           isCompact
           changeJson={flow.changeJson}
           emptyText={pairedText ?? undefined}
+          holds={flow.holds}
         />
       )}
     </div>

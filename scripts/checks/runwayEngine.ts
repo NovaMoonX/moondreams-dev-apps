@@ -7093,10 +7093,18 @@ const version = (
   );
   assert.ok(
     describeHoldsChange(
-      look(day, [rentShort]),
+      look(day, []),
       look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
     )?.includes('1 more item needs a look'),
-    'the sentence counts the other problems',
+    'the sentence counts the other problems the change creates',
+  );
+  const onlyCar = describeHoldsChange(
+    look(day, [rentShort]),
+    look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+  );
+  assert.ok(
+    onlyCar?.includes('Car') && !onlyCar.includes('more item'),
+    "a problem the plan already had is not counted as the change's",
   );
   const text = describeHoldsChange(
     look(day, [short(utc(2026, 10, 30), 'Rent', 22000)]),
@@ -9410,6 +9418,19 @@ const version = (
     created([short(2_000, 5_000)], [short(2_500, 5_000)]).length,
     0,
     'the same shortfall moved later is old',
+  );
+  assert.equal(
+    created(
+      [short(2_000, 500), short(4_000, 100)],
+      [short(5_000, 100), short(6_000, 400)],
+    ).length,
+    0,
+    'two shortfalls that each fit an old one are old, whatever order they are matched in',
+  );
+  assert.equal(
+    created([short(4_000, 5_000)], [short(3_000, 5_000)]).length,
+    1,
+    "a shortfall that moved earlier is the change's",
   );
   assert.equal(
     created([water], [{ ...water, on: 500 }]).length,

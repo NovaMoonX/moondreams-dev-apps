@@ -13,7 +13,10 @@ import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { describeHoldsBlocks } from '@apps/runway/utils/lookaheadText';
+import {
+  describeHoldsBlocks,
+  isSameLookahead,
+} from '@apps/runway/utils/lookaheadText';
 
 /** The pinned footer and the sheet's own padding, so a warning behind them counts as out of view. */
 const FOOTER_ALLOWANCE_PX = 100;
@@ -28,8 +31,11 @@ const getScroller = (element: HTMLElement | null): HTMLElement | null => {
     : getScroller(element.parentElement);
 };
 
-/** The one line a change's warning comes to, and the same line when the warning drawn in the form is not fully in view, for the footer note beside Next. */
-export function useWarningHint(changeJson: string | null) {
+/** What a change does to how far the plan holds (shared with the effects preview so it is worked out once), the one line its warning comes to, and that line again only when the warning drawn in the form is not in view at all, for the footer note beside Next. */
+export function useWarningHint(
+  changeJson: string | null,
+  container: HTMLElement | null,
+) {
   const { isHidden } = useValuesHidden();
   const store = useStore<RootState>();
   const today = todayAsUtcDate();
@@ -42,46 +48,64 @@ export function useWarningHint(changeJson: string | null) {
   const settledJson = useDeferredValue(changeJson);
   const [isOutOfView, setIsOutOfView] = useState(false);
 
-  const text = useMemo(() => {
+  const holds = useMemo(() => {
     if (settledJson === null || !isLedgerReady) return null;
     const { before, after } = previewLookahead(
       store.getState(),
       today,
       JSON.parse(settledJson) as PreviewChange,
     );
-    const warning = describeHoldsBlocks(before, after, isHidden).find(
-      (block) => block.tone === 'warning',
-    );
-    if (!warning) return null;
-    return isHidden ? NEEDS_LOOK_WORDS.title : warning.text;
+    return {
+      blocks: describeHoldsBlocks(before, after, isHidden),
+      isSame: isSameLookahead(before, after),
+    };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settledJson, isLedgerReady, today, items, versions, openDays, isHidden]);
 
+  const warning = holds?.blocks.find((block) => block.tone === 'warning');
+  const text = warning
+    ? isHidden
+      ? NEEDS_LOOK_WORDS.title
+      : warning.text
+    : null;
+
   useEffect(() => {
     if (text === null) return;
-    let observer: IntersectionObserver | null = null;
-    const frame = requestAnimationFrame(() => {
-      const element = document.querySelector<HTMLElement>(WARNING_SELECTOR);
+    const state: {
+      observer: IntersectionObserver | null;
+      watched: Element | null;
+    } = { observer: null, watched: null };
+    const watch = () => {
+      const element = container?.querySelector(WARNING_SELECTOR) ?? null;
+      if (element === state.watched) return;
+      state.observer?.disconnect();
+      state.observer = null;
+      state.watched = element;
       if (!element) {
         setIsOutOfView(true);
         return;
       }
-      observer = new IntersectionObserver(
-        ([entry]) => setIsOutOfView(entry.intersectionRatio < 0.99),
+      state.observer = new IntersectionObserver(
+        ([entry]) => setIsOutOfView(!entry.isIntersecting),
         {
           root: getScroller(element.parentElement),
           rootMargin: `0px 0px -${FOOTER_ALLOWANCE_PX}px 0px`,
-          threshold: [0, 0.99, 1],
         },
       );
-      observer.observe(element);
-    });
+      state.observer.observe(element);
+    };
+    const frame = requestAnimationFrame(watch);
+    const mutations = container ? new MutationObserver(watch) : null;
+    if (container)
+      mutations?.observe(container, { childList: true, subtree: true });
     return () => {
       cancelAnimationFrame(frame);
-      observer?.disconnect();
+      mutations?.disconnect();
+      state.observer?.disconnect();
+      setIsOutOfView(false);
     };
-  }, [text]);
+  }, [text, container]);
 
-  return { text, hint: text !== null && isOutOfView ? text : null };
+  return { text, holds, hint: text !== null && isOutOfView ? text : null };
 }

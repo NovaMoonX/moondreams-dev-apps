@@ -197,7 +197,7 @@ function describeChangeProblem(
       figure: null,
     };
   }
-  const figure = formatCentsShort(grewBy ?? problem.shortBy);
+  const figure = formatCents(grewBy ?? problem.shortBy);
   return {
     text: `With this change, the plan leaves ${name} ${figure}${grewBy === null ? '' : ' more'} short on ${on}.${tail}`,
     figure,
@@ -222,49 +222,48 @@ export function getCreatedProblems(
   before: readonly LookaheadProblem[],
   after: readonly LookaheadProblem[],
 ): CreatedProblem[] {
-  const sortedAfter = [...after].sort((a, b) => a.on - b.on);
-  const result = sortedAfter.reduce<{
+  const shortOf = (problem: LookaheadProblem) =>
+    problem.kind === 'short' ? problem.shortBy : 0;
+  const biggestFirst = [...after].sort((a, b) => shortOf(b) - shortOf(a));
+  const matched = biggestFirst.reduce<{
     used: readonly LookaheadProblem[];
-    created: CreatedProblem[];
+    results: Map<LookaheadProblem, CreatedProblem | null>;
   }>(
     (acc, candidate) => {
       const key = getProblemKey(candidate);
-      const matches = before.filter(
+      const open = before
+        .filter(
+          (entry) =>
+            !acc.used.includes(entry) &&
+            getProblemKey(entry) === key &&
+            entry.on <= candidate.on,
+        )
+        .sort((a, b) => shortOf(a) - shortOf(b));
+      const covers = open.find(
         (entry) =>
-          !acc.used.includes(entry) &&
-          getProblemKey(entry) === key &&
-          entry.on <= candidate.on,
+          candidate.kind !== 'short' || shortOf(entry) >= shortOf(candidate),
       );
-      const covers = matches.find(
-        (entry) =>
-          candidate.kind !== 'short' ||
-          (entry.kind === 'short' && entry.shortBy >= candidate.shortBy),
-      );
-      if (covers) return { ...acc, used: [...acc.used, covers] };
-      const [grown] = matches
-        .filter((entry) => entry.kind === 'short')
-        .sort(
-          (a, b) =>
-            (b.kind === 'short' ? b.shortBy : 0) -
-            (a.kind === 'short' ? a.shortBy : 0),
-        );
+      const grown = covers ? undefined : open[open.length - 1];
+      const taken = covers ?? grown;
       return {
-        used: grown ? [...acc.used, grown] : acc.used,
-        created: [
-          ...acc.created,
-          {
-            problem: candidate,
-            grewBy:
-              grown && grown.kind === 'short' && candidate.kind === 'short'
-                ? candidate.shortBy - grown.shortBy
-                : null,
-          },
-        ],
+        used: taken ? [...acc.used, taken] : acc.used,
+        results: new Map(acc.results).set(
+          candidate,
+          covers
+            ? null
+            : {
+                problem: candidate,
+                grewBy:
+                  grown && candidate.kind === 'short' && grown.kind === 'short'
+                    ? candidate.shortBy - grown.shortBy
+                    : null,
+              },
+        ),
       };
     },
-    { used: [], created: [] },
+    { used: [], results: new Map() },
   );
-  return result.created;
+  return after.flatMap((problem) => matched.results.get(problem) ?? []);
 }
 
 /** What a change does to how far the plan holds, as separate blocks: the plan holding is one idea, a shortfall another. */
@@ -288,8 +287,9 @@ export function describeHoldsBlocks(
   if (isSameLookahead(before, after)) {
     return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
-  const created = getCreatedProblems(before.problems, after.problems).sort(
-    (a, b) => (sortProblems([a.problem, b.problem])[0] === a.problem ? -1 : 1),
+  const found = getCreatedProblems(before.problems, after.problems);
+  const created = sortProblems(found.map((entry) => entry.problem)).flatMap(
+    (problem) => found.filter((entry) => entry.problem === problem),
   );
   const [first] = created;
   const problem: HoldsBlock[] = first
