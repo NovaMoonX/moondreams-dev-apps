@@ -36,7 +36,7 @@ Every brief has: the goal in one line; the files to touch (and not to touch); wh
 
 The plan is for the owner, and its job is to lighten their mental load (owner: "the plan is so dense"). Keep it to a short page with plain bullets:
 
-- **The idea** in a line or two, and **what the person will see or be able to do**.
+- **The idea** in a line or two, and **what the person will see or be able to do**. When the app has people (`PRODUCT.md` "Who It Is For"), name the one it serves.
 - **What counts** (the criteria) when the request has them, with any change you made to them in a clause.
 - **Decisions for the owner**, only the ones that are uncertain or risky, each a 🚩 question with your recommendation. When none are left, say "No open decisions."
 
