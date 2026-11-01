@@ -23,7 +23,6 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
 import UndatedBillsRow from '@apps/runway/components/UndatedBillsRow';
-import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   BILL_WORDS,
@@ -209,12 +208,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const undated = lookahead?.undated ?? [];
   const openUndated = () => {
     onClose();
-    leaveAfterSubviewCloses(() => {
-      showPlanSection('bills');
-      showTab('plan');
-      if (undated.length === 1) openDueBill(undated[0].billId);
-      else openUndatedBills();
-    });
+    showPlanSection('bills');
+    showTab('plan');
+    if (undated.length === 1) openDueBill(undated[0].billId);
+    else openUndatedBills();
   };
 
   const renderLine = (line: (typeof draft.lines)[number]) => {

@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -17,6 +19,7 @@ import {
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { undoPaymentPaid, useBillPaid } from '@apps/runway/hooks/useBillPaid';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
@@ -47,26 +50,37 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
     isQuick: true,
   });
   const name = due.name === '' ? 'A bill' : due.name;
+  const isUndoing = useRef(false);
+  const maskText = useMaskedText();
 
   const undo = async () => {
-    if (!user) return;
+    if (!user || isUndoing.current) return;
+    if (!navigator.onLine) {
+      addToast({ title: DUE_WORDS.undoOffline(name), type: 'error' });
+      return;
+    }
     const written = (
       selectBillPayments(store.getState(), today)[due.billId] ?? []
     ).find((entry) => entry.dueOn === due.dueOn)?.paid;
-    if (!written) return;
+    if (!written) {
+      addToast({ title: DUE_WORDS.undoFailed(name), type: 'error' });
+      return;
+    }
+    isUndoing.current = true;
     try {
       await undoPaymentPaid(user.uid, due.billId, written);
     } catch {
-      addToast({
-        title: `${name} is still marked paid`,
-        description: 'Undoing needs a connection. Open the bill to try again.',
-        type: 'error',
-      });
+      addToast({ title: DUE_WORDS.undoFailed(name), type: 'error' });
+    } finally {
+      isUndoing.current = false;
     }
   };
 
   const markPaid = async () => {
     if (!paid.isReady || paid.isBusy) return;
+    const fromFreeCents = payment
+      ? Math.max(0, payment.totalCents - payment.heldNowCents)
+      : 0;
     const isWritten = await paid.mark();
     if (!isWritten) return;
     const state = store.getState();
@@ -84,6 +98,12 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
         cardName === null
           ? ITEM_SHEET_R2_WORDS.markedPaid(name)
           : CARD_WORDS.markedPaidWith(name, cardName),
+      description:
+        cardName === null && fromFreeCents > 0
+          ? maskText(
+              ITEM_SHEET_R2_WORDS.paidFromFreeText(formatCents(fromFreeCents)),
+            )
+          : undefined,
       type: 'success',
       action: { label: ITEM_SHEET_R2_WORDS.undo, onClick: () => void undo() },
     });
