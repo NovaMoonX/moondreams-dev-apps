@@ -36,6 +36,8 @@ function TrackInviteCard() {
     state.runway.days.some((day) => day.status === 'confirmed'),
   );
 
+  if (isLineUp && isPlan)
+    return <LineUpScreen onClose={() => setIsLineUp(false)} />;
   if (!isPlan || !hasConfirmedDay || hasTracked || isDismissed || !user)
     return null;
 
@@ -126,7 +128,6 @@ function TrackInviteCard() {
           {TRACK_INVITE_WORDS.switchBack}
         </p>
       </DetailSheet>
-      {isLineUp && <LineUpScreen onClose={() => setIsLineUp(false)} />}
     </>
   );
 }

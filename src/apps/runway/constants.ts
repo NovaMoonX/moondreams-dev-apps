@@ -719,14 +719,14 @@ export const TRACKING_WORDS = {
 
 /** The one-time invitation Home shows a Plan person after their first confirmed income day. */
 export const TRACK_INVITE_WORDS = {
-  title: 'Want to see envelopes go down as you spend?',
-  subtitle: 'Track your purchases too',
+  title: 'Want to see what each envelope has left?',
+  subtitle: 'Try tracking, any time',
   dismiss: 'Hide this for good',
   sheetTitle: 'Plan or Track',
   planName: 'Plan',
   planBody: 'What each payday should cover.',
   trackName: 'Track',
-  trackBody: "Add what you buy, and envelopes show what's left.",
+  trackBody: 'Also what each envelope has left as you go.',
   switchBack: 'You can switch back any time. Nothing in your plan changes.',
   turnOn: 'Turn on tracking',
   notNow: 'Not now',
