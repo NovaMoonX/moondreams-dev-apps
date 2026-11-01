@@ -50,7 +50,7 @@ interface SumRow {
   section?: PlanSection;
   /** What the row counts, behind an info icon beside its name. */
   help?: string;
-  isResult?: boolean;
+  isEmphasised?: boolean;
 }
 
 /** Free to Spend in detail: the money on hand and what has a job, so the figure can be followed to its parts. */
@@ -83,24 +83,15 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const rows: SumRow[] = [
     {
       sign: '',
-      name: FREE_SUM_WORDS.onHand,
-      value: formatCents(balances.moneyOnHandCents),
-      help: hasCards ? CARD_WORDS.freeOnHandHelp : undefined,
+      name: FREE_SUM_WORDS.result,
+      value:
+        figure.kind === 'over'
+          ? `−${formatCents(figure.cents)}`
+          : formatCents(balances.freeToSpendCents),
+      isEmphasised: true,
     },
     {
-      sign: '−',
-      name: FREE_SUM_WORDS.bills,
-      value: formatCents(balances.assignedToBillsCents),
-      section: 'bills',
-    },
-    {
-      sign: '−',
-      name: FREE_SUM_WORDS.goals,
-      value: formatCents(balances.assignedToGoalsCents),
-      section: 'goals',
-    },
-    {
-      sign: '−',
+      sign: '+',
       name:
         level === 'track'
           ? FREE_SUM_WORDS.envelopesTrack
@@ -108,11 +99,23 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       value: formatCents(balances.assignedToEnvelopesCents),
       section: 'envelopes',
     },
-    ...(hasCards
+    {
+      sign: '+',
+      name: FREE_SUM_WORDS.goals,
+      value: formatCents(balances.assignedToGoalsCents),
+      section: 'goals',
+    },
+    {
+      sign: '+',
+      name: FREE_SUM_WORDS.bills,
+      value: formatCents(balances.assignedToBillsCents),
+      section: 'bills',
+    },
+    ...(balances.assignedToCardsCents !== 0
       ? [
           {
-            sign: '−',
-            name: CARD_WORDS.freeWaiting,
+            sign: '+',
+            name: FREE_SUM_WORDS.cards,
             value: formatCents(balances.assignedToCardsCents),
             section: 'cards' as const,
             help: CARD_WORDS.freeWaitingHelp,
@@ -121,12 +124,9 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       : []),
     {
       sign: '=',
-      name: FREE_SUM_WORDS.result,
-      value:
-        figure.kind === 'over'
-          ? `−${formatCents(figure.cents)}`
-          : formatCents(balances.freeToSpendCents),
-      isResult: true,
+      name: FREE_SUM_WORDS.total,
+      value: formatCents(balances.moneyOnHandCents),
+      help: hasCards ? CARD_WORDS.freeOnHandHelp : undefined,
     },
   ];
   const openSection = (section: PlanSection) => {
@@ -217,7 +217,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                     key='name'
                     className={join(
                       'min-w-0 text-left',
-                      row.isResult && 'font-medium',
+                      row.isEmphasised && 'font-medium',
                     )}
                   >
                     {row.name}
@@ -231,7 +231,9 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                     key='value'
                     className={join(
                       'text-right whitespace-nowrap tabular-nums',
-                      row.isResult ? 'text-base font-semibold' : 'font-medium',
+                      row.isEmphasised
+                        ? 'text-base font-semibold'
+                        : 'font-medium',
                     )}
                   >
                     <SensitiveValue>{row.value}</SensitiveValue>

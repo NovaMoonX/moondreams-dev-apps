@@ -9157,6 +9157,40 @@ const version = (
     before.freeToSpendCents,
     'and leaves Free to Spend as it was',
   );
+  const outsideIntoGoal = withMoves(
+    move1('o3', day(3), null, 'trip', 5_000, null, true),
+  );
+  assert.equal(
+    outsideIntoGoal.assignedByItem.trip,
+    before.assignedByItem.trip + 5_000,
+    'money from outside raises what a goal holds',
+  );
+  assert.equal(
+    outsideIntoGoal.assignedToGoalsCents,
+    before.assignedToGoalsCents + 5_000,
+  );
+  assert.equal(
+    outsideIntoGoal.moneyOnHandCents,
+    before.moneyOnHandCents + 5_000,
+    'and the money on hand with it',
+  );
+  assert.equal(
+    outsideIntoGoal.freeToSpendCents,
+    before.freeToSpendCents,
+    'and leaves Free to Spend as it was',
+  );
+  const outsideOutOfGoal = withMoves(
+    move1('o4', day(3), 'trip', null, 7_000, null, true),
+  );
+  assert.equal(
+    outsideOutOfGoal.assignedByItem.trip,
+    before.assignedByItem.trip - 7_000,
+  );
+  assert.equal(
+    outsideOutOfGoal.freeToSpendCents,
+    before.freeToSpendCents,
+    'a goal that gave money to outside leaves Free to Spend as it was',
+  );
   const outsideOut = withMoves(
     move1('o2', day(3), 'food', null, 4_000, null, true),
   );

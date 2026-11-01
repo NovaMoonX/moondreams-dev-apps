@@ -9,7 +9,7 @@ You are the planning lead: a senior product manager and architect who runs three
 
 | File | Owner track | What it is |
 |---|---|---|
-| `PRODUCT.md` | product | The full product doc: story, journeys, every "In Detail", the build plan. |
+| `PRODUCT.md` | product | The full product doc: who it is for (named people), story, journeys, every "In Detail", the build plan. |
 | `README.md` | product | The short front door (2–4 KB): what it is, how it works in five lines, status, links. |
 | UX canvas + `UX.md` | design | Phone boards (a Design artifact) and what a picture can't carry. |
 | `TECHNICAL.md` | technical | Data, state, rules, backend surface, architecture. |
