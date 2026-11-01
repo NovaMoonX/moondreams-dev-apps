@@ -37,9 +37,10 @@ import type { Cents, OpenMove } from '@apps/runway/types';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 
 interface SetHeldViewProps {
-  envelopeId: string;
+  itemId: string;
+  kind: 'envelope' | 'goal';
   name: string;
-  /** What the envelope holds now. */
+  /** What the envelope or goal holds now. */
   heldCents: Cents;
   today: number;
   onBack: () => void;
@@ -49,9 +50,10 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-/** The view an envelope's sheet swaps in to say what it holds now; the person says whether the difference moves with Free to Spend or came from, or left to, outside the plan. */
+/** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with Free to Spend or came from, or left to, outside the plan. */
 function SetHeldView({
-  envelopeId,
+  itemId,
+  kind,
   name,
   heldCents,
   today,
@@ -83,8 +85,8 @@ function SetHeldView({
   const cents = Math.abs(difference);
   const isRaising = difference > 0;
   const source = picked?.isRaising === isRaising ? picked.choice : null;
-  const fromId = isRaising ? null : envelopeId;
-  const toId = isRaising ? envelopeId : null;
+  const fromId = isRaising ? null : itemId;
+  const toId = isRaising ? itemId : null;
   const isOutside = source === 'outside';
   const amountBlocker =
     target === null
@@ -127,7 +129,7 @@ function SetHeldView({
               id: moveId,
               kind: 'transfer',
               date: today,
-              refId: envelopeId,
+              refId: itemId,
               reversesMoveId: null,
               createdAt: today,
               payload: { fromId, toId, cents, note: null, isOutside },
@@ -135,7 +137,10 @@ function SetHeldView({
           ],
         })
       : before;
-  const figure = (value: Cents) => describeEnvelopeFigure('track', value).value;
+  const figure = (value: Cents) =>
+    kind === 'goal'
+      ? formatCents(value)
+      : describeEnvelopeFigure('track', value).value;
   const change = (from: Cents, to: Cents) => `${figure(from)} → ${figure(to)}`;
   const rows =
     blocker !== null || target === null
@@ -239,7 +244,7 @@ function SetHeldView({
         disabled={isSaving}
       />
       {amountBlocker === null && (
-        <div className='grid grid-cols-2 gap-2'>
+        <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
           {options.map((option) => {
             const isChosen = source === option.choice;
             return (

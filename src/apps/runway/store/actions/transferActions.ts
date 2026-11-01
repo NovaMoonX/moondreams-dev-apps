@@ -89,7 +89,7 @@ export async function moveLeftover(
     throw new Error('Enter how much to move.');
   }
   if (input.fromId !== null && input.cents > input.leftCents) {
-    throw new Error('That is more than the envelope has left.');
+    throw new Error('That is more than it has left.');
   }
   if (input.toId === input.fromId) {
     throw new Error('Pick somewhere else to move it to.');
@@ -145,7 +145,7 @@ export async function moveLeftover(
       from !== null &&
       isStopped(from.data() as Partial<PlanItemDoc> | undefined)
     ) {
-      throw new Error('That envelope was archived.');
+      throw new Error('That one was archived.');
     }
     if (
       to !== null &&
