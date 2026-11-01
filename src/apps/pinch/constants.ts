@@ -11,6 +11,7 @@ import type {
   NoteKind,
   PackageEventKind,
   PackagePlace,
+  PinchStartTab,
   PinchTab,
   ReminderKind,
   RecipeLinkKind,
@@ -28,7 +29,17 @@ export const PINCH_TABS: PinchTab[] = [
   'shopping',
   'settings',
 ];
-export const DEFAULT_PINCH_TAB: PinchTab = 'calendar';
+export const DEFAULT_PINCH_TAB: PinchStartTab = 'recipes';
+export const START_TAB_CHOICES: PinchStartTab[] = [
+  'calendar',
+  'recipes',
+  'kitchen',
+  'shopping',
+];
+
+/** A stored value that is not one of the choices (a tab added or removed since) reads as the built-in tab. */
+export const toStartTab = (value: unknown): PinchStartTab =>
+  START_TAB_CHOICES.find((tab) => tab === value) ?? DEFAULT_PINCH_TAB;
 
 export const PINCH_TAB_LABELS: Record<PinchTab, string> = {
   calendar: 'Calendar',

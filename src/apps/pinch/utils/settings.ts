@@ -2,6 +2,7 @@ import {
   CONTAINER_FREEZER_DAYS,
   CONTAINER_FRIDGE_DAYS,
   DEFAULT_LEAD_DAYS,
+  DEFAULT_PINCH_TAB,
   DEFAULT_REMINDER_HOUR,
   FREEZER_DAYS_RANGE,
   FRIDGE_DAYS_RANGE,
@@ -11,6 +12,7 @@ import {
 import type {
   PinchReminderSettings,
   PinchSettings,
+  PinchStartTab,
   PinchVoiceSettings,
 } from '@apps/pinch/types';
 
@@ -25,6 +27,7 @@ export const DEFAULT_PINCH_SETTINGS: PinchSettings = {
   freezerDays: null,
   suggestPhotos: true,
   calendarStats: false,
+  defaultTab: DEFAULT_PINCH_TAB,
   voice: {
     hasAgreed: null,
     isReadingAloud: null,
@@ -97,6 +100,7 @@ export interface PinchSettingsPatch {
   freezerDays?: number;
   suggestPhotos?: boolean;
   calendarStats?: boolean;
+  defaultTab?: PinchStartTab;
   voice?: Partial<PinchVoiceSettings>;
   reminders?: Partial<PinchReminderSettings>;
 }
@@ -112,6 +116,7 @@ export const createSettings = (
   freezerDays: patch.freezerDays ?? DEFAULT_PINCH_SETTINGS.freezerDays,
   suggestPhotos: patch.suggestPhotos ?? DEFAULT_PINCH_SETTINGS.suggestPhotos,
   calendarStats: patch.calendarStats ?? DEFAULT_PINCH_SETTINGS.calendarStats,
+  defaultTab: patch.defaultTab ?? DEFAULT_PINCH_SETTINGS.defaultTab,
   voice: { ...DEFAULT_PINCH_SETTINGS.voice, ...patch.voice },
   reminders: {
     ...DEFAULT_PINCH_SETTINGS.reminders,
@@ -138,6 +143,9 @@ export const getSettingsUpdates = (
   ...(patch.calendarStats === undefined
     ? []
     : [{ path: ['calendarStats'], value: patch.calendarStats }]),
+  ...(patch.defaultTab === undefined
+    ? []
+    : [{ path: ['defaultTab'], value: patch.defaultTab }]),
   ...Object.entries(patch.voice ?? {}).flatMap(([key, value]) =>
     value === undefined ? [] : [{ path: ['voice', key], value }],
   ),
