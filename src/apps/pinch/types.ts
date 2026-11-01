@@ -5,6 +5,9 @@ export type PinchTab =
   | 'shopping'
   | 'settings';
 
+/** The tabs a person can open Pinch on; Settings is the place that chooses, so it is never one. */
+export type PinchStartTab = Exclude<PinchTab, 'settings'>;
+
 export type Unit =
   | 'G'
   | 'KG'
@@ -163,6 +166,8 @@ export interface PinchSettings {
   suggestPhotos: boolean;
   /** Whether the Calendar draws its stat tiles (the total, the averages and the daily nutrition) above the week or month. Saved with the account, so it follows the person to another device. A document written before this key lacks it, which reads as false. */
   calendarStats: boolean;
+  /** The tab Pinch opens on, on every device. A document written before this key lacks it, which reads as Recipes. */
+  defaultTab: PinchStartTab;
   /** Hands-free cooking choices. A document written before this key lacks it, which reads as every choice not made yet. */
   voice: PinchVoiceSettings;
   reminders: PinchReminderSettings;
