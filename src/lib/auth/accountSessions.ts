@@ -32,12 +32,12 @@ function openSession(uid: string) {
   return session;
 }
 
-/** Loads the kept sessions of these accounts, so a later tap can tell at once which can switch without Google. */
+/** Loads the kept sessions of these accounts. */
 export function loadAccountSessions(uids: string[]) {
   uids.forEach(openSession);
 }
 
-/** Keeps a copy of this signed-in account's session on the device, so switching back to it needs no Google sign-in. */
+/** Keeps a copy of this signed-in account's session on the device. */
 export async function keepAccountSession(user: User) {
   const { auth, ready } = openSession(user.uid);
   await ready;
@@ -45,13 +45,13 @@ export async function keepAccountSession(user: User) {
   await auth.updateCurrentUser(user);
 }
 
-/** The kept session for this account when it has loaded, else `null`; synchronous so a tap can still open Google's popup in time. */
+/** The kept session for this account once loaded, else `null`; synchronous, for use inside a tap. */
 export function getKeptSession(uid: string) {
   const user = sessions.get(uid)?.auth.currentUser ?? null;
   return user?.uid === uid ? user : null;
 }
 
-/** Ends this account's kept session on the device; the next switch to it goes through Google. */
+/** Ends this account's kept session on the device. */
 export async function dropAccountSession(uid: string) {
   const session = openSession(uid);
   sessions.delete(uid);

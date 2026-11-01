@@ -72,7 +72,6 @@ const ENDED_SESSION_CODES = new Set([
 const toStringOrNull = (value: unknown) =>
   typeof value === 'string' && value ? value : null;
 
-/** The name and photo each account shows on the site, read from its profile; an account whose profile can't be read is left out. */
 async function readSiteProfiles(uids: string[]) {
   const profiles = await Promise.all(
     uids.map(async (uid) => {
@@ -345,11 +344,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
     const switchToKept = async (kept: User) => {
       try {
         await kept.getIdToken(true);
+        // The kept copy holds the name and photo from when it was kept; the sign-in sync writes what it carries.
+        await kept.reload();
       } catch (error) {
         const code = (error as { code?: string }).code ?? '';
         if (!ENDED_SESSION_CODES.has(code)) throw error;
-        await dropAccountSession(kept.uid);
-        return openGooglePicker().catch((popupError: unknown) => {
+        const picking = openGooglePicker();
+        void dropAccountSession(kept.uid);
+        return picking.catch((popupError: unknown) => {
           if ((popupError as { code?: string }).code !== 'auth/popup-blocked') throw popupError;
           throw new Error(
             `Your sign-in to ${account?.email ?? 'that account'} ended. Tap it again to sign in with Google.`,
