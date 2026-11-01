@@ -21,10 +21,9 @@ import {
   getErrorMessage,
   getStorageErrorMessage,
 } from '@/utils/errorUtils';
-import { resizeImageToWebp } from '@/utils/imageCompression';
+import { compressImageForUse } from '@/utils/imageCompression';
 import {
   COOK_BATCH_SIZE,
-  COOK_PHOTO_MAX_DIMENSION,
   MAX_COOKED_SERVINGS,
   SOFT_MAX_COOKS_PER_RECIPE,
 } from '@apps/pinch/constants';
@@ -407,11 +406,8 @@ export const setCookReview = createAsyncThunk<
       photoFile instanceof File ? getCookPhotoPath(uid, id, now) : null;
     try {
       if (newPath !== null && photoFile) {
-        const resized = await resizeImageToWebp(
-          photoFile,
-          COOK_PHOTO_MAX_DIMENSION,
-        );
-        if (!resized.type.startsWith('image/')) {
+        const resized = await compressImageForUse(photoFile, 'photo');
+        if (resized === null) {
           return rejectWithValue(
             "That picture couldn't be read. Try a JPG, PNG or WebP photo.",
           );

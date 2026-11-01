@@ -237,7 +237,7 @@ function PhotoPicker({
         <p className='text-muted-foreground text-xs'>
           {isDragging
             ? 'Drop it right here'
-            : 'Drag a photo here, or browse. JPG, PNG or GIF up to 5MB.'}
+            : 'Drag a photo here, or browse. Any photo from your phone works.'}
         </p>
         {errorText}
       </div>
