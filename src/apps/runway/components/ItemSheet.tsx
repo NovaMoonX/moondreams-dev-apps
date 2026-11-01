@@ -271,6 +271,10 @@ function ItemSheet({
     (state): OpenVersion | null =>
       resolveCurrentOrNext(state.runway.versions, itemId, today) ?? null,
   );
+  const hasStarted = useAppSelector((state) => {
+    const start = state.runway.plan?.startDate ?? null;
+    return start !== null && start <= today;
+  });
   const next = useAppSelector((state) =>
     resolveNextChange(state.runway.versions, itemId, today),
   );
@@ -810,7 +814,8 @@ function ItemSheet({
         )}
         {canChange &&
           (itemKind === 'envelope' || itemKind === 'goal') &&
-          isArchivable && (
+          isArchivable &&
+          hasStarted && (
             <ActionRow
               isGrouped
               hasChevron

@@ -10,7 +10,7 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useAppSelector } from '@/store';
 import { TRACK_INVITE_WORDS } from '@apps/runway/constants';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import LineUpScreen from '@apps/runway/screens/plan/LineUpScreen';
 
 const DISMISSED_KEY_PREFIX = 'runway.trackInviteDismissed.';
 
@@ -22,23 +22,26 @@ const ROWS = [
 /** Home's one quiet invitation for a Plan person to try Track, shown once an income day has been confirmed; hiding it lasts on this device. */
 function TrackInviteCard() {
   const { user } = useAuth();
-  const { openMoreEntry, openSettingsView } = useRunwayUrlState();
   const [isDismissed, setIsDismissed] = useLocalStoragePreference(
     `${DISMISSED_KEY_PREFIX}${user?.uid ?? ''}`,
     false,
   );
   const [isOpen, setIsOpen] = useState(false);
+  const [isLineUp, setIsLineUp] = useState(false);
+  const hasTracked = useAppSelector(
+    (state) => (state.runway.plan?.trackingPeriods ?? []).length > 0,
+  );
   const isPlan = useAppSelector((state) => selectLevel(state) === 'plan');
   const hasConfirmedDay = useAppSelector((state) =>
     state.runway.days.some((day) => day.status === 'confirmed'),
   );
 
-  if (!isPlan || !hasConfirmedDay || isDismissed || !user) return null;
+  if (!isPlan || !hasConfirmedDay || hasTracked || isDismissed || !user)
+    return null;
 
   const turnOn = () => {
     setIsOpen(false);
-    openMoreEntry('settings');
-    openSettingsView('tracking');
+    setIsLineUp(true);
   };
 
   return (
@@ -123,6 +126,7 @@ function TrackInviteCard() {
           {TRACK_INVITE_WORDS.switchBack}
         </p>
       </DetailSheet>
+      {isLineUp && <LineUpScreen onClose={() => setIsLineUp(false)} />}
     </>
   );
 }
