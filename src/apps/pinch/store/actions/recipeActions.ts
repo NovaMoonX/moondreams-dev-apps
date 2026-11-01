@@ -40,8 +40,7 @@ import {
   isCoverUrl,
 } from '@apps/pinch/utils/recipeCover';
 import { isInUse } from '@apps/pinch/utils/references';
-import { resizeImageToWebp } from '@/utils/imageCompression';
-import { RECIPE_COVER_MAX_DIMENSION } from '@apps/pinch/constants';
+import { compressImageForUse } from '@/utils/imageCompression';
 import type {
   Collection,
   DishCategory,
@@ -72,6 +71,8 @@ const noteDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'notes', id);
 
 const OFFLINE_MESSAGE = 'Check your connection and try again.';
+const UNREADABLE_COVER =
+  "That photo's format can't be opened here. Try a JPG or PNG.";
 
 const getWriteMessage = (error: unknown, fallback: string) => {
   if (!(error instanceof FirebaseError)) {
@@ -266,10 +267,11 @@ export const saveRecipe = createAsyncThunk<
     try {
       await freezeBeforeEdit(uid, getState());
       if (draft.coverFile) {
-        await uploadFile(
-          path,
-          await resizeImageToWebp(draft.coverFile, RECIPE_COVER_MAX_DIMENSION),
-        );
+        const cover = await compressImageForUse(draft.coverFile, 'cover');
+        if (cover === null) {
+          throw new Error(UNREADABLE_COVER);
+        }
+        await uploadFile(path, cover);
       }
 
       const fields = {

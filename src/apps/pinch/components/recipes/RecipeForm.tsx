@@ -235,7 +235,7 @@ function RecipeForm({
     recipe?.coverPath ?? null,
     recipe?.updatedAt ?? 0,
   );
-  const upload = useImageUpload(null);
+  const upload = useImageUpload(null, 'cover');
   const { pick: pickCover, clear: clearCover, error: coverError } = upload;
   const [initialData] = useState(() =>
     initialRead
@@ -689,7 +689,7 @@ function RecipeForm({
             title={formData.title}
             onSelect={(file) => {
               hasChosenCover.current = true;
-              pickCover(file);
+              void pickCover(file);
               setIsCoverRemoved(false);
               isDirtyRef.current = true;
             }}
@@ -896,7 +896,11 @@ function RecipeForm({
     return { sourceId: newSource.id, newSource };
   };
 
-  const getDraft = (data: RecipeFormData, reason: string): RecipeDraft => {
+  const getDraft = (
+    data: RecipeFormData,
+    reason: string,
+    coverFile: File | null = upload.file,
+  ): RecipeDraft => {
     const { sourceId, newSource } = getSourceDraft(data.sourceChoice);
     const { collectionIds, newCollections } = ownsCollections
       ? getCollectionsToSave(data.collections, collections)
@@ -935,8 +939,8 @@ function RecipeForm({
       care: parseCareText(data.care),
       links: toRecipeLinks(data.links),
       steps: data.steps.map((step) => step.trim()).filter(Boolean),
-      coverFile: upload.file,
-      coverUrl: upload.file ? null : (webCover?.imageUrl ?? null),
+      coverFile,
+      coverUrl: coverFile ? null : (webCover?.imageUrl ?? null),
       removeCover: isCoverRemoved,
       fromIdeaId: initialIdea?.id ?? null,
       tweakReason: reason,
@@ -949,7 +953,10 @@ function RecipeForm({
     setIsSubmitting(true);
     try {
       const { recipeId: savedId } = await dispatch(
-        saveRecipe({ uid, draft: getDraft(data, why) }),
+        saveRecipe({
+          uid,
+          draft: getDraft(data, why, await upload.readyFile()),
+        }),
       ).unwrap();
       if (!recipe) {
         addToast({
