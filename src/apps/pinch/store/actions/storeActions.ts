@@ -12,12 +12,14 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import type { RootState } from '@/store';
 import { generateUuid } from '@/utils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { resizeImageToWebp } from '@/utils/imageCompression';
+import { compressImageForUse } from '@/utils/imageCompression';
 import { CATALOG_STORES_BY_ID } from '@apps/pinch/catalog/catalogStores';
-import { STORE_IMAGE_MAX_DIMENSION } from '@apps/pinch/constants';
 import { readUsage } from '@apps/pinch/store/actions/usageActions';
 import type { Store } from '@apps/pinch/types';
 import { isInUse } from '@apps/pinch/utils/references';
+
+const UNREADABLE_IMAGE =
+  "That picture's format can't be opened here. Try a JPG or PNG.";
 
 const storeDoc = (uid: string, id: string) =>
   doc(db, 'apps', 'pinch', 'kitchens', uid, 'stores', id);
@@ -112,10 +114,11 @@ export const saveStore = createAsyncThunk<
 
     try {
       if (imageFile) {
-        await uploadFile(
-          path,
-          await resizeImageToWebp(imageFile, STORE_IMAGE_MAX_DIMENSION),
-        );
+        const image = await compressImageForUse(imageFile, 'thumbnail');
+        if (image === null) {
+          throw new Error(UNREADABLE_IMAGE);
+        }
+        await uploadFile(path, image);
       }
 
       const imagePath = imageFile

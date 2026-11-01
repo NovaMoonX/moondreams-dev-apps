@@ -79,7 +79,7 @@ function CatDetailsModalContent({
   onSubmit,
   onDelete,
 }: CatDetailsModalContentProps) {
-  const photoUpload = useImageUpload(cat.photoURL ?? null);
+  const photoUpload = useImageUpload(cat.photoURL ?? null, 'avatar');
   const photoRemoved = photoUpload.previewUrl === null && Boolean(cat.photoURL);
   const { addToast } = useToast();
 
@@ -90,8 +90,9 @@ function CatDetailsModalContent({
       if (householdId) {
         const photoPath = `nine-lives/households/${householdId}/cats/${cat.id}/photo`;
 
-        if (photoUpload.file) {
-          photoURL = await uploadFile(photoPath, photoUpload.file);
+        const photoFile = await photoUpload.readyFile();
+        if (photoFile) {
+          photoURL = await uploadFile(photoPath, photoFile);
         } else if (photoRemoved) {
           await deleteFile(photoPath);
           photoURL = null;
@@ -123,8 +124,9 @@ function CatDetailsModalContent({
           photoUrl={photoUpload.previewUrl}
           error={photoUpload.error}
           disabled={isSubmitting}
+          loading={photoUpload.isPreparing}
           showPreview={false}
-          onSelect={photoUpload.pick}
+          onSelect={(file) => void photoUpload.pick(file)}
           onRemove={photoUpload.clear}
         />
       </div>
