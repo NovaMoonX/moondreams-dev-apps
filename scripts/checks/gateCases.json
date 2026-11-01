@@ -131,5 +131,50 @@
   "defaultRollout": "everyone",
   "isAdmin": false,
   "expected": true
+ },
+ {
+  "name": "unknown rollout uses the default",
+  "setting": {
+   "rollout": "bogus"
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": true
+ },
+ {
+  "name": "null rollout uses the default",
+  "setting": {
+   "rollout": null
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": true
+ },
+ {
+  "name": "kept-out list of the wrong type is ignored",
+  "setting": {
+   "rollout": "off",
+   "alwaysOffUids": "u",
+   "alwaysOnUids": "u"
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": false
+ },
+ {
+  "name": "kept-out list of the wrong type, default open",
+  "setting": {
+   "alwaysOffUids": "u"
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": true
+ },
+ {
+  "name": "setting of the wrong type uses the default",
+  "setting": "off",
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": true
  }
 ]

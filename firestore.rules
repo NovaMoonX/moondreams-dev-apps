@@ -23,11 +23,16 @@ service cloud.firestore {
     // `defaultRollout` is the registry's, used until the admin sets one; `npm run check:gates` fails if the two disagree.
     function isGateOpen(appId, gateId, defaultRollout) {
       let path = /databases/$(database)/documents/featureGates/$(appId);
-      let setting = exists(path) ? get(path).data.get('gates', {}).get(gateId, {}) : {};
-      let rollout = setting.get('rollout', defaultRollout);
+      let gates = exists(path) ? get(path).data.get('gates', {}) : {};
+      let stored = gates is map ? gates.get(gateId, {}) : {};
+      let setting = stored is map ? stored : {};
+      let stated = setting.get('rollout', defaultRollout);
+      let rollout = stated in ['off', 'testing', 'everyone'] ? stated : defaultRollout;
+      let off = setting.get('alwaysOffUids', []);
+      let on = setting.get('alwaysOnUids', []);
       return request.auth != null
-        && !(request.auth.uid in setting.get('alwaysOffUids', []))
-        && ((request.auth.uid in setting.get('alwaysOnUids', []))
+        && !(off is list && request.auth.uid in off)
+        && ((on is list && request.auth.uid in on)
           || rollout == 'everyone'
           || (rollout == 'testing' && isAdmin()));
     }

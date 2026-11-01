@@ -1,11 +1,7 @@
 // No imports on purpose: scripts/checks/gates.ts loads this file without the Functions dependencies installed.
 export type GateRollout = 'off' | 'testing' | 'everyone';
 
-export interface GateSetting {
-  rollout?: unknown;
-  alwaysOnUids?: unknown;
-  alwaysOffUids?: unknown;
-}
+export type GateSetting = Record<string, unknown>;
 
 const toUids = (value: unknown) =>
   Array.isArray(value) ? value.filter((uid): uid is string => typeof uid === 'string') : [];

@@ -40,7 +40,7 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     appId: 'waypoint',
     label: 'Create trips',
     description:
-      'Someone kept out still sees the Create trip button, locked, and can still join and plan trips they were invited to. Everyone else can start new trips.',
+      'Someone kept out sees the Create trip button locked. Trips they already made, and trips they join with a code or an invite, work as normal. Everyone else can start new trips.',
     defaultRollout: 'everyone',
     isServerEnforced: true,
   },

@@ -42,6 +42,9 @@ function Waypoint() {
   useTrackAppUsage('waypoint', user?.uid ?? null);
   useLoadFeatureGates('waypoint', user?.uid ?? null);
   const canCreateTrips = useIsGateOpen('waypoint', CREATE_TRIPS_GATE_ID);
+  const areGatesRead = useAppSelector(
+    (state) => state.featureGates.byApp['waypoint'] !== undefined,
+  );
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -203,7 +206,7 @@ function Waypoint() {
     return <AuthRequiredState message='Please sign in to use Waypoint.' />;
   }
 
-  if (!tripsLoaded) {
+  if (!tripsLoaded || !areGatesRead) {
     return <Loading />;
   }
 
@@ -213,8 +216,8 @@ function Waypoint() {
         {label}
       </Button>
     ) : (
-      <Tooltip message='Creating trips is turned off for you right now. You can still join trips you are invited to.'>
-        <span className={className.includes('mt-4') ? 'mt-4 inline-block' : 'block'}>
+      <Tooltip message='Creating trips is turned off for you right now. You can still join trips with a code or an invite.'>
+        <span className='block'>
           <Button className='w-full whitespace-nowrap' disabled>
             <Lock className='h-4 w-4' aria-hidden />
             {label}
@@ -271,7 +274,9 @@ function Waypoint() {
           <div>
             <h1 className='text-3xl font-semibold'>My Trips</h1>
             <p className='text-muted-foreground mt-1'>
-              Create a trip to start planning together.
+              {canCreateTrips
+                ? 'Create a trip to start planning together.'
+                : 'Join a trip with a code or an invite to start planning together.'}
             </p>
           </div>
           <div className='flex flex-col-reverse gap-3 sm:flex-row sm:items-center'>
@@ -331,7 +336,21 @@ function Waypoint() {
                 ? 'You do not have any trips to show.'
                 : 'You do not belong to any active trips yet.'}
             </p>
-            {renderCreateButton('Create your first trip', 'mt-4')}
+            {canCreateTrips ? (
+              renderCreateButton('Create your first trip', 'mt-4')
+            ) : (
+              <>
+                <p className='text-muted-foreground mt-2 text-sm'>
+                  Ask whoever is planning a trip for a join code or an invite.
+                </p>
+                <Button
+                  className='mt-4'
+                  onClick={() => setIsJoinCodeModalOpen(true)}
+                >
+                  Join with code
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <div className='space-y-8'>

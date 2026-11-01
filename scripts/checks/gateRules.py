@@ -72,12 +72,16 @@ def main():
             if (kind == 'admin') != c['isAdmin']: continue
             delete('featureGates/waypoint')
             if c['setting'] is not None:
-                setting = {k: v for k, v in c['setting'].items()}
-                for key in ('alwaysOnUids', 'alwaysOffUids'):
-                    if key in setting: setting[key] = [uid if x == 'u' else x for x in setting[key]]
+                setting = c['setting']
+                if isinstance(setting, dict):
+                    setting = dict(setting)
+                    for key in ('alwaysOnUids', 'alwaysOffUids'):
+                        if isinstance(setting.get(key), list): setting[key] = [uid if x == 'u' else x for x in setting[key]]
+                    for key in ('alwaysOnUids', 'alwaysOffUids'):
+                        if setting.get(key) == 'u': setting[key] = uid
                 assert write('featureGates/waypoint', dict(appId='waypoint', gates={'create-trips': setting}), 'owner') == 200
             # The rules read the registry default for create-trips ('everyone'); a case with another default only applies where a stored rollout decides.
-            if c['defaultRollout'] != 'everyone' and (c['setting'] is None or 'rollout' not in c['setting']): continue
+            if c['defaultRollout'] != 'everyone' and (not isinstance(c['setting'], dict) or c['setting'].get('rollout') not in ('off', 'testing', 'everyone')): continue
             got = write(f'apps/waypoint/trips/trip-{i}', trip(uid, i), tok, True)
             if (got == 200) != c['expected']: bad.append(f"{c['name']} [{kind}]: got {got}, expected {'allow' if c['expected'] else 'deny'}")
         delete(f'apps/waypoint/trips/trip-{i}')
