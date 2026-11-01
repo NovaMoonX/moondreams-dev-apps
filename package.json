@@ -61,6 +61,7 @@
     "check:pipeline-answers": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/pipelineAnswers.ts",
     "check:pipeline-map": "node scripts/checks/pipelineMap.ts",
     "check:board": "node scripts/checks/board.ts",
+    "check:app-people": "node scripts/checks/appPeople.ts",
     "inbox:build": "node scripts/ownerInbox/run.ts",
     "check:option-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/optionMatch.ts",
     "check:runway-engine": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayEngine.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayStartCorrection.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayGoalSeries.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayBudgetReading.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/sealedBytes.ts",

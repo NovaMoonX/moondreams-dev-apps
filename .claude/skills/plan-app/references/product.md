@@ -4,6 +4,7 @@ The product track writes two files. `PRODUCT.md` is the full product doc: every 
 
 `PRODUCT.md` focuses on the user experience and vision, in this structure:
 
+- **Who It Is For**: two or three named people, each with their situation, the journey they repeat, the level they use and what they never want to see, at most about six lines each (`docs/conventions/product.md` "An app names its people"; Runway's `PRODUCT.md` is the reference, one `###` subheading per person). Every journey and build-plan item below serves one of them.
 - **The short**: A 1-paragraph overview of the app's core value.
 - **The story** (Optional): Context or origin of the idea.
 - **How it Works**: A step-by-step user journey, kept at overview level — each step is one line conveying what happens, not how every branch of it resolves. When a step genuinely needs more explanation (e.g., what a share link does for each of several access states, or exact state-transition specifics), give that its own named sub-section below the numbered flow (e.g., `### Sharing & Access, In Detail`) rather than expanding the step inline. A reader should be able to read just the numbered list and understand the app; the sub-sections are for whoever wants the next layer of detail.

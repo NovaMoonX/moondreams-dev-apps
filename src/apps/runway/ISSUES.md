@@ -1732,7 +1732,7 @@ Free to Spend shows how much came from each source, and a purchase can be assign
 - `src/apps/runway/forms/CardForm.tsx`, `forms/PayCardSheet.tsx`, Plan > Cards
 - `firestore.rules` (`cards`)
 
-**Context:** `PRODUCT.md` "Who It Is Built For First" and "Credit Cards, In Detail"; the TDD's balances table.
+**Context:** `PRODUCT.md` "Who It Is For" and "Credit Cards, In Detail"; the TDD's balances table.
 
 ### Description
 A card is named by its issuer and an optional name ("Capital One Venture X"). A purchase or bill paid by a card fills that card's reserve while the cash stays put; "Pay off" lowers the cash and the reserve together, so Free to Spend does not move.
