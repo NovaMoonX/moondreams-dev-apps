@@ -1,5 +1,5 @@
 import FallbackImage from '@/components/FallbackImage';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
@@ -24,22 +24,28 @@ function EditTripCoverModal({
   onSubmit,
   onClose,
 }: EditTripCoverModalProps) {
-  const coverUpload = useImageUpload(trip?.coverImageUrl ?? null);
+  const coverUpload = useImageUpload(trip?.coverImageUrl ?? null, 'cover');
   const [error, setError] = useState<string | null>(null);
+  const [isWaiting, setIsWaiting] = useState(false);
+  const isSavingRef = useRef(false);
 
   if (!trip) {
     return null;
   }
 
   const handleSubmit = async () => {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsWaiting(true);
     setError(null);
     try {
+      const coverImageFile = await coverUpload.readyFile();
       await onSubmit({
         title: trip.title,
         startDate: trip.startDate,
         endDate: trip.endDate,
         coverImageUrl: trip.coverImageUrl,
-        coverImageFile: coverUpload.file,
+        coverImageFile,
         coverImageRemoved: coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
         defaultCurrency: trip.defaultCurrency,
         timezone: trip.timezone,
@@ -52,6 +58,9 @@ function EditTripCoverModal({
           getErrorMessage(submitError, 'Unable to update the cover photo.'),
         ),
       );
+    } finally {
+      isSavingRef.current = false;
+      setIsWaiting(false);
     }
   };
 
@@ -69,8 +78,9 @@ function EditTripCoverModal({
           photoUrl={coverUpload.previewUrl}
           error={coverUpload.error}
           disabled={isSubmitting}
+          loading={coverUpload.isPreparing}
           showPreview={false}
-          onSelect={(file) => coverUpload.pick(file)}
+          onSelect={(file) => void coverUpload.pick(file)}
           onRemove={() => coverUpload.clear()}
         />
       </div>
@@ -81,11 +91,11 @@ function EditTripCoverModal({
         </Button>
         <Button
           type='button'
-          loading={isSubmitting}
-          disabled={isSubmitting}
+          loading={isSubmitting || isWaiting}
+          disabled={isSubmitting || isWaiting}
           onClick={() => void handleSubmit()}
         >
-          {isSubmitting ? 'Saving…' : 'Save'}
+          {isSubmitting || isWaiting ? 'Saving…' : 'Save'}
         </Button>
       </div>
     </Modal>

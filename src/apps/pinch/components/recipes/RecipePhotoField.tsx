@@ -7,7 +7,7 @@ import type { ShownCover } from '@apps/pinch/utils/recipeCover';
 
 const PLACEHOLDER = '🍲';
 const UPLOAD_NOTE =
-  "A photo under 5 MB. It's shrunk to fit and saved with the recipe.";
+  "Any photo from your phone works. It's shrunk to fit and saved with the recipe.";
 
 interface RecipePhotoFieldProps {
   uid: string;

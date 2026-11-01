@@ -51,7 +51,7 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
   const ideas = useAppSelector(selectIdeas);
   const recipesById = useAppSelector(selectRecipesById);
   const savedPhotoUrl = useIdeaImageUrl(idea);
-  const upload = useImageUpload(null);
+  const upload = useImageUpload(null, 'photo');
   const { pick: pickPhoto, error: photoError } = upload;
   const [data, setData] = useState<IdeaFormData>({
     title: idea.title,
@@ -161,7 +161,7 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
                       error={photoError}
                       onSelect={(file) => {
                         setError(null);
-                        pickPhoto(file);
+                        void pickPhoto(file);
                       }}
                     />
                   </div>
@@ -189,6 +189,7 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
     setError(null);
     setIsSubmitting(true);
     try {
+      const photoFile = await upload.readyFile();
       await dispatch(
         updateIdea({
           uid,
@@ -196,7 +197,7 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
           title: data.title,
           note: data.note,
           url: data.url,
-          photoFile: upload.file,
+          photoFile,
         }),
       ).unwrap();
       onClose();
