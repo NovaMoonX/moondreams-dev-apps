@@ -132,6 +132,8 @@ export interface Demand {
   ask: DraftAsk;
   /** A `rest` demand's ceiling (a goal's target left, an envelope's room under its max); null for no ceiling. */
   capCents: Cents | null;
+  /** The person set this day's share of the bill, so the line shows even at nothing. */
+  isFixed?: boolean;
 }
 
 export const TIER_RANK: Record<Priority, number> = {
@@ -355,7 +357,7 @@ const isOnPayDay = (
 };
 
 /** The days of a window a bill's funding allows: all of them, the last one, or one pay line's. */
-const getEligibleDays = (
+export const getEligibleDays = (
   window: readonly IncomeDayRef[],
   fundedBy: BillFundedBy,
 ) => {
@@ -572,6 +574,9 @@ function buildBillDemands(
           },
           ask: { kind: 'exact' },
           capCents: null,
+          isFixed:
+            bill.fixed !== undefined &&
+            Object.hasOwn(bill.fixed, part.day.dayKey),
         })),
     ),
   );

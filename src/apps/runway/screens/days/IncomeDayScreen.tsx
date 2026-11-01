@@ -114,7 +114,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     override !== null &&
     (override.pairings !== null ||
       Object.keys(override.holdResolutions).length > 0 ||
-      Object.keys(override.payloads).length > 0);
+      Object.keys(override.payloads).length > 0 ||
+      Object.keys(override.billCents).length > 0);
 
   const persist = async (
     change: (current: typeof EMPTY_OVERRIDE) => typeof EMPTY_OVERRIDE,
@@ -185,6 +186,15 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         ),
       ),
     }));
+  const resetShare = (line: DraftLineData) =>
+    save((current) => ({
+      ...current,
+      billCents: Object.fromEntries(
+        Object.entries(current.billCents).filter(
+          ([itemId]) => itemId !== line.itemId,
+        ),
+      ),
+    }));
   const funded = draft.lines.filter((line) => line.shortBy === 0);
   const unfunded = draft.lines.filter((line) => line.shortBy > 0);
   const fixIds = new Set(
@@ -224,7 +234,11 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         onChoose={choose}
         onUndoChoice={undoChoice}
         isChoosing={isSaving}
-        isDayOnly={Object.hasOwn(override?.payloads ?? {}, line.itemId)}
+        isDayOnly={
+          Object.hasOwn(override?.payloads ?? {}, line.itemId) ||
+          Object.hasOwn(override?.billCents ?? {}, line.itemId)
+        }
+        onResetShare={resetShare}
         canChange={day.on >= today && changeableIds.has(line.itemId)}
       />
     );

@@ -40,6 +40,7 @@ export const EMPTY_OVERRIDE: DayOverrideSealed = {
   pairings: null,
   holdResolutions: {},
   payloads: {},
+  billCents: {},
 };
 
 export interface DayRef {
@@ -85,6 +86,7 @@ export async function saveDayOverride(
       pairings: opened?.pairings ?? null,
       holdResolutions: opened?.holdResolutions ?? {},
       payloads: opened?.payloads ?? {},
+      billCents: opened?.billCents ?? {},
     };
     const sealed = await sealJson(change(current), encryption);
     if (log && changeSealed) {
@@ -222,6 +224,7 @@ export async function confirmDay(
       pairings: stored?.pairings ?? null,
       holdResolutions: stored?.holdResolutions ?? {},
       payloads: stored?.payloads,
+      billCents: stored?.billCents,
     });
     if (current !== input.overrideFingerprint) {
       throw new DayChangedElsewhere(
@@ -442,6 +445,7 @@ const readChoices = async (
     pairings: opened?.pairings ?? null,
     holdResolutions: opened?.holdResolutions ?? {},
     payloads: opened?.payloads ?? {},
+    billCents: opened?.billCents ?? {},
   };
 };
 

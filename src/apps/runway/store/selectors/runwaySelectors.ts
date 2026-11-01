@@ -34,6 +34,7 @@ import {
 } from '@apps/runway/engine/demands';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
+import { getFixedByBill } from '@apps/runway/engine/billShare';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
@@ -669,6 +670,8 @@ const hashProgress = (progress: BillProgressInput | undefined) => {
   return result;
 };
 
+const NO_FIXED: Record<string, number> = {};
+
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 
@@ -811,6 +814,11 @@ export function computeDraftView(
             hashProgress(billProgress[item.id]),
           ]),
           horizon,
+          openDays
+            .filter(
+              (entry) => Object.keys(entry.override.billCents ?? {}).length > 0,
+            )
+            .map((entry) => [entry.id, entry.status, entry.override.billCents]),
         ]),
       );
   const draftCache = draftCaches.get(versions) ?? new Map<string, DraftView>();
@@ -835,6 +843,7 @@ export function computeDraftView(
       heldCents: heldByItem[item.id] ?? 0,
     };
   });
+  const fixedByBill = getFixedByBill(openDays);
   const bills = resolvedBills.map(({ item, version }) => ({
     itemId: item.id,
     createdAt: item.createdAt,
@@ -845,7 +854,7 @@ export function computeDraftView(
     schedule: version.payload.timing.schedule,
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
-    fixed: {},
+    fixed: fixedByBill.get(item.id) ?? NO_FIXED,
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
   const goals = resolvedGoals.map(({ item, version }) => {
@@ -914,6 +923,7 @@ export function computeDraftView(
       pairings: override?.pairings ?? null,
       holdResolutions: override?.holdResolutions ?? {},
       payloads: override?.payloads,
+      billCents: override?.billCents,
     }),
     items: Object.fromEntries(
       [...resolved, ...resolvedBills, ...resolvedGoals].map(
@@ -978,6 +988,7 @@ export const selectBillPayments = createSelector(
     selectBillProgress,
     selectOn,
     selectStartDate,
+    selectOpenDays,
   ],
   (
     bills,
@@ -986,8 +997,10 @@ export const selectBillPayments = createSelector(
     progress,
     today,
     startDate,
+    openDays,
   ): Record<string, BillPayment[]> => {
     const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
+    const fixedByBill = getFixedByBill(openDays);
     const result = Object.fromEntries(
       bills.map(({ item, version }) => {
         const { payload } = version;
@@ -1004,7 +1017,7 @@ export const selectBillPayments = createSelector(
               schedule: payload.timing.schedule,
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
-              fixed: {},
+              fixed: fixedByBill.get(item.id) ?? NO_FIXED,
               progress: progress[item.id] ?? NO_PROGRESS,
             },
             comingDays,

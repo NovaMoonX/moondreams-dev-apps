@@ -8,6 +8,7 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
+import BillShareView from '@apps/runway/components/BillShareView';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
@@ -16,6 +17,7 @@ import {
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
   NEEDS_LOOK_WORDS,
+  PAY_SHARE_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
@@ -45,6 +47,8 @@ interface DraftLineProps {
   canChange?: boolean;
   /** This income day takes its own version of the line. */
   isDayOnly?: boolean;
+  /** Takes back a bill's changed share for this day; absent where the day cannot change. */
+  onResetShare?: (line: DraftLineData) => void;
   /** The shortfall is one of the plan's things to fix, so it wears the warning; any other short line stays neutral. */
   isWarning?: boolean;
   /** Set where the day opens the line's sheet itself (a door from the footer). */
@@ -66,6 +70,7 @@ function DraftLine({
   isChoosing = false,
   canChange = false,
   isDayOnly = false,
+  onResetShare,
   isWarning = false,
   isOpen: isOpenProp,
   onOpenChange,
@@ -134,6 +139,8 @@ function DraftLine({
         isStrong: true,
       };
     if (shortText) return { text: shortText, isStrong: isWarning };
+    if (isDayOnly && line.bill)
+      return { text: PAY_SHARE_WORDS.changedFor, isStrong: false };
     return { text: billShareShort ?? reason, isStrong: false };
   };
   const detail = getDetail();
@@ -149,7 +156,8 @@ function DraftLine({
           line.bill.ranged.isOwnStance,
         )
       : null,
-    isDayOnly ? DRAFT_WORDS.dayOnly : null,
+    isDayOnly && line.bill ? PAY_SHARE_WORDS.changedFor : null,
+    isDayOnly && !line.bill ? DRAFT_WORDS.dayOnly : null,
     tieNote,
   ].filter((text): text is string => Boolean(text));
   const canChoose = Boolean(onChoose);
@@ -187,8 +195,10 @@ function DraftLine({
         : [];
   const canUndo =
     Boolean(onUndoChoice) && (state === 'toppedUp' || state === 'leftShort');
+  const canResetShare =
+    Boolean(onResetShare) && isDayOnly && line.bill !== null;
   const extra =
-    choices.length > 0 || canUndo ? (
+    choices.length > 0 || canUndo || canResetShare ? (
       <ActionGroup caption={ITEM_SHEET_WORDS.lineHeading}>
         {choices.map(({ choice, label, subtitle, icon }) => (
           <ActionRow
@@ -201,6 +211,16 @@ function DraftLine({
             onClick={() => onChoose?.(line, choice)}
           />
         ))}
+        {canResetShare && (
+          <ActionRow
+            isGrouped
+            icon={<Undo2 />}
+            label={PAY_SHARE_WORDS.backToPlan}
+            subtitle={PAY_SHARE_WORDS.backToPlanSub}
+            isDisabled={isChoosing}
+            onClick={() => onResetShare?.(line)}
+          />
+        )}
         {canUndo && (
           <ActionRow
             isGrouped
@@ -249,6 +269,22 @@ function DraftLine({
           quickChange={
             kind === 'bill' || kind === 'envelope' || kind === 'goal'
               ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+              : undefined
+          }
+          dayAction={
+            kind === 'bill' && line.bill
+              ? {
+                  label: PAY_SHARE_WORDS.action,
+                  renderView: ({ onBack, onClose }) => (
+                    <BillShareView
+                      billId={line.itemId}
+                      dayKey={dayKey}
+                      currentCents={line.demandCents}
+                      onBack={onBack}
+                      onClose={onClose}
+                    />
+                  ),
+                }
               : undefined
           }
           canChange={canChange}

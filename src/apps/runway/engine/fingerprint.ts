@@ -25,6 +25,7 @@ export function hashOverride(override: {
   pairings: unknown;
   holdResolutions: Record<string, string>;
   payloads?: Record<string, unknown>;
+  billCents?: Record<string, number>;
 }): string {
   const holds = Object.entries(override.holdResolutions).sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
@@ -32,11 +33,16 @@ export function hashOverride(override: {
   const payloads = Object.entries(override.payloads ?? {}).sort(([a], [b]) =>
     a < b ? -1 : a > b ? 1 : 0,
   );
+  const bills = Object.entries(override.billCents ?? {}).sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
   const result = hashText(
     JSON.stringify(
-      payloads.length === 0
-        ? [override.pairings, holds]
-        : [override.pairings, holds, payloads],
+      bills.length > 0
+        ? [override.pairings, holds, payloads, bills]
+        : payloads.length === 0
+          ? [override.pairings, holds]
+          : [override.pairings, holds, payloads],
     ),
   );
   return result;

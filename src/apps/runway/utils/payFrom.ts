@@ -1,6 +1,7 @@
 import { PAID_FROM_WORDS } from '@apps/runway/constants';
 import type { ResolvedSource } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillFundedBy } from '@apps/runway/types';
+import { daysInUtcMonth } from '@apps/runway/engine/dates';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 
 type PayFundedBy = Extract<BillFundedBy, { kind: 'pay' }>;
@@ -76,4 +77,28 @@ export function describePaidFrom(
   if (fundedBy.kind === 'lastBefore') return PAID_FROM_WORDS.lastBefore;
   if (fundedBy.kind === 'pay') return describePayChoice(fundedBy, plan);
   return PAID_FROM_WORDS.spread;
+}
+
+/** The day of the month a pay line's income lands on, the one its schedule names (a 30th that fell on the 28th still reads 30); null for a pay that is not monthly. */
+export function getPayMonthDay(
+  plan: readonly ResolvedSource[],
+  payLineId: string,
+  on: number,
+) {
+  const line = plan
+    .flatMap(({ payLines }) => payLines)
+    .find(({ item }) => item.id === payLineId);
+  const schedule = line?.version.payload.schedule;
+  if (
+    !schedule ||
+    (schedule.kind !== 'monthly' && schedule.kind !== 'twiceMonthly')
+  )
+    return null;
+  const date = new Date(on);
+  const length = daysInUtcMonth(date.getUTCFullYear(), date.getUTCMonth());
+  const result =
+    schedule.monthDays.find(
+      (day) => Math.min(day, length) === date.getUTCDate(),
+    ) ?? null;
+  return result;
 }

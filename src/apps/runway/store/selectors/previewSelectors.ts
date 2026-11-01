@@ -12,7 +12,16 @@ import {
   layerVersion,
   type DayEffect,
 } from '@apps/runway/engine/whatIf';
-import { MAX_PREVIEW_DAYS } from '@apps/runway/constants';
+import { MAX_PREVIEW_DAYS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import { addUtcMonths } from '@apps/runway/engine/dates';
+import {
+  getFixedByBill,
+  previewBillShare,
+  type BillShareEffect,
+} from '@apps/runway/engine/billShare';
+import { capEnding } from '@apps/runway/engine/endings';
+import { NO_PROGRESS } from '@apps/runway/engine/progress';
+import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { selectLookahead } from '@apps/runway/store/selectors/lookaheadSelectors';
 import { computeDraftView } from '@apps/runway/store/selectors/runwaySelectors';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
@@ -50,13 +59,19 @@ export type PreviewChange =
       day: Pick<ComingDay, 'dayKey' | 'payLineId' | 'sourceId' | 'on'>;
       itemId: string;
       payload: EnvelopeSealed | GoalSealed;
+    }
+  | {
+      kind: 'dayBill';
+      day: Pick<ComingDay, 'dayKey' | 'payLineId' | 'sourceId' | 'on'>;
+      billId: string;
+      cents: number;
     };
 
 const layerDay = (
   openDays: Slice['days'],
-  change: Extract<PreviewChange, { kind: 'day' }>,
+  change: Extract<PreviewChange, { kind: 'day' | 'dayBill' }>,
 ): OpenDay[] => {
-  const { day, itemId, payload } = change;
+  const { day } = change;
   const existing = openDays.find((entry) => entry.id === day.dayKey);
   const base: OpenDay = existing ?? {
     id: day.dayKey,
@@ -67,14 +82,31 @@ const layerDay = (
     confirmedAt: null,
     status: 'draft',
     doneLineIds: [],
-    override: { pairings: null, holdResolutions: {}, payloads: {} },
+    override: {
+      pairings: null,
+      holdResolutions: {},
+      payloads: {},
+      billCents: {},
+    },
   };
   const layered: OpenDay = {
     ...base,
-    override: {
-      ...base.override,
-      payloads: { ...base.override.payloads, [itemId]: payload },
-    },
+    override:
+      change.kind === 'day'
+        ? {
+            ...base.override,
+            payloads: {
+              ...base.override.payloads,
+              [change.itemId]: change.payload,
+            },
+          }
+        : {
+            ...base.override,
+            billCents: {
+              ...base.override.billCents,
+              [change.billId]: change.cents,
+            },
+          },
   };
   return [...openDays.filter((entry) => entry.id !== day.dayKey), layered];
 };
@@ -308,5 +340,78 @@ export function previewOverrideCarry(
     daysOf(versions),
     daysOf(layerVersion<OpenVersion>(versions, change.version)),
   );
+  return result;
+}
+
+export interface BillShareView {
+  share: BillShareEffect;
+  /** What the pay leaves after its lines, as it is and with the change. */
+  leftBeforeCents: number;
+  leftAfterCents: number;
+}
+
+/** What setting one pay's share of a bill to `cents` does: the bill's payment across its window and the pay's own leftover, from the same engine that drafts the days. Null when the pay is not in a payment's window. */
+export function previewBillShareView(
+  inputs: PreviewInputs,
+  change: Extract<PreviewChange, { kind: 'dayBill' }>,
+): BillShareView | null {
+  const { items, versions, openDays, stance, today } = inputs;
+  const { day, billId, cents } = change;
+  const settled = new Set(
+    inputs.settledKey === '' ? [] : inputs.settledKey.split(','),
+  );
+  const coming = buildComingDays(items, versions, today).filter(
+    (entry) => !settled.has(entry.dayKey),
+  );
+  const item = items.find((entry) => entry.id === billId);
+  const version = resolveCurrentOrNext(
+    versions.filter((entry) => entry.kind === 'bill'),
+    billId,
+    day.on,
+  );
+  if (!item || !version || version.kind !== 'bill') return null;
+  const { payload } = version;
+  const share = previewBillShare(
+    {
+      itemId: item.id,
+      createdAt: item.createdAt,
+      priority: payload.priority,
+      orderIndex: payload.orderIndex,
+      amount: payload.amount,
+      stanceOverride: payload.stanceOverride ?? null,
+      schedule: payload.timing.schedule,
+      ending: capEnding(payload.ending, item.endedAt),
+      fundedBy: payload.fundedBy,
+      fixed: getFixedByBill(openDays).get(billId) ?? {},
+      progress: inputs.billProgress[billId] ?? NO_PROGRESS,
+    },
+    coming,
+    addUtcMonths(today, LOOKAHEAD_MONTHS),
+    stance,
+    day.dayKey,
+    cents,
+    { today },
+  );
+  if (!share) return null;
+  const draftOf = (source: Slice['days']) =>
+    computeDraftView(
+      items,
+      versions,
+      stance,
+      source,
+      day.dayKey,
+      today,
+      inputs.heldByItem,
+      inputs.settledKey,
+      inputs.billProgress,
+      { isCached: false },
+    );
+  const result: BillShareView = {
+    share,
+    leftBeforeCents: draftOf(openDays)?.draft.freeToSpend.cents ?? 0,
+    leftAfterCents:
+      draftOf(layerDay(openDays, { ...change, cents: share.cents }))?.draft
+        .freeToSpend.cents ?? 0,
+  };
   return result;
 }

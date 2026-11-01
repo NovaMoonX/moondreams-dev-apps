@@ -71,6 +71,11 @@ import {
   getIncomeDaysPerMonth,
   monthlyTotal,
 } from '../../src/apps/runway/engine/groups.ts';
+import {
+  findPayRule,
+  getFixedByBill,
+  previewBillShare,
+} from '../../src/apps/runway/engine/billShare.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
 import {
   describePurchaseEdit,
@@ -1529,6 +1534,151 @@ const version = (
       ),
       [['20261115', 150_000]],
       'a fixed share on a day the pay does not allow is ignored',
+    );
+
+    // A pay's own share of a bill: the other pays, the shortfall and the rule it could become.
+    const monthDayOf = (_payLineId: string, on: number) =>
+      new Date(on).getUTCDate();
+    const base = rent({ kind: 'suggested' });
+    const nov15 = workPays[0].dayKey;
+    const nov30 = workPays[1].dayKey;
+    const zero = previewBillShare(
+      base,
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      0,
+    );
+    assert.deepEqual(
+      zero?.rows.map((row) => [row.dayKey, row.beforeCents, row.afterCents]),
+      [
+        [nov15, 75_000, 0],
+        [nov30, 75_000, 150_000],
+      ],
+      'setting a pay to nothing moves its share to the other pay in the window',
+    );
+    assert.equal(zero?.shortCents, 0, 'the other pay carries the rest');
+    assert.deepEqual(
+      zero && findPayRule(zero, nov15, monthDayOf),
+      { kind: 'pay', payLineId: 'work', monthDay: 30 },
+      'one other pay carrying it all maps to a Paid from rule',
+    );
+    assert.equal(
+      zero && findPayRule(zero, nov15, () => null),
+      null,
+      "a rule that would pick the line's other pays too is not offered",
+    );
+    const capped = previewBillShare(
+      base,
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      999_999,
+    );
+    assert.equal(
+      capped?.cents,
+      150_000,
+      'a share above what the bill needs is capped',
+    );
+    assert.deepEqual(
+      capped && findPayRule(capped, nov15, monthDayOf),
+      { kind: 'pay', payLineId: 'work', monthDay: 15 },
+      'the pay set to the whole amount maps to that pay',
+    );
+    const middle = previewBillShare(
+      base,
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      100_000,
+    );
+    assert.equal(
+      middle && findPayRule(middle, nov15, monthDayOf),
+      null,
+      'two pays sharing it is not a rule',
+    );
+    const stuck = previewBillShare(
+      rent({ kind: 'suggested' }, { [nov30]: 0 }),
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      0,
+    );
+    assert.equal(
+      stuck?.shortCents,
+      150_000,
+      'with no other pay the whole payment is short',
+    );
+    assert.equal(
+      previewBillShare(
+        base,
+        workPays,
+        horizon,
+        'conservative',
+        'work_20300101',
+        0,
+      ),
+      null,
+      'a pay outside any payment window has no preview',
+    );
+
+    // A day's own share reaches the demands, and the line stays at nothing.
+    const fixedDemands = buildDemands(
+      workPays.slice(0, 2).map((entry) => ({
+        ...entry,
+        sourceId: 'src',
+        amount: { lowCents: 500_000, highCents: 500_000 },
+      })),
+      workPays.slice(0, 2),
+      [],
+      [rent({ kind: 'suggested' }, { [nov15]: 0 })],
+      horizon,
+    ).map((demand) => [demand.dayKey, demand.cents, demand.isFixed]);
+    assert.deepEqual(
+      fixedDemands,
+      [
+        [nov15, 0, true],
+        [nov30, 150_000, false],
+      ],
+      'a pay fixed at nothing still has its line and the other takes the rest',
+    );
+    const open = (
+      id: string,
+      status: 'draft' | 'confirmed',
+      billCents: Record<string, number>,
+    ) => ({
+      id,
+      status,
+      override: { billCents },
+    });
+    assert.deepEqual(
+      [
+        ...getFixedByBill([
+          open(nov15, 'draft', { rent: 0 }),
+          open(nov30, 'confirmed', { rent: 5 }),
+          open('other', 'draft', {}),
+        ]).entries(),
+      ],
+      [['rent', { [nov15]: 0 }]],
+      'only draft days set a share',
+    );
+    assert.notEqual(
+      hashOverride({
+        pairings: null,
+        holdResolutions: {},
+        billCents: { rent: 0 },
+      }),
+      hashOverride({ pairings: null, holdResolutions: {} }),
+      'a changed share changes the day fingerprint',
+    );
+    assert.equal(
+      hashOverride({ pairings: null, holdResolutions: {}, billCents: {} }),
+      hashOverride({ pairings: null, holdResolutions: {} }),
+      'an empty set of shares is the legacy fingerprint',
     );
   }
 
@@ -4352,6 +4502,7 @@ const version = (
       pairings: null,
       holdResolutions: {},
       payloads: { vac: envelope(5_000) },
+      billCents: {},
     },
   };
   const withDay = [dayOverride] as never[];
@@ -7843,6 +7994,7 @@ const version = (
       pairings: null,
       holdResolutions: { rent: 'leaveShort' },
       payloads: {},
+      billCents: {},
     },
   });
   const carry = planOverrideCarry([ownDay(utc(2026, 11, 20))], before, after);

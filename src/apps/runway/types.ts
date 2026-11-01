@@ -141,6 +141,8 @@ export interface DayOverrideSealed {
   holdResolutions: Record<string, HoldChoice>;
   /** An envelope's or goal's whole payload for this income day only, by item id; a day written before it existed has none. */
   payloads: Record<string, EnvelopeSealed | GoalSealed>;
+  /** What this income day puts toward a bill's payment, by bill id; a day written before it existed has none. */
+  billCents: Record<string, Cents>;
 }
 
 export interface IncomeDayDoc {

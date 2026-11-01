@@ -161,7 +161,8 @@ type View =
   | 'check'
   | 'group'
   | 'move'
-  | 'setHeld';
+  | 'setHeld'
+  | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 interface ItemSheetProps {
@@ -182,6 +183,14 @@ interface ItemSheetProps {
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
   quickChange?: { label: string; step: string };
+  /** An action that takes the place of the first row and swaps its own view in, for a change that belongs to the income day the sheet was opened from. */
+  dayAction?: {
+    label: string;
+    renderView: (controls: {
+      onBack: () => void;
+      onClose: () => void;
+    }) => ReactNode;
+  };
   /** An optional extra's own action row, opening the change at that question. */
   maxAction?: { label: string; step: string };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
@@ -229,6 +238,7 @@ const VIEW_NOTES: Record<View, string> = {
   group: '',
   move: '',
   setHeld: '',
+  dayAction: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -243,6 +253,7 @@ function ItemSheet({
   fact,
   help,
   quickChange,
+  dayAction,
   maxAction,
   startsAtStep,
   payment = null,
@@ -753,7 +764,16 @@ function ItemSheet({
       />
       {extra}
       <ActionGroup>
-        {canChange && quickChange && (
+        {canChange && dayAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Pencil />}
+            label={dayAction.label}
+            onClick={() => goTo('dayAction')}
+          />
+        )}
+        {canChange && !dayAction && quickChange && (
           <ActionRow
             isGrouped
             hasChevron
@@ -762,7 +782,7 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
-        {canChange && !quickChange && (
+        {canChange && !quickChange && !dayAction && (
           <ActionRow
             isGrouped
             hasChevron
@@ -1220,7 +1240,12 @@ function ItemSheet({
                 ? moveView
                 : view === 'setHeld'
                   ? setHeldView
-                  : action
+                  : view === 'dayAction' && dayAction
+                    ? dayAction.renderView({
+                        onBack: () => goTo('menu'),
+                        onClose,
+                      })
+                    : action
         }
       >
         {menu}

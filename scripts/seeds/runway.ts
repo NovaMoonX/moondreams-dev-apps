@@ -1020,6 +1020,7 @@ async function writeSeedIncome(
     pairings: null,
     holdResolutions: { 'seed-envelope-trip': 'leaveShort' },
     payloads: {},
+    billCents: {},
   };
   const bonusDayId = toDayKey(ids.bonus, bonusDay);
   const overrideDoc: IncomeDayDoc = {
@@ -1345,6 +1346,7 @@ const EMPTY_SEED_OVERRIDE: DayOverrideSealed = {
   pairings: null,
   holdResolutions: {},
   payloads: {},
+  billCents: {},
 };
 
 /** Seven envelopes across Must, Should and Want, all three cadences, a percentage of the day and the rest, sealed the way the app seals them. */

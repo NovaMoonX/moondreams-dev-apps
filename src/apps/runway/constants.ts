@@ -708,6 +708,40 @@ export const PAID_FROM_WORDS = {
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
 
+/** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */
+export const PAY_SHARE_WORDS = {
+  action: 'Change what this pay puts in',
+  title: (name: string) => `How much should this pay put toward ${name}?`,
+  amount: 'Amount',
+  changes: 'What changes',
+  payRow: (date: string) => `${date} pay`,
+  short: (name: string, short: string, dueOn: string) =>
+    `${name} would be ${short} short on ${dueOn}`,
+  capped: (name: string, max: string) =>
+    `${max} is all ${name} still needs, so it stops there.`,
+  needsAmount: 'Enter an amount.',
+  unchanged: 'Change the amount to save it.',
+  save: 'Save for this pay',
+  saveFailed: 'This did not save. Nothing was changed.',
+  changedFor: 'Changed for this pay',
+  backToPlan: "Back to the plan's amount",
+  backToPlanSub: 'This pay goes back to its share of the plan',
+  keepTitle: 'Keep it this way for every paycheck?',
+  keepYes: (pay: string) => `Yes, always from ${pay}`,
+  keepYesBody: (name: string, pay: string) =>
+    `${name} comes from ${pay} every time.`,
+  keepJustOnce: 'Just this time',
+  keepJustOnceBody: 'The other pays stay as they are.',
+  summary: (name: string, cents: string, date: string) =>
+    `${name}: this pay puts in ${cents}, for ${date} only.`,
+  undoSummary: (name: string, date: string) =>
+    `${name}: this pay is back to the plan's amount, for ${date} only.`,
+  savedToast: (name: string) => `Changed what this pay puts toward ${name}`,
+  ruleToast: (name: string, pay: string) => `${name} now comes from ${pay}`,
+  undo: 'Undo',
+  undoFailed: 'That could not be undone. Nothing was changed.',
+} as const;
+
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
 export const LEVELS = ['plan', 'track'] as const;
 

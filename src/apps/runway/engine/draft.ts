@@ -511,7 +511,9 @@ export function buildDraft(input: DraftInput): Draft {
     .filter(
       (demand) =>
         !pairedKeys.has(`${demand.dayKey}:${demand.itemId}`) &&
-        (demand.cents > 0 || demand.ask.kind === 'rest'),
+        (demand.cents > 0 ||
+          demand.ask.kind === 'rest' ||
+          demand.isFixed === true),
     )
     .map((demand): WalkItem => ({ ...demand, mode: 'ordinary' }));
   const walkItems = [
