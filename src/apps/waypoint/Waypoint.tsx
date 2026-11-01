@@ -1,20 +1,17 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
-import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Lock } from 'lucide-react';
-
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ADMIN_NAME } from '@lib/app/app.constants';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
-import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import GatesClosedNote from '@/components/GatesClosedNote';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AppToggle from '@/components/AppToggle';
+import LockedButton from '@/components/LockedButton';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 
@@ -55,9 +52,6 @@ function Waypoint() {
   const isResumed = Boolean((useLocation().state as { resumed?: boolean } | null)?.resumed);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLockedInfoOpen, setIsLockedInfoOpen] = useState(false);
-  const { dialogId: lockedInfoDialogId, onDialogClose: onLockedInfoClose } =
-    useSheetHistory(isLockedInfoOpen, () => setIsLockedInfoOpen(false));
   const [showArchived, setShowArchived] = useState(false);
   const [isJoinCodeModalOpen, setIsJoinCodeModalOpen] = useState(false);
   const [isEnteredCode, setIsEnteredCode] = useState(false);
@@ -223,14 +217,17 @@ function Waypoint() {
         {label}
       </Button>
     ) : (
-      <Button
-        aria-disabled
-        className={join(className, 'opacity-60')}
-        onClick={() => setIsLockedInfoOpen(true)}
+      <LockedButton
+        label={label}
+        title='Creating trips is turned off'
+        className={className}
       >
-        <Lock className='h-4 w-4' aria-hidden />
-        {label}
-      </Button>
+        <p>
+          Creating trips is turned off for you right now. You can still join
+          trips with a code or an invite, and plan the ones you are in. Ask{' '}
+          {ADMIN_NAME} if you&apos;d like it on.
+        </p>
+      </LockedButton>
     );
 
   const renderTripSection = (label: string, sectionTrips: TripSpace[]) => {
@@ -369,23 +366,6 @@ function Waypoint() {
         <GatesClosedNote appId='waypoint' />
       </div>
 
-      <Modal
-        id={lockedInfoDialogId}
-        isOpen={isLockedInfoOpen}
-        onClose={onLockedInfoClose}
-        title='Creating trips is turned off'
-      >
-        <div className='space-y-4'>
-          <p className='text-muted-foreground text-sm'>
-            Creating trips is turned off for you right now. You can still join
-            trips with a code or an invite, and plan the ones you are in. Ask{' '}
-            {ADMIN_NAME} if you&apos;d like it on.
-          </p>
-          <div className='flex justify-end'>
-            <Button onClick={onLockedInfoClose}>Got it</Button>
-          </div>
-        </div>
-      </Modal>
       <CreateTripModal
         key={isCreateModalOpen ? 'open' : 'closed'}
         isOpen={isCreateModalOpen}
