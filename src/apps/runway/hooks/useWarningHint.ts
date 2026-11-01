@@ -31,7 +31,7 @@ const getScroller = (element: HTMLElement | null): HTMLElement | null => {
     : getScroller(element.parentElement);
 };
 
-/** What a change does to how far the plan holds (shared with the effects preview so it is worked out once), the one line its warning comes to, and that line again only when the warning drawn in the form is not in view at all, for the footer note beside Next. */
+/** What a change does to how far the plan holds (shared with the effects preview so it is worked out once), the one line its warning comes to, and that line again whenever the warning drawn in the form is not fully in view, for the footer note beside Next. */
 export function useWarningHint(
   changeJson: string | null,
   container: HTMLElement | null,
@@ -87,10 +87,11 @@ export function useWarningHint(
         return;
       }
       state.observer = new IntersectionObserver(
-        ([entry]) => setIsOutOfView(!entry.isIntersecting),
+        ([entry]) => setIsOutOfView(entry.intersectionRatio < 1),
         {
           root: getScroller(element.parentElement),
           rootMargin: `0px 0px -${FOOTER_ALLOWANCE_PX}px 0px`,
+          threshold: [0, 1],
         },
       );
       state.observer.observe(element);

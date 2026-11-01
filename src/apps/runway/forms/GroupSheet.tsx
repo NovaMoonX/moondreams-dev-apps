@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -170,6 +170,8 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     undo: DueWritten[] | null;
   } | null>(null);
   const store = useStore<RootState>();
+  const handledUndos = useRef(new WeakSet<DueWritten[]>());
+  const [isUndoingDue, setIsUndoingDue] = useState(false);
   const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
@@ -356,7 +358,9 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   );
 
   const undoDueDates = async (written: DueWritten[]) => {
-    if (!user) return;
+    if (!user || handledUndos.current.has(written)) return;
+    handledUndos.current.add(written);
+    setIsUndoingDue(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
       const state = store.getState();
@@ -421,8 +425,11 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
       });
     } catch (undoError) {
       const message = getErrorMessage(undoError, GROUP_WORDS.dueUndoFailed);
+      handledUndos.current.delete(written);
       setDueRecord({ note: message, undo: written });
       addToast({ title: message, type: 'error' });
+    } finally {
+      setIsUndoingDue(false);
     }
   };
 
@@ -878,7 +885,9 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                         variant='secondary'
                         size='sm'
                         rounded='full'
-                        className="relative after:absolute after:-inset-1.5 after:content-['']"
+                        loading={isUndoingDue}
+                        disabled={isUndoingDue}
+                        className="relative mr-3 after:absolute after:-inset-1.5 after:content-['']"
                         onClick={() => void undoDueDates(dueRecord.undo ?? [])}
                       >
                         {ITEM_SHEET_R2_WORDS.undo}
