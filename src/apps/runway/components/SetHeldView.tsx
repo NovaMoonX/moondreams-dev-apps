@@ -244,7 +244,7 @@ function SetHeldView({
         disabled={isSaving}
       />
       {amountBlocker === null && (
-        <div className='grid grid-cols-1 gap-2 sm:grid-cols-2'>
+        <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
           {options.map((option) => {
             const isChosen = source === option.choice;
             return (
@@ -255,7 +255,7 @@ function SetHeldView({
                 aria-pressed={isChosen}
                 disabled={isSaving}
                 className={join(
-                  'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-1.5! text-left font-normal whitespace-normal',
+                  'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-4! py-3! text-left font-normal whitespace-normal',
                   isChosen &&
                     'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
                 )}
@@ -277,7 +277,7 @@ function SetHeldView({
                     {isChosen && <Check className='size-3.5' />}
                   </span>
                 </span>
-                <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
+                <span className='text-muted-foreground mt-1 block text-[13px] leading-[1.125rem]'>
                   <MaskedText>{option.body}</MaskedText>
                 </span>
               </Button>

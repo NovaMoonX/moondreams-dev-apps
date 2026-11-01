@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Footprints, X } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Check, ChevronRight, Footprints } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -14,9 +15,19 @@ import LineUpScreen from '@apps/runway/screens/plan/LineUpScreen';
 
 const DISMISSED_KEY_PREFIX = 'runway.trackInviteDismissed.';
 
-const ROWS = [
-  { name: TRACK_INVITE_WORDS.planName, body: TRACK_INVITE_WORDS.planBody },
-  { name: TRACK_INVITE_WORDS.trackName, body: TRACK_INVITE_WORDS.trackBody },
+const OPTIONS = [
+  {
+    name: TRACK_INVITE_WORDS.planName,
+    lead: TRACK_INVITE_WORDS.planLead,
+    points: TRACK_INVITE_WORDS.planPoints,
+    isStep: false,
+  },
+  {
+    name: TRACK_INVITE_WORDS.trackName,
+    lead: TRACK_INVITE_WORDS.trackLead,
+    points: TRACK_INVITE_WORDS.trackPoints,
+    isStep: true,
+  },
 ] as const;
 
 /** Home's one quiet invitation for a Plan person to try Track, shown once an income day has been confirmed; hiding it lasts on this device. */
@@ -75,17 +86,6 @@ function TrackInviteCard() {
             aria-hidden='true'
           />
         </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label={TRACK_INVITE_WORDS.dismiss}
-          title={TRACK_INVITE_WORDS.dismiss}
-          className='text-muted-foreground! mr-1 size-10 min-w-10 shrink-0 self-center rounded-full p-0'
-          onClick={() => setIsDismissed(true)}
-        >
-          <X className='h-5 w-5' aria-hidden='true' />
-        </Button>
       </section>
       <DetailSheet
         isOpen={isOpen}
@@ -116,17 +116,54 @@ function TrackInviteCard() {
           </div>
         }
       >
-        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          {ROWS.map((row) => (
-            <li key={row.name} className='px-3 py-2.5'>
-              <p className='text-sm font-medium'>{row.name}</p>
-              <p className='text-muted-foreground text-sm'>{row.body}</p>
-            </li>
+        <div className='space-y-3'>
+          {OPTIONS.map((option) => (
+            <section
+              key={option.name}
+              aria-label={option.name}
+              className={join(
+                'bg-card rounded-2xl border p-4',
+                option.isStep ? 'border-primary' : 'border-border',
+              )}
+            >
+              <p className='text-base font-semibold'>{option.name}</p>
+              <p className='text-muted-foreground text-sm'>{option.lead}</p>
+              <ul className='mt-2 space-y-1.5'>
+                {option.points.map((point) => (
+                  <li key={point} className='flex items-start gap-2 text-sm'>
+                    <Check
+                      className={join(
+                        'mt-0.5 size-4 shrink-0',
+                        option.isStep
+                          ? 'text-primary'
+                          : 'text-muted-foreground',
+                      )}
+                      aria-hidden='true'
+                    />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
         <p className='text-muted-foreground mt-3 text-sm'>
           {TRACK_INVITE_WORDS.switchBack}
         </p>
+        <div className='mt-4 flex justify-center'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='text-muted-foreground!'
+            onClick={() => {
+              setIsOpen(false);
+              setIsDismissed(true);
+            }}
+          >
+            {TRACK_INVITE_WORDS.dismiss}
+          </Button>
+        </div>
       </DetailSheet>
     </>
   );
