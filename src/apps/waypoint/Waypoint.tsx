@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ADMIN_NAME } from '@lib/app/app.constants';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
+import GatesClosedNote from '@/components/GatesClosedNote';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AppToggle from '@/components/AppToggle';
+import LockedButton from '@/components/LockedButton';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 
@@ -18,6 +22,7 @@ import MyEmailInvites from '@apps/waypoint/components/MyEmailInvites';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
+import { CREATE_TRIPS_GATE_ID } from '@apps/waypoint/constants';
 import { getMyTripsParams } from '@apps/waypoint/utils/tripsUrl';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
@@ -36,6 +41,11 @@ function Waypoint() {
   useWaypointTheme();
   const { user, loading } = useAuth();
   useTrackAppUsage('waypoint', user?.uid ?? null);
+  useLoadFeatureGates('waypoint', user?.uid ?? null);
+  const canCreateTrips = useIsGateOpen('waypoint', CREATE_TRIPS_GATE_ID);
+  const areGatesRead = useAppSelector(
+    (state) => state.featureGates.byApp['waypoint'] !== undefined,
+  );
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -197,9 +207,28 @@ function Waypoint() {
     return <AuthRequiredState message='Please sign in to use Waypoint.' />;
   }
 
-  if (!tripsLoaded) {
+  if (!tripsLoaded || !areGatesRead) {
     return <Loading />;
   }
+
+  const renderCreateButton = (label: string, className: string) =>
+    canCreateTrips ? (
+      <Button className={className} onClick={() => setIsCreateModalOpen(true)}>
+        {label}
+      </Button>
+    ) : (
+      <LockedButton
+        label={label}
+        title='Creating trips is turned off'
+        className={className}
+      >
+        <p>
+          Creating trips is turned off for you right now. You can still join
+          trips with a code or an invite, and plan the ones you are in. Ask{' '}
+          {ADMIN_NAME} if you&apos;d like it on.
+        </p>
+      </LockedButton>
+    );
 
   const renderTripSection = (label: string, sectionTrips: TripSpace[]) => {
     if (sectionTrips.length === 0) {
@@ -249,7 +278,9 @@ function Waypoint() {
           <div>
             <h1 className='text-3xl font-semibold'>My Trips</h1>
             <p className='text-muted-foreground mt-1'>
-              Create a trip to start planning together.
+              {canCreateTrips
+                ? 'Create a trip to start planning together.'
+                : 'Join a trip with a code or an invite to start planning together.'}
             </p>
           </div>
           <div className='flex flex-col-reverse gap-3 sm:flex-row sm:items-center'>
@@ -281,12 +312,7 @@ function Waypoint() {
                   focusTripId={selectedTripId}
                 />
               </div>
-              <Button
-                className='whitespace-nowrap'
-                onClick={() => setIsCreateModalOpen(true)}
-              >
-                Create trip
-              </Button>
+              {renderCreateButton('Create trip', 'whitespace-nowrap')}
             </div>
           </div>
         </div>
@@ -314,9 +340,21 @@ function Waypoint() {
                 ? 'You do not have any trips to show.'
                 : 'You do not belong to any active trips yet.'}
             </p>
-            <Button className='mt-4' onClick={() => setIsCreateModalOpen(true)}>
-              Create your first trip
-            </Button>
+            {canCreateTrips ? (
+              renderCreateButton('Create your first trip', 'mt-4')
+            ) : (
+              <>
+                <p className='text-muted-foreground mt-2 text-sm'>
+                  Ask whoever is planning a trip for a join code or an invite.
+                </p>
+                <Button
+                  className='mt-4'
+                  onClick={() => setIsJoinCodeModalOpen(true)}
+                >
+                  Join with code
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <div className='space-y-8'>
@@ -325,6 +363,7 @@ function Waypoint() {
             {renderTripSection('Past', pastTrips)}
           </div>
         )}
+        <GatesClosedNote appId='waypoint' />
       </div>
 
       <CreateTripModal
