@@ -144,9 +144,6 @@ export const MAX_SERVING_AMOUNT = 1_000_000;
 /** What "1 serving" is for an ingredient with no serving size of its own. */
 export const DEFAULT_SERVING = { amount: 100, unit: 'G' } as const;
 
-/** The longest edge of a store's own image: it only ever shows in a small round tile. */
-export const STORE_IMAGE_MAX_DIMENSION = 512;
-
 export const MAX_DISMISSED_NUDGES = 500;
 /** The most ingredient names one copy carries. */
 /** The longest recipe text the reader takes, and the biggest photo, screenshot or PDF. */
@@ -337,7 +334,6 @@ export const MAX_IDEA_SITE_NAME_LENGTH = 120;
 /** The most ideas the list takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_IDEAS = 200;
 export const IDEA_LOOKUP_TIMEOUT_MS = 6000;
-export const IDEA_PHOTO_MAX_DIMENSION = 1280;
 export const IDEA_KIND_EMOJIS: Record<IdeaKind, string> = {
   LINK: '🔗',
   PHOTO: '📷',
@@ -504,8 +500,6 @@ export const CARE_DAYS_PER_MONTH = 30;
 export const CARE_DAYS_PER_WEEK = 7;
 export const MAX_CARE_REHEAT_LENGTH = 300;
 export const MAX_CARE_TIP_LENGTH = 300;
-/** The longest edge of a recipe cover: it shows in a list row and a drawer header. */
-export const RECIPE_COVER_MAX_DIMENSION = 1280;
 /** A web cover is kept as an address; the rules refuse a longer one. */
 export const MAX_COVER_URL_LENGTH = 2000;
 export const PHOTO_QUERY_MIN_TITLE_LENGTH = 3;
@@ -688,8 +682,6 @@ export const MIN_COOK_SERVINGS = 0.5;
 export const MAX_COOK_SERVINGS = 1000;
 
 export const MAX_COOKED_SERVINGS = 1000;
-/** The longer edge of a cook's photo once it is stored. */
-export const COOK_PHOTO_MAX_DIMENSION = 1280;
 export const COOK_RATING_STEP = 0.5;
 /** The most cooks one recipe's history takes before asking to delete one: the action and the screens, not the rules. */
 export const SOFT_MAX_COOKS_PER_RECIPE = 500;

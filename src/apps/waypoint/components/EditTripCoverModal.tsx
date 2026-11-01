@@ -24,7 +24,7 @@ function EditTripCoverModal({
   onSubmit,
   onClose,
 }: EditTripCoverModalProps) {
-  const coverUpload = useImageUpload(trip?.coverImageUrl ?? null);
+  const coverUpload = useImageUpload(trip?.coverImageUrl ?? null, 'cover');
   const [error, setError] = useState<string | null>(null);
 
   if (!trip) {
@@ -34,12 +34,13 @@ function EditTripCoverModal({
   const handleSubmit = async () => {
     setError(null);
     try {
+      const coverImageFile = await coverUpload.readyFile();
       await onSubmit({
         title: trip.title,
         startDate: trip.startDate,
         endDate: trip.endDate,
         coverImageUrl: trip.coverImageUrl,
-        coverImageFile: coverUpload.file,
+        coverImageFile,
         coverImageRemoved: coverUpload.previewUrl === null && Boolean(trip.coverImageUrl),
         defaultCurrency: trip.defaultCurrency,
         timezone: trip.timezone,
@@ -69,8 +70,9 @@ function EditTripCoverModal({
           photoUrl={coverUpload.previewUrl}
           error={coverUpload.error}
           disabled={isSubmitting}
+          loading={coverUpload.isPreparing}
           showPreview={false}
-          onSelect={(file) => coverUpload.pick(file)}
+          onSelect={(file) => void coverUpload.pick(file)}
           onRemove={() => coverUpload.clear()}
         />
       </div>

@@ -25,7 +25,7 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
   const dispatch = useAppDispatch();
   const cook = useAppSelector(selectCooksById).get(cookId) ?? null;
   const storedUrl = useCookPhotoUrl(cook);
-  const upload = useImageUpload(null);
+  const upload = useImageUpload(null, 'photo');
   const { pick, clear } = upload;
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,10 +47,14 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
 
   const handlePick = async (file: File | null) => {
     if (file === null) return;
-    pick(file);
     setIsUploading(true);
+    const prepared = await pick(file);
+    if (prepared === null) {
+      setIsUploading(false);
+      return;
+    }
     try {
-      await write({ photoFile: file });
+      await write({ photoFile: prepared });
     } catch {
       clear();
     } finally {

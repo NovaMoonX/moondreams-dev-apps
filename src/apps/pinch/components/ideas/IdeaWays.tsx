@@ -423,7 +423,7 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
     uid,
     onSaved,
   );
-  const upload = useImageUpload(null);
+  const upload = useImageUpload(null, 'photo');
   const { pick, clear } = upload;
   const [data, setData] = useState({ title: '', note: '' });
 
@@ -459,9 +459,10 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
               uploadLabel='Choose a picture'
               changeLabel='Choose another'
               error={upload.error}
+              loading={upload.isPreparing}
               onSelect={(file) => {
                 clearError();
-                pick(file);
+                void pick(file);
               }}
               onRemove={clear}
             />
