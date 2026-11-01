@@ -10350,6 +10350,7 @@ assert.equal(
       freezerDays: null,
       suggestPhotos: true,
       calendarStats: false,
+      defaultTab: 'recipes',
       voice: { hasAgreed: null, isReadingAloud: null, isReadingNotes: null, isWaiting: null },
       reminders: {
         eatSoon: true,
@@ -10409,6 +10410,25 @@ assert.equal(
       false,
     ],
     'the Calendar stats choice is written on its own path and starts off',
+  );
+  assert.deepEqual(
+    [
+      stgCreate({ defaultTab: 'kitchen' }, 3, null).defaultTab,
+      stgUpdates({ defaultTab: 'kitchen' }, 9),
+      stgWithDefaults(null).defaultTab,
+      stgWithDefaults(
+        Object.fromEntries(
+          Object.entries(stgWithDefaults(null)).filter(([key]) => key !== 'defaultTab'),
+        ) as never,
+      ).defaultTab,
+    ],
+    [
+      'kitchen',
+      [{ path: ['defaultTab'], value: 'kitchen' }, { path: ['updatedAt'], value: 9 }],
+      'recipes',
+      'recipes',
+    ],
+    'the opening tab is written on its own path and a person without one opens on Recipes',
   );
   assert.equal(
     stgCreate({ suggestPhotos: false }, 3, null).suggestPhotos,
