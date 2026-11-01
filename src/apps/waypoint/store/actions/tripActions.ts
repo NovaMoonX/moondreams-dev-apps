@@ -111,7 +111,16 @@ export const createTrip = createAsyncThunk<
       tripId,
       title: trip.title,
     });
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (error) {
+      if (error instanceof FirebaseError && error.code === 'permission-denied') {
+        return rejectWithValue(
+          "Creating trips is turned off for you right now. If that seems wrong, refresh the page and try again.",
+        );
+      }
+      throw error;
+    }
 
     dispatch(upsertTrip(trip));
 

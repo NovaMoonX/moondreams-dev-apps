@@ -19,6 +19,19 @@ service cloud.firestore {
       );
     }
 
+    // A feature switch (`featureGates/{appId}`), the same answer as `isGateOpen` in src/lib/gates/gateAccess.ts.
+    // `defaultRollout` is the registry's, used until the admin sets one; `npm run check:gates` fails if the two disagree.
+    function isGateOpen(appId, gateId, defaultRollout) {
+      let path = /databases/$(database)/documents/featureGates/$(appId);
+      let setting = exists(path) ? get(path).data.get('gates', {}).get(gateId, {}) : {};
+      let rollout = setting.get('rollout', defaultRollout);
+      return request.auth != null
+        && !(request.auth.uid in setting.get('alwaysOffUids', []))
+        && ((request.auth.uid in setting.get('alwaysOnUids', []))
+          || rollout == 'everyone'
+          || (rollout == 'testing' && isAdmin()));
+    }
+
     // Only ever set by scripts/seeds/core.ts, which refuses to run against anything but a local
     // emulator, so it never appears on a production token.
     function isDevUser() {
@@ -426,6 +439,7 @@ service cloud.firestore {
 
       allow read: if isTripMember();
       allow create: if request.auth != null
+        && isGateOpen('waypoint', 'create-trips', 'everyone')
         && isCreatedByMe()
         && request.resource.data.members.keys().hasOnly([request.auth.uid])
         && isMemberEntryValid(request.resource.data.members[request.auth.uid], request.auth.uid)
@@ -804,7 +818,7 @@ service cloud.firestore {
 
     // An app's feature switches. Every member reads them, since the app checks its own, so any member can
     // see who is given or kept out of a feature (uids map to names through `users`); accepted for the beta
-    // tier. The checks are client-side only, so no other rule reads them.
+    // tier. A switch with `isServerEnforced` is also checked by `isGateOpen` in the rule that guards what it controls.
     match /featureGates/{appId} {
       allow read: if request.auth != null;
       allow write: if isAdmin();

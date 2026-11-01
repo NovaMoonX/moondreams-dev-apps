@@ -1,0 +1,135 @@
+[
+ {
+  "name": "no doc, default everyone",
+  "setting": null,
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": true
+ },
+ {
+  "name": "no doc, default off",
+  "setting": null,
+  "defaultRollout": "off",
+  "isAdmin": false,
+  "expected": false
+ },
+ {
+  "name": "no doc, default testing, member",
+  "setting": null,
+  "defaultRollout": "testing",
+  "isAdmin": false,
+  "expected": false
+ },
+ {
+  "name": "no doc, default testing, admin",
+  "setting": null,
+  "defaultRollout": "testing",
+  "isAdmin": true,
+  "expected": true
+ },
+ {
+  "name": "everyone",
+  "setting": {
+   "rollout": "everyone"
+  },
+  "defaultRollout": "off",
+  "isAdmin": false,
+  "expected": true
+ },
+ {
+  "name": "off",
+  "setting": {
+   "rollout": "off"
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": false
+ },
+ {
+  "name": "off, admin",
+  "setting": {
+   "rollout": "off"
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": true,
+  "expected": false
+ },
+ {
+  "name": "testing, member",
+  "setting": {
+   "rollout": "testing"
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": false
+ },
+ {
+  "name": "testing, admin",
+  "setting": {
+   "rollout": "testing"
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": true,
+  "expected": true
+ },
+ {
+  "name": "off but given",
+  "setting": {
+   "rollout": "off",
+   "alwaysOnUids": [
+    "u"
+   ]
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": true
+ },
+ {
+  "name": "everyone but kept out",
+  "setting": {
+   "rollout": "everyone",
+   "alwaysOffUids": [
+    "u"
+   ]
+  },
+  "defaultRollout": "off",
+  "isAdmin": false,
+  "expected": false
+ },
+ {
+  "name": "given and kept out",
+  "setting": {
+   "rollout": "off",
+   "alwaysOnUids": [
+    "u"
+   ],
+   "alwaysOffUids": [
+    "u"
+   ]
+  },
+  "defaultRollout": "off",
+  "isAdmin": false,
+  "expected": false
+ },
+ {
+  "name": "kept out, admin",
+  "setting": {
+   "rollout": "testing",
+   "alwaysOffUids": [
+    "u"
+   ]
+  },
+  "defaultRollout": "off",
+  "isAdmin": true,
+  "expected": false
+ },
+ {
+  "name": "setting without rollout uses default",
+  "setting": {
+   "alwaysOnUids": []
+  },
+  "defaultRollout": "everyone",
+  "isAdmin": false,
+  "expected": true
+ }
+]
