@@ -1,5 +1,5 @@
 import FallbackImage from '@/components/FallbackImage';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
@@ -26,12 +26,17 @@ function EditTripCoverModal({
 }: EditTripCoverModalProps) {
   const coverUpload = useImageUpload(trip?.coverImageUrl ?? null, 'cover');
   const [error, setError] = useState<string | null>(null);
+  const [isWaiting, setIsWaiting] = useState(false);
+  const isSavingRef = useRef(false);
 
   if (!trip) {
     return null;
   }
 
   const handleSubmit = async () => {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+    setIsWaiting(true);
     setError(null);
     try {
       const coverImageFile = await coverUpload.readyFile();
@@ -53,6 +58,9 @@ function EditTripCoverModal({
           getErrorMessage(submitError, 'Unable to update the cover photo.'),
         ),
       );
+    } finally {
+      isSavingRef.current = false;
+      setIsWaiting(false);
     }
   };
 
@@ -83,11 +91,11 @@ function EditTripCoverModal({
         </Button>
         <Button
           type='button'
-          loading={isSubmitting}
-          disabled={isSubmitting}
+          loading={isSubmitting || isWaiting}
+          disabled={isSubmitting || isWaiting}
           onClick={() => void handleSubmit()}
         >
-          {isSubmitting ? 'Saving…' : 'Save'}
+          {isSubmitting || isWaiting ? 'Saving…' : 'Save'}
         </Button>
       </div>
     </Modal>

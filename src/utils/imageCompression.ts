@@ -23,7 +23,21 @@ const MIN_FALLBACK_DIMENSION = 320;
 const MAX_IMAGE_DIMENSION = 2_000;
 const WEBP_QUALITY = 0.82;
 
-const toWebpName = (name: string) => `${name.replace(/\.[^.]+$/, '')}.webp`;
+const EXTENSIONS: Record<string, string> = {
+  'image/webp': 'webp',
+  'image/jpeg': 'jpg',
+};
+const shrunkFiles = new WeakSet<File>();
+
+const toNamedFile = (blob: Blob, source: File) => {
+  const name = `${source.name.replace(/\.[^.]+$/, '')}.${EXTENSIONS[blob.type]}`;
+  const file = new File([blob], name, {
+    type: blob.type,
+    lastModified: source.lastModified,
+  });
+  shrunkFiles.add(file);
+  return file;
+};
 
 const withDecodedImage = async <T,>(
   file: File,
@@ -43,7 +57,7 @@ const withDecodedImage = async <T,>(
   }
 };
 
-const encodeWebp = async (
+const encodeImage = async (
   image: HTMLImageElement,
   maxDimension: number,
   quality: number,
@@ -58,10 +72,13 @@ const encodeWebp = async (
   const context = canvas.getContext('2d');
   if (!context) return null;
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, 'image/webp', quality),
-  );
-  return blob?.type === 'image/webp' ? blob : null;
+  const toBlob = (type: string) =>
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
+  const webp = await toBlob('image/webp');
+  if (webp?.type === 'image/webp') return webp;
+  // Safari can't encode WebP and hands back a PNG, which is larger than the original.
+  const jpeg = await toBlob('image/jpeg');
+  return jpeg?.type === 'image/jpeg' ? jpeg : null;
 };
 
 const fitsAlready = (
@@ -70,7 +87,7 @@ const fitsAlready = (
   maxDimension: number,
   maxBytes: number,
 ) =>
-  file.type === 'image/webp' &&
+  shrunkFiles.has(file) &&
   file.size <= maxBytes &&
   Math.max(image.naturalWidth, image.naturalHeight) <= maxDimension;
 
@@ -92,7 +109,7 @@ const getAttempts = ({ maxDimension, quality }: ImageUseSize) => [
   })),
 ];
 
-/** Shrinks a photo for its use to WebP under `maxBytes`; `null` when this browser can't open it (HEIC on a computer). */
+/** Shrinks a photo for its use to WebP (JPEG on Safari) under `maxBytes`; `null` when this browser can't open it (HEIC on a computer). */
 export async function compressImageForUse(
   file: File,
   use: ImageUse,
@@ -109,15 +126,12 @@ export async function compressImageForUse(
         async (previous, attempt) => {
           const found = await previous;
           if (found && found.size <= maxBytes) return found;
-          return encodeWebp(image, attempt.maxDimension, attempt.quality);
+          return encodeImage(image, attempt.maxDimension, attempt.quality);
         },
         Promise.resolve(null),
       );
       if (!blob || blob.size > maxBytes) return null;
-      return new File([blob], toWebpName(file.name), {
-        type: 'image/webp',
-        lastModified: file.lastModified,
-      });
+      return toNamedFile(blob, file);
     },
     null,
   );
@@ -129,7 +143,7 @@ export async function compressIngestionImage(file: File): Promise<File> {
   return resizeImageToWebp(file, MAX_IMAGE_DIMENSION);
 }
 
-/** Scales an image down to fit `maxDimension` on its longer edge and re-encodes it as WebP; a non-image, or one the browser can't decode, passes through untouched. */
+/** Scales an image down to fit `maxDimension` on its longer edge and re-encodes it as WebP (JPEG on Safari); a non-image, or one the browser can't decode, passes through untouched. */
 export async function resizeImageToWebp(
   file: File,
   maxDimension: number,
@@ -138,12 +152,8 @@ export async function resizeImageToWebp(
   return withDecodedImage(
     file,
     async (image) => {
-      const blob = await encodeWebp(image, maxDimension, WEBP_QUALITY);
-      if (!blob) return file;
-      return new File([blob], toWebpName(file.name), {
-        type: 'image/webp',
-        lastModified: file.lastModified,
-      });
+      const blob = await encodeImage(image, maxDimension, WEBP_QUALITY);
+      return blob ? toNamedFile(blob, file) : file;
     },
     file,
   );

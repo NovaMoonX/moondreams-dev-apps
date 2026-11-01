@@ -47,11 +47,10 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
 
   const handlePick = async (file: File | null) => {
     if (file === null) return;
-    const prepared = await pick(file);
-    if (prepared === null) return;
+    void pick(file);
     setIsUploading(true);
     try {
-      await write({ photoFile: prepared });
+      await write({ photoFile: file });
     } catch {
       clear();
     } finally {
