@@ -96,7 +96,7 @@ block-beta
 
 **Destinations vs. tags — kept deliberately separate, not one combined row**: destination badges (Tokyo, Kyoto) describe *where*; tags (Guys Trip, Couples Vacation) describe *what kind of trip*. New `TripSpace.tags: string[]` field, freeform, same treatment as `destinationLabels` — flagged for the TDD reconciliation pass.
 
-**Create Trip** (modal). When the admin's `create-trips` switch is off for someone, My Trips shows the button locked (lock icon, muted); tapping it opens a small "Creating trips is turned off" dialog that says why, that joining and planning still work, and who to ask; a trip-less person sees "Join with code" instead of "Create your first trip", and a refused create (a stale page) says so in the modal and keeps what was typed.
+**Create Trip** (modal). When the admin's `create-trips` switch is off for someone, My Trips shows the button locked (lock icon, dashed outline); tapping it opens a small "Creating trips is turned off" dialog that says why, that joining and planning still work, and who to ask; a trip-less person sees "Join with code" instead of "Create your first trip", and a refused create (a stale page) says so in the modal and keeps what was typed.
 ```mermaid
 %%{init: {'theme': 'base', 'themeVariables': {'primaryColor': 'transparent', 'primaryBorderColor': '#888888', 'primaryTextColor': '#333333', 'lineColor': '#888888'}}}%%
 block-beta
