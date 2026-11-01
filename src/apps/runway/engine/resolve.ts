@@ -166,3 +166,30 @@ export function getVersionStretches<
       : [],
   );
 }
+
+/** The fields whose values differ between two payloads. */
+export function getChangedKeys<P extends object>(
+  before: P,
+  after: P,
+): (keyof P)[] {
+  const keys = Object.keys({ ...before, ...after }) as (keyof P)[];
+  return keys.filter(
+    (key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]),
+  );
+}
+
+/** Carries only the fields a change touched onto each stretch, so every other field of a later version stays as it was. */
+export function applyFieldChanges<P extends object>(
+  stretches: readonly VersionStretch<P>[],
+  current: P,
+  candidate: P,
+): VersionStretch<P>[] {
+  const changed = getChangedKeys(current, candidate);
+  return stretches.map((stretch) => ({
+    ...stretch,
+    payload: {
+      ...stretch.payload,
+      ...Object.fromEntries(changed.map((key) => [key, candidate[key]])),
+    },
+  }));
+}

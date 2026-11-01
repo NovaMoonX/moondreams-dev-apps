@@ -1,3 +1,4 @@
+import { getChangedKeys } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
@@ -231,6 +232,16 @@ const getParts = (
 };
 
 /** True when two payloads say the same thing. */
+const MONEYLESS_KEYS = ['name', 'emoji', 'groupId', 'paidByCardId'];
+
+/** A change to only a name, emoji, group or card: it moves no money on any income day. */
+export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
+  const changed = getChangedKeys(before, after) as string[];
+  return (
+    changed.length > 0 && changed.every((key) => MONEYLESS_KEYS.includes(key))
+  );
+};
+
 export const isSamePayload = (a: ItemPayload, b: ItemPayload) => same(a, b);
 
 /** What differs, from and to: "Amount $1,250.00 to $1,300.00; Name Rent to Home rent". */

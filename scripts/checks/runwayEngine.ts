@@ -226,6 +226,8 @@ import {
   percentShares,
 } from '../../src/apps/runway/engine/money.ts';
 import {
+  applyFieldChanges,
+  getChangedKeys,
   getVersionStretches,
   resolve,
   resolveCurrentOrNext,
@@ -8974,6 +8976,48 @@ const version = (
       foreignCurrency: 'EUR',
     }),
     'Read the store, the day and 9 items. This receipt is in EUR, so type the amount in dollars.',
+  );
+}
+
+{
+  const stretches = [
+    {
+      payload: { name: 'Rent', cents: 125000 },
+      effectiveFrom: 10,
+      effectiveUntil: 40,
+    },
+    {
+      payload: { name: 'Rent', cents: 130000 },
+      effectiveFrom: 40,
+      effectiveUntil: null,
+    },
+  ];
+  assert.deepEqual(
+    getChangedKeys(
+      { name: 'Rent', cents: 125000 },
+      { name: 'Home', cents: 125000 },
+    ),
+    ['name'],
+  );
+  assert.deepEqual(
+    applyFieldChanges(
+      stretches,
+      { name: 'Rent', cents: 125000 },
+      { name: 'Home', cents: 125000 },
+    ),
+    [
+      {
+        payload: { name: 'Home', cents: 125000 },
+        effectiveFrom: 10,
+        effectiveUntil: 40,
+      },
+      {
+        payload: { name: 'Home', cents: 130000 },
+        effectiveFrom: 40,
+        effectiveUntil: null,
+      },
+    ],
+    "a rename keeps the later version's own amount",
   );
 }
 

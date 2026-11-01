@@ -1506,6 +1506,7 @@ export const FORM_FLOW_WORDS = {
 // Lists and screens, round 2: one fact per sheet head, short action rows, the payday tick and the problems row.
 export const ITEM_SHEET_R2_WORDS = {
   moreDetails: 'More details',
+  showToChange: 'Show amounts to change it',
   change: 'Change',
   changeBillSub: 'Amount, name, due date and more',
   changeAmountSub: 'Amount, name and more',
@@ -1517,8 +1518,6 @@ export const ITEM_SHEET_R2_WORDS = {
   archiveSub: 'Off your lists. Its history stays',
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
-  setMax: 'Set a max',
-  changeMax: 'Change the max',
   stopsAt: (amount: string) => `Stops at ${amount}`,
   setDueDate: 'Set the due date',
   eachTime: 'Each time',
@@ -1619,8 +1618,6 @@ export const HOW_OFTEN_WORDS = {
   noAddingSummary: 'Not being added to',
   noAddingHint:
     'Nothing goes into it. You can start adding to it whenever you like.',
-  startAdding: 'Start adding to it',
-  changeOften: 'Change how often',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',
@@ -1779,7 +1776,16 @@ export const RUNWAY_SEARCH_THRESHOLD = 5;
 
 export const GROUP_WORDS = {
   setDue: 'Set one due date',
-  setDueSub: (count: number) => `For all ${count} bills in this group`,
+  setDueSub: (count: number, isAll: boolean) =>
+    isAll
+      ? `For all ${count} bills in this group`
+      : `For the ${count} bills it can change`,
+  duePickDay: 'Pick a day to continue',
+  dueUndone: (count: number) =>
+    `Put back the due ${count === 1 ? 'date' : 'dates'} on ${count} ${count === 1 ? 'bill' : 'bills'}`,
+  dueUndoPartial: (done: number, total: number, failed: string[]) =>
+    `Put back ${done} of ${total} due dates. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not change back.`,
+  dueUndoFailed: 'The due dates did not change back. Nothing was undone.',
   dueQuestion: 'When are they all due?',
   dueCaption: 'Due',
   dueAction: 'Set the due date',
@@ -1789,10 +1795,12 @@ export const GROUP_WORDS = {
       ? '1 bill keeps its own date: it is paid, ends first or repeats its own way.'
       : `${count} bills keep their own dates: paid, ending first or repeating their own way.`,
   dueReplaceTitle: 'Replace their due dates?',
-  dueReplaceBody: (names: string[], count: number, date: string) =>
-    names.length > 0 && count <= 3
-      ? `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} already ${count === 1 ? 'has a due date' : 'have a due date'}. Replace ${count === 1 ? 'it' : 'them'} with ${date}?`
-      : `${count} of these bills already have a due date. Replace them with ${date}?`,
+  dueReplaceBody: (bills: string[], date: string) =>
+    `${
+      bills.length <= 3
+        ? bills.join(', ').replace(/, ([^,]*)$/, ' and $1')
+        : `${bills.slice(0, 2).join(', ')} and ${bills.length - 2} more`
+    } already ${bills.length === 1 ? 'has a due date' : 'have due dates'}. Replace ${bills.length === 1 ? 'it' : 'them'} with ${date}?`,
   dueReplace: 'Replace',
   dueToast: (count: number) =>
     `Set the due date on ${count} ${count === 1 ? 'bill' : 'bills'}`,

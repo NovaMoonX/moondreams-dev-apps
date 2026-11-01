@@ -501,6 +501,8 @@ function EnvelopeFormBody({
   const quickStep = steps.find((step) => step.id === openStep) ?? null;
   const isQuick = !!editing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
+  const changeSection =
+    editing && questions.hasReviewed ? <ChangeSection /> : null;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -566,6 +568,7 @@ function EnvelopeFormBody({
                 step={quickStep}
                 flow={questions}
                 rowIds={['name', 'often', 'max']}
+                after={changeSection}
                 onAll={() => setIsAll(true)}
               />
             ) : (
@@ -576,7 +579,7 @@ function EnvelopeFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && questions.hasReviewed && <ChangeSection />}
+            {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
                 error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
@@ -607,14 +610,17 @@ function EnvelopeFormBody({
                     disabled={isSaving || shownBlocker !== null}
                     onClick={() => {
                       if (editing) {
-                        flow.setStep('reason');
+                        if (flow.isMoneyless) void flow.save(null);
+                        else flow.setStep('reason');
                         return;
                       }
                       void handleSubmit();
                     }}
                   >
                     {editing
-                      ? CHANGE_WORDS.review
+                      ? flow.isMoneyless
+                        ? 'Save'
+                        : CHANGE_WORDS.review
                       : draft?.initial
                         ? 'Save'
                         : 'Add'}

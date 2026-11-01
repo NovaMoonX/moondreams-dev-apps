@@ -553,7 +553,7 @@ function IncomeFormBody({
         <RangeAmountField
           isHero
           label={FORM_FLOW_WORDS.takeHome}
-          hint={FORM_FLOW_WORDS.howOftenNext}
+          hint={isEditing ? '' : FORM_FLOW_WORDS.howOftenNext}
           side='income'
           planStance={planStance}
           value={formData.amount}
@@ -786,6 +786,10 @@ function IncomeFormBody({
     questions.steps.find((step) => step.id === openStep) ?? null;
   const isQuick = !!isEditing && openStep !== null && !isAll;
   const isAsking = !questions.hasReviewed;
+  const changeSection =
+    editing && !isEditingSource && questions.hasReviewed ? (
+      <ChangeSection />
+    ) : null;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -870,7 +874,8 @@ function IncomeFormBody({
               <QuickChange
                 step={quickStep}
                 flow={questions}
-                rowIds={['payName', 'often', 'schedule']}
+                rowIds={['payName', 'schedule']}
+                after={changeSection}
                 onAll={() => setIsAll(true)}
               />
             ) : (
@@ -881,9 +886,7 @@ function IncomeFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && !isEditingSource && questions.hasReviewed && (
-              <ChangeSection />
-            )}
+            {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
                 error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
@@ -914,14 +917,17 @@ function IncomeFormBody({
                     disabled={isSaving || shownBlocker !== null}
                     onClick={() => {
                       if (editing) {
-                        flow.setStep('reason');
+                        if (flow.isMoneyless) void flow.save(null);
+                        else flow.setStep('reason');
                         return;
                       }
                       void handleSubmit();
                     }}
                   >
                     {editing
-                      ? CHANGE_WORDS.review
+                      ? flow.isMoneyless
+                        ? 'Save'
+                        : CHANGE_WORDS.review
                       : draft?.initial
                         ? 'Save'
                         : 'Add'}

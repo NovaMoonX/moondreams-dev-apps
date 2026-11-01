@@ -950,6 +950,8 @@ function BillFormBody({
   const isFirstDate =
     isQuick && editing?.payload.timing.schedule.anchor === null;
   const shownBlocker = editing ? editBlocker : blocker;
+  const changeSection =
+    editing && questions.hasReviewed && !isFirstDate ? <ChangeSection /> : null;
 
   const handleSubmit = async () => {
     const bill = buildBill(formData);
@@ -1014,6 +1016,7 @@ function BillFormBody({
                 step={quickStep}
                 flow={questions}
                 rowIds={['name', 'due', 'repeats']}
+                after={changeSection}
                 onAll={() => setIsAll(true)}
                 isFirstDate={isFirstDate}
               />
@@ -1025,9 +1028,7 @@ function BillFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && questions.hasReviewed && !isFirstDate && (
-              <ChangeSection />
-            )}
+            {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
                 error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
@@ -1066,7 +1067,8 @@ function BillFormBody({
                         return;
                       }
                       if (editing) {
-                        flow.setStep('reason');
+                        if (flow.isMoneyless) void flow.save(null);
+                        else flow.setStep('reason');
                         return;
                       }
                       void handleSubmit();
@@ -1075,7 +1077,9 @@ function BillFormBody({
                     {isFirstDate
                       ? 'Save'
                       : editing
-                        ? CHANGE_WORDS.review
+                        ? flow.isMoneyless
+                          ? 'Save'
+                          : CHANGE_WORDS.review
                         : draft?.initial
                           ? 'Save'
                           : 'Add'}

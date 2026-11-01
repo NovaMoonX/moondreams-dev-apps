@@ -238,3 +238,5 @@ Notes on the table:
 ## Group due date
 
 A group's sheet has "Set one due date" ("For all N bills in this group") when it holds bills. It swaps in "When are they all due?" with one date control and "Set the due date". Each bill keeps its own repeat (a bill always has one, even undated). Paid one-time bills and bills ending before the day stay as they are, and the view says how many. When bills already have a due date, a confirm asks "Replace them with Nov 15?" (names up to three). Each bill is written as its own change from today with its own change-log line; a partial failure names the bills that did not save.
+
+The success toast carries one Undo that puts every written bill back as it was (its later scheduled changes included); the confirm names each bill with its current date, and the primary's footer says "Pick a day to continue" until a day is chosen.

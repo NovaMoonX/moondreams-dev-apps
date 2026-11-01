@@ -13,7 +13,7 @@ function ChangeSection() {
   const value = use(ChangeFlowContext);
   const today = todayAsUtcDate();
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
-  if (!value || value.flow.isUnchanged) return null;
+  if (!value || value.flow.isUnchanged || value.flow.isMoneyless) return null;
   const { flow, kind, itemId } = value;
   const pairedText = describePairedBy(pairedBy[itemId] ?? []);
 

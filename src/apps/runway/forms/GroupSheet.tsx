@@ -24,7 +24,9 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { useAppSelector } from '@/store';
+import { useStore } from 'react-redux';
+
+import { useAppSelector, type RootState } from '@/store';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -32,6 +34,7 @@ import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   GROUP_WORDS,
+  ITEM_SHEET_R2_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
@@ -60,7 +63,17 @@ import {
   selectAllPurposeEmojis,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GroupTotal } from '@apps/runway/engine/groups';
-import type { BillSealed, GroupSealed, Priority } from '@apps/runway/types';
+import {
+  applyFieldChanges,
+  getVersionStretches,
+  type VersionStretch,
+} from '@apps/runway/engine/resolve';
+import type {
+  BillSealed,
+  BillVersion,
+  GroupSealed,
+  Priority,
+} from '@apps/runway/types';
 import {
   describeBillRepeat,
   describeGroupLead,
@@ -122,6 +135,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const [isSettingDue, setIsSettingDue] = useState(false);
   const [dueText, setDueText] = useState('');
+  const store = useStore<RootState>();
 
   if (!group || !figures) return null;
   const {
@@ -279,14 +293,78 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   );
   const skippedCount = billCount - eligibleBills.length;
 
+  const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
+    (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
+    version.payload.timing.schedule.anchor;
+  const settableBills = bills.filter(
+    (bill) => isSettable(bill) && !isPaidOnce(bill),
+  );
+
+  const undoDueDates = async (
+    written: {
+      itemId: string;
+      name: string;
+      before: BillSealed;
+      after: BillSealed;
+      stretches: VersionStretch<BillSealed>[];
+    }[],
+  ) => {
+    if (!user) return;
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const results = await Promise.allSettled(
+        written.map((entry) =>
+          changeItem(user.uid, encryption, {
+            itemId: entry.itemId,
+            kind: 'bill',
+            payload: entry.before,
+            summary: GROUP_WORDS.dueSummary(
+              entry.name,
+              describeChange(entry.after, entry.before, getCardNamer([])) ||
+                'Updated',
+              formatDateUTC(today),
+            ),
+            note: null,
+            effectiveFrom: today,
+            stretches: entry.stretches,
+          }),
+        ),
+      );
+      const failed = written.flatMap((entry, index) =>
+        results[index].status === 'rejected' ? [entry.name] : [],
+      );
+      addToast(
+        failed.length === 0
+          ? { title: GROUP_WORDS.dueUndone(written.length), type: 'success' }
+          : {
+              title: GROUP_WORDS.dueUndoPartial(
+                written.length - failed.length,
+                written.length,
+                failed,
+              ),
+              type: 'error',
+            },
+      );
+    } catch (undoError) {
+      addToast({
+        title: getErrorMessage(undoError, GROUP_WORDS.dueUndoFailed),
+        type: 'error',
+      });
+    }
+  };
+
   const setDueDate = async () => {
     if (!user || dueDate === undefined) return;
     if (replacedBills.length > 0) {
       const isConfirmed = await confirm({
         title: GROUP_WORDS.dueReplaceTitle,
         message: GROUP_WORDS.dueReplaceBody(
-          replacedBills.map(({ version }) => version.payload.name),
-          replacedBills.length,
+          replacedBills.map((bill) => {
+            const current = getCurrentDue(bill);
+            return current === null
+              ? bill.version.payload.name
+              : `${bill.version.payload.name} (${formatDateShortUTC(current)})`;
+          }),
           formatDateUTC(dueDate),
         ),
         confirmText: GROUP_WORDS.dueReplace,
@@ -297,56 +375,87 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      const results = await Promise.allSettled(
-        changingBills.map(({ item, version }) => {
-          const { payload: bill } = version;
-          const { schedule } = bill.timing;
-          const next: BillSealed = {
-            ...bill,
-            fundedBy:
-              bill.fundedBy.kind === 'chosen'
-                ? { kind: 'suggested' }
-                : bill.fundedBy,
-            timing: {
-              kind: 'date',
-              schedule: {
-                ...schedule,
-                anchor: dueDate,
-                monthDays:
-                  schedule.kind === 'monthly'
-                    ? [new Date(dueDate).getUTCDate()]
-                    : [],
-              },
+      const billVersions = store
+        .getState()
+        .runway.versions.filter(
+          (version): version is BillVersion => version.kind === 'bill',
+        );
+      const plans = changingBills.map(({ item, version }) => {
+        const { payload: bill } = version;
+        const { schedule } = bill.timing;
+        const next: BillSealed = {
+          ...bill,
+          fundedBy:
+            bill.fundedBy.kind === 'chosen'
+              ? { kind: 'suggested' }
+              : bill.fundedBy,
+          timing: {
+            kind: 'date',
+            schedule: {
+              ...schedule,
+              anchor: dueDate,
+              monthDays:
+                schedule.kind === 'monthly'
+                  ? [new Date(dueDate).getUTCDate()]
+                  : [],
             },
-          };
-          return changeItem(user.uid, encryption, {
-            itemId: item.id,
+          },
+        };
+        const before = getVersionStretches<BillVersion, BillSealed>(
+          billVersions,
+          item.id,
+          today,
+        );
+        return {
+          itemId: item.id,
+          name: bill.name,
+          before: bill,
+          after: next,
+          stretches: before,
+          written: applyFieldChanges(before, bill, next),
+        };
+      });
+      const results = await Promise.allSettled(
+        plans.map((plan) =>
+          changeItem(user.uid, encryption, {
+            itemId: plan.itemId,
             kind: 'bill',
-            payload: next,
+            payload: plan.after,
             summary: GROUP_WORDS.dueSummary(
-              bill.name,
-              describeChange(bill, next, getCardNamer([])) || 'Updated',
+              plan.name,
+              describeChange(plan.before, plan.after, getCardNamer([])) ||
+                'Updated',
               formatDateUTC(today),
             ),
             note: null,
             effectiveFrom: today,
-          });
-        }),
+            stretches: plan.written.length > 1 ? plan.written : undefined,
+          }),
+        ),
       );
-      const failed = changingBills.flatMap(({ version }, index) =>
-        results[index].status === 'rejected' ? [version.payload.name] : [],
+      const saved = plans.filter(
+        (_, index) => results[index].status === 'fulfilled',
       );
-      const done = changingBills.length - failed.length;
-      if (done > 0)
-        addToast({ title: GROUP_WORDS.dueToast(done), type: 'success' });
+      const failed = plans
+        .filter((_, index) => results[index].status === 'rejected')
+        .map((plan) => plan.name);
+      if (saved.length > 0)
+        addToast({
+          title: GROUP_WORDS.dueToast(saved.length),
+          type: 'success',
+          action: {
+            label: ITEM_SHEET_R2_WORDS.undo,
+            onClick: () => void undoDueDates(saved),
+          },
+        });
       if (failed.length === 0) {
         setIsSettingDue(false);
         return;
       }
       setError(
-        done === 0
+        saved.length === 0
           ? GROUP_WORDS.dueFailed
-          : GROUP_WORDS.duePartial(done, changingBills.length, failed),
+          : GROUP_WORDS.duePartial(saved.length, plans.length, failed),
       );
     } catch (saveError) {
       setError(getErrorMessage(saveError, GROUP_WORDS.dueFailed));
@@ -466,9 +575,11 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
             <ModalFooterActions
               note={
                 error ??
-                (dueDate !== undefined && changingBills.length === 0
-                  ? GROUP_WORDS.dueNothingToChange
-                  : null)
+                (dueDate === undefined
+                  ? GROUP_WORDS.duePickDay
+                  : changingBills.length === 0
+                    ? GROUP_WORDS.dueNothingToChange
+                    : null)
               }
               rightActions={
                 <Button
@@ -658,13 +769,16 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                 label={GROUP_WORDS.addBill(payload.name)}
                 onClick={() => setAdding('bill')}
               />
-              {billCount > 0 && (
+              {settableBills.length > 0 && (
                 <ActionRow
                   isGrouped
                   hasChevron
                   icon={<CalendarDays />}
                   label={GROUP_WORDS.setDue}
-                  subtitle={GROUP_WORDS.setDueSub(billCount)}
+                  subtitle={GROUP_WORDS.setDueSub(
+                    settableBills.length,
+                    settableBills.length === billCount,
+                  )}
                   onClick={() => {
                     setDueText('');
                     setError(null);

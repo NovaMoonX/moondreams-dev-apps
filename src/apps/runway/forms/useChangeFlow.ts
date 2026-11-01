@@ -9,6 +9,10 @@ import { useAppSelector, type RootState } from '@/store';
 import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  applyFieldChanges,
+  getVersionStretches,
+} from '@apps/runway/engine/resolve';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   carryDayOverrides,
@@ -28,6 +32,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeChange,
+  isMoneylessChange,
   isSamePayload,
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
@@ -44,6 +49,7 @@ import type {
   GoalSealed,
   GroupSealed,
   ItemKind,
+  OpenVersion,
 } from '@apps/runway/types';
 
 interface UseChangeFlowArgs {
@@ -137,18 +143,24 @@ export function useChangeFlow({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
 
-  const { span, blocker: spanBlocker } = getChangeSpan(from, {
+  const { span: askedSpan, blocker: askedBlocker } = getChangeSpan(from, {
     today,
     days,
     presetDayKey,
   });
+  const isUnchanged = candidate !== null && isSamePayload(current, candidate);
+  const isMoneyless =
+    candidate !== null && !isUnchanged && isMoneylessChange(current, candidate);
+  const span: ChangeSpan | null = isMoneyless
+    ? { kind: 'version', effectiveFrom: today, effectiveUntil: null }
+    : askedSpan;
+  const spanBlocker = isMoneyless ? null : askedBlocker;
   const effectiveFrom =
     span?.kind === 'version'
       ? span.effectiveFrom
       : span?.kind === 'day'
         ? span.day.on
         : null;
-  const isUnchanged = candidate !== null && isSamePayload(current, candidate);
   const summaryText =
     candidate === null
       ? ''
@@ -163,12 +175,14 @@ export function useChangeFlow({
             'a group',
         );
 
-  const changeJson = isUnchanged
-    ? null
-    : getChangeJson(itemId, kind, candidate, span);
+  const changeJson =
+    isUnchanged || isMoneyless
+      ? null
+      : getChangeJson(itemId, kind, candidate, span);
 
   const getSummary = (name: string) => {
     const words = summaryText || 'Updated';
+    if (isMoneyless) return `${name}: ${words}.`;
     if (span?.kind === 'day') {
       return `${name}: ${words}, for ${formatDateUTC(span.day.on)} only.`;
     }
@@ -220,6 +234,18 @@ export function useChangeFlow({
                 },
                 JSON.parse(changeJson) as PreviewChange,
               );
+        const stretches =
+          span.effectiveUntil === null
+            ? applyFieldChanges(
+                getVersionStretches<OpenVersion, ItemPayload>(
+                  state.runway.versions,
+                  itemId,
+                  span.effectiveFrom,
+                ),
+                current,
+                candidate,
+              )
+            : [];
         await changeItem(user.uid, encryption, {
           itemId,
           kind,
@@ -229,6 +255,8 @@ export function useChangeFlow({
           note: reason,
           effectiveFrom: span.effectiveFrom,
           effectiveUntil: span.effectiveUntil,
+          changeEffectiveFrom: isMoneyless ? null : span.effectiveFrom,
+          stretches: stretches.length > 1 ? stretches : undefined,
         });
         if (carry !== null && carry.carried.length > 0) {
           const moves = carry.carried.map(({ from, to }) => ({
@@ -300,6 +328,7 @@ export function useChangeFlow({
     days,
     presetDayKey,
     isUnchanged,
+    isMoneyless,
     summaryText,
     today,
     save,

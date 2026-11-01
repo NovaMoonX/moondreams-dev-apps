@@ -442,6 +442,8 @@ export interface ChangeItemInput {
   summary: string;
   note: string | null;
   effectiveFrom: number;
+  /** The day the change entry says it covers income days from; null for a change that moves no money. Defaults to `effectiveFrom`. */
+  changeEffectiveFrom?: number | null;
   /** The first day the change no longer covers, so the version before it returns; null lasts until superseded. */
   effectiveUntil?: number | null;
   /** A group the person named while changing a bill; it is written in the same batch and the bill joins it. */
@@ -508,7 +510,10 @@ export async function changeItem(
     id: changeId,
     kind: 'planChange',
     createdAt: now,
-    effectiveFrom: input.effectiveFrom,
+    effectiveFrom:
+      input.changeEffectiveFrom === undefined
+        ? input.effectiveFrom
+        : input.changeEffectiveFrom,
     itemIds: [input.itemId],
     sealed: changeSealed,
   };
