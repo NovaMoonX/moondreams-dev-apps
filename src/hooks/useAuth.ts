@@ -11,8 +11,8 @@ export type AuthContextValue = {
   logOut: () => Promise<void>;
   /** Accounts used on this device, most recent first, the signed-in one included. */
   rememberedAccounts: RememberedAccount[];
-  /** Opens Google's account picker (on `email` when given) and reloads as whoever is picked. Call it from a tap. */
-  switchAccount: (email: string | null) => Promise<void>;
+  /** Switches to `account` with the session this device kept for it, else through Google's picker (on its email), and reloads as whoever signs in. Call it from a tap. */
+  switchAccount: (account: Pick<RememberedAccount, 'uid' | 'email'> | null) => Promise<void>;
   /** Removes an account from this device's list and clears what the device saved for it. */
   forgetAccount: (uid: string) => void;
   updateDisplayName: (displayName: string) => Promise<void>;
