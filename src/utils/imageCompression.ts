@@ -92,10 +92,7 @@ const getAttempts = ({ maxDimension, quality }: ImageUseSize) => [
   })),
 ];
 
-/**
- * Shrinks a photo for its use and re-encodes it as WebP under `maxBytes`, stepping quality and then size
- * down until it fits. Returns `null` when the file isn't an image this browser can open (HEIC on desktop).
- */
+/** Shrinks a photo for its use to WebP under `maxBytes`; `null` when this browser can't open it (HEIC on a computer). */
 export async function compressImageForUse(
   file: File,
   use: ImageUse,

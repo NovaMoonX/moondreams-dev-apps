@@ -7,15 +7,12 @@ const UNREADABLE_PHOTO =
 const KEPT_EARLIER = ' Your earlier photo stays.';
 
 export interface UseImageUploadResult {
-  /** The shrunk photo, ready to upload; never the original pick. */
   file: File | null;
   previewUrl: string | null;
   error: string | null;
-  /** True while a picked photo is being shrunk. */
   isPreparing: boolean;
-  /** The file to upload, waiting for the latest photo still being shrunk; use it in a save instead of `file`. A failed pick leaves the earlier photo, and its error says so. */
+  /** Saves await this, never `file`, so a Save tapped mid-shrink waits for the latest pick. */
   readyFile: () => Promise<File | null>;
-  /** Shrinks the pick for its use and resolves with the file to upload, or `null` when it couldn't be used. */
   pick: (selected: File | null) => Promise<File | null>;
   clear: () => void;
 }
