@@ -18,6 +18,7 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
+import { daysInUtcMonth, payLineIdOfDayKey } from './dates';
 import { allocate, percentOf, percentShares } from './money';
 import {
   countFundedDays,
@@ -93,6 +94,8 @@ export interface DraftBillInput {
   schedule: Schedule;
   ending: Ending;
   fundedBy: BillFundedBy;
+  /** Cents a day must give this bill by day key, whatever the funding says; the rest of a payment is spread over its other eligible days. */
+  fixed?: Readonly<Record<string, Cents>>;
   /** What confirmed days and payments already say about this bill; none until a day is confirmed. */
   progress?: BillProgressInput;
 }
@@ -335,6 +338,62 @@ const getFirstNeeded = (
   return found === -1 ? dues.length : Math.max(0, found - 1);
 };
 
+const isOnPayDay = (
+  day: IncomeDayRef,
+  fundedBy: Extract<BillFundedBy, { kind: 'pay' }>,
+) => {
+  if (payLineIdOfDayKey(day.dayKey) !== fundedBy.payLineId) return false;
+  if (fundedBy.monthDay === null) return true;
+  const date = new Date(day.on);
+  return (
+    date.getUTCDate() ===
+    Math.min(
+      fundedBy.monthDay,
+      daysInUtcMonth(date.getUTCFullYear(), date.getUTCMonth()),
+    )
+  );
+};
+
+/** The days of a window a bill's funding allows: all of them, the last one, or one pay line's. */
+const getEligibleDays = (
+  window: readonly IncomeDayRef[],
+  fundedBy: BillFundedBy,
+) => {
+  if (fundedBy.kind === 'lastBefore') return window.slice(-1);
+  if (fundedBy.kind === 'pay') {
+    return window.filter((day) => isOnPayDay(day, fundedBy));
+  }
+  return window;
+};
+
+/** Shares of a payment by eligible day: a fixed day gets its fixed amount (never more than what remains) and the others split the rest, so with no other day the rest stays unfunded. */
+const getDayShares = (
+  eligible: readonly IncomeDayRef[],
+  totalCents: Cents,
+  fixed: Readonly<Record<string, Cents>> | undefined,
+) => {
+  if (!fixed || Object.keys(fixed).length === 0)
+    return spreadShares(totalCents, eligible.length);
+  const given = eligible.reduce<{ left: Cents; cents: Map<string, Cents> }>(
+    (acc, day) => {
+      const asked = fixed[day.dayKey];
+      if (asked === undefined) return acc;
+      const cents = Math.min(Math.max(0, asked), acc.left);
+      return {
+        left: acc.left - cents,
+        cents: acc.cents.set(day.dayKey, cents),
+      };
+    },
+    { left: totalCents, cents: new Map() },
+  );
+  const others = eligible.filter((day) => !given.cents.has(day.dayKey));
+  const spread = spreadShares(given.left, others.length);
+  const result = eligible.map(
+    (day) => given.cents.get(day.dayKey) ?? spread[others.indexOf(day)],
+  );
+  return result;
+};
+
 const isInDayOrder = (days: readonly IncomeDayRef[]) =>
   days.every((day, index) => index === 0 || days[index - 1].on <= day.on);
 
@@ -357,7 +416,8 @@ export interface BillPayment {
 /**
  * Every payment of a bill up to `horizon` and what each income day sets aside for it. A payment is
  * funded by the income days after the previous payment through its due date: suggested spreads it
- * over them, chosen splits it equally over the picked days that are still coming.
+ * over them, the last-before kind takes it all from the last, a pay takes it from that pay line's
+ * days (or one day of the month), and chosen splits it equally over the picked days still coming.
  */
 export function planBillPayments(
   bill: DraftBillInput,
@@ -447,9 +507,11 @@ export function planBillPayments(
     const confirmed = fundedInWindow(progress.funded, previous, dueOn);
     const fundedCents = sumFunded(confirmed);
     const paid = paidByDue.get(dueOn) ?? null;
-    const shares = spreadShares(
+    const eligible = getEligibleDays(window, bill.fundedBy);
+    const shares = getDayShares(
+      eligible,
       paid ? 0 : Math.max(0, amountCents - fundedCents),
-      window.length,
+      bill.fixed,
     );
     return {
       dueOn,
@@ -457,7 +519,7 @@ export function planBillPayments(
       ranged,
       parts: paid
         ? []
-        : window.map((day, position) => ({
+        : eligible.map((day, position) => ({
             day,
             cents: shares[position],
           })),
@@ -469,6 +531,13 @@ export function planBillPayments(
   });
   return result;
 }
+
+const BILL_CADENCES: Record<BillFundedBy['kind'], DraftCadence> = {
+  suggested: 'billSuggested',
+  chosen: 'billChosen',
+  lastBefore: 'billLastBefore',
+  pay: 'billPay',
+};
 
 /** What each planned day sets aside for each bill; a day demands all it is asked for when the payment falls before the next income day. */
 function buildBillDemands(
@@ -495,8 +564,7 @@ function buildBillDemands(
           orderIndex: bill.orderIndex,
           createdAt: bill.createdAt,
           cents: part.cents,
-          cadence:
-            bill.fundedBy.kind === 'chosen' ? 'billChosen' : 'billSuggested',
+          cadence: BILL_CADENCES[bill.fundedBy.kind],
           bill: {
             dueOn: payment.dueOn,
             totalCents: payment.totalCents,

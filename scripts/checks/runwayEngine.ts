@@ -181,6 +181,7 @@ import {
   DAY_MS,
   addUtcMonths,
   toDayKey,
+  payLineIdOfDayKey,
   toDayStamp,
   todayAsUtcDate,
 } from '../../src/apps/runway/engine/dates.ts';
@@ -1414,6 +1415,122 @@ const version = (
     ['20261231', '20270131', '20270228'],
     'day 31 clamps to the month length',
   );
+
+  // Paid from: the pay before it's due, or one pay line (and day of the month).
+  {
+    const payDay = (payLineId: string, on: number) => ({
+      dayKey: toDayKey(payLineId, on),
+      on,
+    });
+    assert.equal(payLineIdOfDayKey(toDayKey('pl1', utc(2026, 3, 9))), 'pl1');
+    const workPays = [
+      payDay('work', utc(2026, 11, 15)),
+      payDay('work', utc(2026, 11, 30)),
+      payDay('work', utc(2026, 12, 15)),
+    ];
+    const pays = [...workPays, payDay('side', utc(2026, 11, 20))].sort(
+      (a, b) => a.on - b.on,
+    );
+    const rent = (
+      fundedBy: DraftBillInput['fundedBy'],
+      fixed: Record<string, number> = {},
+    ) => makeBill({ schedule: once(utc(2026, 12, 1)), fundedBy, fixed });
+    const partsOf = (bill: DraftBillInput, days = pays) =>
+      planBillPayments(bill, days, horizon)[0].parts.map((part) => [
+        toDayStamp(part.day.on),
+        part.cents,
+      ]);
+    assert.deepEqual(
+      partsOf(rent({ kind: 'lastBefore' }), workPays),
+      [['20261130', 150_000]],
+      'the pay before it is due carries the whole payment',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'work', monthDay: 15 })),
+      [['20261115', 150_000]],
+      'a pay on the 15th carries it all',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'work', monthDay: null })),
+      [
+        ['20261115', 75_000],
+        ['20261130', 75_000],
+      ],
+      'a pay line without a day shares it over its days',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'gone', monthDay: null })),
+      [],
+      'a pay that is no longer coming funds nothing',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'work', monthDay: 15 }), [
+        payDay('work', utc(2026, 11, 30)),
+      ]),
+      [],
+      'a pay on another day of the month funds nothing',
+    );
+    const february = planBillPayments(
+      makeBill({
+        schedule: once(utc(2027, 3, 1)),
+        fundedBy: { kind: 'pay', payLineId: 'work', monthDay: 30 },
+      }),
+      [payDay('work', utc(2027, 2, 15)), payDay('work', utc(2027, 2, 28))],
+      horizon,
+    );
+    assert.deepEqual(
+      february[0].parts.map((part) => toDayStamp(part.day.on)),
+      ['20270228'],
+      'the 30th lands on the 28th in February',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent({ kind: 'suggested' }, { [workPays[0].dayKey]: 0 }),
+        workPays,
+      ),
+      [
+        ['20261115', 0],
+        ['20261130', 150_000],
+      ],
+      'the 30th takes the whole when the 15th is fixed at nothing',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent(
+          { kind: 'pay', payLineId: 'work', monthDay: null },
+          { [workPays[0].dayKey]: 1_000_000, [workPays[1].dayKey]: 0 },
+        ),
+      ),
+      [
+        ['20261115', 150_000],
+        ['20261130', 0],
+      ],
+      'a fixed share is capped at what remains, and with no other day the rest stays unfunded',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent(
+          { kind: 'pay', payLineId: 'work', monthDay: null },
+          { [workPays[0].dayKey]: 50_000 },
+        ),
+      ),
+      [
+        ['20261115', 50_000],
+        ['20261130', 100_000],
+      ],
+      'a fixed day under a pay leaves the rest to its other days',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent(
+          { kind: 'pay', payLineId: 'work', monthDay: 15 },
+          { [workPays[1].dayKey]: 10_000 },
+        ),
+      ),
+      [['20261115', 150_000]],
+      'a fixed share on a day the pay does not allow is ignored',
+    );
+  }
 
   // Endings reuse the schedule machinery.
   const sixTimes = makeBill({

@@ -221,7 +221,11 @@ interface BillSealed {
     | { kind: 'window'; opensOn: DateOnly; closesOn: DateOnly }
     | { kind: 'none' };                                        // no date: use an envelope instead
   ending: Ending;
-  fundedBy: { kind: 'suggested' } | { kind: 'chosen'; dayKeys: string[] };
+  fundedBy:
+    | { kind: 'suggested' }
+    | { kind: 'lastBefore' }
+    | { kind: 'pay'; payLineId: string; monthDay: number | null }
+    | { kind: 'chosen'; dayKeys: string[] };
   stanceOverride: (typeof STANCES)[number] | null;
   loan: LoanTerms | null;
   steps: Step[];
@@ -1318,3 +1322,5 @@ Each becomes a spike or a decision in the Issue Roadmap rather than blocking it.
 - **`canChangeStart`** returns false for a start date with no start record in hand (the Free to Spend screen waits for the ledger before asking).
 - **The goal chart** leaves a strip above the plot for the readout (`isReadoutAbove`) and names the guide line on the soft look (`referenceLabelSoft`); its height follows the viewport.
 - **"Pay these first"** swaps into the "Paid first from {source}" sheet in place of the list (the form stays mounted, hidden), led by `BackLink`; the rows write through `ValueChangeHandle`, which hands the form field's change callback to the sheet.
+
+**A repeating bill's Paid from.** `fundedBy` also takes `{ kind: 'lastBefore' }` (the whole payment from the last income day in its window) and `{ kind: 'pay', payLineId, monthDay }` (only that pay line's days in the window; with `monthDay` set, only the day that lands on that day of the month, clamped to a short month's last day, so 30 is the 28th in February). The window is the same as for suggested (after the previous due date, through this one); `planBillPayments` picks the eligible days (`getEligibleDays`) and shares the remaining amount over them. No eligible day leaves `parts` empty, so the lookahead's `noIncome` fires, and the bill's sheet (`BillPaidFromNotice`) offers "Spread across my pays" (a new version from today with an Undo toast) or "Pick another pay" (the form at its `funding` question); a `short` problem on one of the payment's days is worded the same way. `DraftBillInput.fixed` (day key to cents, empty from `runwaySelectors`) pins a day's share, capped at what remains; the rest is spread over the other eligible days and stays unfunded when there is none (nothing writes it yet). `payLineIdOfDayKey` (`engine/dates.ts`) reads the pay line from a day key. Demands carry `billLastBefore` / `billPay` cadences. Old documents are unchanged (`suggested` and `chosen` read as before); the form's draft key set grew by `paidFrom` and `payValue`, so a draft kept before this change is dropped, not misread. `utils/payFrom.ts` builds the "A pay I pick" options (one per month day for monthly and twice-a-month pays, one by name for others; none unless there is more than one).

@@ -296,9 +296,12 @@ export interface EnvelopeSealed {
   startingCents?: Cents | null;
 }
 
-/** How a bill is funded: spread over the income days before it is due, or on days the person picked. */
+/** How a bill is funded: spread over the income days before it is due, all from the last one, from one pay line (and one day of the month when `monthDay` is set), or on days the person picked. */
 export type BillFundedBy =
-  { kind: 'suggested' } | { kind: 'chosen'; dayKeys: string[] };
+  | { kind: 'suggested' }
+  | { kind: 'lastBefore' }
+  | { kind: 'pay'; payLineId: string; monthDay: number | null }
+  | { kind: 'chosen'; dayKeys: string[] };
 
 export interface BillSealed {
   name: string;

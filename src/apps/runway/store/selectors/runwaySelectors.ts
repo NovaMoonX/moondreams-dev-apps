@@ -845,6 +845,7 @@ export function computeDraftView(
     schedule: version.payload.timing.schedule,
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
+    fixed: {},
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
   const goals = resolvedGoals.map(({ item, version }) => {
@@ -1003,6 +1004,7 @@ export const selectBillPayments = createSelector(
               schedule: payload.timing.schedule,
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
+              fixed: {},
               progress: progress[item.id] ?? NO_PROGRESS,
             },
             comingDays,

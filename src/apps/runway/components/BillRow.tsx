@@ -1,8 +1,11 @@
+import { useState } from 'react';
+
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemSheet from '@apps/runway/components/ItemSheet';
+import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   BILL_WORDS,
   GROUP_WORDS,
@@ -102,6 +105,7 @@ export function BillSheet({
   startsAtStep,
   onClose,
 }: BillSheetProps) {
+  const [pickedStep, setPickedStep] = useState<string | null>(null);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
@@ -142,7 +146,17 @@ export function BillSheet({
           ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
           : { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
       }
-      startsAtStep={startsAtStep}
+      key={pickedStep ?? 'sheet'}
+      startsAtStep={pickedStep ?? startsAtStep}
+      extra={
+        <BillPaidFromNotice
+          billId={billId}
+          bill={bill}
+          payment={payment}
+          today={today}
+          onPickAnother={() => setPickedStep('funding')}
+        />
+      }
       payment={payment}
       onClose={onClose}
     />

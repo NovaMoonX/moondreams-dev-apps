@@ -302,7 +302,12 @@ export const BILL_FUNDING_LABELS: Record<
 > = { suggested: 'Spread over income days', chosen: 'Days I choose' };
 
 /** How a draft line for a bill was decided, beside the envelope cadences. */
-export const BILL_DRAFT_CADENCES = ['billSuggested', 'billChosen'] as const;
+export const BILL_DRAFT_CADENCES = [
+  'billSuggested',
+  'billChosen',
+  'billLastBefore',
+  'billPay',
+] as const;
 export const MAX_CHOSEN_DAYS = 60;
 export const MAX_EMOJI_LENGTH = 8;
 
@@ -585,6 +590,8 @@ export const DRAFT_CADENCE_WORDS: Record<
   pairing: 'First from this pay',
   billSuggested: 'Spread over your income days',
   billChosen: 'A day you chose',
+  billLastBefore: "Comes from the pay before it's due",
+  billPay: 'Comes from the pay you picked',
   everyIncomeDay: 'Every income day',
   every2: 'Every other income day',
   every3: 'Every third income day',
@@ -670,6 +677,35 @@ export const BILL_WORDS = {
   needsDueDate: 'Needs a due date',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
+} as const;
+
+/** A repeating bill's "Paid from": which of the plan's pays carries it. */
+export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
+
+export const PAID_FROM_WORDS = {
+  title: 'Which pay covers it?',
+  summaryLabel: 'Paid from',
+  label: 'Paid from',
+  spread: 'Spread across my pays',
+  lastBefore: "The pay right before it's due",
+  pay: 'A pay I pick',
+  whichPay: 'Which pay',
+  pickPay: 'Pick a pay.',
+  gone: 'A pay that is no longer in the plan',
+  /** The change log's phrase for the choice. */
+  logSpread: 'spread across the pays before it',
+  logLastBefore: "the pay right before it's due",
+  noticeNoPay: (pay: string, name: string, dueOn: string) =>
+    `${pay} doesn't come before ${name} is due ${dueOn}`,
+  noticeNoPayAtAll: (name: string, dueOn: string) =>
+    `No pay comes before ${name} is due ${dueOn}`,
+  noticeShort: (name: string, short: string, on: string) =>
+    `${name} is ${short} short on ${on}`,
+  keepSpread: 'Spread across my pays',
+  pickAnother: 'Pick another pay',
+  changed: (name: string) => `${name} is now spread across your pays`,
+  undo: 'Undo',
+  saveFailed: 'This did not save. Nothing was changed.',
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */

@@ -104,7 +104,9 @@ export function describeBillFunding(
   fundedBy: BillFundedBy,
 ) {
   if (!payment || payment.parts.length === 0) {
-    return 'No income day comes before it is due.';
+    return fundedBy.kind === 'pay' || fundedBy.kind === 'lastBefore'
+      ? 'The pay you picked does not come before it is due.'
+      : 'No income day comes before it is due.';
   }
   const amounts = payment.parts.map((part) => part.cents);
   const count = amounts.length;
@@ -116,7 +118,9 @@ export function describeBillFunding(
   const scope =
     fundedBy.kind === 'chosen'
       ? `of the ${count} days you chose`
-      : `of the next ${count} income days`;
+      : fundedBy.kind === 'pay'
+        ? `of the ${count} pays you picked`
+        : `of the next ${count} income days`;
   const isEven = amounts.every((cents) => cents === amounts[0]);
   if (isEven) return `${first} from each ${scope}`;
   const result = `Up to ${first} from each ${scope}, ${formatCents(last)} on the last`;

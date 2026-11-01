@@ -2,6 +2,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
   GROUP_WORDS,
+  PAID_FROM_WORDS,
   PRIORITY_LABELS,
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
@@ -16,6 +17,17 @@ import type {
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
+
+const describeFundedByChange = (value: BillSealed['fundedBy']) => {
+  if (value.kind === 'chosen') return `${value.dayKeys.length} chosen days`;
+  if (value.kind === 'lastBefore') return PAID_FROM_WORDS.logLastBefore;
+  if (value.kind === 'pay') {
+    return value.monthDay === null
+      ? 'one pay you picked'
+      : `the pay on ${value.monthDay === 31 ? 'the last day' : `day ${value.monthDay}`}`;
+  }
+  return PAID_FROM_WORDS.logSpread;
+};
 
 export type ItemPayload =
   | SourceSealed
@@ -149,10 +161,8 @@ const getParts = (
         billAfter.stanceOverride ?? null,
         (value) => value ?? 'follows the plan',
       ),
-      diff('Funded from', billBefore.fundedBy, billAfter.fundedBy, (value) =>
-        value.kind === 'chosen'
-          ? `${value.dayKeys.length} chosen days`
-          : 'the days before',
+      diff('Paid from', billBefore.fundedBy, billAfter.fundedBy, (value) =>
+        describeFundedByChange(value),
       ),
       diff(
         'Paid by',
