@@ -704,6 +704,8 @@ export const PAID_FROM_WORDS = {
   keepSpread: 'Spread across my pays',
   pickAnother: 'Pick another pay',
   changed: (name: string) => `${name} is now spread across your pays`,
+  paidFromBack: (name: string, was: string) =>
+    `${name}: Paid from is back to ${was}.`,
   undo: 'Undo',
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
@@ -740,6 +742,19 @@ export const PAY_SHARE_WORDS = {
   ruleToast: (name: string, pay: string) => `${name} now comes from ${pay}`,
   undo: 'Undo',
   undoFailed: 'That could not be undone. Nothing was changed.',
+  pinnedRow: (date: string) => `${date} pay, set by you`,
+  resetSummary: (name: string, date: string) =>
+    `${name}: this pay goes back to the plan's amount, for ${date} only.`,
+  restoreSummary: (name: string, cents: string, date: string) =>
+    `${name}: this pay puts in ${cents} again, for ${date} only.`,
+  resetToast: (name: string) =>
+    `${name} is back to the plan's amount for this pay`,
+  paidFromBack: (name: string, was: string) =>
+    `${name}: Paid from is back to ${was}.`,
+  keepPartial: (name: string, pay: string) =>
+    `${name} now comes from ${pay}, but this pay's own figure is still saved. Tap Yes again to clear it.`,
+  undoPartial: (name: string) =>
+    `${name} is back to its old Paid from, but this pay's figure could not be restored.`,
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
@@ -1703,6 +1718,8 @@ export const HOW_OFTEN_WORDS = {
 export const FIX_WORDS = {
   notPaid: (name: string) => `${name} is not marked paid`,
   noIncome: (name: string) => `${name} has no income before it is due`,
+  noPick: (name: string) =>
+    `${name} comes from a pay that is not before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,
   dueOn: (date: string) => `Due ${date}`,
   runsShortOn: (date: string) => `On ${date}`,

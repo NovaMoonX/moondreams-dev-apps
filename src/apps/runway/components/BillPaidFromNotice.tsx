@@ -11,6 +11,8 @@ import { formatCentsShort } from '@/utils/moneyUtils';
 import { PAID_FROM_WORDS } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { getVersionStretches } from '@apps/runway/engine/resolve';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
@@ -24,7 +26,10 @@ import type { BillSealed, BillVersion } from '@apps/runway/types';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
-import { describePayChoice } from '@apps/runway/utils/payFrom';
+import {
+  describePaidFrom,
+  describePayChoice,
+} from '@apps/runway/utils/payFrom';
 
 interface BillPaidFromNoticeProps {
   billId: string;
@@ -46,6 +51,7 @@ function BillPaidFromNotice({
   const { user } = useAuth();
   const { addToast } = useToast();
   const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const allCards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(
@@ -118,7 +124,13 @@ function BillPaidFromNotice({
         itemId: billId,
         kind: 'bill',
         payload: next,
-        summary: `${bill.name}: ${describeChange(bill, next, getCardNamer(allCards))}, from ${formatDateUTC(today)}.`,
+        summary: `${bill.name}: ${describeChange(
+          bill,
+          next,
+          getCardNamer(allCards),
+          undefined,
+          (picked) => describePayChoice(picked, plan),
+        )}, from ${formatDateUTC(today)}.`,
         note: null,
         effectiveFrom: today,
         stretches: stretches.map((stretch) => ({
@@ -136,7 +148,10 @@ function BillPaidFromNotice({
               itemId: billId,
               kind: 'bill',
               payload: bill,
-              summary: `${bill.name}: undid the change to Paid from.`,
+              summary: PAID_FROM_WORDS.paidFromBack(
+                bill.name,
+                describePaidFrom(bill.fundedBy, plan),
+              ),
               note: null,
               effectiveFrom: today,
               stretches,
@@ -161,29 +176,41 @@ function BillPaidFromNotice({
     }
   };
 
+  const buttons = (
+    <div className='mt-2 flex flex-wrap gap-2'>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        disabled={isBusy}
+        onClick={() => void spread()}
+      >
+        {PAID_FROM_WORDS.keepSpread}
+      </Button>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        disabled={isBusy}
+        onClick={onPickAnother}
+      >
+        {PAID_FROM_WORDS.pickAnother}
+      </Button>
+    </div>
+  );
+
+  if (isHidden) {
+    return (
+      <div>
+        <NeedsALookRow />
+        {buttons}
+      </div>
+    );
+  }
   return (
     <InlineNotice tone='warning'>
       <p>{message}</p>
-      <div className='mt-2 flex flex-wrap gap-2'>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          disabled={isBusy}
-          onClick={() => void spread()}
-        >
-          {PAID_FROM_WORDS.keepSpread}
-        </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          disabled={isBusy}
-          onClick={onPickAnother}
-        >
-          {PAID_FROM_WORDS.pickAnother}
-        </Button>
-      </div>
+      {buttons}
     </InlineNotice>
   );
 }

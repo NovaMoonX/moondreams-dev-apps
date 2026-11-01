@@ -18,10 +18,19 @@ import type {
   SourceSealed,
 } from '@apps/runway/types';
 
-const describeFundedByChange = (value: BillSealed['fundedBy']) => {
+/** Names a pay a bill is set to come from, when the plan is at hand. */
+export type PayNamer = (
+  fundedBy: Extract<BillSealed['fundedBy'], { kind: 'pay' }>,
+) => string;
+
+const describeFundedByChange = (
+  value: BillSealed['fundedBy'],
+  payNameOf: PayNamer | undefined,
+) => {
   if (value.kind === 'chosen') return `${value.dayKeys.length} chosen days`;
   if (value.kind === 'lastBefore') return PAID_FROM_WORDS.logLastBefore;
   if (value.kind === 'pay') {
+    if (payNameOf) return payNameOf(value);
     return value.monthDay === null
       ? 'one pay you picked'
       : `the pay on ${value.monthDay === 31 ? 'the last day' : `day ${value.monthDay}`}`;
@@ -60,6 +69,7 @@ const getParts = (
   after: ItemPayload,
   cardNameOf: (cardId: string | null) => string,
   groupName: GroupNamer,
+  payNameOf?: PayNamer,
 ): Part[] => {
   const base: Part[] = [
     diff('Name', before.name, after.name, (value) => value),
@@ -162,7 +172,7 @@ const getParts = (
         (value) => value ?? 'follows the plan',
       ),
       diff('Paid from', billBefore.fundedBy, billAfter.fundedBy, (value) =>
-        describeFundedByChange(value),
+        describeFundedByChange(value, payNameOf),
       ),
       diff(
         'Paid by',
@@ -249,8 +259,9 @@ export function describeChange(
   after: ItemPayload,
   cardNameOf: (cardId: string | null) => string,
   groupName: GroupNamer = () => 'a group',
+  payNameOf?: PayNamer,
 ) {
-  const result = getParts(before, after, cardNameOf, groupName)
+  const result = getParts(before, after, cardNameOf, groupName, payNameOf)
     .flatMap((part) => (part === null ? [] : [part]))
     .map(([label, from, to]) => `${label} ${from} to ${to}`)
     .join('; ');

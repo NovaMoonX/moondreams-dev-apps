@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useAppSelector } from '@/store';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -27,6 +28,7 @@ import {
   CHECKLIST_R3_WORDS,
   DAYS_WORDS,
   DRAFT_WORDS,
+  PAY_SHARE_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
   NEEDS_LOOK_WORDS,
@@ -36,6 +38,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   EMPTY_OVERRIDE,
   markNotArrived,
+  saveBillShare,
   saveDayOverride,
   undoNotArrived,
 } from '@apps/runway/store/actions/dayActions';
@@ -186,15 +189,63 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         ),
       ),
     }));
-  const resetShare = (line: DraftLineData) =>
-    save((current) => ({
-      ...current,
-      billCents: Object.fromEntries(
-        Object.entries(current.billCents).filter(
-          ([itemId]) => itemId !== line.itemId,
-        ),
-      ),
-    }));
+  const resetShare = async (line: DraftLineData) => {
+    const before = override?.billCents?.[line.itemId];
+    if (!user || before === undefined) return;
+    const name = Object.hasOwn(items, line.itemId)
+      ? items[line.itemId].name
+      : DRAFT_WORDS.billFallback;
+    const dayRef = {
+      payLineId: day.payLineId,
+      sourceId: day.sourceId,
+      expectedOn: day.on,
+    };
+    const date = formatDateUTC(day.on);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      await saveBillShare(user.uid, encryption, dayRef, line.itemId, null, {
+        itemId: line.itemId,
+        summary: PAY_SHARE_WORDS.resetSummary(name, date),
+        note: null,
+      });
+      addToast({
+        title: PAY_SHARE_WORDS.resetToast(name),
+        type: 'success',
+        action: {
+          label: PAY_SHARE_WORDS.undo,
+          onClick: () =>
+            void saveBillShare(
+              user.uid,
+              encryption,
+              dayRef,
+              line.itemId,
+              before,
+              {
+                itemId: line.itemId,
+                summary: PAY_SHARE_WORDS.restoreSummary(
+                  name,
+                  formatCents(before),
+                  date,
+                ),
+                note: null,
+              },
+            ).catch((undoError: unknown) =>
+              addToast({
+                title: PAY_SHARE_WORDS.undoFailed,
+                description: getErrorMessage(undoError, ''),
+                type: 'error',
+              }),
+            ),
+        },
+      });
+    } catch (resetError) {
+      addToast({
+        title: PAY_SHARE_WORDS.saveFailed,
+        description: getErrorMessage(resetError, ''),
+        type: 'error',
+      });
+    }
+  };
   const funded = draft.lines.filter((line) => line.shortBy === 0);
   const unfunded = draft.lines.filter((line) => line.shortBy > 0);
   const fixIds = new Set(

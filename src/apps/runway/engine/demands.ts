@@ -476,11 +476,15 @@ export function planBillPayments(
     return dues.slice(0, 1).map((dueOn) => {
       const paid = paidByDue.get(dueOn) ?? null;
       const fundedCents = sumFunded(progress.funded);
-      const shares = allocate(
-        paid ? 0 : Math.max(0, amountCents - fundedCents),
-        days.map(() => 1),
-        days.map((day) => day.dayKey),
-      );
+      const left = paid ? 0 : Math.max(0, amountCents - fundedCents);
+      const shares =
+        bill.fixed && Object.keys(bill.fixed).length > 0
+          ? getDayShares(days, left, bill.fixed)
+          : allocate(
+              left,
+              days.map(() => 1),
+              days.map((day) => day.dayKey),
+            );
       return {
         dueOn,
         totalCents: amountCents,

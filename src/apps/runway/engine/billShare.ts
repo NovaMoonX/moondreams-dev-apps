@@ -40,7 +40,14 @@ export interface BillShareEffect {
   /** The figure after the cap. */
   cents: Cents;
   /** Each pay in the payment's window whose share moves, plus this one, in day order. */
-  rows: { dayKey: string; on: number; beforeCents: Cents; afterCents: Cents }[];
+  rows: {
+    dayKey: string;
+    on: number;
+    beforeCents: Cents;
+    afterCents: Cents;
+    /** Another pay the person pinned whose figure the change cuts. */
+    isPinned: boolean;
+  }[];
   /** What no pay in the window would carry after the change. */
   shortCents: Cents;
   /** Every pay in the payment's window, and the pays that carry something after the change. */
@@ -89,6 +96,10 @@ export function previewBillShare(
       on,
       beforeCents: centsOf(before.parts, key),
       afterCents: centsOf(after.parts, key),
+      isPinned:
+        key !== dayKey &&
+        bill.fixed !== undefined &&
+        Object.hasOwn(bill.fixed, key),
     }))
     .filter(
       (row) => row.dayKey === dayKey || row.beforeCents !== row.afterCents,

@@ -17,7 +17,12 @@ export function describeProblem(problem: LookaheadProblem) {
     return `${name} was due ${formatDateUTC(problem.on)} and is not marked paid.`;
   }
   if (problem.kind === 'noIncome') {
-    return `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
+    if (problem.reason === 'short') {
+      return `On ${formatDateUTC(problem.on)}, the plan leaves ${name} ${formatCents(problem.shortBy)} short.`;
+    }
+    return problem.reason === 'noPick'
+      ? `${name} on ${formatDateUTC(problem.on)}: the pay it comes from is not before it is due.`
+      : `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
   }
   const result = `On ${formatDateUTC(problem.on)}, the plan leaves ${name} ${formatCents(problem.shortBy)} short.`;
   return result;
@@ -184,9 +189,9 @@ function describeChangeProblem(
       figure: null,
     };
   }
-  if (problem.kind === 'noIncome') {
+  if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
-      text: `With this change, ${name} on ${on} has no income before it is due.${tail}`,
+      text: `With this change, ${name} on ${on} ${problem.reason === 'noPick' ? 'is set to come from a pay that is not before it is due' : 'has no income before it is due'}.${tail}`,
       figure: null,
     };
   }
@@ -243,8 +248,10 @@ export function describeProblemShort(problem: LookaheadProblem) {
   const on = formatDateShortUTC(problem.on).replace(/ /g, '\u00a0');
   if (problem.kind === 'overdue')
     return `${name} was due ${on}, not marked paid`;
-  if (problem.kind === 'noIncome')
+  if (problem.kind === 'noIncome' && problem.reason === 'noIncome')
     return `${name} on ${on} has no income before it`;
+  if (problem.kind === 'noIncome' && problem.reason === 'noPick')
+    return `${name} on ${on} comes from a pay that is not before it`;
   const result = `The plan leaves ${name} ${formatCentsShort(problem.shortBy)} short on ${on}`;
   return result;
 }
@@ -256,8 +263,14 @@ export function describeProblemRow(problem: LookaheadProblem) {
   if (problem.kind === 'overdue') {
     return { title: FIX_WORDS.notPaid(name), detail: FIX_WORDS.dueOn(on) };
   }
-  if (problem.kind === 'noIncome') {
-    return { title: FIX_WORDS.noIncome(name), detail: FIX_WORDS.dueOn(on) };
+  if (problem.kind === 'noIncome' && problem.reason !== 'short') {
+    return {
+      title:
+        problem.reason === 'noPick'
+          ? FIX_WORDS.noPick(name)
+          : FIX_WORDS.noIncome(name),
+      detail: FIX_WORDS.dueOn(on),
+    };
   }
   return {
     title: FIX_WORDS.short(name, formatCentsShort(problem.shortBy)),

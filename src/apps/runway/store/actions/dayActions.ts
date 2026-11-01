@@ -124,6 +124,32 @@ export async function saveDayOverride(
   });
 }
 
+/** Sets what one income day puts toward a bill (`null` takes the day's own figure back), keeping the day's other choices. */
+export function saveBillShare(
+  uid: string,
+  encryption: RunwayEncryption,
+  day: DayRef,
+  billId: string,
+  cents: Cents | null,
+  log?: { itemId: string; summary: string; note: string | null },
+): Promise<void> {
+  return saveDayOverride(
+    uid,
+    encryption,
+    day,
+    (current) => ({
+      ...current,
+      billCents:
+        cents === null
+          ? Object.fromEntries(
+              Object.entries(current.billCents).filter(([id]) => id !== billId),
+            )
+          : { ...current.billCents, [billId]: cents },
+    }),
+    log,
+  );
+}
+
 /** A day another device settled or changed first; the screen may already have moved on, so it is also said in a toast. */
 export class DayChangedElsewhere extends Error {}
 

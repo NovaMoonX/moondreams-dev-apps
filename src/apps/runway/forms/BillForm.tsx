@@ -83,6 +83,7 @@ import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   describePayChoice,
   getPayOptions,
+  hasPaysToChoose,
   toPayValue,
   type PayOption,
 } from '@apps/runway/utils/payFrom';
@@ -483,7 +484,25 @@ function BillFormBody({
         ]
       : planPayOptions;
   const canPickPay = !isOnce && formData.frequency !== null;
-  const canAskPaidFrom = canPickPay;
+  const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
+  const canAskPaidFrom =
+    canPickPay &&
+    (savedFundedBy === 'lastBefore' ||
+      savedFundedBy === 'pay' ||
+      (dueDate !== undefined &&
+        formData.frequency !== null &&
+        hasPaysToChoose(
+          comingDays,
+          {
+            kind: formData.frequency,
+            anchor: dueDate,
+            monthDays:
+              formData.frequency === 'monthly'
+                ? [new Date(dueDate).getUTCDate()]
+                : [],
+          },
+          today,
+        )));
   const isPayMissing =
     canPickPay &&
     formData.paidFrom === 'pay' &&
@@ -506,6 +525,8 @@ function BillFormBody({
   );
 
   const getPaidFromSummary = () => {
+    if (formData.paidFrom === 'spread' && savedFundedBy === 'chosen')
+      return BILL_FUNDING_LABELS.chosen;
     if (formData.paidFrom === 'pay') {
       return (
         payOptions.find(({ value }) => value === formData.payValue)?.label ??
@@ -965,6 +986,11 @@ function BillFormBody({
       return { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) };
     if (!canPickPay) return { kind: 'suggested' };
     if (data.paidFrom === 'lastBefore') return { kind: 'lastBefore' };
+    if (
+      data.paidFrom === 'spread' &&
+      editing?.payload.fundedBy.kind === 'chosen'
+    )
+      return editing.payload.fundedBy;
     const found = payOptions.find(({ value }) => value === data.payValue);
     return data.paidFrom === 'pay' && found
       ? found.fundedBy

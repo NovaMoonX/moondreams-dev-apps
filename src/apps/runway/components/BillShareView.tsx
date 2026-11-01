@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
@@ -35,11 +34,15 @@ import { findPayRule } from '@apps/runway/engine/billShare';
 import {
   getVersionStretches,
   resolveCurrentOrNext,
+  type VersionStretch,
 } from '@apps/runway/engine/resolve';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
-import { saveDayOverride } from '@apps/runway/store/actions/dayActions';
+import {
+  saveBillShare,
+  type DayRef,
+} from '@apps/runway/store/actions/dayActions';
 import {
   previewBillShareView,
   type PreviewChange,
@@ -58,11 +61,14 @@ import type {
   BillSealed,
   BillVersion,
   Cents,
-  DayOverrideSealed,
 } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
-import { describePayChoice, getPayMonthDay } from '@apps/runway/utils/payFrom';
+import {
+  describePaidFrom,
+  describePayChoice,
+  getPayMonthDay,
+} from '@apps/runway/utils/payFrom';
 
 interface BillShareViewProps {
   billId: string;
@@ -75,12 +81,96 @@ interface BillShareViewProps {
 
 type PayRule = Extract<BillFundedBy, { kind: 'pay' }>;
 
-const withoutBill = (current: DayOverrideSealed, billId: string) => ({
-  ...current,
-  billCents: Object.fromEntries(
-    Object.entries(current.billCents).filter(([id]) => id !== billId),
-  ),
-});
+/** Everything taking a saved share back needs, kept from before the write. */
+interface Pending {
+  uid: string;
+  billId: string;
+  billName: string;
+  day: DayRef;
+  /** This pay's own figure before the change; undefined when it followed the plan. */
+  before: Cents | undefined;
+  /** The bill's stretches before a Paid from rule was written; null when none was. */
+  stretches: VersionStretch<BillSealed>[] | null;
+  wasText: string;
+  rule: PayRule | null;
+}
+
+type AddToast = ReturnType<typeof useToast>['addToast'];
+
+/** Takes a saved share back, in the order it was made, and says what it reached if a step fails. */
+async function undoPending(pending: Pending, addToast: AddToast) {
+  const { uid, billId, billName, day, before, stretches } = pending;
+  const encryption = await getRunwayEncryption(uid);
+  const isRuleBack = stretches === null;
+  if (stretches !== null && stretches.length > 0) {
+    try {
+      await changeItem(uid, encryption, {
+        itemId: billId,
+        kind: 'bill',
+        payload: stretches[0].payload,
+        summary: PAY_SHARE_WORDS.paidFromBack(billName, pending.wasText),
+        note: null,
+        effectiveFrom: stretches[0].effectiveFrom,
+        stretches,
+      });
+    } catch (error) {
+      addToast({
+        title: PAY_SHARE_WORDS.undoFailed,
+        description: getErrorMessage(error, ''),
+        type: 'error',
+      });
+      return;
+    }
+  }
+  try {
+    const date = formatDateUTC(day.expectedOn);
+    await saveBillShare(uid, encryption, day, billId, before ?? null, {
+      itemId: billId,
+      summary:
+        before === undefined
+          ? PAY_SHARE_WORDS.resetSummary(billName, date)
+          : PAY_SHARE_WORDS.restoreSummary(billName, formatCents(before), date),
+      note: null,
+    });
+  } catch (error) {
+    addToast({
+      title: isRuleBack
+        ? PAY_SHARE_WORDS.undoFailed
+        : PAY_SHARE_WORDS.undoPartial(billName),
+      description: getErrorMessage(error, ''),
+      type: 'error',
+    });
+  }
+}
+
+interface KeepChoiceProps {
+  title: string;
+  body: string;
+  isDisabled: boolean;
+  onPick: () => void;
+}
+
+function KeepChoice({ title, body, isDisabled, onPick }: KeepChoiceProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      disabled={isDisabled}
+      className='text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-1.5! text-left font-normal whitespace-normal'
+      onClick={onPick}
+    >
+      <span className='text-[15px] leading-[1.125rem] font-medium'>
+        {title}
+      </span>
+      <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
+        <MaskedText>{body}</MaskedText>
+      </span>
+    </Button>
+  );
+}
+
+const isSameRule = (a: BillFundedBy, b: PayRule) =>
+  a.kind === 'pay' && a.payLineId === b.payLineId && a.monthDay === b.monthDay;
 
 /** The view a bill's sheet swaps in on an income day: what this one pay puts toward the bill, its effect on the other pays, and then whether to keep it for every pay. */
 function BillShareView({
@@ -122,11 +212,31 @@ function BillShareView({
   );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<{
-    rule: PayRule;
-    previous: Cents | null;
-    cents: Cents;
-  } | null>(null);
+  const [saved, setSaved] = useState<(Pending & { rule: PayRule }) | null>(
+    null,
+  );
+  const pendingRef = useRef<Pending | null>(null);
+  const addToastRef = useRef(addToast);
+
+  useEffect(() => {
+    addToastRef.current = addToast;
+  });
+  useEffect(
+    () => () => {
+      const pending = pendingRef.current;
+      if (!pending) return;
+      pendingRef.current = null;
+      addToastRef.current({
+        title: PAY_SHARE_WORDS.savedToast(pending.billName),
+        type: 'success',
+        action: {
+          label: PAY_SHARE_WORDS.undo,
+          onClick: () => void undoPending(pending, addToastRef.current),
+        },
+      });
+    },
+    [],
+  );
 
   const parsed = parseMoneyToCents(amount);
   const target =
@@ -177,103 +287,38 @@ function BillShareView({
       : !isChanged
         ? PAY_SHARE_WORDS.unchanged
         : null;
-  const figure = (cents: Cents) => formatCents(cents);
   const rows = isChanged
-    ? share.rows.map((row) => ({
-        key: row.dayKey,
-        name: PAY_SHARE_WORDS.payRow(formatDateShortUTC(row.on)),
-        text: `${figure(row.beforeCents)} → ${figure(row.afterCents)}`,
-      }))
+    ? share.rows.map((row) => {
+        const date = formatDateShortUTC(row.on);
+        return {
+          key: row.dayKey,
+          name:
+            row.isPinned && row.beforeCents !== row.afterCents
+              ? PAY_SHARE_WORDS.pinnedRow(date)
+              : PAY_SHARE_WORDS.payRow(date),
+          text: `${formatCents(row.beforeCents)} → ${formatCents(row.afterCents)}`,
+        };
+      })
     : [];
   const dayLeftRow =
     isChanged && shown && shown.leftBeforeCents !== shown.leftAfterCents
       ? {
           key: 'left',
           name: DRAFT_WORDS.dayLeft,
-          text: `${figure(shown.leftBeforeCents)} → ${figure(shown.leftAfterCents)}`,
+          text: `${formatCents(shown.leftBeforeCents)} → ${formatCents(shown.leftAfterCents)}`,
         }
       : null;
   const previous = openDays.find((entry) => entry.id === dayKey)?.override
-    .billCents[billId];
+    .billCents?.[billId];
 
-  const writeShare = (billCents: Cents | null, log: string | null) =>
-    (async () => {
-      if (!user || day === null) return;
-      const encryption = await getRunwayEncryption(user.uid);
-      await saveDayOverride(
-        user.uid,
-        encryption,
-        {
-          payLineId: day.payLineId,
-          sourceId: day.sourceId,
-          expectedOn: day.on,
-        },
-        (current) =>
-          billCents === null
-            ? withoutBill(current, billId)
-            : {
-                ...current,
-                billCents: { ...current.billCents, [billId]: billCents },
-              },
-        log === null ? undefined : { itemId: billId, summary: log, note: null },
-      );
-    })();
-
-  const undoShare = (before: Cents | undefined, rule: PayRule | null) => {
-    if (!day) return;
-    void (async () => {
-      try {
-        if (rule !== null) {
-          const encryption = user ? await getRunwayEncryption(user.uid) : null;
-          if (user && encryption) {
-            await changeItem(user.uid, encryption, {
-              itemId: billId,
-              kind: 'bill',
-              payload: bill,
-              summary: `${bill.name}: undid the change to Paid from.`,
-              note: null,
-              effectiveFrom: today,
-              stretches: getVersionStretches<BillVersion, BillSealed>(
-                store
-                  .getState()
-                  .runway.versions.filter(
-                    (version): version is BillVersion =>
-                      version.kind === 'bill',
-                  ),
-                billId,
-                today,
-              ).map((stretch) => ({
-                ...stretch,
-                payload: { ...stretch.payload, fundedBy: bill.fundedBy },
-              })),
-            });
-          }
-        }
-        await writeShare(
-          before ?? null,
-          PAY_SHARE_WORDS.undoSummary(bill.name, formatDateUTC(day.on)),
-        );
-      } catch (undoError) {
-        addToast({
-          title: PAY_SHARE_WORDS.undoFailed,
-          description: getErrorMessage(undoError, ''),
-          type: 'error',
-        });
-      }
-    })();
-  };
-
-  const finish = (
-    title: string,
-    before: Cents | undefined,
-    rule: PayRule | null,
-  ) => {
+  const finish = (title: string, pending: Pending) => {
+    pendingRef.current = null;
     addToast({
       title,
       type: 'success',
       action: {
         label: PAY_SHARE_WORDS.undo,
-        onClick: () => undoShare(before, rule),
+        onClick: () => void undoPending(pending, addToast),
       },
     });
     onClose();
@@ -294,132 +339,132 @@ function BillShareView({
 
   const save = () =>
     run(async () => {
-      if (!share || !day || blocker !== null) return;
-      await writeShare(
-        share.cents,
-        PAY_SHARE_WORDS.summary(
+      if (!share || !day || !user || blocker !== null) return;
+      const encryption = await getRunwayEncryption(user.uid);
+      const dayRef: DayRef = {
+        payLineId: day.payLineId,
+        sourceId: day.sourceId,
+        expectedOn: day.on,
+      };
+      const rule = findPayRule(share, dayKey, (payLineId, on) =>
+        getPayMonthDay(plan, payLineId, on),
+      );
+      const pending: Pending = {
+        uid: user.uid,
+        billId,
+        billName: bill.name,
+        day: dayRef,
+        before: previous,
+        stretches: null,
+        wasText: describePaidFrom(bill.fundedBy, plan),
+        rule,
+      };
+      await saveBillShare(user.uid, encryption, dayRef, billId, share.cents, {
+        itemId: billId,
+        summary: PAY_SHARE_WORDS.summary(
           bill.name,
           formatCents(share.cents),
           formatDateUTC(day.on),
         ),
-      );
-      const rule = findPayRule(share, dayKey, (payLineId, on) =>
-        getPayMonthDay(plan, payLineId, on),
-      );
+        note: null,
+      });
       if (rule === null) {
-        finish(PAY_SHARE_WORDS.savedToast(bill.name), previous, null);
+        finish(PAY_SHARE_WORDS.savedToast(bill.name), pending);
         return;
       }
-      setSaved({ rule, previous: previous ?? null, cents: share.cents });
+      const withStretches: Pending & { rule: PayRule } = {
+        ...pending,
+        rule,
+        stretches: getVersionStretches<BillVersion, BillSealed>(
+          store
+            .getState()
+            .runway.versions.filter(
+              (version): version is BillVersion => version.kind === 'bill',
+            ),
+          billId,
+          today,
+        ),
+      };
+      pendingRef.current = { ...withStretches, stretches: null };
+      setSaved(withStretches);
     });
 
   const keepForEvery = () =>
     run(async () => {
-      if (!saved || !user || !day) return;
+      if (!saved || !user) return;
       const encryption = await getRunwayEncryption(user.uid);
-      const next: BillSealed = { ...bill, fundedBy: saved.rule };
-      const stretches = getVersionStretches<BillVersion, BillSealed>(
-        store
-          .getState()
-          .runway.versions.filter(
-            (version): version is BillVersion => version.kind === 'bill',
-          ),
-        billId,
-        today,
-      );
-      await changeItem(user.uid, encryption, {
-        itemId: billId,
-        kind: 'bill',
-        payload: next,
-        summary: `${bill.name}: ${describeChange(bill, next, getCardNamer(allCards))}, from ${formatDateUTC(today)}.`,
-        note: null,
-        effectiveFrom: today,
-        stretches: stretches.map((stretch) => ({
-          ...stretch,
-          payload: { ...stretch.payload, fundedBy: saved.rule },
-        })),
-      });
-      await writeShare(null, null);
-      finish(
-        PAY_SHARE_WORDS.ruleToast(
-          bill.name,
-          describePayChoice(saved.rule, plan),
-        ),
-        saved.previous ?? undefined,
-        saved.rule,
-      );
+      const payName = describePayChoice(saved.rule, plan);
+      if (!isSameRule(bill.fundedBy, saved.rule)) {
+        const next: BillSealed = { ...bill, fundedBy: saved.rule };
+        await changeItem(user.uid, encryption, {
+          itemId: billId,
+          kind: 'bill',
+          payload: next,
+          summary: `${bill.name}: ${describeChange(bill, next, getCardNamer(allCards), undefined, (fundedBy) => describePayChoice(fundedBy, plan))}, from ${formatDateUTC(today)}.`,
+          note: null,
+          effectiveFrom: today,
+          stretches: (saved.stretches ?? []).map((stretch) => ({
+            ...stretch,
+            payload: { ...stretch.payload, fundedBy: saved.rule },
+          })),
+        });
+      }
+      try {
+        await saveBillShare(user.uid, encryption, saved.day, billId, null);
+      } catch (partialError) {
+        setError(
+          `${PAY_SHARE_WORDS.keepPartial(bill.name, payName)} ${getErrorMessage(partialError, '')}`.trim(),
+        );
+        return;
+      }
+      finish(PAY_SHARE_WORDS.ruleToast(bill.name, payName), saved);
     });
 
   const justThisTime = () => {
     if (!saved) return;
-    finish(
-      PAY_SHARE_WORDS.savedToast(bill.name),
-      saved.previous ?? undefined,
-      null,
-    );
+    finish(PAY_SHARE_WORDS.savedToast(bill.name), {
+      ...saved,
+      stretches: null,
+    });
   };
 
   if (saved) {
     const payLabel = describePayChoice(saved.rule, plan);
-    const payWords = payLabel.startsWith('The ')
+    const payWords = payLabel.startsWith('The pay on ')
       ? `t${payLabel.slice(1)}`
       : payLabel;
-    const options = [
-      {
-        key: 'yes',
-        title: PAY_SHARE_WORDS.keepYes(payWords),
-        body: PAY_SHARE_WORDS.keepYesBody(bill.name, payWords),
-        onClick: () => void keepForEvery(),
-      },
-      {
-        key: 'once',
-        title: PAY_SHARE_WORDS.keepJustOnce,
-        body: PAY_SHARE_WORDS.keepJustOnceBody,
-        onClick: justThisTime,
-      },
-    ];
     return (
       <div className='flex flex-1 flex-col gap-3'>
         <ActionTitle>{PAY_SHARE_WORDS.keepTitle}</ActionTitle>
         <div className='grid grid-cols-2 gap-2'>
-          {options.map((option) => (
-            <Button
-              key={option.key}
-              type='button'
-              variant='tertiary'
-              disabled={isSaving}
-              className={join(
-                'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-1.5! text-left font-normal whitespace-normal',
-              )}
-              onClick={option.onClick}
-            >
-              <span className='text-[15px] leading-[1.125rem] font-medium'>
-                {option.title}
-              </span>
-              <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
-                {option.body}
-              </span>
-            </Button>
-          ))}
+          <KeepChoice
+            title={PAY_SHARE_WORDS.keepYes(payWords)}
+            body={PAY_SHARE_WORDS.keepYesBody(bill.name, payWords)}
+            isDisabled={isSaving}
+            onPick={() => void keepForEvery()}
+          />
+          <KeepChoice
+            title={PAY_SHARE_WORDS.keepJustOnce}
+            body={PAY_SHARE_WORDS.keepJustOnceBody}
+            isDisabled={isSaving}
+            onPick={() => justThisTime()}
+          />
         </div>
         {error && <InlineNotice tone='warning'>{error}</InlineNotice>}
       </div>
     );
   }
 
-  const shortLine =
-    isChanged && share.shortCents > 0
-      ? isHidden
-        ? null
-        : mask(
-            PAY_SHARE_WORDS.short(
-              bill.name,
-              formatCents(share.shortCents),
-              formatDateShortUTC(share.dueOn),
-            ),
-          )
-      : null;
-  const isHiddenShort = isChanged && share.shortCents > 0 && isHidden;
+  const hasShort = isChanged && share.shortCents > 0;
+  const shortLine = hasShort
+    ? mask(
+        PAY_SHARE_WORDS.short(
+          bill.name,
+          formatCents(share.shortCents),
+          formatDateShortUTC(share.dueOn),
+        ),
+      )
+    : null;
 
   return (
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
@@ -431,7 +476,10 @@ function BillShareView({
         onChange={setAmount}
         disabled={isSaving}
         hint={
-          target !== null && share !== null && target > share.maxCents ? (
+          !isHidden &&
+          target !== null &&
+          share !== null &&
+          target > share.maxCents ? (
             <MaskedText>
               {PAY_SHARE_WORDS.capped(bill.name, formatCents(share.maxCents))}
             </MaskedText>
@@ -454,8 +502,12 @@ function BillShareView({
           </ul>
         </ActionSection>
       )}
-      {shortLine && <InlineNotice tone='warning'>{shortLine}</InlineNotice>}
-      {isHiddenShort && <NeedsALookRow />}
+      {hasShort &&
+        (isHidden ? (
+          <NeedsALookRow />
+        ) : (
+          <InlineNotice tone='warning'>{shortLine}</InlineNotice>
+        ))}
       <ModalFooterActions
         note={error ?? blocker}
         cancelAction={

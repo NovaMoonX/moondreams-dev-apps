@@ -24,6 +24,7 @@ import {
   selectAllCards,
   selectComingDays,
   selectGroups,
+  selectResolvedPlan,
   selectSettledKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
@@ -32,6 +33,7 @@ import {
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
 import { getCardNamer } from '@apps/runway/utils/cardText';
+import { describePayChoice } from '@apps/runway/utils/payFrom';
 import {
   getChangeSpan,
   INITIAL_FROM_WHEN,
@@ -130,6 +132,7 @@ export function useChangeFlow({
   const days = useAppSelector((state) => selectComingDays(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
+  const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const [from, setFrom] = useState(initialFrom);
   const [step, setStep] = useState<'form' | 'reason'>('form');
   const [note, setNote] = useState(initialNote);
@@ -161,6 +164,7 @@ export function useChangeFlow({
               .name ??
             newGroup?.name ??
             'a group',
+          (fundedBy) => describePayChoice(fundedBy, plan),
         );
 
   const changeJson = isUnchanged

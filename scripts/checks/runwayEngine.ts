@@ -84,6 +84,7 @@ import {
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
   describeHoldsChange,
+  describeProblemShort,
   isSameLookahead,
   sortProblems,
 } from '../../src/apps/runway/utils/lookaheadText.ts';
@@ -1679,6 +1680,41 @@ const version = (
       hashOverride({ pairings: null, holdResolutions: {}, billCents: {} }),
       hashOverride({ pairings: null, holdResolutions: {} }),
       'an empty set of shares is the legacy fingerprint',
+    );
+
+    // A chosen bill honours a pinned share too, and over-asked pins name the pay they cut.
+    const chosenFixed = planBillPayments(
+      makeBill({
+        schedule: once(utc(2026, 12, 1)),
+        fundedBy: { kind: 'chosen', dayKeys: [nov15, nov30] },
+        fixed: { [nov15]: 0 },
+      }),
+      workPays,
+      horizon,
+    )[0].parts.map((part) => [toDayStamp(part.day.on), part.cents]);
+    assert.deepEqual(
+      chosenFixed,
+      [
+        ['20261115', 0],
+        ['20261130', 150_000],
+      ],
+      'a chosen day pinned at nothing leaves the rest to the others',
+    );
+    const overAsked = previewBillShare(
+      rent({ kind: 'suggested' }, { [nov30]: 100_000 }),
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      100_000,
+    );
+    assert.deepEqual(
+      overAsked?.rows.map((row) => [row.dayKey, row.afterCents, row.isPinned]),
+      [
+        [nov15, 100_000, false],
+        [nov30, 50_000, true],
+      ],
+      'a pinned pay that is cut is named as one the person set',
     );
   }
 
@@ -5021,7 +5057,7 @@ const version = (
       paid: null,
       parts: Array.from({ length: parts }, () => ({
         day: day(today),
-        cents: 1,
+        cents: 1_000 / parts,
       })),
     }) as never;
   const billsOf = (...ids: string[]) =>
@@ -5043,6 +5079,58 @@ const version = (
     noIncome.holdsThrough,
     today + 39 * DAY_MS,
     'the plan holds through the day before a bill with no income',
+  );
+  // A payment its pays do not carry in full is reported, with the reason.
+  const shortPayment = (over: Record<string, unknown>, parts: number) =>
+    ({ ...(payment(today + 40 * DAY_MS, parts) as object), ...over }) as never;
+  const reasonOf = (
+    payments: ReturnType<typeof shortPayment>[],
+    isPick = false,
+  ) =>
+    run(weekly.slice(0, 3), {
+      bills: [{ id: 'rent', name: 'rent', since: 0, isUndated: false, isPick }],
+      payments: { rent: payments },
+    }).problems.map((problem) =>
+      problem.kind === 'noIncome'
+        ? [problem.reason, problem.shortBy]
+        : [problem.kind],
+    );
+  assert.deepEqual(
+    reasonOf([shortPayment({ parts: [{ day: day(today), cents: 250 }] }, 1)]),
+    [['short', 750]],
+    'pays that carry less than the payment needs are reported as short',
+  );
+  assert.deepEqual(
+    reasonOf([
+      shortPayment(
+        { parts: [{ day: day(today), cents: 250 }], fundedCents: 750 },
+        1,
+      ),
+    ]),
+    [],
+    'what confirmed days already set aside counts',
+  );
+  assert.deepEqual(
+    reasonOf([shortPayment({}, 0)], true),
+    [['noPick', 1_000]],
+    'a named pay that does not come before it is due says so',
+  );
+  assert.deepEqual(
+    reasonOf([shortPayment({}, 0)]),
+    [['noIncome', 1_000]],
+    'no pay at all keeps its reason',
+  );
+  assert.equal(
+    describeProblemShort({
+      kind: 'noIncome',
+      on: today + 40 * DAY_MS,
+      billId: 'rent',
+      name: 'Rent',
+      reason: 'short',
+      shortBy: 75_000,
+    }).startsWith('The plan leaves Rent $750'),
+    true,
+    'a short payment is worded as the plan leaving the bill short',
   );
   assert.equal(
     run(weekly.slice(0, 3), {
