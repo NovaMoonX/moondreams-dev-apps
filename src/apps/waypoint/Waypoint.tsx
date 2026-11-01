@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Tooltip } from '@moondreamsdev/dreamer-ui/components';
+import { Lock } from 'lucide-react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
+import GatesClosedNote from '@/components/GatesClosedNote';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AppToggle from '@/components/AppToggle';
@@ -18,6 +21,7 @@ import MyEmailInvites from '@apps/waypoint/components/MyEmailInvites';
 import MyPendingTrips from '@apps/waypoint/components/MyPendingTrips';
 import TripCard from '@apps/waypoint/components/TripCard';
 import TripDetailPage from '@apps/waypoint/components/TripDetailPage';
+import { CREATE_TRIPS_GATE_ID } from '@apps/waypoint/constants';
 import { getMyTripsParams } from '@apps/waypoint/utils/tripsUrl';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useWaypointSync } from '@apps/waypoint/hooks/useWaypointSync';
@@ -36,6 +40,8 @@ function Waypoint() {
   useWaypointTheme();
   const { user, loading } = useAuth();
   useTrackAppUsage('waypoint', user?.uid ?? null);
+  useLoadFeatureGates('waypoint', user?.uid ?? null);
+  const canCreateTrips = useIsGateOpen('waypoint', CREATE_TRIPS_GATE_ID);
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -201,6 +207,22 @@ function Waypoint() {
     return <Loading />;
   }
 
+  const renderCreateButton = (label: string, className: string) =>
+    canCreateTrips ? (
+      <Button className={className} onClick={() => setIsCreateModalOpen(true)}>
+        {label}
+      </Button>
+    ) : (
+      <Tooltip message='Creating trips is turned off for you right now. You can still join trips you are invited to.'>
+        <span className={className.includes('mt-4') ? 'mt-4 inline-block' : 'block'}>
+          <Button className='w-full whitespace-nowrap' disabled>
+            <Lock className='h-4 w-4' aria-hidden />
+            {label}
+          </Button>
+        </span>
+      </Tooltip>
+    );
+
   const renderTripSection = (label: string, sectionTrips: TripSpace[]) => {
     if (sectionTrips.length === 0) {
       return null;
@@ -281,12 +303,7 @@ function Waypoint() {
                   focusTripId={selectedTripId}
                 />
               </div>
-              <Button
-                className='whitespace-nowrap'
-                onClick={() => setIsCreateModalOpen(true)}
-              >
-                Create trip
-              </Button>
+              {renderCreateButton('Create trip', 'whitespace-nowrap')}
             </div>
           </div>
         </div>
@@ -314,9 +331,7 @@ function Waypoint() {
                 ? 'You do not have any trips to show.'
                 : 'You do not belong to any active trips yet.'}
             </p>
-            <Button className='mt-4' onClick={() => setIsCreateModalOpen(true)}>
-              Create your first trip
-            </Button>
+            {renderCreateButton('Create your first trip', 'mt-4')}
           </div>
         ) : (
           <div className='space-y-8'>
@@ -325,6 +340,7 @@ function Waypoint() {
             {renderTripSection('Past', pastTrips)}
           </div>
         )}
+        <GatesClosedNote appId='waypoint' />
       </div>
 
       <CreateTripModal

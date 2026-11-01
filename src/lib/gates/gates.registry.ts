@@ -31,6 +31,14 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
       'Someone kept out sees only what they planned on their calendar, with no setting for release days. Everyone else sees the day a watchlist movie opens outlined in gold, and can hide it in Membership settings.',
     defaultRollout: 'everyone',
   },
+  {
+    id: 'create-trips',
+    appId: 'waypoint',
+    label: 'Create trips',
+    description:
+      'Someone kept out still sees the Create trip button, locked, and can still join and plan trips they were invited to. Everyone else can start new trips.',
+    defaultRollout: 'everyone',
+  },
 ];
 
 export function getAppFeatureGates(appId: string) {
