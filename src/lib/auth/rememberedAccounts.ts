@@ -94,6 +94,32 @@ export function rememberAccount(
   return next;
 }
 
+/** Brings the saved name and photo of these accounts up to date with their site profiles, keeping the list's order. */
+export function refreshRememberedProfiles(
+  profiles: Pick<RememberedAccount, 'uid' | 'displayName' | 'photoURL'>[],
+) {
+  const byUid = new Map(profiles.map((profile) => [profile.uid, profile]));
+  const saved = readRememberedAccounts();
+  const next = saved.map((entry) => {
+    const profile = byUid.get(entry.uid);
+    return profile
+      ? {
+          ...entry,
+          displayName: profile.displayName ?? entry.displayName,
+          photoURL: profile.photoURL ?? entry.photoURL,
+        }
+      : entry;
+  });
+  const hasChanged = next.some(
+    (entry, index) =>
+      entry.displayName !== saved[index].displayName ||
+      entry.photoURL !== saved[index].photoURL,
+  );
+  if (!hasChanged) return null;
+  writeRememberedAccounts(next);
+  return next;
+}
+
 async function readPhotoAsDataURL(url: string) {
   const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
   if (!response.ok) throw new Error(`Photo request failed: ${response.status}`);
