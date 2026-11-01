@@ -670,8 +670,6 @@ const hashProgress = (progress: BillProgressInput | undefined) => {
   return result;
 };
 
-const NO_FIXED: Record<string, number> = {};
-
 const MAX_CACHED_DRAFTS = 24;
 const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 
@@ -854,7 +852,7 @@ export function computeDraftView(
     schedule: version.payload.timing.schedule,
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
-    fixed: fixedByBill.get(item.id) ?? NO_FIXED,
+    fixed: fixedByBill.get(item.id),
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
   const goals = resolvedGoals.map(({ item, version }) => {
@@ -1017,7 +1015,7 @@ export const selectBillPayments = createSelector(
               schedule: payload.timing.schedule,
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
-              fixed: fixedByBill.get(item.id) ?? NO_FIXED,
+              fixed: fixedByBill.get(item.id),
               progress: progress[item.id] ?? NO_PROGRESS,
             },
             comingDays,

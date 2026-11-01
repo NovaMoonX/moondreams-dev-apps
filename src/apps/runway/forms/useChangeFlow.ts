@@ -59,6 +59,8 @@ interface UseChangeFlowArgs {
   /** A group the person named while changing a bill, written in the same batch as the change. */
   newGroup?: GroupSealed | null;
   onDone: () => void;
+  /** Runs once the change is written, for what the change makes stale; a failure is told, never hidden. */
+  afterSave?: () => Promise<void>;
   /** A kept draft's note and "from when", when the form starts from one. */
   initialNote?: string;
   initialFrom?: FromWhenValue;
@@ -122,6 +124,7 @@ export function useChangeFlow({
   presetDayKey = null,
   newGroup = null,
   onDone,
+  afterSave,
   initialNote = '',
   initialFrom = INITIAL_FROM_WHEN,
 }: UseChangeFlowArgs) {
@@ -263,6 +266,17 @@ export function useChangeFlow({
               console.error('Moving day choices failed', carryError);
               tellFailed(moves.map((move) => move.fromOn));
             });
+        }
+      }
+      if (afterSave) {
+        try {
+          await afterSave();
+        } catch (afterError) {
+          addToast({
+            title: CHANGE_WORDS.savedButStale,
+            description: getErrorMessage(afterError, ''),
+            type: 'error',
+          });
         }
       }
       onDone();

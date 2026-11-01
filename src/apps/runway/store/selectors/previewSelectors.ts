@@ -348,6 +348,8 @@ export interface BillShareView {
   /** What the pay leaves after its lines, as it is and with the change. */
   leftBeforeCents: number;
   leftAfterCents: number;
+  /** What the pay brings in all. */
+  dayMoneyCents: number;
 }
 
 /** What setting one pay's share of a bill to `cents` does: the bill's payment across its window and the pay's own leftover, from the same engine that drafts the days. Null when the pay is not in a payment's window. */
@@ -408,6 +410,7 @@ export function previewBillShareView(
     );
   const result: BillShareView = {
     share,
+    dayMoneyCents: draftOf(openDays)?.draft.moneyCents ?? 0,
     leftBeforeCents: draftOf(openDays)?.draft.freeToSpend.cents ?? 0,
     leftAfterCents:
       draftOf(layerDay(openDays, { ...change, cents: share.cents }))?.draft

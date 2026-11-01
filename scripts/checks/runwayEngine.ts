@@ -83,6 +83,7 @@ import {
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
+  describeHoldsBlocks,
   describeHoldsChange,
   describeProblemShort,
   isSameLookahead,
@@ -1537,7 +1538,35 @@ const version = (
       'a fixed share on a day the pay does not allow is ignored',
     );
 
+    // The change log says what changed in plain words.
+    const logBill = {
+      name: 'Rent',
+      emoji: null,
+      priority: 'must',
+      orderIndex: 1,
+      amount: { lowCents: 125_000, highCents: 125_000 },
+      timing: { kind: 'date', schedule: once(utc(2026, 12, 1)) },
+      ending: NEVER,
+      fundedBy: { kind: 'suggested' },
+      stanceOverride: null,
+      groupId: null,
+    } as const;
+    assert.equal(
+      describeChange(
+        logBill as never,
+        {
+          ...logBill,
+          fundedBy: { kind: 'pay', payLineId: 'work', monthDay: 30 },
+        } as never,
+        () => '',
+        undefined,
+        () => 'The pay on the 30th',
+      ),
+      'Paid from: spread across your pays to the pay on the 30th',
+      'a Paid from change reads as plain words',
+    );
     // A pay's own share of a bill: the other pays, the shortfall and the rule it could become.
+    const never = () => false;
     const monthDayOf = (_payLineId: string, on: number) =>
       new Date(on).getUTCDate();
     const base = rent({ kind: 'suggested' });
@@ -1561,14 +1590,57 @@ const version = (
     );
     assert.equal(zero?.shortCents, 0, 'the other pay carries the rest');
     assert.deepEqual(
-      zero && findPayRule(zero, nov15, monthDayOf),
+      zero && findPayRule(zero, nov15, monthDayOf, never),
       { kind: 'pay', payLineId: 'work', monthDay: 30 },
       'one other pay carrying it all maps to a Paid from rule',
     );
     assert.equal(
-      zero && findPayRule(zero, nov15, () => null),
+      zero && findPayRule(zero, nov15, () => null, never),
       null,
       "a rule that would pick the line's other pays too is not offered",
+    );
+    const withFreelance = [
+      workPays[0],
+      payDay('free', utc(2026, 11, 7)),
+      workPays[1],
+    ].sort((a, b) => a.on - b.on);
+    const isFree = (payLineId: string) => payLineId === 'free';
+    const amongOneTime = previewBillShare(
+      base,
+      withFreelance,
+      horizon,
+      'conservative',
+      nov15,
+      0,
+    );
+    assert.deepEqual(
+      amongOneTime && findPayRule(amongOneTime, nov15, monthDayOf, isFree),
+      { kind: 'pay', payLineId: 'work', monthDay: 30 },
+      'a one-time pay in the window does not stop the rule',
+    );
+    assert.equal(
+      amongOneTime && findPayRule(amongOneTime, nov15, monthDayOf, never),
+      null,
+      'counted as a pay, the one-time pay leaves two others, so no rule',
+    );
+    const freeZero = previewBillShare(
+      base,
+      withFreelance,
+      horizon,
+      'conservative',
+      toDayKey('free', utc(2026, 11, 7)),
+      0,
+    );
+    assert.equal(
+      freeZero &&
+        findPayRule(
+          freeZero,
+          toDayKey('free', utc(2026, 11, 7)),
+          monthDayOf,
+          isFree,
+        ),
+      null,
+      'a rule is never offered for a one-time pay',
     );
     const capped = previewBillShare(
       base,
@@ -1584,7 +1656,7 @@ const version = (
       'a share above what the bill needs is capped',
     );
     assert.deepEqual(
-      capped && findPayRule(capped, nov15, monthDayOf),
+      capped && findPayRule(capped, nov15, monthDayOf, never),
       { kind: 'pay', payLineId: 'work', monthDay: 15 },
       'the pay set to the whole amount maps to that pay',
     );
@@ -1597,7 +1669,7 @@ const version = (
       100_000,
     );
     assert.equal(
-      middle && findPayRule(middle, nov15, monthDayOf),
+      middle && findPayRule(middle, nov15, monthDayOf, never),
       null,
       'two pays sharing it is not a rule',
     );
@@ -7441,9 +7513,34 @@ const version = (
   assert.ok(
     describeHoldsChange(
       look(day, [rentShort]),
-      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+      look(day, [
+        rentShort,
+        short(utc(2026, 11, 2), 'Car', 5000),
+        short(utc(2026, 11, 3), 'Gas', 100),
+      ]),
     )?.includes('1 more item needs a look'),
-    'the sentence counts the other problems',
+    'the sentence names the first problem the change causes and counts the other new ones',
+  );
+  assert.ok(
+    !describeHoldsChange(
+      look(day, [rentShort]),
+      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+    )?.includes('Rent'),
+    'a problem the plan already had is never named as caused by the change',
+  );
+  const noted = describeHoldsBlocks(
+    look(day, [rentShort]),
+    look(day, [rentShort, short(utc(2026, 11, 7), 'Rent', 29600)]),
+    false,
+    {
+      [`k${utc(2026, 11, 7)}`]: 'Freelance payment is one-time and brings $120',
+    },
+  );
+  assert.ok(
+    noted[0]?.text.includes(
+      'Rent $296 short on Nov 7: Freelance payment is one-time and brings $120.',
+    ),
+    'a short pay that is one-time says why',
   );
   const text = describeHoldsChange(
     look(day, [short(utc(2026, 10, 30), 'Rent', 22000)]),

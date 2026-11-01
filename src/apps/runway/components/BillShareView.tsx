@@ -29,7 +29,7 @@ import {
   MAX_PURCHASE_CENTS,
   PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { payLineIdOfDayKey, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findPayRule } from '@apps/runway/engine/billShare';
 import {
   getVersionStretches,
@@ -67,6 +67,7 @@ import { describeChange } from '@apps/runway/utils/changeText';
 import {
   describePaidFrom,
   describePayChoice,
+  getOneTimePayIds,
   getPayMonthDay,
 } from '@apps/runway/utils/payFrom';
 
@@ -77,6 +78,8 @@ interface BillShareViewProps {
   currentCents: Cents;
   onBack: () => void;
   onClose: () => void;
+  /** Opens the bill's form at its Paid from question. */
+  onOpenPaidFrom: () => void;
 }
 
 type PayRule = Extract<BillFundedBy, { kind: 'pay' }>;
@@ -179,6 +182,7 @@ function BillShareView({
   currentCents,
   onBack,
   onClose,
+  onOpenPaidFrom,
 }: BillShareViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -215,6 +219,10 @@ function BillShareView({
   const [saved, setSaved] = useState<(Pending & { rule: PayRule }) | null>(
     null,
   );
+  const [withheld, setWithheld] = useState<{
+    pending: Pending;
+    leaveOut: string;
+  } | null>(null);
   const pendingRef = useRef<Pending | null>(null);
   const addToastRef = useRef(addToast);
 
@@ -311,7 +319,7 @@ function BillShareView({
   const previous = openDays.find((entry) => entry.id === dayKey)?.override
     .billCents?.[billId];
 
-  const finish = (title: string, pending: Pending) => {
+  const toastSaved = (title: string, pending: Pending) => {
     pendingRef.current = null;
     addToast({
       title,
@@ -321,6 +329,9 @@ function BillShareView({
         onClick: () => void undoPending(pending, addToast),
       },
     });
+  };
+  const finish = (title: string, pending: Pending) => {
+    toastSaved(title, pending);
     onClose();
   };
 
@@ -346,8 +357,12 @@ function BillShareView({
         sourceId: day.sourceId,
         expectedOn: day.on,
       };
-      const rule = findPayRule(share, dayKey, (payLineId, on) =>
-        getPayMonthDay(plan, payLineId, on),
+      const oneTimeIds = getOneTimePayIds(plan);
+      const rule = findPayRule(
+        share,
+        dayKey,
+        (payLineId, on) => getPayMonthDay(plan, payLineId, on),
+        (payLineId) => oneTimeIds.has(payLineId),
       );
       const pending: Pending = {
         uid: user.uid,
@@ -369,6 +384,23 @@ function BillShareView({
         note: null,
       });
       if (rule === null) {
+        const thisPay: PayRule | null = oneTimeIds.has(
+          payLineIdOfDayKey(dayKey),
+        )
+          ? null
+          : {
+              kind: 'pay',
+              payLineId: payLineIdOfDayKey(dayKey),
+              monthDay: getPayMonthDay(plan, payLineIdOfDayKey(dayKey), day.on),
+            };
+        if (share.cents === 0 && thisPay !== null) {
+          pendingRef.current = pending;
+          setWithheld({
+            pending,
+            leaveOut: describePayChoice(thisPay, plan),
+          });
+          return;
+        }
         finish(PAY_SHARE_WORDS.savedToast(bill.name), pending);
         return;
       }
@@ -428,6 +460,44 @@ function BillShareView({
     });
   };
 
+  if (withheld) {
+    const pay = withheld.leaveOut.startsWith('The pay on ')
+      ? `t${withheld.leaveOut.slice(1)}`
+      : withheld.leaveOut;
+    return (
+      <div className='flex flex-1 flex-col gap-3'>
+        <ActionTitle>{PAY_SHARE_WORDS.savedTitle}</ActionTitle>
+        <p className='text-muted-foreground text-sm'>
+          {PAY_SHARE_WORDS.withheld(pay, bill.name)}
+        </p>
+        <div className='flex flex-wrap gap-2'>
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() =>
+              finish(PAY_SHARE_WORDS.savedToast(bill.name), withheld.pending)
+            }
+          >
+            {PAY_SHARE_WORDS.done}
+          </Button>
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() => {
+              toastSaved(
+                PAY_SHARE_WORDS.savedToast(bill.name),
+                withheld.pending,
+              );
+              onOpenPaidFrom();
+            }}
+          >
+            {PAY_SHARE_WORDS.setPaidFrom}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (saved) {
     const payLabel = describePayChoice(saved.rule, plan);
     const payWords = payLabel.startsWith('The pay on ')
@@ -455,6 +525,25 @@ function BillShareView({
     );
   }
 
+  const getHint = () => {
+    if (isHidden || target === null || share === null || shown === null)
+      return undefined;
+    if (target > share.maxCents) {
+      return (
+        <MaskedText>
+          {PAY_SHARE_WORDS.capped(bill.name, formatCents(share.maxCents))}
+        </MaskedText>
+      );
+    }
+    return target > shown.dayMoneyCents ? (
+      <MaskedText>
+        {PAY_SHARE_WORDS.overPay(
+          formatCents(shown.dayMoneyCents),
+          formatCents(target - shown.dayMoneyCents),
+        )}
+      </MaskedText>
+    ) : undefined;
+  };
   const hasShort = isChanged && share.shortCents > 0;
   const shortLine = hasShort
     ? mask(
@@ -475,16 +564,7 @@ function BillShareView({
         value={amount}
         onChange={setAmount}
         disabled={isSaving}
-        hint={
-          !isHidden &&
-          target !== null &&
-          share !== null &&
-          target > share.maxCents ? (
-            <MaskedText>
-              {PAY_SHARE_WORDS.capped(bill.name, formatCents(share.maxCents))}
-            </MaskedText>
-          ) : undefined
-        }
+        hint={getHint()}
       />
       {rows.length > 0 && (
         <ActionSection caption={PAY_SHARE_WORDS.changes}>

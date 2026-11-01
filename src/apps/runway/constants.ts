@@ -475,6 +475,8 @@ export const PREVIEW_SHOWN = 3;
 export const MAX_CHANGE_DAYS_AHEAD = 3600;
 
 export const CHANGE_WORDS = {
+  savedButStale:
+    'Saved, but the changes you made for one pay could not be cleared. They are still on those pays.',
   fromHeading: 'From when',
   fromNow: 'From now on',
   fromDate: 'From a date ahead',
@@ -684,6 +686,16 @@ export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
 
 export const PAID_FROM_WORDS = {
   title: 'Which pay covers it?',
+  row: (what: string) => `Paid from · ${what}`,
+  spreadRow: 'Spread across your pays',
+  chosenRow: 'Days you chose',
+  spreadMeaning: 'Every pay before it is due puts in a share.',
+  lastBeforeMeaning: 'Only the last pay before it is due puts it in.',
+  payMeaning: 'Only the pay you pick puts it in.',
+  replacesPins: (count: number) =>
+    count === 1
+      ? 'This replaces 1 change you made for one pay.'
+      : `This replaces ${count} changes you made for one pay.`,
   summaryLabel: 'Paid from',
   label: 'Paid from',
   spread: 'Spread across my pays',
@@ -693,7 +705,7 @@ export const PAID_FROM_WORDS = {
   pickPay: 'Pick a pay.',
   gone: 'A pay that is no longer in the plan',
   /** The change log's phrase for the choice. */
-  logSpread: 'spread across the pays before it',
+  logSpread: 'spread across your pays',
   logLastBefore: "the pay right before it's due",
   noticeNoPay: (pay: string, name: string, dueOn: string) =>
     `${pay} doesn't come before ${name} is due ${dueOn}`,
@@ -742,6 +754,13 @@ export const PAY_SHARE_WORDS = {
   ruleToast: (name: string, pay: string) => `${name} now comes from ${pay}`,
   undo: 'Undo',
   undoFailed: 'That could not be undone. Nothing was changed.',
+  overPay: (money: string, over: string) =>
+    `This pay brings ${money}, so ${over} would stay short.`,
+  savedTitle: 'Saved for this pay',
+  withheld: (pay: string, name: string) =>
+    `Only this pay changed. To always leave ${pay} out, set ${name}'s Paid from.`,
+  done: 'Done',
+  setPaidFrom: 'Set Paid from',
   pinnedRow: (date: string) => `${date} pay, set by you`,
   resetSummary: (name: string, date: string) =>
     `${name}: this pay goes back to the plan's amount, for ${date} only.`,

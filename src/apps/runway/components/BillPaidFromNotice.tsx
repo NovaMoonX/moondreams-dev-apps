@@ -81,7 +81,7 @@ function BillPaidFromNotice({
         problem.isBill &&
         payDays.has(problem.dayKey),
     ) ?? null;
-  const message = (() => {
+  const getMessage = () => {
     if (isUnfunded) {
       return fundedBy.kind === 'pay'
         ? PAID_FROM_WORDS.noticeNoPay(
@@ -101,7 +101,8 @@ function BillPaidFromNotice({
       );
     }
     return null;
-  })();
+  };
+  const message = getMessage();
   if (message === null) return null;
 
   const spread = async () => {
@@ -180,7 +181,7 @@ function BillPaidFromNotice({
     <div className='mt-2 flex flex-wrap gap-2'>
       <Button
         type='button'
-        variant='tertiary'
+        variant='secondary'
         size='sm'
         disabled={isBusy}
         onClick={() => void spread()}
@@ -189,7 +190,7 @@ function BillPaidFromNotice({
       </Button>
       <Button
         type='button'
-        variant='tertiary'
+        variant='secondary'
         size='sm'
         disabled={isBusy}
         onClick={onPickAnother}

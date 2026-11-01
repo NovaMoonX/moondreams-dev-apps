@@ -30,7 +30,10 @@ const describeFundedByChange = (
   if (value.kind === 'chosen') return `${value.dayKeys.length} chosen days`;
   if (value.kind === 'lastBefore') return PAID_FROM_WORDS.logLastBefore;
   if (value.kind === 'pay') {
-    if (payNameOf) return payNameOf(value);
+    if (payNameOf) {
+      const name = payNameOf(value);
+      return name.startsWith('The pay on ') ? `t${name.slice(1)}` : name;
+    }
     return value.monthDay === null
       ? 'one pay you picked'
       : `the pay on ${value.monthDay === 31 ? 'the last day' : `day ${value.monthDay}`}`;
@@ -171,7 +174,7 @@ const getParts = (
         billAfter.stanceOverride ?? null,
         (value) => value ?? 'follows the plan',
       ),
-      diff('Paid from', billBefore.fundedBy, billAfter.fundedBy, (value) =>
+      diff('Paid from:', billBefore.fundedBy, billAfter.fundedBy, (value) =>
         describeFundedByChange(value, payNameOf),
       ),
       diff(

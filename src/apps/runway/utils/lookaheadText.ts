@@ -136,10 +136,25 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
   const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {
     const problem = group.problem;
+    if (problem.kind === 'noIncome' && problem.reason === 'short') {
+      return isHidden
+        ? {
+            before: `The plan leaves ${getName(problem)} short on ${on}`,
+            figure: null,
+            after: '',
+          }
+        : {
+            before: `The plan leaves ${getName(problem)} `,
+            figure: formatCentsShort(problem.shortBy),
+            after: ` short on ${on}`,
+          };
+    }
     const before =
       problem.kind === 'overdue'
         ? `${getName(problem)} was due ${on}, not marked paid`
-        : `${getName(problem)} on ${on} has no income before it`;
+        : problem.kind === 'noIncome' && problem.reason === 'noPick'
+          ? `${getName(problem)} on ${on} comes from a pay that is not before it`
+          : `${getName(problem)} on ${on} has no income before it`;
     return { before, figure: null, after: '' };
   }
   if (group.shorts.length > 1) {
@@ -176,6 +191,7 @@ function describeChangeProblem(
   problem: LookaheadProblem,
   more: number,
   isHidden: boolean,
+  note: string | null,
 ) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
@@ -202,17 +218,25 @@ function describeChangeProblem(
     };
   }
   const figure = formatCentsShort(problem.shortBy);
+  const why = note === null || problem.kind !== 'short' ? '' : `: ${note}`;
   return {
-    text: `With this change, the plan leaves ${name} ${figure} short on ${on}.${tail}`,
+    text: `With this change, the plan leaves ${name} ${figure} short on ${on}${why}.${tail}`,
     figure,
   };
 }
+
+const getProblemKey = (problem: LookaheadProblem) =>
+  problem.kind === 'short'
+    ? `short:${problem.dayKey}:${problem.itemId}`
+    : `${problem.kind}:${problem.billId}:${problem.on}`;
 
 /** What a change does to how far the plan holds, as separate blocks: the plan holding is one idea, a shortfall another. */
 export function describeHoldsBlocks(
   before: Lookahead,
   after: Lookahead,
   isHidden = false,
+  /** Why a pay is short, by its day key ("Freelance payment is one-time and brings $120"). */
+  notes: Readonly<Record<string, string>> = {},
 ): HoldsBlock[] {
   const holds = (through: number): HoldsBlock => ({
     tone: 'success',
@@ -229,17 +253,26 @@ export function describeHoldsBlocks(
   if (isSameLookahead(before, after)) {
     return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
-  const [first] = sortProblems(after.problems);
+  const known = new Set(before.problems.map(getProblemKey));
+  const created = sortProblems(
+    after.problems.filter((entry) => !known.has(getProblemKey(entry))),
+  );
+  const [first] = created;
   const problem: HoldsBlock[] = first
     ? [
         {
           tone: 'warning',
-          ...describeChangeProblem(first, after.problems.length - 1, isHidden),
+          ...describeChangeProblem(
+            first,
+            created.length - 1,
+            isHidden,
+            first.kind === 'short' ? (notes[first.dayKey] ?? null) : null,
+          ),
         },
       ]
     : [];
-  if (after.holdsThrough === null || problem.length > 0) return problem;
-  return [holds(after.holdsThrough)];
+  if (problem.length > 0 || after.problems.length > 0) return problem;
+  return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
 }
 
 /** One problem in a few words, in the plan's terms: "The plan leaves Rent $30 short on Nov 1". */

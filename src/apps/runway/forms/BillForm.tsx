@@ -47,6 +47,7 @@ import {
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
+import { saveBillShare } from '@apps/runway/store/actions/dayActions';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
@@ -83,6 +84,7 @@ import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   describePayChoice,
   getPayOptions,
+  getOneTimePayIds,
   hasPaysToChoose,
   toPayValue,
   type PayOption,
@@ -468,6 +470,7 @@ function BillFormBody({
   const canChoose = isOnce && dueDays.length > 0;
   const isChosen = canChoose && formData.funding === 'chosen';
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const openDays = useAppSelector((state) => state.runway.days);
   const savedPay =
     editing?.payload.fundedBy.kind === 'pay' ? editing.payload.fundedBy : null;
   const planPayOptions = getPayOptions(plan);
@@ -483,6 +486,14 @@ function BillFormBody({
           },
         ]
       : planPayOptions;
+  const pinnedDayIds = openDays
+    .filter(
+      (entry) =>
+        editing !== undefined &&
+        entry.status === 'draft' &&
+        Object.hasOwn(entry.override.billCents ?? {}, editing.itemId),
+    )
+    .map((entry) => entry.id);
   const canPickPay = !isOnce && formData.frequency !== null;
   const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
   const canAskPaidFrom =
@@ -502,6 +513,7 @@ function BillFormBody({
                 : [],
           },
           today,
+          getOneTimePayIds(plan),
         )));
   const isPayMissing =
     canPickPay &&
@@ -831,6 +843,16 @@ function BillFormBody({
                       if (paidFrom !== 'pay') moveOn();
                     }}
                   />
+                  <p className='text-muted-foreground text-xs'>
+                    {PAID_FROM_WORDS[`${formData.paidFrom}Meaning`]}
+                  </p>
+                  {pinnedDayIds.length > 0 &&
+                    (formData.paidFrom !== startData.paidFrom ||
+                      formData.payValue !== startData.payValue) && (
+                      <p className='text-muted-foreground text-xs'>
+                        {PAID_FROM_WORDS.replacesPins(pinnedDayIds.length)}
+                      </p>
+                    )}
                   {formData.paidFrom === 'pay' && (
                     <div className='space-y-2'>
                       <p className='text-muted-foreground text-xs'>
@@ -1043,6 +1065,31 @@ function BillFormBody({
   };
 
   const candidate = blocker === null ? buildBill(formData) : null;
+  const isFundingChanged =
+    candidate !== null &&
+    editing !== undefined &&
+    JSON.stringify(candidate.fundedBy) !==
+      JSON.stringify(editing.payload.fundedBy);
+  const clearPins = async () => {
+    if (!user || !editing) return;
+    const encryption = await getRunwayEncryption(user.uid);
+    const days = comingDays.filter((day) => pinnedDayIds.includes(day.dayKey));
+    await Promise.all(
+      days.map((day) =>
+        saveBillShare(
+          user.uid,
+          encryption,
+          {
+            payLineId: day.payLineId,
+            sourceId: day.sourceId,
+            expectedOn: day.on,
+          },
+          editing.itemId,
+          null,
+        ),
+      ),
+    );
+  };
   const flow = useChangeFlow({
     itemId: editing?.itemId ?? '',
     kind: 'bill',
@@ -1056,6 +1103,8 @@ function BillFormBody({
     presetDayKey,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
+    afterSave:
+      pinnedDayIds.length > 0 && isFundingChanged ? clearPins : undefined,
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from,
   });

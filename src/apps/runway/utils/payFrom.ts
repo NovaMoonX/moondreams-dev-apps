@@ -1,8 +1,15 @@
 import { PAID_FROM_WORDS } from '@apps/runway/constants';
 import type { ResolvedSource } from '@apps/runway/store/selectors/runwaySelectors';
-import type { BillFundedBy, Schedule } from '@apps/runway/types';
+import type { BillFundedBy, Schedule, Stance } from '@apps/runway/types';
+import { formatCents } from '@/utils/moneyUtils';
+import type { ComingDay } from '@apps/runway/engine/comingDays';
+import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
-import { addUtcMonths, daysInUtcMonth } from '@apps/runway/engine/dates';
+import {
+  addUtcMonths,
+  daysInUtcMonth,
+  payLineIdOfDayKey,
+} from '@apps/runway/engine/dates';
 import { occurrences } from '@apps/runway/engine/schedule';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 
@@ -29,6 +36,7 @@ export function getPayOptions(plan: readonly ResolvedSource[]): PayOption[] {
   const options = plan.flatMap(({ version, payLines }) =>
     payLines.flatMap(({ item, version: line }): PayOption[] => {
       const { kind, monthDays } = line.payload.schedule;
+      if (kind === 'once') return [];
       const isMonthly =
         (kind === 'monthly' || kind === 'twiceMonthly') && monthDays.length > 0;
       if (!isMonthly) {
@@ -107,10 +115,14 @@ export function getPayMonthDay(
 
 /** Whether any payment of a repeating bill has more than one pay before it, so there is a pay to choose; with one pay a window, "Spread" and "The pay right before it" are the same. */
 export function hasPaysToChoose(
-  days: readonly { on: number }[],
+  allDays: readonly { on: number; dayKey: string }[],
   schedule: Schedule,
   today: number,
+  oneTimeIds: ReadonlySet<string> = new Set(),
 ) {
+  const days = allDays.filter(
+    (day) => !oneTimeIds.has(payLineIdOfDayKey(day.dayKey)),
+  );
   const dues = occurrences(
     schedule,
     { onDate: null, afterCount: null },
@@ -123,5 +135,40 @@ export function hasPaysToChoose(
       days.filter((day) => day.on > previous && day.on <= dueOn).length > 1
     );
   });
+  return result;
+}
+
+/** The pay lines that pay once (a freelance payment, a bonus): they are never the pay a repeating bill comes from. */
+export function getOneTimePayIds(plan: readonly ResolvedSource[]) {
+  const result = new Set(
+    plan
+      .flatMap(({ payLines }) => payLines)
+      .filter(({ version }) => version.payload.schedule.kind === 'once')
+      .map(({ item }) => item.id),
+  );
+  return result;
+}
+
+/** Why a one-time pay can leave a bill short, by its day key: "Freelance payment is one-time and brings $120". */
+export function getOneTimeNotes(
+  days: readonly ComingDay[],
+  plan: readonly ResolvedSource[],
+  stance: Stance,
+) {
+  const oneTime = getOneTimePayIds(plan);
+  const result = Object.fromEntries(
+    days
+      .filter((day) => oneTime.has(day.payLineId))
+      .map((day) => [
+        day.dayKey,
+        `${day.payLineName} is one-time and brings ${formatCents(
+          pick(
+            effectiveStance(stance, day.stanceOverride),
+            day.amount,
+            'income',
+          ),
+        )}`,
+      ]),
+  );
   return result;
 }

@@ -189,10 +189,11 @@ interface ItemSheetProps {
     renderView: (controls: {
       onBack: () => void;
       onClose: () => void;
+      openChange: (step: string) => void;
     }) => ReactNode;
   };
   /** An optional extra's own action row, opening the change at that question. */
-  maxAction?: { label: string; step: string };
+  maxAction?: { label: string; step: string; icon?: ReactNode };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -796,7 +797,7 @@ function ItemSheet({
           <ActionRow
             isGrouped
             hasChevron
-            icon={<Ruler />}
+            icon={maxAction.icon ?? <Ruler />}
             label={maxAction.label}
             onClick={() => openChange(maxAction.step)}
           />
@@ -1244,6 +1245,7 @@ function ItemSheet({
                     ? dayAction.renderView({
                         onBack: () => goTo('menu'),
                         onClose,
+                        openChange,
                       })
                     : action
         }

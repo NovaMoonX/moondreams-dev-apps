@@ -14,7 +14,9 @@ import {
   type IncomeDayRef,
 } from './demands';
 
-/** The share a draft day was given for each bill by the person, by bill id and then day key; only days still open to change count, since a settled day's share is in the records. */
+const fixedCache = new WeakMap<object, Map<string, Record<string, Cents>>>();
+
+/** The share a draft day was given for each bill by the person, by bill id and then day key; only days still open to change count, since a settled day's share is in the records. Read once per list of days, since a walk over every income day asks again and again. */
 export function getFixedByBill(
   days: readonly {
     id: string;
@@ -22,6 +24,8 @@ export function getFixedByBill(
     override: Pick<DayOverrideSealed, 'billCents'>;
   }[],
 ): Map<string, Record<string, Cents>> {
+  const known = fixedCache.get(days);
+  if (known) return known;
   const result = days.reduce((acc, day) => {
     if (day.status !== 'draft') return acc;
     Object.entries(day.override.billCents ?? {}).forEach(([billId, cents]) => {
@@ -29,6 +33,7 @@ export function getFixedByBill(
     });
     return acc;
   }, new Map<string, Record<string, Cents>>());
+  fixedCache.set(days, result);
   return result;
 }
 
@@ -122,24 +127,29 @@ export function previewBillShare(
 }
 
 /**
- * The Paid from rule that says what one change to a pay's share says for every paycheck: the pay
- * set to nothing while exactly one other pay carries the whole rest, or the pay set to the whole
- * payment. Null when the change is not one pay doing it all, or the rule would pick other pays too.
+ * The Paid from rule that says what one change to a pay's share says for every paycheck: a pay set to
+ * nothing while exactly one other repeating pay is in the window, or a pay set to the whole payment.
+ * One-time pays are never part of a rule. Null when the change does not name one pay, or the rule
+ * would pick other pays too.
  */
 export function findPayRule(
   effect: BillShareEffect,
   dayKey: string,
   getMonthDay: (payLineId: string, on: number) => number | null,
+  isOneTime: (payLineId: string) => boolean,
 ): Extract<BillFundedBy, { kind: 'pay' }> | null {
-  const only = effect.carriers.length === 1 ? effect.carriers[0] : null;
-  const targetKey =
-    effect.cents === 0 && only && only.dayKey !== dayKey
-      ? only.dayKey
+  const repeating = effect.window.filter(
+    (day) => !isOneTime(payLineIdOfDayKey(day.dayKey)),
+  );
+  if (!repeating.some((day) => day.dayKey === dayKey)) return null;
+  const others = repeating.filter((day) => day.dayKey !== dayKey);
+  const target =
+    effect.cents === 0 && others.length === 1
+      ? others[0]
       : effect.cents > 0 && effect.cents === effect.maxCents
-        ? dayKey
-        : null;
-  const target = effect.window.find((day) => day.dayKey === targetKey);
-  if (!target || only?.cents !== effect.maxCents) return null;
+        ? repeating.find((day) => day.dayKey === dayKey)
+        : undefined;
+  if (!target) return null;
   const payLineId = payLineIdOfDayKey(target.dayKey);
   const rule: Extract<BillFundedBy, { kind: 'pay' }> = {
     kind: 'pay',

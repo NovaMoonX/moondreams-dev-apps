@@ -20,6 +20,7 @@ import {
   PAY_SHARE_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
@@ -76,6 +77,10 @@ function DraftLine({
   onOpenChange,
 }: DraftLineProps) {
   const [isOwnOpen, setIsOwnOpen] = useState(false);
+  const paidFromAction = usePaidFromAction(
+    kind === 'bill' ? line.itemId : '',
+    today,
+  );
   const { isHidden } = useValuesHidden();
   const emoji = useRecordedEmoji(null, line.itemId);
   const isOpen = isOpenProp ?? isOwnOpen;
@@ -271,17 +276,19 @@ function DraftLine({
               ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
               : undefined
           }
+          maxAction={kind === 'bill' ? paidFromAction : undefined}
           dayAction={
             kind === 'bill' && line.bill
               ? {
                   label: PAY_SHARE_WORDS.action,
-                  renderView: ({ onBack, onClose }) => (
+                  renderView: ({ onBack, onClose, openChange }) => (
                     <BillShareView
                       billId={line.itemId}
                       dayKey={dayKey}
                       currentCents={line.demandCents}
                       onBack={onBack}
                       onClose={onClose}
+                      onOpenPaidFrom={() => openChange('funding')}
                     />
                   ),
                 }

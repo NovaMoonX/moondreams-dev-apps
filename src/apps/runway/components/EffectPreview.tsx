@@ -32,12 +32,15 @@ import {
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectBillProgress,
+  selectComingDays,
+  selectResolvedPlan,
   selectIsMovesLoaded,
   selectIsRecordsReady,
   selectDraftHeldByItem,
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { getOneTimeNotes } from '@apps/runway/utils/payFrom';
 
 const MAX_LINES_SHOWN = 3;
 const NO_PINNED: ReadonlySet<string> = new Set();
@@ -271,6 +274,12 @@ function EffectPreview({
     return result;
   }, [settledVirtual, items, versions, openDays, today, settledKey]);
 
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const oneTimeNotes = useMemo(
+    () => getOneTimeNotes(comingDays, plan, stance),
+    [comingDays, plan, stance],
+  );
   const holdsText = useMemo(() => {
     if (settledVirtual === null || !isLedgerReady) return null;
     const { before, after } = previewLookahead(
@@ -279,7 +288,10 @@ function EffectPreview({
       settledVirtual,
     );
     const isSame = isSameLookahead(before, after);
-    return { blocks: describeHoldsBlocks(before, after, isHidden), isSame };
+    return {
+      blocks: describeHoldsBlocks(before, after, isHidden, oneTimeNotes),
+      isSame,
+    };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -290,6 +302,7 @@ function EffectPreview({
     versions,
     openDays,
     isHidden,
+    oneTimeNotes,
   ]);
 
   const isMoveSaid =

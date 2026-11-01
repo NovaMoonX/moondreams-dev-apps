@@ -16,6 +16,7 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
 import { describeBillRepeat, isUndatedBill } from '@apps/runway/utils/billText';
+import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
 interface BillRowProps {
@@ -106,6 +107,7 @@ export function BillSheet({
   onClose,
 }: BillSheetProps) {
   const [pickedStep, setPickedStep] = useState<string | null>(null);
+  const paidFromAction = usePaidFromAction(billId, today);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
@@ -146,6 +148,7 @@ export function BillSheet({
           ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
           : { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
       }
+      maxAction={paidFromAction}
       key={pickedStep ?? 'sheet'}
       startsAtStep={pickedStep ?? startsAtStep}
       extra={
