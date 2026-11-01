@@ -1,4 +1,4 @@
-import SegmentedControl from '@/components/SegmentedControl';
+import { PillGroup } from '@/components/PillGroup';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import {
@@ -23,9 +23,8 @@ function StartTabSection({ uid }: StartTabSectionProps) {
         title='Open Pinch on'
         description='The tab you land on when you open Pinch, on every device you use.'
       >
-        <SegmentedControl
+        <PillGroup
           label='Open Pinch on'
-          className='mt-3'
           options={START_TAB_CHOICES.map((tab) => ({
             value: tab,
             label: PINCH_TAB_LABELS[tab],
