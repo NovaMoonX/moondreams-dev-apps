@@ -248,8 +248,8 @@ function Pinch() {
     }));
   };
 
-  // Back from any tab returns to the Calendar and back from the Calendar leaves: only leaving the
-  // Calendar adds an entry, and going back to it steps back onto that entry when it is the one below.
+  // Back from any tab returns to the opening tab and back from it leaves: only leaving the opening
+  // tab adds an entry, and going back to it steps back onto that entry when it is the one below.
   const setActiveTab = (tab: PinchTab) => {
     if (tab === activeTab) {
       if (window.scrollY > 0) {

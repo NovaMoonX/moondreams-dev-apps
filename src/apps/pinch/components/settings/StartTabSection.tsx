@@ -1,7 +1,11 @@
 import SegmentedControl from '@/components/SegmentedControl';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
-import { PINCH_TAB_LABELS, START_TAB_CHOICES } from '@apps/pinch/constants';
+import {
+  PINCH_TAB_LABELS,
+  START_TAB_CHOICES,
+  toStartTab,
+} from '@apps/pinch/constants';
 import { usePinchSettings } from '@apps/pinch/hooks/usePinchSettings';
 
 interface StartTabSectionProps {
@@ -26,7 +30,7 @@ function StartTabSection({ uid }: StartTabSectionProps) {
             value: tab,
             label: PINCH_TAB_LABELS[tab],
           }))}
-          value={settings.defaultTab}
+          value={toStartTab(settings.defaultTab)}
           onChange={(defaultTab) => void save({ defaultTab })}
         />
       </SettingsRow>
