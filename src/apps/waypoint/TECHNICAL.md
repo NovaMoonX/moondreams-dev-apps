@@ -33,6 +33,8 @@ Currency codes stay a plain client-side list — not seeded or admin-curated.
 
 Path: `apps/waypoint/trips/{tripId}`
 
+Creating a trip is also guarded by the `create-trips` feature switch: the `create` rule calls `isGateOpen('waypoint', 'create-trips', 'everyone')`, which reads `featureGates/waypoint` (see `docs/conventions/firestore-rules.md`).
+
 ```typescript
 interface TripSpace {
   id: string;
