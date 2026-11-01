@@ -38,6 +38,7 @@ export function useImageUpload(
   useEffect(() => {
     return () => {
       pickIdRef.current += 1;
+      pendingRef.current = null;
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
       }
@@ -105,7 +106,7 @@ export function useImageUpload(
     const pending = pendingRef.current;
     if (pending === null) return fileRef.current;
     await pending;
-    return waitForLatest();
+    return pendingRef.current === pending ? fileRef.current : waitForLatest();
   }, []);
 
   const clear = useCallback(() => {
