@@ -428,7 +428,7 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
   const [data, setData] = useState({ title: '', note: '' });
 
   const title = data.title.trim();
-  const canSave = upload.file !== null && title !== '';
+  const canSave = upload.file !== null && !upload.isPreparing && title !== '';
 
   const fields = [
     custom({
@@ -505,8 +505,10 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
           setData(next as typeof data);
           clearError();
         }}
-        onSubmit={() => {
+        onSubmit={async () => {
           if (!canSave) return;
+          const photoFile = await upload.readyFile();
+          if (photoFile === null) return;
           void submit({
             kind: 'PHOTO',
             title,
@@ -514,7 +516,7 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
             url: null,
             siteName: null,
             imageUrl: null,
-            photoFile: upload.file,
+            photoFile,
           });
         }}
         submitButton={

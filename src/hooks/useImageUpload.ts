@@ -4,6 +4,7 @@ import { compressImageForUse, type ImageUse } from '@/utils/imageCompression';
 
 const UNREADABLE_PHOTO =
   "This photo's format can't be opened here. Try a JPG or PNG, or pick it from your phone.";
+const KEPT_EARLIER = ' Your earlier photo stays.';
 
 export interface UseImageUploadResult {
   /** The shrunk photo, ready to upload; never the original pick. */
@@ -12,7 +13,7 @@ export interface UseImageUploadResult {
   error: string | null;
   /** True while a picked photo is being shrunk. */
   isPreparing: boolean;
-  /** The file to upload, waiting for a photo still being shrunk; use it in a save instead of `file`. */
+  /** The file to upload, waiting for the latest photo still being shrunk; use it in a save instead of `file`. A failed pick leaves the earlier photo, and its error says so. */
   readyFile: () => Promise<File | null>;
   /** Shrinks the pick for its use and resolves with the file to upload, or `null` when it couldn't be used. */
   pick: (selected: File | null) => Promise<File | null>;
@@ -35,9 +36,11 @@ export function useImageUpload(
   const pickIdRef = useRef(0);
   const fileRef = useRef<File | null>(null);
   const pendingRef = useRef<Promise<File | null> | null>(null);
+  const hasPreviewRef = useRef(initialUrl !== null);
 
   useEffect(() => {
     return () => {
+      pickIdRef.current += 1;
       if (objectUrlRef.current) {
         URL.revokeObjectURL(objectUrlRef.current);
       }
@@ -54,7 +57,9 @@ export function useImageUpload(
       setIsPreparing(false);
 
       if (!prepared) {
-        setError(UNREADABLE_PHOTO);
+        setError(
+          hasPreviewRef.current ? UNREADABLE_PHOTO + KEPT_EARLIER : UNREADABLE_PHOTO,
+        );
         return null;
       }
 
@@ -65,6 +70,7 @@ export function useImageUpload(
       const nextUrl = URL.createObjectURL(prepared);
       objectUrlRef.current = nextUrl;
       fileRef.current = prepared;
+      hasPreviewRef.current = true;
 
       setFile(prepared);
       setPreviewUrl(nextUrl);
@@ -90,21 +96,26 @@ export function useImageUpload(
       setError(null);
 
       const pending = prepare(selected, pickId);
-      pendingRef.current = pending.then((prepared) => prepared ?? fileRef.current);
+      pendingRef.current = pending;
       return pending;
     },
     [prepare],
   );
 
-  const readyFile = useCallback(
-    () => pendingRef.current ?? Promise.resolve(fileRef.current),
-    [],
-  );
+  const readyFile = useCallback(async function waitForLatest(): Promise<
+    File | null
+  > {
+    const pending = pendingRef.current;
+    if (pending === null) return fileRef.current;
+    await pending;
+    return waitForLatest();
+  }, []);
 
   const clear = useCallback(() => {
     pickIdRef.current += 1;
     pendingRef.current = null;
     fileRef.current = null;
+    hasPreviewRef.current = false;
     if (objectUrlRef.current) {
       URL.revokeObjectURL(objectUrlRef.current);
       objectUrlRef.current = null;

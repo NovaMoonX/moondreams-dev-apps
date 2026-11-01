@@ -47,12 +47,9 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
 
   const handlePick = async (file: File | null) => {
     if (file === null) return;
-    setIsUploading(true);
     const prepared = await pick(file);
-    if (prepared === null) {
-      setIsUploading(false);
-      return;
-    }
+    if (prepared === null) return;
+    setIsUploading(true);
     try {
       await write({ photoFile: prepared });
     } catch {
@@ -119,7 +116,7 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
           <PhotoPicker
             photoUrl={hasPhoto ? (shownUrl ?? '') : null}
             showPreview={false}
-            loading={isUploading}
+            loading={isUploading || upload.isPreparing}
             uploadLabel='Add a photo'
             changeLabel='Change photo'
             onSelect={(file) => void handlePick(file)}

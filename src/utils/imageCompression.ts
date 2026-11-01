@@ -141,9 +141,6 @@ export async function resizeImageToWebp(
   return withDecodedImage(
     file,
     async (image) => {
-      if (fitsAlready(file, image, maxDimension, Number.POSITIVE_INFINITY)) {
-        return file;
-      }
       const blob = await encodeWebp(image, maxDimension, WEBP_QUALITY);
       if (!blob) return file;
       return new File([blob], toWebpName(file.name), {
