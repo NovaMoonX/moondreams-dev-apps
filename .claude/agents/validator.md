@@ -13,7 +13,7 @@ The brief gives you a base (default `origin/main`). Run, from the repo root:
 
 1. `npm run typecheck`
 2. `npx eslint .`
-3. `npm run check:apps`, and when the diff touches them: `npm run check:indexes` (src, functions/src, the index file), `npm run check:rules-size` (`firestore.rules`), and any other `check:*` script in `package.json` whose name matches a changed area.
+3. `npm run check:apps`, and when the diff touches them: `npm run check:indexes` (src, functions/src, the index file), `npm run check:rules-size` (`firestore.rules`), `npm run check:app-people` (an app's `PRODUCT.md`), and any other `check:*` script in `package.json` whose name matches a changed area.
 4. The repo-rule greps over the added lines only (`git diff <base>...HEAD -U0 | grep '^+'`), each hit with file:line:
    - `let ` assigned across branches, `for (` loops that build a result, `(() =>` IIFEs;
    - `<button`, `<input`, `<select`, `<textarea` in `.tsx`;

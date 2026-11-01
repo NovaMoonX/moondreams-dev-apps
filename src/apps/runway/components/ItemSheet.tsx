@@ -271,6 +271,10 @@ function ItemSheet({
     (state): OpenVersion | null =>
       resolveCurrentOrNext(state.runway.versions, itemId, today) ?? null,
   );
+  const hasStarted = useAppSelector((state) => {
+    const start = state.runway.plan?.startDate ?? null;
+    return start !== null && start <= today;
+  });
   const next = useAppSelector((state) =>
     resolveNextChange(state.runway.versions, itemId, today),
   );
@@ -808,15 +812,18 @@ function ItemSheet({
             onClick={() => goTo('move')}
           />
         )}
-        {canChange && itemKind === 'envelope' && isArchivable && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Scale />}
-            label={SET_HELD_WORDS.open}
-            onClick={() => goTo('setHeld')}
-          />
-        )}
+        {canChange &&
+          (itemKind === 'envelope' || itemKind === 'goal') &&
+          isArchivable &&
+          hasStarted && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Scale />}
+              label={SET_HELD_WORDS.open}
+              onClick={() => goTo('setHeld')}
+            />
+          )}
         {hasBillRow && payment && (
           <ActionRow
             isGrouped
@@ -1077,7 +1084,8 @@ function ItemSheet({
 
   const setHeldView = (
     <SetHeldView
-      envelopeId={itemId}
+      itemId={itemId}
+      kind={itemKind === 'goal' ? 'goal' : 'envelope'}
       name={payload.name}
       heldCents={heldCents}
       today={today}

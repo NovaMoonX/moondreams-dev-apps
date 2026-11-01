@@ -732,6 +732,31 @@ export const TRACKING_WORDS = {
   lineUpTotal: 'Assigned',
 } as const;
 
+/** The one-time invitation Home shows a Plan person after their first confirmed income day. */
+export const TRACK_INVITE_WORDS = {
+  title: 'Want to see what each envelope has left?',
+  subtitle: 'Try tracking, any time',
+  dismiss: "Don't show this again",
+  sheetTitle: 'Plan or Track',
+  planName: 'Plan',
+  planLead: 'What you use now',
+  planPoints: [
+    'What you have today',
+    "Each payday's share for bills, envelopes and goals",
+    'Free to Spend',
+  ],
+  trackName: 'Track',
+  trackLead: 'Everything in Plan, plus',
+  trackPoints: [
+    'Add purchases as you go',
+    'Pay with cards and see what they owe',
+    "Envelopes show what's left after you spend",
+  ],
+  switchBack: 'You can switch back any time. Nothing in your plan changes.',
+  turnOn: 'Turn on tracking',
+  notNow: 'Not now',
+} as const;
+
 export const HOME_WORDS = {
   freeToSpend: 'Free to Spend',
   notSet: 'Not set yet',
@@ -1883,7 +1908,8 @@ const countMembers = (bills: number, envelopes: number) =>
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {
-  onHand: 'Money on hand',
+  total: 'Everything you have',
+  cards: 'Set aside for cards',
   bills: 'Held for bills',
   goals: 'Held for goals',
   envelopesTrack: 'Left in envelopes',
@@ -2288,7 +2314,6 @@ export const CARD_WORDS = {
   markedAllWith: (cards: string) => `Charged to ${cards}.`,
   markedPaidWith: (bill: string, card: string) =>
     `Marked ${bill} paid with ${card}`,
-  freeWaiting: 'Waiting to be paid on cards',
   freeWaitingHelp:
     "Charged to your cards and not paid yet. It's set aside now, so paying a card doesn't change Free to Spend.",
   freeOnHandHelp:

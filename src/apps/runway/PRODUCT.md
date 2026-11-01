@@ -10,14 +10,33 @@ Runway is an income-first budget planner for money that does not arrive or leave
 
 Most budgets start from a month and a bank balance. Money actually arrives in pieces, from more than one place, bills land between paychecks, and a checking balance includes money that is already spoken for: rent due Friday, the credit card bill you are about to owe. Runway starts from the money as it arrives, keeps what is spoken for apart from what you can spend, tells you how far ahead everything is covered, and never asks for a bank login to get started, so anyone can plan a budget with it on day one.
 
-## Who It Is Built For First
+## Who It Is For
 
-The owner is Runway's first user, and every change is checked against how they handle money:
+Every change names the person it serves and is walked as that person. Each person has a situation, the journey they repeat, the level they use and what they never want to see. A change for one never breaks another's journey.
 
-- **Spending goes on credit cards.** Purchases and most bills are charged to several cards, each paid in full every month. A card's balance is money already spoken for, not a debt carried.
-- **One account holds the cash.** Deposits land in one account (Wealthfront cash) and the cards are paid from it. The account holds the money Runway sets aside for envelopes and goals, so the money never has to move between accounts for the budget to stay true.
-- **The problem it solves.** Keeping a separate account per envelope and per card meant a transfer for every purchase; when the transfers lagged, nobody knew what was really free to spend, owed on a card or set aside. Runway keeps that picture without a single transfer.
-- **Typed by hand, for now.** Importing a CSV and linking banks are on hold until the owner says otherwise, so adding a purchase, a card charge or a card payment must stay quick by hand.
+### The owner, who tracks
+
+- **Situation.** Spending goes on several credit cards, each paid in full every month, so a card's balance is money already spoken for, not a debt carried. One account (Wealthfront cash) holds the cash, the cards are paid from it, and it holds the money set aside for envelopes and goals, so no transfer is ever needed for the budget to stay true.
+- **The problem it solves.** A separate account per envelope and per card meant a transfer for every purchase; when the transfers lagged, nobody knew what was really free to spend, owed on a card or set aside.
+- **Journey they repeat.** Type a purchase or card charge by hand, see what its envelope has left and what is free to spend, pay a card in full from the cash account.
+- **Level.** Track. Importing a CSV and linking banks are on hold until the owner says otherwise, so adding a purchase, a card charge or a card payment must stay quick by hand.
+- **Never wants to see.** A transfer between accounts to keep the budget true.
+
+### The owner's brother, who plans paycheck to paycheck
+
+- **Situation.** He keeps a sheet of what each paycheck covers over the next two months or so, with amounts that change from paycheck to paycheck.
+- **Journey they repeat.** Open the next paychecks, see what each one covers, and when a surprise cost lands (his cat's vet bill) see what the following paychecks give up to absorb it.
+- **Level.** Plan only. He never logs a purchase.
+- **Never wants to see.** Purchases, cards, receipts, or a figure that depends on a purchase being logged.
+
+### Someone paying off card debt (future, not built)
+
+- **Situation.** Carries a balance on a card. That debt is a loan with a balance, a rate and a payoff date, as "Rates and Scheduled Increases, In Detail" describes.
+- **Journey they repeat.** Pay the card each month, put anything extra toward the payoff through priorities, and watch the payoff date move closer.
+- **Level.** Track: a carried card links to its debt.
+- **Never wants to see.** A payoff date that ignores the extra they put in.
+
+**Plan and Track stay apart.** A Plan screen never mentions a purchase or a card, and Track only adds to Plan: turning it on shows more, never changes what Plan says or does.
 
 ## How It Works
 
