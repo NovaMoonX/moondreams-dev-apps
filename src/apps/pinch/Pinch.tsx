@@ -38,7 +38,7 @@ import RecipesScreen from '@apps/pinch/components/recipes/RecipesScreen';
 import SourcesSubview from '@apps/pinch/components/recipes/SourcesSubview';
 import PinchNav from '@apps/pinch/components/shell/PinchNav';
 import LoadingSkeleton from '@apps/pinch/components/shell/LoadingSkeleton';
-import { DEFAULT_PINCH_TAB, PINCH_TABS } from '@apps/pinch/constants';
+import { PINCH_TABS, toStartTab } from '@apps/pinch/constants';
 import { PinchOverlayContext } from '@apps/pinch/hooks/usePinchOverlay';
 import { PinchSessionContext } from '@apps/pinch/hooks/usePinchSession';
 import { useFreezePastDays } from '@apps/pinch/hooks/useFreezePastDays';
@@ -47,6 +47,7 @@ import { usePinchTheme } from '@apps/pinch/hooks/usePinchTheme';
 import {
   selectIsPinchLoaded,
   selectPinchLoadError,
+  selectPinchSettings,
 } from '@apps/pinch/store/selectors';
 import type { PinchSubview, PinchTab } from '@apps/pinch/types';
 import {
@@ -95,6 +96,7 @@ function Pinch() {
   const [resetCounts, setResetCounts] = useState<
     Partial<Record<PinchTab, number>>
   >({});
+  const homeTab = toStartTab(useAppSelector(selectPinchSettings).defaultTab);
   const showTab = useCallback(
     (tab: PinchTab) => {
       const next = new URLSearchParams(window.location.search);
@@ -138,7 +140,8 @@ function Pinch() {
       }
       const next = new URLSearchParams(window.location.search);
       const isFromTab = next.has('tab');
-      next.delete('tab');
+      if (homeTab === 'calendar') next.delete('tab');
+      else next.set('tab', 'calendar');
       next.set('view', 'week');
       const around = {
         startKey: addDaysToKey(dayKey, -6),
@@ -155,7 +158,7 @@ function Pinch() {
         setSearchParams(next, { replace: isFromTab });
       });
     },
-    [setSearchParams],
+    [homeTab, setSearchParams],
   );
   const overlayContext = useMemo(
     () => ({
@@ -208,7 +211,7 @@ function Pinch() {
 
   const requestedTab = searchParams.get('tab');
   const activeTab: PinchTab =
-    PINCH_TABS.find((tab) => tab === requestedTab) ?? DEFAULT_PINCH_TAB;
+    PINCH_TABS.find((tab) => tab === requestedTab) ?? homeTab;
   const isTabHidden =
     subview !== null && !OVERLAY_SUBVIEWS.includes(subview.kind);
   const isTabShown = Boolean(user) && isLoaded && !loadError && !isTabHidden;
@@ -238,7 +241,7 @@ function Pinch() {
     Array.from(session.keys())
       .filter((key) => key.startsWith(`${tab}:`))
       .forEach((key) => session.delete(key));
-    if (tab === DEFAULT_PINCH_TAB) setCalendarFocus(null);
+    if (tab === 'calendar') setCalendarFocus(null);
     setResetCounts((current) => ({
       ...current,
       [tab]: (current[tab] ?? 0) + 1,
@@ -261,9 +264,9 @@ function Pinch() {
     }
     setCalendarFocus(null);
     const historyIndex = getHistoryIndex();
-    const isFromCalendar = activeTab === DEFAULT_PINCH_TAB;
+    const isFromCalendar = !searchParams.has('tab');
     if (
-      tab === DEFAULT_PINCH_TAB &&
+      tab === homeTab &&
       historyIndex !== null &&
       calendarIndexRef.current === historyIndex - 1
     ) {
@@ -272,7 +275,7 @@ function Pinch() {
     }
     if (isFromCalendar) calendarIndexRef.current = historyIndex;
     const nextSearchParams = new URLSearchParams(searchParams);
-    if (tab === DEFAULT_PINCH_TAB) {
+    if (tab === homeTab) {
       nextSearchParams.delete('tab');
     } else {
       nextSearchParams.set('tab', tab);

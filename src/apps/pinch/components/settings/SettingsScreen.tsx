@@ -7,6 +7,7 @@ import KeepingSection from '@apps/pinch/components/settings/KeepingSection';
 import NutritionSection from '@apps/pinch/components/settings/NutritionSection';
 import PhotosSection from '@apps/pinch/components/settings/PhotosSection';
 import RemindersSection from '@apps/pinch/components/settings/RemindersSection';
+import StartTabSection from '@apps/pinch/components/settings/StartTabSection';
 import SharedLinksSection from '@apps/pinch/components/settings/SharedLinksSection';
 import { selectPinchSettingsLoadError } from '@apps/pinch/store/selectors';
 
@@ -33,6 +34,7 @@ function SettingsScreen({ uid }: SettingsScreenProps) {
       <SectionHeader title='Settings' />
       <div className='space-y-5 md:grid md:grid-cols-2 md:items-start md:space-y-0 md:gap-x-6'>
         <div className='space-y-5'>
+          {loadError === null && <StartTabSection uid={uid} />}
           <NutritionSection uid={uid} />
           {loadError !== null ? (
             <IntroCard
