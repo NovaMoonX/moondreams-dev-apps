@@ -147,7 +147,8 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
           size='sm'
           className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
           aria-label={`${DUE_WORDS.markPaid}: ${name}`}
-          disabled={!paid.isReady}
+          loading={paid.isBusy}
+          disabled={!paid.isReady || paid.isBusy}
           onClick={() => void markPaid()}
         >
           {DUE_WORDS.markPaid}

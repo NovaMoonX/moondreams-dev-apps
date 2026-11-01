@@ -670,8 +670,8 @@ export const BILL_WORDS = {
   needsDueDate: 'Needs a due date',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
-  offPlanOne: (name: string) => `${name} needs a due date to show here`,
-  offPlanMany: (count: number) => `${count} bills need a due date to show here`,
+  offPlanOne: (name: string) => `${name} needs a due date to show`,
+  offPlanMany: (count: number) => `${count} bills need a due date`,
 } as const;
 
 export const DUE_WORDS = {
