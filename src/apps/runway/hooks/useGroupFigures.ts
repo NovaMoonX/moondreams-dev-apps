@@ -12,6 +12,8 @@ import {
   type ResolvedBill,
   type ResolvedEnvelope,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
+import type { Priority } from '@apps/runway/types';
 import { getGroupMemberNames } from '@apps/runway/utils/billText';
 
 const toBillMember = ({ version: bill }: ResolvedBill) => ({
@@ -50,12 +52,19 @@ const useResolvedPayLines = (today: number) => {
   );
 };
 
-/** What the whole plan's income, bills and envelopes each come to in a usual month. */
+/** What the whole plan's income, bills and envelopes each come to in a usual month, counting only the bills and envelopes at or above `dial`. */
 export function usePlanTotals(
   today: number,
+  dial: Priority = 'want',
 ): Record<'income' | 'bills' | 'envelopes', GroupTotal> {
-  const bills = useAppSelector((state) => selectBills(state, today));
-  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const isCounted = ({ version }: ResolvedBill | ResolvedEnvelope) =>
+    isCountedAt(version.payload.priority, dial);
+  const bills = useAppSelector((state) => selectBills(state, today)).filter(
+    isCounted,
+  );
+  const envelopes = useAppSelector((state) =>
+    selectEnvelopes(state, today),
+  ).filter(isCounted);
   const payLines = useResolvedPayLines(today);
   // A month from today, so items starting later this month or early next one still count late in a month.
   const usualMonth = today + 30 * 86_400_000;

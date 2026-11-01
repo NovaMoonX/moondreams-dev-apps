@@ -32,6 +32,8 @@ interface EnvelopeTileProps {
   look?: 'row' | 'tile';
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
+  /** Left out of the view's total by the priority dial. */
+  isFaded?: boolean;
 }
 
 const capitalize = (text: string) =>
@@ -47,6 +49,7 @@ function EnvelopeTile({
   look = 'row',
   reorder,
   isHighlighted = false,
+  isFaded = false,
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -120,6 +123,7 @@ function EnvelopeTile({
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}
+          isFaded={isFaded}
         />
       )}
       {isOpen && (

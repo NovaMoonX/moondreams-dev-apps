@@ -61,6 +61,8 @@ interface ItemRowProps {
   reorder?: ItemRowReorder;
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
   isHighlighted?: boolean;
+  /** Left out of the total the view shows, so it reads quieter than the rows it counts. */
+  isFaded?: boolean;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -81,6 +83,7 @@ function ItemRow({
   tick,
   reorder,
   isHighlighted = false,
+  isFaded = false,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const ariaLabel =
@@ -293,6 +296,7 @@ function ItemRow({
       className={join(
         'first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl',
         isHighlighted && 'bg-primary/10',
+        isFaded && 'opacity-55',
       )}
     >
       <Button

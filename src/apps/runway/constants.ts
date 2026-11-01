@@ -253,6 +253,34 @@ export const PRIORITY_LABELS: Record<(typeof PRIORITIES)[number], string> = {
   want: 'Want',
 };
 
+export const PRIORITY_DIAL_WORDS = {
+  label: 'Which priorities the total counts',
+  options: {
+    must: { label: 'Must', ariaLabel: 'Musts only' },
+    should: { label: 'Should', ariaLabel: 'Musts and Shoulds' },
+    want: { label: 'Want', ariaLabel: 'Everything' },
+  },
+  monthRest: {
+    must: 'a month, Musts only',
+    should: 'a month without Wants',
+    want: 'a month',
+  },
+  savedRest: {
+    must: 'saved, Musts only',
+    should: 'saved without Wants',
+    want: 'saved',
+  },
+  trimmedNote: (counted: string) =>
+    `Counting ${counted} only. Move the dial to Want to count everything; it goes back there the next time you open Runway.`,
+  counted: { must: 'Musts', should: 'Musts and Shoulds' },
+} as const;
+
+export const PRIORITIES_NUDGE_WORDS = {
+  title: 'Mark what you must pay',
+  subtitle: 'Everything starts as Should. Mark your Musts and Wants.',
+  dismiss: 'Not now',
+} as const;
+
 /** Every income day, or every Nth: the cadences the envelope form offers. */
 export const FUNDING_CADENCES = [
   'everyIncomeDay',

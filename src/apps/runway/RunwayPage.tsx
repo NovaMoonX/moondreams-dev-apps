@@ -11,6 +11,7 @@ import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
 import Loading from '@/ui/Loading';
+import PriorityDial from '@apps/runway/components/PriorityDial';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
@@ -118,7 +119,10 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
           <h1 className='text-2xl font-semibold'>
             {RUNWAY_TAB_LABELS[activeTab]}
           </h1>
-          {hasFigures && <ValuesEyeButton />}
+          <div className='flex shrink-0 items-center gap-2.5'>
+            {activeTab === 'plan' && <PriorityDial />}
+            {hasFigures && <ValuesEyeButton />}
+          </div>
         </div>
         {getScreen(activeTab)}
       </div>

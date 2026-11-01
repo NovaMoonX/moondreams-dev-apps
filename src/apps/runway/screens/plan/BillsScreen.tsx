@@ -19,6 +19,10 @@ import {
 } from '@apps/runway/constants';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
 import PlanTotal from '@apps/runway/components/PlanTotal';
+import {
+  isCountedAt,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import UndatedBillsRow from '@apps/runway/components/UndatedBillsRow';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import GroupHeading from '@apps/runway/components/GroupHeading';
@@ -91,8 +95,9 @@ function BillsScreen() {
     `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
       .toLowerCase()
       .includes(needle);
-  const total = usePlanTotals(today).bills;
-  const totalFigure = describePlanTotal({ kind: 'monthly', total });
+  const { dial } = usePriorityDial();
+  const total = usePlanTotals(today, dial).bills;
+  const totalFigure = describePlanTotal({ kind: 'monthly', total }, dial);
   const visible = listed.filter(isShown);
   const figuresByGroup = useGroupFigures(today);
   const sections = figuresByGroup
@@ -147,6 +152,7 @@ function BillsScreen() {
                   payment={payment}
                   planStance={stance}
                   onOpen={() => setOpenBillId(item.id)}
+                  isFaded={!isCountedAt(payload.priority, dial)}
                   isOutsideTotal={
                     groupId !== null && payload.timing.schedule.kind === 'once'
                   }
