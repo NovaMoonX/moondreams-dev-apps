@@ -22,7 +22,11 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
+import UndatedBillsRow from '@apps/runway/components/UndatedBillsRow';
+import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
+  BILL_WORDS,
   CONFIRM_WORDS,
   CHECKLIST_R3_WORDS,
   DAYS_WORDS,
@@ -89,6 +93,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
   const changeableIds = useAppSelector(selectChangeableKey);
+  const { openDueBill, openUndatedBills, showPlanSection, showTab } =
+    useRunwayUrlState();
 
   if (!view || !isDaysLoaded || !isRecordsReady) {
     return (
@@ -200,6 +206,17 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       : unfunded.filter((line) => !fixIds.has(line.itemId)).length;
   const title = day.sourceName ?? day.payLineName;
 
+  const undated = lookahead?.undated ?? [];
+  const openUndated = () => {
+    onClose();
+    leaveAfterSubviewCloses(() => {
+      showPlanSection('bills');
+      showTab('plan');
+      if (undated.length === 1) openDueBill(undated[0].billId);
+      else openUndatedBills();
+    });
+  };
+
   const renderLine = (line: (typeof draft.lines)[number]) => {
     const isKnown = Object.hasOwn(items, line.itemId);
     const envelope = isKnown
@@ -258,6 +275,17 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             <MaskedText>{statusLine}</MaskedText>
           </p>
         </div>
+        {undated.length > 0 && (
+          <UndatedBillsRow
+            names={undated.map(({ name }) => name)}
+            label={
+              undated.length === 1
+                ? BILL_WORDS.offPlanOne(undated[0].name)
+                : BILL_WORDS.offPlanMany(undated.length)
+            }
+            onOpen={openUndated}
+          />
+        )}
         {draft.lines.length === 0 ? (
           <EmptyCard icon={<Mail className='h-5 w-5' />}>
             Nothing is set to be funded from this day. Add an envelope or a bill

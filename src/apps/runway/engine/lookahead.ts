@@ -28,7 +28,6 @@ export interface LookaheadDraft {
 }
 
 export type LookaheadProblem =
-  | { kind: 'overdue'; on: DateOnly; billId: string; name: string }
   | { kind: 'noIncome'; on: DateOnly; billId: string; name: string }
   | {
       kind: 'short';
@@ -63,7 +62,7 @@ export interface Lookahead {
   hasBills: boolean;
   /** The last day the plan holds; null when it fails on the first day it looks at. */
   holdsThrough: DateOnly | null;
-  /** In date order, an overdue bill first. */
+  /** In date order. */
   problems: LookaheadProblem[];
   /** The first short line on each income day, by day key. */
   shortByDay: Record<string, Extract<LookaheadProblem, { kind: 'short' }>>;
@@ -75,12 +74,14 @@ export interface Lookahead {
   } | null;
   /** The last income day when nothing follows it for a long stretch. */
   incomeEndsOn: DateOnly | null;
+  /** Bills to pay now: the first unpaid payment of each bill due today or before, soonest first. They are to-dos, not gaps in the plan, so they are not in `problems`. */
+  due: { billId: string; name: string; dueOn: DateOnly; isOverdue: boolean }[];
   /** Bills with no due date yet, in the order given. They never stop the plan, so they are not in `problems`. */
   undated: { billId: string; name: string }[];
 }
 
 const EMPTY_CARRY: LookaheadCarry = { funded: {}, added: {} };
-const PROBLEM_RANK = { overdue: 0, noIncome: 1, short: 2 } as const;
+const PROBLEM_RANK = { noIncome: 0, short: 1 } as const;
 
 const TIER_RANK: Record<Priority, number> = { must: 0, should: 1, want: 2 };
 const getTierRank = (problem: LookaheadProblem) =>
@@ -160,19 +161,28 @@ const findShorts = (
       tier: line.tier,
     }));
 
-/** The first payment of each bill that is past due and not marked paid, since the bill began to be tracked. */
-const findOverdue = (input: LookaheadInput): LookaheadProblem[] =>
-  input.bills.flatMap((bill) => {
-    const late = (input.payments[bill.id] ?? []).find(
-      (payment) =>
-        payment.paid === null &&
-        payment.dueOn < input.today &&
-        payment.dueOn >= bill.since,
-    );
-    return late
-      ? [{ kind: 'overdue', on: late.dueOn, billId: bill.id, name: bill.name }]
-      : [];
-  });
+/** The first payment of each bill that is due today or past due and not marked paid, since the bill began to be tracked. */
+const findDue = (input: LookaheadInput): Lookahead['due'] =>
+  input.bills
+    .flatMap((bill) => {
+      const late = (input.payments[bill.id] ?? []).find(
+        (payment) =>
+          payment.paid === null &&
+          payment.dueOn <= input.today &&
+          payment.dueOn >= bill.since,
+      );
+      return late
+        ? [
+            {
+              billId: bill.id,
+              name: bill.name,
+              dueOn: late.dueOn,
+              isOverdue: late.dueOn < input.today,
+            },
+          ]
+        : [];
+    })
+    .sort((a, b) => a.dueOn - b.dueOn);
 
 /** The first payment of each bill with no income day to set it aside before it is due. */
 const findNoIncome = (input: LookaheadInput): LookaheadProblem[] =>
@@ -180,7 +190,7 @@ const findNoIncome = (input: LookaheadInput): LookaheadProblem[] =>
     const unfunded = (input.payments[bill.id] ?? []).find(
       (payment) =>
         payment.paid === null &&
-        payment.dueOn >= input.today &&
+        payment.dueOn > input.today &&
         payment.dueOn <= input.horizon &&
         payment.parts.length === 0 &&
         payment.fundedCents < payment.totalCents,
@@ -235,16 +245,11 @@ export function lookahead(input: LookaheadInput): Lookahead {
     },
     { carry: EMPTY_CARRY, shorts: [], firstShortDay: null },
   );
-  const problems = sortProblems([
-    ...findOverdue(input),
-    ...findNoIncome(input),
-    ...walked.shorts,
-  ]);
+  const problems = sortProblems([...findNoIncome(input), ...walked.shorts]);
   const incomeEndsOn = getIncomeEnd(input);
   const first = problems[0] ?? null;
   const getThrough = (): DateOnly | null => {
     if (!first) return incomeEndsOn ?? input.horizon;
-    if (first.kind === 'overdue') return null;
     if (first.kind === 'noIncome') {
       const day = addUtcDays(first.on, -1);
       return day >= input.today ? day : null;
@@ -267,6 +272,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     ),
     firstShortDay: walked.firstShortDay,
     incomeEndsOn,
+    due: findDue(input),
     undated: input.bills
       .filter((bill) => bill.isUndated)
       .map((bill) => ({ billId: bill.id, name: bill.name })),

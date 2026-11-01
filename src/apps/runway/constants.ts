@@ -670,6 +670,19 @@ export const BILL_WORDS = {
   needsDueDate: 'Needs a due date',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
+  offPlanOne: (name: string) =>
+    `${name} isn't on this plan yet. It needs a due date`,
+  offPlanMany: (count: number) =>
+    `${count} bills aren't on this plan yet. They need a due date`,
+} as const;
+
+export const DUE_WORDS = {
+  title: 'To pay today',
+  titleLate: 'To pay now',
+  today: 'Due today',
+  wasDue: (when: string) => `Was due ${when}`,
+  markPaid: 'Mark paid',
+  openBills: (name: string) => `Open ${name}`,
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
@@ -1631,7 +1644,6 @@ export const HOW_OFTEN_WORDS = {
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
 export const FIX_WORDS = {
-  notPaid: (name: string) => `${name} is not marked paid`,
   noIncome: (name: string) => `${name} has no income before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,
   dueOn: (date: string) => `Due ${date}`,

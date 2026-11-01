@@ -17,6 +17,8 @@ import {
   GROUP_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
+import DueBillsCard from '@apps/runway/components/DueBillsCard';
+import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
 import PlanTotal from '@apps/runway/components/PlanTotal';
 import UndatedBillsRow from '@apps/runway/components/UndatedBillsRow';
@@ -54,17 +56,25 @@ function BillsScreen() {
       selectIsRecordsReady(state),
   );
   const bills = useAppSelector((state) => selectBills(state, today));
+  const lookahead = useDeferredLookahead(today, isLoaded);
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);
-  const { addRequest, clearAdd, dueBillId, closeDueBill, openDueBill } =
-    useRunwayUrlState();
+  const {
+    addRequest,
+    clearAdd,
+    dueBillId,
+    closeDueBill,
+    openDueBill,
+    isUndatedBillsOnly,
+    openUndatedBills,
+    closeUndatedBills,
+  } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'bill';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [openBillId, setOpenBillId] = useState<string | null>(null);
-  const [narrowedIds, setNarrowedIds] = useState<string[] | null>(null);
 
   const hasSearch = bills.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -82,12 +92,9 @@ function BillsScreen() {
     };
   });
   const undated = listed.filter(({ payload }) => isUndatedBill(payload));
-  const isNarrowed =
-    narrowedIds !== null &&
-    undated.some(({ item }) => narrowedIds.includes(item.id));
-  const isShown = ({ item, payload, payment }: (typeof listed)[number]) =>
-    (!isNarrowed ||
-      (isUndatedBill(payload) && (narrowedIds ?? []).includes(item.id))) &&
+  const isNarrowed = isUndatedBillsOnly && undated.length > 0;
+  const isShown = ({ payload, payment }: (typeof listed)[number]) =>
+    (!isNarrowed || isUndatedBill(payload)) &&
     `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
       .toLowerCase()
       .includes(needle);
@@ -146,6 +153,7 @@ function BillsScreen() {
                   bill={payload}
                   payment={payment}
                   planStance={stance}
+                  today={today}
                   onOpen={() => setOpenBillId(item.id)}
                   isOutsideTotal={
                     groupId !== null && payload.timing.schedule.kind === 'once'
@@ -175,12 +183,17 @@ function BillsScreen() {
     }
     return (
       <div className='space-y-3'>
+        <DueBillsCard
+          lookahead={lookahead}
+          today={today}
+          onOpenBill={setOpenBillId}
+        />
         {undated.length > 0 &&
           (isNarrowed ? (
             <div>
               <RevealChip
                 icon={<X className='h-3.5 w-3.5' aria-hidden='true' />}
-                onClick={() => setNarrowedIds(null)}
+                onClick={closeUndatedBills}
               >
                 {BILL_WORDS.needsDueDate}
               </RevealChip>
@@ -191,7 +204,7 @@ function BillsScreen() {
               onOpen={() =>
                 undated.length === 1
                   ? openDueBill(undated[0].item.id)
-                  : setNarrowedIds(undated.map(({ item }) => item.id))
+                  : openUndatedBills()
               }
             />
           ))}

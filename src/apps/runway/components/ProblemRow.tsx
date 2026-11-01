@@ -2,7 +2,9 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   describeGroupRow,
@@ -17,10 +19,17 @@ interface ProblemRowProps {
 
 /** One day that runs short, or one problem not tied to a day: what is short or missing and when, as a row that opens the income day it runs short on, or the bills. */
 function ProblemRow({ group }: ProblemRowProps) {
-  const { openDay, openDueBill, showPlanSection, showTab, closeFixes } =
-    useRunwayUrlState();
+  const {
+    openDay,
+    openDueBill,
+    openUndatedBills,
+    showPlanSection,
+    showTab,
+    closeFixes,
+  } = useRunwayUrlState();
   const { isHidden } = useValuesHidden();
-  const { title, detail } = describeGroupRow(group, isHidden);
+  const today = todayAsUtcDate(useNow(60_000));
+  const { title, detail } = describeGroupRow(group, today, isHidden);
   const isDay = group.kind === 'day';
 
   const open = () => {
@@ -32,8 +41,9 @@ function ProblemRow({ group }: ProblemRowProps) {
     closeFixes();
     showPlanSection('bills');
     showTab('plan');
-    if (group.kind === 'undated' && group.bills.length === 1)
-      openDueBill(group.bills[0].billId);
+    if (group.kind !== 'undated') return;
+    if (group.bills.length === 1) openDueBill(group.bills[0].billId);
+    else openUndatedBills();
   };
 
   return (

@@ -13,6 +13,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
+import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
@@ -175,6 +176,7 @@ function HomeScreen() {
           </Button>
         </div>
       </div>
+      <DueBillsCard lookahead={lookahead} today={today} />
       {!isAddingPurchase && (
         <DraftPickUpRow
           isTrack={isTrack}

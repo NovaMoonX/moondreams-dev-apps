@@ -97,6 +97,16 @@ export function formatDateShortUTC(timestamp: number) {
   return result;
 }
 
+/** A date-only day as "today", "tomorrow" or "yesterday" when it is one, otherwise "Sep 24"; `today` is a date-only value too. */
+export function formatRelativeDayUTC(timestamp: number, today: number) {
+  const days = Math.round((timestamp - today) / 86_400_000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  if (days === -1) return 'yesterday';
+  const result = formatDateShortUTC(timestamp);
+  return result;
+}
+
 /** "Sep 24" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
 export function formatDateShort(timestamp: number) {
   const date = new Date(timestamp);

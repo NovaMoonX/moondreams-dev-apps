@@ -6,15 +6,22 @@ import { BILL_WORDS } from '@apps/runway/constants';
 
 interface UndatedBillsRowProps {
   names: string[];
+  /** Replaces the Bills screen's wording when the row sits somewhere else. */
+  label?: string;
   onOpen: () => void;
 }
 
 /** The bills with no due date, as one warning row that opens the bill or narrows the list to them. */
-function UndatedBillsRow({ names, onOpen }: UndatedBillsRowProps) {
+function UndatedBillsRow({
+  names,
+  label: given,
+  onOpen,
+}: UndatedBillsRowProps) {
   const label =
-    names.length === 1
+    given ??
+    (names.length === 1
       ? BILL_WORDS.undatedOne(names[0])
-      : BILL_WORDS.undatedMany(names.length);
+      : BILL_WORDS.undatedMany(names.length));
 
   return (
     <Button
