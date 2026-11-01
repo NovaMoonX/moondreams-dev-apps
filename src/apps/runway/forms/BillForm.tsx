@@ -300,7 +300,7 @@ const getBlocker = (
   if (!isEditing && start !== undefined && start < today)
     return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
-  if (isChosen && pickedCount === 0) return 'Pick at least one income day.';
+  if (isChosen && pickedCount === 0) return FORM_FLOW_WORDS.pickDays;
   return null;
 };
 
@@ -425,7 +425,8 @@ function BillFormBody({
 
   const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
-  const isDueWord = isOnce || formData.frequency === null;
+  const isDueWord =
+    isOnce || formData.frequency === null || (editing && noun === 'bill');
   const dueDate = formData.isLater
     ? undefined
     : fromDateInputValue(formData.startDate);
@@ -437,11 +438,16 @@ function BillFormBody({
   const pickedCount = dueDays.filter((day) =>
     formData.dayKeys.includes(day.dayKey),
   ).length;
+  const isFundingUntouched =
+    editing !== undefined &&
+    formData.funding === startData.funding &&
+    formData.startDate === startData.startDate &&
+    JSON.stringify(formData.dayKeys) === JSON.stringify(startData.dayKeys);
   const blocker = getBlocker(
     formData,
     parseAmountDraft(formData.amount) !== null,
     today,
-    isChosen,
+    isChosen && !isFundingUntouched,
     pickedCount,
     editing !== undefined,
     noun,
@@ -500,7 +506,7 @@ function BillFormBody({
             value={formData.name}
             onChange={(event) => set({ name: event.target.value })}
           />
-          {noun === 'bill' && (
+          {noun === 'bill' && !editing && (
             <SuggestionChips
               label={FORM_FLOW_WORDS.commonBills}
               suggestions={BILL_QUICK_PICKS.map(toPickLabel)}
@@ -867,7 +873,9 @@ function BillFormBody({
         : getNextTierRank([...bills, ...envelopes, ...goals], priority);
     const { groupId, newGroup } = resolveGroup(data);
     const fundedBy: BillFundedBy = isChosen
-      ? { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
+      ? isFundingUntouched && editing
+        ? editing.payload.fundedBy
+        : { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
       : { kind: 'suggested' };
     const result: BillSealed = {
       name: data.name.trim(),
@@ -945,13 +953,15 @@ function BillFormBody({
       : FORM_FLOW_WORDS.discardNew(noun),
   });
   const quickStep = steps.find((step) => step.id === openStep) ?? null;
-  const isQuick = !!editing && openStep !== null && !isAll;
+  const isQuick = !!editing && openStep !== null;
   const isAsking = !questions.hasReviewed;
   const isFirstDate =
     isQuick && editing?.payload.timing.schedule.anchor === null;
   const shownBlocker = editing ? editBlocker : blocker;
   const changeSection =
-    editing && questions.hasReviewed && !isFirstDate ? <ChangeSection /> : null;
+    editing && questions.hasReviewed && !isFirstDate ? (
+      <ChangeSection isIdleShown />
+    ) : null;
 
   const handleSubmit = async () => {
     const bill = buildBill(formData);
@@ -1017,7 +1027,9 @@ function BillFormBody({
                 flow={questions}
                 rowIds={['name', 'due', 'repeats']}
                 after={changeSection}
+                isAll={isAll}
                 onAll={() => setIsAll(true)}
+                onBack={() => setIsAll(false)}
                 isFirstDate={isFirstDate}
               />
             ) : (
@@ -1031,7 +1043,10 @@ function BillFormBody({
             {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
-                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+                error ??
+                flow.error ??
+                maskNote(isAsking ? questions.blocker : shownBlocker) ??
+                flow.warningHint
               }
               cancelAction={
                 <Button

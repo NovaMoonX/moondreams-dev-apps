@@ -1,7 +1,6 @@
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { FIX_WORDS } from '@apps/runway/constants';
-import { isSameValue } from '@apps/runway/engine/resolve';
 import {
   isSameLookahead,
   sortProblems,
@@ -204,6 +203,10 @@ function describeChangeProblem(
   };
 }
 
+/** Which item has which kind of problem, whatever day it falls on, so a due date that only moves a problem it already had creates nothing new; a shortfall counts again only when it grows. */
+const getProblemKey = (problem: LookaheadProblem) =>
+  `${problem.kind}:${problem.kind === 'short' ? problem.itemId : problem.billId}`;
+
 /** What a change does to how far the plan holds, as separate blocks: the plan holding is one idea, a shortfall another. */
 export function describeHoldsBlocks(
   before: Lookahead,
@@ -225,9 +228,17 @@ export function describeHoldsBlocks(
   if (isSameLookahead(before, after)) {
     return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
-  const created = after.problems.filter(
-    (candidate) => !before.problems.some((had) => isSameValue(had, candidate)),
-  );
+  const created = after.problems.filter((candidate) => {
+    const had = before.problems.filter(
+      (entry) => getProblemKey(entry) === getProblemKey(candidate),
+    );
+    if (candidate.kind !== 'short') return had.length === 0;
+    const worst = Math.max(
+      0,
+      ...had.map((entry) => (entry.kind === 'short' ? entry.shortBy : 0)),
+    );
+    return had.length === 0 || candidate.shortBy > worst;
+  });
   const [first] = sortProblems(created);
   const problem: HoldsBlock[] = first
     ? [

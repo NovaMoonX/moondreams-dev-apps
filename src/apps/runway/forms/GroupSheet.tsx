@@ -28,11 +28,13 @@ import { useStore } from 'react-redux';
 
 import { useAppSelector, type RootState } from '@/store';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
-import { fromDateInputValue } from '@/utils/dateInputUtils';
+import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
+  BILL_WORDS,
+  FORM_FLOW_WORDS,
   GROUP_WORDS,
   ITEM_SHEET_R2_WORDS,
   MAX_EMOJI_LENGTH,
@@ -68,11 +70,13 @@ import {
   isSameValue,
   type VersionStretch,
 } from '@apps/runway/engine/resolve';
+import { toOrdinal } from '@apps/runway/utils/monthDays';
 import type {
   BillSealed,
   BillVersion,
   GroupSealed,
   Priority,
+  Schedule,
 } from '@apps/runway/types';
 import {
   describeBillRepeat,
@@ -88,6 +92,13 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
 
 type StartingChoice = Priority | 'none';
+
+interface DueWritten {
+  itemId: string;
+  name: string;
+  original: VersionStretch<BillSealed>[];
+  written: VersionStretch<BillSealed>[];
+}
 
 interface GroupSheetProps {
   groupId: string;
@@ -109,6 +120,28 @@ const SETTABLE_KINDS: readonly string[] = [
 ];
 
 /** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
+const getWeekday = (date: number) =>
+  new Date(date).toLocaleDateString('en-US', {
+    weekday: 'long',
+    timeZone: 'UTC',
+  });
+
+/** What a repeating bill's new day means for it ("Monthly bills then repeat on the 5th"), or null when none repeats. */
+const describeRepeatsOn = (kinds: string[], date: number): string | null => {
+  const notes = [
+    kinds.includes('monthly')
+      ? `Monthly bills then repeat on the ${toOrdinal(new Date(date).getUTCDate())} of each month.`
+      : null,
+    kinds.includes('weekly')
+      ? `Weekly bills then repeat every ${getWeekday(date)}.`
+      : null,
+    kinds.includes('everyOtherWeek')
+      ? `Bills every other week then repeat every other ${getWeekday(date)}.`
+      : null,
+  ].filter((note): note is string => note !== null);
+  return notes.length === 0 ? null : notes.join(' ');
+};
+
 function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -135,6 +168,10 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const [isSettingDue, setIsSettingDue] = useState(false);
   const [dueText, setDueText] = useState('');
+  const [dueRecord, setDueRecord] = useState<{
+    note: string;
+    undo: DueWritten[] | null;
+  } | null>(null);
   const store = useStore<RootState>();
   const allVersions = useAppSelector((state) => state.runway.versions);
 
@@ -266,8 +303,11 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const billVersions = allVersions.filter(
     (version): version is BillVersion => version.kind === 'bill',
   );
-  const getStretches = (versions: readonly BillVersion[], itemId: string) =>
-    getVersionStretches<BillVersion, BillSealed>(versions, itemId, today);
+  const getStretches = (
+    versions: readonly BillVersion[],
+    itemId: string,
+    from = today,
+  ) => getVersionStretches<BillVersion, BillSealed>(versions, itemId, from);
   const isSettable = ({ item }: (typeof bills)[number]) => {
     const stretches = getStretches(billVersions, item.id);
     return (
@@ -304,8 +344,13 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const replacedBills = changingBills.filter(
     ({ version }) => version.payload.timing.schedule.anchor !== null,
   );
+  const isPast = dueDate !== undefined && dueDate < today;
   const skippedCount = billCount - eligibleBills.length;
 
+  const describeBillDue = (kind: string, due: number | null) =>
+    due === null
+      ? BILL_WORDS.needsDueDate
+      : `Due ${formatDateShortUTC(due)} · ${describeBillRepeat(kind as Schedule['kind'])}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;
@@ -313,14 +358,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     (bill) => isSettable(bill) && !isPaidOnce(bill),
   );
 
-  const undoDueDates = async (
-    written: {
-      itemId: string;
-      name: string;
-      original: VersionStretch<BillSealed>[];
-      written: VersionStretch<BillSealed>[];
-    }[],
-  ) => {
+  const undoDueDates = async (written: DueWritten[]) => {
     if (!user) return;
     try {
       const encryption = await getRunwayEncryption(user.uid);
@@ -329,7 +367,14 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
         (version): version is BillVersion => version.kind === 'bill',
       );
       const isUntouched = (entry: (typeof written)[number]) =>
-        isSameValue(getStretches(liveVersions, entry.itemId), entry.written);
+        isSameValue(
+          getStretches(
+            liveVersions,
+            entry.itemId,
+            entry.written[0].effectiveFrom,
+          ),
+          entry.written,
+        );
       const untouched = written.filter(isUntouched);
       const stale = written
         .filter((entry) => !isUntouched(entry))
@@ -359,26 +404,28 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
         results[index].status === 'rejected' ? [entry.name] : [],
       );
       const done = untouched.length - failed.length;
-      addToast(
-        failed.length === 0 && stale.length === 0
-          ? { title: GROUP_WORDS.dueUndone(done), type: 'success' }
-          : {
-              title: GROUP_WORDS.dueUndoPartial(done, written.length, [
-                ...failed,
-                ...stale,
-              ]),
-              description:
-                stale.length === 0
-                  ? undefined
-                  : GROUP_WORDS.dueUndoStale(stale),
-              type: 'error',
-            },
-      );
-    } catch (undoError) {
-      addToast({
-        title: getErrorMessage(undoError, GROUP_WORDS.dueUndoFailed),
-        type: 'error',
+      const isClean = failed.length === 0 && stale.length === 0;
+      const title = isClean
+        ? GROUP_WORDS.dueUndone(done)
+        : GROUP_WORDS.dueUndoPartial(done, written.length, [
+            ...failed,
+            ...stale,
+          ]);
+      const description =
+        stale.length === 0 ? undefined : GROUP_WORDS.dueUndoStale(stale);
+      setDueRecord({
+        note: description ? `${title} ${description}` : title,
+        undo: null,
       });
+      addToast({
+        title,
+        description,
+        type: isClean ? 'success' : 'error',
+      });
+    } catch (undoError) {
+      const message = getErrorMessage(undoError, GROUP_WORDS.dueUndoFailed);
+      setDueRecord({ note: message, undo: written });
+      addToast({ title: message, type: 'error' });
     }
   };
 
@@ -395,6 +442,12 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
               : `${bill.version.payload.name} (${formatDateShortUTC(current)})`;
           }),
           formatDateUTC(dueDate),
+          describeRepeatsOn(
+            replacedBills.map(
+              ({ version }) => version.payload.timing.schedule.kind,
+            ),
+            dueDate,
+          ),
         ),
         confirmText: GROUP_WORDS.dueReplace,
       });
@@ -466,7 +519,8 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
       const failed = plans
         .filter((_, index) => results[index].status === 'rejected')
         .map((plan) => plan.name);
-      if (saved.length > 0)
+      if (saved.length > 0) {
+        setDueRecord({ note: GROUP_WORDS.dueDone(saved.length), undo: saved });
         addToast({
           title: GROUP_WORDS.dueToast(saved.length),
           type: 'success',
@@ -475,6 +529,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
             onClick: () => void undoDueDates(saved),
           },
         });
+      }
       if (failed.length === 0) {
         setIsSettingDue(false);
         return;
@@ -590,6 +645,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
               <DateInput
                 variant='outline'
                 aria-label={GROUP_WORDS.dueCaption}
+                min={toDateInputValue(today)}
                 value={dueText}
                 onChange={(event) => setDueText(event.target.value)}
               />
@@ -602,11 +658,15 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
             <ModalFooterActions
               note={
                 error ??
-                (dueDate === undefined
-                  ? GROUP_WORDS.duePickDay
-                  : changingBills.length === 0
-                    ? GROUP_WORDS.dueNothingToChange
-                    : null)
+                (isSaving
+                  ? null
+                  : dueDate === undefined
+                    ? GROUP_WORDS.duePickDay
+                    : isPast
+                      ? FORM_FLOW_WORDS.pastDay
+                      : changingBills.length === 0
+                        ? GROUP_WORDS.dueNothingToChange
+                        : null)
               }
               rightActions={
                 <Button
@@ -615,6 +675,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                   disabled={
                     isSaving ||
                     dueDate === undefined ||
+                    isPast ||
                     changingBills.length === 0
                   }
                   onClick={() => void setDueDate()}
@@ -717,8 +778,9 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                         version.payload.groupId,
                         purposeEmojis,
                       )}
-                      detail={describeBillRepeat(
+                      detail={describeBillDue(
                         version.payload.timing.schedule.kind,
+                        getCurrentDue({ item, version }),
                       )}
                       figure={describeGroupTotal(version.payload.amount)}
                     />
@@ -802,10 +864,26 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                   hasChevron
                   icon={<CalendarDays />}
                   label={GROUP_WORDS.setDue}
-                  subtitle={GROUP_WORDS.setDueSub(
-                    settableBills.length,
-                    settableBills.length === billCount,
-                  )}
+                  subtitle={
+                    dueRecord?.note ??
+                    GROUP_WORDS.setDueSub(
+                      settableBills.length,
+                      settableBills.length === billCount,
+                    )
+                  }
+                  trailing={
+                    dueRecord?.undo ? (
+                      <Button
+                        type='button'
+                        variant='tertiary'
+                        size='sm'
+                        className="relative after:absolute after:-inset-2 after:content-['']"
+                        onClick={() => void undoDueDates(dueRecord.undo ?? [])}
+                      >
+                        {ITEM_SHEET_R2_WORDS.undo}
+                      </Button>
+                    ) : undefined
+                  }
                   onClick={() => {
                     setDueText('');
                     setError(null);

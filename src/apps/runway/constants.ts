@@ -470,6 +470,8 @@ export const PREVIEW_SHOWN = 3;
 export const MAX_CHANGE_DAYS_AHEAD = 3600;
 
 export const CHANGE_WORDS = {
+  changedElsewhere:
+    'This changed somewhere else. What it does now is shown below. Check it, then save again.',
   fromHeading: 'From when',
   fromNow: 'From now on',
   fromDate: 'From a date ahead',
@@ -486,6 +488,7 @@ export const CHANGE_WORDS = {
   removed: 'This income day goes away.',
   review: 'Next',
   whyHeading: 'Why the change?',
+  reasonPicks: 'Quick picks',
   whyHint: 'A note for your own records. You can leave it out.',
   whyPlaceholder: 'Why it changed. You can leave this out.',
   saveWithNote: 'Save',
@@ -544,13 +547,20 @@ export const LIFECYCLE_WORDS = {
   chipsPause: ['Focusing on another goal', 'Money is tight', 'Changed my mind'],
 } as const;
 
-export const CHANGE_REASON_CHIPS = [
-  'Price went up',
-  'Price went down',
-  'New job or raise',
-  'Changed my mind',
-  'Fixing a mistake',
-] as const;
+const MIND_CHIPS = ['Changed my mind', 'Fixing a mistake'] as const;
+
+/** Starting points for "Why the change?", shaped like what changes for each kind of item. */
+export const CHANGE_REASON_CHIPS: Record<
+  (typeof ITEM_KINDS)[number],
+  readonly string[]
+> = {
+  bill: ['Price went up', 'Price went down', ...MIND_CHIPS],
+  envelope: ['Spending more', 'Spending less', ...MIND_CHIPS],
+  goal: ['Saving more', 'Saving less', 'Goal changed', 'Fixing a mistake'],
+  payLine: ['New job or raise', 'Hours changed', ...MIND_CHIPS],
+  source: MIND_CHIPS,
+  group: MIND_CHIPS,
+};
 
 /** What happened to a pairing that its own pay could not cover. */
 export const PAIRING_STATES = [
@@ -1495,7 +1505,7 @@ export const FORM_FLOW_WORDS = {
   badRange: 'Make the top of the range higher than the low end.',
   badPercent: 'Enter a whole or half percent, up to 100.',
   finishEnding: 'Finish when it ends.',
-  pickDays: 'Pick at least one income day.',
+  pickDays: 'Paid from: pick at least one income day.',
   otherPayday: 'Pick two different days of the month.',
   discardNew: (noun: string) => `Discard this ${noun}?`,
   discardChange: 'Discard this change?',
@@ -1797,12 +1807,14 @@ export const GROUP_WORDS = {
       ? '1 bill keeps its own date: it is paid, ends first or repeats its own way.'
       : `${count} bills keep their own dates: paid, ending first or repeating their own way.`,
   dueReplaceTitle: 'Replace their due dates?',
-  dueReplaceBody: (bills: string[], date: string) =>
+  dueReplaceBody: (bills: string[], date: string, repeats: string | null) =>
     `${
       bills.length <= 3
         ? bills.join(', ').replace(/, ([^,]*)$/, ' and $1')
         : `${bills.slice(0, 2).join(', ')} and ${bills.length - 2} more`
-    } already ${bills.length === 1 ? 'has a due date' : 'have due dates'}. Replace ${bills.length === 1 ? 'it' : 'them'} with ${date}?`,
+    } already ${bills.length === 1 ? 'has a due date' : 'have due dates'}. Replace ${bills.length === 1 ? 'it' : 'them'} with ${date}?${repeats ? ` ${repeats}` : ''}`,
+  dueDone: (count: number) =>
+    `Set on ${count} ${count === 1 ? 'bill' : 'bills'}`,
   dueReplace: 'Replace',
   dueToast: (count: number) =>
     `Set the due date on ${count} ${count === 1 ? 'bill' : 'bills'}`,

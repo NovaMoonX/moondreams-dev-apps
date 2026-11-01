@@ -784,11 +784,11 @@ function IncomeFormBody({
   });
   const quickStep =
     questions.steps.find((step) => step.id === openStep) ?? null;
-  const isQuick = !!isEditing && openStep !== null && !isAll;
+  const isQuick = !!isEditing && openStep !== null;
   const isAsking = !questions.hasReviewed;
   const changeSection =
     editing && !isEditingSource && questions.hasReviewed ? (
-      <ChangeSection />
+      <ChangeSection isIdleShown />
     ) : null;
   const shownBlocker = editing ? editBlocker : blocker;
 
@@ -876,7 +876,9 @@ function IncomeFormBody({
                 flow={questions}
                 rowIds={['payName', 'schedule']}
                 after={changeSection}
+                isAll={isAll}
                 onAll={() => setIsAll(true)}
+                onBack={() => setIsAll(false)}
               />
             ) : (
               <>
@@ -889,7 +891,10 @@ function IncomeFormBody({
             {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
-                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+                error ??
+                flow.error ??
+                maskNote(isAsking ? questions.blocker : shownBlocker) ??
+                flow.warningHint
               }
               cancelAction={
                 <Button

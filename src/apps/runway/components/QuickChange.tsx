@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Eye } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import QuestionFlow from '@/components/QuestionFlow';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -20,8 +21,10 @@ interface QuickChangeProps {
   rowIds: string[];
   /** What sits between the rows and "More details": when the change starts and what it does. */
   after?: ReactNode;
-  /** Opens the view that lists every field as a row. */
+  /** Shows the fields that are not on the front instead of the question. */
+  isAll: boolean;
   onAll: () => void;
+  onBack: () => void;
   /** Giving an undated item its first date: just the question, no door to the rest. */
   isFirstDate?: boolean;
 }
@@ -32,7 +35,9 @@ function QuickChange({
   flow,
   rowIds,
   after = null,
+  isAll,
   onAll,
+  onBack,
   isFirstDate = false,
 }: QuickChangeProps) {
   const { isHidden, toggle } = useValuesHidden();
@@ -47,16 +52,25 @@ function QuickChange({
     .map((id) => flow.steps.find((other) => other.id === id))
     .filter((other): other is QuestionStep => other !== undefined)
     .filter((other) => other.id !== step.id);
-  const hasMore = flow.steps.some(
-    (other) => other.id !== step.id && !shownIds.includes(other.id),
-  );
-  const rowsFlow: QuestionFlowState = {
+  const toRows = (steps: QuestionStep[]): QuestionFlowState => ({
     ...flow,
-    steps: rows,
+    steps,
     open: null,
     isReview: true,
     hasReviewed: true,
-  };
+  });
+  const rest = flow.steps.filter(
+    (other) => other.id !== step.id && !shownIds.includes(other.id),
+  );
+  if (isAll) {
+    return (
+      <div className='space-y-4'>
+        <BackLink onBack={onBack} />
+        <QuestionFlow flow={toRows(rest)} shouldFocus={false} />
+        {after}
+      </div>
+    );
+  }
   return (
     <div
       className='space-y-4 [@media(max-height:419px)]:space-y-1.5 [@media(min-height:420px)_and_(max-height:599px)]:space-y-2'
@@ -89,10 +103,10 @@ function QuickChange({
       ) : (
         <>
           {rows.length > 0 && (
-            <QuestionFlow flow={rowsFlow} shouldFocus={false} />
+            <QuestionFlow flow={toRows(rows)} shouldFocus={false} />
           )}
           {after}
-          {hasMore && (
+          {rest.length > 0 && (
             <Button
               type='button'
               variant='secondary'

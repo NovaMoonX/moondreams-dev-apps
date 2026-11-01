@@ -9,7 +9,12 @@ import { useAppSelector, type RootState } from '@/store';
 import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
-import { planStretches, type StretchPlan } from '@apps/runway/engine/resolve';
+import { useWarningHint } from '@apps/runway/hooks/useWarningHint';
+import {
+  isSameValue,
+  planStretches,
+  type StretchPlan,
+} from '@apps/runway/engine/resolve';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   carryDayOverrides,
@@ -201,6 +206,7 @@ export function useChangeFlow({
       ? null
       : getChangeJson(itemId, kind, candidate, span, plan);
   const replaced = isMoneyless ? [] : (plan?.replaced ?? []);
+  const warningHint = useWarningHint(changeJson);
   const getSummary = (name: string) => {
     const words = summaryText || 'Updated';
     if (isMoneyless) return `${name}: ${words}.`;
@@ -256,6 +262,11 @@ export function useChangeFlow({
                 JSON.parse(changeJson) as PreviewChange,
               );
         const written = getPlan(state.runway.versions)?.written;
+        if (!isSameValue(written, plan?.written)) {
+          setError(CHANGE_WORDS.changedElsewhere);
+          setStep('form');
+          return;
+        }
         await changeItem(user.uid, encryption, {
           itemId,
           kind,
@@ -323,6 +334,8 @@ export function useChangeFlow({
   };
 
   return {
+    kind,
+    warningHint,
     getBlocker,
     from,
     setFrom,

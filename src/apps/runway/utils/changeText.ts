@@ -1,3 +1,4 @@
+import { DAY_MS } from '@apps/runway/engine/dates';
 import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
@@ -261,6 +262,7 @@ export function describeChange(
 export function describeReplaced(
   replaced: readonly {
     effectiveFrom: number;
+    effectiveUntil: number | null;
     before: ItemPayload;
     after: ItemPayload;
   }[],
@@ -269,6 +271,6 @@ export function describeReplaced(
   const [first] = replaced;
   if (!first) return null;
   const more = replaced.length - 1;
-  const result = `This replaces your change from ${formatDateUTC(first.effectiveFrom)} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
+  const result = `This replaces your change from ${formatDateUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }

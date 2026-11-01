@@ -9131,6 +9131,46 @@ const version = (
   );
   assert.equal(window.replaced.length, 0);
 
+  const windowOver = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 50 * D, effectiveUntil: 70 * D },
+    rent,
+    { name: 'Rent', cents: 127000 },
+  );
+  assert.deepEqual(
+    windowOver.replaced.map(
+      ({ effectiveFrom, effectiveUntil, before, after }) => [
+        effectiveFrom,
+        effectiveUntil,
+        before.cents,
+        after.cents,
+      ],
+    ),
+    [[60 * D, null, 125000, 130000]],
+    'a temporary change over a scheduled change of the same field names the one it overwrites',
+  );
+
+  const bounded = [
+    v('base', 1, 0, null, 'Rent', 100),
+    v('temp', 2, 20 * D, 30 * D, 'Rent', 200),
+  ];
+  const permanent = planStretches(
+    bounded,
+    'x',
+    { effectiveFrom: 10 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 100 },
+    { name: 'Rent', cents: 150 },
+  );
+  assert.deepEqual(
+    permanent.replaced.map(({ effectiveFrom, effectiveUntil }) => [
+      effectiveFrom,
+      effectiveUntil,
+    ]),
+    [[20 * D, 30 * D]],
+    'the return to what held before a temporary change is part of its entry, not a change of its own',
+  );
+
   assert.deepEqual(
     getChangedKeys(
       { a: 1, b: { x: 1, y: null } },
@@ -9291,6 +9331,13 @@ const version = (
     }).some((block) => block.tone === 'warning'),
     false,
     "a plan's existing problem is not warned about again",
+  );
+  assert.equal(
+    describeHoldsBlocks(look([water]), look([{ ...water, on: 1_500 }])).some(
+      (block) => block.tone === 'warning',
+    ),
+    false,
+    'a problem a bill already had, moved to another day, is not created by the change',
   );
 }
 

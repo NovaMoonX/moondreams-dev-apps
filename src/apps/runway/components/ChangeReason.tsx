@@ -31,7 +31,7 @@ function ChangeReason({ flow, onClose }: ChangeReasonProps) {
   const trimmed = note.trim();
 
   return (
-    <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+    <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto [@media(max-height:419px)]:gap-2.5'>
       <BackLink onBack={() => flow.setStep('form')} />
       <div className='space-y-1'>
         <ActionTitle>{CHANGE_WORDS.whyHeading}</ActionTitle>
@@ -45,8 +45,8 @@ function ChangeReason({ flow, onClose }: ChangeReasonProps) {
         )}
       </div>
       <SuggestionChips
-        label={CHANGE_WORDS.whyHeading}
-        suggestions={CHANGE_REASON_CHIPS}
+        label={CHANGE_WORDS.reasonPicks}
+        suggestions={CHANGE_REASON_CHIPS[flow.kind]}
         isDisabled={isSaving}
         onPick={setNote}
       />

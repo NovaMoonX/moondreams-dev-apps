@@ -558,10 +558,10 @@ function GoalFormBody({
       : FORM_FLOW_WORDS.discardNew('goal'),
   });
   const quickStep = steps.find((step) => step.id === openStep) ?? null;
-  const isQuick = !!editing && openStep !== null && !isAll;
+  const isQuick = !!editing && openStep !== null;
   const isAsking = !questions.hasReviewed;
   const changeSection =
-    editing && questions.hasReviewed ? <ChangeSection /> : null;
+    editing && questions.hasReviewed ? <ChangeSection isIdleShown /> : null;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -647,7 +647,9 @@ function GoalFormBody({
                 flow={questions}
                 rowIds={['name', 'often', 'byWhen']}
                 after={changeSection}
+                isAll={isAll}
                 onAll={() => setIsAll(true)}
+                onBack={() => setIsAll(false)}
               />
             ) : (
               <>
@@ -660,7 +662,10 @@ function GoalFormBody({
             {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
-                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+                error ??
+                flow.error ??
+                maskNote(isAsking ? questions.blocker : shownBlocker) ??
+                flow.warningHint
               }
               cancelAction={
                 <Button

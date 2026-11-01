@@ -210,6 +210,8 @@ export function applyFieldChanges<P extends object>(
 
 export interface ReplacedChange<P> {
   effectiveFrom: number;
+  /** Where a bounded change ends and what held before returns; null when it lasts. */
+  effectiveUntil: number | null;
   /** The later version as it stands, with only the changed fields taken from the stretch before it. */
   before: P;
   after: P;
@@ -259,32 +261,40 @@ export function planStretches<
     };
   }
   const changed = getChangedKeys(current, candidate);
-  const replaced =
-    effectiveUntil !== null
-      ? []
-      : clipped.flatMap((stretch, index): ReplacedChange<P>[] => {
-          const previous = clipped[index - 1];
-          if (!previous) return [];
-          const isReplaced = changed.some(
-            (key) =>
-              !isSameValue(stretch.payload[key], previous.payload[key]) &&
-              !isSameValue(stretch.payload[key], candidate[key]),
-          );
-          return isReplaced
-            ? [
-                {
-                  effectiveFrom: stretch.effectiveFrom,
-                  before: {
-                    ...stretch.payload,
-                    ...Object.fromEntries(
-                      changed.map((key) => [key, previous.payload[key]]),
-                    ),
-                  },
-                  after: stretch.payload,
-                },
-              ]
-            : [];
-        });
+  const holds = (index: number, other: number) =>
+    changed.every((key) =>
+      isSameValue(clipped[index].payload[key], clipped[other].payload[key]),
+    );
+  const isChange = (index: number) =>
+    index > 0 &&
+    changed.some(
+      (key) =>
+        !isSameValue(
+          clipped[index].payload[key],
+          clipped[index - 1].payload[key],
+        ) && !isSameValue(clipped[index].payload[key], candidate[key]),
+    );
+  /** The stretch after a bounded change that only brings back what held before it. */
+  const isReturn = (index: number) =>
+    index > 1 && isChange(index - 1) && holds(index, index - 2);
+  const replaced = clipped.flatMap((stretch, index): ReplacedChange<P>[] => {
+    if (!isChange(index) || isReturn(index)) return [];
+    const previous = clipped[index - 1];
+    const next = clipped[index + 1];
+    return [
+      {
+        effectiveFrom: stretch.effectiveFrom,
+        effectiveUntil: next && isReturn(index + 1) ? next.effectiveFrom : null,
+        before: {
+          ...stretch.payload,
+          ...Object.fromEntries(
+            changed.map((key) => [key, previous.payload[key]]),
+          ),
+        },
+        after: stretch.payload,
+      },
+    ];
+  });
   return {
     written: applyFieldChanges(clipped, current, candidate),
     replaced,
