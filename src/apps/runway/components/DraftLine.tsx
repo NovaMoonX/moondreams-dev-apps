@@ -9,7 +9,9 @@ import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import BillShareView from '@apps/runway/components/BillShareView';
-import ItemSheet from '@apps/runway/components/ItemSheet';
+import ItemSheet, {
+  type ItemSheetProps,
+} from '@apps/runway/components/ItemSheet';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHECKLIST_R3_WORDS,
@@ -20,6 +22,7 @@ import {
   PAY_SHARE_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
@@ -77,10 +80,6 @@ function DraftLine({
   onOpenChange,
 }: DraftLineProps) {
   const [isOwnOpen, setIsOwnOpen] = useState(false);
-  const paidFromAction = usePaidFromAction(
-    kind === 'bill' ? line.itemId : '',
-    today,
-  );
   const { isHidden } = useValuesHidden();
   const emoji = useRecordedEmoji(null, line.itemId);
   const isOpen = isOpenProp ?? isOwnOpen;
@@ -239,6 +238,36 @@ function DraftLine({
       </ActionGroup>
     ) : null;
 
+  const sheetProps: ItemSheetProps | null =
+    kind === null
+      ? null
+      : {
+          itemId: line.itemId,
+          kind,
+          today,
+          figureLabel: ITEM_SHEET_WORDS.fromThisDay,
+          figure: amount,
+          fact: `${PRIORITY_LABELS[line.tier]} · ${isHidden && (pairingShort || shortText) ? NEEDS_LOOK_WORDS.short : (pairingShort ?? billShareShort ?? reason)}`,
+          help:
+            helpLines.length > 0 ? (
+              <span className='block space-y-2'>
+                {helpLines.map((text) => (
+                  <span key={text} className='block'>
+                    <MaskedText>{text}</MaskedText>
+                  </span>
+                ))}
+              </span>
+            ) : undefined,
+          presetDayKey: dayKey,
+          quickChange:
+            kind === 'bill' || kind === 'envelope' || kind === 'goal'
+              ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+              : undefined,
+          canChange,
+          extra,
+          onClose: () => setIsOpen(false),
+        };
+
   return (
     <>
       <ItemRow
@@ -251,55 +280,60 @@ function DraftLine({
         ariaLabel={`${name}: ${PRIORITY_LABELS[line.tier]}, ${amount}. ${detail.text}`}
         onOpen={kind === null ? undefined : () => setIsOpen(true)}
       />
-      {isOpen && kind !== null && (
-        <ItemSheet
-          itemId={line.itemId}
-          kind={kind}
-          today={today}
-          figureLabel={ITEM_SHEET_WORDS.fromThisDay}
-          figure={amount}
-          fact={`${PRIORITY_LABELS[line.tier]} · ${isHidden && (pairingShort || shortText) ? NEEDS_LOOK_WORDS.short : (pairingShort ?? billShareShort ?? reason)}`}
-          help={
-            helpLines.length > 0 ? (
-              <span className='block space-y-2'>
-                {helpLines.map((text) => (
-                  <span key={text} className='block'>
-                    <MaskedText>{text}</MaskedText>
-                  </span>
-                ))}
-              </span>
-            ) : undefined
-          }
-          presetDayKey={dayKey}
-          quickChange={
-            kind === 'bill' || kind === 'envelope' || kind === 'goal'
-              ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
-              : undefined
-          }
-          maxAction={kind === 'bill' ? paidFromAction : undefined}
-          dayAction={
-            kind === 'bill' && line.bill
-              ? {
-                  label: PAY_SHARE_WORDS.action,
-                  renderView: ({ onBack, onClose, openChange }) => (
-                    <BillShareView
-                      billId={line.itemId}
-                      dayKey={dayKey}
-                      currentCents={line.demandCents}
-                      onBack={onBack}
-                      onClose={onClose}
-                      onOpenPaidFrom={() => openChange('funding')}
-                    />
-                  ),
-                }
-              : undefined
-          }
-          canChange={canChange}
-          extra={extra}
-          onClose={() => setIsOpen(false)}
+      {isOpen && sheetProps !== null && kind === 'bill' && (
+        <BillLineSheet
+          line={line}
+          name={name}
+          dayKey={dayKey}
+          sheetProps={sheetProps}
         />
       )}
+      {isOpen && sheetProps !== null && kind !== 'bill' && (
+        <ItemSheet {...sheetProps} />
+      )}
     </>
+  );
+}
+
+interface BillLineSheetProps {
+  line: DraftLineData;
+  name: string;
+  dayKey: string;
+  sheetProps: ItemSheetProps;
+}
+
+/** A bill's sheet from an income day: its Paid from row, and a change to what this one pay puts in (not on a pay that pays it first, where the figure comes from the pairing). */
+function BillLineSheet({ line, name, dayKey, sheetProps }: BillLineSheetProps) {
+  const paidFromAction = usePaidFromAction(line.itemId, sheetProps.today);
+  const mask = useMaskedText();
+  return (
+    <ItemSheet
+      {...sheetProps}
+      maxAction={paidFromAction}
+      dayAction={
+        line.bill && line.pairing === null
+          ? {
+              label: PAY_SHARE_WORDS.action,
+              subtitle: mask(
+                PAY_SHARE_WORDS.actionSub(
+                  name,
+                  formatCents(line.bill.totalCents),
+                ),
+              ),
+              renderView: ({ onBack, onClose, openChange }) => (
+                <BillShareView
+                  billId={line.itemId}
+                  dayKey={dayKey}
+                  currentCents={line.demandCents}
+                  onBack={onBack}
+                  onClose={onClose}
+                  onOpenPaidFrom={() => openChange('funding')}
+                />
+              ),
+            }
+          : undefined
+      }
+    />
   );
 }
 

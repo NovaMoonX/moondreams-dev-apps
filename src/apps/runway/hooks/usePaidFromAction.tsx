@@ -47,7 +47,8 @@ export function usePaidFromAction(billId: string, today: number) {
         ? PAID_FROM_WORDS.spreadRow
         : describePaidFrom(bill.fundedBy, plan);
   return {
-    label: PAID_FROM_WORDS.row(what),
+    label: PAID_FROM_WORDS.title2,
+    subtitle: what,
     step: 'funding',
     icon: <Wallet />,
   };

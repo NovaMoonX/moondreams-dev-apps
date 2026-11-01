@@ -1,5 +1,5 @@
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import { FIX_WORDS } from '@apps/runway/constants';
 import {
   isSameLookahead,
@@ -9,24 +9,6 @@ import {
 } from '@apps/runway/engine/lookahead';
 
 export { isSameLookahead, sortProblems };
-
-/** One problem in a sentence: what stops the plan, on which day, never as missing money. */
-export function describeProblem(problem: LookaheadProblem) {
-  const name = problem.name === '' ? 'A bill' : problem.name;
-  if (problem.kind === 'overdue') {
-    return `${name} was due ${formatDateUTC(problem.on)} and is not marked paid.`;
-  }
-  if (problem.kind === 'noIncome') {
-    if (problem.reason === 'short') {
-      return `On ${formatDateUTC(problem.on)}, the plan leaves ${name} ${formatCents(problem.shortBy)} short.`;
-    }
-    return problem.reason === 'noPick'
-      ? `${name} on ${formatDateUTC(problem.on)}: the pay it comes from is not before it is due.`
-      : `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
-  }
-  const result = `On ${formatDateUTC(problem.on)}, the plan leaves ${name} ${formatCents(problem.shortBy)} short.`;
-  return result;
-}
 
 /** The headline: how far the plan holds, or null when there is nothing to hold yet. */
 export function describeHoldsThrough(lookahead: Lookahead) {
@@ -184,6 +166,8 @@ export interface HoldsBlock {
   text: string;
   /** The amount inside `text`, so it can be drawn in the warning colour. */
   figure: string | null;
+  /** The text says why a one-time pay leaves the bill short. */
+  hasNote?: boolean;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -222,6 +206,7 @@ function describeChangeProblem(
   return {
     text: `With this change, the plan leaves ${name} ${figure} short on ${on}${why}.${tail}`,
     figure,
+    hasNote: why !== '',
   };
 }
 

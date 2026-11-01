@@ -1,6 +1,9 @@
 import type { RootState } from '@/store';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
-import { buildComingDays } from '@apps/runway/engine/comingDays';
+import {
+  buildComingDays,
+  getOneTimePayLineIds,
+} from '@apps/runway/engine/comingDays';
 import {
   planOverrideCarry,
   type OverrideCarry,
@@ -13,19 +16,27 @@ import {
   type DayEffect,
 } from '@apps/runway/engine/whatIf';
 import { MAX_PREVIEW_DAYS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
-import { addUtcMonths } from '@apps/runway/engine/dates';
+import { addUtcMonths, payLineIdOfDayKey } from '@apps/runway/engine/dates';
 import {
   getFixedByBill,
   previewBillShare,
   type BillShareEffect,
 } from '@apps/runway/engine/billShare';
 import { capEnding } from '@apps/runway/engine/endings';
+import {
+  planBillPayments,
+  type DraftBillInput,
+} from '@apps/runway/engine/demands';
 import { NO_PROGRESS } from '@apps/runway/engine/progress';
 import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { selectLookahead } from '@apps/runway/store/selectors/lookaheadSelectors';
-import { computeDraftView } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  computeDraftView,
+  type DraftView,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
 import type {
+  BillFundedBy,
   EnvelopeSealed,
   GoalSealed,
   OpenDay,
@@ -50,8 +61,8 @@ export type PreviewVersion = Parameters<typeof layerVersion<OpenVersion>>[1];
 
 /** What is layered over the real plan to see its effect: a version, an item that ends or is archived, or one income day's own payload. */
 export type PreviewChange =
-  | { kind: 'version'; version: PreviewVersion }
-  | { kind: 'versions'; versions: PreviewVersion[] }
+  | { kind: 'version'; version: PreviewVersion; unpinBillId?: string }
+  | { kind: 'versions'; versions: PreviewVersion[]; unpinBillId?: string }
   | { kind: 'end'; itemId: string; endedAt: number }
   | { kind: 'archive'; itemId: string; archivedAt: number }
   | {
@@ -111,6 +122,26 @@ const layerDay = (
   return [...openDays.filter((entry) => entry.id !== day.dayKey), layered];
 };
 
+/** The open days without the figures set for one bill, as a change that replaces them would leave them. */
+const unpin = (openDays: Slice['days'], billId: string | undefined) =>
+  billId === undefined
+    ? openDays
+    : openDays.map((entry) =>
+        Object.hasOwn(entry.override.billCents ?? {}, billId)
+          ? {
+              ...entry,
+              override: {
+                ...entry.override,
+                billCents: Object.fromEntries(
+                  Object.entries(entry.override.billCents).filter(
+                    ([id]) => id !== billId,
+                  ),
+                ),
+              },
+            }
+          : entry,
+      );
+
 const layerPlan = (
   inputs: Pick<PreviewInputs, 'items' | 'versions' | 'openDays'>,
   change: PreviewChange,
@@ -120,7 +151,7 @@ const layerPlan = (
     return {
       items,
       versions: layerVersion<OpenVersion>(versions, change.version),
-      openDays,
+      openDays: unpin(openDays, change.unpinBillId),
     };
   }
   if (change.kind === 'versions') {
@@ -133,7 +164,7 @@ const layerPlan = (
           id: `${WHAT_IF_VERSION_ID}-${index}`,
         })),
       ],
-      openDays,
+      openDays: unpin(openDays, change.unpinBillId),
     };
   }
   if (change.kind === 'end') {
@@ -345,14 +376,31 @@ export function previewOverrideCarry(
 
 export interface BillShareView {
   share: BillShareEffect;
+  /** The bill's own line on each pay in the payment's window, as the day screens draw it, before and after. */
+  rows: {
+    dayKey: string;
+    on: number;
+    beforeCents: number;
+    afterCents: number;
+    isPinned: boolean;
+  }[];
+  /** Other items whose lines move on those pays, summed over them. */
+  others: {
+    itemId: string;
+    name: string;
+    beforeCents: number;
+    afterCents: number;
+  }[];
   /** What the pay leaves after its lines, as it is and with the change. */
   leftBeforeCents: number;
   leftAfterCents: number;
   /** What the pay brings in all. */
   dayMoneyCents: number;
+  /** Whether a Paid from rule would give every payment to the horizon exactly one pay to come from. */
+  isRuleClean: (rule: Extract<BillFundedBy, { kind: 'pay' }>) => boolean;
 }
 
-/** What setting one pay's share of a bill to `cents` does: the bill's payment across its window and the pay's own leftover, from the same engine that drafts the days. Null when the pay is not in a payment's window. */
+/** What setting one pay's share of a bill to `cents` does: each pay of the payment's window as its day screen draws it (the same drafts, before and after), the other items that move and the pay's own leftover. Null when the pay is not in a payment's window. */
 export function previewBillShareView(
   inputs: PreviewInputs,
   change: Extract<PreviewChange, { kind: 'dayBill' }>,
@@ -373,48 +421,124 @@ export function previewBillShareView(
   );
   if (!item || !version || version.kind !== 'bill') return null;
   const { payload } = version;
+  const fixed = getFixedByBill(openDays).get(billId);
+  const billInput: DraftBillInput = {
+    itemId: item.id,
+    createdAt: item.createdAt,
+    priority: payload.priority,
+    orderIndex: payload.orderIndex,
+    amount: payload.amount,
+    stanceOverride: payload.stanceOverride ?? null,
+    schedule: payload.timing.schedule,
+    ending: capEnding(payload.ending, item.endedAt),
+    fundedBy: payload.fundedBy,
+    fixed,
+    oneTimePayLineIds: getOneTimePayLineIds(versions),
+    progress: inputs.billProgress[billId] ?? NO_PROGRESS,
+  };
+  const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const share = previewBillShare(
-    {
-      itemId: item.id,
-      createdAt: item.createdAt,
-      priority: payload.priority,
-      orderIndex: payload.orderIndex,
-      amount: payload.amount,
-      stanceOverride: payload.stanceOverride ?? null,
-      schedule: payload.timing.schedule,
-      ending: capEnding(payload.ending, item.endedAt),
-      fundedBy: payload.fundedBy,
-      fixed: getFixedByBill(openDays).get(billId) ?? {},
-      progress: inputs.billProgress[billId] ?? NO_PROGRESS,
-    },
+    billInput,
     coming,
-    addUtcMonths(today, LOOKAHEAD_MONTHS),
+    horizon,
     stance,
     day.dayKey,
     cents,
     { today },
   );
   if (!share) return null;
-  const draftOf = (source: Slice['days']) =>
+  const layered = layerDay(openDays, { ...change, cents: share.cents });
+  const draftOf = (source: Slice['days'], dayKey: string) =>
     computeDraftView(
       items,
       versions,
       stance,
       source,
-      day.dayKey,
+      dayKey,
       today,
       inputs.heldByItem,
       inputs.settledKey,
       inputs.billProgress,
-      { isCached: false },
+      { isCached: false, coming },
     );
+  const pairs = share.window.map((entry) => ({
+    entry,
+    before: draftOf(openDays, entry.dayKey),
+    after: draftOf(layered, entry.dayKey),
+  }));
+  const billCents = (view: DraftView | null) =>
+    view?.draft.lines.find((line) => line.itemId === billId)?.cents ?? 0;
+  const rows = pairs
+    .map(({ entry, before, after }) => ({
+      dayKey: entry.dayKey,
+      on: entry.on,
+      beforeCents: billCents(before),
+      afterCents: billCents(after),
+      isPinned:
+        entry.dayKey !== day.dayKey &&
+        Boolean(fixed?.[entry.dayKey] !== undefined),
+    }))
+    .filter(
+      (row) => row.dayKey === day.dayKey || row.beforeCents !== row.afterCents,
+    );
+  const others = [
+    ...pairs
+      .flatMap(({ before, after }) =>
+        before && after
+          ? (compareDrafts(before.draft, after.draft)?.lines ?? [])
+          : [],
+      )
+      .filter((line) => line.itemId !== billId)
+      .reduce((acc, line) => {
+        const known = acc.get(line.itemId);
+        return acc.set(line.itemId, {
+          itemId: line.itemId,
+          name: '',
+          beforeCents: (known?.beforeCents ?? 0) + line.beforeCents,
+          afterCents: (known?.afterCents ?? 0) + line.afterCents,
+        });
+      }, new Map<string, BillShareView['others'][number]>())
+      .values(),
+  ]
+    .map((entry) => ({
+      ...entry,
+      name:
+        pairs.find(({ after }) => after?.items[entry.itemId])?.after?.items[
+          entry.itemId
+        ].name ?? '',
+    }))
+    .filter(
+      (entry) => entry.name !== '' && entry.beforeCents !== entry.afterCents,
+    );
+  const own = pairs.find(({ entry }) => entry.dayKey === day.dayKey);
   const result: BillShareView = {
     share,
-    dayMoneyCents: draftOf(openDays)?.draft.moneyCents ?? 0,
-    leftBeforeCents: draftOf(openDays)?.draft.freeToSpend.cents ?? 0,
-    leftAfterCents:
-      draftOf(layerDay(openDays, { ...change, cents: share.cents }))?.draft
-        .freeToSpend.cents ?? 0,
+    rows,
+    others,
+    dayMoneyCents: own?.before?.draft.moneyCents ?? 0,
+    leftBeforeCents: own?.before?.draft.freeToSpend.cents ?? 0,
+    leftAfterCents: own?.after?.draft.freeToSpend.cents ?? 0,
+    isRuleClean: (rule) => {
+      const plan = (fundedBy: BillFundedBy) =>
+        planBillPayments(
+          { ...billInput, fundedBy, fixed: undefined },
+          coming,
+          horizon,
+          stance,
+          { today },
+        );
+      const spread = plan({ kind: 'suggested' });
+      const oneTime = billInput.oneTimePayLineIds;
+      return plan(rule).every(
+        (payment, index) =>
+          payment.paid !== null ||
+          payment.dueOn < today ||
+          payment.parts.length === 1 ||
+          (spread[index]?.parts ?? []).every((part) =>
+            oneTime?.has(payLineIdOfDayKey(part.day.dayKey)),
+          ),
+      );
+    },
   };
   return result;
 }

@@ -60,7 +60,11 @@ import {
   splitReceiptRow,
 } from '../../src/apps/runway/utils/receiptText.ts';
 import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
-import type { OpenDay, Pairing } from '../../src/apps/runway/types.ts';
+import type {
+  BillFundedBy,
+  OpenDay,
+  Pairing,
+} from '../../src/apps/runway/types.ts';
 import type { DraftDayInput } from '../../src/apps/runway/engine/demands.ts';
 import type { ComingDay } from '../../src/apps/runway/engine/comingDays.ts';
 import {
@@ -72,6 +76,7 @@ import {
   monthlyTotal,
 } from '../../src/apps/runway/engine/groups.ts';
 import {
+  withFundedBy,
   findPayRule,
   getFixedByBill,
   previewBillShare,
@@ -109,7 +114,10 @@ import type {
 import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
 import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
 import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
-import { previewChange } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
+import {
+  previewBillShareView,
+  previewChange,
+} from '../../src/apps/runway/store/selectors/previewSelectors.ts';
 import {
   computeDraftView,
   selectReachedEndingsKey,
@@ -1560,9 +1568,9 @@ const version = (
         } as never,
         () => '',
         undefined,
-        () => 'The pay on the 30th',
+        () => 'the pay on the 30th',
       ),
-      'Paid from: spread across your pays to the pay on the 30th',
+      'Paid from spread across your pays to the pay on the 30th',
       'a Paid from change reads as plain words',
     );
     // A pay's own share of a bill: the other pays, the shortfall and the rule it could become.
@@ -5169,8 +5177,8 @@ const version = (
     );
   assert.deepEqual(
     reasonOf([shortPayment({ parts: [{ day: day(today), cents: 250 }] }, 1)]),
-    [['short', 750]],
-    'pays that carry less than the payment needs are reported as short',
+    [['short', 1_000]],
+    'pays that carry less than the payment needs are reported as short, by what the walk funds',
   );
   assert.deepEqual(
     reasonOf([
@@ -7557,6 +7565,224 @@ const version = (
       'would hold through',
     ),
     'a later last day reads as a move',
+  );
+}
+
+// A pay's share of a bill: the preview is the day screens' own drafts, one-time pays are left out of a named pay, and a Paid from edit keeps later versions.
+{
+  const today = utc(2026, 10, 23);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const never = { onDate: null, afterCount: null };
+  const item = (
+    id: string,
+    kind: PlanItemDoc['kind'],
+    parentId: string | null = null,
+  ): PlanItemDoc => ({
+    id,
+    kind,
+    parentId,
+    createdAt: 1,
+    endedAt: null,
+    archivedAt: null,
+    heldReleasedOn: null,
+  });
+  const version = (
+    id: string,
+    itemId: string,
+    kind: OpenVersion['kind'],
+    payload: unknown,
+    effectiveFrom = today,
+    effectiveUntil: number | null = null,
+  ) =>
+    ({
+      id,
+      itemId,
+      kind,
+      createdAt: 1,
+      effectiveFrom,
+      effectiveUntil,
+      changeId: 'c',
+      payload,
+    }) as unknown as OpenVersion;
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
+  const free = today + 5 * DAY_MS;
+  const dueOn = today + 30 * DAY_MS;
+  const rentPayload = (fundedBy: BillFundedBy, cents = 100_000) => ({
+    name: 'Rent',
+    emoji: null,
+    priority: 'must',
+    orderIndex: 1,
+    amount: exact(cents),
+    timing: {
+      kind: 'date',
+      schedule: { kind: 'once', anchor: dueOn, monthDays: [] },
+    },
+    ending: never,
+    fundedBy,
+    stanceOverride: null,
+    groupId: null,
+  });
+  const planItems = [
+    item('src', 'source'),
+    item('pay', 'payLine', 'src'),
+    item('free', 'payLine', 'src'),
+    item('rent', 'bill'),
+  ];
+  const versions = [
+    version('vsrc', 'src', 'source', { name: 'Acme', pairings: [] }),
+    version('vpay', 'pay', 'payLine', {
+      name: 'Paycheck',
+      schedule: weekly,
+      amount: exact(100_000),
+      ending: never,
+      stanceOverride: null,
+      pairings: [],
+    }),
+    version('vfree', 'free', 'payLine', {
+      name: 'Freelance',
+      schedule: { kind: 'once', anchor: free, monthDays: [] },
+      amount: exact(30_000),
+      ending: never,
+      stanceOverride: null,
+      pairings: [
+        {
+          targetItemId: 'rent',
+          amount: { kind: 'exact', cents: 30_000 },
+          topUpFromAnySource: false,
+        },
+      ],
+    }),
+    version('vrent', 'rent', 'bill', rentPayload({ kind: 'suggested' })),
+  ];
+  const inputs = {
+    items: planItems,
+    versions,
+    openDays: [] as never[],
+    stance: 'conservative' as const,
+    today,
+    heldByItem: {},
+    settledKey: '',
+    billProgress: {},
+  };
+  const coming = buildComingDays(planItems, versions, today);
+  const target = coming.find((day) => day.payLineId === 'pay' && day.on > free);
+  assert.ok(target, 'there is a repeating pay after the one-time one');
+  const shown = previewBillShareView(inputs, {
+    kind: 'dayBill',
+    day: target,
+    billId: 'rent',
+    cents: 0,
+  });
+  assert.ok(shown, 'a pay in the payment window has a preview');
+  const layered = [
+    {
+      id: target.dayKey,
+      payLineId: 'pay',
+      sourceId: 'src',
+      expectedOn: target.on,
+      arrivedOn: null,
+      confirmedAt: null,
+      status: 'draft',
+      doneLineIds: [],
+      override: {
+        pairings: null,
+        holdResolutions: {},
+        payloads: {},
+        billCents: { rent: 0 },
+      },
+    },
+  ] as never[];
+  const rentCents = (openDays: never[], dayKey: string) =>
+    computeDraftView(
+      planItems,
+      versions,
+      'conservative',
+      openDays,
+      dayKey,
+      today,
+      {},
+      '',
+      {},
+    )?.draft.lines.find((line) => line.itemId === 'rent')?.cents ?? 0;
+  assert.ok(
+    shown.rows.every(
+      (row) =>
+        row.beforeCents === rentCents([], row.dayKey) &&
+        row.afterCents === rentCents(layered, row.dayKey),
+    ),
+    'every preview row is the bill line the day screen draws, before and after',
+  );
+  assert.ok(
+    !shown.rows.some((row) => row.dayKey === toDayKey('free', free)),
+    'a pay that pays the bill first does not change and is not listed',
+  );
+  assert.equal(
+    rentCents(layered, target.dayKey),
+    0,
+    'the pinned pay puts in nothing',
+  );
+
+  // A named pay and the pay before it's due never use a one-time pay.
+  const winDays = coming.filter((day) => day.on <= dueOn);
+  const oneTime = new Set(['free']);
+  const lastOne = planBillPayments(
+    {
+      itemId: 'rent',
+      createdAt: 1,
+      priority: 'must',
+      orderIndex: 1,
+      amount: exact(100_000),
+      ending: never,
+      schedule: { kind: 'once', anchor: dueOn, monthDays: [] },
+      fundedBy: { kind: 'lastBefore' },
+      oneTimePayLineIds: oneTime,
+    },
+    winDays,
+    dueOn,
+  )[0];
+  assert.ok(
+    lastOne.parts.every((part) => part.day.dayKey.startsWith('pay_')),
+    'the pay before it is due is a repeating pay',
+  );
+
+  // A Paid from edit keeps a later version and its end.
+  const later = today + 40 * DAY_MS;
+  const stretchVersions = [
+    version(
+      'v1',
+      'rent',
+      'bill',
+      rentPayload({ kind: 'suggested' }),
+      today,
+      later,
+    ),
+    version(
+      'v2',
+      'rent',
+      'bill',
+      rentPayload({ kind: 'suggested' }, 130_000),
+      later,
+      later + 60 * DAY_MS,
+    ),
+  ] as never[];
+  const stretches = withFundedBy(
+    getVersionStretches(stretchVersions, 'rent', today) as never[],
+    { kind: 'lastBefore' },
+  ) as unknown as {
+    payload: { amount: { lowCents: number }; fundedBy: { kind: string } };
+    effectiveUntil: number | null;
+  }[];
+  assert.deepEqual(
+    stretches.map((stretch) => [
+      stretch.payload.amount.lowCents,
+      stretch.payload.fundedBy.kind,
+      stretch.effectiveUntil,
+    ]),
+    [
+      [100_000, 'lastBefore', later],
+      [130_000, 'lastBefore', later + 60 * DAY_MS],
+    ],
+    'Paid from changes in every stretch and the later raise and its end stay',
   );
 }
 

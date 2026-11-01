@@ -64,6 +64,17 @@ export function getPayOptions(plan: readonly ResolvedSource[]): PayOption[] {
 export function describePayChoice(
   fundedBy: PayFundedBy,
   plan: readonly ResolvedSource[],
+  isLower = false,
+) {
+  const label = getPayChoiceLabel(fundedBy, plan);
+  return isLower && label.startsWith('The pay on ')
+    ? `t${label.slice(1)}`
+    : label;
+}
+
+function getPayChoiceLabel(
+  fundedBy: PayFundedBy,
+  plan: readonly ResolvedSource[],
 ) {
   const found = getPayOptions(plan).find(
     (option) => option.value === toPayValue(fundedBy),
@@ -83,9 +94,15 @@ export function describePayChoice(
 export function describePaidFrom(
   fundedBy: BillFundedBy,
   plan: readonly ResolvedSource[],
+  isLower = false,
 ) {
-  if (fundedBy.kind === 'lastBefore') return PAID_FROM_WORDS.lastBefore;
-  if (fundedBy.kind === 'pay') return describePayChoice(fundedBy, plan);
+  if (fundedBy.kind === 'lastBefore') {
+    return isLower
+      ? PAID_FROM_WORDS.lastBeforeLower
+      : PAID_FROM_WORDS.lastBefore;
+  }
+  if (fundedBy.kind === 'pay')
+    return describePayChoice(fundedBy, plan, isLower);
   return PAID_FROM_WORDS.spread;
 }
 

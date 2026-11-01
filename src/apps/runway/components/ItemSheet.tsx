@@ -165,7 +165,7 @@ type View =
   | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
-interface ItemSheetProps {
+export interface ItemSheetProps {
   itemId: string;
   /** The kind the row knows, until the item's own version is read. */
   kind: ItemKind;
@@ -186,6 +186,7 @@ interface ItemSheetProps {
   /** An action that takes the place of the first row and swaps its own view in, for a change that belongs to the income day the sheet was opened from. */
   dayAction?: {
     label: string;
+    subtitle?: string;
     renderView: (controls: {
       onBack: () => void;
       onClose: () => void;
@@ -193,7 +194,12 @@ interface ItemSheetProps {
     }) => ReactNode;
   };
   /** An optional extra's own action row, opening the change at that question. */
-  maxAction?: { label: string; step: string; icon?: ReactNode };
+  maxAction?: {
+    label: string;
+    subtitle?: string;
+    step: string;
+    icon?: ReactNode;
+  };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -775,6 +781,7 @@ function ItemSheet({
             hasChevron
             icon={<Pencil />}
             label={dayAction.label}
+            subtitle={dayAction.subtitle}
             onClick={() => goTo('dayAction')}
           />
         )}
@@ -803,6 +810,7 @@ function ItemSheet({
             hasChevron
             icon={maxAction.icon ?? <Ruler />}
             label={maxAction.label}
+            subtitle={maxAction.subtitle}
             onClick={() => openChange(maxAction.step)}
           />
         )}

@@ -10,12 +10,20 @@ import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import { PAID_FROM_WORDS } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import { getVersionStretches } from '@apps/runway/engine/resolve';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { changeItem } from '@apps/runway/store/actions/itemActions';
+import { getBillPins } from '@apps/runway/engine/billShare';
+import {
+  revertFundedBy,
+  writeFundedBy,
+} from '@apps/runway/store/actions/billPaidFromActions';
+import {
+  clearBillPins,
+  PinsPartlyCleared,
+  restoreBillPins,
+} from '@apps/runway/store/actions/dayActions';
 import {
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
@@ -109,68 +117,85 @@ function BillPaidFromNotice({
     if (isBusyRef.current || !user) return;
     isBusyRef.current = true;
     setIsBusy(true);
+    const tell = (title: string, error: unknown) =>
+      addToast({
+        title,
+        description: getErrorMessage(error, ''),
+        type: 'error',
+      });
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      const stretches = getVersionStretches<BillVersion, BillSealed>(
+      const liveBills = () =>
         store
           .getState()
           .runway.versions.filter(
             (version): version is BillVersion => version.kind === 'bill',
-          ),
-        billId,
-        today,
-      );
+          );
       const next: BillSealed = { ...bill, fundedBy: { kind: 'suggested' } };
-      await changeItem(user.uid, encryption, {
-        itemId: billId,
-        kind: 'bill',
-        payload: next,
+      const wasWritten = await writeFundedBy(user.uid, encryption, {
+        billId,
+        versions: liveBills(),
+        today,
+        next: next.fundedBy,
         summary: `${bill.name}: ${describeChange(
           bill,
           next,
           getCardNamer(allCards),
           undefined,
-          (picked) => describePayChoice(picked, plan),
+          (picked) => describePayChoice(picked, plan, true),
         )}, from ${formatDateUTC(today)}.`,
-        note: null,
-        effectiveFrom: today,
-        stretches: stretches.map((stretch) => ({
-          ...stretch,
-          payload: { ...stretch.payload, fundedBy: next.fundedBy },
-        })),
       });
+      const pins = getBillPins(store.getState().runway.days, billId, today);
+      const cleared = await clearBillPins(
+        user.uid,
+        encryption,
+        billId,
+        bill.name,
+        pins,
+      ).catch((partial: unknown) => {
+        tell(PAID_FROM_WORDS.pinsLeft(bill.name), partial);
+        return partial instanceof PinsPartlyCleared ? partial.cleared : [];
+      });
+      const undo = async () => {
+        try {
+          if (wasWritten) {
+            await revertFundedBy(user.uid, encryption, {
+              billId,
+              versions: liveBills(),
+              today,
+              wrote: next.fundedBy,
+              back: bill.fundedBy,
+              summary: PAID_FROM_WORDS.paidFromBack(
+                bill.name,
+                describePaidFrom(bill.fundedBy, plan),
+              ),
+            });
+          }
+        } catch (undoError) {
+          tell(PAID_FROM_WORDS.saveFailed, undoError);
+          return;
+        }
+        if (cleared.length === 0) return;
+        await restoreBillPins(
+          user.uid,
+          encryption,
+          billId,
+          bill.name,
+          cleared,
+        ).catch((undoError: unknown) =>
+          tell(PAID_FROM_WORDS.undoPartial(bill.name), undoError),
+        );
+      };
       addToast({
         title: PAID_FROM_WORDS.changed(bill.name),
         type: 'success',
         action: {
           label: PAID_FROM_WORDS.undo,
-          onClick: () =>
-            void changeItem(user.uid, encryption, {
-              itemId: billId,
-              kind: 'bill',
-              payload: bill,
-              summary: PAID_FROM_WORDS.paidFromBack(
-                bill.name,
-                describePaidFrom(bill.fundedBy, plan),
-              ),
-              note: null,
-              effectiveFrom: today,
-              stretches,
-            }).catch((undoError: unknown) =>
-              addToast({
-                title: PAID_FROM_WORDS.saveFailed,
-                description: getErrorMessage(undoError, ''),
-                type: 'error',
-              }),
-            ),
+          onClick: () => void undo(),
         },
       });
     } catch (saveError) {
-      addToast({
-        title: PAID_FROM_WORDS.saveFailed,
-        description: getErrorMessage(saveError, ''),
-        type: 'error',
-      });
+      tell(PAID_FROM_WORDS.saveFailed, saveError);
     } finally {
       isBusyRef.current = false;
       setIsBusy(false);

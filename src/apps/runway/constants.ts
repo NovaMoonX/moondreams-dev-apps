@@ -686,7 +686,7 @@ export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
 
 export const PAID_FROM_WORDS = {
   title: 'Which pay covers it?',
-  row: (what: string) => `Paid from · ${what}`,
+  title2: 'Paid from',
   spreadRow: 'Spread across your pays',
   chosenRow: 'Days you chose',
   spreadMeaning: 'Every pay before it is due puts in a share.',
@@ -700,6 +700,7 @@ export const PAID_FROM_WORDS = {
   label: 'Paid from',
   spread: 'Spread across my pays',
   lastBefore: "The pay right before it's due",
+  lastBeforeLower: "the pay right before it's due",
   pay: 'A pay I pick',
   whichPay: 'Which pay',
   pickPay: 'Pick a pay.',
@@ -718,6 +719,10 @@ export const PAID_FROM_WORDS = {
   changed: (name: string) => `${name} is now spread across your pays`,
   paidFromBack: (name: string, was: string) =>
     `${name}: Paid from is back to ${was}.`,
+  pinsLeft: (name: string) =>
+    `${name} is now spread, but some per-pay changes are still on.`,
+  undoPartial: (name: string) =>
+    `${name} is back to its old Paid from, but the per-pay changes could not be put back.`,
   undo: 'Undo',
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
@@ -731,8 +736,10 @@ export const PAY_SHARE_WORDS = {
   payRow: (date: string) => `${date} pay`,
   short: (name: string, short: string, dueOn: string) =>
     `${name} would be ${short} short on ${dueOn}`,
-  capped: (name: string, max: string) =>
-    `${max} is all ${name} still needs, so it stops there.`,
+  capped: (name: string, needs: string, set: string, max: string) =>
+    set === ''
+      ? `${name} needs ${needs}, so ${max} is the most this pay can put in.`
+      : `${name} needs ${needs} and ${set} is already set aside, so ${max} is the most this pay can put in.`,
   needsAmount: 'Enter an amount.',
   unchanged: 'Change the amount to save it.',
   save: 'Save for this pay',
@@ -741,15 +748,28 @@ export const PAY_SHARE_WORDS = {
   backToPlan: "Back to the plan's amount",
   backToPlanSub: 'This pay goes back to its share of the plan',
   keepTitle: 'Keep it this way for every paycheck?',
+  savedStatus: 'Saved for this pay',
+  tryAgain: 'Try again',
+  tryAgainBody: 'Clears the per-pay changes that are still on.',
+  undoBody: 'Takes this whole change back.',
+  showMore: (count: number) => `Show ${count} more`,
+  andMore: (count: number) => `and ${count} more`,
   keepYes: (pay: string) => `Yes, always from ${pay}`,
-  keepYesBody: (name: string, pay: string) =>
-    `${name} comes from ${pay} every time.`,
+  keepYesBody: (name: string, pay: string, total: string, each: string) =>
+    `From now on ${name} comes only from ${pay} (${total} ${each}).`,
   keepJustOnce: 'Just this time',
-  keepJustOnceBody: 'The other pays stay as they are.',
+  keepJustOnceBody: (date: string, later: string) =>
+    `Only ${date} changes; ${later}.`,
+  laterSpread: 'other months keep spreading it',
+  laterSame: 'other months stay as they are',
+  eachMonth: 'each month',
+  eachTime: 'each time',
+  actionSub: (name: string, total: string) =>
+    `${name} stays ${total}; only this pay changes`,
+  leftOutDetail: (pay: string) => `Paid from ${pay}`,
+  leftOutHeading: 'Paid from another pay',
   summary: (name: string, cents: string, date: string) =>
     `${name}: this pay puts in ${cents}, for ${date} only.`,
-  undoSummary: (name: string, date: string) =>
-    `${name}: this pay is back to the plan's amount, for ${date} only.`,
   savedToast: (name: string) => `Changed what this pay puts toward ${name}`,
   ruleToast: (name: string, pay: string) => `${name} now comes from ${pay}`,
   undo: 'Undo',
@@ -761,6 +781,10 @@ export const PAY_SHARE_WORDS = {
     `Only this pay changed. To always leave ${pay} out, set ${name}'s Paid from.`,
   done: 'Done',
   setPaidFrom: 'Set Paid from',
+  pinsCleared: (name: string, dates: string) =>
+    `${name}: per-pay changes on ${dates} cleared.`,
+  pinsBack: (name: string, dates: string) =>
+    `${name}: per-pay changes on ${dates} put back.`,
   pinnedRow: (date: string) => `${date} pay, set by you`,
   resetSummary: (name: string, date: string) =>
     `${name}: this pay goes back to the plan's amount, for ${date} only.`,

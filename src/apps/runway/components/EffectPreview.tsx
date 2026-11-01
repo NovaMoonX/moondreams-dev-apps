@@ -62,6 +62,8 @@ interface EffectPreviewProps {
   ) => ReactNode;
   /** Items whose rows lead every day's card, so a reorder shows the gain beside the losses. */
   pinnedItemIds?: ReadonlySet<string>;
+  /** Offered under a warning that says why a pay is short, so the way out is next to the problem. */
+  warningActions?: ReactNode;
 }
 
 interface EffectEntry {
@@ -187,6 +189,7 @@ function EffectPreview({
   isCompact = false,
   describeLead,
   pinnedItemIds,
+  warningActions,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -201,6 +204,7 @@ function EffectPreview({
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [isOpen, setIsOpen] = useState(false);
+  const [isEvery, setIsEvery] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
   const { isHidden } = useValuesHidden();
   const settledJson = useDeferredValue(changeJson);
@@ -316,10 +320,8 @@ function EffectPreview({
 
   const getBody = () => {
     if (virtual === null || days === null) {
-      return (
-        <p className='text-muted-foreground text-sm'>
-          {waitingText ?? CHANGE_WORDS.previewWaiting}
-        </p>
+      return waitingText === undefined ? null : (
+        <p className='text-muted-foreground text-sm'>{waitingText}</p>
       );
     }
     if (days.length === 0) {
@@ -335,7 +337,10 @@ function EffectPreview({
       );
     }
     const entries = toEntries(days, pinnedItemIds ?? NO_PINNED);
-    const shown = isOpen ? entries : entries.slice(0, PREVIEW_SHOWN);
+    const isCapped =
+      isCompact && isOpen && !isEvery && entries.length > PREVIEW_SHOWN;
+    const shown =
+      isOpen && !isCapped ? entries : entries.slice(0, PREVIEW_SHOWN);
     if (isCompact && !isOpen) {
       const first = getMoves(days).isMove
         ? undefined
@@ -425,8 +430,19 @@ function EffectPreview({
             </li>
           ))}
         </ul>
-        {(entries.length > PREVIEW_SHOWN || isCompact) && (
-          <ShowMoreButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)}>
+        {isCapped && (
+          <ShowMoreButton isOpen={false} onClick={() => setIsEvery(true)}>
+            {`Show ${entries.length - PREVIEW_SHOWN} more`}
+          </ShowMoreButton>
+        )}
+        {(entries.length > PREVIEW_SHOWN || isCompact) && !isCapped && (
+          <ShowMoreButton
+            isOpen={isOpen}
+            onClick={() => {
+              setIsOpen(!isOpen);
+              setIsEvery(false);
+            }}
+          >
             {isOpen
               ? 'Show fewer'
               : `Show ${entries.length - PREVIEW_SHOWN} more`}
@@ -465,20 +481,32 @@ function EffectPreview({
       ))
     : [];
 
+  const body = getBody();
+  const visibleNotes = movedNotes.filter(
+    (note) => !(note.isOneCarried && isCarrySaid),
+  );
+  if (
+    body === null &&
+    visibleNotes.length === 0 &&
+    shownBlocks.length === 0 &&
+    !isLeadShown
+  ) {
+    return null;
+  }
+  const hasNote = shownBlocks.some((block) => block.hasNote === true);
+
   return (
     <ActionSection caption={CHANGE_WORDS.previewHeading}>
       {isLeadShown &&
         isHidden &&
         shownBlocks.map((block) => <NeedsALookRow key={block.text} />)}
       {isLeadShown && describeLead(days, isHidden, leadShortfalls)}
-      {getBody()}
-      {movedNotes
-        .filter((note) => !(note.isOneCarried && isCarrySaid))
-        .map((note) => (
-          <InlineNotice key={note.text} tone={note.tone}>
-            {note.text}
-          </InlineNotice>
-        ))}
+      {body}
+      {visibleNotes.map((note) => (
+        <InlineNotice key={note.text} tone={note.tone}>
+          {note.text}
+        </InlineNotice>
+      ))}
       {!isLeadShown &&
         shownBlocks.map((block) =>
           isHidden && block.tone === 'warning' ? (
@@ -489,6 +517,7 @@ function EffectPreview({
             </InlineNotice>
           ),
         )}
+      {hasNote && !isHidden && warningActions}
     </ActionSection>
   );
 }

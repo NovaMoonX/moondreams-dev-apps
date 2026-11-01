@@ -14,6 +14,61 @@ import {
   type IncomeDayRef,
 } from './demands';
 
+export interface BillPin {
+  dayKey: string;
+  payLineId: string;
+  sourceId: string | null;
+  expectedOn: number;
+  cents: Cents;
+}
+
+/** The days still open to change on or after `from` where the person set what a pay puts toward one bill: the one list a count and a clear both use. */
+export function getBillPins(
+  days: readonly {
+    id: string;
+    payLineId: string;
+    sourceId: string | null;
+    expectedOn: number;
+    status: DayStatus;
+    override: Pick<DayOverrideSealed, 'billCents'>;
+  }[],
+  billId: string,
+  from: number,
+): BillPin[] {
+  const result = days
+    .filter(
+      (day) =>
+        day.status === 'draft' &&
+        day.expectedOn >= from &&
+        Object.hasOwn(day.override.billCents ?? {}, billId),
+    )
+    .map((day) => ({
+      dayKey: day.id,
+      payLineId: day.payLineId,
+      sourceId: day.sourceId,
+      expectedOn: day.expectedOn,
+      cents: day.override.billCents[billId],
+    }))
+    .sort((a, b) => a.expectedOn - b.expectedOn);
+  return result;
+}
+
+/** A bill's stretches with only Paid from changed, so a later version and its end are kept. */
+export function withFundedBy<P extends { fundedBy: BillFundedBy }>(
+  stretches: readonly {
+    payload: P;
+    effectiveFrom: number;
+    effectiveUntil: number | null;
+  }[],
+  fundedBy: BillFundedBy,
+) {
+  const result = stretches.map((stretch) => ({
+    ...stretch,
+    payload: { ...stretch.payload, fundedBy },
+  }));
+  return result;
+}
+
 const fixedCache = new WeakMap<object, Map<string, Record<string, Cents>>>();
 
 /** The share a draft day was given for each bill by the person, by bill id and then day key; only days still open to change count, since a settled day's share is in the records. Read once per list of days, since a walk over every income day asks again and again. */
@@ -42,6 +97,8 @@ export interface BillShareEffect {
   totalCents: Cents;
   /** The most this pay can put in: what the payment still needs. */
   maxCents: Cents;
+  /** What confirmed days already set aside for the payment. */
+  fundedCents: Cents;
   /** The figure after the cap. */
   cents: Cents;
   /** Each pay in the payment's window whose share moves, plus this one, in day order. */
@@ -115,6 +172,7 @@ export function previewBillShare(
     dueOn: before.dueOn,
     totalCents: before.totalCents,
     maxCents,
+    fundedCents: before.fundedCents,
     cents: capped,
     rows,
     shortCents: Math.max(0, maxCents - given),

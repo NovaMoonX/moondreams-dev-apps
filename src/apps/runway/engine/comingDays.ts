@@ -110,6 +110,24 @@ export function buildComingDays(
   return result;
 }
 
+const oneTimeCache = new WeakMap<object, ReadonlySet<string>>();
+
+/** The pay lines that pay once (a freelance payment, a bonus), by id, one set per list of versions. */
+export function getOneTimePayLineIds(
+  versions: readonly OpenVersion[],
+): ReadonlySet<string> {
+  const known = oneTimeCache.get(versions);
+  if (known) return known;
+  const result = new Set(
+    versions
+      .filter(isPayLine)
+      .filter((version) => version.payload.schedule.kind === 'once')
+      .map((version) => version.itemId),
+  );
+  oneTimeCache.set(versions, result);
+  return result;
+}
+
 /** A day that has a document, described from the plan as it stood on its date; null when its pay line no longer resolves. */
 export function describeDay(
   versions: readonly OpenVersion[],

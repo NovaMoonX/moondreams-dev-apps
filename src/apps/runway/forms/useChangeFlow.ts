@@ -9,6 +9,7 @@ import { useAppSelector, type RootState } from '@/store';
 import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import type { VersionStretch } from '@apps/runway/engine/resolve';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   carryDayOverrides,
@@ -60,7 +61,13 @@ interface UseChangeFlowArgs {
   newGroup?: GroupSealed | null;
   onDone: () => void;
   /** Runs once the change is written, for what the change makes stale; a failure is told, never hidden. */
-  afterSave?: () => Promise<void>;
+  afterSave?: (effectiveFrom: number) => Promise<void>;
+  /** For a change to one field only: the item's stretches from the day the change starts, each written as its own version so later versions and their ends are kept. */
+  buildStretches?: (
+    effectiveFrom: number,
+  ) => VersionStretch<ItemPayload>[] | undefined;
+  /** The change replaces this bill's per-pay figures, so its preview is drawn without them. */
+  clearsPins?: boolean;
   /** A kept draft's note and "from when", when the form starts from one. */
   initialNote?: string;
   initialFrom?: FromWhenValue;
@@ -90,6 +97,8 @@ const getChangeJson = (
   kind: ItemKind,
   candidate: ItemPayload | null,
   span: ChangeSpan | null,
+  stretches: VersionStretch<ItemPayload>[] | undefined,
+  unpinBillId: string | undefined,
 ) => {
   if (candidate === null || span === null) return null;
   if (span.kind === 'day') {
@@ -101,17 +110,34 @@ const getChangeJson = (
     };
     return JSON.stringify(change);
   }
-  const change: PreviewChange = {
-    kind: 'version',
-    version: {
-      itemId,
-      kind,
-      effectiveFrom: span.effectiveFrom,
-      effectiveUntil: span.effectiveUntil,
-      changeId: 'what-if',
-      payload: candidate,
-    } as PreviewVersion,
-  };
+  const change: PreviewChange = stretches
+    ? {
+        kind: 'versions',
+        versions: stretches.map(
+          (stretch) =>
+            ({
+              itemId,
+              kind,
+              effectiveFrom: stretch.effectiveFrom,
+              effectiveUntil: stretch.effectiveUntil,
+              changeId: 'what-if',
+              payload: stretch.payload,
+            }) as PreviewVersion,
+        ),
+        unpinBillId,
+      }
+    : {
+        kind: 'version',
+        version: {
+          itemId,
+          kind,
+          effectiveFrom: span.effectiveFrom,
+          effectiveUntil: span.effectiveUntil,
+          changeId: 'what-if',
+          payload: candidate,
+        } as PreviewVersion,
+        unpinBillId,
+      };
   return JSON.stringify(change);
 };
 
@@ -125,6 +151,8 @@ export function useChangeFlow({
   newGroup = null,
   onDone,
   afterSave,
+  buildStretches,
+  clearsPins = false,
   initialNote = '',
   initialFrom = INITIAL_FROM_WHEN,
 }: UseChangeFlowArgs) {
@@ -170,9 +198,20 @@ export function useChangeFlow({
           (fundedBy) => describePayChoice(fundedBy, plan),
         );
 
+  const stretches =
+    span?.kind === 'version' && candidate !== null
+      ? buildStretches?.(span.effectiveFrom)
+      : undefined;
   const changeJson = isUnchanged
     ? null
-    : getChangeJson(itemId, kind, candidate, span);
+    : getChangeJson(
+        itemId,
+        kind,
+        candidate,
+        span,
+        stretches,
+        clearsPins ? itemId : undefined,
+      );
 
   const getSummary = (name: string) => {
     const words = summaryText || 'Updated';
@@ -236,6 +275,7 @@ export function useChangeFlow({
           note: reason,
           effectiveFrom: span.effectiveFrom,
           effectiveUntil: span.effectiveUntil,
+          stretches,
         });
         if (carry !== null && carry.carried.length > 0) {
           const moves = carry.carried.map(({ from, to }) => ({
@@ -270,7 +310,7 @@ export function useChangeFlow({
       }
       if (afterSave) {
         try {
-          await afterSave();
+          await afterSave(span.kind === 'version' ? span.effectiveFrom : today);
         } catch (afterError) {
           addToast({
             title: CHANGE_WORDS.savedButStale,

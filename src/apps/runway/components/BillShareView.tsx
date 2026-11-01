@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from 'react-redux';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -29,17 +29,23 @@ import {
   MAX_PURCHASE_CENTS,
   PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
-import { payLineIdOfDayKey, todayAsUtcDate } from '@apps/runway/engine/dates';
-import { findPayRule } from '@apps/runway/engine/billShare';
 import {
-  getVersionStretches,
-  resolveCurrentOrNext,
-  type VersionStretch,
-} from '@apps/runway/engine/resolve';
+  getBillPins,
+  findPayRule,
+  type BillPin,
+} from '@apps/runway/engine/billShare';
+import { payLineIdOfDayKey, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { changeItem } from '@apps/runway/store/actions/itemActions';
 import {
+  revertFundedBy,
+  writeFundedBy,
+} from '@apps/runway/store/actions/billPaidFromActions';
+import {
+  clearBillPins,
+  PinsPartlyCleared,
+  restoreBillPins,
   saveBillShare,
   type DayRef,
 } from '@apps/runway/store/actions/dayActions';
@@ -84,65 +90,90 @@ interface BillShareViewProps {
 
 type PayRule = Extract<BillFundedBy, { kind: 'pay' }>;
 
-/** Everything taking a saved share back needs, kept from before the write. */
+/** What taking a saved change back needs, kept from before the write. */
 interface Pending {
   uid: string;
   billId: string;
   billName: string;
   day: DayRef;
-  /** This pay's own figure before the change; undefined when it followed the plan. */
+  today: number;
+  /** The figure this action wrote for the pay. */
+  wrote: Cents;
+  /** The pay's own figure before; undefined when it followed the plan. */
   before: Cents | undefined;
-  /** The bill's stretches before a Paid from rule was written; null when none was. */
-  stretches: VersionStretch<BillSealed>[] | null;
-  wasText: string;
-  rule: PayRule | null;
+  /** The Paid from this action wrote and the one it replaced; null when it wrote none. */
+  ruleWrote: BillFundedBy | null;
+  ruleBack: BillFundedBy;
+  backText: string;
+  /** Per-pay figures this action cleared. */
+  cleared: BillPin[];
 }
 
 type AddToast = ReturnType<typeof useToast>['addToast'];
+type Store = ReturnType<typeof useStore<RootState>>;
 
-/** Takes a saved share back, in the order it was made, and says what it reached if a step fails. */
-async function undoPending(pending: Pending, addToast: AddToast) {
-  const { uid, billId, billName, day, before, stretches } = pending;
+/** Takes a saved change back in the order it was made, changing only its own fields and only while they are still what this action wrote; says what it reached when a step fails. */
+async function undoPending(pending: Pending, addToast: AddToast, store: Store) {
+  const { uid, billId, billName, day, before, wrote, today } = pending;
   const encryption = await getRunwayEncryption(uid);
-  const isRuleBack = stretches === null;
-  if (stretches !== null && stretches.length > 0) {
+  const tell = (title: string, error: unknown) =>
+    addToast({
+      title,
+      description: getErrorMessage(error, ''),
+      type: 'error',
+    });
+  if (pending.ruleWrote !== null) {
     try {
-      await changeItem(uid, encryption, {
-        itemId: billId,
-        kind: 'bill',
-        payload: stretches[0].payload,
-        summary: PAY_SHARE_WORDS.paidFromBack(billName, pending.wasText),
-        note: null,
-        effectiveFrom: stretches[0].effectiveFrom,
-        stretches,
+      await revertFundedBy(uid, encryption, {
+        billId,
+        versions: store
+          .getState()
+          .runway.versions.filter(
+            (version): version is BillVersion => version.kind === 'bill',
+          ),
+        today,
+        wrote: pending.ruleWrote,
+        back: pending.ruleBack,
+        summary: PAY_SHARE_WORDS.paidFromBack(billName, pending.backText),
       });
     } catch (error) {
-      addToast({
-        title: PAY_SHARE_WORDS.undoFailed,
-        description: getErrorMessage(error, ''),
-        type: 'error',
-      });
+      tell(PAY_SHARE_WORDS.undoFailed, error);
       return;
     }
   }
   try {
+    if (pending.cleared.length > 0) {
+      await restoreBillPins(uid, encryption, billId, billName, pending.cleared);
+      return;
+    }
     const date = formatDateUTC(day.expectedOn);
-    await saveBillShare(uid, encryption, day, billId, before ?? null, {
-      itemId: billId,
-      summary:
-        before === undefined
-          ? PAY_SHARE_WORDS.resetSummary(billName, date)
-          : PAY_SHARE_WORDS.restoreSummary(billName, formatCents(before), date),
-      note: null,
-    });
+    await saveBillShare(
+      uid,
+      encryption,
+      day,
+      billId,
+      before ?? null,
+      {
+        itemId: billId,
+        summary:
+          before === undefined
+            ? PAY_SHARE_WORDS.resetSummary(billName, date)
+            : PAY_SHARE_WORDS.restoreSummary(
+                billName,
+                formatCents(before),
+                date,
+              ),
+        note: null,
+      },
+      { was: wrote },
+    );
   } catch (error) {
-    addToast({
-      title: isRuleBack
+    tell(
+      pending.ruleWrote === null
         ? PAY_SHARE_WORDS.undoFailed
         : PAY_SHARE_WORDS.undoPartial(billName),
-      description: getErrorMessage(error, ''),
-      type: 'error',
-    });
+      error,
+    );
   }
 }
 
@@ -159,7 +190,7 @@ function KeepChoice({ title, body, isDisabled, onPick }: KeepChoiceProps) {
       type='button'
       variant='tertiary'
       disabled={isDisabled}
-      className='text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-1.5! text-left font-normal whitespace-normal'
+      className='text-foreground! border-border h-auto min-h-20 w-full flex-col items-start justify-start gap-0.5 rounded-2xl border px-3! py-2! text-left font-normal whitespace-normal'
       onClick={onPick}
     >
       <span className='text-[15px] leading-[1.125rem] font-medium'>
@@ -175,7 +206,9 @@ function KeepChoice({ title, body, isDisabled, onPick }: KeepChoiceProps) {
 const isSameRule = (a: BillFundedBy, b: PayRule) =>
   a.kind === 'pay' && a.payLineId === b.payLineId && a.monthDay === b.monthDay;
 
-/** The view a bill's sheet swaps in on an income day: what this one pay puts toward the bill, its effect on the other pays, and then whether to keep it for every pay. */
+const SHOWN_ROWS = 3;
+
+/** The view a bill's sheet swaps in on an income day: what this one pay puts toward the bill, its effect on the other pays and on the other items, and then whether to keep it for every pay. */
 function BillShareView({
   billId,
   dayKey,
@@ -216,15 +249,19 @@ function BillShareView({
   );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState<(Pending & { rule: PayRule }) | null>(
-    null,
-  );
-  const [withheld, setWithheld] = useState<{
+  const [isAllShown, setIsAllShown] = useState(false);
+  const [saved, setSaved] = useState<{
     pending: Pending;
+    rule: PayRule | null;
     leaveOut: string;
+    isPartial: boolean;
+    needsMoney: Cents;
   } | null>(null);
   const pendingRef = useRef<Pending | null>(null);
+  const isBusyRef = useRef(false);
+  const isFinishingRef = useRef(false);
   const addToastRef = useRef(addToast);
+  const cardRef = useRef<HTMLUListElement | null>(null);
 
   useEffect(() => {
     addToastRef.current = addToast;
@@ -232,18 +269,18 @@ function BillShareView({
   useEffect(
     () => () => {
       const pending = pendingRef.current;
-      if (!pending) return;
+      if (!pending || isFinishingRef.current) return;
       pendingRef.current = null;
       addToastRef.current({
         title: PAY_SHARE_WORDS.savedToast(pending.billName),
         type: 'success',
         action: {
           label: PAY_SHARE_WORDS.undo,
-          onClick: () => void undoPending(pending, addToastRef.current),
+          onClick: () => void undoPending(pending, addToastRef.current, store),
         },
       });
     },
-    [],
+    [store],
   );
 
   const parsed = parseMoneyToCents(amount);
@@ -251,13 +288,14 @@ function BillShareView({
     parsed !== null && parsed >= 0 && parsed <= MAX_PURCHASE_CENTS
       ? parsed
       : null;
+  const settledTarget = useDeferredValue(target);
   const shown = useMemo(() => {
-    if (target === null || day === null) return null;
+    if (settledTarget === null || day === null) return null;
     const change: Extract<PreviewChange, { kind: 'dayBill' }> = {
       kind: 'dayBill',
       day,
       billId,
-      cents: target,
+      cents: settledTarget,
     };
     return previewBillShareView(
       {
@@ -273,7 +311,7 @@ function BillShareView({
       change,
     );
   }, [
-    target,
+    settledTarget,
     day,
     billId,
     items,
@@ -287,16 +325,23 @@ function BillShareView({
   ]);
 
   const share = shown?.share ?? null;
+  const changedView =
+    shown !== null && shown.share.cents !== currentCents ? shown : null;
+  const isChanged = changedView !== null;
+  const rowCount = changedView ? changedView.rows.length : 0;
+  useEffect(() => {
+    if (rowCount > 0) cardRef.current?.scrollIntoView({ block: 'end' });
+  }, [rowCount, settledTarget]);
+
   if (bill === null) return null;
-  const isChanged = share !== null && share.cents !== currentCents;
   const blocker =
     target === null
       ? PAY_SHARE_WORDS.needsAmount
       : !isChanged
         ? PAY_SHARE_WORDS.unchanged
         : null;
-  const rows = isChanged
-    ? share.rows.map((row) => {
+  const billRows = changedView
+    ? changedView.rows.map((row) => {
         const date = formatDateShortUTC(row.on);
         return {
           key: row.dayKey,
@@ -308,35 +353,51 @@ function BillShareView({
         };
       })
     : [];
+  const otherRows = changedView
+    ? changedView.others.map((entry) => ({
+        key: entry.itemId,
+        name: entry.name,
+        text: `${formatCents(entry.beforeCents)} → ${formatCents(entry.afterCents)}`,
+      }))
+    : [];
   const dayLeftRow =
-    isChanged && shown && shown.leftBeforeCents !== shown.leftAfterCents
+    changedView && changedView.leftBeforeCents !== changedView.leftAfterCents
       ? {
           key: 'left',
           name: DRAFT_WORDS.dayLeft,
-          text: `${formatCents(shown.leftBeforeCents)} → ${formatCents(shown.leftAfterCents)}`,
+          text: `${formatCents(changedView.leftBeforeCents)} → ${formatCents(changedView.leftAfterCents)}`,
         }
       : null;
+  const hiddenBillRows = isAllShown
+    ? 0
+    : Math.max(0, billRows.length - SHOWN_ROWS);
+  const shownBillRows = isAllShown ? billRows : billRows.slice(0, SHOWN_ROWS);
+  const shownOthers = otherRows.slice(0, SHOWN_ROWS);
   const previous = openDays.find((entry) => entry.id === dayKey)?.override
     .billCents?.[billId];
 
-  const toastSaved = (title: string, pending: Pending) => {
+  const toastSaved = (
+    pending: Pending,
+    title = PAY_SHARE_WORDS.savedToast(pending.billName),
+  ) => {
     pendingRef.current = null;
     addToast({
       title,
       type: 'success',
       action: {
         label: PAY_SHARE_WORDS.undo,
-        onClick: () => void undoPending(pending, addToast),
+        onClick: () => void undoPending(pending, addToast, store),
       },
     });
   };
-  const finish = (title: string, pending: Pending) => {
-    toastSaved(title, pending);
+  const finish = (pending: Pending, title?: string) => {
+    toastSaved(pending, title);
     onClose();
   };
 
   const run = async (work: () => Promise<void>) => {
-    if (isSaving) return;
+    if (isBusyRef.current) return;
+    isBusyRef.current = true;
     setError(null);
     setIsSaving(true);
     try {
@@ -344,13 +405,14 @@ function BillShareView({
     } catch (saveError) {
       setError(getErrorMessage(saveError, PAY_SHARE_WORDS.saveFailed));
     } finally {
+      isBusyRef.current = false;
       setIsSaving(false);
     }
   };
 
   const save = () =>
     run(async () => {
-      if (!share || !day || !user || blocker !== null) return;
+      if (!share || !shown || !day || !user || blocker !== null) return;
       const encryption = await getRunwayEncryption(user.uid);
       const dayRef: DayRef = {
         payLineId: day.payLineId,
@@ -358,21 +420,25 @@ function BillShareView({
         expectedOn: day.on,
       };
       const oneTimeIds = getOneTimePayIds(plan);
-      const rule = findPayRule(
+      const found = findPayRule(
         share,
         dayKey,
         (payLineId, on) => getPayMonthDay(plan, payLineId, on),
         (payLineId) => oneTimeIds.has(payLineId),
       );
+      const rule = found && shown.isRuleClean(found) ? found : null;
       const pending: Pending = {
         uid: user.uid,
         billId,
         billName: bill.name,
         day: dayRef,
+        today,
+        wrote: share.cents,
         before: previous,
-        stretches: null,
-        wasText: describePaidFrom(bill.fundedBy, plan),
-        rule,
+        ruleWrote: null,
+        ruleBack: bill.fundedBy,
+        backText: describePaidFrom(bill.fundedBy, plan),
+        cleared: [],
       };
       await saveBillShare(user.uid, encryption, dayRef, billId, share.cents, {
         itemId: billId,
@@ -383,155 +449,221 @@ function BillShareView({
         ),
         note: null,
       });
-      if (rule === null) {
-        const thisPay: PayRule | null = oneTimeIds.has(
-          payLineIdOfDayKey(dayKey),
-        )
-          ? null
-          : {
-              kind: 'pay',
-              payLineId: payLineIdOfDayKey(dayKey),
-              monthDay: getPayMonthDay(plan, payLineIdOfDayKey(dayKey), day.on),
-            };
-        if (share.cents === 0 && thisPay !== null) {
-          pendingRef.current = pending;
-          setWithheld({
-            pending,
-            leaveOut: describePayChoice(thisPay, plan),
-          });
-          return;
-        }
-        finish(PAY_SHARE_WORDS.savedToast(bill.name), pending);
+      const thisPayId = payLineIdOfDayKey(dayKey);
+      const thisPay: PayRule | null = oneTimeIds.has(thisPayId)
+        ? null
+        : {
+            kind: 'pay',
+            payLineId: thisPayId,
+            monthDay: getPayMonthDay(plan, thisPayId, day.on),
+          };
+      const isLeaveOut = rule === null && share.cents === 0 && thisPay !== null;
+      if (rule === null && !isLeaveOut) {
+        finish(pending);
         return;
       }
-      const withStretches: Pending & { rule: PayRule } = {
-        ...pending,
+      pendingRef.current = pending;
+      setSaved({
+        pending,
         rule,
-        stretches: getVersionStretches<BillVersion, BillSealed>(
-          store
-            .getState()
-            .runway.versions.filter(
-              (version): version is BillVersion => version.kind === 'bill',
-            ),
-          billId,
-          today,
-        ),
-      };
-      pendingRef.current = { ...withStretches, stretches: null };
-      setSaved(withStretches);
+        leaveOut: describePayChoice(rule ?? (thisPay as PayRule), plan, true),
+        isPartial: false,
+        needsMoney: share.totalCents,
+      });
     });
 
   const keepForEvery = () =>
     run(async () => {
-      if (!saved || !user) return;
+      if (!saved || !saved.rule || !user) return;
+      const { rule } = saved;
       const encryption = await getRunwayEncryption(user.uid);
-      const payName = describePayChoice(saved.rule, plan);
-      if (!isSameRule(bill.fundedBy, saved.rule)) {
-        const next: BillSealed = { ...bill, fundedBy: saved.rule };
-        await changeItem(user.uid, encryption, {
-          itemId: billId,
-          kind: 'bill',
-          payload: next,
-          summary: `${bill.name}: ${describeChange(bill, next, getCardNamer(allCards), undefined, (fundedBy) => describePayChoice(fundedBy, plan))}, from ${formatDateUTC(today)}.`,
-          note: null,
-          effectiveFrom: today,
-          stretches: (saved.stretches ?? []).map((stretch) => ({
-            ...stretch,
-            payload: { ...stretch.payload, fundedBy: saved.rule },
-          })),
-        });
-      }
-      try {
-        await saveBillShare(user.uid, encryption, saved.day, billId, null);
-      } catch (partialError) {
-        setError(
-          `${PAY_SHARE_WORDS.keepPartial(bill.name, payName)} ${getErrorMessage(partialError, '')}`.trim(),
+      const liveVersions = store
+        .getState()
+        .runway.versions.filter(
+          (version): version is BillVersion => version.kind === 'bill',
         );
-        return;
+      const next: BillSealed = { ...bill, fundedBy: rule };
+      const wasWritten = isSameRule(bill.fundedBy, rule)
+        ? false
+        : await writeFundedBy(user.uid, encryption, {
+            billId,
+            versions: liveVersions,
+            today,
+            next: rule,
+            summary: `${bill.name}: ${describeChange(
+              bill,
+              next,
+              getCardNamer(allCards),
+              undefined,
+              (picked) => describePayChoice(picked, plan, true),
+            )}, from ${formatDateUTC(today)}.`,
+          });
+      const withRule: Pending = {
+        ...saved.pending,
+        ruleWrote: wasWritten ? rule : saved.pending.ruleWrote,
+      };
+      pendingRef.current = withRule;
+      isFinishingRef.current = true;
+      const pins = getBillPins(store.getState().runway.days, billId, today);
+      try {
+        const cleared = await clearBillPins(
+          user.uid,
+          encryption,
+          billId,
+          bill.name,
+          pins,
+        );
+        finish(
+          { ...withRule, cleared },
+          PAY_SHARE_WORDS.ruleToast(
+            bill.name,
+            describePayChoice(rule, plan, true),
+          ),
+        );
+      } catch (partial) {
+        const cleared =
+          partial instanceof PinsPartlyCleared ? partial.cleared : [];
+        isFinishingRef.current = false;
+        const reached = { ...withRule, cleared };
+        pendingRef.current = reached;
+        setSaved({ ...saved, pending: reached, isPartial: true });
+        addToast({
+          title: PAY_SHARE_WORDS.keepPartial(
+            bill.name,
+            describePayChoice(rule, plan, true),
+          ),
+          type: 'error',
+          action: {
+            label: PAY_SHARE_WORDS.undo,
+            onClick: () => void undoPending(reached, addToast, store),
+          },
+        });
+        setError(
+          `${PAY_SHARE_WORDS.keepPartial(bill.name, describePayChoice(rule, plan, true))} ${getErrorMessage(partial, '')}`.trim(),
+        );
       }
-      finish(PAY_SHARE_WORDS.ruleToast(bill.name, payName), saved);
     });
 
-  const justThisTime = () => {
-    if (!saved) return;
-    finish(PAY_SHARE_WORDS.savedToast(bill.name), {
-      ...saved,
-      stretches: null,
+  const undoNow = () =>
+    run(async () => {
+      if (!saved) return;
+      const { pending } = saved;
+      pendingRef.current = null;
+      await undoPending(pending, addToast, store);
+      onClose();
     });
+
+  const backToSheet = () => {
+    if (saved) toastSaved(saved.pending);
+    onBack();
   };
 
-  if (withheld) {
-    const pay = withheld.leaveOut.startsWith('The pay on ')
-      ? `t${withheld.leaveOut.slice(1)}`
-      : withheld.leaveOut;
-    return (
-      <div className='flex flex-1 flex-col gap-3'>
-        <ActionTitle>{PAY_SHARE_WORDS.savedTitle}</ActionTitle>
-        <p className='text-muted-foreground text-sm'>
-          {PAY_SHARE_WORDS.withheld(pay, bill.name)}
-        </p>
-        <div className='flex flex-wrap gap-2'>
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={() =>
-              finish(PAY_SHARE_WORDS.savedToast(bill.name), withheld.pending)
-            }
-          >
-            {PAY_SHARE_WORDS.done}
-          </Button>
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={() => {
-              toastSaved(
-                PAY_SHARE_WORDS.savedToast(bill.name),
-                withheld.pending,
-              );
-              onOpenPaidFrom();
-            }}
-          >
-            {PAY_SHARE_WORDS.setPaidFrom}
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   if (saved) {
-    const payLabel = describePayChoice(saved.rule, plan);
-    const payWords = payLabel.startsWith('The pay on ')
-      ? `t${payLabel.slice(1)}`
-      : payLabel;
+    const { rule } = saved;
+    const dayLabel = formatDateShortUTC(day?.on ?? today);
     return (
-      <div className='flex flex-1 flex-col gap-3'>
-        <ActionTitle>{PAY_SHARE_WORDS.keepTitle}</ActionTitle>
-        <div className='grid grid-cols-2 gap-2'>
-          <KeepChoice
-            title={PAY_SHARE_WORDS.keepYes(payWords)}
-            body={PAY_SHARE_WORDS.keepYesBody(bill.name, payWords)}
-            isDisabled={isSaving}
-            onPick={() => void keepForEvery()}
-          />
-          <KeepChoice
-            title={PAY_SHARE_WORDS.keepJustOnce}
-            body={PAY_SHARE_WORDS.keepJustOnceBody}
-            isDisabled={isSaving}
-            onPick={() => justThisTime()}
-          />
-        </div>
+      <div className='flex flex-col gap-3'>
+        <BackLink onBack={backToSheet} />
+        <p className='text-muted-foreground text-sm font-medium'>
+          {PAY_SHARE_WORDS.savedStatus}
+        </p>
+        {rule ? (
+          <>
+            <ActionTitle>{PAY_SHARE_WORDS.keepTitle}</ActionTitle>
+            <div className='flex flex-col gap-2'>
+              {saved.isPartial ? (
+                <>
+                  <KeepChoice
+                    title={PAY_SHARE_WORDS.tryAgain}
+                    body={PAY_SHARE_WORDS.tryAgainBody}
+                    isDisabled={isSaving}
+                    onPick={() => void keepForEvery()}
+                  />
+                  <KeepChoice
+                    title={PAY_SHARE_WORDS.undo}
+                    body={PAY_SHARE_WORDS.undoBody}
+                    isDisabled={isSaving}
+                    onPick={() => void undoNow()}
+                  />
+                </>
+              ) : (
+                <>
+                  <KeepChoice
+                    title={PAY_SHARE_WORDS.keepYes(saved.leaveOut)}
+                    body={PAY_SHARE_WORDS.keepYesBody(
+                      bill.name,
+                      saved.leaveOut,
+                      formatCents(saved.needsMoney),
+                      bill.timing.schedule.kind === 'monthly'
+                        ? PAY_SHARE_WORDS.eachMonth
+                        : PAY_SHARE_WORDS.eachTime,
+                    )}
+                    isDisabled={isSaving}
+                    onPick={() => void keepForEvery()}
+                  />
+                  <KeepChoice
+                    title={PAY_SHARE_WORDS.keepJustOnce}
+                    body={PAY_SHARE_WORDS.keepJustOnceBody(
+                      dayLabel,
+                      bill.fundedBy.kind === 'suggested'
+                        ? PAY_SHARE_WORDS.laterSpread
+                        : PAY_SHARE_WORDS.laterSame,
+                    )}
+                    isDisabled={isSaving}
+                    onPick={() => finish(saved.pending)}
+                  />
+                </>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            <p className='text-sm'>
+              {PAY_SHARE_WORDS.withheld(saved.leaveOut, bill.name)}
+            </p>
+            <div className='flex flex-wrap gap-2'>
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => finish(saved.pending)}
+              >
+                {PAY_SHARE_WORDS.done}
+              </Button>
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => {
+                  toastSaved(saved.pending);
+                  onOpenPaidFrom();
+                }}
+              >
+                {PAY_SHARE_WORDS.setPaidFrom}
+              </Button>
+            </div>
+          </>
+        )}
         {error && <InlineNotice tone='warning'>{error}</InlineNotice>}
       </div>
     );
   }
 
+  const snapToCap = () => {
+    if (target !== null && share !== null && target > share.maxCents) {
+      setAmount(centsToInputValue(share.maxCents));
+    }
+  };
   const getHint = () => {
     if (isHidden || target === null || share === null || shown === null)
       return undefined;
     if (target > share.maxCents) {
       return (
         <MaskedText>
-          {PAY_SHARE_WORDS.capped(bill.name, formatCents(share.maxCents))}
+          {PAY_SHARE_WORDS.capped(
+            bill.name,
+            formatCents(share.totalCents),
+            share.fundedCents > 0 ? formatCents(share.fundedCents) : '',
+            formatCents(share.maxCents),
+          )}
         </MaskedText>
       );
     }
@@ -544,13 +676,13 @@ function BillShareView({
       </MaskedText>
     ) : undefined;
   };
-  const hasShort = isChanged && share.shortCents > 0;
+  const hasShort = changedView !== null && changedView.share.shortCents > 0;
   const shortLine = hasShort
     ? mask(
         PAY_SHARE_WORDS.short(
           bill.name,
-          formatCents(share.shortCents),
-          formatDateShortUTC(share.dueOn),
+          formatCents(changedView?.share.shortCents ?? 0),
+          formatDateShortUTC(changedView?.share.dueOn ?? today),
         ),
       )
     : null;
@@ -559,17 +691,26 @@ function BillShareView({
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
       <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
-      <AmountHero
-        label={PAY_SHARE_WORDS.amount}
-        value={amount}
-        onChange={setAmount}
-        disabled={isSaving}
-        hint={getHint()}
-      />
-      {rows.length > 0 && (
+      <div onBlurCapture={snapToCap}>
+        <AmountHero
+          label={PAY_SHARE_WORDS.amount}
+          value={amount}
+          onChange={setAmount}
+          disabled={isSaving}
+          hint={getHint()}
+        />
+      </div>
+      {billRows.length > 0 && (
         <ActionSection caption={PAY_SHARE_WORDS.changes}>
-          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {[...rows, ...(dayLeftRow ? [dayLeftRow] : [])].map((row) => (
+          <ul
+            ref={cardRef}
+            className='border-border divide-border bg-card scroll-mb-24 divide-y rounded-2xl border'
+          >
+            {[
+              ...shownBillRows,
+              ...shownOthers,
+              ...(dayLeftRow ? [dayLeftRow] : []),
+            ].map((row) => (
               <li key={row.key} className='px-3 py-2 text-sm'>
                 <p className='flex items-baseline justify-between gap-3'>
                   <span className='min-w-0 break-words'>{row.name}</span>
@@ -579,6 +720,24 @@ function BillShareView({
                 </p>
               </li>
             ))}
+            {(hiddenBillRows > 0 || otherRows.length > SHOWN_ROWS) && (
+              <li className='px-3 py-2 text-xs'>
+                {hiddenBillRows > 0 ? (
+                  <Button
+                    type='button'
+                    variant='tertiary'
+                    size='sm'
+                    onClick={() => setIsAllShown(true)}
+                  >
+                    {PAY_SHARE_WORDS.showMore(hiddenBillRows)}
+                  </Button>
+                ) : (
+                  <span className='text-muted-foreground'>
+                    {PAY_SHARE_WORDS.andMore(otherRows.length - SHOWN_ROWS)}
+                  </span>
+                )}
+              </li>
+            )}
           </ul>
         </ActionSection>
       )}

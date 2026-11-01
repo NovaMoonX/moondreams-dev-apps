@@ -11,6 +11,7 @@ import ActionRow from '@/components/ActionRow';
 import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
+import LeftOutBillRow from '@apps/runway/components/LeftOutBillRow';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -229,6 +230,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                 ),
                 note: null,
               },
+              { was: undefined },
             ).catch((undoError: unknown) =>
               addToast({
                 title: PAY_SHARE_WORDS.undoFailed,
@@ -336,6 +338,21 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
               </ul>
             )}
             {dayLeft}
+            {view.leftOut.length > 0 && (
+              <div className='space-y-2'>
+                <SectionDivider label={PAY_SHARE_WORDS.leftOutHeading} />
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {view.leftOut.map((entry) => (
+                    <LeftOutBillRow
+                      key={entry.itemId}
+                      billId={entry.itemId}
+                      fundedBy={entry.fundedBy}
+                      today={today}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
             {unfunded.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider

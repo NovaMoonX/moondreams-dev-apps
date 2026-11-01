@@ -3,7 +3,13 @@ import { doc, runTransaction } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 
-import { CONFIRM_WORDS, CORRECT_WORDS } from '@apps/runway/constants';
+import { formatDateUTC } from '@/utils/formatUtils';
+import {
+  CONFIRM_WORDS,
+  CORRECT_WORDS,
+  PAY_SHARE_WORDS,
+} from '@apps/runway/constants';
+import type { BillPin } from '@apps/runway/engine/billShare';
 import {
   buildRecords,
   countUnresolvedHolds,
@@ -132,22 +138,124 @@ export function saveBillShare(
   billId: string,
   cents: Cents | null,
   log?: { itemId: string; summary: string; note: string | null },
+  /** What the day's figure must still be for this write to take (an Undo only takes back its own change). */
+  expect?: { was: Cents | undefined },
 ): Promise<void> {
   return saveDayOverride(
     uid,
     encryption,
     day,
-    (current) => ({
-      ...current,
-      billCents:
-        cents === null
-          ? Object.fromEntries(
-              Object.entries(current.billCents).filter(([id]) => id !== billId),
-            )
-          : { ...current.billCents, [billId]: cents },
-    }),
+    (current) => {
+      if (expect && current.billCents[billId] !== expect.was) {
+        throw new BillShareChanged();
+      }
+      return {
+        ...current,
+        billCents:
+          cents === null
+            ? Object.fromEntries(
+                Object.entries(current.billCents).filter(
+                  ([id]) => id !== billId,
+                ),
+              )
+            : { ...current.billCents, [billId]: cents },
+      };
+    },
     log,
   );
+}
+
+/** What a pay puts toward a bill changed since the action being taken back made its change. */
+export class BillShareChanged extends Error {
+  constructor() {
+    super('This pay was changed again since, so nothing was taken back.');
+  }
+}
+
+const describePinDays = (pins: readonly BillPin[]) =>
+  pins.map((pin) => formatDateUTC(pin.expectedOn)).join(', ');
+
+const toDayRef = (pin: BillPin): DayRef => ({
+  payLineId: pin.payLineId,
+  sourceId: pin.sourceId,
+  expectedOn: pin.expectedOn,
+});
+
+/** A clear that stopped part way: the days it did clear, so an Undo can put them back. */
+export class PinsPartlyCleared extends Error {
+  constructor(
+    readonly cleared: BillPin[],
+    cause: unknown,
+  ) {
+    super(
+      cause instanceof Error ? cause.message : 'Some days were not cleared.',
+    );
+  }
+}
+
+/** Takes every per-pay figure of one bill off the given days, with one history line for all of them; the cleared pins come back for an Undo, or in the error when it stops part way. */
+export async function clearBillPins(
+  uid: string,
+  encryption: RunwayEncryption,
+  billId: string,
+  billName: string,
+  pins: readonly BillPin[],
+): Promise<BillPin[]> {
+  const done = await pins.reduce<Promise<BillPin[]>>(async (previous, pin) => {
+    const acc = await previous;
+    try {
+      await saveBillShare(
+        uid,
+        encryption,
+        toDayRef(pin),
+        billId,
+        null,
+        acc.length === 0
+          ? {
+              itemId: billId,
+              summary: PAY_SHARE_WORDS.pinsCleared(
+                billName,
+                describePinDays(pins),
+              ),
+              note: null,
+            }
+          : undefined,
+      );
+    } catch (error) {
+      throw new PinsPartlyCleared(acc, error);
+    }
+    return [...acc, pin];
+  }, Promise.resolve([]));
+  return done;
+}
+
+/** Puts back per-pay figures a clear took off, one history line for all; a day changed again since is left as it is. */
+export async function restoreBillPins(
+  uid: string,
+  encryption: RunwayEncryption,
+  billId: string,
+  billName: string,
+  pins: readonly BillPin[],
+): Promise<void> {
+  await pins.reduce<Promise<number>>(async (previous, pin) => {
+    const count = await previous;
+    await saveBillShare(
+      uid,
+      encryption,
+      toDayRef(pin),
+      billId,
+      pin.cents,
+      count === 0
+        ? {
+            itemId: billId,
+            summary: PAY_SHARE_WORDS.pinsBack(billName, describePinDays(pins)),
+            note: null,
+          }
+        : undefined,
+      { was: undefined },
+    );
+    return count + 1;
+  }, Promise.resolve(0));
 }
 
 /** A day another device settled or changed first; the screen may already have moved on, so it is also said in a toast. */

@@ -3,6 +3,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import {
   buildComingDays,
+  getOneTimePayLineIds,
   describeDay,
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
@@ -50,6 +51,7 @@ import {
 } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
 import type {
+  BillFundedBy,
   BillVersion,
   DayOverrideSealed,
   DayStatus,
@@ -648,6 +650,8 @@ export interface DraftView {
   /** Names and emoji of the envelopes, goals and bills a draft can name, by item id. */
   items: Record<string, { name: string; emoji: string | null }>;
   sourceNames: Record<string, string>;
+  /** Bills set to come from another pay (or the last one before they are due) whose payment this day falls inside, so the day puts nothing toward them. */
+  leftOut: { itemId: string; name: string; fundedBy: BillFundedBy }[];
 }
 
 /** The plan's stance; an unknown or missing one reads as conservative. */
@@ -842,6 +846,7 @@ export function computeDraftView(
     };
   });
   const fixedByBill = getFixedByBill(openDays);
+  const oneTimePayLineIds = getOneTimePayLineIds(versions);
   const bills = resolvedBills.map(({ item, version }) => ({
     itemId: item.id,
     createdAt: item.createdAt,
@@ -853,6 +858,7 @@ export function computeDraftView(
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
     fixed: fixedByBill.get(item.id),
+    oneTimePayLineIds,
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
   const goals = resolvedGoals.map(({ item, version }) => {
@@ -910,6 +916,25 @@ export function computeDraftView(
         : acc,
     {},
   );
+  const leftOut = bills.flatMap((bill) => {
+    if (bill.fundedBy.kind !== 'pay' && bill.fundedBy.kind !== 'lastBefore') {
+      return [];
+    }
+    const payments = planBillPayments(bill, days, horizon, stance);
+    const inside = payments.find(
+      (payment, index) =>
+        payment.paid === null &&
+        day.on <= payment.dueOn &&
+        (index === 0 || day.on > payments[index - 1].dueOn),
+    );
+    const name = resolvedBills.find(({ item }) => item.id === bill.itemId)
+      ?.version.payload.name;
+    return inside &&
+      name !== undefined &&
+      !inside.parts.some((part) => part.day.dayKey === dayKey)
+      ? [{ itemId: bill.itemId, name, fundedBy: bill.fundedBy }]
+      : [];
+  });
   const result: DraftView = {
     day,
     override,
@@ -932,6 +957,7 @@ export function computeDraftView(
       ),
     ),
     sourceNames,
+    leftOut,
   };
   if (!isCached) return result;
   if (draftCache.size >= MAX_CACHED_DRAFTS) draftCache.clear();
@@ -987,6 +1013,7 @@ export const selectBillPayments = createSelector(
     selectOn,
     selectStartDate,
     selectOpenDays,
+    selectVersions,
   ],
   (
     bills,
@@ -996,9 +1023,11 @@ export const selectBillPayments = createSelector(
     today,
     startDate,
     openDays,
+    versions,
   ): Record<string, BillPayment[]> => {
     const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
     const fixedByBill = getFixedByBill(openDays);
+    const oneTimePayLineIds = getOneTimePayLineIds(versions);
     const result = Object.fromEntries(
       bills.map(({ item, version }) => {
         const { payload } = version;
@@ -1016,6 +1045,7 @@ export const selectBillPayments = createSelector(
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
               fixed: fixedByBill.get(item.id),
+              oneTimePayLineIds,
               progress: progress[item.id] ?? NO_PROGRESS,
             },
             comingDays,

@@ -96,6 +96,8 @@ export interface DraftBillInput {
   fundedBy: BillFundedBy;
   /** Cents a day must give this bill by day key, whatever the funding says; the rest of a payment is spread over its other eligible days. */
   fixed?: Readonly<Record<string, Cents>>;
+  /** Pay lines that pay once: spread may use them, the pay before it's due and a named pay never do. */
+  oneTimePayLineIds?: ReadonlySet<string>;
   /** What confirmed days and payments already say about this bill; none until a day is confirmed. */
   progress?: BillProgressInput;
 }
@@ -360,10 +362,15 @@ const isOnPayDay = (
 export const getEligibleDays = (
   window: readonly IncomeDayRef[],
   fundedBy: BillFundedBy,
+  oneTime: ReadonlySet<string> | undefined = undefined,
 ) => {
-  if (fundedBy.kind === 'lastBefore') return window.slice(-1);
+  const repeating = (days: readonly IncomeDayRef[]) =>
+    oneTime && oneTime.size > 0
+      ? days.filter((day) => !oneTime.has(payLineIdOfDayKey(day.dayKey)))
+      : days;
+  if (fundedBy.kind === 'lastBefore') return repeating(window).slice(-1);
   if (fundedBy.kind === 'pay') {
-    return window.filter((day) => isOnPayDay(day, fundedBy));
+    return repeating(window).filter((day) => isOnPayDay(day, fundedBy));
   }
   return window;
 };
@@ -513,7 +520,11 @@ export function planBillPayments(
     const confirmed = fundedInWindow(progress.funded, previous, dueOn);
     const fundedCents = sumFunded(confirmed);
     const paid = paidByDue.get(dueOn) ?? null;
-    const eligible = getEligibleDays(window, bill.fundedBy);
+    const eligible = getEligibleDays(
+      window,
+      bill.fundedBy,
+      bill.oneTimePayLineIds,
+    );
     const shares = getDayShares(
       eligible,
       paid ? 0 : Math.max(0, amountCents - fundedCents),

@@ -186,7 +186,10 @@ const findOverdue = (input: LookaheadInput): LookaheadProblem[] =>
   });
 
 /** The first payment of each bill that the pays before it are not set to carry in full: none comes before it, the pay it names does not, or what is pinned leaves some of it. */
-const findNoIncome = (input: LookaheadInput): LookaheadProblem[] =>
+const findNoIncome = (
+  input: LookaheadInput,
+  walkedFunded: LookaheadCarry['funded'],
+): LookaheadProblem[] =>
   input.bills.flatMap((bill) => {
     const unfunded = (input.payments[bill.id] ?? []).find(
       (payment) =>
@@ -198,10 +201,14 @@ const findNoIncome = (input: LookaheadInput): LookaheadProblem[] =>
           payment.totalCents,
     );
     if (!unfunded) return [];
-    const shortBy =
-      unfunded.totalCents -
-      unfunded.fundedCents -
-      unfunded.parts.reduce((sum, part) => sum + part.cents, 0);
+    const partKeys = new Set(unfunded.parts.map((part) => part.day.dayKey));
+    const walked = (walkedFunded[bill.id] ?? [])
+      .filter((entry) => partKeys.has(entry.dayKey))
+      .reduce((sum, entry) => sum + entry.cents, 0);
+    const shortBy = Math.max(
+      0,
+      unfunded.totalCents - unfunded.fundedCents - walked,
+    );
     const reason =
       unfunded.parts.length > 0
         ? 'short'
@@ -260,7 +267,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
   );
   const problems = sortProblems([
     ...findOverdue(input),
-    ...findNoIncome(input),
+    ...findNoIncome(input, walked.carry.funded),
     ...walked.shorts,
   ]);
   const incomeEndsOn = getIncomeEnd(input);
