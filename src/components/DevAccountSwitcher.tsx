@@ -5,17 +5,16 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { Check, ChevronDown } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { signInWithEmailAndPassword } from 'firebase/auth';
 import { useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
-import { signOutInPlace } from '@/lib/dev/devSignOut';
+import { signInInPlace, signOutInPlace } from '@/lib/dev/devSignOut';
 import {
   FIXTURE_PASSWORD,
   FIXTURE_USERS,
   FixtureAccount,
 } from '@lib/dev/fixtureAccounts';
-import { auth, isUsingFirebaseEmulators } from '@lib/firebase/config';
+import { isUsingFirebaseEmulators } from '@lib/firebase/config';
 
 const adminAccount = FIXTURE_USERS.admin;
 const appAccounts = Object.values(FIXTURE_USERS).filter(
@@ -37,7 +36,7 @@ export function DevAccountSwitcher() {
     setError(undefined);
 
     try {
-      await signInWithEmailAndPassword(auth, email, FIXTURE_PASSWORD);
+      await signInInPlace(email, FIXTURE_PASSWORD);
     } catch (signInError) {
       const message =
         signInError instanceof Error
