@@ -6,6 +6,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '@/lib/firebase/config';
 import { getUniqueInviteCode } from '@/lib/firebase/firestore';
 import { deleteFile, uploadFile } from '@/lib/firebase/storage';
+import { ADMIN_NAME } from '@lib/app/app.constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
 import type { TripCity, TripSpace } from '@apps/waypoint/types';
@@ -111,7 +112,16 @@ export const createTrip = createAsyncThunk<
       tripId,
       title: trip.title,
     });
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (error) {
+      if (error instanceof FirebaseError && error.code === 'permission-denied') {
+        return rejectWithValue(
+          `We couldn't create this trip. Creating trips may be turned off for you right now: ask ${ADMIN_NAME} if you'd like it on, or refresh the page and try again.`,
+        );
+      }
+      throw error;
+    }
 
     dispatch(upsertTrip(trip));
 
