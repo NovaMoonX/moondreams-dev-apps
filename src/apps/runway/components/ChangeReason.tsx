@@ -10,6 +10,11 @@ import {
   MAX_NOTE_LENGTH,
 } from '@apps/runway/constants';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
+import { useAppSelector } from '@/store';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
+import { getCardNamer } from '@apps/runway/utils/cardText';
+import { describeReplaced } from '@apps/runway/utils/changeText';
 import type { ChangeFlow } from '@apps/runway/forms/useChangeFlow';
 
 interface ChangeReasonProps {
@@ -19,7 +24,10 @@ interface ChangeReasonProps {
 
 /** Asked where the edit is saved, in place of the form: starter chips, one box, and a save that works with no answer. */
 function ChangeReason({ flow, onClose }: ChangeReasonProps) {
-  const { note, setNote, isSaving, error, summaryText } = flow;
+  const { note, setNote, isSaving, error, summaryText, replaced } = flow;
+  const allCards = useAppSelector(selectAllCards);
+  const mask = useMaskedText();
+  const replacedText = describeReplaced(replaced, getCardNamer(allCards));
   const trimmed = note.trim();
 
   return (
@@ -30,6 +38,11 @@ function ChangeReason({ flow, onClose }: ChangeReasonProps) {
         <p className='text-muted-foreground text-sm break-words'>
           {summaryText}
         </p>
+        {replacedText && (
+          <p className='text-muted-foreground text-sm break-words'>
+            {mask(replacedText)}
+          </p>
+        )}
       </div>
       <SuggestionChips
         label={CHANGE_WORDS.whyHeading}

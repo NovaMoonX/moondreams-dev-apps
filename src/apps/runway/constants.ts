@@ -1785,6 +1785,8 @@ export const GROUP_WORDS = {
     `Put back the due ${count === 1 ? 'date' : 'dates'} on ${count} ${count === 1 ? 'bill' : 'bills'}`,
   dueUndoPartial: (done: number, total: number, failed: string[]) =>
     `Put back ${done} of ${total} due dates. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not change back.`,
+  dueUndoStale: (names: string[]) =>
+    `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} changed since, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
   dueUndoFailed: 'The due dates did not change back. Nothing was undone.',
   dueQuestion: 'When are they all due?',
   dueCaption: 'Due',

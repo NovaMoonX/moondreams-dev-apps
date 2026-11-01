@@ -64,8 +64,8 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GroupTotal } from '@apps/runway/engine/groups';
 import {
-  applyFieldChanges,
   getVersionStretches,
+  isSameValue,
   type VersionStretch,
 } from '@apps/runway/engine/resolve';
 import type {
@@ -100,7 +100,6 @@ const startingOptions = [
   { value: 'none' as const, label: GROUP_WORDS.noPriority },
 ];
 
-/** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
 /** Repeats whose dates come from the due date alone; a twice-a-month or irregular bill, or one that ends after a count, keeps its own. */
 const SETTABLE_KINDS: readonly string[] = [
   'once',
@@ -109,6 +108,7 @@ const SETTABLE_KINDS: readonly string[] = [
   'monthly',
 ];
 
+/** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
 function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -136,6 +136,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const [isSettingDue, setIsSettingDue] = useState(false);
   const [dueText, setDueText] = useState('');
   const store = useStore<RootState>();
+  const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
   const {
@@ -262,30 +263,42 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const isPaidOnce = ({ item, version }: (typeof bills)[number]) =>
     version.payload.timing.schedule.kind === 'once' &&
     (payments[item.id] ?? []).some((payment) => payment.paid);
-  const isSettable = ({ version }: (typeof bills)[number]) => {
-    const { schedule } = version.payload.timing;
+  const billVersions = allVersions.filter(
+    (version): version is BillVersion => version.kind === 'bill',
+  );
+  const getStretches = (versions: readonly BillVersion[], itemId: string) =>
+    getVersionStretches<BillVersion, BillSealed>(versions, itemId, today);
+  const isSettable = ({ item }: (typeof bills)[number]) => {
+    const stretches = getStretches(billVersions, item.id);
     return (
-      SETTABLE_KINDS.includes(schedule.kind) &&
-      version.payload.ending.afterCount === null
+      stretches.length > 0 &&
+      stretches.every(
+        ({ payload: bill }) =>
+          SETTABLE_KINDS.includes(bill.timing.schedule.kind) &&
+          bill.ending.afterCount === null,
+      )
     );
   };
-  const isSameDue = ({ version }: (typeof bills)[number]) => {
-    const { schedule } = version.payload.timing;
-    if (dueDate === undefined || schedule.anchor === null) return false;
-    if (schedule.anchor === dueDate) return true;
-    return (
-      schedule.kind === 'monthly' &&
-      schedule.anchor <= dueDate &&
-      schedule.monthDays[0] === new Date(dueDate).getUTCDate()
+  const isSameDue = ({ item }: (typeof bills)[number]) =>
+    dueDate !== undefined &&
+    getStretches(billVersions, item.id).every(({ payload: bill }) => {
+      const { schedule } = bill.timing;
+      if (schedule.anchor === null) return false;
+      if (schedule.anchor === dueDate) return true;
+      return (
+        schedule.kind === 'monthly' &&
+        schedule.anchor <= dueDate &&
+        schedule.monthDays[0] === new Date(dueDate).getUTCDate()
+      );
+    });
+  const endsBefore = ({ item }: (typeof bills)[number]) =>
+    dueDate !== undefined &&
+    getStretches(billVersions, item.id).some(
+      ({ payload: bill }) =>
+        bill.ending.onDate !== null && bill.ending.onDate < dueDate,
     );
-  };
   const eligibleBills = bills.filter(
-    (bill) =>
-      isSettable(bill) &&
-      !isPaidOnce(bill) &&
-      (dueDate === undefined ||
-        bill.version.payload.ending.onDate === null ||
-        bill.version.payload.ending.onDate >= dueDate),
+    (bill) => isSettable(bill) && !isPaidOnce(bill) && !endsBefore(bill),
   );
   const changingBills = eligibleBills.filter((bill) => !isSameDue(bill));
   const replacedBills = changingBills.filter(
@@ -304,44 +317,60 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     written: {
       itemId: string;
       name: string;
-      before: BillSealed;
-      after: BillSealed;
-      stretches: VersionStretch<BillSealed>[];
+      original: VersionStretch<BillSealed>[];
+      written: VersionStretch<BillSealed>[];
     }[],
   ) => {
     if (!user) return;
     try {
       const encryption = await getRunwayEncryption(user.uid);
+      const state = store.getState();
+      const liveVersions = state.runway.versions.filter(
+        (version): version is BillVersion => version.kind === 'bill',
+      );
+      const isUntouched = (entry: (typeof written)[number]) =>
+        isSameValue(getStretches(liveVersions, entry.itemId), entry.written);
+      const untouched = written.filter(isUntouched);
+      const stale = written
+        .filter((entry) => !isUntouched(entry))
+        .map((entry) => entry.name);
       const results = await Promise.allSettled(
-        written.map((entry) =>
+        untouched.map((entry) =>
           changeItem(user.uid, encryption, {
             itemId: entry.itemId,
             kind: 'bill',
-            payload: entry.before,
+            payload: entry.original[0].payload,
             summary: GROUP_WORDS.dueSummary(
               entry.name,
-              describeChange(entry.after, entry.before, getCardNamer([])) ||
-                'Updated',
+              describeChange(
+                entry.written[0].payload,
+                entry.original[0].payload,
+                getCardNamer([]),
+              ) || 'Updated',
               formatDateUTC(today),
             ),
             note: null,
             effectiveFrom: today,
-            stretches: entry.stretches,
+            stretches: entry.original,
           }),
         ),
       );
-      const failed = written.flatMap((entry, index) =>
+      const failed = untouched.flatMap((entry, index) =>
         results[index].status === 'rejected' ? [entry.name] : [],
       );
+      const done = untouched.length - failed.length;
       addToast(
-        failed.length === 0
-          ? { title: GROUP_WORDS.dueUndone(written.length), type: 'success' }
+        failed.length === 0 && stale.length === 0
+          ? { title: GROUP_WORDS.dueUndone(done), type: 'success' }
           : {
-              title: GROUP_WORDS.dueUndoPartial(
-                written.length - failed.length,
-                written.length,
-                failed,
-              ),
+              title: GROUP_WORDS.dueUndoPartial(done, written.length, [
+                ...failed,
+                ...stale,
+              ]),
+              description:
+                stale.length === 0
+                  ? undefined
+                  : GROUP_WORDS.dueUndoStale(stale),
               type: 'error',
             },
       );
@@ -375,44 +404,39 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      const billVersions = store
+      const liveVersions = store
         .getState()
         .runway.versions.filter(
           (version): version is BillVersion => version.kind === 'bill',
         );
-      const plans = changingBills.map(({ item, version }) => {
-        const { payload: bill } = version;
-        const { schedule } = bill.timing;
-        const next: BillSealed = {
-          ...bill,
-          fundedBy:
-            bill.fundedBy.kind === 'chosen'
-              ? { kind: 'suggested' }
-              : bill.fundedBy,
-          timing: {
-            kind: 'date',
-            schedule: {
-              ...schedule,
-              anchor: dueDate,
-              monthDays:
-                schedule.kind === 'monthly'
-                  ? [new Date(dueDate).getUTCDate()]
-                  : [],
-            },
+      const toDue = (bill: BillSealed): BillSealed => ({
+        ...bill,
+        fundedBy:
+          bill.fundedBy.kind === 'chosen'
+            ? { kind: 'suggested' }
+            : bill.fundedBy,
+        timing: {
+          kind: 'date',
+          schedule: {
+            ...bill.timing.schedule,
+            anchor: dueDate,
+            monthDays:
+              bill.timing.schedule.kind === 'monthly'
+                ? [new Date(dueDate).getUTCDate()]
+                : [],
           },
-        };
-        const before = getVersionStretches<BillVersion, BillSealed>(
-          billVersions,
-          item.id,
-          today,
-        );
+        },
+      });
+      const plans = changingBills.map(({ item, version }) => {
+        const original = getStretches(liveVersions, item.id);
         return {
           itemId: item.id,
-          name: bill.name,
-          before: bill,
-          after: next,
-          stretches: before,
-          written: applyFieldChanges(before, bill, next),
+          name: version.payload.name,
+          original,
+          written: original.map((stretch) => ({
+            ...stretch,
+            payload: toDue(stretch.payload),
+          })),
         };
       });
       const results = await Promise.allSettled(
@@ -420,16 +444,19 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
           changeItem(user.uid, encryption, {
             itemId: plan.itemId,
             kind: 'bill',
-            payload: plan.after,
+            payload: plan.written[0].payload,
             summary: GROUP_WORDS.dueSummary(
               plan.name,
-              describeChange(plan.before, plan.after, getCardNamer([])) ||
-                'Updated',
+              describeChange(
+                plan.original[0].payload,
+                plan.written[0].payload,
+                getCardNamer([]),
+              ) || 'Updated',
               formatDateUTC(today),
             ),
             note: null,
             effectiveFrom: today,
-            stretches: plan.written.length > 1 ? plan.written : undefined,
+            stretches: plan.written,
           }),
         ),
       );

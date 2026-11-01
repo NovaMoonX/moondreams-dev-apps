@@ -1,6 +1,7 @@
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { FIX_WORDS } from '@apps/runway/constants';
+import { isSameValue } from '@apps/runway/engine/resolve';
 import {
   isSameLookahead,
   sortProblems,
@@ -224,12 +225,15 @@ export function describeHoldsBlocks(
   if (isSameLookahead(before, after)) {
     return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
-  const [first] = sortProblems(after.problems);
+  const created = after.problems.filter(
+    (candidate) => !before.problems.some((had) => isSameValue(had, candidate)),
+  );
+  const [first] = sortProblems(created);
   const problem: HoldsBlock[] = first
     ? [
         {
           tone: 'warning',
-          ...describeChangeProblem(first, after.problems.length - 1, isHidden),
+          ...describeChangeProblem(first, created.length - 1, isHidden),
         },
       ]
     : [];

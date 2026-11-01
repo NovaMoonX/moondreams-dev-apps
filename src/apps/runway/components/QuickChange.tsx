@@ -4,11 +4,14 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Eye } from 'lucide-react';
 
 import QuestionFlow from '@/components/QuestionFlow';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import type { QuestionFlowState, QuestionStep } from '@/hooks/useQuestionFlow';
 import { ITEM_SHEET_R2_WORDS } from '@apps/runway/constants';
 
 const MONEY_STEPS = ['amount', 'target', 'max'];
+const SHORT_SCREEN_ROWS = 2;
+const LANDSCAPE_ROWS = 1;
 
 interface QuickChangeProps {
   step: QuestionStep;
@@ -34,12 +37,18 @@ function QuickChange({
 }: QuickChangeProps) {
   const { isHidden, toggle } = useValuesHidden();
   const isMoney = MONEY_STEPS.includes(step.id);
-  const rows = rowIds
+  const isShort = useIsShortScreen(599);
+  const isLandscape = useIsShortScreen(419);
+  const shownIds = rowIds.slice(
+    0,
+    isLandscape ? LANDSCAPE_ROWS : isShort ? SHORT_SCREEN_ROWS : rowIds.length,
+  );
+  const rows = shownIds
     .map((id) => flow.steps.find((other) => other.id === id))
     .filter((other): other is QuestionStep => other !== undefined)
     .filter((other) => other.id !== step.id);
   const hasMore = flow.steps.some(
-    (other) => other.id !== step.id && !rowIds.includes(other.id),
+    (other) => other.id !== step.id && !shownIds.includes(other.id),
   );
   const rowsFlow: QuestionFlowState = {
     ...flow,
@@ -50,12 +59,12 @@ function QuickChange({
   };
   return (
     <div
-      className='space-y-4 [@media(max-height:599px)]:space-y-2'
+      className='space-y-4 [@media(max-height:419px)]:space-y-1.5 [@media(min-height:420px)_and_(max-height:599px)]:space-y-2'
       role='group'
       aria-label={step.title}
       data-sensitive={isMoney ? '' : undefined}
     >
-      <h3 className='text-2xl leading-tight font-semibold break-words [@media(max-height:599px)]:text-lg'>
+      <h3 className='text-2xl leading-tight font-semibold break-words [@media(max-height:419px)]:text-base [@media(min-height:420px)_and_(max-height:599px)]:text-lg'>
         {step.title}
       </h3>
       {isMoney && isHidden ? (
@@ -69,7 +78,7 @@ function QuickChange({
           <Eye className='text-muted-foreground h-5 w-5' aria-hidden='true' />
         </Button>
       ) : (
-        <div className='[@media(max-height:599px)]:[&_input]:text-3xl [@media(max-height:599px)]:[&_label]:text-3xl [@media(max-height:599px)]:[&_p:first-child]:hidden'>
+        <div className='[@media(max-height:419px)]:[&_button]:hidden [@media(max-height:419px)]:[&_input]:text-2xl [@media(max-height:419px)]:[&_label]:text-2xl [@media(max-height:599px)]:[&_p:first-child]:hidden [@media(min-height:420px)_and_(max-height:599px)]:[&_input]:text-3xl [@media(min-height:420px)_and_(max-height:599px)]:[&_label]:text-3xl'>
           {step.render({ moveOn: () => undefined })}
         </div>
       )}

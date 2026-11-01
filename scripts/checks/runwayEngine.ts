@@ -107,8 +107,10 @@ import {
   computeDraftView,
   selectReachedEndingsKey,
 } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
+import { describeHoldsBlocks } from '../../src/apps/runway/utils/lookaheadText.ts';
 import {
   describeChange,
+  isMoneylessChange,
   isSamePayload,
   type ItemPayload,
 } from '../../src/apps/runway/utils/changeText.ts';
@@ -229,6 +231,8 @@ import {
   applyFieldChanges,
   getChangedKeys,
   getVersionStretches,
+  isSameValue,
+  planStretches,
   resolve,
   resolveCurrentOrNext,
   resolveNextChange,
@@ -9018,6 +9022,275 @@ const version = (
       },
     ],
     "a rename keeps the later version's own amount",
+  );
+}
+
+{
+  const D = 86_400_000;
+  const v = (
+    id: string,
+    createdAt: number,
+    from: number,
+    until: number | null,
+    name: string,
+    cents: number,
+  ) => ({
+    id,
+    itemId: 'x',
+    createdAt,
+    effectiveFrom: from,
+    effectiveUntil: until,
+    payload: { name, cents },
+  });
+  const versions = [
+    v('base', 1, 0, null, 'Rent', 125000),
+    v('raise', 2, 60 * D, null, 'Rent', 130000),
+  ];
+  const rent = { name: 'Rent', cents: 125000 };
+
+  const single = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 70 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 130000 },
+    { name: 'Home', cents: 130000 },
+  );
+  assert.deepEqual(
+    single.written,
+    [
+      {
+        payload: { name: 'Home', cents: 130000 },
+        effectiveFrom: 70 * D,
+        effectiveUntil: null,
+      },
+    ],
+    'a change from a day inside the last version is one stretch, still written as a stretch',
+  );
+
+  const rename = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 10 * D, effectiveUntil: null },
+    rent,
+    { name: 'Home', cents: 125000 },
+  );
+  assert.deepEqual(
+    rename.written.map(({ payload }) => payload),
+    [
+      { name: 'Home', cents: 125000 },
+      { name: 'Home', cents: 130000 },
+    ],
+    'a rename keeps the later raise',
+  );
+  assert.equal(rename.replaced.length, 0, 'a rename replaces nothing');
+
+  const amount = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 10 * D, effectiveUntil: null },
+    rent,
+    { name: 'Rent', cents: 140000 },
+  );
+  assert.deepEqual(
+    amount.written.map(({ payload }) => payload.cents),
+    [140000, 140000],
+    'an amount edit from now on replaces the scheduled raise of that amount',
+  );
+  assert.deepEqual(
+    amount.replaced.map(({ effectiveFrom, before, after }) => [
+      effectiveFrom,
+      before.cents,
+      after.cents,
+    ]),
+    [[60 * D, 125000, 130000]],
+    'and says which change it replaces',
+  );
+
+  const window = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 50 * D, effectiveUntil: 70 * D },
+    rent,
+    { name: 'Home', cents: 125000 },
+  );
+  assert.deepEqual(
+    window.written,
+    [
+      {
+        payload: { name: 'Home', cents: 125000 },
+        effectiveFrom: 50 * D,
+        effectiveUntil: 60 * D,
+      },
+      {
+        payload: { name: 'Home', cents: 130000 },
+        effectiveFrom: 60 * D,
+        effectiveUntil: 70 * D,
+      },
+    ],
+    'a temporary window over a later version is clipped to the window and keeps the later amount',
+  );
+  assert.equal(window.replaced.length, 0);
+
+  assert.deepEqual(
+    getChangedKeys(
+      { a: 1, b: { x: 1, y: null } },
+      { b: { y: undefined, x: 1 }, a: 1, c: null },
+    ),
+    [],
+    'key order and null against missing do not count as a change',
+  );
+  assert.equal(
+    isSameValue({ a: [1, { b: 2, c: 3 }] }, { a: [1, { c: 3, b: 2 }] }),
+    true,
+  );
+}
+
+{
+  const base = {
+    name: 'Rent',
+    emoji: null,
+    priority: 'must' as const,
+    orderIndex: 1,
+  };
+  const bill = {
+    ...base,
+    amount: { kind: 'exact', cents: 125000 },
+    timing: {
+      kind: 'date',
+      schedule: { kind: 'monthly', anchor: 0, monthDays: [1] },
+    },
+    ending: { onDate: null, afterCount: null },
+    fundedBy: { kind: 'suggested' },
+    stanceOverride: null,
+    groupId: null,
+    paidByCardId: null,
+  } as unknown as ItemPayload;
+  const envelope = {
+    ...base,
+    funding: {
+      amount: { kind: 'exact', cents: 5000 },
+      cadence: { kind: 'everyIncomeDay' },
+    },
+    maxCents: null,
+    groupId: null,
+  } as unknown as ItemPayload;
+  const goal = {
+    ...base,
+    targetCents: 20000,
+    targetDate: null,
+    funding: {
+      amount: { kind: 'exact', cents: 5000 },
+      cadence: { kind: 'everyIncomeDay' },
+    },
+    state: 'active',
+  } as unknown as ItemPayload;
+  const payLine = {
+    name: 'Paycheck',
+    amount: { kind: 'exact', cents: 300000 },
+    schedule: { kind: 'weekly', anchor: 0, monthDays: [] },
+  } as unknown as ItemPayload;
+  [bill, envelope, goal, payLine].forEach((payload) => {
+    assert.equal(
+      isMoneylessChange(payload, {
+        ...payload,
+        name: 'Renamed',
+      } as ItemPayload),
+      true,
+      'a rename moves nothing for every kind',
+    );
+    assert.equal(
+      isMoneylessChange(payload, {
+        ...payload,
+        emoji: '🏠',
+        name: 'Renamed',
+      } as ItemPayload),
+      true,
+    );
+    assert.equal(
+      isMoneylessChange(payload, { ...payload } as ItemPayload),
+      false,
+      'no difference is not a change',
+    );
+  });
+  assert.equal(
+    isMoneylessChange(bill, {
+      ...bill,
+      name: 'Home',
+      amount: { kind: 'exact', cents: 130000 },
+    } as unknown as ItemPayload),
+    false,
+    'a name and an amount together still move money',
+  );
+  assert.equal(
+    isMoneylessChange(payLine, {
+      ...payLine,
+      schedule: { kind: 'weekly', anchor: 7, monthDays: [] },
+    } as unknown as ItemPayload),
+    false,
+    'a pay day moves money',
+  );
+  assert.equal(
+    isMoneylessChange(
+      envelope,
+      JSON.parse(
+        JSON.stringify({ ...envelope, name: 'X' }, [
+          'groupId',
+          'maxCents',
+          'funding',
+          'cadence',
+          'kind',
+          'amount',
+          'cents',
+          'name',
+          'emoji',
+          'priority',
+          'orderIndex',
+        ]),
+      ) as ItemPayload,
+    ),
+    true,
+    'key order never makes a rename look like more',
+  );
+}
+
+{
+  const water = {
+    kind: 'noIncome' as const,
+    on: 1_000,
+    billId: 'water',
+    name: 'Water',
+  };
+  const rent = { ...water, billId: 'rent', name: 'Rent', on: 2_000 };
+  const look = (problems: (typeof water)[]) => ({
+    hasBills: true,
+    holdsThrough: 5_000,
+    problems,
+    shortByDay: {},
+    firstShortDay: null,
+    incomeEndsOn: null,
+    undated: [],
+  });
+  assert.equal(
+    describeHoldsBlocks(look([water]), look([water, rent]))
+      .filter((block) => block.tone === 'warning')[0]
+      ?.text.includes('Rent'),
+    true,
+    'a warning names the problem the change creates',
+  );
+  assert.equal(
+    describeHoldsBlocks(look([water]), look([water, rent]))
+      .filter((block) => block.tone === 'warning')[0]
+      ?.text.includes('more'),
+    false,
+    "and does not count the plan's existing problems",
+  );
+  assert.equal(
+    describeHoldsBlocks(look([water]), {
+      ...look([water]),
+      holdsThrough: 6_000,
+    }).some((block) => block.tone === 'warning'),
+    false,
+    "a plan's existing problem is not warned about again",
   );
 }
 
