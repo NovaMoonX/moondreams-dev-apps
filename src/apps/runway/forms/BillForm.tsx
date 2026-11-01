@@ -1012,6 +1012,8 @@ function BillFormBody({
             {isQuick && quickStep ? (
               <QuickChange
                 step={quickStep}
+                flow={questions}
+                rowIds={['name', 'due', 'repeats']}
                 onAll={() => setIsAll(true)}
                 isFirstDate={isFirstDate}
               />

@@ -867,7 +867,12 @@ function IncomeFormBody({
               />
             )}
             {isQuick && quickStep ? (
-              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+              <QuickChange
+                step={quickStep}
+                flow={questions}
+                rowIds={['payName', 'often', 'schedule']}
+                onAll={() => setIsAll(true)}
+              />
             ) : (
               <>
                 {openStep !== null && isEditing && (

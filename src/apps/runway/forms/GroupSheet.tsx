@@ -2,11 +2,19 @@ import { useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Archive, Pencil, Receipt, Smile, Wallet } from 'lucide-react';
+import {
+  Archive,
+  CalendarDays,
+  Pencil,
+  Receipt,
+  Smile,
+  Wallet,
+} from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
+import DateInput from '@/components/DateInput';
 import EmojiField from '@/components/EmojiField';
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
@@ -18,6 +26,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
+import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
@@ -29,6 +38,10 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import SheetHead from '@apps/runway/components/SheetHead';
+import {
+  ActionSection,
+  ActionTitle,
+} from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
@@ -41,12 +54,13 @@ import {
   changeItem,
 } from '@apps/runway/store/actions/itemActions';
 import {
+  selectBillPayments,
   selectGroups,
   selectStance,
   selectAllPurposeEmojis,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GroupTotal } from '@apps/runway/engine/groups';
-import type { GroupSealed, Priority } from '@apps/runway/types';
+import type { BillSealed, GroupSealed, Priority } from '@apps/runway/types';
 import {
   describeBillRepeat,
   describeGroupLead,
@@ -97,6 +111,9 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
   const allGroups = useAppSelector((state) => selectGroups(state, today));
   const figures = useGroupFigures(today).find(({ id }) => id === groupId);
   const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
+  const payments = useAppSelector((state) => selectBillPayments(state, today));
+  const [isSettingDue, setIsSettingDue] = useState(false);
+  const [dueText, setDueText] = useState('');
 
   if (!group || !figures) return null;
   const {
@@ -219,6 +236,97 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     }
   };
 
+  const dueDate = fromDateInputValue(dueText);
+  const isPaidOnce = ({ item, version }: (typeof bills)[number]) =>
+    version.payload.timing.schedule.kind === 'once' &&
+    (payments[item.id] ?? []).some((payment) => payment.paid);
+  const eligibleBills = bills.filter(
+    (bill) =>
+      !isPaidOnce(bill) &&
+      (dueDate === undefined ||
+        bill.version.payload.ending.onDate === null ||
+        bill.version.payload.ending.onDate >= dueDate),
+  );
+  const changingBills = eligibleBills.filter(
+    ({ version }) => version.payload.timing.schedule.anchor !== dueDate,
+  );
+  const replacedBills = changingBills.filter(
+    ({ version }) => version.payload.timing.schedule.anchor !== null,
+  );
+  const skippedCount = billCount - eligibleBills.length;
+
+  const setDueDate = async () => {
+    if (!user || dueDate === undefined) return;
+    if (replacedBills.length > 0) {
+      const isConfirmed = await confirm({
+        title: GROUP_WORDS.dueReplaceTitle,
+        message: GROUP_WORDS.dueReplaceBody(
+          replacedBills.map(({ version }) => version.payload.name),
+          replacedBills.length,
+          formatDateUTC(dueDate),
+        ),
+        confirmText: GROUP_WORDS.dueReplace,
+      });
+      if (!isConfirmed) return;
+    }
+    setError(null);
+    setIsSaving(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const results = await Promise.allSettled(
+        changingBills.map(({ item, version }) => {
+          const { payload: bill } = version;
+          const { schedule } = bill.timing;
+          const next: BillSealed = {
+            ...bill,
+            timing: {
+              kind: 'date',
+              schedule: {
+                ...schedule,
+                anchor: dueDate,
+                monthDays:
+                  schedule.kind === 'monthly'
+                    ? [new Date(dueDate).getUTCDate()]
+                    : [],
+              },
+            },
+          };
+          return changeItem(user.uid, encryption, {
+            itemId: item.id,
+            kind: 'bill',
+            payload: next,
+            summary: GROUP_WORDS.dueSummary(
+              bill.name,
+              describeChange(bill, next, getCardNamer([])) || 'Updated',
+              formatDateUTC(today),
+            ),
+            note: null,
+            effectiveFrom: today,
+          });
+        }),
+      );
+      const failed = changingBills.flatMap(({ version }, index) =>
+        results[index].status === 'rejected' ? [version.payload.name] : [],
+      );
+      const done = changingBills.length - failed.length;
+      if (done > 0)
+        addToast({ title: GROUP_WORDS.dueToast(done), type: 'success' });
+      if (failed.length === 0) {
+        setIsSettingDue(false);
+        return;
+      }
+      setError(
+        done === 0
+          ? GROUP_WORDS.dueFailed
+          : GROUP_WORDS.duePartial(done, changingBills.length, failed),
+      );
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, GROUP_WORDS.dueFailed));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const trimmed = name.trim();
   const canRename = trimmed !== '' && trimmed !== payload.name;
   const lead = describeGroupLead(total, memberCount);
@@ -306,6 +414,46 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                   onClick={() => void saveEmoji(trimmedEmoji)}
                 >
                   Save
+                </Button>
+              }
+            />
+          </>
+        ) : isSettingDue ? (
+          <>
+            <BackLink onBack={() => setIsSettingDue(false)} />
+            <ActionTitle>{GROUP_WORDS.dueQuestion}</ActionTitle>
+            <ActionSection caption={GROUP_WORDS.dueCaption}>
+              <DateInput
+                variant='outline'
+                aria-label={GROUP_WORDS.dueCaption}
+                value={dueText}
+                onChange={(event) => setDueText(event.target.value)}
+              />
+            </ActionSection>
+            {skippedCount > 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {GROUP_WORDS.dueSkipped(skippedCount)}
+              </p>
+            )}
+            <ModalFooterActions
+              note={
+                error ??
+                (dueDate !== undefined && changingBills.length === 0
+                  ? GROUP_WORDS.dueNothingToChange
+                  : null)
+              }
+              rightActions={
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={
+                    isSaving ||
+                    dueDate === undefined ||
+                    changingBills.length === 0
+                  }
+                  onClick={() => void setDueDate()}
+                >
+                  {GROUP_WORDS.dueAction}
                 </Button>
               }
             />
@@ -482,6 +630,20 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
                 label={GROUP_WORDS.addBill(payload.name)}
                 onClick={() => setAdding('bill')}
               />
+              {billCount > 0 && (
+                <ActionRow
+                  isGrouped
+                  hasChevron
+                  icon={<CalendarDays />}
+                  label={GROUP_WORDS.setDue}
+                  subtitle={GROUP_WORDS.setDueSub(billCount)}
+                  onClick={() => {
+                    setDueText('');
+                    setError(null);
+                    setIsSettingDue(true);
+                  }}
+                />
+              )}
               <ActionRow
                 isGrouped
                 hasChevron

@@ -176,7 +176,8 @@ function PayLineRow({
             Boolean(payLine.stanceOverride),
           )}
           quickChange={{
-            label: ITEM_SHEET_R2_WORDS.changeAmount,
+            label: ITEM_SHEET_R2_WORDS.change,
+            subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
             step: 'amount',
           }}
           onClose={() => setIsOpen(false)}

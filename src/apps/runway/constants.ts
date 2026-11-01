@@ -1505,7 +1505,11 @@ export const FORM_FLOW_WORDS = {
 
 // Lists and screens, round 2: one fact per sheet head, short action rows, the payday tick and the problems row.
 export const ITEM_SHEET_R2_WORDS = {
-  changeElse: 'Change something else',
+  moreDetails: 'More details',
+  change: 'Change',
+  changeBillSub: 'Amount, name, due date and more',
+  changeAmountSub: 'Amount, name and more',
+  changeTargetSub: 'Target, name and more',
   firstDateNote: 'Nothing is set aside for it until it has a date.',
   pauseSub: 'Nothing new goes in',
   resumeSub: 'Money goes in again from the next income day',
@@ -1513,14 +1517,12 @@ export const ITEM_SHEET_R2_WORDS = {
   archiveSub: 'Off your lists. Its history stays',
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
-  changeAmount: 'Change amount',
   setMax: 'Set a max',
   changeMax: 'Change the max',
   stopsAt: (amount: string) => `Stops at ${amount}`,
   setDueDate: 'Set the due date',
   eachTime: 'Each time',
   balance: 'Balance',
-  changeTarget: 'Change target',
   changeName: 'Change name',
   heldDetail: (amount: string) => `${amount} held · choose`,
   toppedUp: 'Topped up',
@@ -1776,6 +1778,29 @@ export const FIX_ROWS_SHOWN = 12;
 export const RUNWAY_SEARCH_THRESHOLD = 5;
 
 export const GROUP_WORDS = {
+  setDue: 'Set one due date',
+  setDueSub: (count: number) => `For all ${count} bills in this group`,
+  dueQuestion: 'When are they all due?',
+  dueCaption: 'Due',
+  dueAction: 'Set the due date',
+  dueNothingToChange: 'Every bill here already has this due date.',
+  dueSkipped: (count: number) =>
+    count === 1
+      ? '1 bill stays as it is: it is paid or ends before this day.'
+      : `${count} bills stay as they are: paid or ending before this day.`,
+  dueReplaceTitle: 'Replace their due dates?',
+  dueReplaceBody: (names: string[], count: number, date: string) =>
+    names.length > 0 && count <= 3
+      ? `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} already ${count === 1 ? 'has a due date' : 'have a due date'}. Replace ${count === 1 ? 'it' : 'them'} with ${date}?`
+      : `${count} of these bills already have a due date. Replace them with ${date}?`,
+  dueReplace: 'Replace',
+  dueToast: (count: number) =>
+    `Set the due date on ${count} ${count === 1 ? 'bill' : 'bills'}`,
+  duePartial: (done: number, total: number, failed: string[]) =>
+    `Set the due date on ${done} of ${total} bills. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not save; the others did.`,
+  dueFailed: 'The due date did not save. Nothing was changed.',
+  dueSummary: (name: string, change: string, from: string) =>
+    `${name}: ${change}, from ${from}.`,
   ungrouped: 'Other bills',
   ungroupedEnvelopes: 'Other envelopes',
   setTip:

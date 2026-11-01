@@ -94,7 +94,8 @@ function GoalRow({
               : `${PRIORITY_LABELS[goal.priority]} · ${funding} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
           }
           quickChange={{
-            label: ITEM_SHEET_R2_WORDS.changeTarget,
+            label: ITEM_SHEET_R2_WORDS.change,
+            subtitle: ITEM_SHEET_R2_WORDS.changeTargetSub,
             step: 'target',
           }}
           onClose={() => setIsOpen(false)}

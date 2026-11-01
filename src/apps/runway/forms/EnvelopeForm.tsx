@@ -562,7 +562,12 @@ function EnvelopeFormBody({
               />
             )}
             {isQuick && quickStep ? (
-              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+              <QuickChange
+                step={quickStep}
+                flow={questions}
+                rowIds={['name', 'often', 'max']}
+                onAll={() => setIsAll(true)}
+              />
             ) : (
               <>
                 {openStep !== null && editing && (

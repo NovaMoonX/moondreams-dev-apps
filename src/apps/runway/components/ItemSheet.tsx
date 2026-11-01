@@ -181,7 +181,7 @@ interface ItemSheetProps {
   /** A caveat about the figure (the end of a range, a pairing), behind a help icon by it. */
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
-  quickChange?: { label: string; step: string };
+  quickChange?: { label: string; subtitle?: string; step: string };
   /** An optional extra's own action row, opening the change at that question. */
   maxAction?: { label: string; step: string };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
@@ -759,6 +759,7 @@ function ItemSheet({
             hasChevron
             icon={<Pencil />}
             label={quickChange.label}
+            subtitle={quickChange.subtitle}
             onClick={() => openChange(quickChange.step)}
           />
         )}
