@@ -66,7 +66,7 @@ function TrackInviteCard() {
         <Button
           type='button'
           variant='tertiary'
-          className='hover:bg-muted/60 h-auto min-h-0 min-w-0 flex-1 justify-start gap-3 rounded-2xl px-3! py-1! text-left max-[359px]:gap-2 max-[359px]:px-2!'
+          className='hover:bg-muted/60 h-auto min-h-0 min-w-0 flex-1 justify-start gap-3 rounded-2xl px-4! py-3.5! text-left max-[359px]:px-3!'
           onClick={() => setIsOpen(true)}
         >
           <Footprints
@@ -77,7 +77,7 @@ function TrackInviteCard() {
             <span className='text-foreground block text-sm leading-5 font-medium'>
               {TRACK_INVITE_WORDS.title}
             </span>
-            <span className='text-muted-foreground block text-xs leading-4'>
+            <span className='text-muted-foreground mt-0.5 block text-xs leading-4'>
               {TRACK_INVITE_WORDS.subtitle}
             </span>
           </span>
