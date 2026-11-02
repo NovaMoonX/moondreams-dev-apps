@@ -946,7 +946,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         onClose={() => setEditingField(null)}
       />
       <DetailSheet isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} title='Keyboard shortcuts'>
-        <div className='border-border mb-2 flex items-center justify-between gap-3 border-b pb-3'>
+        <div className='border-border mb-2 flex items-center justify-between gap-3 border-b pr-1 pb-3'>
           <span className='text-sm'>
             <span className='block font-medium'>Use keyboard shortcuts</span>
             <span className='text-muted-foreground block text-xs'>Single letters jump around this trip. Turn them off if they get in the way.</span>

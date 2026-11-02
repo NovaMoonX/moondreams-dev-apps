@@ -1203,7 +1203,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         </Button>
       </div>
       {sortBy === 'day' && (
-        <div className='flex items-center gap-3'>
+        <div className='flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3'>
           <span className='text-muted-foreground shrink-0 text-sm'>Each day&apos;s total</span>
           <SegmentedControl
             label="Each day's total"
