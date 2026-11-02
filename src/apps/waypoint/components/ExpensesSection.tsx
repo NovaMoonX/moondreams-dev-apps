@@ -774,9 +774,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         return (
           <Button
             type='button'
-            variant={isReceiving ? 'tertiary' : 'secondary'}
+            variant='secondary'
             size='sm'
-            className='h-10 shrink-0'
+            className={
+              isReceiving
+                ? "relative h-7 shrink-0 text-xs after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']"
+                : 'h-10 shrink-0'
+            }
             onClick={toggle}
           >
             {isReceiving ? 'Mark as received' : 'Mark as repaid'}
@@ -810,8 +814,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           <div className='space-y-1'>
             {splitBreakdown.shares.map((share) => (
               <div key={share.uid} className='flex items-center justify-end gap-2'>
-                <p className='text-muted-foreground mr-auto min-w-0 truncate text-xs'>
-                  {memberLabel(share.uid)} {share.amountLabel}
+                <p className='text-muted-foreground mr-auto flex min-w-0 gap-1 text-xs'>
+                  <span className='truncate'>{memberLabel(share.uid)}</span>
+                  <span className='shrink-0'>{share.amountLabel}</span>
                 </p>
                 {renderRepaidControl(share)}
               </div>
