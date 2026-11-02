@@ -20,8 +20,8 @@ import { useAppSelector } from '@/store';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import { getExtras } from '@apps/runway/engine/parts';
+import { formatCents } from '@/utils/moneyUtils';
+import { withExtras } from '@apps/runway/engine/parts';
 import {
   GROUP_WORDS,
   PRIORITY_DIAL_WORDS,
@@ -57,7 +57,6 @@ import {
 import {
   describeCadenceLine,
   describeFundingShort,
-  describeExtras,
 } from '@apps/runway/utils/fundingText';
 import { resolveGroupRename } from '@apps/runway/utils/groupChoice';
 import { getCardNamer } from '@apps/runway/utils/cardText';
@@ -431,7 +430,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {envelopes.map(({ item, version }) => {
-                    const { funding } = version.payload;
+                    const funding = withExtras(version.payload);
                     return (
                       <ItemRow
                         key={item.id}
@@ -443,7 +442,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         )}
                         detail={
                           funding.amount.kind === 'exact'
-                            ? `${describeCadenceLine(funding.cadence)}${describeExtras(getExtras(version.payload), formatCentsShort)}`
+                            ? describeCadenceLine(funding.cadence)
                             : describeFundingShort(funding)
                         }
                         figure={
