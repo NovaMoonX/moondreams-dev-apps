@@ -73,8 +73,9 @@ function DayHeader({ label, trailing, isSticky, canOpen, onOpen }: DayHeaderProp
 
   if (!isSticky) {
     return (
-      <div className='bg-secondary/60 rounded-lg px-3 py-2'>
-        <SectionDivider label={<span className='text-foreground text-base font-semibold'>{labelNode}</span>} trailing={trailing} />
+      <div className='border-primary/25 bg-primary/10 border-l-primary flex min-h-11 items-center justify-between gap-3 rounded-lg border border-l-4 px-4 py-2'>
+        <span className='text-foreground text-base font-semibold'>{labelNode}</span>
+        {trailing}
       </div>
     );
   }

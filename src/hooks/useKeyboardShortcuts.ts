@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 const TYPING_SELECTOR =
-  'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
+  'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 const LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"]';
 
 // A closed popover stays in the page as an invisible, inert dialog, so only a shown one counts.
@@ -39,7 +39,7 @@ export function useKeyboardShortcuts(
         isLayerOpen()
       )
         return;
-      const handler = handlersRef.current[keyEvent.key.toLowerCase()];
+      const handler = handlersRef.current[keyEvent.key?.toLowerCase() ?? ''];
       if (!handler) return;
       keyEvent.preventDefault();
       handler();

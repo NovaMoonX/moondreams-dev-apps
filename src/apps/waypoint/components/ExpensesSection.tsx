@@ -429,8 +429,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     sortBy === 'day' ? groupByIndexBucket(sortedExpenses, (expense) => expense.dayIndex, dayCount) : null;
 
   const formatDayTotal = (items: TripExpense[]) => {
-    const dayTotal = computeExpenseTotals(items, memberIds)[dayTotalKind];
-    return formatTotal(dayTotal.min, dayTotal.max, currency);
+    const mine = { paid: 'paidByMe', expected: 'expectedForMe', total: 'myTotal' } as const;
+    const dayTotal =
+      totalsView === 'me'
+        ? computeMemberTotals(items, memberIds, currentUserId)[mine[dayTotalKind]]
+        : toTotalsView(computeExpenseTotals(items, memberIds)[dayTotalKind]);
+    const basis = { me: ' yours', 'per-person': ' per person', group: '' }[totalsView];
+    return `${formatTotal(dayTotal.min, dayTotal.max, currency)}${basis}`;
   };
 
   const handleSubmit = async (values: ExpenseSubmitValues) => {
@@ -835,7 +840,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
           {!isRow && breakdown}
         </div>
-        {isRow && breakdown && <div className='col-span-2'>{breakdown}</div>}
+        {isRow && breakdown && <div className='col-span-2 pl-12'>{breakdown}</div>}
       </>
     );
   };
@@ -1198,13 +1203,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         </Button>
       </div>
       {sortBy === 'day' && (
-        <SegmentedControl
-          label='Day totals show'
-          options={DAY_TOTAL_KIND_OPTIONS}
-          value={dayTotalKind}
-          onChange={setDayTotalKind}
-          className='sm:w-72'
-        />
+        <div className='flex items-center gap-3'>
+          <span className='text-muted-foreground shrink-0 text-sm'>Each day&apos;s total</span>
+          <SegmentedControl
+            label="Each day's total"
+            options={DAY_TOTAL_KIND_OPTIONS}
+            value={dayTotalKind}
+            onChange={setDayTotalKind}
+            className='w-full sm:w-72'
+          />
+        </div>
       )}
       <Drawer
         isOpen={isFilterDrawerOpen}
@@ -1291,7 +1299,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 <SectionDivider
                   label={getBucketLabel(bucket, trip.startDate)}
                   trailing={
-                    <span className='text-muted-foreground text-sm'>{formatDayTotal(items)}</span>
+                    <span className='text-foreground text-sm font-semibold'>{formatDayTotal(items)}</span>
                   }
                 />
                 <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_ROW_HEIGHT}>

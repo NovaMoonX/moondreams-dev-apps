@@ -24,6 +24,7 @@ import {
   ClipboardCopy,
   Globe,
   Image,
+  Keyboard,
   Link,
   Megaphone,
   MapPin,
@@ -33,7 +34,9 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import AppToggle from '@/components/AppToggle';
 import DetailSheet from '@/components/DetailSheet';
+import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAppDispatch, type RootState } from '@/store';
 import EditTripMealsModal from '@apps/waypoint/components/EditTripMealsModal';
@@ -175,6 +178,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
   };
   const [dayTab, setDayTab] = useState('all');
   const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isUsingShortcuts, setIsUsingShortcuts] = useLocalStoragePreference('waypoint:keyboardShortcuts', true);
 
   const jumpToDay = (direction: 1 | -1) => {
     if (sectionTab !== 'overview') return;
@@ -193,7 +197,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       k: () => jumpToDay(-1),
       '?': () => setIsShortcutsOpen(true),
     },
-    !isSmallScreen,
+    !isSmallScreen && isUsingShortcuts,
   );
   const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false);
   const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);
@@ -454,6 +458,14 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         },
       })
     : null;
+  const shortcutsActionItem = !isSmallScreen
+    ? option({
+        label: 'Keyboard shortcuts',
+        value: 'shortcuts',
+        icon: <Keyboard className='h-4 w-4' />,
+        onClick: () => setIsShortcutsOpen(true),
+      })
+    : null;
   const coverActionItem = canEdit
     ? option({
         label: 'Set cover photo',
@@ -519,7 +531,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       ))
     : null;
 
-  const actionItems = [cityActionItem, mealsActionItem, coverActionItem, announcementActionItem, copyMarkdownActionItem, archiveActionItem, deleteDesktopMenuItem].filter(
+  const actionItems = [cityActionItem, mealsActionItem, coverActionItem, announcementActionItem, copyMarkdownActionItem, shortcutsActionItem, archiveActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
   const groupedEditActionItems = [titleActionItem, datesActionItem, cityActionItem, mealsActionItem, coverActionItem].filter(
@@ -934,6 +946,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         onClose={() => setEditingField(null)}
       />
       <DetailSheet isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} title='Keyboard shortcuts'>
+        <div className='border-border mb-2 flex items-center justify-between gap-3 border-b pb-3'>
+          <span className='text-sm'>
+            <span className='block font-medium'>Use keyboard shortcuts</span>
+            <span className='text-muted-foreground block text-xs'>Single letters jump around this trip. Turn them off if they get in the way.</span>
+          </span>
+          <AppToggle checked={isUsingShortcuts} onCheckedChange={setIsUsingShortcuts} aria-label='Use keyboard shortcuts' />
+        </div>
         <ul className='divide-border divide-y'>
           {[
             ...TRIP_TAB_SHORTCUTS.map(({ key, label }) => ({ key, label: `Go to ${label}` })),

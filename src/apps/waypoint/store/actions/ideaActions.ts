@@ -196,7 +196,12 @@ export const convertIdeaToEvent = createAsyncThunk<
       if (!ideaSnapshot.exists()) {
         throw new Error('This idea was removed, so it can no longer be added to the itinerary.');
       }
-      if ((ideaSnapshot.data().convertedToEntityId ?? null) !== null) {
+      const linkedEventId: string | null = ideaSnapshot.data().convertedToEntityId ?? null;
+      const linkedEvent =
+        linkedEventId === null
+          ? null
+          : await transaction.get(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', linkedEventId));
+      if (linkedEvent?.exists()) {
         throw new Error('Someone already added this idea to the itinerary.');
       }
 

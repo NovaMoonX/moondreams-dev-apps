@@ -417,7 +417,7 @@ function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
     endTimezone: prefill.endTimezone ?? null,
     quickField: prefill.transitType ?? prefill.mealType ?? getDefaultSubtype(prefill.eventType, prefill.time),
     isMealTouched: Boolean(prefill.mealType),
-    isTimeTouched: true,
+    isTimeTouched: !prefill.mealType,
     settings: prefill.settings,
     hasSettings: prefill.settings.length > 0,
     cuisines: prefill.cuisines.join(', '),
@@ -707,7 +707,7 @@ function EventFormModal({
   };
 
   const selectEventType = (eventType: EventType) => {
-    const isNewEvent = !event && !prefill && !legFrom;
+    const isNewEvent = !event && (!prefill || Boolean(prefill.mealType)) && !legFrom;
     const becomesTravel =
       eventType === 'TRAVEL' && isNewEvent && draft.attendeeTargetType === 'EVERYONE_INCLUDING_FUTURE';
     const leavesTravel = eventType !== 'TRAVEL' && draft.isAttendeeAuto;

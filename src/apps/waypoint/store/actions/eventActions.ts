@@ -2,10 +2,14 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
+  getDocs,
+  query,
   runTransaction,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -507,17 +511,14 @@ export const deleteEvent = createAsyncThunk<
     );
 
     const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
-    const convertedIdeas = (getState() as RootState).waypoint.ideas.items.filter(
-      (idea) => idea.tripId === trip.id && idea.convertedToEntityId === eventId,
-    );
-    const batch = writeBatch(db);
-    batch.delete(eventRef);
-    convertedIdeas.forEach((idea) =>
-      batch.update(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id), {
-        convertedToEntityId: null,
-      }),
-    );
-    await batch.commit();
+    await deleteDoc(eventRef);
+    const ideasRef = collection(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas');
+    // The event is gone either way; an idea that can't be cleared still reads as off the itinerary.
+    await getDocs(query(ideasRef, where('convertedToEntityId', '==', eventId)))
+      .then((snapshot) =>
+        Promise.allSettled(snapshot.docs.map((ideaDoc) => updateDoc(ideaDoc.ref, { convertedToEntityId: null }))),
+      )
+      .catch(() => undefined);
     await cancelEventReminder(current?.reminderId ?? null);
     return eventId;
   },

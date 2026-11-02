@@ -10,7 +10,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useQueryClient } from '@tanstack/react-query';
-import { ClipboardCopy } from 'lucide-react';
+import { ClipboardCopy, Plus } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
 import { airlinesQueryOptions } from '@/lib/airlines/airlinesQueries';
@@ -433,23 +433,23 @@ export function TimelineSection({
     />
   );
 
+  const getDayMissingMeals = (day: number) =>
+    !canAddEvents || day < weather.todayIndex || day >= dayCount ? [] : getMissingMeals(events, day, getWatchedMeals(trip));
+
   const renderMissingMeals = (day: number) => {
-    const missing =
-      day < weather.todayIndex || day >= dayCount ? [] : getMissingMeals(events, day, getWatchedMeals(trip));
+    const missing = getDayMissingMeals(day);
     if (missing.length === 0) return null;
-    const note = formatMissingMealsNote(missing);
-    return canAddEvents ? (
+    return (
       <Button
         type='button'
         variant='tertiary'
         size='sm'
-        className="relative h-auto p-0 text-xs before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+        className="text-muted-foreground relative h-auto gap-1 self-start p-0 text-xs before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
         onClick={() => openNew(day, getMealPrefill(day, missing[0]))}
       >
-        {note}
+        <Plus className='h-3.5 w-3.5' aria-hidden='true' />
+        {formatMissingMealsNote(missing)}
       </Button>
-    ) : (
-      <p className='text-muted-foreground text-xs'>{note}</p>
     );
   };
 
@@ -483,9 +483,12 @@ export function TimelineSection({
     const hasLogistics = scope === 'all' ? logisticsByDay.size > 0 : typeof scope === 'number' && logisticsByDay.has(scope);
     if (visibleEvents.length === 0 && !hasLogistics && (scope !== 'all' || !weather.hasWeather || needle !== '')) {
       return (
-        <p className='text-muted-foreground py-6 text-sm'>
-          {needle !== '' ? 'Nothing in the itinerary matches that.' : 'No events planned yet.'}
-        </p>
+        <div className='space-y-2 py-6'>
+          <p className='text-muted-foreground text-sm'>
+            {needle !== '' ? 'Nothing in the itinerary matches that.' : 'No events planned yet.'}
+          </p>
+          {typeof scope === 'number' && needle === '' && renderMissingMeals(scope)}
+        </div>
       );
     }
 
@@ -528,7 +531,7 @@ export function TimelineSection({
       MAX_DAYS_OUTSIDE_TRIP,
     );
     const weatherOnlyDays = dayIndexes
-      .filter((day) => ((needle === '' && weather.getDay(day)) || logisticsByDay.has(day)) && !eventDays.some(({ bucket }) => bucket === day))
+      .filter((day) => ((needle === '' && (weather.getDay(day) || getDayMissingMeals(day).length > 0)) || logisticsByDay.has(day)) && !eventDays.some(({ bucket }) => bucket === day))
       .map((day) => ({ bucket: day as IndexBucket, items: [] as TimelineEvent[] }));
     const getBucketOrder = (bucket: IndexBucket) =>
       typeof bucket === 'number' ? bucket : bucket === 'outside' ? dayCount + MAX_DAYS_OUTSIDE_TRIP : dayCount + MAX_DAYS_OUTSIDE_TRIP + 1;

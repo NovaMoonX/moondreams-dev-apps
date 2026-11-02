@@ -392,7 +392,7 @@ export function EventCard({
             alt=''
             className={
               isImageOnLeft
-                ? 'w-24 shrink-0 self-stretch object-cover sm:w-44'
+                ? 'w-20 shrink-0 self-stretch object-cover sm:w-44'
                 : 'aspect-video w-full object-cover sm:aspect-2/1'
             }
           />
