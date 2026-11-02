@@ -42,9 +42,17 @@ function ThingDrawer({ item, onClose, onFinish }: ThingDrawerProps) {
       title={name}
       footer={
         isListable(item) ? undefined : (
-          <Button type='button' rounded='full' onClick={onFinish}>
-            Finish adding
-          </Button>
+          <div className='flex items-center gap-2'>
+            <Button
+              type='button'
+              size='lg'
+              rounded='full'
+              className='flex-1'
+              onClick={onFinish}
+            >
+              Finish adding
+            </Button>
+          </div>
         )
       }
     >

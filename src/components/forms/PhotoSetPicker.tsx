@@ -408,9 +408,17 @@ function PhotoSetPicker({
             : `Photo ${openedIndex + 1} of ${shown.length}`
         }
         footer={
-          <Button type='button' rounded='full' onClick={() => setOpenId(null)}>
-            Done
-          </Button>
+          <div className='flex items-center gap-2'>
+            <Button
+              type='button'
+              size='lg'
+              rounded='full'
+              className='flex-1'
+              onClick={() => setOpenId(null)}
+            >
+              Done
+            </Button>
+          </div>
         }
       >
         {opened !== null && (
