@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
@@ -14,7 +14,11 @@ import { usePhotoSetUploads } from '@/hooks/usePhotoSetUploads';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
-import { formatCentsShort, parseMoneyToCents } from '@/utils/moneyUtils';
+import {
+  centsToInputValue,
+  formatCentsShort,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
 import {
   CONDITION_LABELS,
   CONDITION_OPTIONS,
@@ -31,7 +35,7 @@ import {
   type ItemFields,
 } from '@apps/going-once/store/actions/itemActions';
 import { selectItems } from '@apps/going-once/store/selectors';
-import type { ItemCondition } from '@apps/going-once/types';
+import type { Item, ItemCondition } from '@apps/going-once/types';
 
 interface Answers {
   title: string;
@@ -40,7 +44,8 @@ interface Answers {
   floor: string;
   isFloorShown: boolean;
   condition: ItemCondition | null;
-  hasSkippedPhotos: boolean;
+  /** Questions the person chose to answer later. */
+  deferred: string[];
 }
 
 const INITIAL_ANSWERS: Answers = {
@@ -50,7 +55,7 @@ const INITIAL_ANSWERS: Answers = {
   floor: '',
   isFloorShown: false,
   condition: null,
-  hasSkippedPhotos: false,
+  deferred: [],
 };
 
 const EMPTY_FIELDS: Required<ItemFields> = {
@@ -70,6 +75,19 @@ const toFields = (answers: Answers): Required<ItemFields> => ({
       : parseMoneyToCents(answers.floor),
 });
 
+const toAnswers = (item: Item): Answers => ({
+  title: item.title,
+  price:
+    item.askingPriceCents === null || item.askingPriceCents === 0
+      ? ''
+      : centsToInputValue(item.askingPriceCents),
+  isFree: item.askingPriceCents === 0,
+  floor: centsToInputValue(item.floorPriceCents),
+  isFloorShown: item.floorPriceCents !== null,
+  condition: item.condition,
+  deferred: [],
+});
+
 const SAVE_FAILED =
   "That didn't save. Check your connection; what you typed is still here.";
 
@@ -86,7 +104,11 @@ interface ThingFormProps {
   uid: string;
   /** Said under the title after a first thing, in the same sitting. */
   statusLine: string | null;
+  /** A thing that was started and left, picked up where it stopped. */
+  resume: Item | null;
   onTitleChange: (title: string) => void;
+  /** Filled with a function that saves the open answer, for the screen's Back, close and Escape. */
+  saveOnExitRef: MutableRefObject<(() => void) | null>;
   onLeave: () => void;
   onNext: (addedName: string) => void;
 }
@@ -96,17 +118,26 @@ function ThingForm({
   saleId,
   uid,
   statusLine,
+  resume,
   onTitleChange,
+  saveOnExitRef,
   onLeave,
   onNext,
 }: ThingFormProps) {
   const dispatch = useAppDispatch();
-  const [itemId] = useState(generateUuid);
-  const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
-  const latestAnswers = useRef<Answers>(INITIAL_ANSWERS);
+  const [itemId] = useState(() => resume?.id ?? generateUuid());
+  const [initialAnswers] = useState(() =>
+    resume === null ? INITIAL_ANSWERS : toAnswers(resume),
+  );
+  const [answers, setAnswers] = useState<Answers>(initialAnswers);
+  const latestAnswers = useRef<Answers>(initialAnswers);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const creation = useRef<Promise<void> | null>(null);
-  const saved = useRef<Required<ItemFields>>(EMPTY_FIELDS);
+  const creation = useRef<Promise<void> | null>(
+    resume === null ? null : Promise.resolve(),
+  );
+  const saved = useRef<Required<ItemFields>>(
+    resume === null ? EMPTY_FIELDS : toFields(initialAnswers),
+  );
   const item = useAppSelector(
     (state) =>
       selectItems(state, saleId).find((found) => found.id === itemId) ?? null,
@@ -121,7 +152,12 @@ function ThingForm({
   };
 
   const ensureCreated = (fields: ItemFields) => {
-    creation.current ??= createItem(saleId, itemId, uid, fields);
+    creation.current ??= createItem(saleId, itemId, uid, fields).catch(
+      (error: unknown) => {
+        creation.current = null;
+        throw error;
+      },
+    );
     return creation.current;
   };
 
@@ -133,13 +169,17 @@ function ThingForm({
     ) as ItemFields;
     if (Object.keys(changed).length === 0) return;
     const isFirst = creation.current === null;
+    const previous = saved.current;
     saved.current = next;
     const request = isFirst
       ? ensureCreated(changed)
       : updateItemFields(saleId, itemId, uid, changed);
     void request.then(
       () => setSaveError(null),
-      () => setSaveError(SAVE_FAILED),
+      () => {
+        if (saved.current === next) saved.current = previous;
+        setSaveError(SAVE_FAILED);
+      },
     );
   };
 
@@ -147,13 +187,35 @@ function ThingForm({
   const saveAnswers = (overrides: Partial<Answers> = {}) =>
     save(toFields({ ...latestAnswers.current, ...overrides }));
 
-  const uploads = usePhotoSetUploads(async (file) => {
-    await ensureCreated({});
-    await dispatch(addItemPhoto({ saleId, itemId, uid, file })).unwrap();
+  useEffect(() => {
+    saveOnExitRef.current = () => saveAnswers();
   });
+
+  const uploads = usePhotoSetUploads(
+    async (file) => {
+      await ensureCreated({});
+      return dispatch(addItemPhoto({ saleId, itemId, uid, file })).unwrap();
+    },
+    photoUrls.flatMap((photo) => (photo.url === null ? [] : [photo.id])),
+  );
 
   const photoCount = (item?.photos.length ?? 0) + uploads.uploads.length;
   const fields = toFields(answers);
+  const isDeferred = (id: string) => answers.deferred.includes(id);
+  const defer = (id: string) =>
+    set({ deferred: [...latestAnswers.current.deferred, id] });
+  const decideLater = (id: string, moveOn: () => void) => (
+    <div className='flex justify-center'>
+      <RevealChip
+        onClick={() => {
+          defer(id);
+          moveOn();
+        }}
+      >
+        Decide later
+      </RevealChip>
+    </div>
+  );
   const isFloorAbove =
     fields.floorPriceCents !== null &&
     fields.askingPriceCents !== null &&
@@ -179,10 +241,10 @@ function ThingForm({
       summaryValue:
         photoCount > 0
           ? `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}`
-          : answers.hasSkippedPhotos
+          : isDeferred('photos')
             ? 'Skipped for now'
             : '',
-      isAnswered: photoCount > 0 || answers.hasSkippedPhotos,
+      isAnswered: photoCount > 0 || isDeferred('photos'),
       render: ({ moveOn }) => (
         <div className='space-y-4'>
           <p className='text-muted-foreground text-sm'>
@@ -192,24 +254,23 @@ function ThingForm({
             photos={photoUrls}
             uploads={uploads}
             max={MAX_ITEM_PHOTOS}
+            fullMessage={`That's ${MAX_ITEM_PHOTOS}, the most a thing can have.`}
             onReorder={(ids) => reorderItemPhotos(saleId, itemId, uid, ids)}
             onRemove={(photoId) =>
               removeItemPhoto(saleId, itemId, uid, photoId)
             }
           />
           {photoCount === 0 && (
-            <Button
-              type='button'
-              variant='tertiary'
-              rounded='full'
-              className='text-muted-foreground!'
-              onClick={() => {
-                set({ hasSkippedPhotos: true });
-                moveOn();
-              }}
-            >
-              Skip photos for now
-            </Button>
+            <div className='flex justify-center'>
+              <RevealChip
+                onClick={() => {
+                  defer('photos');
+                  moveOn();
+                }}
+              >
+                Skip photos for now
+              </RevealChip>
+            </div>
           )}
         </div>
       ),
@@ -218,31 +279,35 @@ function ThingForm({
       id: 'name',
       title: 'What is it?',
       summaryLabel: 'Name',
-      summaryValue: fields.title,
-      isAnswered: fields.title !== '',
-      render: () => (
-        <Input
-          variant='outline'
-          aria-label='Name'
-          placeholder='Oak desk'
-          maxLength={MAX_ITEM_TITLE_LENGTH}
-          value={answers.title}
-          onChange={(event) => set({ title: event.target.value })}
-          onBlur={() => saveAnswers()}
-        />
+      summaryValue: fields.title || (isDeferred('name') ? 'Decide later' : ''),
+      isAnswered: fields.title !== '' || isDeferred('name'),
+      render: ({ moveOn }) => (
+        <div className='space-y-4'>
+          <Input
+            variant='outline'
+            aria-label='Name'
+            placeholder='Oak desk'
+            maxLength={MAX_ITEM_TITLE_LENGTH}
+            value={answers.title}
+            onChange={(event) => set({ title: event.target.value })}
+            onBlur={() => saveAnswers()}
+          />
+          {photoCount > 0 && decideLater('name', moveOn)}
+        </div>
       ),
     },
     {
       id: 'price',
       title: 'What are you asking?',
       summaryLabel: 'Price',
-      summaryValue: priceSummary,
-      isAnswered: fields.askingPriceCents !== null,
-      blocker:
-        answers.price.trim() === '' || answers.isFree
-          ? null
+      summaryValue: priceSummary || (isDeferred('price') ? 'Decide later' : ''),
+      isAnswered: fields.askingPriceCents !== null || isDeferred('price'),
+      blocker: answers.isFree
+        ? null
+        : answers.price.trim() === ''
+          ? "Enter a price, or tap It's free."
           : 'Enter the price as a dollar amount.',
-      render: () => (
+      render: ({ moveOn }) => (
         <div className='space-y-4'>
           {answers.isFree ? (
             <div className='space-y-3 text-center'>
@@ -290,6 +355,7 @@ function ThingForm({
                 </RevealChip>
               </div>
             ))}
+          {!answers.isFree && decideLater('price', moveOn)}
         </div>
       ),
     },
@@ -298,25 +364,33 @@ function ThingForm({
       title: 'What shape is it in?',
       summaryLabel: 'Condition',
       summaryValue:
-        answers.condition === null ? '' : CONDITION_LABELS[answers.condition],
-      isAnswered: answers.condition !== null,
+        answers.condition === null
+          ? isDeferred('condition')
+            ? 'Decide later'
+            : ''
+          : CONDITION_LABELS[answers.condition],
+      isAnswered: answers.condition !== null || isDeferred('condition'),
       render: ({ moveOn }) => (
-        <PillGroup
-          label='Condition'
-          options={CONDITION_OPTIONS}
-          value={answers.condition}
-          onChange={(condition) => {
-            set({ condition });
-            saveAnswers({ condition });
-            moveOn();
-          }}
-        />
+        <div className='space-y-4'>
+          <PillGroup
+            label='Condition'
+            options={CONDITION_OPTIONS}
+            value={answers.condition}
+            onChange={(condition) => {
+              set({ condition });
+              saveAnswers({ condition });
+              moveOn();
+            }}
+          />
+          {answers.condition === null && decideLater('condition', moveOn)}
+        </div>
       ),
     },
   ];
 
   const flow = useQuestionFlow({
     steps,
+    foldAnswered: resume !== null,
     onAdvance: () => saveAnswers(),
   });
   const isReview = flow.hasReviewed;
@@ -367,6 +441,7 @@ function ThingForm({
             ) : (
               <Button
                 type='button'
+                className='max-sm:-ml-2'
                 disabled={!flow.open?.isAnswered}
                 onClick={flow.advance}
               >
@@ -383,13 +458,25 @@ function ThingForm({
 interface NewThingFlowProps {
   saleId: string;
   uid: string;
+  /** A thing that was started and left Not listed yet, to pick up where it stopped. */
+  resume?: Item | null;
   onClose: () => void;
 }
 
-/** Adds things one after another: photos, a name, a price (or Free) with a floor beside it, a condition, then the next thing. */
-function NewThingFlow({ saleId, uid, onClose }: NewThingFlowProps) {
+/** Adds things one after another: photos, a name, a price (or Free) with a floor beside it, a condition, then the next thing. Back, close and Escape save the open answer first. */
+function NewThingFlow({
+  saleId,
+  uid,
+  resume = null,
+  onClose,
+}: NewThingFlowProps) {
   const [added, setAdded] = useState<string[]>([]);
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(resume?.title.trim() ?? '');
+  const saveOnExit = useRef<(() => void) | null>(null);
+  const close = () => {
+    saveOnExit.current?.();
+    onClose();
+  };
   const lastAdded = added.at(-1) ?? null;
 
   const statusLine =
@@ -401,7 +488,7 @@ function NewThingFlow({ saleId, uid, onClose }: NewThingFlowProps) {
     <Subview
       overlay
       title={title === '' ? 'New thing' : title}
-      onClose={onClose}
+      onClose={close}
       isTitleWrapped
     >
       <ThingForm
@@ -409,7 +496,9 @@ function NewThingFlow({ saleId, uid, onClose }: NewThingFlowProps) {
         saleId={saleId}
         uid={uid}
         statusLine={statusLine}
+        resume={added.length === 0 ? resume : null}
         onTitleChange={setTitle}
+        saveOnExitRef={saveOnExit}
         onLeave={onClose}
         onNext={(name) => {
           setAdded((current) => [...current, name]);

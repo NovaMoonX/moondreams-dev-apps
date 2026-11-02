@@ -1,3 +1,5 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import DetailSheet from '@/components/DetailSheet';
 import FactsLine from '@/components/FactsLine';
 import PhotoStrip from '@/components/PhotoStrip';
@@ -15,10 +17,12 @@ import { formatCentsShort } from '@/utils/moneyUtils';
 interface ThingDrawerProps {
   item: Item;
   onClose: () => void;
+  /** Reopens the add-a-thing walk-through on this thing. */
+  onFinish: () => void;
 }
 
 /** A thing in full: its photos, a facts line and the private figures sellers negotiate with. */
-function ThingDrawer({ item, onClose }: ThingDrawerProps) {
+function ThingDrawer({ item, onClose, onFinish }: ThingDrawerProps) {
   const name = getItemName(item);
   const photos = useItemPhotoUrls(item.photos).flatMap((photo) =>
     photo.url === null ? [] : [{ id: photo.id, url: photo.url }],
@@ -32,7 +36,18 @@ function ThingDrawer({ item, onClose }: ThingDrawerProps) {
   ].filter((fact) => fact !== null);
 
   return (
-    <DetailSheet isOpen onClose={onClose} title={name}>
+    <DetailSheet
+      isOpen
+      onClose={onClose}
+      title={name}
+      footer={
+        isListable(item) ? undefined : (
+          <Button type='button' rounded='full' onClick={onFinish}>
+            Finish adding
+          </Button>
+        )
+      }
+    >
       <div className='space-y-4'>
         <PhotoStrip photos={photos} label={name} />
         <div className='flex items-center gap-3'>

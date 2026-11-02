@@ -1,6 +1,7 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
   doc,
+  getDoc,
   runTransaction,
   setDoc,
   updateDoc,
@@ -92,9 +93,9 @@ interface AddItemPhotoInput {
   file: File;
 }
 
-/** Uploads one photo, then adds it to the thing in a transaction that refuses a 13th. */
+/** Uploads one photo, then adds it to the thing in a transaction that refuses a 13th; resolves with the new photo's id. */
 export const addItemPhoto = createAsyncThunk<
-  void,
+  string,
   AddItemPhotoInput,
   { rejectValue: string }
 >(
@@ -140,9 +141,18 @@ export const addItemPhoto = createAsyncThunk<
         });
       });
     } catch (error) {
-      await deleteFile(path).catch(() => undefined);
+      // A commit whose answer was lost may still have gone through; the file stays unless the thing doesn't list it.
+      const isListed = await getDoc(ref)
+        .then((snapshot) =>
+          ((snapshot.data()?.photos ?? []) as ItemPhoto[]).some(
+            (found) => found.id === photoId,
+          ),
+        )
+        .catch(() => true);
+      if (!isListed) await deleteFile(path).catch(() => undefined);
       return rejectWithValue(describeSaveFailure(error));
     }
+    return photoId;
   },
 );
 
@@ -189,5 +199,8 @@ export async function removeItemPhoto(
     });
     return found;
   });
-  if (removed !== null) await deleteFile(removed.path).catch(() => undefined);
+  if (removed !== null)
+    await deleteFile(removed.path).catch((error: unknown) =>
+      console.error(`Could not delete ${removed.path}`, error),
+    );
 }

@@ -216,6 +216,8 @@ Flow, all in `functions/src/notifications/bundledPush.ts` (no app words; the app
 
 The beta tier keeps access (sign-in, ownership, membership, the seller's powers, the invite join, immutable ownership fields) and checks no field types, lengths or list caps (`firestore-rules.md`); those caps live in the client and, for anything a visitor sends, in the functions. "Seller" is `uid == ownerUid`; "co-seller" is `uid in members` and not the seller; "other" is any other signed-in person.
 
+A member may write any `photos[].path` on a thing, so the public function (and the trigger and zip) derives every file path from the thing's own sale and item path and the photo id, and never trusts `photos[].path` or a `saleId` in the request body.
+
 ### Firestore, per path
 
 | Path | Seller | Co-seller | Other signed in | Signed out |

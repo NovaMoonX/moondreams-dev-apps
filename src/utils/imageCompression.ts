@@ -76,10 +76,14 @@ const encodeImage = async (
   canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
   const context = canvas.getContext('2d');
   if (!context) return null;
+  if (type === 'image/jpeg') {
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const toBlob = (type: string) =>
+  const toBlob = (mimeType: string) =>
     new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, type, quality),
+      canvas.toBlob(resolve, mimeType, quality),
     );
   const webp = type === undefined ? await toBlob('image/webp') : null;
   if (webp?.type === 'image/webp') return webp;

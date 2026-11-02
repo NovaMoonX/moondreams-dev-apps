@@ -14,6 +14,7 @@ import {
   selectItemsStatus,
   selectPhotoUploads,
 } from '@apps/going-once/store/selectors';
+import type { Item } from '@apps/going-once/types';
 
 interface ItemsSectionProps {
   saleId: string;
@@ -25,12 +26,16 @@ function ItemsSection({ saleId, uid }: ItemsSectionProps) {
   const items = useAppSelector((state) => selectItems(state, saleId));
   const status = useAppSelector(selectItemsStatus);
   const uploads = useAppSelector(selectPhotoUploads);
-  const [isAdding, setIsAdding] = useState(false);
+  const [adding, setAdding] = useState<{ resume: Item | null } | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const openItem = items.find((item) => item.id === openId) ?? null;
 
   const addButton = (
-    <Button size='sm' rounded='full' onClick={() => setIsAdding(true)}>
+    <Button
+      size='sm'
+      rounded='full'
+      onClick={() => setAdding({ resume: null })}
+    >
       <Plus className='size-4' aria-hidden='true' />
       New thing
     </Button>
@@ -67,13 +72,21 @@ function ItemsSection({ saleId, uid }: ItemsSectionProps) {
         </ul>
       )}
       {openItem && (
-        <ThingDrawer item={openItem} onClose={() => setOpenId(null)} />
+        <ThingDrawer
+          item={openItem}
+          onClose={() => setOpenId(null)}
+          onFinish={() => {
+            setAdding({ resume: openItem });
+            setOpenId(null);
+          }}
+        />
       )}
-      {isAdding && (
+      {adding && (
         <NewThingFlow
           saleId={saleId}
           uid={uid}
-          onClose={() => setIsAdding(false)}
+          resume={adding.resume}
+          onClose={() => setAdding(null)}
         />
       )}
     </div>

@@ -12,7 +12,7 @@ export function toItem(id: string, saleId: string, data: DocumentData): Item {
     condition: item.condition ?? null,
     askingPriceCents: item.askingPriceCents ?? null,
     floorPriceCents: item.floorPriceCents ?? null,
-    photos: item.photos ?? [],
+    photos: Array.isArray(item.photos) ? item.photos : [],
     status: item.status ?? 'AVAILABLE',
     createdBy: item.createdBy ?? '',
     createdAt: item.createdAt ?? 0,

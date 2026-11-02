@@ -9,30 +9,46 @@ export interface PhotoUpload {
   key: string;
   /** The shrunk photo, once it exists. */
   previewUrl: string | null;
-  status: 'preparing' | 'saving' | 'failed';
+  status: 'preparing' | 'saving' | 'saved' | 'failed';
   message: string | null;
+  /** The saved photo's id, once it is saved; the upload stays until the record lists it. */
+  photoId: string | null;
 }
 
 const UNREADABLE_PHOTO =
   "This photo's format can't be opened here. Try a JPG or PNG, or pick it from your phone.";
 
 /**
- * Shrinks each picked photo for a listing on the device and hands it to `onAdd`, one at a time per photo, so the
- * state outlives the picker's screen: a photo still saving when the person moves on finishes in the background.
- * `onAdd` throws a readable message when it can't save.
+ * Shrinks each picked photo on the device (the `listing` use) and hands it to `onAdd`, so the state outlives the
+ * picker's screen: a photo still saving when the person moves on finishes in the background. Photos shrink side by
+ * side but are handed over in pick order. `onAdd` returns the saved photo's id and throws a readable message when it
+ * can't save; a saved upload keeps showing until its id is among `listedIds`, so its thumb never blinks.
  */
-export function usePhotoSetUploads(onAdd: (file: File) => Promise<void>) {
+export function usePhotoSetUploads(
+  onAdd: (file: File) => Promise<string>,
+  listedIds: string[],
+) {
   const [uploads, setUploads] = useState<PhotoUpload[]>([]);
   const addRef = useRef(onAdd);
   const shrunk = useRef(new Map<string, File>());
+  const previews = useRef(new Map<string, string>());
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const isLive = useRef(true);
 
   useEffect(() => {
     addRef.current = onAdd;
   });
 
   useEffect(() => {
+    isLive.current = true;
     const files = shrunk.current;
-    return () => files.clear();
+    const urls = previews.current;
+    return () => {
+      isLive.current = false;
+      files.clear();
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      urls.clear();
+    };
   }, []);
 
   const patch = useCallback((key: string, changes: Partial<PhotoUpload>) => {
@@ -43,21 +59,25 @@ export function usePhotoSetUploads(onAdd: (file: File) => Promise<void>) {
     );
   }, []);
 
-  const drop = useCallback((key: string) => {
-    shrunk.current.delete(key);
-    setUploads((current) => {
-      const found = current.find((upload) => upload.key === key);
-      if (found?.previewUrl) URL.revokeObjectURL(found.previewUrl);
-      return current.filter((upload) => upload.key !== key);
+  const drop = useCallback((keys: string[]) => {
+    keys.forEach((key) => {
+      shrunk.current.delete(key);
+      const url = previews.current.get(key);
+      if (url) URL.revokeObjectURL(url);
+      previews.current.delete(key);
     });
+    setUploads((current) =>
+      current.filter((upload) => !keys.includes(upload.key)),
+    );
   }, []);
 
   const save = useCallback(
     async (key: string, file: File) => {
       patch(key, { status: 'saving', message: null });
       try {
-        await addRef.current(file);
-        drop(key);
+        const photoId = await addRef.current(file);
+        shrunk.current.delete(key);
+        patch(key, { status: 'saved', photoId });
       } catch (error) {
         patch(key, {
           status: 'failed',
@@ -65,21 +85,25 @@ export function usePhotoSetUploads(onAdd: (file: File) => Promise<void>) {
         });
       }
     },
-    [patch, drop],
+    [patch],
   );
 
-  const prepare = useCallback(
+  const shrink = useCallback(
     async (key: string, file: File) => {
       const result = await compressImageForUse(file, 'listing');
       if (result === null) {
         patch(key, { status: 'failed', message: UNREADABLE_PHOTO });
-        return;
+        return null;
       }
       shrunk.current.set(key, result);
-      patch(key, { previewUrl: URL.createObjectURL(result) });
-      await save(key, result);
+      if (isLive.current) {
+        const url = URL.createObjectURL(result);
+        previews.current.set(key, url);
+        patch(key, { previewUrl: url });
+      }
+      return result;
     },
-    [patch, save],
+    [patch],
   );
 
   const add = useCallback(
@@ -92,11 +116,18 @@ export function usePhotoSetUploads(onAdd: (file: File) => Promise<void>) {
           previewUrl: null,
           status: 'preparing' as const,
           message: null,
+          photoId: null,
         })),
       ]);
-      entries.forEach(({ key, file }) => void prepare(key, file));
+      entries.forEach(({ key, file }) => {
+        const shrinking = shrink(key, file);
+        queue.current = queue.current.then(async () => {
+          const result = await shrinking;
+          if (result !== null) await save(key, result);
+        });
+      });
     },
-    [prepare],
+    [shrink, save],
   );
 
   const retry = useCallback(
@@ -107,7 +138,13 @@ export function usePhotoSetUploads(onAdd: (file: File) => Promise<void>) {
     [save],
   );
 
-  return { uploads, add, retry, dismiss: drop };
+  const dismiss = useCallback((key: string) => drop([key]), [drop]);
+
+  const shown = uploads.filter(
+    (upload) => upload.photoId === null || !listedIds.includes(upload.photoId),
+  );
+
+  return { uploads: shown, add, retry, dismiss };
 }
 
 export type PhotoSetUploads = ReturnType<typeof usePhotoSetUploads>;

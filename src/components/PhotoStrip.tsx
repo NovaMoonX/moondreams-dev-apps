@@ -19,15 +19,17 @@ interface PhotoStripProps {
 
 /** A sideways row of photos that snaps one at a time and lets the next peek in, with "1 / 5" and a tap that opens the pictures full screen. */
 function PhotoStrip({ photos, label }: PhotoStripProps) {
-  const [current, setCurrent] = useState(0);
+  const [scrolledTo, setScrolledTo] = useState(0);
   const [viewerStart, setViewerStart] = useState<number | null>(null);
 
   if (photos.length === 0) return null;
 
+  const current = Math.min(scrolledTo, photos.length - 1);
+
   const handleScroll = (event: UIEvent<HTMLUListElement>) => {
     const { scrollLeft, scrollWidth } = event.currentTarget;
     const step = scrollWidth / photos.length;
-    setCurrent(
+    setScrolledTo(
       Math.min(photos.length - 1, Math.max(0, Math.round(scrollLeft / step))),
     );
   };
@@ -50,7 +52,7 @@ function PhotoStrip({ photos, label }: PhotoStripProps) {
               type='button'
               variant='tertiary'
               aria-label={`${label}, photo ${index + 1} of ${photos.length}, open`}
-              className='bg-muted aspect-4/3 h-auto w-full overflow-hidden rounded-2xl p-0'
+              className='bg-muted aspect-4/3 h-auto w-full overflow-hidden rounded-2xl px-0! py-0!'
               onClick={() => setViewerStart(index)}
             >
               <FallbackImage
