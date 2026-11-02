@@ -2,7 +2,6 @@ import { useAppSelector } from '@/store';
 import EmptyCard from '@/components/EmptyCard';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
-import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import InquiryDrawer from '@apps/going-once/components/inbox/InquiryDrawer';
 import InquiryRow from '@apps/going-once/components/inbox/InquiryRow';
@@ -35,7 +34,8 @@ interface InboxTabProps {
   uid: string;
   view: InboxView;
   onViewChange: (view: InboxView) => void;
-  /** The inquiry whose drawer is open, kept in the address. */
+  /** Changes the view and leaves the open message where it is. */
+  onSwitchView: (view: InboxView) => void;
   openId: string | null;
   onOpen: (id: string) => void;
   onClose: () => void;
@@ -47,6 +47,7 @@ function InboxTab({
   uid,
   view,
   onViewChange,
+  onSwitchView,
   openId,
   onOpen,
   onClose,
@@ -89,7 +90,6 @@ function InboxTab({
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title='Inbox' />
       {openId !== null && open === undefined && status === 'ready' && (
         <p className='text-muted-foreground text-sm'>
           That message isn&apos;t here anymore.
@@ -148,6 +148,7 @@ function InboxTab({
           handledBy={getHandledBy(open)}
           now={now}
           onClose={onClose}
+          onBackToNew={() => onSwitchView('new')}
         />
       )}
     </div>

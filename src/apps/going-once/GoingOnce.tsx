@@ -137,6 +137,7 @@ function GoingOnce() {
     inquiryId,
     inboxView,
     showInboxView,
+    switchInboxView,
     openInquiry,
     closeInquiry,
     activeTab,
@@ -277,6 +278,7 @@ function GoingOnce() {
                 uid={user.uid}
                 view={inboxView}
                 onViewChange={showInboxView}
+                onSwitchView={switchInboxView}
                 openId={inquiryId}
                 onOpen={openInquiry}
                 onClose={closeInquiry}

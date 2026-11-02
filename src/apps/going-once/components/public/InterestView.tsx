@@ -21,11 +21,9 @@ import { formatPhone, readContact } from '@apps/going-once/utils/contact';
 interface InterestViewProps {
   thing: PublicThing;
   linkId: string;
-  /** The drawer's footer, once it is drawn. */
   footerNode: HTMLElement | null;
   onBack: () => void;
   onDone: () => void;
-  /** Tells the drawer a refusal that changes what it offers after this view closes. */
   onRefused: (status: 'not_found' | 'not_available') => void;
 }
 
@@ -37,12 +35,8 @@ const getRefusal = (result: InterestResult): string | null => {
   return INTEREST_REFUSALS[result.status];
 };
 
-const getMissingNote = (hasName: boolean, hasContact: boolean) => {
-  if (!hasName && !hasContact) return 'Add your name and a phone or email';
-  if (!hasName) return 'Add your name';
-  if (!hasContact) return 'Add a phone or email that looks real';
-  return null;
-};
+const NAME_NOTE = 'Add your name so they know who you are';
+const CONTACT_NOTE = 'Add a phone number or an email we can reach you at';
 
 /** The buyer's I'm interested form, swapped into the thing's drawer: a name, one phone-or-email field and a message, then its own Sent confirmation. Nothing on it says who is selling. */
 function InterestView({
@@ -63,7 +57,12 @@ function InterestView({
   const [sent, setSent] = useState<Sent | null>(null);
   const { isWorking, run } = useSingleFlight();
   const read = readContact(contact);
-  const missingNote = getMissingNote(name.trim() !== '', read !== null);
+  const [touched, setTouched] = useState({ name: false, contact: false });
+  const isReady = name.trim() !== '' && read !== null;
+  const nameNote = touched.name && name.trim() === '' ? NAME_NOTE : null;
+  const contactNote = touched.contact && read === null ? CONTACT_NOTE : null;
+  const touch = (field: 'name' | 'contact') => () =>
+    setTouched((current) => ({ ...current, [field]: true }));
 
   const send = () =>
     run(async () => {
@@ -94,21 +93,14 @@ function InterestView({
       }
     });
 
-  const footerNote = sent === null ? (error ?? missingNote) : null;
+  const footerNote = sent === null ? error : null;
   const footer =
     footerNode === null
       ? null
       : createPortal(
           <div className='space-y-2'>
             {footerNote && (
-              <p
-                role={error === null ? 'status' : 'alert'}
-                className={
-                  error === null
-                    ? 'text-muted-foreground text-sm'
-                    : 'text-destructive text-sm'
-                }
-              >
+              <p role='alert' className='text-destructive text-sm'>
                 {footerNote}
               </p>
             )}
@@ -118,7 +110,7 @@ function InterestView({
                 size='lg'
                 rounded='full'
                 className='w-full'
-                disabled={isWorking || missingNote !== null}
+                disabled={isWorking || !isReady}
                 onClick={() => void send()}
               >
                 Send
@@ -142,7 +134,7 @@ function InterestView({
     return (
       <div className='space-y-4'>
         <p className='text-lg font-semibold'>
-          Sent. The seller will reach out to you at {sent.contact}.
+          Sent. The people running this sale can reach you at {sent.contact}.
         </p>
         <p className='text-muted-foreground text-sm'>
           About: {thing.title} · {formatCentsShort(thing.askingPriceCents)}
@@ -152,7 +144,7 @@ function InterestView({
     );
 
   return (
-    <div className='space-y-5'>
+    <div className='space-y-5 pb-28'>
       <BackLink onBack={onBack} label={thing.title} />
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Your name</p>
@@ -163,7 +155,13 @@ function InterestView({
           maxLength={MAX_INQUIRY_NAME_LENGTH}
           autoComplete='name'
           onChange={(event) => setName(event.target.value)}
+          onBlur={touch('name')}
         />
+        {nameNote && (
+          <p role='status' className='text-muted-foreground text-sm'>
+            {nameNote}
+          </p>
+        )}
       </div>
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Phone or email</p>
@@ -172,13 +170,21 @@ function InterestView({
           placeholder='Phone or email'
           value={contact}
           maxLength={MAX_INQUIRY_CONTACT_LENGTH}
-          inputMode='email'
           autoComplete='off'
           autoCapitalize='none'
           autoCorrect='off'
           spellCheck={false}
           onChange={(event) => setContact(event.target.value)}
+          onBlur={touch('contact')}
         />
+        {contactNote && (
+          <p role='status' className='text-muted-foreground text-sm'>
+            {contactNote}
+          </p>
+        )}
+        <p className='text-muted-foreground text-sm'>
+          Only the people running this sale see this.
+        </p>
       </div>
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Message</p>
@@ -203,9 +209,6 @@ function InterestView({
           onChange={(event) => setWebsite(event.target.value)}
         />
       </div>
-      <p className='text-muted-foreground text-sm'>
-        Only the people running this sale see this.
-      </p>
       {footer}
     </div>
   );

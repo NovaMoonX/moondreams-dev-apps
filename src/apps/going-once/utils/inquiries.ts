@@ -38,3 +38,7 @@ export function describeInquiryThing(
 
 /** Who asked: the name, or "A buyer" once the sale's contacts have been cleared. */
 export const getInquirerName = (inquiry: Inquiry) => inquiry.name ?? 'A buyer';
+
+/** Whether the message is just the one the form starts with, so a row has nothing of the buyer's own to show. */
+export const isPrefilledMessage = (inquiry: Inquiry) =>
+  inquiry.message === `Hi! Is the ${inquiry.itemTitleAtSend} still available?`;

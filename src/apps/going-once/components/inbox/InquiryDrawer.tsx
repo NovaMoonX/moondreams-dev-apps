@@ -32,12 +32,11 @@ import {
 interface InquiryDrawerProps {
   inquiry: Inquiry;
   uid: string;
-  /** The thing it is about, already worded ("Gray sofa (No longer listed)"). */
   thing: string;
-  /** Who handled it, for a Handled inquiry. */
   handledBy: string | null;
   now: number;
   onClose: () => void;
+  onBackToNew: () => void;
 }
 
 const REACH_LINK =
@@ -70,6 +69,7 @@ function InquiryDrawer({
   handledBy,
   now,
   onClose,
+  onBackToNew,
 }: InquiryDrawerProps) {
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -84,15 +84,18 @@ function InquiryDrawer({
       type: 'error',
     });
 
-  const handle = () =>
+  const handle = () => {
+    onClose();
     void markHandled(inquiry.saleId, inquiry.id, uid).catch(
       showFailure("Couldn't mark it handled"),
     );
+  };
   const reopen = () => {
     setIsMoreOpen(false);
     void backToNew(inquiry.saleId, inquiry.id).catch(
       showFailure("Couldn't move it back to New"),
     );
+    onBackToNew();
   };
   const remove = async () => {
     const isConfirmed = await confirm({
@@ -223,17 +226,19 @@ function InquiryDrawer({
           </p>
           {reach.length > 0 && (
             <div className='space-y-2'>
-              <p className='text-muted-foreground text-sm'>Reach {name}</p>
+              {contactText !== null && (
+                <p className='text-muted-foreground text-sm break-all'>
+                  Reach them at {contactText}
+                </p>
+              )}
               <div className='flex flex-wrap gap-2'>
-                {reach.map((link, index) => (
+                {reach.map((link) => (
                   <a
                     key={link.key}
                     href={link.href}
                     className={join(
                       REACH_LINK,
-                      index === 0
-                        ? 'bg-primary text-primary-foreground'
-                        : 'border-border text-foreground border',
+                      'border-border text-foreground border',
                     )}
                   >
                     <link.icon className='size-4' aria-hidden='true' />
@@ -241,11 +246,6 @@ function InquiryDrawer({
                   </a>
                 ))}
               </div>
-              {contactText !== null && (
-                <p className='text-muted-foreground text-sm break-all'>
-                  {contactText}
-                </p>
-              )}
             </div>
           )}
         </div>

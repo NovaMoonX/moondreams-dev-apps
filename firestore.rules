@@ -459,9 +459,9 @@ service cloud.firestore {
           && resource.data.get('pending', null) == null);
     }
 
-    // An inquiry is written only by `submitSaleInterest`, so no client creates one. The sale's members read it, delete it,
+    // An inquiry is written only by the server, so no client creates one. The sale's members read it, delete it,
     // and change only whether it has been handled and by whom: Handled carries the caller and a time, New carries neither.
-    // `limits` (the callable's daily count) has no rule, so no client reads or writes it.
+    // `limits` (the day's interest count) has no rule, so no client reads or writes it.
     match /apps/going-once/sales/{saleId}/inquiries/{inquiryId} {
       function isHandledChange() {
         let next = request.resource.data;

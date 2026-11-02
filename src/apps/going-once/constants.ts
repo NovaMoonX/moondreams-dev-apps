@@ -132,7 +132,6 @@ export const MAX_INQUIRY_NAME_LENGTH = 80;
 export const MAX_INQUIRY_CONTACT_LENGTH = 254;
 export const MAX_INQUIRY_MESSAGE_LENGTH = 1000;
 
-/** How many Handled inquiries the Inbox keeps listening to. */
 export const HANDLED_INBOX_LIMIT = 30;
 
 export const INBOX_VIEWS = [
@@ -145,7 +144,6 @@ export const INBOX_VIEW_LABELS: Record<InboxView, string> = {
   handled: 'Handled',
 };
 
-/** One sentence per reason the interest form was refused, shown with everything typed kept. */
 export const INTEREST_REFUSALS: Record<
   Exclude<InterestResult['status'], 'sent' | 'invalid'>,
   string

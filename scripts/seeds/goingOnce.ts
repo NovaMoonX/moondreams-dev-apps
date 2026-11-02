@@ -85,16 +85,14 @@ export interface SeedInquiry {
   itemId: string;
   itemTitle: string;
   name: string;
-  /** A phone in the form `submitSaleInterest` stores, or an email. */
   contact: string;
   message: string;
   sentAt: number;
   sendCount?: number;
-  /** Set for a Handled inquiry. */
   handled?: { by: string; at: number };
 }
 
-/** An inquiry exactly as `submitSaleInterest` files it (same id, same fields), so the seeded Inbox matches a live one. */
+/** An inquiry exactly as the server files it (same id, same fields), so the seeded Inbox matches a live one. */
 export function buildSeedInquiry(saleId: string, seed: SeedInquiry) {
   const isEmail = seed.contact.includes('@');
   return {

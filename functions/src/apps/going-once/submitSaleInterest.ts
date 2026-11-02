@@ -115,6 +115,14 @@ async function send(
       transaction.get(limits),
     ]);
     if (existing.exists) {
+      const sendCount = Number(existing.get('sendCount') ?? 1);
+      const lastSentAt = Number(existing.get('lastSentAt') ?? 0);
+      if (
+        sendCount >= INQUIRY_LIMITS.MAX_SENDS_PER_INQUIRY ||
+        now - lastSentAt < INQUIRY_LIMITS.RESEND_GAP_MS
+      ) {
+        return false;
+      }
       transaction.update(inquiry, {
         name,
         email: contact.email,
@@ -124,8 +132,9 @@ async function send(
         status: 'NEW',
         handledBy: null,
         handledAt: null,
-        sendCount: (existing.get('sendCount') ?? 1) + 1,
+        sendCount: sendCount + 1,
         lastSentAt: now,
+        contactClearedAt: null,
       });
       return false;
     }
@@ -208,7 +217,7 @@ export const submitSaleInterest = onCall(
     }
 
     const now = Date.now();
-    if (isThrottled(request.rawRequest.ip ?? '', now)) {
+    if (isThrottled(request.rawRequest.ip ?? `link:${data.linkId}`, now)) {
       return refuse('slow_down');
     }
 

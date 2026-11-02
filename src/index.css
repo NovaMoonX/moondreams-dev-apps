@@ -376,6 +376,11 @@ html[data-installed-app] *::-webkit-scrollbar {
   max-height: 92dvh;
 }
 
+/* A sheet's title can be a name someone typed with no spaces, which would otherwise run off the screen. */
+[role='dialog'] :is(h1, h2, h3) {
+  overflow-wrap: break-word;
+}
+
 /* On a landscape phone 92dvh leaves too little for the subject, so the strip of page shrinks to a hairline. */
 @media (max-height: 599px) {
   [role='dialog'][data-drawer-open] > .fixed.bottom-0 {

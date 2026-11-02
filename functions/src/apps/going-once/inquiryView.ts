@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-// A function can't import src/apps/going-once/constants.ts, so the caps are repeated here; scripts/checks/goingOnceShare.ts fails when they drift.
+// Functions can't import the client's constants, so the caps are repeated here; a check fails when they drift.
 export const INQUIRY_LIMITS = {
   MAX_NAME_LENGTH: 80,
   MAX_CONTACT_LENGTH: 254,
@@ -8,6 +8,8 @@ export const INQUIRY_LIMITS = {
   MAX_PAYLOAD_BYTES: 4096,
   PER_SALE_PER_DAY: 100,
   PER_THING: 40,
+  RESEND_GAP_MS: 10 * 60_000,
+  MAX_SENDS_PER_INQUIRY: 20,
   THROTTLE_SENDS: 5,
   THROTTLE_WINDOW_MS: 10 * 60_000,
 } as const;

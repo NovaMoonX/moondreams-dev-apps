@@ -99,6 +99,10 @@ export function useGoingOnceUrlState() {
       history: 'replace',
     });
   };
+  const switchInboxView = (view: InboxView) =>
+    setRequestedInboxView(view === 'new' ? null : view, {
+      history: 'replace',
+    });
   const openInquiry = (id: string) => setInquiryId(id, { history: 'replace' });
   const closeInquiry = () => setInquiryId(null, { history: 'replace' });
 
@@ -107,6 +111,7 @@ export function useGoingOnceUrlState() {
     inquiryId,
     inboxView,
     showInboxView,
+    switchInboxView,
     openInquiry,
     closeInquiry,
     thingId,
