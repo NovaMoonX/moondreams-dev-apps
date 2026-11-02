@@ -11,16 +11,23 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
+import EffectPreview from '@apps/runway/components/EffectPreview';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
+import {
+  formatCents,
+  parseMoneyToCents,
+  parsePercentToBps,
+} from '@/utils/moneyUtils';
 import {
   CHANGE_WORDS,
   ITEM_SHEET_WORDS,
   MAX_PAIRINGS,
   PAIRING_STOP_WORDS,
+  PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
 import { formatDateUTC } from '@/utils/formatUtils';
 import InlineNotice from '@/components/InlineNotice';
@@ -34,6 +41,7 @@ import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  selectBillPayments,
   selectBills,
   selectEnvelopes,
   selectGoals,
@@ -73,6 +81,13 @@ interface PairingsEditorProps {
   };
   /** Shown when a set of pairings can be cleared back to the plan. */
   note?: string;
+  /** The income day whose own set this changes: its effect is shown before saving, and an amount for a bill is held to what the bill still needs. */
+  day?: {
+    dayKey: string;
+    payLineId: string;
+    sourceId: string | null;
+    on: number;
+  };
 }
 
 const { custom } = FormFactories;
@@ -156,8 +171,13 @@ function PairingsEditor({
   onSave,
   change,
   note,
+  day,
 }: PairingsEditorProps) {
   const today = todayAsUtcDate();
+  const { isHidden } = useValuesHidden();
+  const billPayments = useAppSelector((state) =>
+    selectBillPayments(state, today),
+  );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
@@ -218,18 +238,39 @@ function PairingsEditor({
     }));
   const blocker = getBlocker(formData.rows, change !== undefined);
 
+  /** What a bill's payment still needs, so an exact amount on its day never asks for more. */
+  const getNeed = (id: string | null) => {
+    if (!day || id === null) return null;
+    const payments = billPayments[id];
+    const payment = payments?.find(
+      (entry, index) =>
+        entry.paid === null &&
+        entry.dueOn >= day.on &&
+        (index === 0 || payments[index - 1].dueOn < day.on),
+    );
+    return payment
+      ? {
+          totalCents: payment.totalCents,
+          setAsideCents: payment.fundedCents,
+          maxCents: Math.max(0, payment.totalCents - payment.fundedCents),
+        }
+      : null;
+  };
   const buildPairings = (rows: PairingRow[]) =>
     rows.flatMap((row): Pairing[] => {
       const amount = toAmount(row);
-      return row.targetItemId === null || amount === null
-        ? []
-        : [
-            {
-              targetItemId: row.targetItemId,
-              amount,
-              topUpFromAnySource: row.topUp,
-            },
-          ];
+      if (row.targetItemId === null || amount === null) return [];
+      const need = getNeed(row.targetItemId);
+      return [
+        {
+          targetItemId: row.targetItemId,
+          amount:
+            amount.kind === 'exact' && need !== null
+              ? { kind: 'exact', cents: Math.min(amount.cents, need.maxCents) }
+              : amount,
+          topUpFromAnySource: row.topUp,
+        },
+      ];
     });
 
   const candidate =
@@ -238,6 +279,20 @@ function PairingsEditor({
           ...change.current,
           pairings: [...locked, ...buildPairings(formData.rows)],
         }
+      : null;
+  const dayPairings = buildPairings(formData.rows);
+  const isDayChanged =
+    day !== undefined &&
+    change === undefined &&
+    blocker === null &&
+    JSON.stringify(dayPairings) !== JSON.stringify(initial);
+  const dayChangeJson =
+    isDayChanged && day
+      ? JSON.stringify({
+          kind: 'dayPairings',
+          day,
+          pairings: [...locked, ...dayPairings],
+        })
       : null;
   const flow = useChangeFlow({
     itemId: change?.itemId ?? '',
@@ -284,6 +339,18 @@ function PairingsEditor({
         : describeAmount(amount, fromLabel);
   };
 
+  const getCapNote = (row: PairingRow) => {
+    const need = getNeed(row.targetItemId);
+    const typed = row.mode === 'exact' ? parseMoneyToCents(row.amount) : null;
+    return isHidden || need === null || typed === null || typed <= need.maxCents
+      ? null
+      : PAY_SHARE_WORDS.capped(
+          nameOf(row.targetItemId ?? ''),
+          formatCents(need.totalCents),
+          need.setAsideCents > 0 ? formatCents(need.setAsideCents) : '',
+          formatCents(need.maxCents),
+        );
+  };
   const editingRow =
     formData.rows.find((row) => row.key === editingKey) ?? null;
   const patchRows = (rows: PairingRow[]) => {
@@ -305,6 +372,11 @@ function PairingsEditor({
             <div className='space-y-3'>
               <InlineNotice tone='info'>
                 {ITEM_SHEET_WORDS.fundsNotice}
+                {rows.some(
+                  (row) =>
+                    targets.find((target) => target.value === row.targetItemId)
+                      ?.kind === 'bill',
+                ) && ` ${ITEM_SHEET_WORDS.fundsBillNote}`}
               </InlineNotice>
               {locked.length > 0 && (
                 <ul className='border-border divide-border divide-y rounded-2xl border'>
@@ -384,6 +456,12 @@ function PairingsEditor({
                   </div>
                 )}
               {note && <p className='text-muted-foreground text-xs'>{note}</p>}
+              {day && !change && (
+                <EffectPreview
+                  changeJson={dayChangeJson}
+                  caption={PAY_SHARE_WORDS.changes}
+                />
+              )}
             </div>
           </>
         );
@@ -412,6 +490,12 @@ function PairingsEditor({
               !formData.rows.some((row) => row.targetItemId === choice.value),
           )}
           fromLabel={fromLabel}
+          maxCents={
+            editingRow.mode === 'exact'
+              ? (getNeed(editingRow.targetItemId)?.maxCents ?? null)
+              : null
+          }
+          capNote={getCapNote(editingRow)}
           amountText={getRowAmountText(editingRow)}
           problem={getBlocker([editingRow], true)}
           onChange={(patch) =>

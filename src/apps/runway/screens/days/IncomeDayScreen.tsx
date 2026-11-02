@@ -468,6 +468,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           fromLabel={title}
           locked={[]}
           initial={effectivePairings}
+          day={day}
           onClose={() => setIsEditingFunds(false)}
           onSave={(pairings) =>
             persist((current) => ({ ...current, pairings }))

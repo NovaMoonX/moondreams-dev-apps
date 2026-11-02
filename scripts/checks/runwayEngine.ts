@@ -10227,6 +10227,115 @@ console.log('runway engine: ok');
   );
 }
 
+// A figure pinned on one pay of a pay line that pays the bill first is counted against what its other pays still ask for.
+{
+  const rentOver = (
+    pairedCents: number,
+    fixed: Record<string, number>,
+    setAsideCents = 0,
+  ) => {
+    const pairing: Pairing = {
+      targetItemId: 'rent',
+      amount: { kind: 'exact', cents: pairedCents },
+      topUpFromAnySource: false,
+    };
+    const keys = ['pay_a', 'pay_b', 'pay_c', 'pay_d'];
+    const ons = [
+      utc(2026, 11, 20),
+      utc(2026, 11, 27),
+      utc(2026, 12, 4),
+      utc(2026, 12, 11),
+    ];
+    const draft = buildDraft({
+      days: keys.map((dayKey, index) => ({
+        dayKey,
+        sourceId: 'src',
+        on: ons[index],
+        amount: { lowCents: 300_000, highCents: 300_000 },
+        pairings: { day: null, payLine: [pairing], source: [] },
+      })),
+      plan: {
+        envelopes: [],
+        bills: [
+          {
+            itemId: 'rent',
+            createdAt: 1,
+            priority: 'must',
+            orderIndex: 1,
+            amount: { lowCents: 100_000, highCents: 100_000 },
+            stanceOverride: null,
+            schedule: {
+              kind: 'monthly',
+              anchor: utc(2026, 12, 15),
+              monthDays: [15],
+            },
+            ending: NEVER,
+            fundedBy: { kind: 'suggested' },
+            fixed,
+            progress: {
+              funded:
+                setAsideCents > 0
+                  ? [
+                      {
+                        dayKey: 'old',
+                        on: utc(2026, 11, 18),
+                        cents: setAsideCents,
+                      },
+                    ]
+                  : [],
+              paid: [],
+            },
+          },
+        ],
+        goals: [],
+        horizon: utc(2027, 6, 1),
+        incomeDays: keys.map((dayKey, index) => ({
+          dayKey,
+          on: ons[index],
+          moneyCents: 300_000,
+        })),
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+    return keys.map(
+      (key) =>
+        draft.lines.find((line) => line.lineId === `${key}:rent`)?.cents ?? 0,
+    );
+  };
+  const total = (parts: number[]) =>
+    parts.reduce((sum, cents) => sum + cents, 0);
+  assert.deepEqual(
+    rentOver(40_000, {}),
+    [40_000, 40_000, 20_000, 0],
+    'without a figure of its own the pairings fund the bill, once',
+  );
+  const over = rentOver(40_000, { pay_b: 5_000 });
+  assert.equal(over[1], 5_000, 'the pinned pay puts in its figure');
+  assert.equal(
+    total(over),
+    100_000,
+    'a pin counts against what the other pairing pays still ask for: the bill is not over-funded',
+  );
+  const under = rentOver(10_000, { pay_b: 5_000 });
+  assert.equal(under[1], 5_000);
+  assert.equal(
+    total(under),
+    100_000,
+    'the rest after the pairings goes to the next pay even when that pay also pairs: the bill is not under-funded',
+  );
+  assert.ok(
+    under[2] > 10_000,
+    'the carrier pay keeps its pairing and adds the rest',
+  );
+  const partlySetAside = rentOver(10_000, { pay_b: 5_000 }, 20_000);
+  assert.equal(
+    total(partlySetAside),
+    80_000,
+    'what a confirmed day already set aside is not asked for again',
+  );
+}
+
 // Round 7, package G9: a correction that leaves its day short is covered or cut like Confirm.
 {
   const start = 10 * DAY_MS;

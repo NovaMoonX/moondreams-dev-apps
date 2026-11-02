@@ -692,10 +692,12 @@ export const PAID_FROM_WORDS = {
   spreadMeaning: 'Every pay before it is due puts in a share.',
   lastBeforeMeaning: 'Only the last pay before it is due puts it in.',
   payMeaning: 'Only the pay you pick puts it in.',
-  replacesPins: (count: number) =>
-    count === 1
-      ? 'This replaces 1 change you made for one pay.'
-      : `This replaces ${count} changes you made for one pay.`,
+  replacesPins: (dates: readonly string[]) =>
+    dates.length === 1
+      ? `This replaces your change for the ${dates[0]} pay.`
+      : dates.length <= 3
+        ? `This replaces your changes for the ${dates.slice(0, -1).join(', ')} and ${dates[dates.length - 1]} pays.`
+        : `This replaces your changes for the ${dates.slice(0, 3).join(', ')} and ${dates.length - 3} more pays.`,
   summaryLabel: 'Paid from',
   label: 'Paid from',
   spread: 'Spread across my pays',
@@ -706,6 +708,7 @@ export const PAID_FROM_WORDS = {
   onlyRepeating:
     'Only repeating pays can be picked. A one-time pay can still top it up from its own day.',
   seeChanges: 'See what this changes below',
+  seePays: 'Pick a pay below.',
   pickPay: 'Pick a pay.',
   gone: 'A pay that is no longer in the plan',
   /** The change log's phrase for the choice. */
@@ -772,7 +775,9 @@ export const PAY_SHARE_WORDS = {
     `${name} stays ${total}; only this pay changes`,
   leftOutDetail: (pay: string) => `Paid from ${pay}`,
   restSetAside: (cents: string, due: string) =>
-    `${cents} · the rest is set aside · due ${due}`,
+    `${cents} · already set aside · due ${due}`,
+  completesIt: (cents: string, due: string) =>
+    `${cents} · this pay completes it · due ${due}`,
   undoPins: 'Put them back',
   theDatePay: (date: string) => `the ${date} pay`,
   leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
@@ -803,6 +808,12 @@ export const PAY_SHARE_WORDS = {
   whyNothing: 'Why this pay puts nothing in',
   leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
   leftOutBody: 'This pay puts nothing toward it.',
+  firstOnlyTitle: (name: string) => `${name} comes out of this pay first`,
+  firstOnlyBody: (from: string) =>
+    `Its Paid from is ${from}, so what this pay puts in is set by Pay these first, not here.`,
+  hiddenEffects: 'Other pays and items may move',
+  whyOthers:
+    'Other items move because this pay has less or more left for them.',
   overCapHidden: (name: string) =>
     `That is more than ${name} still needs. Show amounts to see how much.`,
   keepEffect: 'If you keep it every paycheck',
@@ -1454,6 +1465,8 @@ export const ITEM_SHEET_WORDS = {
   fundsTitle: (source: string) => `Paid first from ${source}`,
   fundsNotice:
     'Everything in your plan is paid from your income. Items here come out of this pay first.',
+  fundsBillNote:
+    'For a bill, this is what this pay puts in, whatever its Paid from says.',
   history: 'History',
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',

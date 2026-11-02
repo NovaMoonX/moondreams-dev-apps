@@ -1,6 +1,7 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { SlidersHorizontal } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import type { QuestionStep } from '@/hooks/useQuestionFlow';
 import { ITEM_SHEET_R2_WORDS } from '@apps/runway/constants';
@@ -13,6 +14,8 @@ interface QuickChangeProps {
   onAll: () => void;
   /** Giving an undated item its first date: just the question, no door to the rest. */
   isFirstDate?: boolean;
+  /** What the change does, drawn between the question and the door to the rest. */
+  children?: ReactNode;
 }
 
 /** The most frequent change to an item: only its one question, with one door to the rest of its fields. */
@@ -21,6 +24,7 @@ function QuickChange({
   onBack,
   onAll,
   isFirstDate = false,
+  children,
 }: QuickChangeProps) {
   return (
     <div className='space-y-4' role='group' aria-label={step.title}>
@@ -29,23 +33,18 @@ function QuickChange({
         {step.title}
       </h3>
       {step.render({ moveOn: () => undefined })}
+      {children}
       {isFirstDate ? (
         <p className='text-muted-foreground text-sm'>
           {ITEM_SHEET_R2_WORDS.firstDateNote}
         </p>
       ) : (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='text-muted-foreground! relative h-auto min-h-10 w-full justify-between rounded-none px-1! py-1.5 font-normal'
+        <ActionRow
+          hasChevron
+          icon={<SlidersHorizontal />}
+          label={ITEM_SHEET_R2_WORDS.changeElse}
           onClick={onAll}
-        >
-          <span>{ITEM_SHEET_R2_WORDS.changeElse}</span>
-          <ChevronRight
-            className='text-muted-foreground h-5 w-5'
-            aria-hidden='true'
-          />
-        </Button>
+        />
       )}
     </div>
   );

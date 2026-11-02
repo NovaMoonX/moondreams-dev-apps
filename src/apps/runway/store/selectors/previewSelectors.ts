@@ -47,6 +47,7 @@ import type {
   GoalSealed,
   OpenDay,
   OpenVersion,
+  Pairing,
   Stance,
 } from '@apps/runway/types';
 
@@ -82,11 +83,16 @@ export type PreviewChange =
       day: Pick<ComingDay, 'dayKey' | 'payLineId' | 'sourceId' | 'on'>;
       billId: string;
       cents: number;
+    }
+  | {
+      kind: 'dayPairings';
+      day: Pick<ComingDay, 'dayKey' | 'payLineId' | 'sourceId' | 'on'>;
+      pairings: Pairing[];
     };
 
 const layerDay = (
   openDays: Slice['days'],
-  change: Extract<PreviewChange, { kind: 'day' | 'dayBill' }>,
+  change: Extract<PreviewChange, { kind: 'day' | 'dayBill' | 'dayPairings' }>,
 ): OpenDay[] => {
   const { day } = change;
   const existing = openDays.find((entry) => entry.id === day.dayKey);
@@ -106,25 +112,26 @@ const layerDay = (
       billCents: {},
     },
   };
-  const layered: OpenDay = {
-    ...base,
-    override:
-      change.kind === 'day'
-        ? {
-            ...base.override,
-            payloads: {
-              ...base.override.payloads,
-              [change.itemId]: change.payload,
-            },
-          }
-        : {
-            ...base.override,
-            billCents: {
-              ...base.override.billCents,
-              [change.billId]: change.cents,
-            },
-          },
+  const getOverride = (): OpenDay['override'] => {
+    if (change.kind === 'dayPairings')
+      return { ...base.override, pairings: change.pairings };
+    if (change.kind === 'day')
+      return {
+        ...base.override,
+        payloads: {
+          ...base.override.payloads,
+          [change.itemId]: change.payload,
+        },
+      };
+    return {
+      ...base.override,
+      billCents: {
+        ...base.override.billCents,
+        [change.billId]: change.cents,
+      },
+    };
   };
+  const layered: OpenDay = { ...base, override: getOverride() };
   return [...openDays.filter((entry) => entry.id !== day.dayKey), layered];
 };
 
@@ -596,7 +603,6 @@ export function previewBillShareView(
       ) {
         return false;
       }
-      const first = applicable[0].payment.parts[0].day;
       const ruled = layerPlan(
         { items, versions, openDays },
         {
@@ -624,19 +630,22 @@ export function previewBillShareView(
           unpin: { billId, from: today, until: null },
         },
       );
-      const drafted = computeDraftView(
-        ruled.items,
-        ruled.versions,
-        stance,
-        ruled.openDays,
-        first.dayKey,
-        today,
-        inputs.heldByItem,
-        inputs.settledKey,
-        inputs.billProgress,
-        { isCached: false, coming },
-      )?.draft.lines.find((line) => line.itemId === billId);
-      return !drafted || drafted.shortBy === 0;
+      return applicable.every(({ payment }) => {
+        if (payment.parts[0].cents === 0) return true;
+        const drafted = computeDraftView(
+          ruled.items,
+          ruled.versions,
+          stance,
+          ruled.openDays,
+          payment.parts[0].day.dayKey,
+          today,
+          inputs.heldByItem,
+          inputs.settledKey,
+          inputs.billProgress,
+          { isCached: false, coming },
+        )?.draft.lines.find((line) => line.itemId === billId);
+        return drafted !== undefined && drafted.shortBy === 0;
+      });
     },
   };
   return result;

@@ -12,6 +12,8 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SummaryRow from '@/components/SummaryRow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 
@@ -59,6 +61,10 @@ interface PairingRowSheetProps {
   fromLabel: string;
   /** What the amount reads as, "$300.00" or "10% of this pay". */
   amountText: string;
+  /** The most an exact amount can be: what the bill it pays first still needs; null when nothing limits it. */
+  maxCents: number | null;
+  /** Said under the amount when the typed figure is above that. */
+  capNote: string | null;
   /** Why the row can't be kept as it is; null when it can. */
   problem: string | null;
   onChange: (patch: Partial<PairingRow>) => void;
@@ -73,6 +79,8 @@ function PairingRowSheet({
   choices,
   fromLabel,
   amountText,
+  maxCents,
+  capNote,
   problem,
   onChange,
   onRemove,
@@ -80,6 +88,7 @@ function PairingRowSheet({
 }: PairingRowSheetProps) {
   const [view, setView] = useState<View>(isNew ? 'what' : 'main');
   const [query, setQuery] = useState('');
+  const { isHidden } = useValuesHidden();
   const picked = choices.find((choice) => choice.value === row.targetItemId);
   const shown = choices.filter((choice) =>
     choice.text.toLowerCase().includes(query.trim().toLowerCase()),
@@ -150,15 +159,29 @@ function PairingRowSheet({
               Takes what is left of {fromLabel} after the others.
             </p>
           ) : (
-            <AmountField
-              isHero
-              autoFocus
-              label={row.mode === 'percent' ? 'Percent' : 'Amount'}
-              value={row.amount}
-              onChange={(amount) => onChange({ amount })}
-              mode={row.mode}
-              percentOfLabel={`of ${fromLabel}`}
-            />
+            <div
+              onBlurCapture={() => {
+                const typed = parseMoneyToCents(row.amount);
+                if (
+                  !isHidden &&
+                  maxCents !== null &&
+                  typed !== null &&
+                  typed > maxCents
+                )
+                  onChange({ amount: centsToInputValue(maxCents) });
+              }}
+            >
+              <AmountField
+                isHero
+                autoFocus
+                label={row.mode === 'percent' ? 'Percent' : 'Amount'}
+                value={row.amount}
+                onChange={(amount) => onChange({ amount })}
+                mode={row.mode}
+                percentOfLabel={`of ${fromLabel}`}
+                hint={capNote ?? undefined}
+              />
+            </div>
           )}
           {row.mode === 'percent' && (
             <PillGroup

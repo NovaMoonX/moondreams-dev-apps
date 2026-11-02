@@ -25,7 +25,7 @@ import { useStore } from 'react-redux';
 import { useAppSelector, type RootState } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import {
   BILL_FREQUENCIES,
   BILL_FREQUENCY_LABELS,
@@ -418,6 +418,10 @@ const getEditingData = (
   };
 };
 
+/** Brings the pays to pick from into sight when they open below the fold of a short screen. */
+const scrollIntoSight = (element: HTMLDivElement | null) =>
+  element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
 function BillFormBody({
   onStartOver,
   isOpen,
@@ -542,11 +546,12 @@ function BillFormBody({
           },
         ]
       : planPayOptions;
-  const getPinCount = () =>
+  const getPinDates = () =>
     editing
-      ? getBillPins(openDays, editing.itemId, flow.effectiveFrom ?? today)
-          .length
-      : 0;
+      ? getBillPins(openDays, editing.itemId, flow.effectiveFrom ?? today).map(
+          (pin) => formatDateShortUTC(pin.expectedOn),
+        )
+      : [];
   const canPickPay = !isOnce && formData.frequency !== null;
   const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
   const canAskPaidFrom =
@@ -905,15 +910,15 @@ function BillFormBody({
                       />
                     ))}
                   </div>
-                  {getPinCount() > 0 &&
+                  {getPinDates().length > 0 &&
                     (formData.paidFrom !== startData.paidFrom ||
                       formData.payValue !== startData.payValue) && (
                       <p className='text-muted-foreground text-xs'>
-                        {PAID_FROM_WORDS.replacesPins(getPinCount())}
+                        {PAID_FROM_WORDS.replacesPins(getPinDates())}
                       </p>
                     )}
                   {formData.paidFrom === 'pay' && (
-                    <div className='space-y-2'>
+                    <div ref={scrollIntoSight} className='space-y-2'>
                       <p className='text-muted-foreground text-xs'>
                         {PAID_FROM_WORDS.whichPay}
                       </p>
@@ -1327,7 +1332,13 @@ function BillFormBody({
                 onBack={onCancel}
                 onAll={() => setIsAll(true)}
                 isFirstDate={isFirstDate}
-              />
+              >
+                {editing && questions.hasReviewed && !isFirstDate && (
+                  <div ref={setChangesEl}>
+                    <ChangeSection />
+                  </div>
+                )}
+              </QuickChange>
             ) : (
               <>
                 {openStep !== null && editing && (
@@ -1336,7 +1347,7 @@ function BillFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && questions.hasReviewed && !isFirstDate && (
+            {editing && !isQuick && questions.hasReviewed && !isFirstDate && (
               <div ref={setChangesEl}>
                 <ChangeSection />
               </div>

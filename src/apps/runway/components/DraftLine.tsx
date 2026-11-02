@@ -128,16 +128,17 @@ function DraftLine({
     return null;
   };
   const pairingShort = getPairingShort();
-  const billShareShort = line.bill
-    ? line.bill.setAsideCents !== undefined &&
-      line.bill.setAsideCents > 0 &&
-      line.cents + line.bill.setAsideCents >= line.bill.totalCents
-      ? PAY_SHARE_WORDS.restSetAside(
-          formatCentsShort(line.cents),
-          formatDateShortUTC(line.bill.dueOn),
-        )
-      : `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatDateShortUTC(line.bill.dueOn)}`
-    : null;
+  const getBillShareShort = () => {
+    if (!line.bill) return null;
+    const { setAsideCents = 0, totalCents, dueOn } = line.bill;
+    const due = formatDateShortUTC(dueOn);
+    if (setAsideCents >= totalCents)
+      return PAY_SHARE_WORDS.restSetAside(formatCentsShort(line.cents), due);
+    if (setAsideCents > 0 && line.cents + setAsideCents >= totalCents)
+      return PAY_SHARE_WORDS.completesIt(formatCentsShort(line.cents), due);
+    return `${formatCentsShort(line.cents)} of ${formatCentsShort(totalCents)} · due ${due}`;
+  };
+  const billShareShort = getBillShareShort();
   const getDetail = () => {
     if (isHidden && (state === 'held' || shortText))
       return { text: NEEDS_LOOK_WORDS.short, isStrong: false };

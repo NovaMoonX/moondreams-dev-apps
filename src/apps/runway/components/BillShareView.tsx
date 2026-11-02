@@ -67,6 +67,7 @@ import {
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectAllCards,
+  selectBillPayments,
   selectBillProgress,
   selectComingDays,
   selectDraftHeldByItem,
@@ -267,6 +268,9 @@ function BillShareView({
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const allCards = useAppSelector(selectAllCards);
+  const billPayments = useAppSelector((state) =>
+    selectBillPayments(state, today),
+  )[billId];
   const day = comingDays.find((entry) => entry.dayKey === dayKey) ?? null;
   const bill = useMemo(() => {
     const found = resolveCurrentOrNext(
@@ -368,16 +372,31 @@ function BillShareView({
   }, [rowCount, settledTarget]);
 
   if (bill === null) return null;
-  if (mode !== 'edit') {
+  const isInWindow = (billPayments ?? []).some((payment) =>
+    payment.parts.some((part) => part.day.dayKey === dayKey),
+  );
+  if (mode !== 'edit' || !isInWindow) {
+    const from = describePaidFrom(bill.fundedBy, plan, true);
     return (
       <div className='flex flex-col gap-3'>
         <BackLink onBack={onBack} />
         <ActionTitle>
-          {PAY_SHARE_WORDS.leftOutTitle(bill.name, paidFromText)}
+          {mode !== 'edit'
+            ? PAY_SHARE_WORDS.leftOutTitle(bill.name, paidFromText)
+            : PAY_SHARE_WORDS.firstOnlyTitle(bill.name)}
         </ActionTitle>
         <p className='text-muted-foreground text-sm'>
-          {PAY_SHARE_WORDS.leftOutBody}
+          {mode !== 'edit'
+            ? PAY_SHARE_WORDS.leftOutBody
+            : PAY_SHARE_WORDS.firstOnlyBody(from)}
         </p>
+        {mode === 'edit' && (
+          <div>
+            <Button type='button' variant='secondary' onClick={onOpenPaidFrom}>
+              {PAY_SHARE_WORDS.setPaidFrom}
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -545,29 +564,28 @@ function BillShareView({
       };
       pendingRef.current = optimistic;
       isFinishingRef.current = true;
-      let wrote: FundedByBefore | null = null;
-      try {
-        if (isWriting) {
-          const next: BillSealed = { ...bill, fundedBy: rule };
-          wrote = await writeFundedBy(user.uid, encryption, {
-            billId,
-            versions: liveVersions,
-            today,
-            next: rule,
-            summary: `${bill.name}: ${describeChange(
-              bill,
-              next,
-              getCardNamer(allCards),
-              undefined,
-              (picked) => describePayChoice(picked, plan, true),
-            )}, from ${formatDateUTC(today)}.`,
-          });
-        }
-      } catch (writeError) {
+      const writeRule = async (): Promise<FundedByBefore | null> => {
+        if (!isWriting) return null;
+        const next: BillSealed = { ...bill, fundedBy: rule };
+        return writeFundedBy(user.uid, encryption, {
+          billId,
+          versions: liveVersions,
+          today,
+          next: rule,
+          summary: `${bill.name}: ${describeChange(
+            bill,
+            next,
+            getCardNamer(allCards),
+            undefined,
+            (picked) => describePayChoice(picked, plan, true),
+          )}, from ${formatDateUTC(today)}.`,
+        });
+      };
+      const wrote = await writeRule().catch((writeError: unknown) => {
         isFinishingRef.current = false;
         pendingRef.current = saved.pending;
         throw writeError;
-      }
+      });
       const withRule: Pending =
         isWriting && wrote === null
           ? { ...optimistic, ruleWrote: null, ruleBack: [] }
@@ -808,22 +826,40 @@ function BillShareView({
 
   return (
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
-      <BackLink onBack={onBack} />
-      <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
-      <div onBlurCapture={snapToCap}>
-        <AmountHero
-          label={PAY_SHARE_WORDS.amount}
-          value={amount}
-          onChange={setAmount}
-          disabled={isSaving}
-          hint={getHint()}
-        />
+      <div className='bg-background sticky top-0 z-10 flex flex-col gap-3 pb-1'>
+        <BackLink onBack={onBack} />
+        <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
+        <div onBlurCapture={snapToCap}>
+          <AmountHero
+            label={PAY_SHARE_WORDS.amount}
+            value={amount}
+            onChange={setAmount}
+            disabled={isSaving}
+            hint={getHint()}
+          />
+        </div>
       </div>
-      {billRows.length > 0 && (
+      {isHidden && isChanged && (
+        <ActionSection caption={PAY_SHARE_WORDS.changes}>
+          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+            <li className='px-3 py-2 text-sm'>
+              <p className='flex items-baseline justify-between gap-3'>
+                <span className='min-w-0 break-words'>
+                  {PAY_SHARE_WORDS.hiddenEffects}
+                </span>
+                <span className='font-medium whitespace-nowrap tabular-nums'>
+                  <MaskedText>{formatCents(0)}</MaskedText>
+                </span>
+              </p>
+            </li>
+          </ul>
+        </ActionSection>
+      )}
+      {!isHidden && billRows.length > 0 && (
         <ActionSection caption={PAY_SHARE_WORDS.changes}>
           <ul
             ref={cardRef}
-            className='border-border divide-border bg-card scroll-mb-24 divide-y rounded-2xl border'
+            className='border-border divide-border bg-card scroll-mb-24 divide-y overflow-y-auto rounded-2xl border [@media(min-height:500px)]:max-h-[max(9rem,calc(92dvh-27rem))]'
           >
             {[
               ...shownBillRows,
@@ -858,6 +894,11 @@ function BillShareView({
               </li>
             )}
           </ul>
+          {(otherRows.length > 0 || dayLeftRow !== null) && (
+            <p className='text-muted-foreground text-xs'>
+              {PAY_SHARE_WORDS.whyOthers}
+            </p>
+          )}
         </ActionSection>
       )}
       {hasShort &&
