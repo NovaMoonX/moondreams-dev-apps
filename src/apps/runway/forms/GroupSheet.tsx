@@ -31,7 +31,13 @@ import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
+import {
+  fundingAtLevel,
+  getExtras,
+  withExtras,
+} from '@apps/runway/engine/parts';
 import {
   BILL_WORDS,
   FORM_FLOW_WORDS,
@@ -84,6 +90,7 @@ import {
 import {
   describeCadenceLine,
   describeFundingShort,
+  describeExtras,
 } from '@apps/runway/utils/fundingText';
 import { resolveGroupRename } from '@apps/runway/utils/groupChoice';
 import { getCardNamer } from '@apps/runway/utils/cardText';
@@ -812,7 +819,14 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {envelopes.map(({ item, version }) => {
-                    const { funding } = version.payload;
+                    const atLevel = fundingAtLevel(version.payload, dial);
+                    const funding = atLevel ?? withExtras(version.payload);
+                    const leftOut =
+                      atLevel === null
+                        ? []
+                        : getExtras(version.payload).filter(
+                            (extra) => !isCountedAt(extra.tier, dial),
+                          );
                     return (
                       <ItemRow
                         key={item.id}
@@ -824,7 +838,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         )}
                         detail={
                           funding.amount.kind === 'exact'
-                            ? describeCadenceLine(funding.cadence)
+                            ? `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
                             : describeFundingShort(funding)
                         }
                         figure={

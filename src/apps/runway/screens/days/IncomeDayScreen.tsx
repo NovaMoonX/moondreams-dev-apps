@@ -44,6 +44,7 @@ import ConfirmSheet from '@apps/runway/screens/days/ConfirmSheet';
 import NotArrivedView from '@apps/runway/screens/days/NotArrivedView';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
+import { getPartName } from '@apps/runway/engine/parts';
 import { effectiveStance } from '@apps/runway/engine/stance';
 import type { HoldChoice } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -194,10 +195,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         : [],
     ),
   );
+  const isFix = (line: DraftLineData) =>
+    line.part === null && fixIds.has(line.itemId);
   const lesserCount =
-    lookahead === null
-      ? 0
-      : unfunded.filter((line) => !fixIds.has(line.itemId)).length;
+    lookahead === null ? 0 : unfunded.filter((line) => !isFix(line)).length;
   const title = day.sourceName ?? day.payLineName;
 
   const renderLine = (line: (typeof draft.lines)[number]) => {
@@ -212,10 +213,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       <DraftLine
         key={line.lineId}
         line={line}
-        isWarning={fixIds.has(line.itemId)}
+        isWarning={isFix(line)}
         isOpen={openLineId === line.lineId}
         onOpenChange={(isOpen) => setOpenLineId(isOpen ? line.lineId : null)}
-        name={envelope.name}
+        name={getPartName(envelope.name, line, draft.lines)}
         kind={isKnown ? (line.bill ? 'bill' : 'envelope') : null}
         sourceNames={sourceNames}
         daySourceId={day.sourceId}
