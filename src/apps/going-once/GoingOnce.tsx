@@ -144,6 +144,7 @@ function GoingOnce() {
     statusView,
     showStatusView,
     showThingsOn,
+    showThingOnThings,
     openSale,
     closeSale,
     showTab,
@@ -282,6 +283,11 @@ function GoingOnce() {
                 openId={inquiryId}
                 onOpen={openInquiry}
                 onClose={closeInquiry}
+                openThingId={thingId}
+                onOpenThing={openThing}
+                onCloseThing={closeThing}
+                onFinishThing={showThingOnThings}
+                onOpenSale={() => showTab('sale')}
               />
             )}
           </div>

@@ -37,7 +37,18 @@ const getRefusal = (result: InterestResult): string | null => {
 };
 
 const NAME_NOTE = 'Add your name so they know who you are';
-const CONTACT_NOTE = 'Add a phone number or an email we can reach you at';
+const CONTACT_MISSING_NOTE = 'Add a phone number or an email.';
+const CONTACT_INVALID_NOTE = 'Check that phone number or email.';
+const HINT_CLASS = 'min-h-5 text-sm text-pretty text-(--going-once-hint)';
+
+const getContactNote = (
+  isTouched: boolean,
+  contact: string,
+  read: ReturnType<typeof readContact>,
+) => {
+  if (!isTouched || read !== null) return null;
+  return contact.trim() === '' ? CONTACT_MISSING_NOTE : CONTACT_INVALID_NOTE;
+};
 
 /** The buyer's I'm interested form, swapped into the thing's drawer: a name, one phone-or-email field and a message, then its own Sent confirmation. Nothing on it says who is selling. */
 function InterestView({
@@ -50,7 +61,9 @@ function InterestView({
 }: InterestViewProps) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
-  const [message, setMessage] = useState(toPrefilledMessage(thing.title));
+  const [message, setMessage] = useState(
+    toPrefilledMessage(thing.title, thing.status === 'PENDING'),
+  );
   const [website, setWebsite] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<Sent | null>(null);
@@ -59,7 +72,7 @@ function InterestView({
   const [touched, setTouched] = useState({ name: false, contact: false });
   const isReady = name.trim() !== '' && read !== null;
   const nameNote = touched.name && name.trim() === '' ? NAME_NOTE : null;
-  const contactNote = touched.contact && read === null ? CONTACT_NOTE : null;
+  const contactNote = getContactNote(touched.contact, contact, read);
   const touch = (field: 'name' | 'contact') => () =>
     setTouched((current) => ({ ...current, [field]: true }));
 
@@ -145,6 +158,11 @@ function InterestView({
   return (
     <div className='space-y-5 pb-28'>
       <BackLink onBack={onBack} label={thing.title} />
+      {thing.status === 'PENDING' && (
+        <p className='text-sm text-pretty'>
+          Someone&apos;s picking this up. Ask anyway in case it falls through.
+        </p>
+      )}
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Your name</p>
         <Input
@@ -156,11 +174,9 @@ function InterestView({
           onChange={(event) => setName(event.target.value)}
           onBlur={touch('name')}
         />
-        {nameNote && (
-          <p role='status' className='text-muted-foreground text-sm'>
-            {nameNote}
-          </p>
-        )}
+        <p role='status' className={HINT_CLASS}>
+          {nameNote}
+        </p>
       </div>
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Phone or email</p>
@@ -176,13 +192,11 @@ function InterestView({
           onChange={(event) => setContact(event.target.value)}
           onBlur={touch('contact')}
         />
-        {contactNote && (
-          <p role='status' className='text-muted-foreground text-sm'>
-            {contactNote}
-          </p>
-        )}
         <p className='text-muted-foreground text-sm'>
           Only the people running this sale see this.
+        </p>
+        <p role='status' className={HINT_CLASS}>
+          {contactNote}
         </p>
       </div>
       <div className='space-y-2'>

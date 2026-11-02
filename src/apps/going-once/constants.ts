@@ -44,7 +44,11 @@ export const SALE_DETAILS: Record<
   SaleDetailField,
   { label: string; empty: string; hint: string | null }
 > = {
-  name: { label: 'Name', empty: 'Name your sale', hint: null },
+  name: {
+    label: 'Name',
+    empty: 'Name your sale',
+    hint: 'Buyers see this. Leave out your name and address.',
+  },
   pickupArea: {
     label: 'Pickup area',
     empty: 'Add a pickup area',
@@ -55,6 +59,13 @@ export const SALE_DETAILS: Record<
     empty: 'Add a note for buyers',
     hint: 'Buyers see this.',
   },
+};
+
+/** What a row says under a sale detail's value: all of them reach the public page. */
+export const SALE_DETAIL_NOTES: Record<SaleDetailField, string> = {
+  name: 'Buyers see this. Leave out your name and address.',
+  pickupArea: 'Buyers see this',
+  buyerNote: 'Buyers see this',
 };
 
 export const MAX_ITEM_PHOTOS = 12;
@@ -96,6 +107,9 @@ export const CONDITION_LABELS: Record<ItemCondition, string> = {
   FAIR: 'Fair',
   WELL_USED: 'Well used',
 };
+
+/** What a thing that buyers can't be shown yet is called where a status word would stand. */
+export const NOT_LISTED_LABEL = 'Not listed yet';
 
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   AVAILABLE: 'Available',

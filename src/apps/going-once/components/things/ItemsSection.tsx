@@ -12,8 +12,7 @@ import SectionHeader from '@/components/SectionHeader';
 import SortControl from '@/components/SortControl';
 import { useAppSelector } from '@/store';
 import NewThingFlow from '@apps/going-once/components/things/NewThingFlow';
-import ThingDrawer from '@apps/going-once/components/things/ThingDrawer';
-import ThingForm from '@apps/going-once/components/things/ThingForm';
+import OpenThing from '@apps/going-once/components/things/OpenThing';
 import ThingRow from '@apps/going-once/components/things/ThingRow';
 import {
   ITEM_SORT_OPTIONS,
@@ -29,7 +28,6 @@ import {
 } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
-import { keepEntryFor } from '@/hooks/useBackHistory';
 import {
   isListable,
   matchesSearch,
@@ -79,12 +77,10 @@ function ItemsSection({
   const uploads = useAppSelector(selectPhotoUploads);
   const sale = useAppSelector((state) => selectSaleById(state, saleId));
   const [adding, setAdding] = useState<{ resume: Item | null } | null>(null);
-  const [modifyId, setModifyId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
   const openItem = items.find((item) => item.id === openId) ?? null;
-  const isModifying = openItem !== null && modifyId === openItem.id;
   const isSeller = isSaleSeller(sale, uid);
 
   const hasTools = items.length >= SEARCH_FROM_ITEMS;
@@ -270,8 +266,9 @@ function ItemsSection({
           </ul>
         </>
       )}
-      {openItem && !isModifying && (
-        <ThingDrawer
+      {openItem && (
+        <OpenThing
+          key={openItem.id}
           item={openItem}
           uid={uid}
           isSeller={isSeller}
@@ -281,18 +278,6 @@ function ItemsSection({
             setAdding({ resume: openItem });
             onCloseThing();
           }}
-          onModify={() => {
-            keepEntryFor('thing');
-            setModifyId(openItem.id);
-          }}
-        />
-      )}
-      {openItem && isModifying && (
-        <ThingForm
-          item={openItem}
-          uid={uid}
-          isSeller={isSeller}
-          onClose={() => setModifyId(null)}
         />
       )}
       {adding && (

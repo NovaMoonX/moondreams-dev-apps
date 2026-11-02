@@ -166,7 +166,7 @@ Contacts already cleared stay cleared after a reopen.
 
 ### Totals
 
-`selectStatusSummary` (a `createSelector` over the open sale's things, no second totals module) runs `getStatusSummary`, one pass bucketing by status: collected (sum of `sale.priceCents`), asked for those, pending count and asking, left count and asking, unpriced count. Withdrawn things are excluded everywhere; `floorPriceCents` is never summed. One formatter per figure shown twice (tile and footer line). The Things tab's pills and its totals line come from `getStatusSummary` in `utils/statusSummary.ts`: Available counts and sums only what is listed (a thing not listed yet waits behind its door, and a missing price is counted, "1 has no price yet"); the pills follow the search, the line under the rows never does (while a search is on it says "All pending ·"); "Collected $225 of $245 asked" is `formatCollected`, used by the line and the sold confirmation; the Sale tab's Collected tile shows the same two parts as `$225` and `formatOfAsked`, and its Pending and Left tiles use `formatStatusTotal`, so a tile and the line under the rows never disagree.
+`selectStatusSummary` (a `createSelector` over the open sale's things, no second totals module) runs `getStatusSummary`, one pass bucketing by status: collected (sum of `sale.priceCents`), asked for those, pending count and asking, left count and asking, and the count of Available things not listed yet. Withdrawn things are excluded everywhere; `floorPriceCents` is never summed. One formatter per figure shown twice (tile and footer line). The Things tab's pills and its totals line come from `getStatusSummary` in `utils/statusSummary.ts`: Available counts and sums only what is listed (a thing not listed yet waits behind its door and is counted apart: "$845 asked · plus 1 not listed yet", so the caption is worked out from the same set as the figure); the pills follow the search, the line under the rows never does (while a search is on it says "All pending ·"); "Collected $225 of $245 asked" is `formatCollected`, used by the line and the sold confirmation; the Sale tab's Collected tile shows the same two parts as `$225` and `formatOfAsked`, and its Pending and Left tiles use `formatStatusTotal`, so a tile and the line under the rows never disagree.
 
 ## Inquiry push
 
@@ -392,10 +392,10 @@ src/apps/going-once/
   types.ts  constants.ts  going-once.css
   components/
     sales/        SalesList, SaleFormSheet, SaleTab (StatTiles, LinkCard, People, Details, Finish, Delete)
-    things/       ThingRow, StatusDot, PriceTag, ThingDrawer (getThingOffer), ThingForm (Modify), MarkPendingView,
+    things/       ThingRow, ThingThumb (a cover), StatusDot, PriceTag, OpenThing (a thing's drawer and its Modify, from the Things tab or over an inquiry), ThingDrawer (getThingOffer), ThingForm (Modify), MarkPendingView,
                   MarkSoldView, SoldConfirmation, ChangePaidView, HistoryView, StatusViewFooter, DeleteThingConfirm, NewThingFlow (QuestionFlow), ThingQuestions + thingRows (the questions
                   both share, and each row's label, fields and summary), ItemsSection (search, sort, the door)
-    inbox/        InboxTab, InquiryRow, InquiryDrawer, PushCapsule
+    inbox/        InboxTab (also draws the open thing over an inquiry: `?inquiry=` and `?thing=` together), InquiryRow, InquiryDrawer, PushCapsule
     people/       PeopleSection, PersonSheet, AddCoSellerSheet, CoSellerIntro (once per sale per person, remembered on the device), RemovedFromSale
     relist/       CopyListingTextRow, SavePhotosRow, SaveAllPhotosSheet
     public/       BuyerCard, BuyerThingDrawer, InterestView

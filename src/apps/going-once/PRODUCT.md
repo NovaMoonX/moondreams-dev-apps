@@ -138,7 +138,7 @@ This is Theo's loop, and every tool in it is one tap from where he is.
 
 - **Collected:** the sum of what was paid for Sold things. **Asked for those:** their asking prices beside it, so "$225 of $245 asked" reads at a glance.
 - **Pending:** a count and what they are asking.
-- **Left:** Available things and what they are asking. Things with no price yet are counted, not priced ("1 has no price yet"), and taken-off things are left out of every figure.
+- **Left:** Available things and what they are asking. Things not listed yet (no photo, name or price) are counted apart, not priced ("plus 1 not listed yet"), and taken-off things are left out of every figure.
 - The floor price is never summed; it is a per-thing guide, not a target.
 
 ### Finishing a Sale, In Detail
@@ -183,12 +183,12 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 
 ### Core MVP
 
-- [ ] **Seller:** start a sale with a name, pickup area and note (behind the `create-sales` switch, open to everyone); keep several, open or finished
+- [x] **Seller:** start a sale with a name, pickup area and note (behind the `create-sales` switch, open to everyone); keep several, open or finished
 - [x] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, "Not listed yet" until it has a photo, a name and a price; no categories, found by status and search
 - [x] **Seller:** add co-sellers by email and remove them, with a confirm that says what they marked stays; **Co-seller:** join, leave, and be told plainly when removed
 - [x] **Co-seller:** Available, Pending (optionally who and a pickup day) and Sold with what was paid, how and when; Not sold after all; take off the list and put back; a short history per thing; refused in words from a stale screen (the seller has the same controls)
-- [ ] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating
-- [ ] **Seller:** delete a thing, with a confirm that names its pickup, its inquiries and any change to Collected, and offers Take it off the list instead
+- [x] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating
+- [x] **Seller:** delete a thing, with a confirm that names its pickup, its inquiries and any change to Collected, and offers Take it off the list instead
 - [ ] **Co-seller:** a push when someone is interested, on by default, bundled to one per 15 minutes, quiet 10 PM to 8 AM with one morning push, never dropped; permission asked on first opening the inbox or on joining, up to three times; a per-sale switch to turn it off (the seller gets the same)
 - [x] **Co-seller:** the shared inbox with Call, Text and Email, New / Handled by hand and resends folded into one inquiry (the seller sees it too)
 - [ ] **Co-seller:** each thing's own list of who asked, and Hold for someone from their inquiry

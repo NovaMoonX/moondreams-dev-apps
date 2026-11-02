@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
+  ChevronRight,
   Ellipsis,
   Mail,
   MessageSquare,
@@ -22,7 +23,12 @@ import {
   deleteInquiry,
   markHandled,
 } from '@apps/going-once/store/actions/inquiryActions';
-import type { Inquiry } from '@apps/going-once/types';
+import StatusDot from '@apps/going-once/components/things/StatusDot';
+import ThingThumb from '@apps/going-once/components/things/ThingThumb';
+import { NOT_LISTED_LABEL } from '@apps/going-once/constants';
+import type { Inquiry, Item } from '@apps/going-once/types';
+import { getItemName, isListable } from '@apps/going-once/utils/listing';
+import { getStatusFacts } from '@apps/going-once/utils/status';
 import { formatPhone } from '@apps/going-once/utils/contact';
 import {
   formatSentAt,
@@ -32,6 +38,9 @@ import {
 interface InquiryDrawerProps {
   inquiry: Inquiry;
   uid: string;
+  /** The thing it is about, which the thing's row opens; `null` once it is gone. */
+  item: Item | null;
+  onOpenThing: () => void;
   thing: string;
   handledBy: string | null;
   now: number;
@@ -65,6 +74,8 @@ const getStatusLine = (
 function InquiryDrawer({
   inquiry,
   uid,
+  item,
+  onOpenThing,
   thing,
   handledBy,
   now,
@@ -220,7 +231,41 @@ function InquiryDrawer({
           <p className='text-muted-foreground text-sm'>
             {getStatusLine(inquiry, handledBy, now)}
           </p>
-          <p className='text-sm font-medium break-words'>{thing}</p>
+          {item === null ? (
+            <p className='text-sm font-medium break-words'>{thing}</p>
+          ) : (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='border-border bg-card h-auto min-h-16 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left'
+              aria-label={`Open ${getItemName(item)}`}
+              onClick={onOpenThing}
+            >
+              <ThingThumb item={item} />
+              <span className='min-w-0 flex-1'>
+                <span className='text-foreground line-clamp-2 text-base font-medium break-words'>
+                  {getItemName(item)}
+                </span>
+                <span className='text-muted-foreground block text-sm font-normal'>
+                  <StatusDot
+                    status={item.status}
+                    label={
+                      item.status === 'AVAILABLE' && !isListable(item)
+                        ? NOT_LISTED_LABEL
+                        : undefined
+                    }
+                    isInline
+                  >
+                    {getStatusFacts(item, true)}
+                  </StatusDot>
+                </span>
+              </span>
+              <ChevronRight
+                className='text-muted-foreground size-5 shrink-0'
+                aria-hidden='true'
+              />
+            </Button>
+          )}
           <p className='text-sm break-words whitespace-pre-wrap'>
             {inquiry.message ?? 'No message.'}
           </p>

@@ -138,8 +138,11 @@ function SaleView({ page, linkId }: { page: OkPage; linkId: string }) {
   const available = shown.filter((thing) => thing.status === 'AVAILABLE');
   const pending = shown.filter((thing) => thing.status === 'PENDING');
   const openThing = things.find((thing) => thing.id === openId) ?? null;
+  const allAvailable = things.filter((thing) => thing.status === 'AVAILABLE');
+  const allPending = things.filter((thing) => thing.status === 'PENDING');
   const summary = [
-    things.length === 0 ? null : `${things.length} for sale`,
+    allAvailable.length === 0 ? null : `${allAvailable.length} for sale`,
+    allPending.length === 0 ? null : `${allPending.length} pending`,
     sale.pickupArea,
   ]
     .filter((part) => part !== null)

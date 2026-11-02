@@ -84,6 +84,12 @@ export function useGoingOnceUrlState() {
     void setRequestedTab(null, { history: 'replace' });
     return showStatusView(view);
   };
+  const showThingOnThings = (id: string) => {
+    clearInbox();
+    void setRequestedTab(null, { history: 'replace' });
+    void setRequestedView(null, { history: 'replace' });
+    return openThing(id);
+  };
   const showTab = (tab: GoingOnceTab) => {
     void closeThing();
     if (tab !== 'inbox') clearInbox();
@@ -119,6 +125,7 @@ export function useGoingOnceUrlState() {
     statusView,
     showStatusView,
     showThingsOn,
+    showThingOnThings,
     openSale,
     closeSale,
     showTab,

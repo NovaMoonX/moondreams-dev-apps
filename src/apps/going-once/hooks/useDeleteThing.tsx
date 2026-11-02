@@ -9,7 +9,11 @@ import DeleteThingConfirm, {
 } from '@apps/going-once/components/things/DeleteThingConfirm';
 import { deleteItem } from '@apps/going-once/store/actions/itemActions';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
-import { selectItems } from '@apps/going-once/store/selectors';
+import {
+  selectHandledInquiries,
+  selectItems,
+  selectNewInquiries,
+} from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
 import { getItemName } from '@apps/going-once/utils/listing';
 import { getStatusSummary } from '@apps/going-once/utils/statusSummary';
@@ -35,9 +39,15 @@ export function useDeleteThing(
       const collectedCents = getStatusSummary(
         selectItems(store.getState(), saleId),
       ).SOLD.collectedCents;
+      const state = store.getState();
+      const inquiryCount = [
+        ...selectNewInquiries(state, saleId),
+        ...selectHandledInquiries(state, saleId),
+      ].filter((inquiry) => inquiry.itemId === item.id).length;
       setAsking({
         item,
         collectedCents,
+        inquiryCount,
         settle: (choice) => {
           setAsking(null);
           resolve(choice);
