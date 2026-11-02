@@ -9434,6 +9434,7 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     undated: [],
+    due: [],
   });
   assert.equal(
     describeHoldsBlocks(look([water]), look([water, rent]))
