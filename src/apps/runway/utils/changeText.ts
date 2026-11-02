@@ -1,3 +1,5 @@
+import { DAY_MS } from '@apps/runway/engine/dates';
+import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
@@ -29,16 +31,7 @@ export type ItemPayload =
 /** The name of a group by its id, from the plan's groups. */
 export type GroupNamer = (groupId: string) => string;
 
-/** Key order never counts: a payload rebuilt with a field in another place is the same payload. */
-const sortKeys = (_key: string, value: unknown) =>
-  value !== null && typeof value === 'object' && !Array.isArray(value)
-    ? Object.fromEntries(
-        Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
-      )
-    : value;
-
-const same = (a: unknown, b: unknown) =>
-  JSON.stringify(a, sortKeys) === JSON.stringify(b, sortKeys);
+const same = isSameValue;
 
 type Part = [label: string, before: string, after: string] | null;
 
@@ -244,6 +237,16 @@ const getParts = (
   return base;
 };
 
+const MONEYLESS_KEYS = ['name', 'emoji', 'groupId', 'paidByCardId'];
+
+/** A change to only a name, emoji, group or card: it moves no money on any income day. */
+export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
+  const changed = getChangedKeys(before, after) as string[];
+  return (
+    changed.length > 0 && changed.every((key) => MONEYLESS_KEYS.includes(key))
+  );
+};
+
 /** True when two payloads say the same thing. */
 export const isSamePayload = (a: ItemPayload, b: ItemPayload) => same(a, b);
 
@@ -258,5 +261,22 @@ export function describeChange(
     .flatMap((part) => (part === null ? [] : [part]))
     .map(([label, from, to]) => `${label} ${from} to ${to}`)
     .join('; ');
+  return result;
+}
+
+/** What an edit from a day on replaces: "This replaces your change from Jan 1, 2027 (Amount $1,250.00 to $1,300.00)."; null when it replaces nothing. */
+export function describeReplaced(
+  replaced: readonly {
+    effectiveFrom: number;
+    effectiveUntil: number | null;
+    before: ItemPayload;
+    after: ItemPayload;
+  }[],
+  cardNameOf: (cardId: string | null) => string,
+) {
+  const [first] = replaced;
+  if (!first) return null;
+  const more = replaced.length - 1;
+  const result = `This replaces your change from ${formatDateUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }

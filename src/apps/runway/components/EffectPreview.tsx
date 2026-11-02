@@ -21,6 +21,7 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   describeHoldsBlocks,
+  type HoldsBlock,
   isSameLookahead,
 } from '@apps/runway/utils/lookaheadText';
 import {
@@ -59,6 +60,8 @@ interface EffectPreviewProps {
   ) => ReactNode;
   /** Items whose rows lead every day's card, so a reorder shows the gain beside the losses. */
   pinnedItemIds?: ReadonlySet<string>;
+  /** What the change does to how far the plan holds, when the form has already worked it out. */
+  holds?: { blocks: HoldsBlock[]; isSame: boolean } | null;
 }
 
 interface EffectEntry {
@@ -184,6 +187,7 @@ function EffectPreview({
   isCompact = false,
   describeLead,
   pinnedItemIds,
+  holds,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -271,8 +275,9 @@ function EffectPreview({
     return result;
   }, [settledVirtual, items, versions, openDays, today, settledKey]);
 
-  const holdsText = useMemo(() => {
-    if (settledVirtual === null || !isLedgerReady) return null;
+  const ownHolds = useMemo(() => {
+    if (holds !== undefined || settledVirtual === null || !isLedgerReady)
+      return null;
     const { before, after } = previewLookahead(
       store.getState(),
       today,
@@ -290,7 +295,9 @@ function EffectPreview({
     versions,
     openDays,
     isHidden,
+    holds,
   ]);
+  const holdsText = holds === undefined ? ownHolds : holds;
 
   const isMoveSaid =
     isCompact &&
@@ -310,6 +317,8 @@ function EffectPreview({
       );
     }
     if (days.length === 0) {
+      if (holdsText?.blocks.some((block) => block.tone === 'warning'))
+        return null;
       if (describeLead !== undefined && holdsText?.isSame !== true) return null;
       return emptyText ? (
         <InlineNotice tone='info'>
@@ -469,11 +478,18 @@ function EffectPreview({
       {!isLeadShown &&
         shownBlocks.map((block) =>
           isHidden && block.tone === 'warning' ? (
-            <NeedsALookRow key={block.text} />
+            <div key={block.text} data-change-warning=''>
+              <NeedsALookRow />
+            </div>
           ) : (
-            <InlineNotice key={block.text} tone={block.tone}>
-              {renderFigure(block)}
-            </InlineNotice>
+            <div
+              key={block.text}
+              data-change-warning={block.tone === 'warning' ? '' : undefined}
+            >
+              <InlineNotice tone={block.tone}>
+                {renderFigure(block)}
+              </InlineNotice>
+            </div>
           ),
         )}
     </ActionSection>

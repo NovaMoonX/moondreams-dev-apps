@@ -9,14 +9,11 @@ import {
   HandCoins,
   ArrowRightLeft,
   Scale,
-  CircleMinus,
   History,
   Link2,
   Pause,
   Pencil,
-  PiggyBank,
   Play,
-  Ruler,
   ReceiptText,
   ShoppingBag,
   Undo2,
@@ -65,7 +62,6 @@ import {
   CARD_WORDS,
   CHANGE_WORDS,
   GOAL_CHART_WORDS,
-  HOW_OFTEN_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
   FORM_FLOW_WORDS,
@@ -181,9 +177,7 @@ interface ItemSheetProps {
   /** A caveat about the figure (the end of a range, a pairing), behind a help icon by it. */
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
-  quickChange?: { label: string; step: string };
-  /** An optional extra's own action row, opening the change at that question. */
-  maxAction?: { label: string; step: string };
+  quickChange?: { label: string; subtitle?: string; step: string };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -243,7 +237,6 @@ function ItemSheet({
   fact,
   help,
   quickChange,
-  maxAction,
   startsAtStep,
   payment = null,
   onMarked,
@@ -763,6 +756,7 @@ function ItemSheet({
             hasChevron
             icon={<Pencil />}
             label={quickChange.label}
+            subtitle={quickChange.subtitle}
             onClick={() => openChange(quickChange.step)}
           />
         )}
@@ -774,33 +768,6 @@ function ItemSheet({
             label={ITEM_SHEET_WORDS.change}
             subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
             onClick={() => openChange(null)}
-          />
-        )}
-        {canChange && maxAction && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Ruler />}
-            label={maxAction.label}
-            onClick={() => openChange(maxAction.step)}
-          />
-        )}
-        {canChange && goal && goal.funding.cadence.kind !== 'none' && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<CircleMinus />}
-            label={HOW_OFTEN_WORDS.changeOften}
-            onClick={() => openChange('often')}
-          />
-        )}
-        {canChange && goal && goal.funding.cadence.kind === 'none' && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<PiggyBank />}
-            label={HOW_OFTEN_WORDS.startAdding}
-            onClick={() => openChange('often')}
           />
         )}
         {canChange && isTrackEnvelope && isArchivable && heldCents > 0 && (
