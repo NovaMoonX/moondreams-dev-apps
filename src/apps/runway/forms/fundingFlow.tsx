@@ -136,13 +136,21 @@ export function buildFundingRule(
   }
   if (data.cadence === 'chosen') {
     const chosen = new Set(data.dayKeys);
+    const savedKeys =
+      saved?.cadence.kind === 'chosen' ? saved.cadence.dayKeys : null;
+    const isUntouched =
+      savedKeys !== null &&
+      savedKeys.length === chosen.size &&
+      savedKeys.every((key) => chosen.has(key));
     return {
       amount,
       cadence: {
         kind: 'chosen',
-        dayKeys: comingDays
-          .filter((day) => chosen.has(day.dayKey))
-          .map((day) => day.dayKey),
+        dayKeys: isUntouched
+          ? savedKeys
+          : comingDays
+              .filter((day) => chosen.has(day.dayKey))
+              .map((day) => day.dayKey),
       },
       ...source,
     };

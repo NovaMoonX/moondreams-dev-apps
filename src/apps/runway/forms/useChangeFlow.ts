@@ -9,6 +9,12 @@ import { useAppSelector, type RootState } from '@/store';
 import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { useWarningHint } from '@apps/runway/hooks/useWarningHint';
+import {
+  isSameValue,
+  planStretches,
+  type StretchPlan,
+} from '@apps/runway/engine/resolve';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   carryDayOverrides,
@@ -28,6 +34,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeChange,
+  isMoneylessChange,
   isSamePayload,
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
@@ -44,6 +51,7 @@ import type {
   GoalSealed,
   GroupSealed,
   ItemKind,
+  OpenVersion,
 } from '@apps/runway/types';
 
 interface UseChangeFlowArgs {
@@ -80,12 +88,13 @@ const getDayOnlyBlocker = (
   return isSamePayload(allowed, next) ? null : CHANGE_WORDS.dayOnlyFields;
 };
 
-/** The change an edit would make, as text the preview reads: a new version, or one income day's own payload. */
+/** The change an edit would make, as text the preview reads: the versions it writes, or one income day's own payload. */
 const getChangeJson = (
   itemId: string,
   kind: ItemKind,
   candidate: ItemPayload | null,
   span: ChangeSpan | null,
+  plan: StretchPlan<ItemPayload> | null,
 ) => {
   if (candidate === null || span === null) return null;
   if (span.kind === 'day') {
@@ -97,16 +106,26 @@ const getChangeJson = (
     };
     return JSON.stringify(change);
   }
-  const change: PreviewChange = {
-    kind: 'version',
-    version: {
-      itemId,
-      kind,
+  const written = plan?.written ?? [
+    {
+      payload: candidate,
       effectiveFrom: span.effectiveFrom,
       effectiveUntil: span.effectiveUntil,
-      changeId: 'what-if',
-      payload: candidate,
-    } as PreviewVersion,
+    },
+  ];
+  const change: PreviewChange = {
+    kind: 'versions',
+    versions: written.map(
+      (stretch) =>
+        ({
+          itemId,
+          kind,
+          effectiveFrom: stretch.effectiveFrom,
+          effectiveUntil: stretch.effectiveUntil,
+          changeId: 'what-if',
+          payload: stretch.payload,
+        }) as PreviewVersion,
+    ),
   };
   return JSON.stringify(change);
 };
@@ -130,25 +149,33 @@ export function useChangeFlow({
   const days = useAppSelector((state) => selectComingDays(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
+  const allVersions = useAppSelector((state) => state.runway.versions);
   const [from, setFrom] = useState(initialFrom);
-  const [step, setStep] = useState<'form' | 'reason'>('form');
+  const [step, setStepState] = useState<'form' | 'reason'>('form');
+  const reviewedRef = useRef<StretchPlan<ItemPayload>['written'] | null>(null);
   const [note, setNote] = useState(initialNote);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
 
-  const { span, blocker: spanBlocker } = getChangeSpan(from, {
+  const { span: askedSpan, blocker: askedBlocker } = getChangeSpan(from, {
     today,
     days,
     presetDayKey,
   });
+  const isUnchanged = candidate !== null && isSamePayload(current, candidate);
+  const isMoneyless =
+    candidate !== null && !isUnchanged && isMoneylessChange(current, candidate);
+  const span: ChangeSpan | null = isMoneyless
+    ? { kind: 'version', effectiveFrom: today, effectiveUntil: null }
+    : askedSpan;
+  const spanBlocker = isMoneyless ? null : askedBlocker;
   const effectiveFrom =
     span?.kind === 'version'
       ? span.effectiveFrom
       : span?.kind === 'day'
         ? span.day.on
         : null;
-  const isUnchanged = candidate !== null && isSamePayload(current, candidate);
   const summaryText =
     candidate === null
       ? ''
@@ -163,12 +190,36 @@ export function useChangeFlow({
             'a group',
         );
 
-  const changeJson = isUnchanged
-    ? null
-    : getChangeJson(itemId, kind, candidate, span);
+  const setStep = (next: 'form' | 'reason') => {
+    reviewedRef.current = next === 'reason' ? (plan?.written ?? null) : null;
+    setStepState(next);
+  };
+  const getPlan = (versions: readonly OpenVersion[]) =>
+    candidate === null || span?.kind !== 'version'
+      ? null
+      : planStretches<OpenVersion, ItemPayload>(
+          versions,
+          itemId,
+          span,
+          current,
+          candidate,
+        );
+  const plan = isUnchanged ? null : getPlan(allVersions);
 
+  const changeJson =
+    isUnchanged || isMoneyless
+      ? null
+      : getChangeJson(itemId, kind, candidate, span, plan);
+  const replaced = isMoneyless ? [] : (plan?.replaced ?? []);
+  const [warningBox, setWarningBox] = useState<HTMLElement | null>(null);
+  const {
+    text: warningText,
+    hint: warningHint,
+    holds,
+  } = useWarningHint(changeJson, warningBox);
   const getSummary = (name: string) => {
     const words = summaryText || 'Updated';
+    if (isMoneyless) return `${name}: ${words}.`;
     if (span?.kind === 'day') {
       return `${name}: ${words}, for ${formatDateUTC(span.day.on)} only.`;
     }
@@ -220,6 +271,12 @@ export function useChangeFlow({
                 },
                 JSON.parse(changeJson) as PreviewChange,
               );
+        const written = getPlan(state.runway.versions)?.written;
+        if (!isSameValue(written, reviewedRef.current ?? plan?.written)) {
+          setError(CHANGE_WORDS.changedElsewhere);
+          setStep('form');
+          return;
+        }
         await changeItem(user.uid, encryption, {
           itemId,
           kind,
@@ -229,6 +286,8 @@ export function useChangeFlow({
           note: reason,
           effectiveFrom: span.effectiveFrom,
           effectiveUntil: span.effectiveUntil,
+          changeEffectiveFrom: isMoneyless ? null : span.effectiveFrom,
+          stretches: written,
         });
         if (carry !== null && carry.carried.length > 0) {
           const moves = carry.carried.map(({ from, to }) => ({
@@ -285,6 +344,12 @@ export function useChangeFlow({
   };
 
   return {
+    kind,
+    candidate,
+    warningHint,
+    warningText,
+    setWarningBox,
+    holds,
     getBlocker,
     from,
     setFrom,
@@ -300,6 +365,8 @@ export function useChangeFlow({
     days,
     presetDayKey,
     isUnchanged,
+    isMoneyless,
+    replaced,
     summaryText,
     today,
     save,

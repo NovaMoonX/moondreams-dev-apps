@@ -297,18 +297,20 @@ function EnvelopeFormBody({
             value={formData.name}
             onChange={(event) => set({ name: event.target.value })}
           />
-          <SuggestionChips
-            label={FORM_FLOW_WORDS.commonEnvelopes}
-            suggestions={ENVELOPE_QUICK_PICKS.map(
-              (pick) => `${pick.emoji} ${pick.name}`,
-            )}
-            onPick={(label) => {
-              const found = ENVELOPE_QUICK_PICKS.find(
-                (pick) => `${pick.emoji} ${pick.name}` === label,
-              );
-              if (found) set({ name: found.name, emoji: found.emoji });
-            }}
-          />
+          {!editing && (
+            <SuggestionChips
+              label={FORM_FLOW_WORDS.commonEnvelopes}
+              suggestions={ENVELOPE_QUICK_PICKS.map(
+                (pick) => `${pick.emoji} ${pick.name}`,
+              )}
+              onPick={(label) => {
+                const found = ENVELOPE_QUICK_PICKS.find(
+                  (pick) => `${pick.emoji} ${pick.name}` === label,
+                );
+                if (found) set({ name: found.name, emoji: found.emoji });
+              }}
+            />
+          )}
         </div>
       ),
     },
@@ -499,8 +501,10 @@ function EnvelopeFormBody({
       : FORM_FLOW_WORDS.discardNew('envelope'),
   });
   const quickStep = steps.find((step) => step.id === openStep) ?? null;
-  const isQuick = !!editing && openStep !== null && !isAll;
+  const isQuick = !!editing && openStep !== null;
   const isAsking = !questions.hasReviewed;
+  const changeSection =
+    editing && questions.hasReviewed ? <ChangeSection isIdleShown /> : null;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -562,7 +566,15 @@ function EnvelopeFormBody({
               />
             )}
             {isQuick && quickStep ? (
-              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+              <QuickChange
+                step={quickStep}
+                flow={questions}
+                rowIds={['name', 'often', 'max']}
+                after={changeSection}
+                isAll={isAll}
+                onAll={() => setIsAll(true)}
+                onBack={() => setIsAll(false)}
+              />
             ) : (
               <>
                 {openStep !== null && editing && (
@@ -571,10 +583,13 @@ function EnvelopeFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && questions.hasReviewed && <ChangeSection />}
+            {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
-                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+                error ??
+                flow.error ??
+                maskNote(isAsking ? questions.blocker : shownBlocker) ??
+                flow.warningHint
               }
               cancelAction={
                 <Button
@@ -602,14 +617,17 @@ function EnvelopeFormBody({
                     disabled={isSaving || shownBlocker !== null}
                     onClick={() => {
                       if (editing) {
-                        flow.setStep('reason');
+                        if (flow.isMoneyless) void flow.save(null);
+                        else flow.setStep('reason');
                         return;
                       }
                       void handleSubmit();
                     }}
                   >
                     {editing
-                      ? CHANGE_WORDS.review
+                      ? flow.isMoneyless
+                        ? 'Save'
+                        : CHANGE_WORDS.review
                       : draft?.initial
                         ? 'Save'
                         : 'Add'}

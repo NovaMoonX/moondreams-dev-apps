@@ -31,7 +31,7 @@ function ChangeSteps({ isReason, children, reason }: ChangeStepsProps) {
       {isReason && (
         <div
           ref={reasonRef}
-          className='col-start-1 row-start-1 flex min-w-0 flex-col'
+          className='col-start-1 row-start-1 flex min-w-0 scroll-mt-3 flex-col'
         >
           {reason}
         </div>

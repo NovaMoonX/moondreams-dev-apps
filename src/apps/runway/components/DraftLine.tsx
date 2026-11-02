@@ -248,7 +248,14 @@ function DraftLine({
           presetDayKey={dayKey}
           quickChange={
             kind === 'bill' || kind === 'envelope' || kind === 'goal'
-              ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+              ? {
+                  label: ITEM_SHEET_R2_WORDS.change,
+                  subtitle:
+                    kind === 'bill'
+                      ? ITEM_SHEET_R2_WORDS.changeBillSub
+                      : ITEM_SHEET_R2_WORDS.changeAmountSub,
+                  step: 'amount',
+                }
               : undefined
           }
           canChange={canChange}

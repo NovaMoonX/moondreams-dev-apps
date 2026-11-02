@@ -166,3 +166,137 @@ export function getVersionStretches<
       : [],
   );
 }
+
+const canonical = (value: unknown): unknown => {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value)) return value.map(canonical);
+  if (typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .map(([key, entry]) => [key, canonical(entry)] as const)
+      .filter(([, entry]) => entry !== null)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
+};
+
+/** Whether two values hold the same thing: key order does not matter and a missing field equals null. */
+export const isSameValue = (a: unknown, b: unknown) =>
+  JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+
+/** The fields whose values differ between two payloads. */
+export function getChangedKeys<P extends object>(
+  before: P,
+  after: P,
+): (keyof P)[] {
+  const keys = Object.keys({ ...before, ...after }) as (keyof P)[];
+  return keys.filter((key) => !isSameValue(before[key], after[key]));
+}
+
+/** Carries only the fields a change touched onto each stretch, so every other field of a later version stays as it was. */
+export function applyFieldChanges<P extends object>(
+  stretches: readonly VersionStretch<P>[],
+  current: P,
+  candidate: P,
+): VersionStretch<P>[] {
+  const changed = getChangedKeys(current, candidate);
+  return stretches.map((stretch) => ({
+    ...stretch,
+    payload: {
+      ...stretch.payload,
+      ...Object.fromEntries(changed.map((key) => [key, candidate[key]])),
+    },
+  }));
+}
+
+export interface ReplacedChange<P> {
+  effectiveFrom: number;
+  /** Where a bounded change ends and what held before returns; null when it lasts. */
+  effectiveUntil: number | null;
+  /** The later version as it stands, with only the changed fields taken from the stretch before it. */
+  before: P;
+  after: P;
+}
+
+export interface StretchPlan<P> {
+  /** What is written: one version per stretch, each keeping its own end. */
+  written: VersionStretch<P>[];
+  /** Later scheduled changes to the same field the edit sets, which it replaces. */
+  replaced: ReplacedChange<P>[];
+}
+
+/**
+ * The versions an edit from a day on (or over a window) writes: one per stretch of the item's
+ * versions in that span, each taking only the fields the edit changed, so a later change to another
+ * field survives. A scheduled change to the field being edited is replaced and listed in `replaced`.
+ */
+export function planStretches<
+  V extends Versioned & { id: string; payload: P },
+  P extends object,
+>(
+  versions: readonly V[],
+  itemId: string,
+  span: { effectiveFrom: number; effectiveUntil: number | null },
+  current: P,
+  candidate: P,
+): StretchPlan<P> {
+  const { effectiveFrom, effectiveUntil } = span;
+  const base = getVersionStretches<V, P>(versions, itemId, effectiveFrom);
+  const clipped =
+    effectiveUntil === null
+      ? base
+      : base
+          .filter((stretch) => stretch.effectiveFrom < effectiveUntil)
+          .map((stretch) => ({
+            ...stretch,
+            effectiveUntil:
+              stretch.effectiveUntil === null ||
+              stretch.effectiveUntil > effectiveUntil
+                ? effectiveUntil
+                : stretch.effectiveUntil,
+          }));
+  if (clipped.length === 0) {
+    return {
+      written: [{ payload: candidate, effectiveFrom, effectiveUntil }],
+      replaced: [],
+    };
+  }
+  const changed = getChangedKeys(current, candidate);
+  const holds = (index: number, other: number) =>
+    changed.every((key) =>
+      isSameValue(clipped[index].payload[key], clipped[other].payload[key]),
+    );
+  const isChange = (index: number) =>
+    index > 0 &&
+    changed.some(
+      (key) =>
+        !isSameValue(
+          clipped[index].payload[key],
+          clipped[index - 1].payload[key],
+        ) && !isSameValue(clipped[index].payload[key], candidate[key]),
+    );
+  /** The stretch after a bounded change that only brings back what held before it. */
+  const isReturn = (index: number) =>
+    index > 1 && isChange(index - 1) && holds(index, index - 2);
+  const replaced = clipped.flatMap((stretch, index): ReplacedChange<P>[] => {
+    if (!isChange(index) || isReturn(index)) return [];
+    const previous = clipped[index - 1];
+    const next = clipped[index + 1];
+    return [
+      {
+        effectiveFrom: stretch.effectiveFrom,
+        effectiveUntil: next && isReturn(index + 1) ? next.effectiveFrom : null,
+        before: {
+          ...stretch.payload,
+          ...Object.fromEntries(
+            changed.map((key) => [key, previous.payload[key]]),
+          ),
+        },
+        after: stretch.payload,
+      },
+    ];
+  });
+  return {
+    written: applyFieldChanges(clipped, current, candidate),
+    replaced,
+  };
+}

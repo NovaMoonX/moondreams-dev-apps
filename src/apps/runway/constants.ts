@@ -500,6 +500,8 @@ export const PREVIEW_SHOWN = 3;
 export const MAX_CHANGE_DAYS_AHEAD = 3600;
 
 export const CHANGE_WORDS = {
+  changedElsewhere:
+    'This changed somewhere else. What it does now is shown below. Check it, then save again.',
   fromHeading: 'From when',
   fromNow: 'From now on',
   fromDate: 'From a date ahead',
@@ -516,6 +518,7 @@ export const CHANGE_WORDS = {
   removed: 'This income day goes away.',
   review: 'Next',
   whyHeading: 'Why the change?',
+  reasonPicks: 'Quick picks',
   whyHint: 'A note for your own records. You can leave it out.',
   whyPlaceholder: 'Why it changed. You can leave this out.',
   saveWithNote: 'Save',
@@ -574,13 +577,20 @@ export const LIFECYCLE_WORDS = {
   chipsPause: ['Focusing on another goal', 'Money is tight', 'Changed my mind'],
 } as const;
 
-export const CHANGE_REASON_CHIPS = [
-  'Price went up',
-  'Price went down',
-  'New job or raise',
-  'Changed my mind',
-  'Fixing a mistake',
-] as const;
+const MIND_CHIPS = ['Changed my mind', 'Fixing a mistake'] as const;
+
+/** Starting points for "Why the change?", shaped like what changes for each kind of item. */
+export const CHANGE_REASON_CHIPS: Record<
+  (typeof ITEM_KINDS)[number],
+  readonly string[]
+> = {
+  bill: ['Price went up', 'Price went down', ...MIND_CHIPS],
+  envelope: ['Spending more', 'Spending less', ...MIND_CHIPS],
+  goal: ['Saving more', 'Saving less', 'Goal changed', 'Fixing a mistake'],
+  payLine: ['New job or raise', 'Hours changed', ...MIND_CHIPS],
+  source: MIND_CHIPS,
+  group: MIND_CHIPS,
+};
 
 /** What happened to a pairing that its own pay could not cover. */
 export const PAIRING_STATES = [
@@ -1544,13 +1554,14 @@ export const FORM_FLOW_WORDS = {
   linesAsPlanned: 'As planned',
   linesChanged: (count: number) => `${count} changed`,
   pastDay: 'Pick today or a day to come.',
+  dayPassed: 'That day has passed.',
   pickRepeat: 'Pick how often it repeats.',
   badAmount: 'Enter an amount above $0, like 45.00.',
   overLimit: 'That is more than an amount can be here.',
   badRange: 'Make the top of the range higher than the low end.',
   badPercent: 'Enter a whole or half percent, up to 100.',
   finishEnding: 'Finish when it ends.',
-  pickDays: 'Pick at least one income day.',
+  pickDays: 'Paid from: pick at least one income day.',
   otherPayday: 'Pick two different days of the month.',
   discardNew: (noun: string) => `Discard this ${noun}?`,
   discardChange: 'Discard this change?',
@@ -1560,7 +1571,12 @@ export const FORM_FLOW_WORDS = {
 
 // Lists and screens, round 2: one fact per sheet head, short action rows, the payday tick and the problems row.
 export const ITEM_SHEET_R2_WORDS = {
-  changeElse: 'Change something else',
+  moreDetails: 'More details',
+  showToChange: 'Show amounts to change it',
+  change: 'Change',
+  changeBillSub: 'Amount, name, due date and more',
+  changeAmountSub: 'Amount, name and more',
+  changeTargetSub: 'Target, name and more',
   firstDateNote: 'Nothing is set aside for it until it has a date.',
   pauseSub: 'Nothing new goes in',
   resumeSub: 'Money goes in again from the next income day',
@@ -1568,14 +1584,10 @@ export const ITEM_SHEET_R2_WORDS = {
   archiveSub: 'Off your lists. Its history stays',
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
-  changeAmount: 'Change amount',
-  setMax: 'Set a max',
-  changeMax: 'Change the max',
   stopsAt: (amount: string) => `Stops at ${amount}`,
   setDueDate: 'Set the due date',
   eachTime: 'Each time',
   balance: 'Balance',
-  changeTarget: 'Change target',
   changeName: 'Change name',
   heldDetail: (amount: string) => `${amount} held · choose`,
   toppedUp: 'Topped up',
@@ -1672,8 +1684,6 @@ export const HOW_OFTEN_WORDS = {
   noAddingSummary: 'Not being added to',
   noAddingHint:
     'Nothing goes into it. You can start adding to it whenever you like.',
-  startAdding: 'Start adding to it',
-  changeOften: 'Change how often',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',
@@ -1831,6 +1841,43 @@ export const FIX_ROWS_SHOWN = 12;
 export const RUNWAY_SEARCH_THRESHOLD = 5;
 
 export const GROUP_WORDS = {
+  setDue: 'Set one due date',
+  setDueSub: (count: number, isAll: boolean) =>
+    isAll
+      ? `For all ${count} bills in this group`
+      : `For the ${count} bills it can change`,
+  duePickDay: 'Pick a day to continue',
+  dueUndone: 'Due dates put back',
+  dueUndoPartial: (done: number, total: number, failed: string[]) =>
+    `Put back ${done} of ${total} due dates. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not change back.`,
+  dueUndoStale: (names: string[]) =>
+    `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} changed since, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
+  dueUndoFailed: 'The due dates did not change back. Nothing was undone.',
+  dueQuestion: 'When are they all due?',
+  dueCaption: 'Due',
+  dueAction: 'Set the due date',
+  dueNothingToChange: 'Every bill here already has this due date.',
+  dueSkipped: (count: number) =>
+    count === 1
+      ? '1 bill keeps its own date: it is paid, ends first or repeats its own way.'
+      : `${count} bills keep their own dates: paid, ending first or repeating their own way.`,
+  dueReplaceTitle: 'Replace their due dates?',
+  dueReplaceBody: (bills: string[], date: string, repeats: string | null) =>
+    `${
+      bills.length <= 3
+        ? bills.join(', ').replace(/, ([^,]*)$/, ' and $1')
+        : `${bills.slice(0, 2).join(', ')} and ${bills.length - 2} more`
+    } already ${bills.length === 1 ? 'has a due date' : 'have due dates'}. Replace ${bills.length === 1 ? 'it' : 'them'} with ${date}?${repeats ? ` ${repeats}` : ''}`,
+  dueDone: (count: number, date: string) =>
+    `Due ${date} on ${count} ${count === 1 ? 'bill' : 'bills'}`,
+  dueReplace: 'Replace',
+  dueToast: (count: number) =>
+    `Set the due date on ${count} ${count === 1 ? 'bill' : 'bills'}`,
+  duePartial: (done: number, total: number, failed: string[]) =>
+    `Set the due date on ${done} of ${total} bills. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not save; the others did.`,
+  dueFailed: 'The due date did not save. Nothing was changed.',
+  dueSummary: (name: string, change: string, from: string) =>
+    `${name}: ${change}, from ${from}.`,
   ungrouped: 'Other bills',
   ungroupedEnvelopes: 'Other envelopes',
   setTip:

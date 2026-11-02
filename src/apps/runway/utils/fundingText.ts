@@ -51,11 +51,13 @@ export function describeFunding(funding: FundingRule) {
 /** Why an item's own rule is not what an income day sets aside: a pairing names an amount for it (shown as "First from"). Null when none does. */
 export function describePairedBy(
   pairedBy: readonly { sourceName: string; amount: FundingAmount }[],
+  own?: FundingRule,
 ) {
   if (pairedBy.length === 0) return null;
   if (pairedBy.length === 1) {
     const { sourceName, amount } = pairedBy[0];
-    return `First from ${sourceName}: ${describeAmount(amount, sourceName)} on its income days.`;
+    const instead = own ? `, instead of ${describeFundingShort(own)}` : '';
+    return `First from ${sourceName}: ${describeAmount(amount, sourceName)} on its income days${instead}.`;
   }
   const names = [...new Set(pairedBy.map((entry) => entry.sourceName))];
   const result = `First from ${names.join(' and ')} on their income days, in place of this rule.`;

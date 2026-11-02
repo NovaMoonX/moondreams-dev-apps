@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { Archive, Pencil, Receipt, Smile, Wallet } from 'lucide-react';
+import {
+  Archive,
+  CalendarDays,
+  Pencil,
+  Receipt,
+  Smile,
+  Wallet,
+} from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
+import DateInput from '@/components/DateInput';
 import EmojiField from '@/components/EmojiField';
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
@@ -16,13 +24,19 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { useAppSelector } from '@/store';
+import { useStore } from 'react-redux';
+
+import { useAppSelector, type RootState } from '@/store';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
+import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
+  BILL_WORDS,
+  FORM_FLOW_WORDS,
   GROUP_WORDS,
+  ITEM_SHEET_R2_WORDS,
   PRIORITY_DIAL_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
@@ -30,6 +44,7 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import SheetHead from '@apps/runway/components/SheetHead';
+import { ActionTitle } from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
@@ -42,12 +57,25 @@ import {
   changeItem,
 } from '@apps/runway/store/actions/itemActions';
 import {
+  selectBillPayments,
   selectGroups,
   selectStance,
   selectAllPurposeEmojis,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GroupTotal } from '@apps/runway/engine/groups';
-import type { GroupSealed, Priority } from '@apps/runway/types';
+import {
+  getVersionStretches,
+  isSameValue,
+  type VersionStretch,
+} from '@apps/runway/engine/resolve';
+import { toOrdinal } from '@apps/runway/utils/monthDays';
+import type {
+  BillSealed,
+  BillVersion,
+  GroupSealed,
+  Priority,
+  Schedule,
+} from '@apps/runway/types';
 import {
   describeBillRepeat,
   describeGroupLead,
@@ -63,6 +91,13 @@ import { describeChange } from '@apps/runway/utils/changeText';
 
 type StartingChoice = Priority | 'none';
 
+interface DueWritten {
+  itemId: string;
+  name: string;
+  original: VersionStretch<BillSealed>[];
+  written: VersionStretch<BillSealed>[];
+}
+
 interface GroupSheetProps {
   groupId: string;
   today: number;
@@ -75,7 +110,37 @@ const startingOptions = [
   { value: 'none' as const, label: GROUP_WORDS.noPriority },
 ];
 
+/** Repeats whose dates come from the due date alone; a twice-a-month or irregular bill, or one that ends after a count, keeps its own. */
+const SETTABLE_KINDS: readonly string[] = [
+  'once',
+  'weekly',
+  'everyOtherWeek',
+  'monthly',
+];
+
 /** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
+const getWeekday = (date: number) =>
+  new Date(date).toLocaleDateString('en-US', {
+    weekday: 'long',
+    timeZone: 'UTC',
+  });
+
+/** What a repeating bill's new day means for it ("Monthly bills then repeat on the 5th"), or null when none repeats. */
+const describeRepeatsOn = (kinds: string[], date: number): string | null => {
+  const notes = [
+    kinds.includes('monthly')
+      ? `Monthly bills then repeat on the ${toOrdinal(new Date(date).getUTCDate())} of each month.`
+      : null,
+    kinds.includes('weekly')
+      ? `Weekly bills then repeat every ${getWeekday(date)}.`
+      : null,
+    kinds.includes('everyOtherWeek')
+      ? `Bills every other week then repeat every other ${getWeekday(date)}.`
+      : null,
+  ].filter((note): note is string => note !== null);
+  return notes.length === 0 ? null : notes.join(' ');
+};
+
 function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -99,6 +164,17 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const allGroups = useAppSelector((state) => selectGroups(state, today));
   const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
   const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
+  const payments = useAppSelector((state) => selectBillPayments(state, today));
+  const [isSettingDue, setIsSettingDue] = useState(false);
+  const [dueText, setDueText] = useState('');
+  const [dueRecord, setDueRecord] = useState<{
+    note: string;
+    undo: DueWritten[] | null;
+  } | null>(null);
+  const store = useStore<RootState>();
+  const handledUndos = useRef(new WeakSet<DueWritten[]>());
+  const [isUndoingDue, setIsUndoingDue] = useState(false);
+  const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
   const {
@@ -221,6 +297,264 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     }
   };
 
+  const dueDate = fromDateInputValue(dueText);
+  const isPaidOnce = ({ item, version }: (typeof bills)[number]) =>
+    version.payload.timing.schedule.kind === 'once' &&
+    (payments[item.id] ?? []).some((payment) => payment.paid);
+  const billVersions = allVersions.filter(
+    (version): version is BillVersion => version.kind === 'bill',
+  );
+  const getStretches = (
+    versions: readonly BillVersion[],
+    itemId: string,
+    from = today,
+  ) => getVersionStretches<BillVersion, BillSealed>(versions, itemId, from);
+  const isSettable = ({ item }: (typeof bills)[number]) => {
+    const stretches = getStretches(billVersions, item.id);
+    return (
+      stretches.length > 0 &&
+      stretches.every(
+        ({ payload: bill }) =>
+          SETTABLE_KINDS.includes(bill.timing.schedule.kind) &&
+          bill.ending.afterCount === null,
+      )
+    );
+  };
+  const isSameDue = ({ item }: (typeof bills)[number]) =>
+    dueDate !== undefined &&
+    getStretches(billVersions, item.id).every(({ payload: bill }) => {
+      const { schedule } = bill.timing;
+      if (schedule.anchor === null) return false;
+      if (schedule.anchor === dueDate) return true;
+      return (
+        schedule.kind === 'monthly' &&
+        schedule.anchor <= dueDate &&
+        schedule.monthDays[0] === new Date(dueDate).getUTCDate()
+      );
+    });
+  const endsBefore = ({ item }: (typeof bills)[number]) =>
+    dueDate !== undefined &&
+    getStretches(billVersions, item.id).some(
+      ({ payload: bill }) =>
+        bill.ending.onDate !== null && bill.ending.onDate < dueDate,
+    );
+  const eligibleBills = bills.filter(
+    (bill) => isSettable(bill) && !isPaidOnce(bill) && !endsBefore(bill),
+  );
+  const changingBills = eligibleBills.filter((bill) => !isSameDue(bill));
+  const replacedBills = changingBills.filter(
+    ({ version }) => version.payload.timing.schedule.anchor !== null,
+  );
+  const isPast = dueDate !== undefined && dueDate < today;
+  const skippedCount = billCount - eligibleBills.length;
+
+  const describeBillDue = (kind: string, due: number | null) =>
+    due === null
+      ? BILL_WORDS.needsDueDate
+      : `Due ${formatDateShortUTC(due)} · ${describeBillRepeat(kind as Schedule['kind'])}`;
+  const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
+    (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
+    version.payload.timing.schedule.anchor;
+  const settableBills = bills.filter(
+    (bill) => isSettable(bill) && !isPaidOnce(bill),
+  );
+
+  const undoDueDates = async (written: DueWritten[]) => {
+    if (!user || handledUndos.current.has(written)) return;
+    handledUndos.current.add(written);
+    setIsUndoingDue(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const state = store.getState();
+      const liveVersions = state.runway.versions.filter(
+        (version): version is BillVersion => version.kind === 'bill',
+      );
+      const isUntouched = (entry: (typeof written)[number]) =>
+        isSameValue(
+          getStretches(
+            liveVersions,
+            entry.itemId,
+            entry.written[0].effectiveFrom,
+          ),
+          entry.written,
+        );
+      const untouched = written.filter(isUntouched);
+      const stale = written
+        .filter((entry) => !isUntouched(entry))
+        .map((entry) => entry.name);
+      const results = await Promise.allSettled(
+        untouched.map((entry) =>
+          changeItem(user.uid, encryption, {
+            itemId: entry.itemId,
+            kind: 'bill',
+            payload: entry.original[0].payload,
+            summary: GROUP_WORDS.dueSummary(
+              entry.name,
+              describeChange(
+                entry.written[0].payload,
+                entry.original[0].payload,
+                getCardNamer([]),
+              ) || 'Updated',
+              formatDateUTC(today),
+            ),
+            note: null,
+            effectiveFrom: today,
+            stretches: entry.original,
+          }),
+        ),
+      );
+      const failed = untouched.flatMap((entry, index) =>
+        results[index].status === 'rejected' ? [entry.name] : [],
+      );
+      const done = untouched.length - failed.length;
+      const isClean = failed.length === 0 && stale.length === 0;
+      const title = isClean
+        ? GROUP_WORDS.dueUndone
+        : GROUP_WORDS.dueUndoPartial(done, written.length, [
+            ...failed,
+            ...stale,
+          ]);
+      const description =
+        stale.length === 0 ? undefined : GROUP_WORDS.dueUndoStale(stale);
+      setDueRecord({
+        note: description ? `${title} ${description}` : title,
+        undo: null,
+      });
+      addToast({
+        title,
+        description,
+        type: isClean ? 'success' : 'error',
+      });
+    } catch (undoError) {
+      const message = getErrorMessage(undoError, GROUP_WORDS.dueUndoFailed);
+      handledUndos.current.delete(written);
+      setDueRecord({ note: message, undo: written });
+      addToast({ title: message, type: 'error' });
+    } finally {
+      setIsUndoingDue(false);
+    }
+  };
+
+  const setDueDate = async () => {
+    if (!user || dueDate === undefined) return;
+    if (replacedBills.length > 0) {
+      const isConfirmed = await confirm({
+        title: GROUP_WORDS.dueReplaceTitle,
+        message: GROUP_WORDS.dueReplaceBody(
+          replacedBills.map((bill) => {
+            const current = getCurrentDue(bill);
+            return current === null
+              ? bill.version.payload.name
+              : `${bill.version.payload.name} (${formatDateShortUTC(current)})`;
+          }),
+          formatDateUTC(dueDate),
+          describeRepeatsOn(
+            replacedBills.map(
+              ({ version }) => version.payload.timing.schedule.kind,
+            ),
+            dueDate,
+          ),
+        ),
+        confirmText: GROUP_WORDS.dueReplace,
+      });
+      if (!isConfirmed) return;
+    }
+    setError(null);
+    setIsSaving(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const liveVersions = store
+        .getState()
+        .runway.versions.filter(
+          (version): version is BillVersion => version.kind === 'bill',
+        );
+      const toDue = (bill: BillSealed): BillSealed => ({
+        ...bill,
+        fundedBy:
+          bill.fundedBy.kind === 'chosen'
+            ? { kind: 'suggested' }
+            : bill.fundedBy,
+        timing: {
+          kind: 'date',
+          schedule: {
+            ...bill.timing.schedule,
+            anchor: dueDate,
+            monthDays:
+              bill.timing.schedule.kind === 'monthly'
+                ? [new Date(dueDate).getUTCDate()]
+                : [],
+          },
+        },
+      });
+      const plans = changingBills.map(({ item, version }) => {
+        const original = getStretches(liveVersions, item.id);
+        return {
+          itemId: item.id,
+          name: version.payload.name,
+          original,
+          written: original.map((stretch) => ({
+            ...stretch,
+            payload: toDue(stretch.payload),
+          })),
+        };
+      });
+      const results = await Promise.allSettled(
+        plans.map((plan) =>
+          changeItem(user.uid, encryption, {
+            itemId: plan.itemId,
+            kind: 'bill',
+            payload: plan.written[0].payload,
+            summary: GROUP_WORDS.dueSummary(
+              plan.name,
+              describeChange(
+                plan.original[0].payload,
+                plan.written[0].payload,
+                getCardNamer([]),
+              ) || 'Updated',
+              formatDateUTC(today),
+            ),
+            note: null,
+            effectiveFrom: today,
+            stretches: plan.written,
+          }),
+        ),
+      );
+      const saved = plans.filter(
+        (_, index) => results[index].status === 'fulfilled',
+      );
+      const failed = plans
+        .filter((_, index) => results[index].status === 'rejected')
+        .map((plan) => plan.name);
+      if (saved.length > 0) {
+        setDueRecord({
+          note: GROUP_WORDS.dueDone(saved.length, formatDateShortUTC(dueDate)),
+          undo: saved,
+        });
+        addToast({
+          title: GROUP_WORDS.dueToast(saved.length),
+          type: 'success',
+          action: {
+            label: ITEM_SHEET_R2_WORDS.undo,
+            onClick: () => void undoDueDates(saved),
+          },
+        });
+      }
+      if (failed.length === 0) {
+        setIsSettingDue(false);
+        return;
+      }
+      setError(
+        saved.length === 0
+          ? GROUP_WORDS.dueFailed
+          : GROUP_WORDS.duePartial(saved.length, plans.length, failed),
+      );
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, GROUP_WORDS.dueFailed));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const trimmed = name.trim();
   const canRename = trimmed !== '' && trimmed !== payload.name;
   const lead = describeGroupLead(total, memberCount);
@@ -308,6 +642,54 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   onClick={() => void saveEmoji(trimmedEmoji)}
                 >
                   Save
+                </Button>
+              }
+            />
+          </>
+        ) : isSettingDue ? (
+          <>
+            <BackLink onBack={() => setIsSettingDue(false)} />
+            <ActionTitle>{GROUP_WORDS.dueQuestion}</ActionTitle>
+            <div>
+              <DateInput
+                variant='outline'
+                aria-label={GROUP_WORDS.dueCaption}
+                min={toDateInputValue(today)}
+                value={dueText}
+                onChange={(event) => setDueText(event.target.value)}
+              />
+            </div>
+            {skippedCount > 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {GROUP_WORDS.dueSkipped(skippedCount)}
+              </p>
+            )}
+            <ModalFooterActions
+              note={
+                error ??
+                (isSaving
+                  ? null
+                  : dueDate === undefined
+                    ? GROUP_WORDS.duePickDay
+                    : isPast
+                      ? FORM_FLOW_WORDS.pastDay
+                      : changingBills.length === 0
+                        ? GROUP_WORDS.dueNothingToChange
+                        : null)
+              }
+              rightActions={
+                <Button
+                  type='button'
+                  loading={isSaving}
+                  disabled={
+                    isSaving ||
+                    dueDate === undefined ||
+                    isPast ||
+                    changingBills.length === 0
+                  }
+                  onClick={() => void setDueDate()}
+                >
+                  {GROUP_WORDS.dueAction}
                 </Button>
               }
             />
@@ -407,8 +789,9 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         version.payload.groupId,
                         purposeEmojis,
                       )}
-                      detail={describeBillRepeat(
+                      detail={describeBillDue(
                         version.payload.timing.schedule.kind,
+                        getCurrentDue({ item, version }),
                       )}
                       figure={describeGroupTotal(version.payload.amount)}
                     />
@@ -486,6 +869,42 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 label={GROUP_WORDS.addBill(payload.name)}
                 onClick={() => setAdding('bill')}
               />
+              {settableBills.length > 0 && (
+                <ActionRow
+                  isGrouped
+                  hasChevron={!dueRecord?.undo}
+                  icon={<CalendarDays />}
+                  label={GROUP_WORDS.setDue}
+                  subtitle={
+                    dueRecord?.note ??
+                    GROUP_WORDS.setDueSub(
+                      settableBills.length,
+                      settableBills.length === billCount,
+                    )
+                  }
+                  trailing={
+                    dueRecord?.undo ? (
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        size='sm'
+                        rounded='full'
+                        loading={isUndoingDue}
+                        disabled={isUndoingDue}
+                        className="relative mr-3 after:absolute after:-inset-1.5 after:content-['']"
+                        onClick={() => void undoDueDates(dueRecord.undo ?? [])}
+                      >
+                        {ITEM_SHEET_R2_WORDS.undo}
+                      </Button>
+                    ) : undefined
+                  }
+                  onClick={() => {
+                    setDueText('');
+                    setError(null);
+                    setIsSettingDue(true);
+                  }}
+                />
+              )}
               <ActionRow
                 isGrouped
                 hasChevron

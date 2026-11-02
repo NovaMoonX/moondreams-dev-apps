@@ -152,15 +152,9 @@ function EnvelopeTile({
             .join(' · ')}
           help={pairedNote}
           quickChange={{
-            label: ITEM_SHEET_R2_WORDS.changeAmount,
+            label: ITEM_SHEET_R2_WORDS.change,
+            subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
             step: 'amount',
-          }}
-          maxAction={{
-            label:
-              envelope.maxCents === null
-                ? ITEM_SHEET_R2_WORDS.setMax
-                : ITEM_SHEET_R2_WORDS.changeMax,
-            step: 'max',
           }}
           onClose={() => setIsOpen(false)}
         />

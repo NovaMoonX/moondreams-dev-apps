@@ -143,7 +143,11 @@ export function BillSheet({
       quickChange={
         isUndated
           ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
-          : { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+          : {
+              label: ITEM_SHEET_R2_WORDS.change,
+              subtitle: ITEM_SHEET_R2_WORDS.changeBillSub,
+              step: 'amount',
+            }
       }
       startsAtStep={startsAtStep}
       payment={payment}
