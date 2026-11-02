@@ -185,7 +185,7 @@ function SharedView({ shareId, share, isChecking }: SharedViewProps) {
         isChecking={isChecking}
         className={
           isSplit
-            ? 'sticky top-6 col-start-2 row-span-2 row-start-2 self-start'
+            ? 'sticky top-[calc(1.5rem+var(--site-banner-inset,0px))] col-start-2 row-span-2 row-start-2 self-start'
             : undefined
         }
       />

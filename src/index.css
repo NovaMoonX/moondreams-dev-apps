@@ -11,7 +11,8 @@
 
 @utility page {
 	/* Use the available layout width instead of the viewport width, which can include the scrollbar on mobile browsers. */
-  @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;
+  @apply w-full max-w-full px-4 pb-12 pt-16;
+  min-height: calc(100dvh - var(--site-banner-inset, 0px));
 }
 
 /* A long list's day or section: the browser skips style, layout and paint until it nears the screen.
@@ -25,11 +26,11 @@
  * the top of the screen once the site header slides away (`data-site-header` on <html>, set by Layout). */
 @utility sticky-app-bar {
   position: sticky;
-  top: 0;
+  top: var(--site-banner-inset, 0px);
   z-index: 20;
+  transition: top 300ms cubic-bezier(0, 0, 0.2, 1);
   @media (max-width: 767.98px) {
     top: calc(4rem - 1px);
-    transition: top 300ms cubic-bezier(0.4, 0, 0.2, 1);
     html[data-site-banner='true'] & {
       top: calc(6.25rem - 1px);
     }
@@ -48,7 +49,7 @@
   z-index: 10;
   @media (max-width: 767.98px) {
     top: calc(4rem + 3.75rem - 2px);
-    transition: top 300ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition: top 300ms cubic-bezier(0, 0, 0.2, 1);
     html[data-site-banner='true'] & {
       top: calc(6.25rem + 3.75rem - 2px);
     }
@@ -180,14 +181,10 @@ html.dark .subview-card {
 .subview-page {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--site-banner-inset, 0px));
   width: 100%;
   padding: var(--subview-inset);
   padding-top: max(var(--subview-inset), env(safe-area-inset-top));
-}
-
-html[data-site-banner='true'] .subview-page {
-  padding-top: calc(var(--subview-inset) + 2.25rem);
 }
 
 .subview-page > .subview-card {
@@ -261,6 +258,14 @@ html[data-site-banner='true'] .subview-backdrop {
 
 #root {
   @apply min-h-dvh w-full max-w-full bg-background text-foreground;
+  padding-top: var(--site-banner-inset, 0px);
+  transition: padding-top 300ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* The top strip (offline / new version) is fixed over the screen, so every page starts below it. The strip's own height
+ * (`h-9`) is also written in the header's `top-9` and `max-md:-top-7`, `6.25rem` and `2.25rem` in the sticky utilities and the subview rules: change them together. */
+html[data-site-banner='true'] {
+  --site-banner-inset: 2.25rem;
 }
 
 body {

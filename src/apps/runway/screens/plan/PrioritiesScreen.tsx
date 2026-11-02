@@ -1200,7 +1200,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         onBack={() => patchEdit((current) => ({ ...current, step: 'edit' }))}
         headerAction={<ValuesEyeButton />}
       >
-        <div className='flex min-h-[calc(100dvh-5rem)] flex-col gap-4 [@media(max-height:499px)]:min-h-[calc(100dvh-3rem)]'>
+        <div className='flex min-h-[calc(100dvh-5rem-var(--site-banner-inset,0px))] flex-col gap-4 [@media(max-height:499px)]:min-h-[calc(100dvh-3rem-var(--site-banner-inset,0px))]'>
           <BackLink
             onBack={() =>
               patchEdit((current) => ({ ...current, step: 'edit' }))
