@@ -214,7 +214,7 @@ function SalePage() {
   };
 
   return (
-    <div className='page pb-16'>
+    <div className='page pt-4! pb-16'>
       <div className='mx-auto max-w-5xl py-6'>{getContent()}</div>
     </div>
   );
