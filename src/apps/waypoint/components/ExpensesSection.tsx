@@ -759,30 +759,28 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
     const splitBreakdown = getSplitBreakdown(expense, memberIds);
-    const repaidNames = (splitBreakdown?.shares ?? [])
-      .filter((share) => share.isPaid)
-      .map((share) => memberLabel(share.uid));
     const renderRepaidControl = (share: SplitShare | undefined) => {
       if (!share) {
         return null;
       }
 
+      const isReceiving = share.uid !== currentUserId;
       const toggle = () =>
         void dispatch(
-          toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+          toggleExpenseRepaid({ uid: share.uid, tripId: trip.id, expenseId: expense.id }),
         );
 
       if (!share.isPaid) {
         return (
           <Button type='button' variant='secondary' size='sm' className='h-10 shrink-0' onClick={toggle}>
-            Mark as repaid
+            {isReceiving ? 'Mark as received' : 'Mark as repaid'}
           </Button>
         );
       }
 
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
-          <span className='text-muted-foreground text-xs'>You repaid this</span>
+          <span className='text-muted-foreground text-xs'>{isReceiving ? 'You received this' : 'You repaid this'}</span>
           <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
             Undo
           </Button>
@@ -801,24 +799,30 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             )}
             {renderRepaidControl(splitBreakdown.shares.find((share) => share.uid === currentUserId))}
           </div>
-        ) : (
+        ) : null}
+        {splitBreakdown.perPersonLabel !== null && expense.payerUid === currentUserId && (
+          <div className='space-y-1'>
+            {splitBreakdown.shares.map((share) => (
+              <div key={share.uid} className='flex items-baseline justify-end gap-2'>
+                <p className='text-muted-foreground mr-auto text-xs'>{memberLabel(share.uid)}</p>
+                {renderRepaidControl(share)}
+              </div>
+            ))}
+          </div>
+        )}
+        {splitBreakdown.perPersonLabel === null && (
           splitBreakdown.shares.map((share) => (
             <div key={share.uid} className='flex items-baseline justify-end gap-2'>
               <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
                 {memberLabel(share.uid)} {share.amountLabel}
               </p>
-              {share.uid === currentUserId && renderRepaidControl(share)}
+              {(share.uid === currentUserId || expense.payerUid === currentUserId) && renderRepaidControl(share)}
             </div>
           ))
         )}
         {splitBreakdown.payerShare && (
           <p className='text-muted-foreground text-xs'>
             {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
-          </p>
-        )}
-        {expense.payerUid === currentUserId && repaidNames.length > 0 && (
-          <p className='text-muted-foreground text-right text-xs'>
-            Repaid so far: {repaidNames.join(', ')}
           </p>
         )}
       </div>
@@ -1165,8 +1169,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               currentUserId={currentUserId}
               memberLabel={memberLabel}
               formatAmount={(amount) => formatTotal(amount, amount, currency)}
-              onToggleRepaid={(expenseId) =>
-                void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
+              onToggleRepaid={(expenseId, debtorUid) =>
+                void dispatch(toggleExpenseRepaid({ uid: debtorUid, tripId: trip.id, expenseId }))
               }
               onSetEarlyReturned={(expenseId, isReturned) =>
                 void runAction(

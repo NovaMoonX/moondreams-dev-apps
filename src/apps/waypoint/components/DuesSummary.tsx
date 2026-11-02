@@ -5,6 +5,8 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 import DetailSheet from '@/components/DetailSheet';
+import InlineNotice from '@/components/InlineNotice';
+import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, ChevronRight, Circle, HandCoins } from 'lucide-react';
 
@@ -26,7 +28,8 @@ interface DuesSummaryProps {
   currentUserId: string;
   memberLabel: (uid: string) => string;
   formatAmount: (amount: number) => string;
-  onToggleRepaid: (expenseId: string) => void;
+  /** Flips whether `debtorUid` has paid this expense back: the debtor or the person owed can. */
+  onToggleRepaid: (expenseId: string, debtorUid: string) => void;
   onSetEarlyReturned: (expenseId: string, isReturned: boolean) => void;
   /** Takes an early payment off its expense: its author always can, and so can an editor. */
   canRemoveEarly: (fromUid: string) => boolean;
@@ -50,6 +53,10 @@ function DuesSummary({
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
   const [showAllNotices, setShowAllNotices] = useState(false);
   const [visiblePairs, setVisiblePairs] = useState(MAX_VISIBLE_PAIRS);
+  const [hasMarkedBefore, setHasMarkedBefore] = useLocalStoragePreference(
+    `waypoint:${currentUserId}:repaidHintSeen`,
+    false,
+  );
   const selectedSettlement = settlements.find((settlement) => getPairKey(settlement) === selectedPairKey);
 
   const getDirection = ({ personA, personB, netAmount, aOwesB, bOwesA }: PairSettlement) => {
@@ -66,8 +73,28 @@ function DuesSummary({
     </div>
   );
 
+  const getToggleLabel = (isRepaid: boolean, isReceiving: boolean, title: string) => {
+    if (isReceiving) {
+      return `${isRepaid ? 'Mark not received' : 'Mark received'}: ${title}`;
+    }
+    return `${isRepaid ? 'Mark not repaid' : 'Mark repaid'}: ${title}`;
+  };
+
+  const getDirectionHint = (fromUid: string, toUid: string, isReceiving: boolean) => {
+    if (isReceiving) {
+      return hasMarkedBefore
+        ? `Tap an item once ${memberLabel(fromUid)} has paid you.`
+        : `Did ${memberLabel(fromUid)} send you money? Tap what they paid to mark it received. It comes off what they owe you.`;
+    }
+    return hasMarkedBefore
+      ? "Tap an item once you've paid it back."
+      : `Already sent ${memberLabel(toUid)} money? Tap what you paid to mark it paid back. It comes off what you owe.`;
+  };
+
   const renderItem = (
     { expense, share, isRepaid }: DirectionalOwed['items'][number],
+    debtorUid: string,
+    isReceiving: boolean,
     canToggle: boolean,
   ) => {
     const content = (
@@ -91,8 +118,11 @@ function DuesSummary({
           <Button
             type='button'
             variant='tertiary'
-            aria-label={`${isRepaid ? 'Mark not repaid' : 'Mark repaid'}: ${expense.title}`}
-            onClick={() => onToggleRepaid(expense.id)}
+            aria-label={getToggleLabel(isRepaid, isReceiving, expense.title)}
+            onClick={() => {
+              onToggleRepaid(expense.id, debtorUid);
+              setHasMarkedBefore(true);
+            }}
             className={join(
               'h-auto w-full justify-start gap-3 rounded-md px-2! py-1.5! focus:outline-transparent!',
               rowClassName,
@@ -119,7 +149,8 @@ function DuesSummary({
       return null;
     }
 
-    const canToggle = fromUid === currentUserId;
+    const isReceiving = toUid === currentUserId;
+    const canToggle = fromUid === currentUserId || isReceiving;
 
     return (
       <div key={`${fromUid}-${toUid}`} className='bg-muted/40 space-y-3 rounded-xl p-3'>
@@ -136,10 +167,12 @@ function DuesSummary({
           </div>
         )}
         <ul className={join('-mx-2', showTotals && 'border-border/60 border-t pt-2')}>
-          {owed.items.map((item) => renderItem(item, canToggle))}
+          {owed.items.map((item) => renderItem(item, fromUid, isReceiving, canToggle))}
         </ul>
         {canToggle && (
-          <p className='text-muted-foreground text-xs'>Tap an item once you&apos;ve paid it back.</p>
+          <p className={join('text-xs', hasMarkedBefore ? 'text-muted-foreground' : 'text-foreground font-medium')}>
+            {getDirectionHint(fromUid, toUid, isReceiving)}
+          </p>
         )}
       </div>
     );
@@ -427,6 +460,14 @@ function DuesSummary({
             )}
           </div>
         ))}
+      {!hasMarkedBefore && (toSend.length > 0 || toCollect.length > 0) && (
+        <InlineNotice tone='info' title='Settled up outside the app?' className='mt-3'>
+          Open a row and tap what was paid.{' '}
+          {toSend.length > 0 && 'If you sent money, mark it paid back. '}
+          {toCollect.length > 0 && 'If someone sent you money, mark it received. '}
+          That&apos;s what updates what&apos;s owed.
+        </InlineNotice>
+      )}
       {renderGroup('Money to send', capGroup(toSend))}
       {renderGroup('Money to collect', capGroup(toCollect))}
       {renderGroup('All square', capGroup(settledMine))}
