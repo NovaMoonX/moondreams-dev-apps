@@ -83,6 +83,19 @@ export const selectExpenseLinkKeys = createSelector(
     new Set(expenses.flatMap((expense) => (expense.linkedTo ? [getExpenseLinkKey(expense.linkedTo)] : []))),
 );
 
+/** Per plan (`getExpenseLinkKey`): the expenses attached to it. */
+export const selectExpensesByLinkKey = createSelector(
+  [selectTripExpenses],
+  (expenses): ReadonlyMap<string, TripExpense[]> =>
+    expenses.reduce((byKey, expense) => {
+      if (!expense.linkedTo) {
+        return byKey;
+      }
+      const key = getExpenseLinkKey(expense.linkedTo);
+      return byKey.set(key, [...(byKey.get(key) ?? []), expense]);
+    }, new Map<string, TripExpense[]>()),
+);
+
 /** Keys of plans marked "no expense needed", across the trips in the store. */
 export const selectNoExpenseKeys = createSelector(
   [selectTrips],

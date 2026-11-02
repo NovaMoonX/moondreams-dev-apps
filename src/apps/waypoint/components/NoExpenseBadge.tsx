@@ -26,16 +26,19 @@ function NoExpenseBadge({ getSubject, isStatic = false, variant = 'inline' }: No
   }
 
   if (isNoExpense) {
-    return isStatic && canAddExpenses ? (
+    return canAddExpenses && (isStatic || variant === 'inline') ? (
       <Button
         type='button'
         variant='tertiary'
         size='sm'
         className="text-muted-foreground relative h-auto px-0! text-xs font-medium whitespace-nowrap after:absolute after:-inset-x-2 after:-inset-y-2 after:content-['']"
-        aria-label='No expense needed: undo'
-        onClick={() => undoNoExpense(getSubject())}
+        aria-label={isStatic ? 'No expense needed: undo' : 'Expense needed after all'}
+        onClick={(event) => {
+          event.stopPropagation();
+          undoNoExpense(getSubject());
+        }}
       >
-        No expense needed · Undo
+        {isStatic ? 'No expense needed · Undo' : 'Expense needed after all'}
       </Button>
     ) : null;
   }
