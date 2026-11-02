@@ -445,6 +445,23 @@ function BillShareView({
           text: `${formatCents(changedView.leftBeforeCents)} → ${formatCents(changedView.leftAfterCents)}`,
         }
       : null;
+  const otherCarriers = changedView
+    ? changedView.share.carriers.filter(
+        (carrier) => carrier.dayKey !== dayKey && carrier.cents > 0,
+      )
+    : [];
+  const carriedBefore = new Set(
+    (changedView?.rows ?? [])
+      .filter((row) => row.dayKey !== dayKey && row.beforeCents > 0)
+      .map((row) => row.dayKey)
+      .concat(otherCarriers.map((carrier) => carrier.dayKey)),
+  );
+  const restCarrier =
+    otherCarriers.length === 1 && carriedBefore.size > 1
+      ? (changedView?.rows.find(
+          (row) => row.dayKey === otherCarriers[0].dayKey,
+        ) ?? null)
+      : null;
   const hiddenBillRows = isAllShown
     ? 0
     : Math.max(0, billRows.length - SHOWN_ROWS);
@@ -862,6 +879,18 @@ function BillShareView({
       )}
       {!isHidden && billRows.length > 0 && (
         <ActionSection caption={PAY_SHARE_WORDS.changes}>
+          {restCarrier && (
+            <p className='text-sm'>
+              <MaskedText>
+                {PAY_SHARE_WORDS.carriesRest(
+                  formatDateShortUTC(restCarrier.on),
+                  bill.name,
+                  formatCents(restCarrier.afterCents),
+                  changedView?.share.cents === 0,
+                )}
+              </MaskedText>
+            </p>
+          )}
           <ul
             ref={cardRef}
             className='border-border divide-border bg-card scroll-mb-24 divide-y overflow-y-auto rounded-2xl border [@media(min-height:500px)]:max-h-[max(9rem,calc(92dvh-27rem))]'

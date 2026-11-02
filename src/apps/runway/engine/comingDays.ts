@@ -1,7 +1,9 @@
 import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 import type {
+  DayOverrideSealed,
   MoneyRange,
   OpenVersion,
+  Pairing,
   PayLineVersion,
   PlanItemDoc,
   SourceVersion,
@@ -9,7 +11,9 @@ import type {
 } from '@apps/runway/types';
 
 import { addUtcMonths, DAY_MS, toDayKey } from './dates';
+import { percentOf } from './money';
 import { resolveCurrentOrNext, resolveVersion } from './resolve';
+import { effectiveStance, pick } from './stance';
 import { occurrences } from './schedule';
 
 export interface ComingDay {
@@ -125,6 +129,78 @@ export function getOneTimePayLineIds(
       .map((version) => version.itemId),
   );
   oneTimeCache.set(versions, result);
+  return result;
+}
+
+const pairedCache = new WeakMap<
+  object,
+  {
+    versions: object;
+    openDays: object;
+    stance: Stance;
+    result: Map<string, Record<string, number>>;
+  }
+>();
+
+/**
+ * What each coming pay's "pay these first" set asks of each bill, by bill id and then day key: the
+ * day's own set, else its pay line's, else its source's. Only a fixed figure or a share of the
+ * day's money is known ahead; a share of what remains or the rest of the day is left out.
+ */
+export function getPairedByBill(
+  versions: readonly OpenVersion[],
+  openDays: readonly {
+    id: string;
+    override: Pick<DayOverrideSealed, 'pairings'>;
+  }[],
+  days: readonly ComingDay[],
+  stance: Stance,
+): Map<string, Record<string, number>> {
+  const known = pairedCache.get(days);
+  if (
+    known &&
+    known.versions === versions &&
+    known.openDays === openDays &&
+    known.stance === stance
+  )
+    return known.result;
+  const payLines = versions.filter(isPayLine);
+  const sources = versions.filter(isSource);
+  const overrides = new Map(
+    openDays.map((day) => [day.id, day.override.pairings]),
+  );
+  const pairingsOf = (day: ComingDay): readonly Pairing[] => {
+    const own = overrides.get(day.dayKey);
+    if (own) return own;
+    const line =
+      resolveCurrentOrNext(payLines, day.payLineId, day.on)?.payload
+        .pairings ?? [];
+    if (line.length > 0 || day.sourceId === null) return line;
+    return (
+      resolveCurrentOrNext(sources, day.sourceId, day.on)?.payload.pairings ??
+      []
+    );
+  };
+  const result = days.reduce((acc, day) => {
+    const money = pick(
+      effectiveStance(stance, day.stanceOverride),
+      day.amount,
+      'income',
+    );
+    pairingsOf(day).forEach(({ targetItemId, amount }) => {
+      const cents =
+        amount.kind === 'exact'
+          ? amount.cents
+          : amount.kind === 'percent' && amount.of === 'dayMoney'
+            ? percentOf(money, amount.bps)
+            : null;
+      if (cents === null || acc.get(targetItemId)?.[day.dayKey] !== undefined)
+        return;
+      acc.set(targetItemId, { ...acc.get(targetItemId), [day.dayKey]: cents });
+    });
+    return acc;
+  }, new Map<string, Record<string, number>>());
+  pairedCache.set(days, { versions, openDays, stance, result });
   return result;
 }
 

@@ -4,6 +4,7 @@ import type { RootState } from '@/store';
 import {
   buildComingDays,
   getOneTimePayLineIds,
+  getPairedByBill,
   describeDay,
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
@@ -847,6 +848,7 @@ export function computeDraftView(
     };
   });
   const fixedByBill = getFixedByBill(openDays);
+  const pairedByBill = getPairedByBill(versions, openDays, days, stance);
   const oneTimePayLineIds = getOneTimePayLineIds(versions);
   const bills = resolvedBills.map(({ item, version }) => ({
     itemId: item.id,
@@ -859,6 +861,7 @@ export function computeDraftView(
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
     fixed: fixedByBill.get(item.id),
+    paired: pairedByBill.get(item.id),
     oneTimePayLineIds,
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
@@ -1029,6 +1032,12 @@ export const selectBillPayments = createSelector(
   ): Record<string, BillPayment[]> => {
     const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
     const fixedByBill = getFixedByBill(openDays);
+    const pairedByBill = getPairedByBill(
+      versions,
+      openDays,
+      comingDays,
+      stance,
+    );
     const oneTimePayLineIds = getOneTimePayLineIds(versions);
     const result = Object.fromEntries(
       bills.map(({ item, version }) => {
@@ -1047,6 +1056,7 @@ export const selectBillPayments = createSelector(
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
               fixed: fixedByBill.get(item.id),
+              paired: pairedByBill.get(item.id),
               oneTimePayLineIds,
               progress: progress[item.id] ?? NO_PROGRESS,
             },

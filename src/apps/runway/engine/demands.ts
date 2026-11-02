@@ -106,6 +106,8 @@ export interface DraftBillInput {
   fundedBy: BillFundedBy;
   /** Cents a day must give this bill by day key, whatever the funding says; the rest of a payment is spread over its other eligible days. */
   fixed?: Readonly<Record<string, Cents>>;
+  /** What a pay that pays this bill first asks of it, by day key: those pays carry their figure and the other pays share only the rest. A day with a fixed share ignores it. */
+  paired?: Readonly<Record<string, Cents>>;
   /** Pay lines that pay once: spread may use them, the pay before it's due and a named pay never do. */
   oneTimePayLineIds?: ReadonlySet<string>;
   /** What confirmed days and payments already say about this bill; none until a day is confirmed. */
@@ -464,6 +466,27 @@ const getDayShares = (
   return result;
 };
 
+/** What the pays that pay a bill first take from a payment, in day order and never more than remains; the rest is left for the other pays. */
+const getPairedShares = (
+  window: readonly IncomeDayRef[],
+  totalCents: Cents,
+  paired: Readonly<Record<string, Cents>> | undefined,
+  fixed: Readonly<Record<string, Cents>> | undefined,
+) =>
+  window.reduce<{ left: Cents; cents: Map<string, Cents> }>(
+    (acc, day) => {
+      const asked = paired?.[day.dayKey];
+      if (asked === undefined || (fixed && Object.hasOwn(fixed, day.dayKey)))
+        return acc;
+      const cents = Math.min(Math.max(0, asked), acc.left);
+      return {
+        left: acc.left - cents,
+        cents: acc.cents.set(day.dayKey, cents),
+      };
+    },
+    { left: totalCents, cents: new Map() },
+  );
+
 const isInDayOrder = (days: readonly IncomeDayRef[]) =>
   days.every((day, index) => index === 0 || days[index - 1].on <= day.on);
 
@@ -586,11 +609,23 @@ export function planBillPayments(
       bill.fundedBy,
       bill.oneTimePayLineIds,
     );
-    const shares = getDayShares(
-      eligible,
+    const pairedShares = getPairedShares(
+      window,
       paid ? 0 : Math.max(0, amountCents - fundedCents),
+      bill.paired,
+      bill.fixed,
+    );
+    const others = eligible.filter(
+      (day) => !pairedShares.cents.has(day.dayKey),
+    );
+    const shares = getDayShares(
+      others,
+      pairedShares.left,
       bill.fixed,
       bill.oneTimePayLineIds,
+    );
+    const otherShares = new Map(
+      others.map((day, position) => [day.dayKey, shares[position]]),
     );
     return {
       dueOn,
@@ -598,10 +633,18 @@ export function planBillPayments(
       ranged,
       parts: paid
         ? []
-        : eligible.map((day, position) => ({
-            day,
-            cents: shares[position],
-          })),
+        : window
+            .filter(
+              (day) =>
+                pairedShares.cents.has(day.dayKey) ||
+                otherShares.has(day.dayKey),
+            )
+            .map((day) => ({
+              day,
+              cents:
+                pairedShares.cents.get(day.dayKey) ??
+                (otherShares.get(day.dayKey) as Cents),
+            })),
       fundedCents,
       fundedDays: countFundedDays(confirmed),
       heldNowCents: getHeldNow(dueOn, fundedCents, paid),

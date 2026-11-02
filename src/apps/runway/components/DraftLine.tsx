@@ -1,14 +1,17 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import BillShareView from '@apps/runway/components/BillShareView';
+import { ActionTitle } from '@apps/runway/components/ActionSection';
 import ItemSheet, {
   type ItemSheetProps,
 } from '@apps/runway/components/ItemSheet';
@@ -58,6 +61,8 @@ interface DraftLineProps {
   /** Set where the day opens the line's sheet itself (a door from the footer). */
   isOpen?: boolean;
   onOpenChange?: (isOpen: boolean) => void;
+  /** Opens this day's Pay these first, where a paired line's figure is set. */
+  onOpenFunds?: () => void;
 }
 
 /** One line of a draft as a row: what it got and the one fact that matters most. It opens the line's sheet, with its reason, its choices and the item's changes. */
@@ -78,6 +83,7 @@ function DraftLine({
   isWarning = false,
   isOpen: isOpenProp,
   onOpenChange,
+  onOpenFunds,
 }: DraftLineProps) {
   const [isOwnOpen, setIsOwnOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -301,6 +307,7 @@ function DraftLine({
           name={name}
           dayKey={dayKey}
           sheetProps={sheetProps}
+          onOpenFunds={onOpenFunds}
         />
       )}
       {isOpen && sheetProps !== null && kind !== 'bill' && (
@@ -315,38 +322,78 @@ interface BillLineSheetProps {
   name: string;
   dayKey: string;
   sheetProps: ItemSheetProps;
+  onOpenFunds?: () => void;
 }
 
-/** A bill's sheet from an income day: its Paid from row, and a change to what this one pay puts in (not on a pay that pays it first, where the figure comes from the pairing). */
-function BillLineSheet({ line, name, dayKey, sheetProps }: BillLineSheetProps) {
+/** A bill's sheet from an income day: its Paid from row, and a change to what this one pay puts in; on a pay that pays it first, the figure comes from Pay these first, so the row leads there. */
+function BillLineSheet({
+  line,
+  name,
+  dayKey,
+  sheetProps,
+  onOpenFunds,
+}: BillLineSheetProps) {
   const paidFromAction = usePaidFromAction(line.itemId, sheetProps.today);
   const mask = useMaskedText();
+  const pairedAction = onOpenFunds && {
+    label: PAY_SHARE_WORDS.action,
+    subtitle: PAY_SHARE_WORDS.pairedSub,
+    renderView: ({
+      onBack,
+      onClose,
+    }: {
+      onBack: () => void;
+      onClose: () => void;
+    }) => (
+      <div className='flex flex-col gap-3'>
+        <BackLink onBack={onBack} />
+        <ActionTitle>{PAY_SHARE_WORDS.firstOnlyTitle(name)}</ActionTitle>
+        <p className='text-muted-foreground text-sm'>
+          {PAY_SHARE_WORDS.pairedBody}
+        </p>
+        <div>
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() => {
+              onClose();
+              onOpenFunds();
+            }}
+          >
+            {PAY_SHARE_WORDS.openFunds}
+          </Button>
+        </div>
+      </div>
+    ),
+  };
   return (
     <ItemSheet
       {...sheetProps}
       maxAction={paidFromAction}
       dayAction={
-        line.bill
-          ? {
-              label: PAY_SHARE_WORDS.action,
-              subtitle: mask(
-                PAY_SHARE_WORDS.actionSub(
-                  name,
-                  formatCents(line.bill.totalCents),
+        line.pairing !== null && pairedAction
+          ? pairedAction
+          : line.bill
+            ? {
+                label: PAY_SHARE_WORDS.action,
+                subtitle: mask(
+                  PAY_SHARE_WORDS.actionSub(
+                    name,
+                    formatCents(line.bill.totalCents),
+                  ),
                 ),
-              ),
-              renderView: ({ onBack, onClose, openChange }) => (
-                <BillShareView
-                  billId={line.itemId}
-                  dayKey={dayKey}
-                  currentCents={line.demandCents}
-                  onBack={onBack}
-                  onClose={onClose}
-                  onOpenPaidFrom={() => openChange('funding')}
-                />
-              ),
-            }
-          : undefined
+                renderView: ({ onBack, onClose, openChange }) => (
+                  <BillShareView
+                    billId={line.itemId}
+                    dayKey={dayKey}
+                    currentCents={line.demandCents}
+                    onBack={onBack}
+                    onClose={onClose}
+                    onOpenPaidFrom={() => openChange('funding')}
+                  />
+                ),
+              }
+            : undefined
       }
     />
   );

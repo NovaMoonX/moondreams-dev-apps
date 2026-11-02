@@ -841,6 +841,10 @@ export const PAY_SHARE_WORDS = {
   title: (name: string) => `How much should this pay put toward ${name}?`,
   amount: 'Amount',
   changes: 'What changes',
+  carriesRest: (date: string, name: string, cents: string, isAlone: boolean) =>
+    isAlone
+      ? `The ${date} pay now puts in all of ${name}'s remaining ${cents}; the other pays put in $0.`
+      : `The ${date} pay now puts in the rest of ${name}, ${cents}.`,
   payRow: (name: string, date: string) => `${name}, ${date} pay`,
   short: (name: string, short: string, dueOn: string) =>
     `${name} would be ${short} short on ${dueOn}`,
@@ -910,6 +914,10 @@ export const PAY_SHARE_WORDS = {
   leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
   leftOutBody: 'This pay puts nothing toward it.',
   firstOnlyTitle: (name: string) => `${name} comes out of this pay first`,
+  pairedSub: 'Set in Pay these first',
+  pairedBody:
+    'What this pay puts in is set in Pay these first, so change it there.',
+  openFunds: 'Open Pay these first',
   firstOnlyBody: (from: string) =>
     `Its Paid from is ${from}, so what this pay puts in is set by Pay these first, not here.`,
   hiddenEffects: 'Other pays and items may move',

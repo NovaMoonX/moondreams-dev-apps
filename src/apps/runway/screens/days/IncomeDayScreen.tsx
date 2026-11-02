@@ -308,6 +308,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         }
         onResetShare={resetShare}
         canChange={day.on >= today && changeableIds.has(line.itemId)}
+        onOpenFunds={() => setIsEditingFunds(true)}
       />
     );
   };

@@ -3,6 +3,7 @@ import type { Lookahead } from '@apps/runway/engine/lookahead';
 import {
   buildComingDays,
   getOneTimePayLineIds,
+  getPairedByBill,
 } from '@apps/runway/engine/comingDays';
 import {
   planOverrideCarry,
@@ -503,6 +504,7 @@ export function previewBillShareView(
     ending: capEnding(payload.ending, item.endedAt),
     fundedBy: payload.fundedBy,
     fixed,
+    paired: getPairedByBill(versions, openDays, coming, stance).get(billId),
     oneTimePayLineIds: getOneTimePayLineIds(versions),
     progress: inputs.billProgress[billId] ?? NO_PROGRESS,
   };

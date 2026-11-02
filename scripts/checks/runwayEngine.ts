@@ -1981,6 +1981,88 @@ const version = (
   assert.equal(draft.lines[0].bill?.totalCents, 150_001);
   assert.equal(draft.freeToSpend.cents, 0);
 
+  // A pay that pays a bill first carries its figure, and the other pays share only the rest.
+  {
+    const window = [5, 8, 15, 19].map((date) =>
+      day(utc(2026, 11, date), `n${date}`),
+    );
+    const pairedRent = (
+      paired: Record<string, number>,
+      fixed?: Record<string, number>,
+    ) =>
+      makeBill({
+        amount: { lowCents: 120_000, highCents: 120_000 },
+        schedule: once(utc(2026, 12, 1)),
+        paired,
+        fixed,
+      });
+    const sharesOf = (bill: DraftBillInput) =>
+      planBillPayments(bill, window, horizon)[0].parts.map((part) => [
+        part.day.dayKey,
+        part.cents,
+      ]);
+    assert.deepEqual(
+      sharesOf(pairedRent({ pay_n8: 60_000 })),
+      [
+        ['pay_n5', 20_000],
+        ['pay_n8', 60_000],
+        ['pay_n15', 20_000],
+        ['pay_n19', 20_000],
+      ],
+      'the other pays spread only what the paired pay leaves',
+    );
+    assert.deepEqual(
+      sharesOf(pairedRent({ pay_n8: 200_000 })).map(([, cents]) => cents),
+      [0, 120_000, 0, 0],
+      'a paired figure over the payment carries all of it and no more',
+    );
+    assert.deepEqual(
+      sharesOf(pairedRent({ pay_n8: 60_000 }, { pay_n8: 10_000 })),
+      [
+        ['pay_n5', 0],
+        ['pay_n8', 10_000],
+        ['pay_n15', 110_000],
+        ['pay_n19', 0],
+      ],
+      'a share the person set wins over the pay that pays it first',
+    );
+    const draftFor = (index: number, withPairing: boolean) =>
+      buildDraft({
+        days: [
+          {
+            ...window[index],
+            pairings: {
+              day: null,
+              payLine: withPairing
+                ? [
+                    {
+                      targetItemId: 'rent',
+                      amount: { kind: 'exact', cents: 60_000 },
+                      topUpFromAnySource: false,
+                    },
+                  ]
+                : [],
+              source: [],
+            },
+          },
+        ],
+        plan: {
+          envelopes: [],
+          bills: [pairedRent({ pay_n8: 60_000 })],
+          goals: [],
+          horizon,
+          incomeDays: window,
+        },
+        stance: 'conservative',
+        overrides: { dayCents: {}, holdResolutions: {} },
+      }).lines.find((line) => line.itemId === 'rent')?.cents;
+    assert.deepEqual(
+      [draftFor(0, false), draftFor(1, true), draftFor(2, false)],
+      [20_000, 60_000, 20_000],
+      'each pay plans its own part, and together they plan the bill once',
+    );
+  }
+
   // The same bills give the same demands whatever order they arrive in.
   const random = makeRandom(5);
   const bills = [

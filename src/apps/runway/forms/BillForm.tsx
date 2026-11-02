@@ -1225,7 +1225,7 @@ function BillFormBody({
   const changeSection =
     editing && questions.hasReviewed && !isFirstDate ? (
       <div ref={setChangesEl}>
-        <ChangeSection isIdleShown />
+        <ChangeSection isIdleShown isOpen={quickStep?.id === 'funding'} />
       </div>
     ) : null;
 
