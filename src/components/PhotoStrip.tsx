@@ -1,4 +1,4 @@
-import { useRef, useState, type UIEvent } from 'react';
+import { type ReactNode, useRef, useState, type UIEvent } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -19,13 +19,15 @@ interface PhotoStripProps {
   photos: StripPhoto[];
   /** Names the photos for screen readers and the viewer's caption, with its place appended ("Oak desk, photo 2"). */
   label: string;
+  /** Drawn in place of the strip when no photo can be shown. */
+  fallback?: ReactNode;
 }
 
 const TILE_BOX =
   'bg-muted aspect-4/3 h-auto max-h-[60dvh] w-full overflow-hidden rounded-2xl';
 
 /** A sideways row of photos that snaps one at a time and lets the next peek in, with "1 / 5" under it, arrows from `sm`, and a tap that opens the pictures full screen. A photo that is loading holds its box, and one that fails shows a camera tile; the strip hides when none can be shown. */
-function PhotoStrip({ photos, label }: PhotoStripProps) {
+function PhotoStrip({ photos, label, fallback = null }: PhotoStripProps) {
   const listRef = useRef<HTMLUListElement>(null);
   const [scrolledTo, setScrolledTo] = useState(0);
   const [failedIds, setFailedIds] = useState<ReadonlySet<string>>(new Set());
@@ -34,7 +36,7 @@ function PhotoStrip({ photos, label }: PhotoStripProps) {
   const isFailed = (photo: StripPhoto) =>
     photo.isMissing === true || failedIds.has(photo.id);
   const shown = photos.filter((photo) => !isFailed(photo));
-  if (shown.length === 0) return null;
+  if (shown.length === 0) return fallback;
 
   const viewable = shown.flatMap((photo) =>
     photo.url === null ? [] : [{ id: photo.id, url: photo.url }],

@@ -28,9 +28,10 @@ async function sweepCopies(saleId: string, action: LinkAction, from: number) {
       return null;
     },
   );
-  if (counts !== null) {
-    logger.info('goingOnce.link.copied', { action, ...counts });
-  }
+  if (counts === null) return;
+  if (counts.partial)
+    logger.warn('goingOnce.link.copiedPartly', { action, ...counts });
+  else logger.info('goingOnce.link.copied', { action, ...counts });
 }
 
 const toCurrentId = (value: unknown) =>

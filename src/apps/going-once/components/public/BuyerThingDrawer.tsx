@@ -42,13 +42,15 @@ function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
       }
     >
       <div className='space-y-4'>
-        {thing.photos.length > 0 ? (
-          <PhotoStrip photos={photos} label={thing.title} />
-        ) : (
-          <div className='bg-accent/60 text-accent-foreground grid h-48 w-full place-items-center rounded-2xl'>
-            <Camera className='size-8 opacity-60' aria-hidden='true' />
-          </div>
-        )}
+        <PhotoStrip
+          photos={photos}
+          label={thing.title}
+          fallback={
+            <div className='bg-accent/60 text-accent-foreground grid aspect-4/3 w-full place-items-center rounded-2xl'>
+              <Camera className='size-8 opacity-60' aria-hidden='true' />
+            </div>
+          }
+        />
         <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
           <PriceTag askingPriceCents={thing.askingPriceCents} />
           {thing.originalPriceCents !== null && (
