@@ -256,7 +256,7 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     });
   });
 
-  const paidStatus = Object.fromEntries(memberUids.map((uid) => [uid, { isPaid: false, paidAt: null }]));
+  const paidStatus = Object.fromEntries(memberUids.map((uid) => [uid, { isPaid: false, paidAt: null, markedByUid: null, log: [] }]));
   Array.from({ length: 150 }, (_, index) => index).forEach((index) => {
     const id = `scale-expense-${index}`;
     const isPaid = index % 3 !== 0;
@@ -270,6 +270,26 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
     const shareCents = splitUids.map((_, position) =>
       position === 0 ? firstCents : position === restCount ? amount * 100 - firstCents - baseRestCents * (restCount - 1) : baseRestCents,
     );
+    const payerUid = isPaid ? (isCustomSplit ? alexUid : pickMember(index)) : null;
+    // Some paid expenses carry marks with history (one marked by the payer, one flipped back) so the payer's list is seen at 120 people.
+    const memberStatus =
+      payerUid !== null && (index % 4 === 1 || index === 2)
+        ? Object.fromEntries(
+            memberUids.map((uid, position) => {
+              if (uid === payerUid) {
+                return [uid, paidStatus[uid]];
+              }
+              if (position % 5 === 2) {
+                const byUid = position % 10 === 2 ? payerUid : uid;
+                return [uid, { isPaid: true, paidAt: context.now - 3_600_000, markedByUid: byUid, log: [{ isPaid: true, byUid, at: context.now - 3_600_000, isReset: false }] }];
+              }
+              if (position % 11 === 3) {
+                return [uid, { isPaid: false, paidAt: null, markedByUid: null, log: [{ isPaid: true, byUid: uid, at: context.now - 7_200_000, isReset: false }, { isPaid: false, byUid: payerUid, at: context.now - 3_600_000, isReset: false }] }];
+              }
+              return [uid, paidStatus[uid]];
+            }),
+          )
+        : paidStatus;
     add(`${tripPath}/expenses/${id}`, {
       id,
       tripId: TRIP_ID,
@@ -281,14 +301,14 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
       paidAmount: null,
       currency: 'USD',
       isPerPerson: index % 7 === 0,
-      payerUid: isPaid ? (isCustomSplit ? alexUid : pickMember(index)) : null,
+      payerUid,
       status: isPaid ? 'PAID' : 'EXPECTED',
       category: EXPENSE_CATEGORIES[index % EXPENSE_CATEGORIES.length],
       customCategoryLabel: null,
       targetType: isCustomSplit ? 'SPECIFIC_MEMBERS' : 'EVERYONE_CURRENT',
       targetMemberIds: isCustomSplit ? splitUids : memberUids,
       splitAmounts: isCustomSplit ? Object.fromEntries(splitUids.map((uid, position) => [uid, shareCents[position] / 100])) : null,
-      paidMemberStatus: paidStatus,
+      paidMemberStatus: memberStatus,
       earlyPayments: !isPaid && index % 6 === 0 ? { [taylorUid]: { toUid: alexUid, amount: 2, paidAt: context.now - 3_600_000, isReturned: false, returnedAt: null } } : {},
       note: null,
       groupLabel: index % 10 === 0 ? `Day ${(index % TRIP_DAYS) + 1} meals` : null,
