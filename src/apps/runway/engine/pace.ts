@@ -1,9 +1,16 @@
 import type { PACE_STATES } from '@apps/runway/constants';
-import type { Cents, DateOnly, FundingRule } from '@apps/runway/types';
+import type {
+  Cents,
+  DateOnly,
+  FundingRule,
+  Priority,
+  PriorityExtra,
+} from '@apps/runway/types';
 
 import { percentOf } from './money';
 import { getCalendarCents } from './calendar';
 import { selectRuleDays } from './schedule';
+import { getPartAsks, splitAcrossParts } from './parts';
 
 /** What one funded day asks of an exact or percentage goal; a `rest` goal's ask is not known ahead. */
 const getDayAsk = (funding: FundingRule, day: PaceDay) => {
@@ -31,6 +38,10 @@ export interface PaceGoal {
   /** What the goal holds before any planned day. Zero until a day is confirmed. */
   heldCents: Cents;
   funding: FundingRule;
+  /** Needed with extras: the goal's own priority, which the extras sit below. */
+  priority?: Priority;
+  orderIndex?: number;
+  extras?: readonly PriorityExtra[] | null;
 }
 
 export interface Pace {
@@ -54,29 +65,52 @@ export interface Pace {
  * knows, so each funded day lists the whole target left as its ceiling.
  */
 export function planGoalContributions<D extends PaceDay>(
-  goal: Pick<PaceGoal, 'targetCents' | 'heldCents' | 'funding'>,
+  goal: Pick<
+    PaceGoal,
+    | 'targetCents'
+    | 'heldCents'
+    | 'funding'
+    | 'priority'
+    | 'orderIndex'
+    | 'extras'
+  >,
   incomeDays: readonly D[],
   priorDays: readonly PaceDay[] = [],
-): { day: D; cents: Cents }[] {
+): { day: D; cents: Cents; shares?: Cents[] }[] {
   const funded = selectRuleDays(goal.funding, incomeDays);
   const calendar = getCalendarCents(goal.funding, funded, priorDays);
+  const partAsks =
+    goal.priority === undefined
+      ? null
+      : getPartAsks(
+          {
+            priority: goal.priority,
+            orderIndex: goal.orderIndex ?? 0,
+            funding: goal.funding,
+            extras: goal.extras,
+          },
+          funded,
+          priorDays,
+        );
   const result = funded.reduce<{
     left: Cents;
-    parts: { day: D; cents: Cents }[];
+    parts: { day: D; cents: Cents; shares?: Cents[] }[];
   }>(
     (acc, day) => {
       const isRest = goal.funding.amount.kind === 'rest';
-      const cents = isRest
-        ? acc.left
-        : Math.min(
-            calendar
-              ? (calendar.get(day.dayKey) ?? 0)
-              : getDayAsk(goal.funding, day),
-            acc.left,
-          );
+      const asks = partAsks?.(day.dayKey) ?? null;
+      const ask = asks
+        ? asks.reduce((sum, part) => sum + part, 0)
+        : calendar
+          ? (calendar.get(day.dayKey) ?? 0)
+          : getDayAsk(goal.funding, day);
+      const cents = isRest ? acc.left : Math.min(ask, acc.left);
+      const entry = asks
+        ? { day, cents, shares: splitAcrossParts(asks, cents) }
+        : { day, cents };
       return {
         left: isRest ? acc.left : acc.left - cents,
-        parts: cents > 0 ? [...acc.parts, { day, cents }] : acc.parts,
+        parts: cents > 0 ? [...acc.parts, entry] : acc.parts,
       };
     },
     { left: Math.max(0, goal.targetCents - goal.heldCents), parts: [] },

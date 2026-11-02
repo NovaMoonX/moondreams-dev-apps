@@ -24,6 +24,7 @@ export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
   const result = draft.lines.map((line): RecordLine => ({
     lineId: line.lineId,
     itemId: line.itemId,
+    part: line.part,
     name: Object.hasOwn(names, line.itemId) ? names[line.itemId].name : '',
     emoji: Object.hasOwn(names, line.itemId) ? names[line.itemId].emoji : null,
     tier: line.tier,

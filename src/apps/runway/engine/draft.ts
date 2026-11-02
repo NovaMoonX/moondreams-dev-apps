@@ -28,6 +28,7 @@ import {
   type DraftTieKey,
 } from './demands';
 import { percentOf } from './money';
+import { getLineId } from './parts';
 import { effectiveStance, pick } from './stance';
 
 export interface DraftOverrides {
@@ -95,6 +96,8 @@ export interface DraftLine {
   lineId: string;
   dayKey: string;
   itemId: string;
+  /** The extra this line funds, by its level; null for the item's own amount. */
+  part: Priority | null;
   tier: Priority;
   /** Set on a bill's line: the payment this day sets money aside for. */
   bill: BillShare | null;
@@ -264,6 +267,7 @@ function fundPairings(
     return {
       dayKey: day.dayKey,
       itemId: target.itemId,
+      part: null,
       tier: target.tier,
       dueBeforeNext: own?.dueBeforeNext ?? false,
       orderIndex: target.orderIndex,
@@ -325,6 +329,7 @@ function fundPairings(
         lineId,
         dayKey: day.dayKey,
         itemId: demand.itemId,
+        part: null,
         tier: demand.tier,
         bill: demand.bill,
         sourceId: day.sourceId,
@@ -414,7 +419,9 @@ export function buildDraft(input: DraftInput): Draft {
     ),
   );
   const replaced = new Map(
-    allDemands.map((demand) => [`${demand.dayKey}:${demand.itemId}`, demand]),
+    allDemands
+      .filter((demand) => demand.part === null)
+      .map((demand) => [`${demand.dayKey}:${demand.itemId}`, demand]),
   );
   const resolutions = input.overrides.holdResolutions ?? {};
   const goalNeeds = new Map([
@@ -579,9 +586,10 @@ export function buildDraft(input: DraftInput): Draft {
     const taken = takeFromPool(acc.pool, wanted, isRest ? demand.dayKey : null);
     const cents = wanted - taken.left;
     const line: DraftLine = {
-      lineId: `${demand.dayKey}:${demand.itemId}`,
+      lineId: getLineId(demand.dayKey, demand.itemId, demand.part),
       dayKey: demand.dayKey,
       itemId: demand.itemId,
+      part: demand.part,
       tier: demand.tier,
       bill: demand.bill,
       sourceId: sourceByDay.get(demand.dayKey) ?? null,

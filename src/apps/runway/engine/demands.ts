@@ -14,6 +14,7 @@ import type {
   MoneyRange,
   Pairing,
   Priority,
+  PriorityExtra,
   Schedule,
   Stance,
 } from '@apps/runway/types';
@@ -33,6 +34,13 @@ import { effectiveStance, pick } from './stance';
 import { getCalendarCents } from './calendar';
 import { occurrences, selectRuleDays } from './schedule';
 import { matchMovedDates } from './moved';
+import {
+  getLineId,
+  getPartAsks,
+  getParts,
+  splitAcrossParts,
+  TIER_RANK,
+} from './parts';
 
 export type DraftCadence =
   | (typeof FUNDING_CADENCES)[number]
@@ -74,6 +82,8 @@ export interface DraftEnvelopeInput {
   maxCents?: Cents | null;
   /** What it holds before any planned day, which a max counts against. */
   heldCents?: Cents;
+  /** Lower-priority extras on the same days; each is its own demand at its own tier. */
+  extras?: readonly PriorityExtra[] | null;
 }
 
 export interface DraftGoalInput extends DraftEnvelopeInput {
@@ -119,6 +129,8 @@ export interface BillShare {
 export interface Demand {
   dayKey: string;
   itemId: string;
+  /** The extra this demand funds, by its level; null for the item's own amount. */
+  part: Priority | null;
   tier: Priority;
   dueBeforeNext: boolean;
   orderIndex: number;
@@ -131,11 +143,7 @@ export interface Demand {
   capCents: Cents | null;
 }
 
-export const TIER_RANK: Record<Priority, number> = {
-  must: 0,
-  should: 1,
-  want: 2,
-};
+export { TIER_RANK };
 
 /** Code-unit order, so a sort never depends on the viewer's locale. */
 export const compareText = (a: string, b: string) =>
@@ -193,7 +201,7 @@ function sharePercentDemands(
         lines.map((line) => line.itemId),
       );
       return lines.map((line, index): [string, Cents] => [
-        `${line.dayKey}:${line.itemId}`,
+        getLineId(line.dayKey, line.itemId, line.part),
         line.ask.kind === 'percent' &&
         line.cents < percentOf(dayMoney.get(dayKey) ?? 0, line.ask.bps)
           ? line.cents
@@ -202,7 +210,9 @@ function sharePercentDemands(
     }),
   );
   const result = demands.map((demand) => {
-    const cents = shares.get(`${demand.dayKey}:${demand.itemId}`);
+    const cents = shares.get(
+      getLineId(demand.dayKey, demand.itemId, demand.part),
+    );
     return cents === undefined ? demand : { ...demand, cents };
   });
   return result;
@@ -230,21 +240,39 @@ export function buildDemands(
   const envelopeDemands = envelopes.flatMap((envelope) => {
     const funded = selectRuleDays(envelope.funding, chronological);
     const calendar = getCalendarCents(envelope.funding, funded, priorDays);
+    const partAsks = getPartAsks(envelope, funded, priorDays);
+    const parts = getParts(envelope);
     const isRest = envelope.funding.amount.kind === 'rest';
     const max = envelope.maxCents ?? null;
     const asked = (day: (typeof funded)[number]) =>
-      calendar
-        ? (calendar.get(day.dayKey) ?? 0)
-        : getDemandCents(envelope.funding, moneyOf(day));
+      partAsks
+        ? partAsks(day.dayKey)
+        : [
+            calendar
+              ? (calendar.get(day.dayKey) ?? 0)
+              : getDemandCents(envelope.funding, moneyOf(day)),
+          ];
     const walked = funded.reduce<{
       room: Cents;
-      parts: { day: (typeof funded)[number]; cents: Cents; room: Cents }[];
+      parts: {
+        day: (typeof funded)[number];
+        shares: Cents[];
+        room: Cents;
+      }[];
     }>(
       (acc, day) => {
-        const cents = Math.min(asked(day), acc.room);
+        const asks = asked(day);
+        const total =
+          asks.length === 1 ? asks[0] : asks.reduce((sum, ask) => sum + ask, 0);
+        const cents = Math.min(total, acc.room);
+        acc.parts.push({
+          day,
+          shares: asks.length === 1 ? [cents] : splitAcrossParts(asks, cents),
+          room: acc.room,
+        });
         return {
           room: max === null || isRest ? acc.room : acc.room - cents,
-          parts: [...acc.parts, { day, cents, room: acc.room }],
+          parts: acc.parts,
         };
       },
       {
@@ -257,37 +285,56 @@ export function buildDemands(
     ).parts;
     return walked
       .filter(({ day }) => planned.has(day.dayKey))
-      .map(({ day, cents, room }): Demand => ({
-        dayKey: day.dayKey,
-        itemId: envelope.itemId,
-        tier: envelope.priority,
-        dueBeforeNext: false,
-        orderIndex: envelope.orderIndex,
-        createdAt: envelope.createdAt,
-        cents,
-        cadence: cadenceCode(envelope.funding.cadence),
-        bill: null,
-        ask: getAsk(envelope.funding),
-        capCents: isRest && max !== null ? room : null,
-      }));
+      .flatMap(({ day, shares, room }) =>
+        shares.flatMap((cents, index): Demand[] =>
+          index > 0 && cents === 0
+            ? []
+            : [
+                {
+                  dayKey: day.dayKey,
+                  itemId: envelope.itemId,
+                  part: parts[index].part,
+                  tier: parts[index].tier,
+                  dueBeforeNext: false,
+                  orderIndex: parts[index].orderIndex,
+                  createdAt: envelope.createdAt,
+                  cents,
+                  cadence: cadenceCode(envelope.funding.cadence),
+                  bill: null,
+                  ask: getAsk(envelope.funding),
+                  capCents: isRest && max !== null ? room : null,
+                },
+              ],
+        ),
+      );
   });
-  const goalDemands = goals.flatMap((goal) =>
-    planGoalContributions(goal, chronological, priorDays)
+  const goalDemands = goals.flatMap((goal) => {
+    const parts = getParts(goal);
+    return planGoalContributions(goal, chronological, priorDays)
       .filter(({ day }) => planned.has(day.dayKey))
-      .map(({ day, cents }): Demand => ({
-        dayKey: day.dayKey,
-        itemId: goal.itemId,
-        tier: goal.priority,
-        dueBeforeNext: false,
-        orderIndex: goal.orderIndex,
-        createdAt: goal.createdAt,
-        cents: goal.funding.amount.kind === 'rest' ? 0 : cents,
-        cadence: cadenceCode(goal.funding.cadence),
-        bill: null,
-        ask: getAsk(goal.funding),
-        capCents: goal.funding.amount.kind === 'rest' ? cents : null,
-      })),
-  );
+      .flatMap(({ day, cents, shares }) =>
+        (shares ?? [cents]).flatMap((share, index): Demand[] =>
+          index > 0 && share === 0
+            ? []
+            : [
+                {
+                  dayKey: day.dayKey,
+                  itemId: goal.itemId,
+                  part: parts[index].part,
+                  tier: parts[index].tier,
+                  dueBeforeNext: false,
+                  orderIndex: parts[index].orderIndex,
+                  createdAt: goal.createdAt,
+                  cents: goal.funding.amount.kind === 'rest' ? 0 : share,
+                  cadence: cadenceCode(goal.funding.cadence),
+                  bill: null,
+                  ask: getAsk(goal.funding),
+                  capCents: goal.funding.amount.kind === 'rest' ? share : null,
+                },
+              ],
+        ),
+      );
+  });
   const result = [
     ...sharePercentDemands([...envelopeDemands, ...goalDemands], dayMoney),
     ...buildBillDemands(planned, chronological, bills, horizon, stance),
@@ -490,6 +537,7 @@ function buildBillDemands(
         .map((part): Demand => ({
           dayKey: part.day.dayKey,
           itemId: bill.itemId,
+          part: null,
           tier: bill.priority,
           dueBeforeNext: payment.dueOn < nextAfter(part.day.on),
           orderIndex: bill.orderIndex,
