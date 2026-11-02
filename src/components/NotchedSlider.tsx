@@ -94,7 +94,7 @@ function NotchedSlider<T extends string>({
       onPointerCancel={onPointerEnd}
       onKeyDown={onKeyDown}
       className={join(
-        "focus-visible:ring-primary/60 relative w-28 shrink-0 cursor-pointer touch-none rounded-lg px-3 pt-1.5 select-none before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] focus-visible:ring-2 focus-visible:outline-none",
+        "group relative w-28 shrink-0 cursor-pointer touch-none px-3 pt-1.5 select-none before:absolute before:inset-x-0 before:-inset-y-1 before:content-[''] focus-visible:outline-none",
         className,
       )}
     >
@@ -121,7 +121,7 @@ function NotchedSlider<T extends string>({
         ))}
         <span
           className={join(
-            'bg-background border-primary absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[5px] shadow-sm',
+            'bg-background border-primary group-focus-visible:ring-primary/60 absolute top-1/2 size-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[5px] shadow-sm group-focus-visible:ring-2',
             isDragging
               ? 'scale-110'
               : 'transition-[left] duration-150 ease-out',
