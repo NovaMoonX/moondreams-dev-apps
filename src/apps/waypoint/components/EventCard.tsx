@@ -282,6 +282,8 @@ export function EventCard({
   const stackActionLabel = isStacked ? 'Edit stack' : isGrouped ? 'Stack whole group' : 'Stack event';
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const hasDesktopNotes = Boolean(event.notes) || canModify;
+  const hasDesktopBadges = EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived;
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = showCover ? getDisplayImage(event) : null;
@@ -378,7 +380,7 @@ export function EventCard({
         {...drawerTriggerProps}
         className={join(
           'border-border bg-card relative overflow-hidden rounded-lg border',
-          imageUrl && 'sm:flex',
+          imageUrl && 'md:flex',
           isSmallScreen && 'cursor-pointer',
           event.isArchived && 'opacity-60',
         )}
@@ -387,10 +389,10 @@ export function EventCard({
           <FallbackImage
             src={imageUrl}
             alt=''
-            className='aspect-video w-full object-cover sm:aspect-auto sm:w-44 sm:shrink-0 sm:self-stretch'
+            className='aspect-video w-full object-cover sm:aspect-2/1 md:aspect-auto md:w-44 md:shrink-0 md:self-stretch'
           />
         )}
-        <div className={join(imageUrl && 'sm:flex sm:min-w-0 sm:flex-1 sm:flex-col')}>
+        <div className={join(imageUrl && 'md:flex md:min-w-0 md:flex-1 md:flex-col')}>
           <div className='flex items-start justify-between gap-3 p-4'>
             <div className='min-w-0 flex-1 space-y-1'>
               <EventDetailLines
@@ -444,27 +446,31 @@ export function EventCard({
               </div>
             )}
           </div>
-          {!isSmallScreen && (event.notes || canModify) && (
-            <div className='-mt-2 px-4 pb-3'>
-              <NotesField
-                key={event.id}
-                notes={event.notes}
-                canEdit={canModify}
-                onSave={(notes) => onSaveNotes(event, notes)}
-                variant='subtle'
-                onEditingChange={setIsEditingNotes}
-                placeholder={EVENT_NOTES_PLACEHOLDER}
-              />
+          {!isSmallScreen && (hasDesktopNotes || hasDesktopBadges) && (
+            <div className='-mt-2 flex items-end gap-3 px-4 pb-3'>
+              <div className='min-w-0 flex-1'>
+                {hasDesktopNotes && (
+                  <NotesField
+                    key={event.id}
+                    notes={event.notes}
+                    canEdit={canModify}
+                    onSave={(notes) => onSaveNotes(event, notes)}
+                    variant='subtle'
+                    onEditingChange={setIsEditingNotes}
+                    placeholder={EVENT_NOTES_PLACEHOLDER}
+                  />
+                )}
+              </div>
+              {hasDesktopBadges && (
+                <div className={join('flex shrink-0 items-center gap-2', isEditingNotes && 'hidden')}>
+                  <LinkedTodosBadge getSubject={() => getEventSubject(trip, event)} />
+                  <LinkedExpensesBadge getSubject={() => getEventSubject(trip, event)} />
+                  <NoExpenseBadge getSubject={() => getEventSubject(trip, event)} />
+                </div>
+              )}
             </div>
           )}
         </div>
-        {!isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-          <div className={join('absolute right-4 bottom-4 flex items-center gap-2', isEditingNotes && 'hidden')}>
-            <LinkedTodosBadge getSubject={() => getEventSubject(trip, event)} />
-            <LinkedExpensesBadge getSubject={() => getEventSubject(trip, event)} />
-            <NoExpenseBadge getSubject={() => getEventSubject(trip, event)} />
-          </div>
-        )}
       </article>
       {isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
         <div className='flex justify-end gap-2 pr-4'>
