@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { store } from '@/store';
+import { HANDLED_INBOX_LIMIT } from '@apps/going-once/constants';
 import DeleteThingConfirm, {
   type DeleteChoice,
   type DeleteQuestion,
@@ -40,14 +41,17 @@ export function useDeleteThing(
         selectItems(store.getState(), saleId),
       ).SOLD.collectedCents;
       const state = store.getState();
-      const inquiryCount = [
-        ...selectNewInquiries(state, saleId),
-        ...selectHandledInquiries(state, saleId),
-      ].filter((inquiry) => inquiry.itemId === item.id).length;
+      const handled = selectHandledInquiries(state, saleId);
+      const asked = {
+        count: [...selectNewInquiries(state, saleId), ...handled].filter(
+          (inquiry) => inquiry.itemId === item.id,
+        ).length,
+        isAtLeast: handled.length >= HANDLED_INBOX_LIMIT,
+      };
       setAsking({
         item,
         collectedCents,
-        inquiryCount,
+        asked,
         settle: (choice) => {
           setAsking(null);
           resolve(choice);

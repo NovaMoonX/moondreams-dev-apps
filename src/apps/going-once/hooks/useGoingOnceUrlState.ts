@@ -84,12 +84,6 @@ export function useGoingOnceUrlState() {
     void setRequestedTab(null, { history: 'replace' });
     return showStatusView(view);
   };
-  const showThingOnThings = (id: string) => {
-    clearInbox();
-    void setRequestedTab(null, { history: 'replace' });
-    void setRequestedView(null, { history: 'replace' });
-    return openThing(id);
-  };
   const showTab = (tab: GoingOnceTab) => {
     void closeThing();
     if (tab !== 'inbox') clearInbox();
@@ -110,7 +104,10 @@ export function useGoingOnceUrlState() {
       history: 'replace',
     });
   const openInquiry = (id: string) => setInquiryId(id, { history: 'replace' });
-  const closeInquiry = () => setInquiryId(null, { history: 'replace' });
+  const closeInquiry = () => {
+    void closeThing();
+    return setInquiryId(null, { history: 'replace' });
+  };
 
   return {
     saleId,
@@ -125,7 +122,6 @@ export function useGoingOnceUrlState() {
     statusView,
     showStatusView,
     showThingsOn,
-    showThingOnThings,
     openSale,
     closeSale,
     showTab,

@@ -57,11 +57,25 @@ export function formatAddedAgo(createdAt: number, now: number): string {
   return `You added it ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
 }
 
+const describeAsked = ({ count, isAtLeast }: AskedCount) => {
+  if (count === 0) return null;
+  const people = count === 1 && !isAtLeast ? '1 person' : `${count} people`;
+  const stays =
+    count === 1 && !isAtLeast ? 'Their message stays' : 'Their messages stay';
+  return `${isAtLeast ? 'At least ' : ''}${people} asked about it. ${stays} in the Inbox.`;
+};
+
+/** How many people asked about a thing, and whether that is only the most recent the Inbox has loaded. */
+export interface AskedCount {
+  count: number;
+  isAtLeast: boolean;
+}
+
 /** What goes with a thing when it is deleted, for the confirm: its hold, the effect on Collected, its photos, and the people who asked about it (their messages stay). */
 export function getDeleteEffects(
   item: Pick<Item, 'photos' | 'status' | 'pending' | 'sale'>,
   collectedCents: number,
-  inquiryCount: number,
+  asked: AskedCount,
 ): string[] {
   const count = item.photos.length;
   const { pending, sale } = item;
@@ -75,9 +89,7 @@ export function getDeleteEffects(
     count === 0
       ? null
       : `${count === 1 ? 'Its photo goes' : `Its ${count} photos go`} with it.`,
-    inquiryCount === 0
-      ? null
-      : `${inquiryCount === 1 ? '1 person asked about it. Their message stays' : `${inquiryCount} people asked about it. Their messages stay`} in the Inbox.`,
+    describeAsked(asked),
   ].filter((effect) => effect !== null);
 }
 

@@ -2,6 +2,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import type { Item } from '@apps/going-once/types';
+import type { AskedCount } from '@apps/going-once/utils/listing';
 import {
   getDeleteEffects,
   getItemName,
@@ -14,7 +15,7 @@ export interface DeleteQuestion {
   item: Item;
   collectedCents: number;
   /** People who have asked about the thing. */
-  inquiryCount: number;
+  asked: AskedCount;
   settle: (choice: DeleteChoice) => void;
 }
 
@@ -28,7 +29,7 @@ function DeleteThingConfirm({ question }: DeleteThingConfirmProps) {
     question?.settle(null),
   );
   if (question === null) return null;
-  const { item, collectedCents, inquiryCount, settle } = question;
+  const { item, collectedCents, asked, settle } = question;
   const name = getItemName(item);
   const canTakeOff =
     item.status === 'PENDING' ||
@@ -44,7 +45,7 @@ function DeleteThingConfirm({ question }: DeleteThingConfirmProps) {
     >
       <p className='text-muted-foreground'>
         {[
-          ...getDeleteEffects(item, collectedCents, inquiryCount),
+          ...getDeleteEffects(item, collectedCents, asked),
           "This can't be undone.",
         ].join(' ')}
       </p>

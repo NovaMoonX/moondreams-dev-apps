@@ -55,7 +55,7 @@ interface InboxTabProps {
   openThingId: string | null;
   onOpenThing: (id: string) => void;
   onCloseThing: () => void;
-  /** Opens the Things tab on a thing, for what the Inbox can't do from here. */
+  /** Opens the Things tab with this thing's add-a-thing walk-through. */
   onFinishThing: (id: string) => void;
   /** Goes to the Sale tab, where the public page is switched on. */
   onOpenSale: () => void;

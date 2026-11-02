@@ -60,6 +60,9 @@ interface ItemsSectionProps {
   /** The status the list is switched to, kept in the address so the Sale tab's tiles can open it. */
   statusView: StatusView;
   onStatusViewChange: (view: StatusView) => void;
+  /** A thing whose add-a-thing walk-through opens as the tab mounts, when another tab sent the person here to finish it. */
+  resumeId: string | null;
+  onResumeTaken: () => void;
 }
 
 /** The Things tab: the sale's things, newest first, with a search and a sort once there are enough to need them, and the way to add one. */
@@ -71,12 +74,17 @@ function ItemsSection({
   onCloseThing,
   statusView,
   onStatusViewChange,
+  resumeId,
+  onResumeTaken,
 }: ItemsSectionProps) {
   const items = useAppSelector((state) => selectItems(state, saleId));
   const status = useAppSelector(selectItemsStatus);
   const uploads = useAppSelector(selectPhotoUploads);
   const sale = useAppSelector((state) => selectSaleById(state, saleId));
-  const [adding, setAdding] = useState<{ resume: Item | null } | null>(null);
+  const [adding, setAdding] = useState<{ resume: Item | null } | null>(() => {
+    const resume = items.find((item) => item.id === resumeId);
+    return resume === undefined ? null : { resume };
+  });
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
@@ -285,7 +293,10 @@ function ItemsSection({
           saleId={saleId}
           uid={uid}
           resume={adding.resume}
-          onClose={() => setAdding(null)}
+          onClose={() => {
+            setAdding(null);
+            onResumeTaken();
+          }}
         />
       )}
     </div>
