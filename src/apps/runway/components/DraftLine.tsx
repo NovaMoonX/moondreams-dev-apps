@@ -129,7 +129,14 @@ function DraftLine({
   };
   const pairingShort = getPairingShort();
   const billShareShort = line.bill
-    ? `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatDateShortUTC(line.bill.dueOn)}`
+    ? line.bill.setAsideCents !== undefined &&
+      line.bill.setAsideCents > 0 &&
+      line.cents + line.bill.setAsideCents >= line.bill.totalCents
+      ? PAY_SHARE_WORDS.restSetAside(
+          formatCentsShort(line.cents),
+          formatDateShortUTC(line.bill.dueOn),
+        )
+      : `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatDateShortUTC(line.bill.dueOn)}`
     : null;
   const getDetail = () => {
     if (isHidden && (state === 'held' || shortText))
@@ -325,7 +332,6 @@ function BillLineSheet({ line, name, dayKey, sheetProps }: BillLineSheetProps) {
                   billId={line.itemId}
                   dayKey={dayKey}
                   currentCents={line.demandCents}
-                  mode={line.pairing === null ? 'edit' : 'pairing'}
                   onBack={onBack}
                   onClose={onClose}
                   onOpenPaidFrom={() => openChange('funding')}

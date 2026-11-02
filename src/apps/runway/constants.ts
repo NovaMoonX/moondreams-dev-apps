@@ -703,6 +703,9 @@ export const PAID_FROM_WORDS = {
   lastBeforeLower: "the pay right before it's due",
   pay: 'A pay I pick',
   whichPay: 'Which pay',
+  onlyRepeating:
+    'Only repeating pays can be picked. A one-time pay can still top it up from its own day.',
+  seeChanges: 'See what this changes below',
   pickPay: 'Pick a pay.',
   gone: 'A pay that is no longer in the plan',
   /** The change log's phrase for the choice. */
@@ -734,7 +737,7 @@ export const PAY_SHARE_WORDS = {
   title: (name: string) => `How much should this pay put toward ${name}?`,
   amount: 'Amount',
   changes: 'What changes',
-  payRow: (date: string) => `${date} pay`,
+  payRow: (name: string, date: string) => `${name}, ${date} pay`,
   short: (name: string, short: string, dueOn: string) =>
     `${name} would be ${short} short on ${dueOn}`,
   capped: (name: string, needs: string, set: string, max: string) =>
@@ -768,6 +771,10 @@ export const PAY_SHARE_WORDS = {
   actionSub: (name: string, total: string) =>
     `${name} stays ${total}; only this pay changes`,
   leftOutDetail: (pay: string) => `Paid from ${pay}`,
+  restSetAside: (cents: string, due: string) =>
+    `${cents} · the rest is set aside · due ${due}`,
+  undoPins: 'Put them back',
+  theDatePay: (date: string) => `the ${date} pay`,
   leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
   leftOutHeading: 'Paid from another pay',
   summary: (name: string, cents: string, date: string) =>
@@ -793,13 +800,15 @@ export const PAY_SHARE_WORDS = {
     `${name}: ${count} per-pay ${count === 1 ? 'change was' : 'changes were'} changed again since, so ${count === 1 ? 'it was' : 'they were'} left as is`,
   oneTimePay: (pay: string, name: string) =>
     `${pay} is one-time and ${name} isn't paid from it. Pick a repeating pay, or change Paid from.`,
-  pairingNote: (name: string) =>
-    `This pay pays ${name} first, so its figure comes from that. To change it, change what the income day pays first.`,
-  leftOutNote: (name: string, pay: string) =>
-    `${name} comes from ${pay}, so this pay puts nothing toward it. To change that, change Paid from.`,
+  whyNothing: 'Why this pay puts nothing in',
+  leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
+  leftOutBody: 'This pay puts nothing toward it.',
+  overCapHidden: (name: string) =>
+    `That is more than ${name} still needs. Show amounts to see how much.`,
+  keepEffect: 'If you keep it every paycheck',
   pinsBack: (name: string, dates: string) =>
     `${name}: per-pay changes on ${dates} put back.`,
-  pinnedRow: (date: string) => `${date} pay, set by you`,
+  pinnedRow: (name: string, date: string) => `${name}, ${date} pay, set by you`,
   resetSummary: (name: string, date: string) =>
     `${name}: this pay goes back to the plan's amount, for ${date} only.`,
   restoreSummary: (name: string, cents: string, date: string) =>

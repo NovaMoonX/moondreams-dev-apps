@@ -366,7 +366,29 @@ function fundPairings(
  * input gives the same output, whatever order the arrays arrive in.
  */
 export function buildDraft(input: DraftInput): Draft {
-  const days = [...input.days].sort(compareDays);
+  const pinnedKeys = new Set(
+    input.plan.bills.flatMap((bill) =>
+      Object.keys(bill.fixed ?? {}).map((dayKey) => `${dayKey}:${bill.itemId}`),
+    ),
+  );
+  const unpinned = (list: readonly Pairing[], dayKey: string) =>
+    list.filter(
+      (pairing) => !pinnedKeys.has(`${dayKey}:${pairing.targetItemId}`),
+    );
+  const days = input.days
+    .map((day) =>
+      day.pairings && pinnedKeys.size > 0
+        ? {
+            ...day,
+            pairings: {
+              day: day.pairings.day && unpinned(day.pairings.day, day.dayKey),
+              payLine: unpinned(day.pairings.payLine, day.dayKey),
+              source: unpinned(day.pairings.source, day.dayKey),
+            },
+          }
+        : day,
+    )
+    .sort(compareDays);
   const dayMoney = days.map((day) => ({
     day,
     moneyCents: getDayMoney(day, input.overrides, input.stance),

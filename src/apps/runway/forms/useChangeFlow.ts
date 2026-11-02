@@ -344,7 +344,7 @@ export function useChangeFlow({
               title: PAY_SHARE_WORDS.pinsClearedToast(billName, cleared.length),
               type: 'success',
               action: {
-                label: PAY_SHARE_WORDS.undo,
+                label: PAY_SHARE_WORDS.undoPins,
                 onClick: () =>
                   void restoreBillPins(
                     user.uid,

@@ -64,6 +64,8 @@ interface EffectPreviewProps {
   pinnedItemIds?: ReadonlySet<string>;
   /** Offered under a warning that says why a pay is short, so the way out is next to the problem. */
   warningActions?: ReactNode;
+  /** Replaces the section's caption. */
+  caption?: string;
 }
 
 interface EffectEntry {
@@ -190,6 +192,7 @@ function EffectPreview({
   describeLead,
   pinnedItemIds,
   warningActions,
+  caption,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -496,7 +499,7 @@ function EffectPreview({
   const hasNote = shownBlocks.some((block) => block.hasNote === true);
 
   return (
-    <ActionSection caption={CHANGE_WORDS.previewHeading}>
+    <ActionSection caption={caption ?? CHANGE_WORDS.previewHeading}>
       {isLeadShown &&
         isHidden &&
         shownBlocks.map((block) => <NeedsALookRow key={block.text} />)}

@@ -1574,6 +1574,19 @@ const version = (
       'Paid from spread across your pays to the pay on the 30th',
       'a Paid from change reads as plain words',
     );
+    // A window with no pin of its own spreads as before, whatever is pinned in other months.
+    assert.deepEqual(
+      partsOf(
+        rent({ kind: 'suggested' }, { [workPays[2].dayKey]: 0 }),
+        workPays,
+      ),
+      [
+        ['20261115', 75_000],
+        ['20261130', 75_000],
+      ],
+      'a pin outside the payment window leaves its spread alone',
+    );
+
     // A pay that puts in less pushes the rest onto the next repeating pay, never onto one-time pays or all the others.
     const oneTimeIds = new Set(['free', 'bonus']);
     const mixed = [
@@ -7792,6 +7805,36 @@ const version = (
     rentCents(layered, target.dayKey),
     0,
     'the pinned pay puts in nothing',
+  );
+
+  const freeDay = toDayKey('free', free);
+  const pinnedFree = [
+    {
+      id: freeDay,
+      payLineId: 'free',
+      sourceId: 'src',
+      expectedOn: free,
+      arrivedOn: null,
+      confirmedAt: null,
+      status: 'draft',
+      doneLineIds: [],
+      override: {
+        pairings: null,
+        holdResolutions: {},
+        payloads: {},
+        billCents: { rent: 5_000 },
+      },
+    },
+  ] as never[];
+  assert.equal(
+    rentCents([], freeDay),
+    30_000,
+    'a pay that pays the bill first puts in what the pairing says',
+  );
+  assert.equal(
+    rentCents(pinnedFree, freeDay),
+    5_000,
+    "a pay's own figure for the bill replaces what it pays first",
   );
 
   // A named pay and the pay before it's due never use a one-time pay.

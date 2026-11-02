@@ -260,7 +260,9 @@ export async function clearBillPins(
       billId,
       PAY_SHARE_WORDS.pinsCleared(billName, describePinDays(done)),
       done[0].expectedOn,
-    ).catch(() => undefined);
+    ).catch((historyError: unknown) =>
+      console.error('History line not written', historyError),
+    );
   }
   if (failed.length > 0) throw new PinsPartlyCleared(done, error);
   return done;
@@ -294,7 +296,9 @@ export async function restoreBillPins(
       billId,
       PAY_SHARE_WORDS.pinsBack(billName, describePinDays(done)),
       done[0].expectedOn,
-    ).catch(() => undefined);
+    ).catch((historyError: unknown) =>
+      console.error('History line not written', historyError),
+    );
   }
   return { restored: done, skipped: failed };
 }

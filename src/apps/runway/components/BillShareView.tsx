@@ -98,9 +98,9 @@ interface BillShareViewProps {
   onClose: () => void;
   /** Opens the bill's form at its Paid from question. */
   onOpenPaidFrom: () => void;
-  /** `pairing`: the pay pays the bill first; `leftOut`: the bill comes from another pay. Both only explain. */
-  mode?: 'edit' | 'pairing' | 'leftOut';
-  /** Where the bill comes from, in words, for the explanation. */
+  /** `leftOut`: the bill comes from another pay, so this view only says so. */
+  mode?: 'edit' | 'leftOut';
+  /** Where the bill comes from, in words, for that statement. */
   paidFromText?: string;
 }
 
@@ -372,19 +372,12 @@ function BillShareView({
     return (
       <div className='flex flex-col gap-3'>
         <BackLink onBack={onBack} />
-        <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
-        <p className='text-sm'>
-          {mode === 'pairing'
-            ? PAY_SHARE_WORDS.pairingNote(bill.name)
-            : PAY_SHARE_WORDS.leftOutNote(bill.name, paidFromText)}
+        <ActionTitle>
+          {PAY_SHARE_WORDS.leftOutTitle(bill.name, paidFromText)}
+        </ActionTitle>
+        <p className='text-muted-foreground text-sm'>
+          {PAY_SHARE_WORDS.leftOutBody}
         </p>
-        {mode === 'leftOut' && (
-          <div>
-            <Button type='button' variant='secondary' onClick={onOpenPaidFrom}>
-              {PAY_SHARE_WORDS.setPaidFrom}
-            </Button>
-          </div>
-        )}
       </div>
     );
   }
@@ -395,9 +388,11 @@ function BillShareView({
       ? PAY_SHARE_WORDS.needsAmount
       : oneTimePays.has(thisPayId)
         ? PAY_SHARE_WORDS.oneTimePay(day?.payLineName ?? '', bill.name)
-        : !isChanged
-          ? PAY_SHARE_WORDS.unchanged
-          : null;
+        : isHidden && share !== null && target > share.maxCents
+          ? PAY_SHARE_WORDS.overCapHidden(bill.name)
+          : !isChanged
+            ? PAY_SHARE_WORDS.unchanged
+            : null;
   const billRows = changedView
     ? changedView.rows.map((row) => {
         const date = formatDateShortUTC(row.on);
@@ -405,8 +400,8 @@ function BillShareView({
           key: row.dayKey,
           name:
             row.isPinned && row.beforeCents !== row.afterCents
-              ? PAY_SHARE_WORDS.pinnedRow(date)
-              : PAY_SHARE_WORDS.payRow(date),
+              ? PAY_SHARE_WORDS.pinnedRow(bill.name, date)
+              : PAY_SHARE_WORDS.payRow(bill.name, date),
           text: `${formatCents(row.beforeCents)} → ${formatCents(row.afterCents)}`,
         };
       })
@@ -541,19 +536,20 @@ function BillShareView({
           (version): version is BillVersion => version.kind === 'bill',
         );
       const isWriting = !isSameRule(bill.fundedBy, rule);
-      const withRule: Pending = {
+      const optimistic: Pending = {
         ...saved.pending,
         ruleWrote: isWriting ? rule : saved.pending.ruleWrote,
         ruleBack: isWriting
           ? getFundedByBefore(liveVersions, billId, today)
           : saved.pending.ruleBack,
       };
-      pendingRef.current = withRule;
+      pendingRef.current = optimistic;
       isFinishingRef.current = true;
+      let wrote: FundedByBefore | null = null;
       try {
         if (isWriting) {
           const next: BillSealed = { ...bill, fundedBy: rule };
-          await writeFundedBy(user.uid, encryption, {
+          wrote = await writeFundedBy(user.uid, encryption, {
             billId,
             versions: liveVersions,
             today,
@@ -572,6 +568,11 @@ function BillShareView({
         pendingRef.current = saved.pending;
         throw writeError;
       }
+      const withRule: Pending =
+        isWriting && wrote === null
+          ? { ...optimistic, ruleWrote: null, ruleBack: [] }
+          : optimistic;
+      pendingRef.current = withRule;
       const thisPin: BillPin = {
         dayKey,
         payLineId: day.payLineId,
@@ -584,12 +585,7 @@ function BillShareView({
         ? stored
         : [...stored, thisPin];
       const alreadyCleared = saved.pending.cleared;
-      const keep = (cleared: BillPin[]) => {
-        const all = [...alreadyCleared, ...cleared];
-        return all.some((pin) => pin.dayKey === dayKey)
-          ? all
-          : [...all, thisPin];
-      };
+      const keep = (cleared: BillPin[]) => [...alreadyCleared, ...cleared];
       try {
         const cleared = await clearBillPins(
           user.uid,
@@ -639,7 +635,7 @@ function BillShareView({
     });
 
   const backToSheet = () => {
-    if (saved) toastSaved(saved.pending);
+    if (saved && !saved.isPartial) toastSaved(saved.pending);
     onBack();
   };
 
@@ -682,7 +678,11 @@ function BillShareView({
           <>
             <ActionTitle>{PAY_SHARE_WORDS.keepTitle}</ActionTitle>
             {!saved.isPartial && (
-              <EffectPreview isCompact changeJson={getRuleChangeJson(rule)} />
+              <EffectPreview
+                isCompact
+                changeJson={getRuleChangeJson(rule)}
+                caption={PAY_SHARE_WORDS.keepEffect}
+              />
             )}
             <div className='flex flex-col gap-2'>
               {saved.isPartial ? (

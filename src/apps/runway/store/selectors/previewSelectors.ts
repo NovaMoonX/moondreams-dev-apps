@@ -19,6 +19,7 @@ import { MAX_PREVIEW_DAYS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 import { addUtcMonths, payLineIdOfDayKey } from '@apps/runway/engine/dates';
 import {
   getFixedByBill,
+  withFundedBy,
   previewBillShare,
   type BillShareEffect,
 } from '@apps/runway/engine/billShare';
@@ -28,7 +29,10 @@ import {
   type DraftBillInput,
 } from '@apps/runway/engine/demands';
 import { NO_PROGRESS } from '@apps/runway/engine/progress';
-import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
+import {
+  getVersionStretches,
+  resolveCurrentOrNext,
+} from '@apps/runway/engine/resolve';
 import { selectLookahead } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
   computeDraftView,
@@ -37,6 +41,8 @@ import {
 import type { ComingDay } from '@apps/runway/engine/comingDays';
 import type {
   BillFundedBy,
+  BillSealed,
+  BillVersion,
   EnvelopeSealed,
   GoalSealed,
   OpenDay,
@@ -557,7 +563,10 @@ export function previewBillShareView(
     rows,
     others,
     dayMoneyCents: own?.before?.draft.moneyCents ?? 0,
-    availableCents: Math.max(0, (own?.before?.draft.moneyCents ?? 0) - earlier),
+    availableCents:
+      ownIndex === -1
+        ? (own?.before?.draft.freeToSpend.cents ?? 0)
+        : Math.max(0, (own?.before?.draft.moneyCents ?? 0) - earlier),
     leftBeforeCents: own?.before?.draft.freeToSpend.cents ?? 0,
     leftAfterCents: own?.after?.draft.freeToSpend.cents ?? 0,
     isRuleClean: (rule) => {
@@ -581,10 +590,53 @@ export function previewBillShareView(
               (part) => !oneTime?.has(payLineIdOfDayKey(part.day.dayKey)),
             ),
         );
-      return (
-        applicable.length > 0 &&
-        applicable.every(({ payment }) => payment.parts.length === 1)
+      if (
+        applicable.length === 0 ||
+        !applicable.every(({ payment }) => payment.parts.length === 1)
+      ) {
+        return false;
+      }
+      const first = applicable[0].payment.parts[0].day;
+      const ruled = layerPlan(
+        { items, versions, openDays },
+        {
+          kind: 'versions',
+          versions: withFundedBy(
+            getVersionStretches<BillVersion, BillSealed>(
+              versions.filter(
+                (entry): entry is BillVersion => entry.kind === 'bill',
+              ),
+              billId,
+              today,
+            ),
+            rule,
+          ).map(
+            (stretch) =>
+              ({
+                itemId: billId,
+                kind: 'bill',
+                effectiveFrom: stretch.effectiveFrom,
+                effectiveUntil: stretch.effectiveUntil,
+                changeId: 'what-if',
+                payload: stretch.payload,
+              }) as PreviewVersion,
+          ),
+          unpin: { billId, from: today, until: null },
+        },
       );
+      const drafted = computeDraftView(
+        ruled.items,
+        ruled.versions,
+        stance,
+        ruled.openDays,
+        first.dayKey,
+        today,
+        inputs.heldByItem,
+        inputs.settledKey,
+        inputs.billProgress,
+        { isCached: false, coming },
+      )?.draft.lines.find((line) => line.itemId === billId);
+      return !drafted || drafted.shortBy === 0;
     },
   };
   return result;

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -499,6 +499,16 @@ function BillFormBody({
     kept.restored?.isPriorityChosen ?? startsChosen,
   );
   const [error, setError] = useState<string | null>(null);
+  const [changesEl, setChangesEl] = useState<HTMLDivElement | null>(null);
+  const [isChangesHidden, setIsChangesHidden] = useState(false);
+  useEffect(() => {
+    if (!changesEl) return;
+    const observer = new IntersectionObserver(([entry]) =>
+      setIsChangesHidden(!entry.isIntersecting),
+    );
+    observer.observe(changesEl);
+    return () => observer.disconnect();
+  }, [changesEl]);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<BillFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
@@ -906,6 +916,9 @@ function BillFormBody({
                     <div className='space-y-2'>
                       <p className='text-muted-foreground text-xs'>
                         {PAID_FROM_WORDS.whichPay}
+                      </p>
+                      <p className='text-muted-foreground text-xs'>
+                        {PAID_FROM_WORDS.onlyRepeating}
                       </p>
                       <PillGroup
                         label={PAID_FROM_WORDS.whichPay}
@@ -1324,11 +1337,17 @@ function BillFormBody({
               </>
             )}
             {editing && questions.hasReviewed && !isFirstDate && (
-              <ChangeSection />
+              <div ref={setChangesEl}>
+                <ChangeSection />
+              </div>
             )}
             <ModalFooterActions
               note={
-                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+                error ||
+                maskNote(isAsking ? questions.blocker : shownBlocker) ||
+                (isChangesHidden && !isAsking && !flow.isUnchanged
+                  ? PAID_FROM_WORDS.seeChanges
+                  : null)
               }
               cancelAction={
                 <Button

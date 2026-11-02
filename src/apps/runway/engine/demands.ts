@@ -112,6 +112,8 @@ export type DraftAsk =
 export interface BillShare {
   dueOn: DateOnly;
   totalCents: Cents;
+  /** What confirmed days already set aside for the payment. */
+  setAsideCents?: Cents;
   /** The bill's range and the stance that picked the total (the bill's own, else the plan's); null when it is exact. */
   ranged: {
     range: MoneyRange;
@@ -396,6 +398,7 @@ const getDayShares = (
     },
     { left: totalCents, cents: new Map() },
   );
+  if (given.cents.size === 0) return spreadShares(totalCents, eligible.length);
   const firstPinned = eligible.findIndex((day) => given.cents.has(day.dayKey));
   const candidates = eligible
     .map((day, index) => ({ day, index }))
@@ -597,6 +600,7 @@ function buildBillDemands(
           bill: {
             dueOn: payment.dueOn,
             totalCents: payment.totalCents,
+            setAsideCents: payment.fundedCents,
             ranged: payment.ranged,
           },
           ask: { kind: 'exact' },
