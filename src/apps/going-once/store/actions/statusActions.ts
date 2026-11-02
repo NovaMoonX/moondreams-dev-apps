@@ -10,11 +10,13 @@ import type {
   ItemStatus,
   PaymentMethod,
   StatusChange,
+  StatusChangeKind,
 } from '@apps/going-once/types';
 import { toFirstName } from '@apps/going-once/utils/personName';
 
 export type StatusTransition =
   | { kind: 'MARK_PENDING'; buyerName: string | null; pickupOn: number | null }
+  | { kind: 'CHANGE_HOLD'; buyerName: string | null; pickupOn: number | null }
   | { kind: 'BACK_TO_AVAILABLE' }
   | {
       kind: 'MARK_SOLD';
@@ -23,18 +25,30 @@ export type StatusTransition =
       soldOn: number;
     }
   | { kind: 'NOT_SOLD' }
-  | { kind: 'TAKE_OFF' }
-  | { kind: 'PUT_BACK'; restorePending: ItemPendingRecord | null }
+  /** Undoes the Not sold after all written at `undoesAt`, and only that one. */
+  | { kind: 'RESTORE_SALE'; sale: ItemSaleRecord; undoesAt: number }
+  /** `undoesAt` ties an Undo to the Put back it undoes. */
+  | { kind: 'TAKE_OFF'; undoesAt: number | null }
+  /** `undoesAt` ties an Undo to the Take off it undoes. */
+  | {
+      kind: 'PUT_BACK';
+      restorePending: ItemPendingRecord | null;
+      undoesAt: number | null;
+    }
   | { kind: 'CHANGE_PAID'; priceCents: number };
 
-export type StatusResult = { ok: true } | { ok: false; message: string };
+/** `at` is when the change was written, the stamp an Undo is tied to. */
+export type StatusResult =
+  { ok: true; at: number } | { ok: false; message: string };
 
 /** The statuses a thing may be in for each change; the transaction re-checks them against its own read. */
 const EXPECTED: Record<StatusTransition['kind'], ItemStatus[]> = {
   MARK_PENDING: ['AVAILABLE'],
+  CHANGE_HOLD: ['PENDING'],
   BACK_TO_AVAILABLE: ['PENDING'],
   MARK_SOLD: ['AVAILABLE', 'PENDING'],
   NOT_SOLD: ['SOLD'],
+  RESTORE_SALE: ['AVAILABLE'],
   TAKE_OFF: ['AVAILABLE', 'PENDING'],
   PUT_BACK: ['WITHDRAWN'],
   CHANGE_PAID: ['SOLD'],
@@ -43,6 +57,9 @@ const EXPECTED: Record<StatusTransition['kind'], ItemStatus[]> = {
 export const OFFLINE_MESSAGE = 'Changing the status needs a connection.';
 const GENERIC_MESSAGE = "The status didn't change. Try again.";
 const GONE_MESSAGE = 'This thing is no longer here.';
+const INVALID_MESSAGE = "That amount or day doesn't look right.";
+const NO_SALE_MESSAGE = 'There is no sale to change.';
+const SAME_PAID_MESSAGE = 'That is already what was paid.';
 
 type Stored = Pick<
   Item,
@@ -50,19 +67,47 @@ type Stored = Pick<
 >;
 
 interface Next {
+  kind: StatusChangeKind;
   status: ItemStatus;
   pending: ItemPendingRecord | null;
   sale: ItemSaleRecord | null;
   fromPriceCents: number | null;
 }
 
+const isMoney = (cents: number) => Number.isInteger(cents) && cents >= 0;
+const isDay = (day: number | null) => day === null || Number.isFinite(day);
+
+const isValid = (transition: StatusTransition): boolean => {
+  if (transition.kind === 'MARK_SOLD')
+    return isMoney(transition.priceCents) && Number.isFinite(transition.soldOn);
+  if (transition.kind === 'CHANGE_PAID') return isMoney(transition.priceCents);
+  if (transition.kind === 'MARK_PENDING' || transition.kind === 'CHANGE_HOLD')
+    return isDay(transition.pickupOn);
+  return true;
+};
+
+const getHold = (
+  current: Stored,
+  transition: { buyerName: string | null; pickupOn: number | null },
+  uid: string,
+  now: number,
+): ItemPendingRecord => ({
+  inquiryId: current.pending?.inquiryId ?? null,
+  buyerName: transition.buyerName,
+  pickupOn: transition.pickupOn,
+  markedBy: current.pending?.markedBy ?? uid,
+  markedAt: current.pending?.markedAt ?? now,
+});
+
+/** The record after the change, or a sentence when there is nothing to write. */
 const getNext = (
   current: Stored,
   transition: StatusTransition,
   uid: string,
   now: number,
-): Next => {
+): Next | string => {
   const keep: Next = {
+    kind: transition.kind,
     status: current.status,
     pending: current.pending,
     sale: current.sale,
@@ -80,6 +125,8 @@ const getNext = (
         markedAt: now,
       },
     };
+  if (transition.kind === 'CHANGE_HOLD')
+    return { ...keep, pending: getHold(current, transition, uid, now) };
   if (transition.kind === 'MARK_SOLD')
     return {
       ...keep,
@@ -94,16 +141,25 @@ const getNext = (
         markedAt: now,
       },
     };
-  if (transition.kind === 'CHANGE_PAID')
-    return current.sale === null
-      ? keep
-      : {
-          ...keep,
-          sale: { ...current.sale, priceCents: transition.priceCents },
-          fromPriceCents: current.sale.priceCents,
-        };
+  if (transition.kind === 'CHANGE_PAID') {
+    if (current.sale === null) return NO_SALE_MESSAGE;
+    if (current.sale.priceCents === transition.priceCents)
+      return SAME_PAID_MESSAGE;
+    return {
+      ...keep,
+      sale: { ...current.sale, priceCents: transition.priceCents },
+      fromPriceCents: current.sale.priceCents,
+    };
+  }
   if (transition.kind === 'NOT_SOLD')
-    return { ...keep, status: 'AVAILABLE', sale: null };
+    return {
+      ...keep,
+      status: 'AVAILABLE',
+      sale: null,
+      fromPriceCents: current.sale?.priceCents ?? null,
+    };
+  if (transition.kind === 'RESTORE_SALE')
+    return { ...keep, status: 'SOLD', pending: null, sale: transition.sale };
   if (transition.kind === 'TAKE_OFF')
     return { ...keep, status: 'WITHDRAWN', pending: null };
   if (transition.kind === 'PUT_BACK')
@@ -113,6 +169,20 @@ const getNext = (
       pending: transition.restorePending,
     };
   return { ...keep, status: 'AVAILABLE', pending: null };
+};
+
+/** Whether an Undo still undoes the last thing that happened to the thing. */
+const isUndoCurrent = (current: Stored, transition: StatusTransition) => {
+  if (
+    transition.kind !== 'RESTORE_SALE' &&
+    transition.kind !== 'TAKE_OFF' &&
+    transition.kind !== 'PUT_BACK'
+  )
+    return true;
+  return (
+    transition.undoesAt === null ||
+    current.statusHistory.at(-1)?.at === transition.undoesAt
+  );
 };
 
 const describeLiveStatus = (current: Stored): string => {
@@ -135,17 +205,17 @@ const readFirstName = (uid: string): Promise<string> =>
     () => 'Someone',
   );
 
+const readActorName = (actor: string | null, uid: string): Promise<string> => {
+  if (actor === null) return Promise.resolve('Someone');
+  if (actor === uid) return Promise.resolve('You');
+  return readFirstName(actor);
+};
+
 const describeConflict = async (
   current: Stored,
   uid: string,
 ): Promise<string> => {
-  const actor = getLastActor(current);
-  const who =
-    actor === null
-      ? 'Someone'
-      : actor === uid
-        ? 'You'
-        : await readFirstName(actor);
+  const who = await readActorName(getLastActor(current), uid);
   return `${who} already ${describeLiveStatus(current)}.`;
 };
 
@@ -163,6 +233,7 @@ export async function changeStatus(
   transition: StatusTransition,
 ): Promise<StatusResult> {
   if (!navigator.onLine) return { ok: false, message: OFFLINE_MESSAGE };
+  if (!isValid(transition)) return { ok: false, message: INVALID_MESSAGE };
   const ref = doc(db, 'apps', 'going-once', 'sales', saleId, 'items', itemId);
   try {
     const outcome = await runTransaction(db, async (transaction) => {
@@ -178,16 +249,28 @@ export async function changeStatus(
           ? data.statusHistory
           : [],
       };
-      if (!EXPECTED[transition.kind].includes(current.status))
+      if (
+        !EXPECTED[transition.kind].includes(current.status) ||
+        !isUndoCurrent(current, transition)
+      )
         return { kind: 'CONFLICT', current } as const;
       const now = Date.now();
       const next = getNext(current, transition, uid, now);
+      if (typeof next === 'string')
+        return { kind: 'REFUSED', message: next } as const;
+      const hold =
+        next.kind === 'MARK_PENDING' || next.kind === 'CHANGE_HOLD'
+          ? next.pending
+          : null;
       const change: StatusChange = {
+        kind: next.kind,
         status: next.status,
         byUid: uid,
         at: now,
         priceCents: next.sale?.priceCents ?? null,
         fromPriceCents: next.fromPriceCents,
+        buyerName: hold?.buyerName ?? null,
+        pickupOn: hold?.pickupOn ?? null,
       };
       transaction.update(ref, {
         status: next.status,
@@ -199,9 +282,11 @@ export async function changeStatus(
         lastEditedAt: now,
         lastEditedBy: uid,
       });
-      return { kind: 'DONE' } as const;
+      return { kind: 'DONE', at: now } as const;
     });
-    if (outcome.kind === 'DONE') return { ok: true };
+    if (outcome.kind === 'DONE') return { ok: true, at: outcome.at };
+    if (outcome.kind === 'REFUSED')
+      return { ok: false, message: outcome.message };
     if (outcome.kind === 'GONE') return { ok: false, message: GONE_MESSAGE };
     return {
       ok: false,

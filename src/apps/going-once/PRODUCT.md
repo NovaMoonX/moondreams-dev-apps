@@ -81,9 +81,9 @@ One noun, three states. The same words are used on every screen, in the inbox, i
 | **Pending** | A buyer is set to pick it up | Shown as "Pending · someone's picking this up", with "I'm interested" kept as a backup ask |
 | **Sold** | Gone, with what was paid | Not shown |
 
-- **Pending can name who is picking it up** (one of its inquiries, or a typed name) and a pickup day, both optional, so a co-seller sees who is coming and when. Back to Available is one tap if the pickup falls through.
+- **Pending can name who is picking it up** (one of its inquiries, or a typed name) and a pickup day, both optional, so a co-seller sees who is coming and when, and Mark pending is one tap with neither. The hold can be corrected ("Change who or when"), and Back to Available is one tap if the pickup falls through. Taking a held thing off the list ends the hold; History remembers who held it.
 - **Sold asks for what was paid**, filled with the asking price so the usual case is one tap, and optionally how they paid (Cash, Venmo, Zelle, Other) and the day (today by default). It records who marked it.
-- **Change it, or look it up.** A sold thing's price and day can be corrected (a typo), and the sheet says what the change does to the sale's total before it saves ("Collected goes from $225 to $215"). "Not sold after all" puts it back to Available and takes it out of the total, with an Undo. Each thing keeps a short history of its status changes (who and when), which is looked up, never edited.
+- **Change it, or look it up.** A sold thing's price and day can be corrected (a typo), and the sheet says what the change does to the sale's total before it saves ("Collected goes from $225 to $215"). "Not sold after all" puts it back to Available and takes it out of the total, with a six-second Undo that restores the sale exactly, unless someone changed the thing in between. A thing sold for $0 offers "Take it off the list instead", for something given away. Each thing keeps a short history of its status changes (who and when), which is looked up, never edited.
 - **Two people at once.** If Theo marks a thing Sold while Maya has it open, her screen follows the live status; a status change made from a stale screen is refused in words ("Theo already marked this sold for $170").
 
 ### Interest and the Inbox, In Detail

@@ -1,22 +1,30 @@
-import { useState } from 'react';
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
-import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
+import InlineNotice from '@/components/InlineNotice';
+import { formatCentsShort, parseMoneyToCents } from '@/utils/moneyUtils';
 import StatusViewFooter from '@apps/going-once/components/things/StatusViewFooter';
+import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
 import type { Item } from '@apps/going-once/types';
-import { formatCollectedChange } from '@apps/going-once/utils/status';
+import {
+  describeMovedOn,
+  formatCollectedChange,
+} from '@apps/going-once/utils/status';
 
 interface ChangePaidViewProps {
   item: Item;
   uid: string;
   /** What the sale has collected so far, every sold thing counted. */
   collectedCents: number;
+  amount: string;
+  onAmount: (amount: string) => void;
   footerNode: HTMLElement | null;
+  /** Back, asking first when something was typed. */
   onBack: () => void;
+  /** Leaves at once, for Done after a refusal. */
+  onLeave: () => void;
   onSaved: () => void;
 }
 
@@ -25,28 +33,30 @@ function ChangePaidView({
   item,
   uid,
   collectedCents,
+  amount,
+  onAmount,
   footerNode,
   onBack,
+  onLeave,
   onSaved,
 }: ChangePaidViewProps) {
   const paidCents = item.sale?.priceCents ?? 0;
-  const [amount, setAmount] = useState(centsToInputValue(paidCents));
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { isBusy, refusal, write } = useStatusWrite();
   const priceCents = parseMoneyToCents(amount);
   const isChanged = priceCents !== null && priceCents !== paidCents;
+  const { floorPriceCents } = item;
+  const lockedNote =
+    refusal ?? (isBusy ? null : describeMovedOn(item, ['SOLD']));
 
   const save = async () => {
     if (priceCents === null) return;
-    setIsBusy(true);
-    setError(null);
-    const result = await changeStatus(item.saleId, item.id, uid, {
-      kind: 'CHANGE_PAID',
-      priceCents,
-    });
-    setIsBusy(false);
-    if (result.ok) onSaved();
-    else setError(result.message);
+    const isSaved = await write(() =>
+      changeStatus(item.saleId, item.id, uid, {
+        kind: 'CHANGE_PAID',
+        priceCents,
+      }),
+    );
+    if (isSaved) onSaved();
   };
 
   return (
@@ -55,7 +65,13 @@ function ChangePaidView({
         <BackLink onBack={onBack} label='Change what was paid' />
         <p className='text-lg font-semibold'>What did they pay?</p>
       </div>
-      <AmountHero label='Paid' value={amount} onChange={setAmount} autoFocus />
+      <AmountHero
+        label='Paid'
+        value={amount}
+        onChange={onAmount}
+        autoFocus
+        disabled={lockedNote !== null}
+      />
       {isChanged && (
         <p className='text-muted-foreground text-center text-sm'>
           {formatCollectedChange(
@@ -64,10 +80,20 @@ function ChangePaidView({
           )}
         </p>
       )}
+      {priceCents !== null &&
+        floorPriceCents !== null &&
+        priceCents < floorPriceCents &&
+        lockedNote === null && (
+          <InlineNotice tone='warning'>
+            That&apos;s under your floor price of{' '}
+            {formatCentsShort(floorPriceCents)}. It still saves.
+          </InlineNotice>
+        )}
       <StatusViewFooter
         footerNode={footerNode}
-        note={error}
-        isRefusal={error !== null}
+        note={priceCents === null ? 'Enter what they paid' : null}
+        lockedNote={lockedNote}
+        onDone={onLeave}
       >
         <Button
           type='button'

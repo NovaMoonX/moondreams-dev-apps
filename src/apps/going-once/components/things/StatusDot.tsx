@@ -16,8 +16,10 @@ interface StatusDotProps {
   status: ItemStatus;
   /** What follows the word ("for Nate · pickup Sat, Nov 7"). */
   children?: ReactNode;
-  /** Only the dot, for a row's muted line; the word stays for screen readers. */
-  isWordHidden?: boolean;
+  /** Replaces the status word where the thing is in a state the status doesn't name ("Not listed yet"). */
+  label?: string;
+  /** Flows with the text around it so a parent's `line-clamp` can clip it; the default is its own flex line. */
+  isInline?: boolean;
   className?: string;
 }
 
@@ -25,9 +27,33 @@ interface StatusDotProps {
 function StatusDot({
   status,
   children,
-  isWordHidden = false,
+  label,
+  isInline = false,
   className,
 }: StatusDotProps) {
+  const dot = (
+    <span
+      className={join(
+        'size-2 shrink-0 rounded-full',
+        isInline
+          ? 'mr-1.5 inline-block align-middle'
+          : 'translate-y-px self-center',
+        DOT_COLORS[status],
+      )}
+      aria-hidden='true'
+    />
+  );
+  const text = `${label ?? STATUS_LABELS[status]}${
+    children !== undefined && children !== '' ? ` ${children}` : ''
+  }`;
+
+  if (isInline)
+    return (
+      <span className={className}>
+        {dot}
+        {text}
+      </span>
+    );
   return (
     <span
       className={join(
@@ -35,17 +61,8 @@ function StatusDot({
         className,
       )}
     >
-      <span
-        className={join(
-          'size-2 shrink-0 translate-y-px self-center rounded-full',
-          DOT_COLORS[status],
-        )}
-        aria-hidden='true'
-      />
-      <span className={join('min-w-0 break-words', isWordHidden && 'sr-only')}>
-        {STATUS_LABELS[status]}
-        {children !== undefined && children !== '' && ` ${children}`}
-      </span>
+      {dot}
+      <span className='min-w-0 break-words'>{text}</span>
     </span>
   );
 }

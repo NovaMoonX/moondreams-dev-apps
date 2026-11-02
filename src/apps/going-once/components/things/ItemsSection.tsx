@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Plus, X } from 'lucide-react';
@@ -35,11 +35,11 @@ import {
   sortItems,
   type ItemSort,
 } from '@apps/going-once/utils/listing';
+import type { StatusView } from '@apps/going-once/utils/status';
 import {
   formatStatusTotal,
   getStatusSummary,
-  type StatusView,
-} from '@apps/going-once/utils/status';
+} from '@apps/going-once/utils/statusSummary';
 
 const ROW_HEIGHT = 72;
 const EAGER_ROWS = 10;
@@ -86,8 +86,9 @@ function ItemsSection({
   const searched = items.filter(
     (item) => !hasTools || matchesSearch(item, query),
   );
+  const isSearching = hasTools && query.trim() !== '';
   const summary = getStatusSummary(searched);
-  const soldFigures = getStatusSummary(items).SOLD;
+  const totals = getStatusSummary(items);
   const inView = searched.filter((item) => item.status === statusView);
   const unlistedCount =
     statusView === 'AVAILABLE'
@@ -96,16 +97,21 @@ function ItemsSection({
   const isNarrowed = isUnlistedOnly && unlistedCount > 0;
   const order = hasTools ? sort : 'newest';
   const shown = sortItems(
-    inView.filter((item) => !isNarrowed || !isListable(item)),
+    inView.filter((item) =>
+      isNarrowed ? !isListable(item) : unlistedCount === 0 || isListable(item),
+    ),
     order,
   );
-  const takenOff =
-    statusView === 'SOLD'
-      ? sortItems(
-          searched.filter((item) => item.status === 'WITHDRAWN'),
-          order,
-        )
-      : [];
+  const allTakenOff = searched.filter((item) => item.status === 'WITHDRAWN');
+  const takenOff = statusView === 'SOLD' ? sortItems(allTakenOff, order) : [];
+  const takenOffRef = useRef<HTMLDivElement | null>(null);
+
+  const showTakenOff = () => {
+    setStatusView('SOLD');
+    window.requestAnimationFrame(() =>
+      takenOffRef.current?.scrollIntoView({ block: 'start' }),
+    );
+  };
 
   // A link to a thing that is gone (deleted, or from another sale) opens nothing, so the address drops it.
   useEffect(() => {
@@ -218,9 +224,11 @@ function ItemsSection({
           Nothing matches that. Try another word.
         </p>
       )}
-      {searched.length > 0 && shown.length === 0 && takenOff.length === 0 && (
+      {searched.length > 0 && shown.length === 0 && (
         <p className='text-muted-foreground text-center text-sm'>
-          {EMPTY_VIEW_TEXT[statusView]}
+          {isSearching
+            ? `No matches in ${STATUS_LABELS[statusView]}`
+            : EMPTY_VIEW_TEXT[statusView]}
         </p>
       )}
       {shown.length > 0 && (
@@ -230,12 +238,26 @@ function ItemsSection({
       )}
       {shown.length > 0 && !isNarrowed && (
         <p className='text-muted-foreground text-right text-sm'>
-          {formatStatusTotal(statusView, summary)}
+          {isSearching && `All ${STATUS_LABELS[statusView].toLowerCase()} · `}
+          {formatStatusTotal(statusView, totals)}
         </p>
+      )}
+      {statusView === 'AVAILABLE' && allTakenOff.length > 0 && (
+        <Button
+          type='button'
+          variant='tertiary'
+          className='border-border text-foreground! h-10 w-full justify-between rounded-full border px-4 text-sm'
+          onClick={showTakenOff}
+        >
+          {allTakenOff.length} taken off the list
+          <ChevronRight className='size-4' aria-hidden='true' />
+        </Button>
       )}
       {takenOff.length > 0 && (
         <>
-          <SectionDivider label={`Taken off the list · ${takenOff.length}`} />
+          <div ref={takenOffRef} className='scroll-mt-4'>
+            <SectionDivider label={`Taken off the list · ${takenOff.length}`} />
+          </div>
           <ul className='space-y-2'>
             {takenOff.map((item, index) =>
               renderRow(item, shown.length + index),
@@ -248,7 +270,7 @@ function ItemsSection({
           item={openItem}
           uid={uid}
           isSeller={isSeller}
-          sold={soldFigures}
+          sold={totals.SOLD}
           onClose={onCloseThing}
           onFinish={() => {
             setAdding({ resume: openItem });

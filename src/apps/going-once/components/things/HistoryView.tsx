@@ -29,8 +29,11 @@ function HistoryView({ item, uid, onBack }: HistoryViewProps) {
         </p>
       ) : (
         <ul className='divide-border border-border divide-y overflow-hidden rounded-2xl border'>
-          {changes.map((change) => (
-            <li key={`${change.at}-${change.status}`} className='px-3 py-2.5'>
+          {changes.map((change, index) => (
+            <li
+              key={`${change.at}-${change.kind}-${index}`}
+              className='px-3 py-2.5'
+            >
               <p className='break-words'>
                 {describeStatusChange(change)} · {getName(change.byUid)} ·{' '}
                 {formatChangeTime(change.at)}

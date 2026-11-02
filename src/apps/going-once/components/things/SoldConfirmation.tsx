@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -12,43 +12,49 @@ import { formatCentsShort } from '@/utils/moneyUtils';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import StatusViewFooter from '@apps/going-once/components/things/StatusViewFooter';
 import { PAYMENT_METHOD_LABELS } from '@apps/going-once/constants';
-import { changeStatus } from '@apps/going-once/store/actions/statusActions';
 import type { Item } from '@apps/going-once/types';
-import type { StatusFigures } from '@apps/going-once/utils/status';
+import { formatCollected } from '@apps/going-once/utils/status';
+import type { StatusFigures } from '@apps/going-once/utils/statusSummary';
 
 interface SoldConfirmationProps {
   item: Item;
-  uid: string;
   now: number;
   /** Who marked it, as a name for a sentence. */
   markedBy: string;
   sold: StatusFigures;
   footerNode: HTMLElement | null;
   onDone: () => void;
+  /** Undoes the sale and leaves; answers a refusal in words. */
+  onNotSold: () => Promise<string | null>;
 }
 
 /** What Mark sold recorded: the figure, how, when and by whom, the new Collected, and the one-tap way back. */
 function SoldConfirmation({
   item,
-  uid,
   now,
   markedBy,
   sold,
   footerNode,
   onDone,
+  onNotSold,
 }: SoldConfirmationProps) {
   useBackStep(true, onDone);
   const [error, setError] = useState<string | null>(null);
   const { sale } = item;
   const today = fromDateInputValue(toLocalDateInputValue(now)) ?? now;
 
+  const [isBusy, setIsBusy] = useState(false);
+  const isInFlightRef = useRef(false);
+
   const undoSale = async () => {
+    if (isInFlightRef.current) return;
+    isInFlightRef.current = true;
+    setIsBusy(true);
     setError(null);
-    const result = await changeStatus(item.saleId, item.id, uid, {
-      kind: 'NOT_SOLD',
-    });
-    if (result.ok) onDone();
-    else setError(result.message);
+    const refusal = await onNotSold();
+    isInFlightRef.current = false;
+    setIsBusy(false);
+    if (refusal !== null) setError(refusal);
   };
 
   return (
@@ -71,8 +77,7 @@ function SoldConfirmation({
         </div>
       )}
       <p className='text-sm'>
-        Collected is now {formatCentsShort(sold.collectedCents)} of{' '}
-        {formatCentsShort(sold.askedCents)} asked
+        {formatCollected(sold.collectedCents, sold.askedCents)}
       </p>
       {sale !== null && (
         <Button
@@ -81,12 +86,17 @@ function SoldConfirmation({
           size='sm'
           rounded='full'
           className='h-10 px-4'
+          disabled={isBusy}
           onClick={() => void undoSale()}
         >
           Not sold after all
         </Button>
       )}
-      <StatusViewFooter footerNode={footerNode} note={error} isRefusal>
+      <StatusViewFooter
+        footerNode={footerNode}
+        lockedNote={error}
+        onDone={onDone}
+      >
         <Button
           type='button'
           size='lg'

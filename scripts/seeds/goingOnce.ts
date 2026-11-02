@@ -43,11 +43,14 @@ export interface SeedStatusFields {
     markedAt: number;
   } | null;
   statusHistory: {
+    kind: 'MARK_PENDING' | 'MARK_SOLD' | 'TAKE_OFF';
     status: SeedStatusFields['status'];
     byUid: string;
     at: number;
     priceCents: number | null;
     fromPriceCents: number | null;
+    buyerName: string | null;
+    pickupOn: number | null;
   }[];
 }
 
@@ -80,13 +83,14 @@ export function buildSeedStatus(
   now: number,
 ): SeedStatusFields {
   const today = new Date(now);
+  // The person's calendar day (local getters), stored as the date-only value a date picker writes (UTC midnight).
   const dayOnly = (offset: number) =>
-    Date.UTC(
-      today.getUTCFullYear(),
-      today.getUTCMonth(),
-      today.getUTCDate() + offset,
-    );
-  const untilSaturday = (6 - today.getUTCDay() + 7) % 7 || 7;
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+  const untilSaturday = (6 - today.getDay() + 7) % 7 || 7;
+  const getPickupOn = (pickup: number | 'saturday' | null) => {
+    if (pickup === null) return null;
+    return dayOnly(pickup === 'saturday' ? untilSaturday : pickup);
+  };
   if (status.kind === 'AVAILABLE')
     return {
       status: 'AVAILABLE',
@@ -96,9 +100,7 @@ export function buildSeedStatus(
     };
   if (status.kind === 'PENDING') {
     const at = now - status.daysAgo * DAY_MS;
-    let pickupOn: number | null = null;
-    if (status.pickup === 'saturday') pickupOn = dayOnly(untilSaturday);
-    else if (status.pickup !== null) pickupOn = dayOnly(status.pickup);
+    const pickupOn = getPickupOn(status.pickup);
     return {
       status: 'PENDING',
       pending: {
@@ -111,11 +113,14 @@ export function buildSeedStatus(
       sale: null,
       statusHistory: [
         {
+          kind: 'MARK_PENDING',
           status: 'PENDING',
           byUid: status.by,
           at,
           priceCents: null,
           fromPriceCents: null,
+          buyerName: status.buyerName,
+          pickupOn,
         },
       ],
     };
@@ -127,11 +132,14 @@ export function buildSeedStatus(
         ? []
         : [
             {
+              kind: 'MARK_PENDING' as const,
               status: 'PENDING' as const,
               byUid: status.by,
               at: at - 3 * HOUR_MS,
               priceCents: null,
               fromPriceCents: null,
+              buyerName: status.heldFor,
+              pickupOn: null,
             },
           ];
     return {
@@ -148,11 +156,14 @@ export function buildSeedStatus(
       statusHistory: [
         ...held,
         {
+          kind: 'MARK_SOLD',
           status: 'SOLD',
           byUid: status.by,
           at,
           priceCents: status.priceCents,
           fromPriceCents: null,
+          buyerName: null,
+          pickupOn: null,
         },
       ],
     };
@@ -164,11 +175,14 @@ export function buildSeedStatus(
     sale: null,
     statusHistory: [
       {
+        kind: 'TAKE_OFF',
         status: 'WITHDRAWN',
         byUid: status.by,
         at,
         priceCents: null,
         fromPriceCents: null,
+        buyerName: null,
+        pickupOn: null,
       },
     ],
   };

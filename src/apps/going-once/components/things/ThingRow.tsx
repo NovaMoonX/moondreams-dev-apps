@@ -9,7 +9,7 @@ import { CONDITION_LABELS } from '@apps/going-once/constants';
 import { useItemPhotoUrls } from '@apps/going-once/queries/photoUrlQueries';
 import type { Item } from '@apps/going-once/types';
 import { getItemName, isListable } from '@apps/going-once/utils/listing';
-import { getStatusRowLine } from '@apps/going-once/utils/status';
+import { getStatusFacts } from '@apps/going-once/utils/status';
 
 interface ThingRowProps {
   item: Item;
@@ -18,29 +18,33 @@ interface ThingRowProps {
   onOpen: () => void;
 }
 
+/** The row's muted line after its status dot: the word (when the status doesn't say it) and what follows. */
 const getLine = (item: Item, uploadingCount: number) => {
   if (uploadingCount > 0)
-    return `Uploading ${uploadingCount} ${uploadingCount === 1 ? 'photo' : 'photos'}`;
-  if (item.status !== 'AVAILABLE') return getStatusRowLine(item);
-  return [
+    return {
+      label: `Uploading ${uploadingCount} ${uploadingCount === 1 ? 'photo' : 'photos'}`,
+      facts: '',
+    };
+  if (item.status !== 'AVAILABLE')
+    return { label: undefined, facts: getStatusFacts(item, true) };
+  const facts = [
     item.condition === null ? null : CONDITION_LABELS[item.condition],
     item.floorPriceCents === null
       ? null
-      : `🔒 floor ${formatCentsShort(item.floorPriceCents)}`,
-    isListable(item) ? null : 'Not listed yet',
+      : `🔒\u00a0floor\u00a0${formatCentsShort(item.floorPriceCents)}`,
   ]
     .filter((part) => part !== null)
     .join(' · ');
+  return {
+    label: isListable(item) ? undefined : 'Not listed yet',
+    facts: facts === '' ? '' : `· ${facts}`,
+  };
 };
 
-/** A thing in the list: its cover, name, a muted line and its asking price. */
+/** A thing in the list: its cover, name, its status as a dot and word with what follows, and its asking price. */
 function ThingRow({ item, uploadingCount, onOpen }: ThingRowProps) {
   const [cover] = useItemPhotoUrls(item.photos.slice(0, 1));
-  const line = getLine(item, uploadingCount);
-  const tagCents =
-    item.status === 'SOLD' && item.sale !== null
-      ? item.sale.priceCents
-      : item.askingPriceCents;
+  const { label, facts } = getLine(item, uploadingCount);
 
   return (
     <Button
@@ -65,13 +69,14 @@ function ThingRow({ item, uploadingCount, onOpen }: ThingRowProps) {
         <span className='text-foreground line-clamp-2 text-base font-medium break-words'>
           {getItemName(item)}
         </span>
-        <span className='text-muted-foreground mt-0.5 flex items-baseline gap-1.5 text-sm font-normal'>
-          <StatusDot status={item.status} isWordHidden />
-          {line !== '' && <span className='min-w-0 break-words'>{line}</span>}
+        <span className='text-muted-foreground mt-0.5 line-clamp-2 text-sm font-normal break-words'>
+          <StatusDot status={item.status} label={label} isInline>
+            {facts}
+          </StatusDot>
         </span>
       </span>
-      {tagCents !== null && item.status !== 'WITHDRAWN' && (
-        <PriceTag askingPriceCents={tagCents} />
+      {item.askingPriceCents !== null && (
+        <PriceTag askingPriceCents={item.askingPriceCents} />
       )}
     </Button>
   );

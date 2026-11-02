@@ -1,12 +1,9 @@
-import { useState } from 'react';
-
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 import BackLink from '@/components/BackLink';
 import DateInput from '@/components/DateInput';
-import { PillGroup, type PillOption } from '@/components/PillGroup';
+import { PillGroup } from '@/components/PillGroup';
 import RevealChip from '@/components/RevealChip';
 import {
   fromDateInputValue,
@@ -14,156 +11,153 @@ import {
 } from '@/utils/dateInputUtils';
 import StatusViewFooter from '@apps/going-once/components/things/StatusViewFooter';
 import { MAX_BUYER_NAME_LENGTH } from '@apps/going-once/constants';
+import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
 import type { Item } from '@apps/going-once/types';
-
-const OTHER_DAY = 'other';
-const DAYS_SHOWN = 7;
-
-/** Today and the next six days as pills, each valued as a local date input's text. */
-const getDayOptions = (now: number): PillOption<string>[] => {
-  const today = new Date(now);
-  return Array.from({ length: DAYS_SHOWN }, (_, offset) => {
-    const day = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      today.getDate() + offset,
-    );
-    return {
-      value: toLocalDateInputValue(day.getTime()),
-      label:
-        offset === 0
-          ? 'Today'
-          : day.toLocaleDateString(undefined, { weekday: 'short' }),
-    };
-  });
-};
+import { describeMovedOn } from '@apps/going-once/utils/status';
+import {
+  getDayOptions,
+  getHoldDraft,
+  isDraftChanged,
+  OTHER_DAY,
+  type HoldDraft,
+} from '@apps/going-once/utils/statusDrafts';
 
 interface MarkPendingViewProps {
   item: Item;
   uid: string;
   now: number;
+  /** Marking a thing pending, or changing who or when on a hold it already has. */
+  mode: 'MARK' | 'CHANGE';
+  draft: HoldDraft;
+  onDraft: (next: HoldDraft) => void;
   footerNode: HTMLElement | null;
+  /** Back, asking first when something was typed. */
   onBack: () => void;
+  /** Leaves at once, for Done after a refusal. */
+  onLeave: () => void;
   onDone: () => void;
 }
 
-/** Who is picking it up, and when: nothing is chosen until the person picks "Someone else". */
+/** Who is picking it up, and when; both are optional, so Mark pending is on from the start. */
 function MarkPendingView({
   item,
   uid,
   now,
+  mode,
+  draft,
+  onDraft,
   footerNode,
   onBack,
+  onLeave,
   onDone,
 }: MarkPendingViewProps) {
-  const [isSomeoneElse, setIsSomeoneElse] = useState(false);
-  const [name, setName] = useState('');
-  const [isDayShown, setIsDayShown] = useState(false);
-  const [day, setDay] = useState('');
-  const [isOtherDay, setIsOtherDay] = useState(false);
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { isBusy, refusal, write } = useStatusWrite();
+  const isChange = mode === 'CHANGE';
   const dayOptions = [
     ...getDayOptions(now),
     { value: OTHER_DAY, label: 'Other day' },
   ];
   const today = toLocalDateInputValue(now);
-  const pickedDay = isOtherDay ? OTHER_DAY : day;
+  const pickedDay = draft.isOtherDay ? OTHER_DAY : draft.day;
+  const lockedNote =
+    refusal ??
+    (isBusy
+      ? null
+      : describeMovedOn(item, [isChange ? 'PENDING' : 'AVAILABLE']));
+  const isUnchanged =
+    isChange && !isDraftChanged(draft, getHoldDraft(item.pending, now));
 
-  const markPending = async () => {
-    setIsBusy(true);
-    setError(null);
-    const result = await changeStatus(item.saleId, item.id, uid, {
-      kind: 'MARK_PENDING',
-      buyerName: name.trim() === '' ? null : name.trim(),
-      pickupOn: isDayShown ? (fromDateInputValue(day) ?? null) : null,
-    });
-    setIsBusy(false);
-    if (result.ok) onDone();
-    else setError(result.message);
+  const save = async () => {
+    const buyerName = draft.name.trim() === '' ? null : draft.name.trim();
+    const pickupOn = draft.isDayShown
+      ? (fromDateInputValue(draft.day) ?? null)
+      : null;
+    const isSaved = await write(() =>
+      changeStatus(item.saleId, item.id, uid, {
+        kind: isChange ? 'CHANGE_HOLD' : 'MARK_PENDING',
+        buyerName,
+        pickupOn,
+      }),
+    );
+    if (isSaved) onDone();
   };
 
   const pickDay = (value: string) => {
     if (value === OTHER_DAY) {
-      setIsOtherDay(true);
+      onDraft({ ...draft, isOtherDay: true });
       return;
     }
-    setIsOtherDay(false);
-    setDay(value);
+    onDraft({ ...draft, isOtherDay: false, day: value });
+  };
+
+  const getNote = () => {
+    if (isUnchanged) return 'Change the name or the day first';
+    if (draft.isDayShown && draft.day === '')
+      return 'No day picked, so it saves without one';
+    return null;
   };
 
   return (
     <div className='space-y-5'>
       <div className='space-y-2'>
-        <BackLink onBack={onBack} label='Mark pending' />
+        <BackLink
+          onBack={onBack}
+          label={isChange ? 'Change the hold' : 'Mark pending'}
+        />
         <p className='text-lg font-semibold'>Who&apos;s picking it up?</p>
       </div>
-      <div className='space-y-3'>
-        <Button
-          type='button'
-          variant='tertiary'
-          aria-pressed={isSomeoneElse}
-          className={join(
-            'text-foreground! h-auto min-h-14 w-full justify-start gap-3 rounded-2xl border px-3 py-2 text-left font-normal',
-            isSomeoneElse ? 'border-primary bg-accent/50' : 'border-border',
-          )}
-          onClick={() => setIsSomeoneElse(true)}
-        >
-          <span
-            className={join(
-              'grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold',
-              isSomeoneElse
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-muted text-muted-foreground',
-            )}
-            aria-hidden='true'
-          >
-            {isSomeoneElse ? <Check className='size-4' /> : 'A'}
-          </span>
-          <span>Someone else</span>
-        </Button>
-        {isSomeoneElse && (
-          <Input
-            aria-label='Their name'
-            placeholder='Their name'
-            value={name}
-            maxLength={MAX_BUYER_NAME_LENGTH}
-            autoComplete='off'
-            onChange={(event) => setName(event.target.value)}
-          />
-        )}
+      <div className='space-y-2'>
+        <p className='text-muted-foreground text-sm'>Their name (optional)</p>
+        <Input
+          aria-label='Their name'
+          placeholder='Their name'
+          value={draft.name}
+          maxLength={MAX_BUYER_NAME_LENGTH}
+          autoComplete='off'
+          disabled={lockedNote !== null}
+          onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+        />
       </div>
-      {isDayShown ? (
+      {draft.isDayShown ? (
         <div className='space-y-3'>
+          <p className='text-muted-foreground text-sm'>Pickup day (optional)</p>
           <PillGroup
             label='Pickup day'
             options={dayOptions}
             value={pickedDay === '' ? null : pickedDay}
             onChange={pickDay}
           />
-          {isOtherDay && (
+          {draft.isOtherDay && (
             <DateInput
               variant='outline'
               aria-label='Pickup day'
               min={today}
-              value={day}
-              onChange={(event) => setDay(event.target.value)}
+              value={draft.day}
+              onChange={(event) =>
+                onDraft({ ...draft, day: event.target.value })
+              }
             />
           )}
           <RevealChip
             icon={<X className='size-4' aria-hidden='true' />}
-            onClick={() => {
-              setIsDayShown(false);
-              setIsOtherDay(false);
-              setDay('');
-            }}
+            onClick={() =>
+              onDraft({
+                ...draft,
+                isDayShown: false,
+                isOtherDay: false,
+                day: '',
+              })
+            }
           >
             No pickup day
           </RevealChip>
         </div>
       ) : (
-        <RevealChip icon='+' onClick={() => setIsDayShown(true)}>
+        <RevealChip
+          icon={<Plus className='size-4' aria-hidden='true' />}
+          onClick={() => onDraft({ ...draft, isDayShown: true })}
+        >
           Add a pickup day
         </RevealChip>
       )}
@@ -172,18 +166,19 @@ function MarkPendingView({
       </p>
       <StatusViewFooter
         footerNode={footerNode}
-        note={error ?? (isSomeoneElse ? null : 'Pick who, or Someone else')}
-        isRefusal={error !== null}
+        note={getNote()}
+        lockedNote={lockedNote}
+        onDone={onLeave}
       >
         <Button
           type='button'
           size='lg'
           rounded='full'
           className='w-full'
-          disabled={!isSomeoneElse || isBusy}
-          onClick={() => void markPending()}
+          disabled={isBusy || isUnchanged}
+          onClick={() => void save()}
         >
-          Mark pending
+          {isChange ? 'Save' : 'Mark pending'}
         </Button>
       </StatusViewFooter>
     </div>

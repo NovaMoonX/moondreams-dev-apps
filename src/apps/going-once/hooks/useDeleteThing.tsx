@@ -12,18 +12,20 @@ import { changeStatus } from '@apps/going-once/store/actions/statusActions';
 import { selectItems } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
 import { getItemName } from '@apps/going-once/utils/listing';
-import { getStatusSummary } from '@apps/going-once/utils/status';
+import { getStatusSummary } from '@apps/going-once/utils/statusSummary';
 
 const isRefused = (error: unknown) =>
   (error as { code?: string } | null)?.code === 'permission-denied';
 
 /**
  * Asks before deleting a thing and deletes it in the background; `deleteThing` resolves true once it is deleted.
+ * `onTakeOff` runs when the person takes it off the list instead, so the caller can show its own Undo; without it the thing is taken off here.
  * `dialog` is the confirm and must be rendered by the caller.
  */
 export function useDeleteThing(
   saleId: string,
   uid: string,
+  onTakeOff: ((item: Item) => void) | null = null,
 ): { deleteThing: (item: Item) => Promise<boolean>; dialog: ReactNode } {
   const { addToast } = useToast();
   const [asking, setAsking] = useState<DeleteQuestion | null>(null);
@@ -47,8 +49,13 @@ export function useDeleteThing(
     const name = getItemName(item);
     const choice = await ask(item);
     if (choice === 'TAKE_OFF') {
+      if (onTakeOff !== null) {
+        onTakeOff(item);
+        return false;
+      }
       const result = await changeStatus(saleId, item.id, uid, {
         kind: 'TAKE_OFF',
+        undoesAt: null,
       });
       if (!result.ok)
         addToast({

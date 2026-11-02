@@ -52,13 +52,30 @@ export interface ItemSaleRecord {
   markedAt: number;
 }
 
-/** One entry of a thing's status history; a corrected price carries the figure it replaced. */
+/** Which act wrote a history entry; the words of a history row come from it. */
+export type StatusChangeKind =
+  | 'MARK_PENDING'
+  | 'CHANGE_HOLD'
+  | 'BACK_TO_AVAILABLE'
+  | 'MARK_SOLD'
+  | 'CHANGE_PAID'
+  | 'NOT_SOLD'
+  | 'RESTORE_SALE'
+  | 'TAKE_OFF'
+  | 'PUT_BACK';
+
+/** One entry of a thing's status history; a corrected price carries the figure it replaced, an undone sale the figure it undid. */
 export interface StatusChange {
+  kind: StatusChangeKind;
   status: ItemStatus;
   byUid: string;
   at: number;
   priceCents: number | null;
   fromPriceCents: number | null;
+  /** The hold's name after a Mark pending or a changed hold; the buyer's personal data. */
+  buyerName: string | null;
+  /** The hold's date-only pickup day (UTC midnight) after a Mark pending or a changed hold. */
+  pickupOn: number | null;
 }
 
 /** One stored listing-size photo; array order is display order and the first is the cover. */

@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountHero from '@/components/AmountHero';
@@ -11,24 +9,30 @@ import {
   fromDateInputValue,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
-import {
-  centsToInputValue,
-  formatCentsShort,
-  parseMoneyToCents,
-} from '@/utils/moneyUtils';
+import { formatCentsShort, parseMoneyToCents } from '@/utils/moneyUtils';
 import StatusViewFooter from '@apps/going-once/components/things/StatusViewFooter';
 import { PAYMENT_METHOD_OPTIONS } from '@apps/going-once/constants';
+import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
-import type { Item, PaymentMethod } from '@apps/going-once/types';
+import type { Item } from '@apps/going-once/types';
 import { formatAskingPrice } from '@apps/going-once/utils/listing';
+import { describeMovedOn } from '@apps/going-once/utils/status';
+import type { SoldDraft } from '@apps/going-once/utils/statusDrafts';
 
 interface MarkSoldViewProps {
   item: Item;
   uid: string;
   now: number;
+  draft: SoldDraft;
+  onDraft: (next: SoldDraft) => void;
   footerNode: HTMLElement | null;
+  /** Back, asking first when something was typed. */
   onBack: () => void;
+  /** Leaves at once, for Done after a refusal. */
+  onLeave: () => void;
   onSold: () => void;
+  /** For a thing given away: the same act as More's Take off the list. */
+  onTakeOff: () => void;
 }
 
 /** What they paid, prefilled with the asking price; under the floor it warns and still saves, and a refusal stays here with its reason. */
@@ -36,24 +40,25 @@ function MarkSoldView({
   item,
   uid,
   now,
+  draft,
+  onDraft,
   footerNode,
   onBack,
+  onLeave,
   onSold,
+  onTakeOff,
 }: MarkSoldViewProps) {
   const today = toLocalDateInputValue(now);
-  const [amount, setAmount] = useState(
-    centsToInputValue(item.askingPriceCents),
-  );
-  const [method, setMethod] = useState<PaymentMethod | null>(null);
-  const [soldOn, setSoldOn] = useState(today);
-  const [isBusy, setIsBusy] = useState(false);
-  const [refusal, setRefusal] = useState<string | null>(null);
-  const priceCents = parseMoneyToCents(amount);
+  const { isBusy, refusal, write } = useStatusWrite();
+  const priceCents = parseMoneyToCents(draft.amount);
   const { floorPriceCents } = item;
   const isUnderFloor =
     priceCents !== null &&
     floorPriceCents !== null &&
     priceCents < floorPriceCents;
+  const lockedNote =
+    refusal ??
+    (isBusy ? null : describeMovedOn(item, ['AVAILABLE', 'PENDING']));
   const asking = formatAskingPrice(item.askingPriceCents);
   const askingLine = [
     asking === null ? null : `Asking ${asking}`,
@@ -65,23 +70,17 @@ function MarkSoldView({
     .join(' · ');
 
   const markSold = async () => {
-    const soldOnDate = fromDateInputValue(soldOn);
+    const soldOnDate = fromDateInputValue(draft.soldOn);
     if (priceCents === null || soldOnDate === undefined) return;
-    setIsBusy(true);
-    const result = await changeStatus(item.saleId, item.id, uid, {
-      kind: 'MARK_SOLD',
-      priceCents,
-      method,
-      soldOn: soldOnDate,
-    });
-    setIsBusy(false);
-    if (result.ok) onSold();
-    else setRefusal(result.message);
-  };
-
-  const getNote = () => {
-    if (refusal !== null) return refusal;
-    return priceCents === null ? 'Enter what they paid' : null;
+    const isSold = await write(() =>
+      changeStatus(item.saleId, item.id, uid, {
+        kind: 'MARK_SOLD',
+        priceCents,
+        method: draft.method,
+        soldOn: soldOnDate,
+      }),
+    );
+    if (isSold) onSold();
   };
 
   return (
@@ -93,10 +92,10 @@ function MarkSoldView({
       <div className='space-y-2'>
         <AmountHero
           label='Paid'
-          value={amount}
-          onChange={setAmount}
+          value={draft.amount}
+          onChange={(amount) => onDraft({ ...draft, amount })}
           autoFocus
-          disabled={refusal !== null}
+          disabled={lockedNote !== null}
         />
         {askingLine !== '' && (
           <p className='text-muted-foreground text-center text-sm'>
@@ -104,11 +103,25 @@ function MarkSoldView({
           </p>
         )}
       </div>
-      {isUnderFloor && refusal === null && floorPriceCents !== null && (
+      {isUnderFloor && lockedNote === null && floorPriceCents !== null && (
         <InlineNotice tone='warning'>
           That&apos;s under your floor price of{' '}
           {formatCentsShort(floorPriceCents)}. It still saves.
         </InlineNotice>
+      )}
+      {priceCents === 0 && lockedNote === null && (
+        <div className='flex flex-wrap items-center gap-x-2'>
+          <p className='text-muted-foreground text-sm'>Gave it away?</p>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className='h-10 px-2'
+            onClick={onTakeOff}
+          >
+            Take it off the list instead
+          </Button>
+        </div>
       )}
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>
@@ -117,44 +130,35 @@ function MarkSoldView({
         <PillGroup
           label='How they paid'
           options={PAYMENT_METHOD_OPTIONS}
-          value={method}
-          onChange={(next) => setMethod(next === method ? null : next)}
+          value={draft.method}
+          onChange={(next) =>
+            onDraft({ ...draft, method: next === draft.method ? null : next })
+          }
         />
       </div>
       <FoldedDateField
         label='Sold on'
-        value={soldOn}
-        onChange={setSoldOn}
+        value={draft.soldOn}
+        onChange={(soldOn) => onDraft({ ...draft, soldOn })}
         todayValue={today}
         max={today}
       />
       <StatusViewFooter
         footerNode={footerNode}
-        note={getNote()}
-        isRefusal={refusal !== null}
+        note={priceCents === null ? 'Enter what they paid' : null}
+        lockedNote={lockedNote}
+        onDone={onLeave}
       >
-        {refusal === null ? (
-          <Button
-            type='button'
-            size='lg'
-            rounded='full'
-            className='w-full'
-            disabled={priceCents === null || isBusy}
-            onClick={() => void markSold()}
-          >
-            Mark sold
-          </Button>
-        ) : (
-          <Button
-            type='button'
-            size='lg'
-            rounded='full'
-            className='w-full'
-            onClick={onBack}
-          >
-            Done
-          </Button>
-        )}
+        <Button
+          type='button'
+          size='lg'
+          rounded='full'
+          className='w-full'
+          disabled={priceCents === null || isBusy}
+          onClick={() => void markSold()}
+        >
+          Mark sold
+        </Button>
       </StatusViewFooter>
     </div>
   );

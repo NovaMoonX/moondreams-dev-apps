@@ -66,9 +66,10 @@ const getSoldParts = (sale: ItemSaleRecord) => [
   formatDateShortUTC(sale.soldOn),
 ];
 
-/** What follows the status word in the drawer's sticker line: "for Nate · pickup Sat, Nov 7", "$170 · Venmo · Oct 31". */
+/** What follows the status word in a sticker line: "for Nate · pickup Sat, Nov 7", "$170 · Venmo · Oct 31". A row names the pickup day by its weekday. */
 export function getStatusFacts(
   item: Pick<Item, 'status' | 'pending' | 'sale'>,
+  isShort = false,
 ): string {
   const { pending, sale } = item;
   if (item.status === 'PENDING' && pending !== null)
@@ -76,99 +77,74 @@ export function getStatusFacts(
       pending.buyerName === null ? null : `for ${pending.buyerName}`,
       pending.pickupOn === null
         ? null
-        : `pickup ${formatPickupDay(pending.pickupOn)}`,
+        : `pickup ${(isShort ? formatPickupWeekday : formatPickupDay)(pending.pickupOn)}`,
     ]);
   if (item.status === 'SOLD' && sale !== null)
     return joinParts(getSoldParts(sale));
   return '';
 }
 
-/** The muted line of a row that is Pending, Sold or taken off the list; empty for an Available one. */
-export function getStatusRowLine(
-  item: Pick<
-    Item,
-    'status' | 'pending' | 'sale' | 'askingPriceCents' | 'floorPriceCents'
-  >,
-): string {
-  const { pending, sale } = item;
-  if (item.status === 'WITHDRAWN') return 'Taken off the list';
-  if (item.status === 'PENDING') {
-    const line = joinParts([
-      pending?.buyerName ? `For ${pending.buyerName}` : null,
-      pending?.pickupOn
-        ? `pickup ${formatPickupWeekday(pending.pickupOn)}`
-        : null,
-    ]);
-    return line === '' ? 'Waiting on pickup' : line;
-  }
-  if (item.status === 'SOLD' && sale !== null)
-    return joinParts([
-      item.askingPriceCents !== null &&
-      item.askingPriceCents !== sale.priceCents
-        ? `Asked ${formatCentsShort(item.askingPriceCents)}`
-        : null,
-      sale.method === null ? null : PAYMENT_METHOD_LABELS[sale.method],
-      formatDateShortUTC(sale.soldOn),
-      isUnderFloor(item) ? 'Sold under your floor price' : null,
-    ]);
-  return '';
+/** Why a view opened for one status can't go on once the live thing has moved to another; `null` while the status is still one it expects. */
+export function describeMovedOn(
+  item: Pick<Item, 'status' | 'sale'>,
+  expected: ItemStatus[],
+): string | null {
+  if (expected.includes(item.status)) return null;
+  if (item.status === 'SOLD')
+    return `This was just marked sold for ${formatCentsShort(item.sale?.priceCents ?? 0)}.`;
+  if (item.status === 'PENDING') return 'This was just marked pending.';
+  if (item.status === 'WITHDRAWN') return 'This was just taken off the list.';
+  return 'This is available again.';
 }
 
-export interface StatusFigures {
-  count: number;
-  askedCents: number;
-  collectedCents: number;
-}
-
-export type StatusSummary = Record<StatusView, StatusFigures>;
-
-/** Counts and sums for the three views in one pass; taken-off things are in none of them. */
-export function getStatusSummary(items: Item[]): StatusSummary {
-  const empty = (): StatusFigures => ({
-    count: 0,
-    askedCents: 0,
-    collectedCents: 0,
-  });
-  const summary: StatusSummary = {
-    AVAILABLE: empty(),
-    PENDING: empty(),
-    SOLD: empty(),
-  };
-  items.forEach((item) => {
-    if (item.status === 'WITHDRAWN') return;
-    const figures = summary[item.status];
-    figures.count += 1;
-    figures.askedCents += item.askingPriceCents ?? 0;
-    figures.collectedCents += item.sale?.priceCents ?? 0;
-  });
-  return summary;
-}
-
-/** The line under a view's rows: "$800 asked", "Collected $225 of $245 asked". */
-export function formatStatusTotal(
-  view: StatusView,
-  summary: StatusSummary,
-): string {
-  const { askedCents, collectedCents } = summary[view];
-  if (view === 'SOLD')
-    return `Collected ${formatCentsShort(collectedCents)} of ${formatCentsShort(askedCents)} asked`;
-  return `${formatCentsShort(askedCents)} asked`;
-}
+/** "Collected $225 of $245 asked". */
+export const formatCollected = (collectedCents: number, askedCents: number) =>
+  `Collected ${formatCentsShort(collectedCents)} of ${formatCentsShort(askedCents)} asked`;
 
 /** "Collected goes from $225 to $215". */
 export const formatCollectedChange = (fromCents: number, toCents: number) =>
   `Collected goes from ${formatCentsShort(fromCents)} to ${formatCentsShort(toCents)}`;
 
+const describePendingChange = (change: StatusChange) => {
+  const when =
+    change.pickupOn === null
+      ? null
+      : `pickup ${formatPickupWeekday(change.pickupOn)}`;
+  if (change.buyerName !== null)
+    return joinParts([`Held for ${change.buyerName}`, when]);
+  return joinParts([when === null ? 'Marked pending' : 'Held', when]);
+};
+
+const describeHoldChange = (change: StatusChange) => {
+  const hold = [
+    change.buyerName,
+    change.pickupOn === null ? null : formatPickupWeekday(change.pickupOn),
+  ]
+    .filter((part) => part !== null)
+    .join(', ');
+  return `Changed the hold: ${hold === '' ? 'no name or day' : hold}`;
+};
+
 /** What a history row says happened. */
 export function describeStatusChange(change: StatusChange): string {
-  if (change.status === 'SOLD') {
-    if (change.priceCents === null) return 'Sold';
-    if (change.fromPriceCents !== null)
-      return `Changed what was paid ${formatCentsShort(change.fromPriceCents)} → ${formatCentsShort(change.priceCents)}`;
-    return `Sold for ${formatCentsShort(change.priceCents)}`;
-  }
-  if (change.status === 'PENDING') return 'Marked pending';
-  if (change.status === 'WITHDRAWN') return 'Taken off the list';
+  const paid =
+    change.priceCents === null ? null : formatCentsShort(change.priceCents);
+  const was =
+    change.fromPriceCents === null
+      ? null
+      : formatCentsShort(change.fromPriceCents);
+  if (change.kind === 'MARK_PENDING') return describePendingChange(change);
+  if (change.kind === 'CHANGE_HOLD') return describeHoldChange(change);
+  if (change.kind === 'MARK_SOLD')
+    return paid === null ? 'Sold' : `Sold for ${paid}`;
+  if (change.kind === 'CHANGE_PAID')
+    return `Changed what was paid ${was ?? ''} → ${paid ?? ''}`;
+  if (change.kind === 'NOT_SOLD')
+    return was === null ? 'Not sold after all' : `Sale of ${was} undone`;
+  if (change.kind === 'RESTORE_SALE')
+    return paid === null ? 'Sale restored' : `Sale of ${paid} restored`;
+  if (change.kind === 'TAKE_OFF') return 'Taken off the list';
+  if (change.kind === 'PUT_BACK') return 'Put back on the list';
   return 'Back to available';
 }
 
