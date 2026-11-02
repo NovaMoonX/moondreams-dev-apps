@@ -53,8 +53,6 @@ interface EventCardProps {
    * could otherwise modify it, sees an archived event fully read-only. */
   canArchive: boolean;
   showCover: boolean;
-  /** With a cover, whether it sits beside the card's text (the default) or above it as a banner. */
-  isImageOnLeft?: boolean;
   showAttendees: boolean;
   isStacked: boolean;
   /** The event belongs to a group of legs, so stacking it stacks the whole group. */
@@ -266,7 +264,6 @@ export function EventCard({
   canEdit,
   canArchive,
   showCover,
-  isImageOnLeft = true,
   showAttendees,
   isStacked,
   isGrouped = false,
@@ -381,7 +378,7 @@ export function EventCard({
         {...drawerTriggerProps}
         className={join(
           'border-border bg-card relative overflow-hidden rounded-lg border',
-          imageUrl && isImageOnLeft && 'flex',
+          imageUrl && 'sm:flex',
           isSmallScreen && 'cursor-pointer',
           event.isArchived && 'opacity-60',
         )}
@@ -390,14 +387,10 @@ export function EventCard({
           <FallbackImage
             src={imageUrl}
             alt=''
-            className={
-              isImageOnLeft
-                ? 'w-20 shrink-0 self-stretch object-cover sm:w-44'
-                : 'aspect-video w-full object-cover sm:aspect-2/1'
-            }
+            className='aspect-video w-full object-cover sm:aspect-auto sm:w-44 sm:shrink-0 sm:self-stretch'
           />
         )}
-        <div className={join(imageUrl && isImageOnLeft && 'flex min-w-0 flex-1 flex-col')}>
+        <div className={join(imageUrl && 'sm:flex sm:min-w-0 sm:flex-1 sm:flex-col')}>
           <div className='flex items-start justify-between gap-3 p-4'>
             <div className='min-w-0 flex-1 space-y-1'>
               <EventDetailLines

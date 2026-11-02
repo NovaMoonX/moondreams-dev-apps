@@ -169,7 +169,6 @@ export function TimelineSection({
     }
   }, [canAddEvents, canEdit, queryClient]);
   const [showCovers, setShowCovers] = useLocalStoragePreference('waypoint:showCovers', true);
-  const [isImageOnLeft, setIsImageOnLeft] = useLocalStoragePreference('waypoint:eventImageLayout', true);
   const [showAttendees, setShowAttendees] = useLocalStoragePreference('waypoint:showAttendees', true);
   const [attendingOnly, setAttendingOnly] = useState(false);
   const [weatherDay, setWeatherDay] = useState<number | null>(null);
@@ -323,7 +322,6 @@ export function TimelineSection({
         canEdit={canEdit}
         canArchive={canArchiveEvent(trip, currentUserId)}
         showCover={showCovers}
-        isImageOnLeft={isImageOnLeft}
         showAttendees={showAttendees}
         weather={weather.getEvent(event.id)}
         weatherPlace={weather.getEventPlace(event.id)}
@@ -585,13 +583,6 @@ export function TimelineSection({
       heading: 'On each card',
       options: [
         { label: 'Show covers', checked: showCovers, onChange: setShowCovers, defaultChecked: true, isCustomized: !showCovers },
-        {
-          label: 'Put covers on the left',
-          checked: isImageOnLeft,
-          onChange: setIsImageOnLeft,
-          defaultChecked: true,
-          isCustomized: !isImageOnLeft,
-        },
         {
           label: "Show who's attending",
           checked: showAttendees,
