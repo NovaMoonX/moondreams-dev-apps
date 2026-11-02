@@ -26,7 +26,7 @@
  * the top of the screen once the site header slides away (`data-site-header` on <html>, set by Layout). */
 @utility sticky-app-bar {
   position: sticky;
-  top: 0;
+  top: var(--site-banner-inset, 0px);
   z-index: 20;
   @media (max-width: 767.98px) {
     top: calc(4rem - 1px);
@@ -259,11 +259,11 @@ html[data-site-banner='true'] .subview-backdrop {
 #root {
   @apply min-h-dvh w-full max-w-full bg-background text-foreground;
   padding-top: var(--site-banner-inset, 0px);
-  transition: padding-top 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition: padding-top 300ms cubic-bezier(0, 0, 0.2, 1);
 }
 
-/* The top strip (offline / new version) is fixed over the screen, so every page starts below it: its height is the one place that
- * says how far, shared by the header, the sticky bars and the page's own padding. */
+/* The top strip (offline / new version) is fixed over the screen, so every page starts below it. The strip's own height
+ * (`h-9`) is also written in the header's `top-9`, the sticky utilities and the subview rules below: change them together. */
 html[data-site-banner='true'] {
   --site-banner-inset: 2.25rem;
 }

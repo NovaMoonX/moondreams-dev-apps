@@ -113,6 +113,10 @@ function Layout() {
       ? 'hidden'
       : 'visible';
     document.documentElement.dataset.siteBanner = String(isBannerVisible);
+    return () => {
+      delete document.documentElement.dataset.siteHeader;
+      delete document.documentElement.dataset.siteBanner;
+    };
   }, [isHeaderHidden, isBannerVisible]);
   useReminderToasts();
 
