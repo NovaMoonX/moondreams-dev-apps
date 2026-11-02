@@ -34,8 +34,8 @@ function PrioritiesNudge({ isHeldBack, otherwise }: PrioritiesNudgeProps) {
 }
 
 interface PrioritiesNudgeProps {
-  /** True while something more pressing asks on the same screen. */
-  isHeldBack: boolean;
+  /** True while something more pressing asks on the same screen; null while that is still being worked out, which draws nothing for a person it may ask. */
+  isHeldBack: boolean | null;
   /** Drawn in its place when it doesn't show, so a screen asks one thing at a time. */
   otherwise: ReactNode;
 }
@@ -64,7 +64,9 @@ function PrioritiesNudgeRow({
   const isUnsorted =
     listed.length >= MIN_ITEMS && listed.every((value) => value === 'should');
 
-  if (isDismissed || !isUnsorted || isHeldBack) return otherwise;
+  if (isDismissed || !isUnsorted) return otherwise;
+  if (isHeldBack === null) return null;
+  if (isHeldBack) return otherwise;
   return (
     <section
       aria-label={PRIORITIES_NUDGE_WORDS.title}

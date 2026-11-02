@@ -189,7 +189,7 @@ function HomeScreen() {
       )}
       <PrioritiesNudge
         isHeldBack={
-          lookahead === null || hasWarnings || lookahead.due.length > 0
+          lookahead === null ? null : hasWarnings || lookahead.due.length > 0
         }
         otherwise={<TrackInviteCard />}
       />

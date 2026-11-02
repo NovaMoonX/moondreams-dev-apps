@@ -7,7 +7,11 @@ import { store, useAppSelector } from '@/store';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { CHECKLIST_R3_WORDS, CHECKLIST_WORDS } from '@apps/runway/constants';
+import {
+  CHECKLIST_R3_WORDS,
+  CHECKLIST_WORDS,
+  PAID_HISTORY_WORDS,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { countMarks } from '@apps/runway/engine/progress';
@@ -187,11 +191,17 @@ export function useBillPaid({
   const undo = async () => {
     const done = await run(async (uid) => {
       const paid = payment?.paid ?? null;
-      if (!paid) return;
-      await undoPaymentPaid(uid, billId, billName, paid);
-      onUndone?.();
+      if (!paid) return false;
+      const isWritten = await undoPaymentPaid(uid, billId, billName, paid);
+      if (isWritten) onUndone?.();
+      return isWritten;
     }, `${billName} was not changed`);
-    return done !== null;
+    if (done !== null && !done.value)
+      addToast({
+        title: PAID_HISTORY_WORDS.alreadyTakenBack(billName),
+        type: 'info',
+      });
+    return done !== null && done.value;
   };
 
   const result = {
