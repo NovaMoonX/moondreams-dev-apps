@@ -78,7 +78,8 @@ export function updateItemFields(
 
 const describeSaveFailure = (error: unknown) => {
   const reason = error instanceof Error ? error.message : '';
-  if (reason === 'full') return `A thing can have ${MAX_ITEM_PHOTOS} photos at most.`;
+  if (reason === 'full')
+    return `A thing can have ${MAX_ITEM_PHOTOS} photos at most.`;
   if (reason === 'missing') return 'This thing is no longer here.';
   return "This photo didn't save. Check your connection and try again.";
 };
