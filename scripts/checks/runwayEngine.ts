@@ -4818,38 +4818,117 @@ const version = (
     'an undated bill does not shorten how far the plan holds',
   );
 
-  // An overdue unpaid bill stops "covered" and holds through nothing; one before the bill began is ignored.
+  // A bill due today or past due is a to-do, never a problem; one before the bill began, or paid, is nowhere.
   const overdue = run(weekly.slice(0, 3), {
     bills: billsOf('rent'),
     payments: {
       rent: [payment(today - 3 * DAY_MS, 0), payment(today + 9 * DAY_MS, 2)],
     },
   });
-  assert.equal(overdue.problems[0].kind, 'overdue');
-  assert.equal(overdue.holdsThrough, null);
-  assert.equal(
-    run(weekly.slice(0, 3), {
-      bills: [{ id: 'rent', name: 'rent', since: today, isUndated: false }],
-      payments: { rent: [payment(today - 3 * DAY_MS, 0)] },
-    }).problems.length,
-    0,
-    'a due date before the bill was tracked is not overdue',
+  assert.equal(overdue.problems.length, 0, 'an overdue bill is no problem');
+  assert.deepEqual(overdue.due, [
+    {
+      billId: 'rent',
+      name: 'rent',
+      dueOn: today - 3 * DAY_MS,
+      isOverdue: true,
+      laterDueOn: [],
+    },
+  ]);
+  assert.notEqual(
+    overdue.holdsThrough,
+    null,
+    'an overdue bill does not stop the plan',
   );
+  const dueToday = run(weekly.slice(0, 3), {
+    bills: billsOf('rent'),
+    payments: { rent: [payment(today, 0)] },
+  });
   assert.equal(
+    dueToday.problems.length,
+    0,
+    'a bill due today has no income problem',
+  );
+  assert.deepEqual(dueToday.due, [
+    {
+      billId: 'rent',
+      name: 'rent',
+      dueOn: today,
+      isOverdue: false,
+      laterDueOn: [],
+    },
+  ]);
+  assert.deepEqual(
     run(weekly.slice(0, 3), {
       bills: billsOf('rent'),
       payments: {
         rent: [
-          {
-            ...(payment(today - 3 * DAY_MS, 0) as object),
-            paid: { moveId: 'm' },
-          } as never,
+          payment(today - 14 * DAY_MS, 0),
+          payment(today - 7 * DAY_MS, 0),
+          payment(today, 0),
         ],
       },
-    }).problems.length,
-    0,
-    'a bill marked paid is not overdue',
+    }).due,
+    [
+      {
+        billId: 'rent',
+        name: 'rent',
+        dueOn: today - 14 * DAY_MS,
+        isOverdue: true,
+        laterDueOn: [today - 7 * DAY_MS, today],
+      },
+    ],
+    'a bill missed more than once shows its oldest payment and lists the later due dates',
   );
+  assert.deepEqual(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent', 'car', 'gym'),
+      payments: {
+        rent: [payment(today - 3 * DAY_MS, 0)],
+        car: [payment(today - 3 * DAY_MS, 0)],
+        gym: [payment(today - 9 * DAY_MS, 0)],
+      },
+    }).due.map((entry) => entry.name),
+    ['gym', 'car', 'rent'],
+    'bills due the same day are listed by name',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: { rent: [payment(today + DAY_MS, 0)] },
+    }).due.length,
+    0,
+    'a bill due tomorrow is not to pay yet',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: { rent: [payment(today + DAY_MS, 0)] },
+    }).problems.length,
+    1,
+    'a bill due tomorrow with no income still warns',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: [{ id: 'rent', name: 'rent', since: today, isUndated: false }],
+      payments: { rent: [payment(today - 3 * DAY_MS, 0)] },
+    }).due.length,
+    0,
+    'a due date before the bill was tracked is not to pay',
+  );
+  const paidLook = run(weekly.slice(0, 3), {
+    bills: billsOf('rent'),
+    payments: {
+      rent: [
+        {
+          ...(payment(today - 3 * DAY_MS, 0) as object),
+          paid: { moveId: 'm' },
+        } as never,
+      ],
+    },
+  });
+  assert.equal(paidLook.problems.length, 0, 'a bill marked paid is no problem');
+  assert.equal(paidLook.due.length, 0, 'a bill marked paid is not to pay');
 
   // The walk carries what each day gave a bill into the next, and names the item that runs short.
   const seen: number[] = [];
@@ -7049,6 +7128,7 @@ const version = (
     shortByDay: {},
     firstShortDay: null,
     incomeEndsOn: null,
+    due: [],
     undated: [],
   });
   const short = (on: number, name: string, shortBy: number) =>
