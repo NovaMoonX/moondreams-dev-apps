@@ -305,7 +305,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
 
   const expenseMemberIds = [alex.uid, taylor.uid, jamie.uid];
   const unpaidMemberStatus = Object.fromEntries(
-    expenseMemberIds.map((uid) => [uid, { isPaid: false, paidAt: null }]),
+    expenseMemberIds.map((uid) => [uid, { isPaid: false, paidAt: null, markedByUid: null, log: [] }]),
   );
   const seedExpenses: Array<{
     id: string;
@@ -517,7 +517,15 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
       paidMemberStatus: {
         ...unpaidMemberStatus,
         ...Object.fromEntries(
-          (seedExpense.repaidBy ?? []).map((uid) => [uid, { isPaid: true, paidAt: context.now - 3_600_000 }]),
+          (seedExpense.repaidBy ?? []).map((uid) => [
+            uid,
+            {
+              isPaid: true,
+              paidAt: context.now - 3_600_000,
+              markedByUid: uid,
+              log: [{ isPaid: true, byUid: uid, at: context.now - 3_600_000 }],
+            },
+          ]),
         ),
       },
       earlyPayments: seedExpense.earlyPayments ?? {},

@@ -439,7 +439,8 @@ interface TripExpense {
   targetType: ExpenseTargetType; // defaults to EVERYONE_CURRENT on Add; changeable via the separate Split action
   targetMemberIds: string[]; // snapshot for EVERYONE_CURRENT (informational only; "Everyone" resolves against current members) and SPECIFIC_MEMBERS; [] for EVERYONE_INCLUDING_FUTURE (computed live from trip.members) and JUST_ME (implied as [payerUid]; older expenses only, the split editor no longer offers it and shows it as Pick people with the payer)
   splitAmounts: Record<string, number> | null; // per-member override once adjusted away from the auto-suggested even split; null = still even
-  paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
+  /** `markedByUid` and `log` (the last 20 flips: { isPaid, byUid, at }) are missing on older documents; read through `getRepaidStatus`. */
+  paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null; markedByUid: string | null; log: RepaidLogEntry[] }>;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number;

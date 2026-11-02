@@ -3,6 +3,7 @@ import { collection, deleteDoc, deleteField, doc, runTransaction, setDoc, update
 
 import { db } from '@/lib/firebase/config';
 import { PLAN_COLLECTIONS } from '@apps/waypoint/constants';
+import { emptyRepaidStatus, flipRepaidStatus, getRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
 import type {
   EarlyPayment,
   ExpenseCategory,
@@ -94,7 +95,7 @@ export const createExpense = createAsyncThunk<
   );
   const now = Date.now();
   const paidMemberStatus = Object.fromEntries(
-    input.memberIds.map((uid) => [uid, { isPaid: false, paidAt: null }]),
+    input.memberIds.map((uid) => [uid, emptyRepaidStatus()]),
   );
   const expense: TripExpense = {
     id: expenseRef.id,
@@ -330,9 +331,10 @@ export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInpu
 );
 
 /** Puts a paid expense back to expected, clearing everyone's "repaid" marks so paying it again starts clean. */
-export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripExpense }>(
+export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripExpense; actorUid: string }>(
   'waypoint/expenses/markUnpaid',
-  async ({ expense }) => {
+  async ({ expense, actorUid }) => {
+    const now = Date.now();
     const expenseRef = getExpenseRef(expense.tripId, expense.id);
     const updatedExpense = await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(expenseRef);
@@ -348,9 +350,12 @@ export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripEx
         payerUid: null,
         paidAmount: null,
         paidMemberStatus: Object.fromEntries(
-          Object.keys(current.paidMemberStatus ?? {}).map((uid) => [uid, { isPaid: false, paidAt: null }]),
+          Object.keys(current.paidMemberStatus ?? {}).map((uid) => {
+            const status = getRepaidStatus(current, uid);
+            return [uid, status.isPaid ? flipRepaidStatus(status, actorUid, now) : status];
+          }),
         ),
-        lastEditedAt: Date.now(),
+        lastEditedAt: now,
       };
       transaction.update(expenseRef, changes);
       return { ...current, ...changes } as TripExpense;
@@ -360,7 +365,10 @@ export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripEx
 );
 
 interface ToggleExpenseRepaidInput {
+  /** Whose share is flipped. */
   uid: string;
+  /** Who tapped: the person who owes it, or the person it is owed to. */
+  actorUid: string;
   tripId: string;
   expenseId: string;
 }
@@ -369,19 +377,18 @@ interface ToggleExpenseRepaidInput {
 // read-modify-write inside a transaction to avoid clobbering a concurrent toggle.
 export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInput>(
   'waypoint/expenses/toggleRepaid',
-  async ({ uid, tripId, expenseId }) => {
+  async ({ uid, actorUid, tripId, expenseId }) => {
     const expenseRef = doc(db, 'apps', 'waypoint', 'trips', tripId, 'expenses', expenseId);
     await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(expenseRef);
       if (!snapshot.exists()) {
         return;
       }
-      const paidMemberStatus = (snapshot.data().paidMemberStatus ?? {}) as TripExpense['paidMemberStatus'];
-      const wasPaid = paidMemberStatus[uid]?.isPaid ?? false;
+      const current = snapshot.data() as TripExpense;
       transaction.update(expenseRef, {
         paidMemberStatus: {
-          ...paidMemberStatus,
-          [uid]: { isPaid: !wasPaid, paidAt: wasPaid ? null : Date.now() },
+          ...(current.paidMemberStatus ?? {}),
+          [uid]: flipRepaidStatus(getRepaidStatus(current, uid), actorUid, Date.now()),
         },
       });
     });

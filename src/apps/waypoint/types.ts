@@ -214,6 +214,21 @@ export interface ExpenseLink {
   id: string;
 }
 
+/** One flip of a member's "paid back" mark, kept so the screen can say who marked what. */
+export interface RepaidLogEntry {
+  isPaid: boolean;
+  byUid: string;
+  at: number;
+}
+
+export interface RepaidStatus {
+  isPaid: boolean;
+  paidAt: number | null;
+  markedByUid: string | null;
+  /** Newest last, capped at `MAX_REPAID_LOG`. */
+  log: RepaidLogEntry[];
+}
+
 export interface TripExpense {
   id: string;
   tripId: string;
@@ -235,7 +250,8 @@ export interface TripExpense {
   targetType: ExpenseTargetType;
   targetMemberIds: string[];
   splitAmounts: Record<string, number> | null;
-  paidMemberStatus: Record<string, { isPaid: boolean; paidAt: number | null }>;
+  /** `markedByUid` and `log` are missing on older documents: read through `getRepaidStatus`. */
+  paidMemberStatus: Record<string, RepaidStatus>;
   /** Keyed by the member who paid early; older documents lack it. */
   earlyPayments: Record<string, EarlyPayment>;
   note: string | null;

@@ -106,7 +106,7 @@ function DuesSummary({
   };
 
   const renderItem = (
-    { expense, share, isRepaid }: DirectionalOwed['items'][number],
+    { expense, share, isRepaid, markedByUid }: DirectionalOwed['items'][number],
     debtorUid: string,
     isReceiving: boolean,
     canToggle: boolean,
@@ -119,7 +119,14 @@ function DuesSummary({
           ) : (
             <Circle className='text-muted-foreground h-4 w-4 shrink-0' />
           )}
-          <span className='truncate'>{expense.title}</span>
+          <span className='min-w-0'>
+            <span className='block truncate'>{expense.title}</span>
+            {isRepaid && markedByUid !== null && (
+              <span className='text-muted-foreground block truncate text-xs'>
+                Marked by {markedByUid === currentUserId ? 'you' : memberLabel(markedByUid)}
+              </span>
+            )}
+          </span>
         </span>
         <span className='shrink-0 tabular-nums'>{formatAmount(share)}</span>
       </>
