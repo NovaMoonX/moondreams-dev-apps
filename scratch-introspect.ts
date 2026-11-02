@@ -1,0 +1,3 @@
+import { execFileSync } from 'node:child_process';
+const q = `{ a: __type(name: "ProjectV2FieldValue") { inputFields { name type { name kind ofType { name kind ofType { name kind ofType { name } } } } } } b: __type(name: "UpdateProjectV2FieldInput") { inputFields { name type { name kind ofType { name kind ofType { name kind ofType { name } } } } } } c: __type(name: "ProjectV2MultiSelectField") { fields { name } } d: __type(name: "ProjectV2ItemFieldMultiSelectValue") { fields { name } } e: __type(name: "ProjectV2MultiSelectFieldOption") { fields { name } } }`;
+console.log(execFileSync('gh', ['api', 'graphql', '-f', `query=${q}`], { encoding: 'utf8', env: { ...process.env, GH_TOKEN: process.env.PROJECT_TOKEN } }));
