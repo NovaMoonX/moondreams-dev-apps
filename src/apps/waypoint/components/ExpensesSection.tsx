@@ -765,6 +765,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       }
 
       const isReceiving = share.uid !== currentUserId;
+      const chipClassName = "relative h-7 shrink-0 text-xs after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']";
       const toggle = () =>
         void dispatch(
           toggleExpenseRepaid({ uid: share.uid, tripId: trip.id, expenseId: expense.id }),
@@ -776,11 +777,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
             type='button'
             variant='secondary'
             size='sm'
-            className={
-              isReceiving
-                ? "relative h-7 shrink-0 text-xs after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']"
-                : 'h-10 shrink-0'
-            }
+            className={isReceiving ? chipClassName : 'h-10 shrink-0'}
             onClick={toggle}
           >
             {isReceiving ? 'Mark as received' : 'Mark as repaid'}
@@ -791,7 +788,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
           <span className='text-muted-foreground text-xs'>{isReceiving ? 'Marked received' : 'Marked paid back'}</span>
-          <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
+          <Button
+            type='button'
+            variant={isReceiving ? 'secondary' : 'tertiary'}
+            size='sm'
+            className={isReceiving ? chipClassName : 'h-10'}
+            onClick={toggle}
+          >
             Undo
           </Button>
         </span>
@@ -811,7 +814,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </div>
         ) : null}
         {splitBreakdown.perPersonLabel !== null && expense.payerUid === currentUserId && (
-          <div className='space-y-1'>
+          <div className='space-y-3'>
             {splitBreakdown.shares.map((share) => (
               <div key={share.uid} className='flex items-center justify-end gap-2'>
                 <p className='text-muted-foreground mr-auto flex min-w-0 gap-1 text-xs'>
