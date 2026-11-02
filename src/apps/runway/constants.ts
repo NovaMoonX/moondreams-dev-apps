@@ -855,7 +855,7 @@ export const PAY_SHARE_WORDS = {
   needsAmount: 'Enter an amount.',
   unchanged: 'Change the amount to save it.',
   save: 'Save for this pay',
-  saveCapped: (cents: string) => `Save ${cents} for this pay`,
+  saveCapped: (cents: string) => `Save ${cents}`,
   saveFailed: 'This did not save. Nothing was changed.',
   changedFor: 'Changed for this pay',
   backToPlan: "Back to the plan's amount",
