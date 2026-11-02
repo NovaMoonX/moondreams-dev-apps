@@ -145,7 +145,8 @@ const pairedCache = new WeakMap<
 /**
  * What each coming pay's "pay these first" set asks of each bill, by bill id and then day key: the
  * day's own set, else its pay line's, else its source's. Only a fixed figure or a share of the
- * day's money is known ahead; a share of what remains or the rest of the day is left out.
+ * day's money is known ahead, counted only as far as the day's money reaches once its other
+ * pairings have theirs; a share of what remains or the rest of the day is left out.
  */
 export function getPairedByBill(
   versions: readonly OpenVersion[],
@@ -173,8 +174,8 @@ export function getPairedByBill(
     const own = overrides.get(day.dayKey);
     if (own) return own;
     const line =
-      resolveCurrentOrNext(payLines, day.payLineId, day.on)?.payload
-        .pairings ?? [];
+      resolveCurrentOrNext(payLines, day.payLineId, day.on)?.payload.pairings ??
+      [];
     if (line.length > 0 || day.sourceId === null) return line;
     return (
       resolveCurrentOrNext(sources, day.sourceId, day.on)?.payload.pairings ??
@@ -187,16 +188,24 @@ export function getPairedByBill(
       day.amount,
       'income',
     );
-    pairingsOf(day).forEach(({ targetItemId, amount }) => {
-      const cents =
+    const asks = pairingsOf(day).map(({ targetItemId, amount }) => ({
+      targetItemId,
+      cents:
         amount.kind === 'exact'
           ? amount.cents
           : amount.kind === 'percent' && amount.of === 'dayMoney'
             ? percentOf(money, amount.bps)
-            : null;
+            : null,
+    }));
+    const asked = asks.reduce((sum, ask) => sum + (ask.cents ?? 0), 0);
+    asks.forEach(({ targetItemId, cents }) => {
       if (cents === null || acc.get(targetItemId)?.[day.dayKey] !== undefined)
         return;
-      acc.set(targetItemId, { ...acc.get(targetItemId), [day.dayKey]: cents });
+      const fundable = Math.min(cents, Math.max(0, money - (asked - cents)));
+      acc.set(targetItemId, {
+        ...acc.get(targetItemId),
+        [day.dayKey]: fundable,
+      });
     });
     return acc;
   }, new Map<string, Record<string, number>>());

@@ -466,26 +466,41 @@ const getDayShares = (
   return result;
 };
 
-/** What the pays that pay a bill first take from a payment, in day order and never more than remains; the rest is left for the other pays. */
+/** What the pays that pay a bill first take from a payment, in day order and never more than remains once the pays the person set have theirs; the rest is left for the other pays. */
 const getPairedShares = (
   window: readonly IncomeDayRef[],
   totalCents: Cents,
   paired: Readonly<Record<string, Cents>> | undefined,
   fixed: Readonly<Record<string, Cents>> | undefined,
-) =>
-  window.reduce<{ left: Cents; cents: Map<string, Cents> }>(
+  pinnable: readonly IncomeDayRef[],
+) => {
+  const isPinned = (day: IncomeDayRef) =>
+    fixed !== undefined && Object.hasOwn(fixed, day.dayKey);
+  const pinned = pinnable
+    .filter(isPinned)
+    .reduce(
+      (left, day) =>
+        left - Math.min(Math.max(0, fixed?.[day.dayKey] ?? 0), left),
+      totalCents,
+    );
+  const taken = window.reduce<{ left: Cents; cents: Map<string, Cents> }>(
     (acc, day) => {
       const asked = paired?.[day.dayKey];
-      if (asked === undefined || (fixed && Object.hasOwn(fixed, day.dayKey)))
-        return acc;
+      if (asked === undefined || isPinned(day)) return acc;
       const cents = Math.min(Math.max(0, asked), acc.left);
       return {
         left: acc.left - cents,
         cents: acc.cents.set(day.dayKey, cents),
       };
     },
-    { left: totalCents, cents: new Map() },
+    { left: pinned, cents: new Map() },
   );
+  const result = {
+    left: totalCents - [...taken.cents.values()].reduce((a, b) => a + b, 0),
+    cents: taken.cents,
+  };
+  return result;
+};
 
 const isInDayOrder = (days: readonly IncomeDayRef[]) =>
   days.every((day, index) => index === 0 || days[index - 1].on <= day.on);
@@ -568,21 +583,45 @@ export function planBillPayments(
       const paid = paidByDue.get(dueOn) ?? null;
       const fundedCents = sumFunded(progress.funded);
       const left = paid ? 0 : Math.max(0, amountCents - fundedCents);
+      const window = chronological.filter(
+        (day) =>
+          chosen.has(day.dayKey) ||
+          (day.on <= dueOn &&
+            bill.paired !== undefined &&
+            Object.hasOwn(bill.paired, day.dayKey)),
+      );
+      const pairedShares = getPairedShares(
+        window,
+        left,
+        bill.paired,
+        bill.fixed,
+        days,
+      );
+      const others = days.filter((day) => !pairedShares.cents.has(day.dayKey));
       const shares =
         bill.fixed && Object.keys(bill.fixed).length > 0
-          ? getDayShares(days, left, bill.fixed, undefined)
+          ? getDayShares(others, pairedShares.left, bill.fixed, undefined)
           : allocate(
-              left,
-              days.map(() => 1),
-              days.map((day) => day.dayKey),
+              pairedShares.left,
+              others.map(() => 1),
+              others.map((day) => day.dayKey),
             );
+      const otherShares = new Map(
+        others.map((day, index) => [day.dayKey, shares[index]]),
+      );
       return {
         dueOn,
         totalCents: amountCents,
         ranged,
         parts: paid
           ? []
-          : days.map((day, index) => ({ day, cents: shares[index] })),
+          : window.map((day) => ({
+              day,
+              cents:
+                pairedShares.cents.get(day.dayKey) ??
+                otherShares.get(day.dayKey) ??
+                0,
+            })),
         fundedCents,
         fundedDays: countFundedDays(progress.funded),
         heldNowCents: getHeldNow(dueOn, fundedCents, paid),
@@ -614,6 +653,7 @@ export function planBillPayments(
       paid ? 0 : Math.max(0, amountCents - fundedCents),
       bill.paired,
       bill.fixed,
+      eligible,
     );
     const others = eligible.filter(
       (day) => !pairedShares.cents.has(day.dayKey),

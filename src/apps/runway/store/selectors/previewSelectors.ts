@@ -592,7 +592,7 @@ export function previewBillShareView(
     isRuleClean: (rule) => {
       const plan = (fundedBy: BillFundedBy) =>
         planBillPayments(
-          { ...billInput, fundedBy, fixed: undefined },
+          { ...billInput, fundedBy, fixed: undefined, paired: undefined },
           coming,
           horizon,
           stance,

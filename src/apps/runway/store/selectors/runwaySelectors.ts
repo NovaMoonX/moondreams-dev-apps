@@ -822,6 +822,9 @@ export function computeDraftView(
               (entry) => Object.keys(entry.override.billCents ?? {}).length > 0,
             )
             .map((entry) => [entry.id, entry.status, entry.override.billCents]),
+          openDays
+            .filter((entry) => entry.override.pairings !== null)
+            .map((entry) => [entry.id, entry.override.pairings]),
         ]),
       );
   const draftCache = draftCaches.get(versions) ?? new Map<string, DraftView>();

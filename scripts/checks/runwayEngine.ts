@@ -166,6 +166,7 @@ import {
 import {
   buildComingDays,
   describeDay,
+  getPairedByBill,
 } from '../../src/apps/runway/engine/comingDays.ts';
 import {
   buildCorrection,
@@ -2025,6 +2026,64 @@ const version = (
         ['pay_n19', 0],
       ],
       'a share the person set wins over the pay that pays it first',
+    );
+    assert.deepEqual(
+      sharesOf(pairedRent({ pay_n15: 120_000 }, { pay_n5: 10_000 })),
+      [
+        ['pay_n5', 10_000],
+        ['pay_n8', 0],
+        ['pay_n15', 110_000],
+        ['pay_n19', 0],
+      ],
+      'a share the person set on another pay is kept before a pairing takes the rest',
+    );
+    assert.deepEqual(
+      planBillPayments(
+        {
+          ...pairedRent({ pay_n8: 60_000 }),
+          fundedBy: { kind: 'chosen', dayKeys: ['pay_n5', 'pay_n15'] },
+        },
+        window,
+        horizon,
+      )[0].parts.map((part) => [part.day.dayKey, part.cents]),
+      [
+        ['pay_n5', 30_000],
+        ['pay_n8', 60_000],
+        ['pay_n15', 30_000],
+      ],
+      'chosen days share only what a paired pay leaves',
+    );
+    const lowPay: ComingDay = {
+      dayKey: 'pay_low',
+      payLineId: 'low',
+      sourceId: null,
+      on: utc(2026, 11, 8),
+      sourceName: null,
+      payLineName: 'Freelance',
+      amount: { lowCents: 12_000, highCents: 12_000 },
+      stanceOverride: null,
+    };
+    const pairsOn = (pairings: Pairing[]) =>
+      getPairedByBill(
+        [],
+        [{ id: 'pay_low', override: { pairings } }],
+        [lowPay],
+        'conservative',
+      );
+    const ask = (targetItemId: string, cents: number): Pairing => ({
+      targetItemId,
+      amount: { kind: 'exact', cents },
+      topUpFromAnySource: false,
+    });
+    assert.deepEqual(
+      pairsOn([ask('rent', 15_000)]).get('rent'),
+      { pay_low: 12_000 },
+      'a pairing counts only what its pay brings in',
+    );
+    assert.deepEqual(
+      pairsOn([ask('rent', 10_000), ask('water', 5_000)]).get('rent'),
+      { pay_low: 7_000 },
+      "and only what is left once the pay's other pairings have theirs",
     );
     const draftFor = (index: number, withPairing: boolean) =>
       buildDraft({
