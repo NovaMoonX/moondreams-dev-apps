@@ -192,6 +192,7 @@ interface SplitShare {
   amountLabel: string;
   isPaid: boolean;
   markedByUid: string | null;
+  paidAt: number | null;
 }
 
 interface SplitBreakdown {
@@ -224,6 +225,7 @@ function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBrea
             amountLabel: formatTotal(amounts[uid] ?? 0, amounts[uid] ?? 0, expense.currency),
             isPaid: getRepaidStatus(expense, uid).isPaid,
             markedByUid: getRepaidStatus(expense, uid).markedByUid,
+            paidAt: getRepaidStatus(expense, uid).paidAt,
           }));
 
   const perPersonLabel =
@@ -234,7 +236,7 @@ function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBrea
   const payerAmount = expense.payerUid === null ? undefined : amounts[expense.payerUid];
   const payerShare =
     customAmounts !== null && expense.payerUid !== null && payerAmount !== undefined
-      ? { uid: expense.payerUid, amountLabel: formatTotal(payerAmount, payerAmount, expense.currency), isPaid: true, markedByUid: null }
+      ? { uid: expense.payerUid, amountLabel: formatTotal(payerAmount, payerAmount, expense.currency), isPaid: true, markedByUid: null, paidAt: null }
       : null;
 
   return { perPersonLabel, shares, payerShare };

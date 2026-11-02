@@ -1,13 +1,16 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import { Check, Circle } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import DetailSheet from '@/components/DetailSheet';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useIsShortScreen } from '@/hooks/useIsShortScreen';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { formatDateTime } from '@/utils/formatUtils';
 import { LIST_SEARCH_THRESHOLD } from '@apps/waypoint/constants';
 import type { TripExpense } from '@apps/waypoint/types';
@@ -20,6 +23,7 @@ interface PaidBackShare {
   amountLabel: string;
   isPaid: boolean;
   markedByUid: string | null;
+  paidAt: number | null;
 }
 
 interface PaidBackSheetProps {
@@ -34,13 +38,31 @@ interface PaidBackSheetProps {
 }
 
 function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, memberLabel, onToggle }: PaidBackSheetProps) {
+  const { isBelow } = useMediaQuery();
+  const isShort = useIsShortScreen(599);
+  // The drawer pads its scroller by 24px, which rows would otherwise show through above a pinned band.
+  const isDrawer = isBelow('sm') || (isShort && isBelow('lg'));
   const [view, setView] = useState<'owed' | 'paid' | 'history' | null>(null);
-  const [pending, setPending] = useState<Record<string, boolean>>({});
+  const [pending, setPending] = useState<Record<string, { isPaid: boolean; at: number }>>({});
+  const [lastMark, setLastMark] = useState<{ uid: string; isPaid: boolean } | null>(null);
+  const lastMarkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlight = useRef(new Map<string, Promise<unknown>>());
   const [query, setQuery] = useState('');
   const [historyCount, setHistoryCount] = useState(HISTORY_PAGE);
   const needle = query.trim().toLowerCase();
   const matches = (uid: string) => memberLabel(uid).toLowerCase().includes(needle);
-  const shownShares = shares.map((share) => ({ ...share, isPaid: pending[share.uid] ?? share.isPaid }));
+  const shownShares = shares.map((share) => {
+    const change = pending[share.uid];
+    if (!change) {
+      return share;
+    }
+    return {
+      ...share,
+      isPaid: change.isPaid,
+      markedByUid: change.isPaid ? currentUserId : null,
+      paidAt: change.isPaid ? change.at : null,
+    };
+  });
   const owedCount = shownShares.filter((share) => !share.isPaid).length;
   const paidCount = shownShares.length - owedCount;
   const history = expense ? getRepaidHistory(expense) : [];
@@ -48,17 +70,43 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
     item.kind === 'reset' ? needle === '' || matches(item.byUid) : matches(item.debtorUid) || matches(item.entry.byUid),
   );
   const shownView = view ?? (owedCount > 0 ? 'owed' : 'paid');
-  const visibleShares = shownShares.filter((share) => matches(share.uid) && share.isPaid === (shownView === 'paid'));
+  const visibleShares = shownShares
+    .filter((share) => matches(share.uid) && share.isPaid === (shownView === 'paid'))
+    .sort((first, second) => (shownView === 'paid' ? (second.paidAt ?? 0) - (first.paidAt ?? 0) : 0));
+
+  const run = async (uid: string, nextIsPaid: boolean) => {
+    setPending((current) => ({ ...current, [uid]: { isPaid: nextIsPaid, at: Date.now() } }));
+    setLastMark({ uid, isPaid: nextIsPaid });
+    if (lastMarkTimer.current) {
+      clearTimeout(lastMarkTimer.current);
+    }
+    lastMarkTimer.current = setTimeout(() => setLastMark(null), 6000);
+    const write = onToggle(uid);
+    inFlight.current.set(uid, write);
+    try {
+      await write;
+    } finally {
+      inFlight.current.delete(uid);
+      setPending((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== uid)));
+    }
+  };
 
   const toggle = (share: PaidBackShare) => {
-    if (share.uid in pending) {
+    if (!(share.uid in pending)) {
+      void run(share.uid, !share.isPaid);
+    }
+  };
+
+  const undoLastMark = async () => {
+    if (!lastMark) {
       return;
     }
-    setPending((current) => ({ ...current, [share.uid]: !share.isPaid }));
-    void onToggle(share.uid).finally(() =>
-      setPending((current) => Object.fromEntries(Object.entries(current).filter(([uid]) => uid !== share.uid))),
-    );
+    const { uid, isPaid } = lastMark;
+    setLastMark(null);
+    await inFlight.current.get(uid)?.catch(() => undefined);
+    void run(uid, !isPaid);
   };
+
   const actorName = (uid: string) => (uid === currentUserId ? 'You' : memberLabel(uid));
 
   const getHistoryLine = (item: RepaidHistoryItem) => {
@@ -84,10 +132,11 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
             {expense.title} · {paidCount} of {shares.length} paid back. Tap a name once you&apos;ve received their
             share.
           </p>
-          <div className='bg-background sticky top-0 z-10 -mx-1 space-y-3 px-1 pb-2'>
+          <div className={join('bg-popover sticky z-10 -mx-1 space-y-3 px-1 pb-2', isDrawer ? '-top-6 -mt-6 pt-6' : 'top-0')}>
             <PillGroup
               label='Show'
               isThin
+              wrapsNarrow
               options={[
                 { value: 'owed', label: 'Still owed', detail: String(owedCount) },
                 { value: 'paid', label: 'Paid back', detail: String(paidCount) },
@@ -98,6 +147,23 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
             />
             {shares.length >= LIST_SEARCH_THRESHOLD && (
               <SearchInput value={query} onChange={setQuery} placeholder='Search people' />
+            )}
+            {lastMark && (
+              <div className='bg-muted/50 flex items-center justify-between gap-2 rounded-xl px-3 py-1 text-sm'>
+                <span className='min-w-0 truncate'>
+                  {lastMark.isPaid ? 'Marked' : 'Took back'} {memberLabel(lastMark.uid)}
+                  {lastMark.isPaid ? ' as received' : ''}
+                </span>
+                <Button
+                  type='button'
+                  variant='link'
+                  size='sm'
+                  className='h-10 shrink-0 px-0!'
+                  onClick={() => void undoLastMark()}
+                >
+                  Undo
+                </Button>
+              </div>
             )}
           </div>
           {shownView !== 'history' &&
