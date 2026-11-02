@@ -256,6 +256,7 @@ function PhotoSetPicker({
 
   const startRemoval = (id: string) => {
     commitRemoval();
+    uploads.forget(id);
     setOpenId(null);
     setHiddenIds((current) => new Set([...current, id]));
     removal.current = {

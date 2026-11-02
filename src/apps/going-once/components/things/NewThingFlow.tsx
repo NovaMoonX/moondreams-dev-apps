@@ -196,7 +196,7 @@ function ThingForm({
       await ensureCreated({});
       return dispatch(addItemPhoto({ saleId, itemId, uid, file })).unwrap();
     },
-    photoUrls.flatMap((photo) => (photo.url === null ? [] : [photo.id])),
+    (item?.photos ?? []).map((photo) => photo.id),
   );
 
   const photoCount = (item?.photos.length ?? 0) + uploads.uploads.length;

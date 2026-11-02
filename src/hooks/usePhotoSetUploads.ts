@@ -22,7 +22,7 @@ const UNREADABLE_PHOTO =
  * Shrinks each picked photo on the device (the `listing` use) and hands it to `onAdd`, so the state outlives the
  * picker's screen: a photo still saving when the person moves on finishes in the background. Photos shrink side by
  * side but are handed over in pick order. `onAdd` returns the saved photo's id and throws a readable message when it
- * can't save; a saved upload keeps showing until its id is among `listedIds`, so its thumb never blinks.
+ * can't save; a saved upload keeps showing until its id is among `listedIds`, so the thumb never blinks.
  */
 export function usePhotoSetUploads(
   onAdd: (file: File) => Promise<string>,
@@ -140,11 +140,22 @@ export function usePhotoSetUploads(
 
   const dismiss = useCallback((key: string) => drop([key]), [drop]);
 
+  /** Forgets the saved upload behind a photo the record is losing, so it never comes back once the record drops it. */
+  const forget = useCallback(
+    (photoId: string) =>
+      drop(
+        uploads
+          .filter((upload) => upload.photoId === photoId)
+          .map((upload) => upload.key),
+      ),
+    [uploads, drop],
+  );
+
   const shown = uploads.filter(
     (upload) => upload.photoId === null || !listedIds.includes(upload.photoId),
   );
 
-  return { uploads: shown, add, retry, dismiss };
+  return { uploads: shown, add, retry, dismiss, forget };
 }
 
 export type PhotoSetUploads = ReturnType<typeof usePhotoSetUploads>;
