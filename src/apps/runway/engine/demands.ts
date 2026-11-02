@@ -564,6 +564,18 @@ export function planBillPayments(
           stance: billStance,
           isOwnStance: Boolean(bill.stanceOverride),
         };
+  const getHeld = (
+    dueOn: DateOnly,
+    fundedCents: Cents,
+    paid: PaidPayment | null,
+  ) => {
+    const heldNowCents = getHeldNow(dueOn, fundedCents, paid);
+    const heldMostCents =
+      ranged === null
+        ? heldNowCents
+        : getHeldNow(dueOn, fundedCents, paid, Number.MAX_SAFE_INTEGER);
+    return { heldNowCents, heldMostCents };
+  };
   const dues = occurrences(
     bill.schedule,
     bill.ending,
@@ -627,13 +639,7 @@ export function planBillPayments(
             })),
         fundedCents,
         fundedDays: countFundedDays(progress.funded),
-        heldNowCents: getHeldNow(dueOn, fundedCents, paid),
-        heldMostCents: getHeldNow(
-          dueOn,
-          fundedCents,
-          paid,
-          Number.MAX_SAFE_INTEGER,
-        ),
+        ...getHeld(dueOn, fundedCents, paid),
         paid,
       };
     });
@@ -696,13 +702,7 @@ export function planBillPayments(
             })),
       fundedCents,
       fundedDays: countFundedDays(confirmed),
-      heldNowCents: getHeldNow(dueOn, fundedCents, paid),
-      heldMostCents: getHeldNow(
-        dueOn,
-        fundedCents,
-        paid,
-        Number.MAX_SAFE_INTEGER,
-      ),
+      ...getHeld(dueOn, fundedCents, paid),
       paid,
     };
   });
