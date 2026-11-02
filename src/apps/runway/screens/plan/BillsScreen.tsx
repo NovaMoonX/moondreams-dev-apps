@@ -21,6 +21,10 @@ import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
 import PlanTotal from '@apps/runway/components/PlanTotal';
+import {
+  isCountedAt,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import UndatedBillsRow from '@apps/runway/components/UndatedBillsRow';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import GroupHeading from '@apps/runway/components/GroupHeading';
@@ -99,10 +103,15 @@ function BillsScreen() {
     `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
       .toLowerCase()
       .includes(needle);
-  const total = usePlanTotals(today).bills;
-  const totalFigure = describePlanTotal({ kind: 'monthly', total });
+  const { dial } = usePriorityDial();
+  const total = usePlanTotals(today, dial).bills;
+  const totalFigure = describePlanTotal(
+    { kind: 'monthly', total },
+    dial,
+    bills.length > 0,
+  );
   const visible = listed.filter(isShown);
-  const figuresByGroup = useGroupFigures(today);
+  const figuresByGroup = useGroupFigures(today, dial);
   const sections = figuresByGroup
     .map((figures) => ({
       figures,
@@ -156,6 +165,7 @@ function BillsScreen() {
                   planStance={stance}
                   today={today}
                   onOpen={() => setOpenBillId(item.id)}
+                  isFaded={!isCountedAt(payload.priority, dial)}
                   isOutsideTotal={
                     groupId !== null && payload.timing.schedule.kind === 'once'
                   }
@@ -261,6 +271,7 @@ function BillsScreen() {
           isLoaded && totalFigure ? (
             <PlanTotal
               figure={totalFigure}
+              dial={dial}
               help={
                 <GroupTotalHelp
                   total={total}
@@ -283,6 +294,7 @@ function BillsScreen() {
         <GroupSheet
           groupId={openGroupId}
           today={today}
+          dial={dial}
           onClose={() => setOpenGroupId(null)}
         />
       )}

@@ -27,6 +27,7 @@ interface BillRowProps {
   detailOverride?: string | null;
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
+  isFaded?: boolean;
   onOpen?: () => void;
 }
 
@@ -73,6 +74,7 @@ function BillRow({
   detailOverride = null,
   reorder,
   isHighlighted = false,
+  isFaded = false,
   onOpen,
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
@@ -94,6 +96,7 @@ function BillRow({
       onOpen={reorder ? undefined : onOpen}
       reorder={reorder}
       isHighlighted={isHighlighted}
+      isFaded={isFaded}
     />
   );
 }

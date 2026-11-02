@@ -28,6 +28,7 @@ import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { getDueCards } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
+import PrioritiesNudge from '@apps/runway/components/PrioritiesNudge';
 import TrackInviteCard from '@apps/runway/components/TrackInviteCard';
 import HomeCards from '@apps/runway/screens/home/HomeCards';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -184,6 +185,7 @@ function HomeScreen() {
           onPickUpPurchase={() => setIsAddingPurchase(true)}
         />
       )}
+      <PrioritiesNudge />
       <TrackInviteCard />
       {isSetupOpen && (
         <EmptyCard
