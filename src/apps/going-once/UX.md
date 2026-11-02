@@ -166,7 +166,7 @@ Everything below has its rule in "Screens" but no board and no spec board.
 
 | Component | Lives in | Does |
 |---|---|---|
-| `PhotoSetPicker` | `src/components/forms` | Several photos for one record: a camera loop, a library multi-pick, cover first, Make cover / Move earlier / Move later / Remove with undo, a count cap. Each photo goes through `useImageUpload`. |
+| `PhotoSetPicker` | `src/components/forms` | Several photos for one record: a camera loop, a library multi-pick, cover first, Make cover / Move earlier / Move later / Remove with undo, a count cap. Each photo is shrunk to the listing size on the device and saved on its own; `usePhotoSetUploads` holds those uploads in the screen that owns the record, so they outlive the picker's question. |
 | `PhotoStrip` | `src/components` | A sideways snap row that peeks the next photo, shows "1 / 5" and opens `ImageViewer`. |
 | `shareOrDownloadFiles` | `src/utils/fileUtils.ts` (technical's name) | Hands prefetched files to the share sheet, otherwise downloads them, and reports which it did. |
 | `PermissionCapsule` | `src/components` | The quiet "Turn on" capsule plus its explainer modal, from `product.md` "An opt-in is offered where the need starts". Pinch's timer capsule moves onto it when touched. |

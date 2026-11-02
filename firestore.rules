@@ -88,6 +88,11 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)).data.members;
     }
 
+    function isSaleMember(saleId) {
+      return request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/apps/going-once/sales/$(saleId)).data.members;
+    }
+
     // Trips are judged by calendar day, and `endDate` is the UTC midnight that starts the last day.
     function isTripActive(trip) {
       return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate + 86400000;
@@ -344,6 +349,14 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.members == [request.auth.uid];
       allow update, delete: if false;
+    }
+
+    // A thing is read and written by the sale's members, judged by the sale in its path and never a field of the thing. Deleting arrives with its issue.
+    match /apps/going-once/sales/{saleId}/items/{itemId} {
+      allow read: if isSaleMember(saleId);
+      allow create: if isSaleMember(saleId) && isCreatedByMe();
+      allow update: if isSaleMember(saleId) && isCreatedByKept();
+      allow delete: if false;
     }
 
     // --- App: waypoint ---

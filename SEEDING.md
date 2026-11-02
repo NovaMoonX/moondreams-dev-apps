@@ -137,7 +137,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run seed:a-list`                            | Upsert core data and A-List Tracker fixtures.                                                    |
 | `npm run seed:pinch`                             | Upsert core data and Pinch kitchen fixtures.                                                     |
 | `npm run seed:runway`                            | Upsert core data, Alex's Runway plan (Plan) and Jamie's (Track), income and wrapped keys.        |
-| `npm run seed:going-once`                        | Upsert core data, Maya's "Fall clear-out" sale for Going Once, and Theo's account with no sale.  |
+| `npm run seed:going-once`                        | Upsert core data, Maya's "Fall clear-out" sale and its 14 things for Going Once, and Theo's account with no sale.  |
 | `npm run seed:pinch-scale`                       | Upsert core data and Taylor's oversized "Big Kitchen (scale test)" for Pinch performance checks.   |
 | `npm run seed:runway-scale`                      | Upsert core data and Morgan's "Five-year plan (scale test)" for Runway performance checks.         |
 | `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
@@ -212,7 +212,7 @@ and a Dune IMAX showing entered as an all-in $21.39 total. Two planned showings 
 without an answer (Midnight Matinee four days ago and Hometown Film Fest Shorts yesterday),
 so the Seen prompt opens on load; The Matrix and both Dune viewings carry star ratings.
 
-`going-once` writes Maya's sale at `apps/going-once/sales/seed-going-once-fall-clear-out` ("Fall clear-out", pickup area "Capitol Hill, Seattle", note for buyers "Evenings and weekends. Cash or Venmo.", Maya as seller and only member), 1 Firestore document. Theo (`seed-going-once-coseller`) has no sale, so signing in as him shows Going Once's first run; he is added to Maya's sale by the co-seller issue.
+`going-once` writes Maya's sale at `apps/going-once/sales/seed-going-once-fall-clear-out` ("Fall clear-out", pickup area "Capitol Hill, Seattle", note for buyers "Evenings and weekends. Cash or Venmo.", Maya as seller and only member) and its 14 things from `canvas.md` "Example data" (Gray sofa to Desk chair, 54 photos in all, each a small solid-colour JPEG uploaded to the Storage emulator at `apps/going-once/sales/{saleId}/items/{itemId}/{photoId}.jpg`; every one is Available for now, since statuses arrive with their issue; Bluetooth speaker has no price so it reads Not listed yet; Gray sofa, Road bike, Oak desk and Cast iron pan carry floor prices), 15 Firestore documents and 54 Storage files (a seed run without the Storage emulator warns and leaves the photos unreadable). Theo (`seed-going-once-coseller`) has no sale, so signing in as him shows Going Once's first run; he is added to Maya's sale by the co-seller issue.
 
 To add a main app or app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its

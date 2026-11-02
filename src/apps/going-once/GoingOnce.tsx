@@ -12,6 +12,7 @@ import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
+import ItemsSection from '@apps/going-once/components/things/ItemsSection';
 import SaleFormSheet from '@apps/going-once/components/sales/SaleFormSheet';
 import SalesList from '@apps/going-once/components/sales/SalesList';
 import {
@@ -35,11 +36,10 @@ const TAB_ICONS: Record<GoingOnceTab, ReactNode> = {
   sale: <Store className='h-5 w-5' />,
 };
 
-const TAB_PLACEHOLDERS: Record<GoingOnceTab, { icon: string; text: string }> = {
-  things: {
-    icon: '🏷️',
-    text: 'Add your first thing: photos first, then a name and a price.',
-  },
+const TAB_PLACEHOLDERS: Record<
+  Exclude<GoingOnceTab, 'things'>,
+  { icon: string; text: string }
+> = {
   inbox: {
     icon: '📬',
     text: 'When someone is interested in a thing, their message will land here.',
@@ -148,8 +148,6 @@ function GoingOnce() {
     );
   }
 
-  const placeholder = TAB_PLACEHOLDERS[activeTab];
-
   return (
     <>
       {sale ? (
@@ -179,7 +177,13 @@ function GoingOnce() {
                 )}
               </div>
             </header>
-            <EmptyCard icon={placeholder.icon}>{placeholder.text}</EmptyCard>
+            {activeTab === 'things' ? (
+              <ItemsSection saleId={sale.id} uid={user.uid} />
+            ) : (
+              <EmptyCard icon={TAB_PLACEHOLDERS[activeTab].icon}>
+                {TAB_PLACEHOLDERS[activeTab].text}
+              </EmptyCard>
+            )}
           </div>
           <SaleTabs value={activeTab} onChange={showTab} />
         </div>

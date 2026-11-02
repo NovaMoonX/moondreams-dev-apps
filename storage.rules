@@ -116,6 +116,23 @@ service firebase.storage {
       allow delete: if isKitchenOwner();
     }
 
+    // A thing's photo, at listing size, read and written by the members of the sale it belongs to (mirrors apps/going-once/sales/{saleId}/items/{itemId}).
+    match /apps/going-once/sales/{saleId}/items/{itemId}/{fileName} {
+      function isSaleMember() {
+        return request.auth != null
+          && request.auth.uid in firestore.get(
+            /databases/(default)/documents/apps/going-once/sales/$(saleId)
+          ).data.members;
+      }
+
+      allow read: if isSaleMember();
+      allow create: if isSaleMember()
+        && fileName.matches('^[A-Za-z0-9-]{8,40}[.]jpg$')
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+      allow delete: if isSaleMember();
+    }
+
     match /waypoint/trips/{tripId}/cover/{fileName} {
       function isTripMember() {
         return request.auth != null
