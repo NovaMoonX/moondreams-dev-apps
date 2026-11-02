@@ -96,6 +96,7 @@ function EnvelopesScreen() {
           pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
           today={today}
           isFaded={!isCountedAt(version.payload.priority, dial)}
+          dial={dial}
         />
       ))}
     </ul>

@@ -74,6 +74,7 @@ const getDayOnlyBlocker = (
   const allowed = {
     ...own,
     funding: next.funding,
+    extras: next.extras,
     priority: next.priority,
     orderIndex: next.orderIndex,
   };

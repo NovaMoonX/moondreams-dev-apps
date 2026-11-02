@@ -7,6 +7,8 @@ import { formatDateUTC } from '@/utils/formatUtils';
 
 import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
+import { getExtras } from '@apps/runway/engine/parts';
+import { applyMove, type PriorityMove } from '@apps/runway/engine/priorities';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
 import { DAY_MS } from '@apps/runway/engine/dates';
@@ -31,7 +33,6 @@ import type {
   PayLineSealed,
   PlanItemDoc,
   PlanVersionDoc,
-  Priority,
   RunwayEncryption,
   Schedule,
   SourceSealed,
@@ -182,7 +183,7 @@ export async function createEnvelope(
     ? { ...draftEnvelope, groupId: groupDocs.groupId }
     : draftEnvelope;
   const changePayload: ChangeSealed = {
-    summary: `Added ${envelope.name}, ${describeFunding(envelope.funding)}.`,
+    summary: `Added ${envelope.name}, ${describeFunding(envelope.funding, getExtras(envelope))}.`,
   };
 
   const [envelopeSealed, changeSealed] = await Promise.all([
@@ -388,7 +389,7 @@ export async function createGoal(
   const dateText =
     goal.targetDate === null ? '' : ` by ${formatDateUTC(goal.targetDate)}`;
   const changePayload: ChangeSealed = {
-    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding)}.`,
+    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding, getExtras(goal))}.`,
   };
 
   const [goalSealed, changeSealed] = await Promise.all([
@@ -532,14 +533,8 @@ export async function changeItem(
 const MAX_REORDER_WRITES = 450;
 
 export interface ReorderItemsInput {
-  moves: {
-    itemId: string;
-    kind: 'bill' | 'envelope' | 'goal';
-    /** The stretches from today on that each keep their own payload; only the tier and rank change. */
-    segments: VersionStretch<BillSealed | EnvelopeSealed | GoalSealed>[];
-    priority: Priority;
-    orderIndex: number;
-  }[];
+  /** The stretches from today on each keep their own payload; only tiers and ranks change. */
+  moves: PriorityMove<BillSealed | EnvelopeSealed | GoalSealed>[];
   summary: string;
   effectiveFrom: number;
 }
@@ -566,14 +561,7 @@ export async function reorderItems(
   const [changeSealed, ...versionsSealed] = await Promise.all([
     sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
     ...writes.map(({ move, segment }) =>
-      sealJson(
-        {
-          ...segment.payload,
-          priority: move.priority,
-          orderIndex: move.orderIndex,
-        },
-        encryption,
-      ),
+      sealJson(applyMove(segment.payload, move), encryption),
     ),
   ]);
   const change: ChangeDoc = {
