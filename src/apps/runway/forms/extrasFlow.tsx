@@ -126,48 +126,56 @@ export function buildExtrasSteps({
   priority: Priority | null;
   set: (patch: Partial<ExtrasFormData>) => void;
 }): QuestionStep[] {
-  if (!canAskForExtras(data, priority) || priority === null) {
-    const typed = TIERS_BELOW.must.flatMap((tier): PriorityExtra[] => {
+  if (priority === null) return [];
+  const isAsking = canAskForExtras(data, priority);
+  const tiers = isAsking ? TIERS_BELOW[priority] : [];
+  const toExtras = (list: readonly ExtraTier[]) =>
+    list.flatMap((tier): PriorityExtra[] => {
       const cents = parseMoneyToCents(data.extras[tier]) ?? 0;
-      const isKept = priority !== null && TIERS_BELOW[priority].includes(tier);
-      return cents > 0 && !isKept ? [{ tier, cents, orderIndex: 0 }] : [];
+      return cents > 0 ? [{ tier, cents, orderIndex: 0 }] : [];
     });
-    if (typed.length === 0 || priority === null) return [];
-    const why =
-      priority === 'want'
-        ? FORM_FLOW_WORDS.extrasDroppedWant
-        : FORM_FLOW_WORDS.extrasDroppedAmount;
-    const extras = describeExtras(typed, formatCentsShort).slice(2);
-    return [
-      {
-        id: 'extras',
-        title: FORM_FLOW_WORDS.extrasTitle,
-        summaryLabel: FORM_FLOW_WORDS.extras,
-        summaryValue: FORM_FLOW_WORDS.extrasDropped(extras, why),
-        isAnswered: true,
-        isPreAnswered: true,
-        render: () => (
-          <p className='text-muted-foreground text-sm'>
-            {FORM_FLOW_WORDS.extrasDropped(extras, why)}
-          </p>
-        ),
-      },
-    ];
+  const chosen = toExtras(tiers);
+  const dropped = toExtras(
+    TIERS_BELOW.must.filter((tier) => !tiers.includes(tier)),
+  );
+  const droppedNote =
+    dropped.length === 0
+      ? null
+      : FORM_FLOW_WORDS.extrasDropped(
+          describeExtras(dropped, formatCentsShort).slice(2),
+          isAsking || priority !== 'want'
+            ? isAsking
+              ? FORM_FLOW_WORDS.extrasDroppedLevel
+              : FORM_FLOW_WORDS.extrasDroppedAmount
+            : FORM_FLOW_WORDS.extrasDroppedWant,
+        );
+  if (!isAsking) {
+    return droppedNote === null
+      ? []
+      : [
+          {
+            id: 'extras',
+            title: FORM_FLOW_WORDS.extrasTitle,
+            summaryLabel: FORM_FLOW_WORDS.extras,
+            summaryValue: droppedNote,
+            isAnswered: true,
+            isPreAnswered: true,
+            render: () => (
+              <p className='text-muted-foreground text-sm'>{droppedNote}</p>
+            ),
+          },
+        ];
   }
-  const tiers = TIERS_BELOW[priority];
-  const chosen = tiers.flatMap((tier): PriorityExtra[] => {
-    const cents = parseMoneyToCents(data.extras[tier]) ?? 0;
-    return cents > 0 ? [{ tier, cents, orderIndex: 0 }] : [];
-  });
   return [
     {
       id: 'extras',
       title: FORM_FLOW_WORDS.extrasTitle,
       summaryLabel: FORM_FLOW_WORDS.extras,
       summaryValue:
-        chosen.length === 0
+        droppedNote ??
+        (chosen.length === 0
           ? FORM_FLOW_WORDS.noExtras
-          : describeExtras(chosen, formatCentsShort).slice(2),
+          : describeExtras(chosen, formatCentsShort).slice(2)),
       isAnswered: !tiers.some((tier) => isBadAmount(data.extras[tier])),
       blocker: FORM_FLOW_WORDS.badAmount,
       isPreAnswered: true,
@@ -185,7 +193,7 @@ export function buildExtrasSteps({
             />
           ))}
           <p className='text-muted-foreground text-sm'>
-            {FORM_FLOW_WORDS.extrasHint}
+            {droppedNote ?? FORM_FLOW_WORDS.extrasHint}
           </p>
         </div>
       ),

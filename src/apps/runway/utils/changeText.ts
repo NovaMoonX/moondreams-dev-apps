@@ -29,8 +29,16 @@ export type ItemPayload =
 /** The name of a group by its id, from the plan's groups. */
 export type GroupNamer = (groupId: string) => string;
 
+/** Key order never counts: a payload rebuilt with a field in another place is the same payload. */
+const sortKeys = (_key: string, value: unknown) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+      )
+    : value;
+
 const same = (a: unknown, b: unknown) =>
-  JSON.stringify(a) === JSON.stringify(b);
+  JSON.stringify(a, sortKeys) === JSON.stringify(b, sortKeys);
 
 type Part = [label: string, before: string, after: string] | null;
 

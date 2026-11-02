@@ -6,6 +6,7 @@ import {
   describeBillRepeat,
   describeBillTiming,
 } from '@apps/runway/utils/billText';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
 import type {
   BillSealed,
@@ -138,7 +139,7 @@ export const toEnvelopeRow = (
   name: envelope.name,
   emoji: envelope.emoji,
   groupId: envelope.groupId,
-  line: describeFundingShort(envelope.funding),
+  line: describeFundingShort(envelope.funding, getExtras(envelope)),
   amount: null,
 });
 
@@ -148,7 +149,7 @@ export const toGoalRow = (id: string, goal: GoalSealed): StartRow => ({
   emoji: goal.emoji,
   line:
     goal.targetDate === null
-      ? describeFundingShort(goal.funding)
+      ? describeFundingShort(goal.funding, getExtras(goal))
       : `By ${formatDateShortUTC(goal.targetDate)}`,
   amount: formatCentsShort(goal.targetCents),
 });

@@ -20,7 +20,8 @@ import { useAppSelector } from '@/store';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { getExtras } from '@apps/runway/engine/parts';
 import {
   GROUP_WORDS,
   PRIORITY_DIAL_WORDS,
@@ -56,6 +57,7 @@ import {
 import {
   describeCadenceLine,
   describeFundingShort,
+  describeExtras,
 } from '@apps/runway/utils/fundingText';
 import { resolveGroupRename } from '@apps/runway/utils/groupChoice';
 import { getCardNamer } from '@apps/runway/utils/cardText';
@@ -441,7 +443,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         )}
                         detail={
                           funding.amount.kind === 'exact'
-                            ? describeCadenceLine(funding.cadence)
+                            ? `${describeCadenceLine(funding.cadence)}${describeExtras(getExtras(version.payload), formatCentsShort)}`
                             : describeFundingShort(funding)
                         }
                         figure={

@@ -1468,6 +1468,7 @@ export const FORM_FLOW_WORDS = {
   extrasDropped: (extras: string, why: string) =>
     `${why}, so ${extras} comes off when you save.`,
   extrasDroppedWant: 'A Want has no lower level for an extra',
+  extrasDroppedLevel: "An extra sits below its item's own level",
   extrasDroppedAmount: 'Only an exact amount on a schedule can get an extra',
   extrasHint:
     'Paid after everything above it, so a short income day trims it first.',
