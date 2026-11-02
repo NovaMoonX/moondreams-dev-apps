@@ -14,12 +14,14 @@ import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
+import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
   BILL_WORDS,
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
   CARD_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PAID_AMOUNT_WORDS,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -37,9 +39,9 @@ import {
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import type { RecordLine } from '@apps/runway/types';
+import type { Cents, RecordLine } from '@apps/runway/types';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
+import { needsPaidAmount, useBillPaid } from '@apps/runway/hooks/useBillPaid';
 import {
   getBillCardName,
   getCardName,
@@ -84,16 +86,24 @@ function ChecklistBillRow({
   const settled = payment ? paid.isPaid : isDone;
   const isChecked = pending ?? settled;
 
-  const toggle = async (next: boolean) => {
+  const [isAsking, setIsAsking] = useState(false);
+
+  /** Resolves true once the tick is written; a bill that varies first asks what it came to. */
+  const toggle = async (next: boolean, amountCents?: Cents) => {
     if (!payment) {
       onDone(next);
-      return;
+      return true;
     }
-    if (!paid.isReady || paid.isBusy || next === paid.isPaid) return;
+    if (!paid.isReady || paid.isBusy || next === paid.isPaid) return false;
+    if (next && amountCents === undefined && paid.needsAmount) {
+      setIsAsking(true);
+      return false;
+    }
+    const paidCents = payment.paid?.amountCents;
     setPending(next);
-    const isWritten = next ? await paid.mark() : await paid.undo();
+    const isWritten = next ? await paid.mark(amountCents) : await paid.undo();
     setPending(null);
-    if (!isWritten) return;
+    if (!isWritten) return false;
     const state = store.getState();
     const cardName =
       selectLevel(state) === 'track'
@@ -114,9 +124,10 @@ function ChecklistBillRow({
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,
         onClick: () =>
-          void (next ? latest.current.undo() : latest.current.mark()),
+          void (next ? latest.current.undo() : latest.current.mark(paidCents)),
       },
     });
+    return true;
   };
 
   return (
@@ -144,6 +155,14 @@ function ChecklistBillRow({
           onMarked={() => onDone(true)}
           onUndone={() => onDone(false)}
           onClose={() => setIsOpen(false)}
+        />
+      )}
+      {isAsking && payment && (
+        <PaidAmountSheet
+          billName={line.name}
+          payment={payment}
+          onMark={(cents) => toggle(true, cents)}
+          onClose={() => setIsAsking(false)}
         />
       )}
     </>
@@ -221,15 +240,30 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
       });
       return;
     }
-    const unpaid = ready.flatMap((row) =>
-      row.payment !== null && row.payment.paid === null
-        ? [{ billId: row.line.itemId, payment: row.payment }]
-        : [],
+    const open = ready.filter(
+      (row) => row.payment !== null && row.payment.paid === null,
+    );
+    const varying = open.filter((row) => needsPaidAmount(row.payment));
+    const unpaid = open.flatMap((row) =>
+      row.payment === null || needsPaidAmount(row.payment)
+        ? []
+        : [{ billId: row.line.itemId, payment: row.payment }],
     );
     const lineIds = ready
-      .filter((row) => !done.has(row.line.lineId))
+      .filter(
+        (row) => !done.has(row.line.lineId) && !needsPaidAmount(row.payment),
+      )
       .map((row) => row.line.lineId);
+    const varyingNote =
+      varying.length === 0
+        ? undefined
+        : PAID_AMOUNT_WORDS.leftForTick(varying.map((row) => row.line.name));
     const dayLines = { dayId: day.dayKey, lineIds };
+    if (varyingNote && unpaid.length === 0 && lineIds.length === 0) {
+      setMarkTries((count) => count + 1);
+      addToast({ title: varyingNote, type: 'info' });
+      return;
+    }
     isMarkingRef.current = true;
     setIsMarkingAll(true);
     try {
@@ -263,9 +297,14 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
             ? CHECKLIST_R3_WORDS.nothingToMark
             : CHECKLIST_R3_WORDS.markedAllPaid(written.length),
         description:
-          chargedCards.length === 0
-            ? undefined
-            : CARD_WORDS.markedAllWith(chargedCards.join(', ')),
+          [
+            chargedCards.length === 0
+              ? undefined
+              : CARD_WORDS.markedAllWith(chargedCards.join(', ')),
+            varyingNote,
+          ]
+            .filter(Boolean)
+            .join('. ') || undefined,
         type: 'success',
         action:
           written.length === 0 && lineIds.length === 0

@@ -70,6 +70,7 @@ import {
   type DraftView,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, Stance } from '@apps/runway/types';
+import { formatRange } from '@apps/runway/utils/rangeText';
 
 interface ConfirmFormData {
   amount: string;
@@ -115,8 +116,9 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const balances = useAppSelector(selectBalances);
   const emojiOf = useRecordedEmojiResolver();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const isVarying = day.amount.lowCents !== day.amount.highCents;
   const initialData: ConfirmFormData = {
-    amount: centsToInputValue(draft.moneyCents),
+    amount: isVarying ? '' : centsToInputValue(draft.moneyCents),
     arrivedOn: toDateInputValue(today),
     note: '',
   };
@@ -408,7 +410,15 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           label={CONFIRM_WORDS.amount}
           value={formData.amount}
           onChange={setAmount}
+          autoFocus={isVarying}
           disabled={isSaving}
+          hint={
+            isVarying && (
+              <MaskedText>
+                {CONFIRM_WORDS.variesHint(formatRange(day.amount))}
+              </MaskedText>
+            )
+          }
         />
         {getNotice()}
       </div>

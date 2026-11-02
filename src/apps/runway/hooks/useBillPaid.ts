@@ -14,6 +14,7 @@ import {
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
+import type { Cents } from '@apps/runway/types';
 import { countMarks } from '@apps/runway/engine/progress';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -35,13 +36,18 @@ const inTurn = <T>(task: () => Promise<T>): Promise<T> => {
   return next;
 };
 
-/** Records a bill's payment paid today; resolves with what it wrote, or null when the payment was already paid. */
+/** A payment whose bill varies is marked with what it came to, so it never records the planned figure. */
+export const needsPaidAmount = (payment: BillPayment | null) =>
+  payment !== null && payment.ranged !== null;
+
+/** Records a bill's payment paid today, at `amountCents` when given; resolves with what it wrote, or null when the payment was already paid. */
 export async function markPaymentPaid(
   uid: string,
   billId: string,
   billName: string,
   payment: BillPayment,
   moves: Parameters<typeof countMarks>[0],
+  amountCents: Cents = payment.totalCents,
 ) {
   const encryption = await getRunwayEncryption(uid);
   const written = await inTurn(() =>
@@ -50,7 +56,7 @@ export async function markPaymentPaid(
       billName,
       cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
       dueOn: payment.dueOn,
-      amountCents: payment.totalCents,
+      amountCents,
       fundedCents: payment.heldNowCents,
       paidOn: todayAsUtcDate(),
       marks: countMarks(moves, billId, payment.dueOn),
@@ -155,16 +161,19 @@ export function useBillPaid({
     }
   };
 
-  /** Resolves with what was written (null when the payment was already paid), or null when nothing was done. */
-  const markWritten = async (): Promise<{
+  /** Resolves with what was written (null when the payment was already paid), or null when nothing was done. A bill that varies writes only with what it came to, which the person gave in a sheet that already said what comes out of Free to Spend. */
+  const markWritten = async (
+    amountCents?: Cents,
+  ): Promise<{
     mark: WrittenPaidMark | null;
   } | null> => {
     if (!payment || payment.paid) return null;
+    if (amountCents === undefined && needsPaidAmount(payment)) return null;
     const unfundedCents = Math.max(
       0,
       payment.totalCents - payment.heldNowCents,
     );
-    if (unfundedCents > 0 && !isQuick) {
+    if (unfundedCents > 0 && !isQuick && amountCents === undefined) {
       const isConfirmed = await confirm({
         title: `Mark ${billName} paid`,
         message: `${mask(formatCents(unfundedCents))} of it is not set aside yet and comes out of Free to Spend. Later income days stop setting this payment aside.`,
@@ -179,6 +188,7 @@ export function useBillPaid({
         billName,
         payment,
         moves,
+        amountCents,
       );
       onMarked?.();
       return written;
@@ -186,7 +196,8 @@ export function useBillPaid({
     return done === null ? null : { mark: done.value };
   };
 
-  const mark = async () => (await markWritten()) !== null;
+  const mark = async (amountCents?: Cents) =>
+    (await markWritten(amountCents)) !== null;
 
   const undo = async () => {
     const done = await run(async (uid) => {
@@ -207,6 +218,7 @@ export function useBillPaid({
   const result = {
     isReady: isLedgerReady && payment !== null,
     isPaid: payment?.paid != null,
+    needsAmount: needsPaidAmount(payment),
     isBusy,
     mark,
     markWritten,

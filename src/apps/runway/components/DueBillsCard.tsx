@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -12,6 +12,7 @@ import { store, useAppSelector } from '@/store';
 import { formatDateShortUTC, formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
   CARD_WORDS,
   DUE_WORDS,
@@ -19,6 +20,7 @@ import {
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
+import type { Cents } from '@apps/runway/types';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -66,6 +68,7 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
   const name = due.name === '' ? 'A bill' : due.name;
   const isUndoing = useRef(false);
   const maskText = useMaskedText();
+  const [isAsking, setIsAsking] = useState(false);
 
   const undo = async (written: WrittenPaidMark) => {
     if (!user || isUndoing.current) return;
@@ -94,14 +97,19 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
     }
   };
 
-  const markPaid = async () => {
-    if (!paid.isReady || paid.isBusy) return;
-    const result = await paid.markWritten();
-    if (result === null) return;
+  /** Resolves true once the mark is written or was already there. */
+  const markPaid = async (amountCents?: Cents) => {
+    if (!paid.isReady || paid.isBusy) return false;
+    if (amountCents === undefined && paid.needsAmount) {
+      setIsAsking(true);
+      return false;
+    }
+    const result = await paid.markWritten(amountCents);
+    if (result === null) return false;
     const { mark: written } = result;
     if (written === null) {
       addToast({ title: DUE_WORDS.alreadyPaid(name), type: 'info' });
-      return;
+      return true;
     }
     const state = store.getState();
     const cardName =
@@ -144,6 +152,7 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
         onClick: () => void undo(written),
       },
     });
+    return true;
   };
 
   return (
@@ -189,6 +198,14 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
           {DUE_WORDS.markPaid}
         </Button>
       </span>
+      {isAsking && payment && (
+        <PaidAmountSheet
+          billName={due.name}
+          payment={payment}
+          onMark={markPaid}
+          onClose={() => setIsAsking(false)}
+        />
+      )}
     </li>
   );
 }
