@@ -855,6 +855,7 @@ export const PAY_SHARE_WORDS = {
   needsAmount: 'Enter an amount.',
   unchanged: 'Change the amount to save it.',
   save: 'Save for this pay',
+  saveCapped: (cents: string) => `Save ${cents} for this pay`,
   saveFailed: 'This did not save. Nothing was changed.',
   changedFor: 'Changed for this pay',
   backToPlan: "Back to the plan's amount",
@@ -914,7 +915,7 @@ export const PAY_SHARE_WORDS = {
   leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
   leftOutBody: 'This pay puts nothing toward it.',
   firstOnlyTitle: (name: string) => `${name} comes out of this pay first`,
-  pairedSub: 'Set in Pay these first',
+  pairedSub: (name: string) => `What this pay puts toward ${name} first`,
   firstOnlyBody: (from: string) =>
     `Its Paid from is ${from}, so what this pay puts in is set by Pay these first, not here.`,
   hiddenEffects: 'Other pays and items may move',

@@ -1315,7 +1315,9 @@ function BillFormBody({
               <QuickChange
                 step={quickStep}
                 flow={questions}
-                rowIds={['name', 'due', 'repeats']}
+                rowIds={
+                  quickStep.id === 'funding' ? [] : ['name', 'due', 'repeats']
+                }
                 after={changeSection}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}

@@ -878,7 +878,7 @@ function BillShareView({
       {!isHidden && billRows.length > 0 && (
         <ActionSection caption={PAY_SHARE_WORDS.changes}>
           {restCarrier && (
-            <p className='text-sm'>
+            <InlineNotice tone='info'>
               <MaskedText>
                 {PAY_SHARE_WORDS.carriesRest(
                   formatDateShortUTC(restCarrier.on),
@@ -887,7 +887,7 @@ function BillShareView({
                   changedView?.share.cents === 0,
                 )}
               </MaskedText>
-            </p>
+            </InlineNotice>
           )}
           <ul
             ref={cardRef}
@@ -959,7 +959,9 @@ function BillShareView({
             disabled={isSaving || blocker !== null}
             onClick={() => void save()}
           >
-            {PAY_SHARE_WORDS.save}
+            {share !== null && target !== null && target > share.maxCents
+              ? mask(PAY_SHARE_WORDS.saveCapped(formatCents(share.maxCents)))
+              : PAY_SHARE_WORDS.save}
           </Button>
         }
       />

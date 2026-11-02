@@ -333,8 +333,8 @@ function BillLineSheet({
   const paidFromAction = usePaidFromAction(line.itemId, sheetProps.today);
   const mask = useMaskedText();
   const pairedAction = onOpenFunds && {
-    label: PAY_SHARE_WORDS.action,
-    subtitle: PAY_SHARE_WORDS.pairedSub,
+    label: ITEM_SHEET_WORDS.funds,
+    subtitle: PAY_SHARE_WORDS.pairedSub(name),
     onOpen: onOpenFunds,
   };
   return (
