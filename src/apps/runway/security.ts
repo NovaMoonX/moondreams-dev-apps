@@ -93,8 +93,7 @@ export function createDraftSealer(encryption: RunwayEncryption) {
         sealed as Sealed,
         encryption,
       );
-      if (typeof draft !== 'string')
-        throw new Error('A sealed draft did not open.');
+      if (typeof draft !== 'string') throw new Error('A sealed draft did not open.');
       return draft;
     },
   };

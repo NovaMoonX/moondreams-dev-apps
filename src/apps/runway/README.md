@@ -14,7 +14,6 @@ Runway is an income-first budget planner for money that does not arrive or leave
 ## Status
 
 Built:
-
 - [x] Income with pay lines, exact or range amounts, and endings
 - [x] Bills, envelopes and goals with priorities and a planning stance
 - [x] Bills grouped under a name (Home, Subscriptions) with what they come to a month
@@ -32,7 +31,7 @@ Built:
 - [x] Move what is left in an envelope to another envelope, a goal or Free to Spend, with an Undo
 
 - [x] Check your balance: type what your bank holds and see how it compares with Runway
-      Next:
+Next:
 - [ ] Start from gross pay with taxes and deductions
 - [ ] Loans and interest on savings
 - [ ] What if: a scratch copy of the plan

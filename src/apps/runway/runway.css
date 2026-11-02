@@ -22,17 +22,9 @@ html.runway-theme {
   --color-tooltip-foreground: oklch(0.99 0.003 250);
 
   --runway-selected: var(--color-blue-700);
-  --runway-selected-soft: color-mix(
-    in oklab,
-    var(--runway-selected) 10%,
-    var(--color-background)
-  );
+  --runway-selected-soft: color-mix(in oklab, var(--runway-selected) 10%, var(--color-background));
 
-  --subview-backdrop: color-mix(
-    in oklab,
-    var(--color-primary) 14%,
-    var(--color-background)
-  );
+  --subview-backdrop: color-mix(in oklab, var(--color-primary) 14%, var(--color-background));
 }
 
 html.runway-theme.dark {
@@ -53,18 +45,10 @@ html.runway-theme.dark {
   --color-tooltip-foreground: oklch(0.2 0.02 255);
 
   --runway-selected: var(--color-blue-300);
-  --runway-selected-soft: color-mix(
-    in oklab,
-    var(--runway-selected) 16%,
-    var(--color-background)
-  );
+  --runway-selected-soft: color-mix(in oklab, var(--runway-selected) 16%, var(--color-background));
 
   --subview-backdrop-dark: oklch(0.11 0.012 255);
-  --subview-border: color-mix(
-    in oklab,
-    var(--runway-selected) 22%,
-    var(--color-border)
-  );
+  --subview-border: color-mix(in oklab, var(--runway-selected) 22%, var(--color-border));
 }
 
 /* A rounded field needs its text inset from the curve, or the first letter looks pressed against the edge. */
@@ -117,27 +101,20 @@ html.runway-theme.dark [class*='bg-muted/50']:not([class*='border-border']) {
 }
 
 /* A modal's card is capped to the screen and scrolls inside itself, so a long form never runs past the viewport with its title cut off above it. */
-html.runway-theme
-  .min-h-screen.items-center.justify-center.p-4
-  > .rounded-lg.shadow-xl {
+html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
   max-height: calc(100dvh - 2rem);
   overflow-y: auto;
 }
 
 /* On a screen tall enough for a form to fit, the card does not clip, so an open Select's list can run past its edge. */
 @media (min-height: 700px) {
-  html.runway-theme
-    .min-h-screen.items-center.justify-center.p-4
-    > .rounded-lg.shadow-xl {
+  html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
     overflow: visible;
   }
 }
 
 /* A scroller's padding insets what sticks to its bottom, so the pinned footer is pulled down over it. */
-html.runway-theme
-  .min-h-screen.items-center.justify-center.p-4
-  > .rounded-lg.shadow-xl
-  .form-footer {
+html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl .form-footer {
   bottom: -1.5rem;
   margin-bottom: -1.5rem;
   padding-bottom: 1.5rem;
@@ -152,33 +129,19 @@ html.runway-theme
 
 /* The four views drop their emoji below 360px so they stay on one line. */
 @media (max-width: 359px) {
-  html.runway-theme
-    [role='group'][aria-label='Plan sections']
-    [data-pill-emoji] {
+  html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill-emoji] {
     display: none;
   }
 }
 
 /* A warning: the warning hue for the tint and edge, a deeper amber for ink so an icon reads on the tint in light and dark. */
 html.runway-theme {
-  --runway-warning-soft: color-mix(
-    in oklab,
-    var(--color-warning) 16%,
-    var(--color-background)
-  );
-  --runway-warning-edge: color-mix(
-    in oklab,
-    var(--color-warning) 50%,
-    var(--color-border)
-  );
+  --runway-warning-soft: color-mix(in oklab, var(--color-warning) 16%, var(--color-background));
+  --runway-warning-edge: color-mix(in oklab, var(--color-warning) 50%, var(--color-border));
   --runway-warning-ink: oklch(0.46 0.1 65);
 }
 
 html.runway-theme.dark {
-  --runway-warning-soft: color-mix(
-    in oklab,
-    var(--color-warning) 14%,
-    var(--color-background)
-  );
+  --runway-warning-soft: color-mix(in oklab, var(--color-warning) 14%, var(--color-background));
   --runway-warning-ink: var(--color-amber-300);
 }
