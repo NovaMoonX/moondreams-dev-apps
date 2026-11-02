@@ -44,14 +44,7 @@ Every merge to `main` is a production deploy, and the app is visible from its fi
 Nothing to run for a new callable: the deploy opens it to the browser (README's "New Cloud Functions & Cloud Run invoker access"). Only if the browser still shows a CORS error, `npm run fb:invoker -- <function>`.
 
 ### 5. Project board
-Only when the issues were created without `gh` (the cloud sandbox): run from the `moondreams-dev-apps` root, as two separate code blocks, a dry run and then the real run. Re-running reuses the existing issues and only attaches them to board 3 with Status Ready and Apps set.
-```bash
-npm run issues:create:dry-run -- <id>
-```
-```bash
-npm run issues:create -- <id>
-```
-The script adds a missing "<App Name>" option to the board's Apps field itself.
+Nothing to run: the `create-issues` label put the issues on board 3. Only if that workflow failed, say why and what fixes it.
 
 ### 6. Brand assets
 Include the light and dark icon SVG sources inline in fenced `svg` blocks. Say that the logo and banner in the repo are placeholders built from them, and that the user creates the final assets.

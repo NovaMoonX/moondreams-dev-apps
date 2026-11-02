@@ -1,0 +1,76 @@
+name: Create app issues
+# The create-issues label on a PR turns every src/apps/<id>/ISSUES.md the PR
+# changes into GitHub issues on board 3 (scripts/createGithubIssues.ts). Safe to
+# re-run: existing issues are reused, so a later push only adds new ones.
+on:
+  pull_request:
+    types: [labeled, synchronize]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+concurrency:
+  # One at a time across PRs: adding an Apps option rewrites the whole list.
+  group: create-app-issues
+  cancel-in-progress: false
+jobs:
+  issues:
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'create-issues') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'create-issues')
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # bash -eo pipefail, so a failed script is not hidden by tee.
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Create the issues and put them on the board
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          if [ -z "$PROJECT_TOKEN" ]; then
+            echo "::error::PROJECT_TOKEN is not set. Add a classic token with the project scope as a repository secret."
+            exit 1
+          fi
+          apps=$(gh pr diff "$PR" --name-only | sed -nE 's#^src/apps/([^/]+)/ISSUES\.md$#\1#p' | sort -u)
+          if [ -z "$apps" ]; then
+            echo "This PR changes no src/apps/<id>/ISSUES.md; nothing to create."
+            exit 0
+          fi
+          : > "$RUNNER_TEMP/issues.log"
+          for app in $apps; do
+            echo "## $app" >> "$RUNNER_TEMP/issues.log"
+            node scripts/createGithubIssues.ts "$app" --yes | tee -a "$RUNNER_TEMP/issues.log"
+          done
+      - name: Say what was created on the PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          ACTION: ${{ github.event.action }}
+        run: |
+          log="$RUNNER_TEMP/issues.log"
+          [ -f "$log" ] || exit 0
+          created=$(sed -nE 's/^Done: ([0-9]+) created.*/\1/p' "$log" | paste -sd+ | bc)
+          if [ "$ACTION" != "labeled" ] && [ "${created:-0}" -eq 0 ]; then exit 0; fi
+          {
+            echo "### Issues on the board"
+            echo
+            grep -E '^(## |Done:|  Issue [0-9]+ → #)' "$log" | sed -E 's/^  (Issue [0-9]+ → #[0-9]+)/- \1/'
+            echo
+            echo "Made by the \`create-issues\` label. Re-running is safe: existing issues are kept as they are."
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR" --body-file "$RUNNER_TEMP/comment.md"
+      - name: Keep the board's Apps backup if the run stopped
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apps-field-backup
+          path: ${{ runner.temp }}/apps-field-backup-*.json
+          if-no-files-found: ignore

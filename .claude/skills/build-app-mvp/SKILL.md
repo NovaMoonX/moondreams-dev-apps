@@ -69,9 +69,8 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
 ## Phase 1: Issues
 
 1. Make sure the label exists with the exact name. Rename a near-duplicate label rather than creating a second one, and delete strays you created.
-2. Create the issues in ISSUES.md order with `npm run issues:create -- <id> --app-name "<App Name>"` (the app isn't in `APP_REGISTRY` until issue 1 lands) (`plan-app/references/issues.md` "Creating the issues"): titles are `<App name> N: Title`, each gets its tier label and goes on board 3 with Status Ready and Apps set, and every `Issue N` becomes the real `#123`.
-   - **Without `gh`** (the cloud sandbox): create them with the MCP `issue_write` in the same title format and tier labels, write the real numbers into the bodies yourself, and give each its app label: `issue-to-board.yml` puts them on board 3 with Apps set and Status Ready once the board has the app's Apps option. A new app has none yet, so put `npm run issues:create -- <id>` in the overview comment for the owner to run once locally, which adds the option and attaches them.
-   - **If both fail**, tell the user and continue with the PRs, using "Implements Issue N of ISSUES.md" in the bodies.
+2. Create the issues by putting the **`create-issues`** label on the PR that adds `src/apps/<id>/ISSUES.md` (the plan-app docs PR, or the first PR of this build when the docs arrive with `/build-app-mvp`): `create-app-issues.yml` runs `scripts/createGithubIssues.ts`, so titles are `<App name> N: Title` (the name from the app's README heading until it is registered), each gets its tier label and goes on board 3 with Status Ready and Apps set, every `Issue N` becomes the real `#123`, and the PR gets a comment with the mapping (`plan-app/references/issues.md` "Creating the issues"). Wait for that comment; never ask the owner to run the script.
+   - **If the workflow fails** (read its log), fix what it names; a missing `PROJECT_TOKEN` is the owner's 🚩 with the steps in the pipeline's secrets section. Meanwhile continue with the PRs, using "Implements Issue N of ISSUES.md" in the bodies.
 3. From here on, refer to issues by their real numbers (`#123`) everywhere: PR bodies, commits, the status comments, `mvp-state.md`.
 4. Each issue body links its prerequisites as full issue URLs.
 

@@ -11,9 +11,10 @@ export interface SelectField {
   id: string;
   name: string;
   options: { id: string; name: string }[];
+  isMulti?: boolean;
 }
 
-/** The option of a single-select field whose name matches, ignoring case and spacing. */
+/** The option of a select field whose name matches, ignoring case and spacing. */
 export function findOption(
   field: SelectField | undefined,
   name: string,

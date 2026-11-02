@@ -23,7 +23,7 @@ Product, design and technical are not phases. A data model shapes what a screen 
 
 Each **round**:
 
-1. **Brief.** Write `planning/<id>/BRIEF.md` in the scratchpad (never in the repo until approved): the idea in the owner's words, every owner answer so far, and `decisions.md` (the running log: one line per decision, who made it, why).
+1. **Brief.** Write `planning/<id>/BRIEF.md` in the scratchpad (never in the repo until approved): the idea in the owner's words, the app's people as soon as they are known (each role, who plays it, what they come to do; the owner is often one of them, and the round-1 brief confirms the list with the owner before any journey is drafted, since every track plans for these people), every owner answer so far, and `decisions.md` (the running log: one line per decision, who made it, why).
 2. **Draft in parallel.** Spawn `product-planner`, `design-planner` and `tech-planner` together (one message, three Agent calls, `run_in_background: true`). Each reads the brief, its own reference file and the current drafts of all three tracks, revises its own files, and returns:
    - **Changed**: what it drafted or revised, one line each;
    - **Needs from the others**: a constraint or question for another track ("tech: can a stay's check-in be trip-relative?");
@@ -35,8 +35,8 @@ Each **round**:
    - **Where the team disagreed** and what you decided.
    - **Next round** covers: one line.
 
-   The owner approves the round brief, never the full docs. They can open any doc when they want the detail, and the docs say which round last changed each section.
-5. Repeat until no track has a question for the owner and the docs agree. Typical rounds: (1) vision, journeys, core entities; (2) screens and data in detail; (3) edge states, rules, backend surface; (4) roadmap.
+   The owner approves the round brief, never the full docs. They can open any doc when they want the detail, and the docs say which round last changed each section. Every link in the brief is one the owner can tap from the Claude app: a scratchpad path is not (owner, Going Once round 3: only the artifact opened), so the drafts go out as published pages beside the canvas, or through a document connector the host attaches.
+5. Repeat until no track has a question for the owner and the docs agree. Typical rounds: (1) vision, journeys, core entities; (2) screens and data in detail; (3) edge states, rules, backend surface; (4) roadmap. **The last round is always the owner's own review:** before approval, offer one round where the owner reads the canvas and docs and sends changes, and never commit the docs or create issues until they say approve (owner, Going Once).
 
 Keep the owner's load low in every round:
 - Never ask what the conventions, the code or a sensible default already answer; say the default in the round brief instead.
@@ -51,9 +51,9 @@ The design track owns the canvas (see `references/design.md` for its structure a
 ## Finishing
 
 When the owner approves the last round:
-1. Open a docs PR that adds `src/apps/<id>/` with `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md` and `ISSUES.md`, and the app's rules file (`.claude/rules/<id>.md`) if the plan settles its look.
-2. Create the issues: `references/issues.md` "Creating the issues" (`npm run issues:create -- <id>`; titles are `<App name> N: Title`, and every `Issue N` becomes the real `#123`).
+1. Open a docs PR that adds `src/apps/<id>/` with `README.md`, `PRODUCT.md`, `UX.md`, `TECHNICAL.md`, `ISSUES.md` and the canvas spec (`canvas.md`, which the issues cite for tokens and example data), and the app's rules file (`.claude/rules/<id>.md`) if the plan settles its look. Drop the `<!-- round N -->` markers.
+2. Create the issues by giving the docs PR the `create-issues` label: `create-app-issues.yml` runs `scripts/createGithubIssues.ts` for each `ISSUES.md` the PR changes, puts them on board 3 and comments the `Issue N → #123` list on the PR (`references/issues.md` "Creating the issues"). Nobody runs the script by hand.
 3. Any repo-wide convention the planning surfaced goes into the narrowest `docs/conventions/` file in the docs PR (`docs/conventions/pipeline.md` "The pipeline improves itself" decides one app or shared, and whether to change or propose); this app's schema and screens stay in its `TECHNICAL.md`.
-4. Hand off: the app is ready for `/build-app-mvp`.
+4. Hand off: the app is ready for `/build-app-mvp`. Recommend the owner compacts the conversation (`/compact`) or starts a fresh session before the build begins, since planning fills the context the build needs (owner, Going Once).
 
 For the repo's file layout, list the real tree (`ls`, Glob) when a plan needs it; never plan from a remembered tree.
