@@ -18,6 +18,10 @@ jobs:
       contains(github.event.pull_request.labels.*.name, 'create-issues') &&
       (github.event.action != 'labeled' || github.event.label.name == 'create-issues')
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        # bash -eo pipefail, so a failed script is not hidden by tee.
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

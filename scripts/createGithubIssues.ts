@@ -80,7 +80,7 @@ const fail = (message: string): never => {
 // The workflow's own token can't reach a user-owned board, so board calls use
 // PROJECT_TOKEN when it is set and issue calls keep the workflow's token.
 const isBoardCall = (args: string[]) =>
-  args[0] === 'project' || (args[0] === 'api' && args[1] === 'graphql');
+  args[0] === 'api' && args[1] === 'graphql';
 
 const ghEnv = (args: string[]) =>
   process.env.PROJECT_TOKEN && isBoardCall(args)
@@ -100,6 +100,52 @@ const ghJson = <T>(args: string[]): T => {
   const result = JSON.parse(gh(args)) as T;
   return result;
 };
+
+// Board calls are plain GraphQL: `gh project` can fail to resolve a user-owned
+// board with a token that has the project scope ("unknown owner type").
+const boardQuery = <T>(query: string, variables: Record<string, string | number>) => {
+  const variableArgs = Object.entries(variables).flatMap(([name, value]) =>
+    typeof value === 'number' ? ['-F', `${name}=${value}`] : ['-f', `${name}=${value}`],
+  );
+  const result = ghJson<{ data: T }>([
+    'api',
+    'graphql',
+    '-f',
+    `query=${query}`,
+    ...variableArgs,
+  ]).data;
+  return result;
+};
+
+const readProject = (login: string) => {
+  const query = `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) { id fields(first: 50) { nodes { ... on ProjectV2FieldCommon { id name } ... on ProjectV2SingleSelectField { options { id name } } } } } } }`;
+  const project =
+    boardQuery<{
+      user: {
+        projectV2: { id: string; fields: { nodes: ProjectField[] } } | null;
+      };
+    }>(query, { login, number: PROJECT_NUMBER }).user.projectV2 ??
+    fail(`${login} has no project ${PROJECT_NUMBER}.`);
+  const result = { id: project.id, fields: project.fields.nodes };
+  return result;
+};
+
+const setOption = (
+  projectId: string,
+  itemId: string,
+  fieldId: string,
+  optionId: string,
+) =>
+  boardQuery(
+    `mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) { updateProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option } }) { projectV2Item { id } } }`,
+    { project: projectId, item: itemId, field: fieldId, option: optionId },
+  );
+
+const addToProject = (projectId: string, contentId: string) =>
+  boardQuery<{ addProjectV2ItemById: { item: { id: string } } }>(
+    `mutation($project: ID!, $content: ID!) { addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } } }`,
+    { project: projectId, content: contentId },
+  ).addProjectV2ItemById.item.id;
 
 const parseRoadmap = (text: string): RoadmapIssue[] => {
   const lines = text.split('\n');
@@ -290,18 +336,12 @@ const restoreAppsValues = (backup: AppsBackup, after: SelectOption[]) => {
   );
   const failed = moved.filter(({ itemId, optionId }) => {
     try {
-      gh([
-        'project',
-        'item-edit',
-        '--id',
-        itemId,
-        '--project-id',
+      setOption(
         backup.projectId,
-        '--field-id',
+        itemId,
         backup.fieldId,
-        '--single-select-option-id',
         newIdByOld.get(optionId) ?? '',
-      ]);
+      );
       return false;
     } catch {
       return true;
@@ -452,26 +492,7 @@ const run = async () => {
     '.nameWithOwner',
   ]);
   const owner = repo.split('/')[0];
-  const projectId = gh([
-    'project',
-    'view',
-    String(PROJECT_NUMBER),
-    '--owner',
-    owner,
-    '--format',
-    'json',
-    '--jq',
-    '.id',
-  ]);
-  const fields = ghJson<{ fields: ProjectField[] }>([
-    'project',
-    'field-list',
-    String(PROJECT_NUMBER),
-    '--owner',
-    owner,
-    '--format',
-    'json',
-  ]).fields;
+  const { id: projectId, fields } = readProject(owner);
   const statusField =
     fields.find((field) => field.name === STATUS_FIELD) ??
     fail(`No "${STATUS_FIELD}" field on the board.`);
@@ -588,45 +609,21 @@ const run = async () => {
     return { issue, number, url, body: issue.body, isNew: true };
   });
 
-  created.forEach(({ url, isNew }) => {
-    const itemId = gh([
-      'project',
-      'item-add',
-      String(PROJECT_NUMBER),
-      '--owner',
-      owner,
-      '--url',
-      url,
-      '--format',
-      'json',
+  created.forEach(({ number, isNew }) => {
+    const contentId = gh([
+      'issue',
+      'view',
+      String(number),
+      '--repo',
+      repo,
+      '--json',
+      'id',
       '--jq',
       '.id',
     ]);
-    if (isNew)
-      gh([
-        'project',
-        'item-edit',
-        '--id',
-        itemId,
-        '--project-id',
-        projectId,
-        '--field-id',
-        statusField.id,
-        '--single-select-option-id',
-        statusOption.id,
-      ]);
-    gh([
-      'project',
-      'item-edit',
-      '--id',
-      itemId,
-      '--project-id',
-      projectId,
-      '--field-id',
-      apps.fieldId,
-      '--single-select-option-id',
-      apps.optionId,
-    ]);
+    const itemId = addToProject(projectId, contentId);
+    if (isNew) setOption(projectId, itemId, statusField.id, statusOption.id);
+    setOption(projectId, itemId, apps.fieldId, apps.optionId);
   });
 
   const numbersByRoadmap = new Map(
