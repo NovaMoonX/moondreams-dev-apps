@@ -826,7 +826,7 @@ function BillShareView({
 
   return (
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
-      <div className='bg-background sticky top-0 z-10 flex flex-col gap-3 pb-1'>
+      <div className='[@media(min-height:720px)]:bg-popover flex flex-col gap-3 pb-1 [@media(min-height:720px)]:sticky [@media(min-height:720px)]:top-0 [@media(min-height:720px)]:z-10'>
         <BackLink onBack={onBack} />
         <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
         <div onBlurCapture={snapToCap}>

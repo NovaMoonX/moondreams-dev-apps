@@ -342,14 +342,15 @@ function PairingsEditor({
   const getCapNote = (row: PairingRow) => {
     const need = getNeed(row.targetItemId);
     const typed = row.mode === 'exact' ? parseMoneyToCents(row.amount) : null;
-    return isHidden || need === null || typed === null || typed <= need.maxCents
-      ? null
-      : PAY_SHARE_WORDS.capped(
-          nameOf(row.targetItemId ?? ''),
-          formatCents(need.totalCents),
-          need.setAsideCents > 0 ? formatCents(need.setAsideCents) : '',
-          formatCents(need.maxCents),
-        );
+    if (need === null || typed === null || typed <= need.maxCents) return null;
+    if (isHidden)
+      return PAY_SHARE_WORDS.overCapHidden(nameOf(row.targetItemId ?? ''));
+    return PAY_SHARE_WORDS.capped(
+      nameOf(row.targetItemId ?? ''),
+      formatCents(need.totalCents),
+      need.setAsideCents > 0 ? formatCents(need.setAsideCents) : '',
+      formatCents(need.maxCents),
+    );
   };
   const editingRow =
     formData.rows.find((row) => row.key === editingKey) ?? null;

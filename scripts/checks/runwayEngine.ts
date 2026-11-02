@@ -83,6 +83,7 @@ import {
   previewBillShare,
 } from '../../src/apps/runway/engine/billShare.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
+import { hasPaysToChoose } from '../../src/apps/runway/utils/payFrom.ts';
 import {
   describePurchaseEdit,
   describePurchaseRemoval,
@@ -11586,6 +11587,31 @@ console.log('runway engine: ok');
       foreignCurrency: 'EUR',
     }),
     'Read the store, the day and 9 items. This receipt is in EUR, so type the amount in dollars.',
+  );
+}
+
+{
+  // A bill set up years ago still offers a pay to pick: payments are counted from today, not from its first due date.
+  const today = utc(2026, 11, 2);
+  const pays = [5, 20].flatMap((day) =>
+    [11, 12].map((month) => ({
+      dayKey: `pay_${month}_${day}`,
+      on: utc(2026, month, day),
+    })),
+  );
+  const oldRent: Schedule = {
+    kind: 'monthly',
+    anchor: utc(2021, 12, 22),
+    monthDays: [22],
+  };
+  assert.equal(hasPaysToChoose(pays, oldRent, today), true);
+  assert.equal(
+    hasPaysToChoose(
+      pays.filter((pay) => pay.dayKey.endsWith('_5')),
+      oldRent,
+      today,
+    ),
+    false,
   );
 }
 

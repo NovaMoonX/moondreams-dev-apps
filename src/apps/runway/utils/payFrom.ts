@@ -145,7 +145,9 @@ export function hasPaysToChoose(
     { onDate: null, afterCount: null },
     schedule.anchor ?? 0,
     addUtcMonths(today, LOOKAHEAD_MONTHS),
-  ).slice(0, 6);
+  )
+    .filter((dueOn) => dueOn >= today)
+    .slice(0, 6);
   const result = dues.some((dueOn, index) => {
     const previous = index === 0 ? -Infinity : dues[index - 1];
     return (
