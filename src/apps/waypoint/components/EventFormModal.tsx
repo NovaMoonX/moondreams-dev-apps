@@ -46,7 +46,7 @@ import TransitDetailsFields from '@apps/waypoint/components/TransitDetailsFields
 import UploadAutofill from '@apps/waypoint/components/UploadAutofill';
 import { flightToPrefill } from '@apps/waypoint/utils/bookingImport';
 import { getLiveLink, isLinkedTo } from '@apps/waypoint/utils/bookingItems';
-import { canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
+import { canChangeExpense, canEditExistingItem, hasTripRole } from '@apps/waypoint/utils/roleGuards';
 import { TODO_TRACKED_EVENT_TYPES } from '@apps/waypoint/constants';
 import {
   ACTIVITY_SETTING_LABELS,
@@ -970,7 +970,10 @@ function EventFormModal({
       (expense) => expense.tripId === trip.id && expense.linkedTo?.kind === link.kind && expense.linkedTo.id === link.id,
     );
     const removableExpenses = canDeleteExpenses
-      ? linkedExpenses.filter((expense) => Object.keys(expense.earlyPayments ?? {}).length === 0)
+      ? linkedExpenses.filter(
+          (expense) =>
+            Object.keys(expense.earlyPayments ?? {}).length === 0 && canChangeExpense(trip, currentUserId, expense),
+        )
       : [];
     return {
       todos: canDeleteTodos

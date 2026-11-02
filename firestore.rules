@@ -609,11 +609,20 @@ service cloud.firestore {
               && isEarlyPaymentAmountBounded(after[request.auth.uid])));
       }
 
+      // Once one person has paid it, it is theirs to change or delete (an Admin takes over if they have left the trip).
+      function canChangeExpense() {
+        let payerUid = resource.data.get('payerUid', null);
+        return resource.data.status == 'PAID' && payerUid != null
+          ? (isTripMemberOf(tripId) && request.auth.uid == payerUid)
+            || (!(payerUid in getTrip(tripId).members) && isTripAdminOf(tripId))
+          : isTripEditorOf(tripId);
+      }
+
       allow read: if isTripMemberOf(tripId);
       allow create: if isTripEditorOf(tripId)
         && isCreatedByMe()
         && earlyPaymentsOf(request.resource.data).size() == 0;
-      allow update: if isTripEditorOf(tripId)
+      allow update: if canChangeExpense()
         && isTripIdKept()
         && isCreatedByKept()
         && earlyPaymentsOf(request.resource.data) == earlyPaymentsOf(resource.data);
@@ -626,12 +635,17 @@ service cloud.firestore {
       allow update: if isTripMemberOf(tripId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
         && isOwnEarlyPaymentChangeValid();
+      // Linking it to an event, stay or rental leaves the money alone, so it stays open to editors.
+      allow update: if isTripEditorOf(tripId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedTo', 'dayIndex', 'lastEditedAt'])
+        && (request.resource.data.get('dayIndex', null) == resource.data.get('dayIndex', null)
+          || resource.data.get('dayIndex', null) == null);
       // An editor can take an early payment off an expense, never add or change one.
       allow update: if isTripEditorOf(tripId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
         && earlyPaymentsOf(request.resource.data).diff(earlyPaymentsOf(resource.data)).affectedKeys()
           .intersection(earlyPaymentsOf(request.resource.data).keys().toSet()).size() == 0;
-      allow delete: if isTripEditorOf(tripId) && earlyPaymentsOf(resource.data).size() == 0;
+      allow delete: if canChangeExpense() && earlyPaymentsOf(resource.data).size() == 0;
     }
 
     // Private to its owner: no one else on the trip can read or change it.

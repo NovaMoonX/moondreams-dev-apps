@@ -13,6 +13,7 @@ import { ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucid
 
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
+import LockedButton from '@/components/LockedButton';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import DetailSheet from '@/components/DetailSheet';
@@ -22,6 +23,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { canChangeExpense } from '@apps/waypoint/utils/roleGuards';
 import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -675,7 +677,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
-    ...(canAddExpenses && getResolvedExpenseAmount(expense) !== null
+    ...(canChangeExpense(trip, currentUserId, expense) && getResolvedExpenseAmount(expense) !== null
       ? [
           {
             key: 'edit-split',
@@ -685,7 +687,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
-    ...(canAddExpenses
+    ...(canChangeExpense(trip, currentUserId, expense)
       ? [
           {
             key: 'modify',
@@ -698,7 +700,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
-    ...(canAddExpenses && expense.status === 'PAID'
+    ...(canChangeExpense(trip, currentUserId, expense) && expense.status === 'PAID'
       ? [
           {
             key: 'mark-unpaid',
@@ -709,6 +711,19 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         ]
       : []),
   ];
+
+  /** The payer's name when the viewer could change expenses but this one is the payer's alone. */
+  const getLockedPayerName = (expense: TripExpense) =>
+    canAddExpenses && expense.payerUid !== null && !canChangeExpense(trip, currentUserId, expense)
+      ? memberLabel(expense.payerUid)
+      : null;
+
+  const renderPayerLock = (payerName: string) => (
+    <>
+      <p>{payerName} paid for this, so only they can change it, edit its split, mark it unpaid or delete it.</p>
+      <p>You can still mark your own share as repaid.</p>
+    </>
+  );
 
   const renderEarlyPayments = (expense: TripExpense) => {
     const entries = Object.entries(getEarlyPayments(expense));
@@ -886,11 +901,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
 
     const actions = getActions(expense);
+    const lockedPayerName = getLockedPayerName(expense);
     return (
       <li key={expense.id} className='grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 py-3'>
         {renderExpenseDetail(expense, true)}
-        {actions.length > 0 && (
+        {(actions.length > 0 || lockedPayerName !== null) && (
           <div className='col-span-2 flex flex-wrap items-start justify-end gap-2'>
+            {lockedPayerName !== null && (
+              <LockedButton size='sm' label='Modify' title={`Only ${lockedPayerName} can change this`}>
+                {renderPayerLock(lockedPayerName)}
+              </LockedButton>
+            )}
             {actions.map((action) => (
               <Button
                 key={action.key}
@@ -911,6 +932,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const detailExpense = expenses.find((expense) => expense.id === detailExpenseId);
+  const detailLockedPayerName = detailExpense ? getLockedPayerName(detailExpense) : null;
 
   const renderClusters = (items: TripExpense[]) =>
     clusterByGroup(items).map((cluster, index) => {
@@ -1328,7 +1350,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         initialExpense={editingExpense ?? undefined}
         currentUserId={currentUserId}
         initialAudience={newExpenseAudience}
-        canShare={canAddExpenses}
+        canShare={canAddExpenses || editingExpense !== null}
         onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
         onSplitReceipt={(prefill) => {
           setReceiptPrefill(prefill);
@@ -1392,6 +1414,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {detailExpense && (
             <div className='space-y-4'>
               <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense, false)}</div>
+              {detailLockedPayerName !== null && (
+                <div className='text-muted-foreground flex gap-2 text-sm'>
+                  <Lock className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+                  <div className='space-y-1'>{renderPayerLock(detailLockedPayerName)}</div>
+                </div>
+              )}
               {getActions(detailExpense).length > 0 && (
                 <div className='border-border divide-border divide-y rounded-xl border'>
                   {getActions(detailExpense).map((action) => (
