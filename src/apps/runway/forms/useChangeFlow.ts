@@ -6,7 +6,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useStore } from 'react-redux';
 
 import { useAppSelector, type RootState } from '@/store';
-import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
+import {
+  CARRY_WORDS,
+  CHANGE_WORDS,
+  PAY_SHARE_WORDS,
+} from '@apps/runway/constants';
+import type { BillPin } from '@apps/runway/engine/billShare';
+import { restoreBillPins } from '@apps/runway/store/actions/dayActions';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useWarningHint } from '@apps/runway/hooks/useWarningHint';
@@ -24,12 +30,14 @@ import { changeItem } from '@apps/runway/store/actions/itemActions';
 import {
   previewOverrideCarry,
   type PreviewChange,
+  type PreviewUnpin,
   type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectAllCards,
   selectComingDays,
   selectGroups,
+  selectResolvedPlan,
   selectSettledKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
@@ -39,6 +47,7 @@ import {
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
 import { getCardNamer } from '@apps/runway/utils/cardText';
+import { describePayChoice } from '@apps/runway/utils/payFrom';
 import {
   getChangeSpan,
   INITIAL_FROM_WHEN,
@@ -54,6 +63,13 @@ import type {
   OpenVersion,
 } from '@apps/runway/types';
 
+/** What an afterSave step cleared, so the toast can offer an Undo. */
+export interface PinsCleared {
+  cleared: BillPin[];
+  billId: string;
+  billName: string;
+}
+
 interface UseChangeFlowArgs {
   itemId: string;
   kind: ItemKind;
@@ -65,6 +81,13 @@ interface UseChangeFlowArgs {
   /** A group the person named while changing a bill, written in the same batch as the change. */
   newGroup?: GroupSealed | null;
   onDone: () => void;
+  /** Runs once the change is written, for what the change makes stale; a failure is told, never hidden. */
+  afterSave?: (
+    effectiveFrom: number,
+    effectiveUntil: number | null,
+  ) => Promise<PinsCleared | void>;
+  /** The change replaces this bill's per-pay figures, so its preview is drawn without them. */
+  clearsPins?: boolean;
   /** A kept draft's note and "from when", when the form starts from one. */
   initialNote?: string;
   initialFrom?: FromWhenValue;
@@ -96,6 +119,7 @@ const getChangeJson = (
   candidate: ItemPayload | null,
   span: ChangeSpan | null,
   plan: StretchPlan<ItemPayload> | null,
+  unpin: PreviewUnpin | undefined,
 ) => {
   if (candidate === null || span === null) return null;
   if (span.kind === 'day') {
@@ -116,6 +140,7 @@ const getChangeJson = (
   ];
   const change: PreviewChange = {
     kind: 'versions',
+    unpin,
     versions: written.map(
       (stretch) =>
         ({
@@ -140,6 +165,8 @@ export function useChangeFlow({
   presetDayKey = null,
   newGroup = null,
   onDone,
+  afterSave,
+  clearsPins = false,
   initialNote = '',
   initialFrom = INITIAL_FROM_WHEN,
 }: UseChangeFlowArgs) {
@@ -150,6 +177,9 @@ export function useChangeFlow({
   const days = useAppSelector((state) => selectComingDays(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
+  const resolvedPlan = useAppSelector((state) =>
+    selectResolvedPlan(state, today),
+  );
   const allVersions = useAppSelector((state) => state.runway.versions);
   const [from, setFrom] = useState(initialFrom);
   const [step, setStepState] = useState<'form' | 'reason'>('form');
@@ -189,6 +219,7 @@ export function useChangeFlow({
               .name ??
             newGroup?.name ??
             'a group',
+          (fundedBy) => describePayChoice(fundedBy, resolvedPlan, true),
         );
 
   const setStep = (next: 'form' | 'reason') => {
@@ -210,7 +241,20 @@ export function useChangeFlow({
   const changeJson =
     isUnchanged || isMoneyless
       ? null
-      : getChangeJson(itemId, kind, candidate, span, plan);
+      : getChangeJson(
+          itemId,
+          kind,
+          candidate,
+          span,
+          plan,
+          clearsPins && span?.kind === 'version'
+            ? {
+                billId: itemId,
+                from: span.effectiveFrom,
+                until: span.effectiveUntil,
+              }
+            : undefined,
+        );
   const replaced = isMoneyless ? [] : (plan?.replaced ?? []);
   const [warningBox, setWarningBox] = useState<HTMLElement | null>(null);
   const {
@@ -319,6 +363,44 @@ export function useChangeFlow({
               console.error('Moving day choices failed', carryError);
               tellFailed(moves.map((move) => move.fromOn));
             });
+        }
+      }
+      if (afterSave) {
+        try {
+          const done = await afterSave(
+            span.kind === 'version' ? span.effectiveFrom : today,
+            span.kind === 'version' ? span.effectiveUntil : null,
+          );
+          if (done && done.cleared.length > 0) {
+            const { cleared, billId, billName } = done;
+            addToast({
+              title: PAY_SHARE_WORDS.pinsClearedToast(billName, cleared.length),
+              type: 'success',
+              action: {
+                label: PAY_SHARE_WORDS.undoPins,
+                onClick: () =>
+                  void restoreBillPins(
+                    user.uid,
+                    encryption,
+                    billId,
+                    billName,
+                    cleared,
+                  ).catch((undoError: unknown) =>
+                    addToast({
+                      title: PAY_SHARE_WORDS.undoFailed,
+                      description: getErrorMessage(undoError, ''),
+                      type: 'error',
+                    }),
+                  ),
+              },
+            });
+          }
+        } catch (afterError) {
+          addToast({
+            title: CHANGE_WORDS.savedButStale,
+            description: getErrorMessage(afterError, ''),
+            type: 'error',
+          });
         }
       }
       onDone();

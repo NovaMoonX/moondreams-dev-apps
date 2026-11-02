@@ -10,13 +10,17 @@ import {
   type PreviewChange,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
+  selectComingDays,
   selectIsMovesLoaded,
   selectIsRecordsReady,
+  selectResolvedPlan,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeHoldsBlocks,
   isSameLookahead,
 } from '@apps/runway/utils/lookaheadText';
+import { getOneTimeNotes } from '@apps/runway/utils/payFrom';
 
 /** The pinned footer and the sheet's own padding, so a warning behind them counts as out of view. */
 const FOOTER_ALLOWANCE_PX = 100;
@@ -45,6 +49,13 @@ export function useWarningHint(
   const isLedgerReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
+  const stance = useAppSelector(selectStance);
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const oneTimeNotes = useMemo(
+    () => getOneTimeNotes(comingDays, plan, stance),
+    [comingDays, plan, stance],
+  );
   const settledJson = useDeferredValue(changeJson);
   const [isOutOfView, setIsOutOfView] = useState(false);
 
@@ -56,12 +67,21 @@ export function useWarningHint(
       JSON.parse(settledJson) as PreviewChange,
     );
     return {
-      blocks: describeHoldsBlocks(before, after, isHidden),
+      blocks: describeHoldsBlocks(before, after, isHidden, oneTimeNotes),
       isSame: isSameLookahead(before, after),
     };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settledJson, isLedgerReady, today, items, versions, openDays, isHidden]);
+  }, [
+    settledJson,
+    isLedgerReady,
+    today,
+    items,
+    versions,
+    openDays,
+    isHidden,
+    oneTimeNotes,
+  ]);
 
   const warning = holds?.blocks.find((block) => block.tone === 'warning');
   const text = warning

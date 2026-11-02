@@ -15,6 +15,7 @@ import {
   Pencil,
   Play,
   ReceiptText,
+  Ruler,
   ShoppingBag,
   Undo2,
 } from 'lucide-react';
@@ -42,6 +43,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
   ActionSection,
   ActionTitle,
@@ -64,6 +66,7 @@ import {
   GOAL_CHART_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
+  PAID_AMOUNT_WORDS,
   FORM_FLOW_WORDS,
   GROUP_WORDS,
   ENVELOPE_SPEND_WORDS,
@@ -157,10 +160,11 @@ type View =
   | 'check'
   | 'group'
   | 'move'
-  | 'setHeld';
+  | 'setHeld'
+  | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
-interface ItemSheetProps {
+export interface ItemSheetProps {
   itemId: string;
   /** The kind the row knows, until the item's own version is read. */
   kind: ItemKind;
@@ -178,6 +182,25 @@ interface ItemSheetProps {
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
   quickChange?: { label: string; subtitle?: string; step: string };
+  /** An action that takes the place of the first row and swaps its own view in, for a change that belongs to the income day the sheet was opened from. */
+  dayAction?: {
+    label: string;
+    subtitle?: string;
+    /** Opens somewhere else instead of a view, closing this sheet first. */
+    onOpen?: () => void;
+    renderView?: (controls: {
+      onBack: () => void;
+      onClose: () => void;
+      openChange: (step: string) => void;
+    }) => ReactNode;
+  };
+  /** An optional extra's own action row, opening the change at that question. */
+  maxAction?: {
+    label: string;
+    subtitle?: string;
+    step: string;
+    icon?: ReactNode;
+  };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -223,6 +246,7 @@ const VIEW_NOTES: Record<View, string> = {
   group: '',
   move: '',
   setHeld: '',
+  dayAction: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -237,6 +261,8 @@ function ItemSheet({
   fact,
   help,
   quickChange,
+  dayAction,
+  maxAction,
   startsAtStep,
   payment = null,
   onMarked,
@@ -307,6 +333,7 @@ function ItemSheet({
     onMarked,
     onUndone,
   });
+  const [isAskingPaid, setIsAskingPaid] = useState(false);
 
   if (!version || version.kind === 'group') return null;
   const payload = version.payload;
@@ -750,7 +777,21 @@ function ItemSheet({
       />
       {extra}
       <ActionGroup>
-        {canChange && quickChange && (
+        {canChange && dayAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Pencil />}
+            label={dayAction.label}
+            subtitle={dayAction.subtitle}
+            onClick={() => {
+              if (!dayAction.onOpen) return goTo('dayAction');
+              onClose();
+              dayAction.onOpen();
+            }}
+          />
+        )}
+        {canChange && !dayAction && quickChange && (
           <ActionRow
             isGrouped
             hasChevron
@@ -760,7 +801,7 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
-        {canChange && !quickChange && (
+        {canChange && !quickChange && !dayAction && (
           <ActionRow
             isGrouped
             hasChevron
@@ -768,6 +809,16 @@ function ItemSheet({
             label={ITEM_SHEET_WORDS.change}
             subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
             onClick={() => openChange(null)}
+          />
+        )}
+        {canChange && maxAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={maxAction.icon ?? <Ruler />}
+            label={maxAction.label}
+            subtitle={maxAction.subtitle}
+            onClick={() => openChange(maxAction.step)}
           />
         )}
         {canChange && isTrackEnvelope && isArchivable && heldCents > 0 && (
@@ -801,20 +852,35 @@ function ItemSheet({
             subtitle={
               paid.isPaid
                 ? undefined
-                : paidWithCard !== null
-                  ? CARD_WORDS.chargedTo(paidWithCard)
-                  : payment.fundedCents >= payment.totalCents
-                    ? ITEM_SHEET_WORDS.paidFromSetAside
-                    : mask(
-                        ITEM_SHEET_R2_WORDS.paidFromFreeText(
-                          formatCentsShort(
-                            payment.totalCents - payment.fundedCents,
+                : paid.needsAmount
+                  ? PAID_AMOUNT_WORDS.markSub
+                  : paidWithCard !== null
+                    ? CARD_WORDS.chargedTo(paidWithCard)
+                    : payment.fundedCents >= payment.totalCents
+                      ? ITEM_SHEET_WORDS.paidFromSetAside
+                      : mask(
+                          ITEM_SHEET_R2_WORDS.paidFromFreeText(
+                            formatCentsShort(
+                              payment.totalCents - payment.fundedCents,
+                            ),
                           ),
-                        ),
-                      )
+                        )
             }
             isDisabled={paid.isBusy}
-            onClick={() => void (paid.isPaid ? paid.undo() : paid.mark())}
+            onClick={() => {
+              if (paid.isPaid) void paid.undo();
+              else if (paid.needsAmount) setIsAskingPaid(true);
+              else void paid.mark();
+            }}
+          />
+        )}
+        {isAskingPaid && payment && (
+          <PaidAmountSheet
+            billId={itemId}
+            billName={payload.name}
+            payment={payment}
+            onMark={paid.mark}
+            onClose={() => setIsAskingPaid(false)}
           />
         )}
         {isFunded && (
@@ -1195,7 +1261,13 @@ function ItemSheet({
                 ? moveView
                 : view === 'setHeld'
                   ? setHeldView
-                  : action
+                  : view === 'dayAction' && dayAction?.renderView
+                    ? dayAction.renderView({
+                        onBack: () => goTo('menu'),
+                        onClose,
+                        openChange,
+                      })
+                    : action
         }
       >
         {menu}

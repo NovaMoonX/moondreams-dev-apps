@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import RevealChip from '@/components/RevealChip';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -20,20 +21,23 @@ import {
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
-import { useAppSelector } from '@/store';
+import { useStore } from 'react-redux';
+import { useAppSelector, type RootState } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import {
   BILL_FREQUENCIES,
   BILL_FREQUENCY_LABELS,
   BILL_FUNDING_LABELS,
   BILL_FUNDINGS,
+  BILL_PAID_FROMS,
   CHANGE_WORDS,
   BILL_QUICK_PICKS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
+  PAID_FROM_WORDS,
   INCOME_ENDING_LABELS,
   INCOME_ENDINGS,
   MAX_CHOSEN_DAYS,
@@ -45,6 +49,8 @@ import {
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
+import { clearBillPins } from '@apps/runway/store/actions/dayActions';
+import { getBillPins } from '@apps/runway/engine/billShare';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import { createBill } from '@apps/runway/store/actions/itemActions';
@@ -75,8 +81,17 @@ import BackLink from '@/components/BackLink';
 import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
+import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
+import {
+  describePayChoice,
+  getPayOptions,
+  getOneTimePayIds,
+  hasPaysToChoose,
+  toPayValue,
+  type PayOption,
+} from '@apps/runway/utils/payFrom';
 import {
   describeAmountDraft,
   EMPTY_AMOUNT_DRAFT,
@@ -118,6 +133,7 @@ const CASH_VALUE = 'cash';
 
 type Frequency = (typeof BILL_FREQUENCIES)[number];
 type Funding = (typeof BILL_FUNDINGS)[number];
+type PaidFrom = (typeof BILL_PAID_FROMS)[number];
 type EndKind = (typeof INCOME_ENDINGS)[number];
 
 interface BillFormData {
@@ -134,6 +150,9 @@ interface BillFormData {
   endCount: string;
   funding: Funding;
   dayKeys: string[];
+  /** A repeating bill's Paid from; `payValue` names the pay once it is `pay`. */
+  paidFrom: PaidFrom;
+  payValue: string;
   /** Null until the person adds one. */
   emoji: string | null;
   /** An existing group's id, `NEW_CHOICE` while naming one, or '' for none. */
@@ -165,6 +184,8 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
         endCount: isText,
         funding: isOneOf(BILL_FUNDINGS),
         dayKeys: isTextList,
+        paidFrom: isOneOf(BILL_PAID_FROMS),
+        payValue: isText,
         emoji: isNullableText,
         group: isPickOrCreate,
         paidByCardId: isNullableText,
@@ -240,6 +261,47 @@ const fundingOptions = BILL_FUNDINGS.map((value) => ({
   label: BILL_FUNDING_LABELS[value],
 }));
 
+const paidFromOptions = BILL_PAID_FROMS.map((value) => ({
+  value,
+  label: PAID_FROM_WORDS[value],
+}));
+
+interface PaidFromChoiceProps {
+  label: string;
+  meaning: string;
+  isChosen: boolean;
+  onPick: () => void;
+}
+
+function PaidFromChoice({
+  label,
+  meaning,
+  isChosen,
+  onPick,
+}: PaidFromChoiceProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      role='radio'
+      aria-checked={isChosen}
+      className={join(
+        'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-2! text-left font-normal whitespace-normal',
+        isChosen &&
+          'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+      )}
+      onClick={onPick}
+    >
+      <span className='text-[15px] leading-[1.125rem] font-medium'>
+        {label}
+      </span>
+      <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
+        {meaning}
+      </span>
+    </Button>
+  );
+}
+
 const toPickLabel = (pick: { name: string; emoji: string }) =>
   `${pick.emoji} ${pick.name}`;
 
@@ -279,6 +341,7 @@ const buildEnding = (data: BillFormData): Ending | null => {
 
 const getBlocker = (
   data: BillFormData,
+  isPayMissing: boolean,
   hasAmount: boolean,
   today: number,
   isChosen: boolean,
@@ -301,6 +364,7 @@ const getBlocker = (
     return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
   if (isChosen && pickedCount === 0) return FORM_FLOW_WORDS.pickDays;
+  if (isPayMissing) return PAID_FROM_WORDS.pickPay;
   return null;
 };
 
@@ -334,11 +398,23 @@ const getEditingData = (
         : String(payload.ending.afterCount),
     funding: payload.fundedBy.kind === 'chosen' ? 'chosen' : 'suggested',
     dayKeys: payload.fundedBy.kind === 'chosen' ? payload.fundedBy.dayKeys : [],
+    paidFrom:
+      payload.fundedBy.kind === 'lastBefore' || payload.fundedBy.kind === 'pay'
+        ? payload.fundedBy.kind === 'pay'
+          ? 'pay'
+          : 'lastBefore'
+        : 'spread',
+    payValue:
+      payload.fundedBy.kind === 'pay' ? toPayValue(payload.fundedBy) : '',
     emoji: payload.emoji,
     group: { choice: payload.groupId ?? '', newText: '' },
     paidByCardId: payload.paidByCardId ?? null,
   };
 };
+
+/** Brings the pays to pick from into sight when they open below the fold of a short screen. */
+const scrollIntoSight = (element: HTMLDivElement | null) =>
+  element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 
 function BillFormBody({
   onStartOver,
@@ -396,6 +472,8 @@ function BillFormBody({
           endCount: '',
           funding: 'suggested',
           dayKeys: [],
+          paidFrom: 'spread',
+          payValue: '',
           emoji: null,
           group: { choice: presetGroupId ?? '', newText: '' },
           paidByCardId: null,
@@ -419,6 +497,16 @@ function BillFormBody({
     kept.restored?.isPriorityChosen ?? startsChosen,
   );
   const [error, setError] = useState<string | null>(null);
+  const [changesEl, setChangesEl] = useState<HTMLDivElement | null>(null);
+  const [isChangesHidden, setIsChangesHidden] = useState(false);
+  useEffect(() => {
+    if (!changesEl) return;
+    const observer = new IntersectionObserver(([entry]) =>
+      setIsChangesHidden(!entry.isIntersecting),
+    );
+    observer.observe(changesEl);
+    return () => observer.disconnect();
+  }, [changesEl]);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<BillFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
@@ -435,6 +523,58 @@ function BillFormBody({
   );
   const canChoose = isOnce && dueDays.length > 0;
   const isChosen = canChoose && formData.funding === 'chosen';
+  const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const openDays = useAppSelector((state) => state.runway.days);
+  const store = useStore<RootState>();
+  const savedPay =
+    editing?.payload.fundedBy.kind === 'pay' ? editing.payload.fundedBy : null;
+  const planPayOptions = getPayOptions(plan);
+  const payOptions: PayOption[] =
+    savedPay &&
+    !planPayOptions.some(({ value }) => value === toPayValue(savedPay))
+      ? [
+          ...planPayOptions,
+          {
+            value: toPayValue(savedPay),
+            fundedBy: savedPay,
+            label: describePayChoice(savedPay, plan),
+          },
+        ]
+      : planPayOptions;
+  const getPinDates = () =>
+    editing
+      ? getBillPins(openDays, editing.itemId, flow.effectiveFrom ?? today).map(
+          (pin) => formatDateShortUTC(pin.expectedOn),
+        )
+      : [];
+  const canPickPay = !isOnce && formData.frequency !== null;
+  const savedFundedBy = editing?.payload.fundedBy.kind ?? null;
+  const canAskPaidFrom =
+    canPickPay &&
+    (savedFundedBy === 'lastBefore' ||
+      savedFundedBy === 'pay' ||
+      (dueDate !== undefined &&
+        formData.frequency !== null &&
+        hasPaysToChoose(
+          comingDays,
+          {
+            kind: formData.frequency,
+            anchor: dueDate,
+            monthDays:
+              formData.frequency === 'monthly'
+                ? [new Date(dueDate).getUTCDate()]
+                : [],
+          },
+          today,
+          getOneTimePayIds(plan),
+        )));
+  const isPayMissing =
+    canPickPay &&
+    formData.paidFrom === 'pay' &&
+    !payOptions.some(({ value }) => value === formData.payValue);
+  const paidFromChoices = paidFromOptions.filter(
+    ({ value }) => value !== 'pay' || payOptions.length > 0,
+  );
   const pickedCount = dueDays.filter((day) =>
     formData.dayKeys.includes(day.dayKey),
   ).length;
@@ -447,6 +587,7 @@ function BillFormBody({
     JSON.stringify(formData.dayKeys) === JSON.stringify(startData.dayKeys);
   const blocker = getBlocker(
     formData,
+    isPayMissing,
     parseAmountDraft(formData.amount) !== null,
     today,
     isChosen && !isFundingUntouched,
@@ -454,6 +595,18 @@ function BillFormBody({
     editing !== undefined,
     noun,
   );
+
+  const getPaidFromSummary = () => {
+    if (formData.paidFrom === 'spread' && savedFundedBy === 'chosen')
+      return BILL_FUNDING_LABELS.chosen;
+    if (formData.paidFrom === 'pay') {
+      return (
+        payOptions.find(({ value }) => value === formData.payValue)?.label ??
+        PAID_FROM_WORDS.pay
+      );
+    }
+    return PAID_FROM_WORDS[formData.paidFrom];
+  };
 
   const savedCardId = editing?.payload.paidByCardId ?? null;
   const cardOptions = allCards.filter(
@@ -731,7 +884,70 @@ function BillFormBody({
             ),
           },
         ]
-      : []),
+      : canAskPaidFrom
+        ? [
+            {
+              id: 'funding',
+              title: PAID_FROM_WORDS.title,
+              summaryLabel: PAID_FROM_WORDS.summaryLabel,
+              summaryValue: getPaidFromSummary(),
+              isAnswered: !isPayMissing,
+              blocker: PAID_FROM_WORDS.pickPay,
+              isPreAnswered: true,
+              render: ({ moveOn }: QuestionControls) => (
+                <div className='space-y-3'>
+                  <div
+                    role='radiogroup'
+                    aria-label={PAID_FROM_WORDS.label}
+                    className='space-y-2'
+                  >
+                    {paidFromChoices.map(({ value, label }) => (
+                      <PaidFromChoice
+                        key={value}
+                        label={label}
+                        meaning={PAID_FROM_WORDS[`${value}Meaning`]}
+                        isChosen={formData.paidFrom === value}
+                        onPick={() => {
+                          set({ paidFrom: value });
+                          if (value !== 'pay') moveOn();
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {getPinDates().length > 0 &&
+                    (formData.paidFrom !== startData.paidFrom ||
+                      formData.payValue !== startData.payValue) && (
+                      <p className='text-muted-foreground text-xs'>
+                        {PAID_FROM_WORDS.replacesPins(getPinDates())}
+                      </p>
+                    )}
+                  {formData.paidFrom === 'pay' && (
+                    <div ref={scrollIntoSight} className='space-y-2'>
+                      <p className='text-muted-foreground text-xs'>
+                        {PAID_FROM_WORDS.whichPay}
+                      </p>
+                      <p className='text-muted-foreground text-xs'>
+                        {PAID_FROM_WORDS.onlyRepeating}
+                      </p>
+                      <PillGroup
+                        label={PAID_FROM_WORDS.whichPay}
+                        options={payOptions.map(({ value, label }) => ({
+                          value,
+                          label,
+                        }))}
+                        value={formData.payValue}
+                        onChange={(payValue) => {
+                          set({ payValue });
+                          moveOn();
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              ),
+            },
+          ]
+        : []),
     ...(draft && !draft.forName
       ? []
       : [
@@ -858,6 +1074,24 @@ function BillFormBody({
       )
       .map((day) => day.dayKey);
 
+  const getFundedBy = (data: BillFormData): BillFundedBy => {
+    if (isChosen)
+      return isFundingUntouched && editing
+        ? editing.payload.fundedBy
+        : { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) };
+    if (!canPickPay) return { kind: 'suggested' };
+    if (data.paidFrom === 'lastBefore') return { kind: 'lastBefore' };
+    if (
+      data.paidFrom === 'spread' &&
+      editing?.payload.fundedBy.kind === 'chosen'
+    )
+      return editing.payload.fundedBy;
+    const found = payOptions.find(({ value }) => value === data.payValue);
+    return data.paidFrom === 'pay' && found
+      ? found.fundedBy
+      : { kind: 'suggested' };
+  };
+
   const buildBill = (data: BillFormData): BillSealed | null => {
     const amount = parseAmountDraft(data.amount);
     const anchor = data.isLater ? null : fromDateInputValue(data.startDate);
@@ -876,11 +1110,7 @@ function BillFormBody({
         ? editing.payload.orderIndex
         : getNextTierRank([...bills, ...envelopes, ...goals], priority);
     const { groupId, newGroup } = resolveGroup(data);
-    const fundedBy: BillFundedBy = isChosen
-      ? isFundingUntouched && editing
-        ? editing.payload.fundedBy
-        : { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
-      : { kind: 'suggested' };
+    const fundedBy: BillFundedBy = getFundedBy(data);
     const result: BillSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,
@@ -908,6 +1138,34 @@ function BillFormBody({
   };
 
   const candidate = blocker === null ? buildBill(formData) : null;
+  const isFundingChanged =
+    candidate !== null &&
+    editing !== undefined &&
+    JSON.stringify(candidate.fundedBy) !==
+      JSON.stringify(editing.payload.fundedBy);
+  const clearStalePins = async (from: number, until: number | null) => {
+    if (!user || !editing) return;
+    const pins = getBillPins(
+      store.getState().runway.days,
+      editing.itemId,
+      from,
+      until,
+    );
+    if (pins.length === 0) return;
+    const encryption = await getRunwayEncryption(user.uid);
+    const cleared = await clearBillPins(
+      user.uid,
+      encryption,
+      editing.itemId,
+      editing.payload.name,
+      pins,
+    );
+    return {
+      cleared,
+      billId: editing.itemId,
+      billName: editing.payload.name,
+    };
+  };
   const flow = useChangeFlow({
     itemId: editing?.itemId ?? '',
     kind: 'bill',
@@ -921,6 +1179,8 @@ function BillFormBody({
     presetDayKey,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
+    afterSave: isFundingChanged ? clearStalePins : undefined,
+    clearsPins: isFundingChanged,
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from,
   });
@@ -964,7 +1224,9 @@ function BillFormBody({
   const shownBlocker = editing ? editBlocker : blocker;
   const changeSection =
     editing && questions.hasReviewed && !isFirstDate ? (
-      <ChangeSection isIdleShown />
+      <div ref={setChangesEl}>
+        <ChangeSection isIdleShown isOpen={quickStep?.id === 'funding'} />
+      </div>
     ) : null;
 
   const handleSubmit = async () => {
@@ -1004,6 +1266,30 @@ function BillFormBody({
     itemId: editing?.itemId ?? '',
     kind: 'bill' as const,
     candidate,
+    warningActions: (
+      <div className='flex flex-wrap gap-2'>
+        {formData.paidFrom !== 'spread' && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => set({ paidFrom: 'spread', payValue: '' })}
+          >
+            {PAID_FROM_WORDS.keepSpread}
+          </Button>
+        )}
+        {payOptions.length > 0 && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => set({ paidFrom: 'pay', payValue: '' })}
+          >
+            {PAID_FROM_WORDS.pickAnother}
+          </Button>
+        )}
+      </div>
+    ),
   };
 
   return (
@@ -1029,7 +1315,9 @@ function BillFormBody({
               <QuickChange
                 step={quickStep}
                 flow={questions}
-                rowIds={['name', 'due', 'repeats']}
+                rowIds={
+                  quickStep.id === 'funding' ? [] : ['name', 'due', 'repeats']
+                }
                 after={changeSection}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
@@ -1050,7 +1338,10 @@ function BillFormBody({
                 error ??
                 flow.error ??
                 maskNote(isAsking ? questions.blocker : shownBlocker) ??
-                flow.warningHint
+                flow.warningHint ??
+                (isChangesHidden && !isAsking && !flow.isUnchanged
+                  ? PAID_FROM_WORDS.seeChanges
+                  : null)
               }
               cancelAction={
                 <Button

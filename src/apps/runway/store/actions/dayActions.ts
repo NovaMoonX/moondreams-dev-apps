@@ -1,9 +1,15 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { doc, runTransaction, setDoc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 
-import { CONFIRM_WORDS, CORRECT_WORDS } from '@apps/runway/constants';
+import { formatDateUTC } from '@/utils/formatUtils';
+import {
+  CONFIRM_WORDS,
+  CORRECT_WORDS,
+  PAY_SHARE_WORDS,
+} from '@apps/runway/constants';
+import type { BillPin } from '@apps/runway/engine/billShare';
 import {
   buildRecords,
   countUnresolvedHolds,
@@ -40,6 +46,7 @@ export const EMPTY_OVERRIDE: DayOverrideSealed = {
   pairings: null,
   holdResolutions: {},
   payloads: {},
+  billCents: {},
 };
 
 export interface DayRef {
@@ -85,6 +92,7 @@ export async function saveDayOverride(
       pairings: opened?.pairings ?? null,
       holdResolutions: opened?.holdResolutions ?? {},
       payloads: opened?.payloads ?? {},
+      billCents: opened?.billCents ?? {},
     };
     const sealed = await sealJson(change(current), encryption);
     if (log && changeSealed) {
@@ -120,6 +128,179 @@ export async function saveDayOverride(
     };
     transaction.set(ref, created);
   });
+}
+
+/** Sets what one income day puts toward a bill (`null` takes the day's own figure back), keeping the day's other choices. */
+export function saveBillShare(
+  uid: string,
+  encryption: RunwayEncryption,
+  day: DayRef,
+  billId: string,
+  cents: Cents | null,
+  log?: { itemId: string; summary: string; note: string | null },
+  /** What the day's figure must still be for this write to take (an Undo only takes back its own change). */
+  expect?: { was: Cents | undefined },
+): Promise<void> {
+  return saveDayOverride(
+    uid,
+    encryption,
+    day,
+    (current) => {
+      if (expect && current.billCents[billId] !== expect.was) {
+        throw new BillShareChanged();
+      }
+      return {
+        ...current,
+        billCents:
+          cents === null
+            ? Object.fromEntries(
+                Object.entries(current.billCents).filter(
+                  ([id]) => id !== billId,
+                ),
+              )
+            : { ...current.billCents, [billId]: cents },
+      };
+    },
+    log,
+  );
+}
+
+/** What a pay puts toward a bill changed since the action being taken back made its change. */
+export class BillShareChanged extends Error {
+  constructor() {
+    super('This pay was changed again since, so nothing was taken back.');
+  }
+}
+
+const describePinDays = (pins: readonly BillPin[]) =>
+  pins.map((pin) => formatDateUTC(pin.expectedOn)).join(', ');
+
+const toDayRef = (pin: BillPin): DayRef => ({
+  payLineId: pin.payLineId,
+  sourceId: pin.sourceId,
+  expectedOn: pin.expectedOn,
+});
+
+/** A clear that stopped part way: the days it did clear, so an Undo can put them back. */
+export class PinsPartlyCleared extends Error {
+  constructor(
+    readonly cleared: BillPin[],
+    cause: unknown,
+  ) {
+    super(
+      cause instanceof Error ? cause.message : 'Some days were not cleared.',
+    );
+  }
+}
+
+/** One history line for a bill, written after the days it names were written. */
+const writeHistoryLine = async (
+  uid: string,
+  encryption: RunwayEncryption,
+  billId: string,
+  summary: string,
+  effectiveFrom: number,
+) => {
+  const changeId = generateUuid();
+  const entry: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: Date.now(),
+    effectiveFrom,
+    itemIds: [billId],
+    sealed: await sealJson<ChangeSealed>({ summary, note: null }, encryption),
+  };
+  await setDoc(
+    doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+    entry,
+  );
+};
+
+/** Runs a write over each pin in turn, going on past one that fails; returns the days it did and the first error. */
+const forEachPin = async (
+  pins: readonly BillPin[],
+  write: (pin: BillPin) => Promise<void>,
+) => {
+  const result = await pins.reduce<
+    Promise<{ done: BillPin[]; failed: BillPin[]; error: unknown }>
+  >(
+    async (previous, pin) => {
+      const acc = await previous;
+      try {
+        await write(pin);
+        return { ...acc, done: [...acc.done, pin] };
+      } catch (error) {
+        return {
+          ...acc,
+          failed: [...acc.failed, pin],
+          error: acc.error ?? error,
+        };
+      }
+    },
+    Promise.resolve({ done: [], failed: [], error: null }),
+  );
+  return result;
+};
+
+/** Takes every per-pay figure of one bill off the given days. A day that fails is skipped; one history line names only the days it did clear, and a stop part way throws what was cleared so an Undo can put it back. */
+export async function clearBillPins(
+  uid: string,
+  encryption: RunwayEncryption,
+  billId: string,
+  billName: string,
+  pins: readonly BillPin[],
+): Promise<BillPin[]> {
+  const { done, failed, error } = await forEachPin(pins, (pin) =>
+    saveBillShare(uid, encryption, toDayRef(pin), billId, null),
+  );
+  if (done.length > 0) {
+    await writeHistoryLine(
+      uid,
+      encryption,
+      billId,
+      PAY_SHARE_WORDS.pinsCleared(billName, describePinDays(done)),
+      done[0].expectedOn,
+    ).catch((historyError: unknown) =>
+      console.error('History line not written', historyError),
+    );
+  }
+  if (failed.length > 0) throw new PinsPartlyCleared(done, error);
+  return done;
+}
+
+/** Puts back per-pay figures a clear took off. A day changed again since (or one that fails) is left as it is and skipped; one history line names only the days it did put back. */
+export async function restoreBillPins(
+  uid: string,
+  encryption: RunwayEncryption,
+  billId: string,
+  billName: string,
+  pins: readonly BillPin[],
+): Promise<{ restored: BillPin[]; skipped: BillPin[] }> {
+  const { done, failed } = await forEachPin(pins, (pin) =>
+    saveBillShare(
+      uid,
+      encryption,
+      toDayRef(pin),
+      billId,
+      pin.cents,
+      undefined,
+      {
+        was: undefined,
+      },
+    ),
+  );
+  if (done.length > 0) {
+    await writeHistoryLine(
+      uid,
+      encryption,
+      billId,
+      PAY_SHARE_WORDS.pinsBack(billName, describePinDays(done)),
+      done[0].expectedOn,
+    ).catch((historyError: unknown) =>
+      console.error('History line not written', historyError),
+    );
+  }
+  return { restored: done, skipped: failed };
 }
 
 /** A day another device settled or changed first; the screen may already have moved on, so it is also said in a toast. */
@@ -222,6 +403,7 @@ export async function confirmDay(
       pairings: stored?.pairings ?? null,
       holdResolutions: stored?.holdResolutions ?? {},
       payloads: stored?.payloads,
+      billCents: stored?.billCents,
     });
     if (current !== input.overrideFingerprint) {
       throw new DayChangedElsewhere(
@@ -442,6 +624,7 @@ const readChoices = async (
     pairings: opened?.pairings ?? null,
     holdResolutions: opened?.holdResolutions ?? {},
     payloads: opened?.payloads ?? {},
+    billCents: opened?.billCents ?? {},
   };
 };
 

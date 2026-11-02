@@ -45,6 +45,7 @@ import {
   FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
   RUNWAY_SEARCH_THRESHOLD,
+  VARIES_HINT,
 } from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import {
@@ -70,6 +71,7 @@ import {
   type DraftView,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, Stance } from '@apps/runway/types';
+import { formatRange } from '@apps/runway/utils/rangeText';
 
 interface ConfirmFormData {
   amount: string;
@@ -115,8 +117,9 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const balances = useAppSelector(selectBalances);
   const emojiOf = useRecordedEmojiResolver();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const isVarying = day.amount.lowCents !== day.amount.highCents;
   const initialData: ConfirmFormData = {
-    amount: centsToInputValue(draft.moneyCents),
+    amount: isVarying ? '' : centsToInputValue(draft.moneyCents),
     arrivedOn: toDateInputValue(today),
     note: '',
   };
@@ -408,7 +411,13 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           label={CONFIRM_WORDS.amount}
           value={formData.amount}
           onChange={setAmount}
+          autoFocus={isVarying}
           disabled={isSaving}
+          hint={
+            isVarying && (
+              <MaskedText>{VARIES_HINT(formatRange(day.amount))}</MaskedText>
+            )
+          }
         />
         {getNotice()}
       </div>

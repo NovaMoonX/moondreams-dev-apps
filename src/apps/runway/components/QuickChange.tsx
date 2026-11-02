@@ -26,6 +26,8 @@ interface QuickChangeProps {
   onBack: () => void;
   /** Giving an undated item its first date: just the question, no door to the rest. */
   isFirstDate?: boolean;
+  /** What the change does, drawn between the question and the door to the rest. */
+  children?: ReactNode;
 }
 
 /** The most frequent change to an item: its one question open, the most useful other fields folded under it and one door to the rest. */
