@@ -15,12 +15,18 @@ export function useStatusWrite() {
     isInFlightRef.current = true;
     setIsBusy(true);
     setRefusal(null);
-    const result = await attempt();
-    isInFlightRef.current = false;
-    if (result.ok) return true;
-    setIsBusy(false);
-    setRefusal(result.message);
-    return false;
+    try {
+      const result = await attempt();
+      if (result.ok) return true;
+      setIsBusy(false);
+      setRefusal(result.message);
+      return false;
+    } catch (error) {
+      setIsBusy(false);
+      throw error;
+    } finally {
+      isInFlightRef.current = false;
+    }
   };
 
   return { isBusy, refusal, write };

@@ -74,11 +74,22 @@ function MarkPendingView({
       ? (fromDateInputValue(draft.day) ?? null)
       : null;
     const isSaved = await write(() =>
-      changeStatus(item.saleId, item.id, uid, {
-        kind: isChange ? 'CHANGE_HOLD' : 'MARK_PENDING',
-        buyerName,
-        pickupOn,
-      }),
+      changeStatus(
+        item.saleId,
+        item.id,
+        uid,
+        isChange
+          ? {
+              kind: 'CHANGE_HOLD',
+              buyerName,
+              pickupOn,
+              from: {
+                buyerName: item.pending?.buyerName ?? null,
+                pickupOn: item.pending?.pickupOn ?? null,
+              },
+            }
+          : { kind: 'MARK_PENDING', buyerName, pickupOn },
+      ),
     );
     if (isSaved) onDone();
   };

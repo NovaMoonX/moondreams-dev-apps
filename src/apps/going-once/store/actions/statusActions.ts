@@ -16,7 +16,13 @@ import { toFirstName } from '@apps/going-once/utils/personName';
 
 export type StatusTransition =
   | { kind: 'MARK_PENDING'; buyerName: string | null; pickupOn: number | null }
-  | { kind: 'CHANGE_HOLD'; buyerName: string | null; pickupOn: number | null }
+  /** `from` is the hold the editor opened with, so an edit made meanwhile by someone else is never overwritten. */
+  | {
+      kind: 'CHANGE_HOLD';
+      buyerName: string | null;
+      pickupOn: number | null;
+      from: { buyerName: string | null; pickupOn: number | null };
+    }
   | { kind: 'BACK_TO_AVAILABLE' }
   | {
       kind: 'MARK_SOLD';
@@ -60,6 +66,7 @@ const GONE_MESSAGE = 'This thing is no longer here.';
 const INVALID_MESSAGE = "That amount or day doesn't look right.";
 const NO_SALE_MESSAGE = 'There is no sale to change.';
 const SAME_PAID_MESSAGE = 'That is already what was paid.';
+const SAME_HOLD_MESSAGE = 'That is already the hold.';
 
 type Stored = Pick<
   Item,
@@ -85,6 +92,11 @@ const isValid = (transition: StatusTransition): boolean => {
     return isDay(transition.pickupOn);
   return true;
 };
+
+const isHoldUnchanged = (current: Stored, transition: StatusTransition) =>
+  transition.kind !== 'CHANGE_HOLD' ||
+  (current.pending?.buyerName === transition.from.buyerName &&
+    current.pending?.pickupOn === transition.from.pickupOn);
 
 const getHold = (
   current: Stored,
@@ -125,8 +137,14 @@ const getNext = (
         markedAt: now,
       },
     };
-  if (transition.kind === 'CHANGE_HOLD')
+  if (transition.kind === 'CHANGE_HOLD') {
+    if (
+      current.pending?.buyerName === transition.buyerName &&
+      current.pending?.pickupOn === transition.pickupOn
+    )
+      return SAME_HOLD_MESSAGE;
     return { ...keep, pending: getHold(current, transition, uid, now) };
+  }
   if (transition.kind === 'MARK_SOLD')
     return {
       ...keep,
@@ -251,7 +269,8 @@ export async function changeStatus(
       };
       if (
         !EXPECTED[transition.kind].includes(current.status) ||
-        !isUndoCurrent(current, transition)
+        !isUndoCurrent(current, transition) ||
+        !isHoldUnchanged(current, transition)
       )
         return { kind: 'CONFLICT', current } as const;
       const now = Date.now();

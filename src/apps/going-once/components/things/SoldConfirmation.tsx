@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -11,6 +11,7 @@ import { formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import StatusViewFooter from '@apps/going-once/components/things/StatusViewFooter';
+import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { PAYMENT_METHOD_LABELS } from '@apps/going-once/constants';
 import type { Item } from '@apps/going-once/types';
 import { formatCollected } from '@apps/going-once/utils/status';
@@ -43,18 +44,12 @@ function SoldConfirmation({
   const { sale } = item;
   const today = fromDateInputValue(toLocalDateInputValue(now)) ?? now;
 
-  const [isBusy, setIsBusy] = useState(false);
-  const isInFlightRef = useRef(false);
+  const { isWorking: isBusy, run } = useSingleFlight();
 
   const undoSale = async () => {
-    if (isInFlightRef.current) return;
-    isInFlightRef.current = true;
-    setIsBusy(true);
     setError(null);
-    const refusal = await onNotSold();
-    isInFlightRef.current = false;
-    setIsBusy(false);
-    if (refusal !== null) setError(refusal);
+    const refusal = await run(onNotSold);
+    if (refusal) setError(refusal);
   };
 
   return (
