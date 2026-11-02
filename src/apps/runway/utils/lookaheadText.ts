@@ -1,5 +1,9 @@
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCentsShort } from '@/utils/moneyUtils';
+import {
+  formatDateShortUTC,
+  formatDateUTC,
+  formatRelativeDayUTC,
+} from '@/utils/formatUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { FIX_WORDS } from '@apps/runway/constants';
 import {
   isSameLookahead,
@@ -91,14 +95,18 @@ function listShorts(shorts: readonly ShortProblem[], isHidden: boolean) {
 }
 
 /** A group as a list row: the day, and what runs short on it. */
-export function describeGroupRow(group: ProblemGroup, isHidden = false) {
+export function describeGroupRow(
+  group: ProblemGroup,
+  today: number,
+  isHidden = false,
+) {
   if (group.kind === 'undated') {
     return {
       title: FIX_WORDS.needsDate(group.bills.map(({ name }) => name)),
       detail: FIX_WORDS.nothingSetAside(group.bills.length),
     };
   }
-  if (group.kind === 'single') return describeProblemRow(group.problem);
+  if (group.kind === 'single') return describeProblemRow(group.problem, today);
   const result = {
     title: formatDateShortUTC(group.on),
     detail: listShorts(group.shorts, isHidden),
@@ -132,11 +140,9 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
           };
     }
     const before =
-      problem.kind === 'overdue'
-        ? `${getName(problem)} was due ${on}, not marked paid`
-        : problem.kind === 'noIncome' && problem.reason === 'noPick'
-          ? `${getName(problem)} on ${on} comes from a pay that is not before it`
-          : `${getName(problem)} on ${on} has no income before it`;
+      problem.kind === 'noIncome' && problem.reason === 'noPick'
+        ? `${getName(problem)} on ${on} comes from a pay that is not before it`
+        : `${getName(problem)} on ${on} has no income before it`;
     return { before, figure: null, after: '' };
   }
   if (group.shorts.length > 1) {
@@ -176,6 +182,7 @@ function describeChangeProblem(
   more: number,
   isHidden: boolean,
   note: string | null,
+  grewBy: number | null = null,
 ) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
@@ -183,12 +190,6 @@ function describeChangeProblem(
     more > 0
       ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.`
       : '';
-  if (problem.kind === 'overdue') {
-    return {
-      text: `With this change, ${name} was due ${on} and is not marked paid.${tail}`,
-      figure: null,
-    };
-  }
   if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
       text: `With this change, ${name} on ${on} ${problem.reason === 'noPick' ? 'is set to come from a pay that is not before it is due' : 'has no income before it is due'}.${tail}`,
@@ -201,19 +202,77 @@ function describeChangeProblem(
       figure: null,
     };
   }
-  const figure = formatCentsShort(problem.shortBy);
+  const figure = formatCents(grewBy ?? problem.shortBy);
   const why = note === null || problem.kind !== 'short' ? '' : `: ${note}`;
   return {
-    text: `With this change, the plan leaves ${name} ${figure} short on ${on}${why}.${tail}`,
+    text: `With this change, the plan leaves ${name} ${figure}${grewBy === null ? '' : ' more'} short on ${on}${why}.${tail}`,
     figure,
     hasNote: why !== '',
   };
 }
 
 const getProblemKey = (problem: LookaheadProblem) =>
-  problem.kind === 'short'
-    ? `short:${problem.dayKey}:${problem.itemId}`
-    : `${problem.kind}:${problem.billId}:${problem.on}`;
+  `${problem.kind}:${problem.kind === 'short' ? problem.itemId : problem.billId}`;
+
+export interface CreatedProblem {
+  problem: LookaheadProblem;
+  /** For a shortfall that already existed and grew: how much more it is short; null for a problem that is new. */
+  grewBy: number | null;
+}
+
+/**
+ * The problems a change creates or makes worse, matched one to one against what the plan already had:
+ * a problem is old only when the same item has the same kind on the same day or earlier with at least
+ * the same shortfall. A problem on an earlier day, an extra day or a bigger shortfall is the change's.
+ */
+export function getCreatedProblems(
+  before: readonly LookaheadProblem[],
+  after: readonly LookaheadProblem[],
+): CreatedProblem[] {
+  const isAmount = (problem: LookaheadProblem) =>
+    problem.kind === 'short' || problem.reason === 'short';
+  const shortOf = (problem: LookaheadProblem) =>
+    isAmount(problem) && 'shortBy' in problem ? problem.shortBy : 0;
+  const biggestFirst = [...after].sort((a, b) => shortOf(b) - shortOf(a));
+  const matched = biggestFirst.reduce<{
+    used: readonly LookaheadProblem[];
+    results: Map<LookaheadProblem, CreatedProblem | null>;
+  }>(
+    (acc, candidate) => {
+      const key = getProblemKey(candidate);
+      const open = before
+        .filter(
+          (entry) =>
+            !acc.used.includes(entry) &&
+            getProblemKey(entry) === key &&
+            entry.on <= candidate.on,
+        )
+        .sort((a, b) => shortOf(a) - shortOf(b));
+      const covers = open.find(
+        (entry) => !isAmount(candidate) || shortOf(entry) >= shortOf(candidate),
+      );
+      const grown = covers ? undefined : open[open.length - 1];
+      const taken = covers ?? grown;
+      return {
+        used: taken ? [...acc.used, taken] : acc.used,
+        results: new Map(acc.results).set(
+          candidate,
+          covers
+            ? null
+            : {
+                problem: candidate,
+                grewBy:
+                  grown && isAmount(candidate) && isAmount(grown)
+                    ? shortOf(candidate) - shortOf(grown)
+                    : null,
+              },
+        ),
+      };
+    },
+    { used: [], results: new Map() },
+  );
+  return after.flatMap((problem) => matched.results.get(problem) ?? []);
+}
 
 /** What a change does to how far the plan holds, as separate blocks: the plan holding is one idea, a shortfall another. */
 export function describeHoldsBlocks(
@@ -238,9 +297,9 @@ export function describeHoldsBlocks(
   if (isSameLookahead(before, after)) {
     return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
-  const known = new Set(before.problems.map(getProblemKey));
-  const created = sortProblems(
-    after.problems.filter((entry) => !known.has(getProblemKey(entry))),
+  const found = getCreatedProblems(before.problems, after.problems);
+  const created = sortProblems(found.map((entry) => entry.problem)).flatMap(
+    (problem) => found.filter((entry) => entry.problem === problem),
   );
   const [first] = created;
   const problem: HoldsBlock[] = first
@@ -248,10 +307,13 @@ export function describeHoldsBlocks(
         {
           tone: 'warning',
           ...describeChangeProblem(
-            first,
+            first.problem,
             created.length - 1,
             isHidden,
-            first.kind === 'short' ? (notes[first.dayKey] ?? null) : null,
+            first.problem.kind === 'short'
+              ? (notes[first.problem.dayKey] ?? null)
+              : null,
+            first.grewBy,
           ),
         },
       ]
@@ -264,8 +326,6 @@ export function describeHoldsBlocks(
 export function describeProblemShort(problem: LookaheadProblem) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on).replace(/ /g, '\u00a0');
-  if (problem.kind === 'overdue')
-    return `${name} was due ${on}, not marked paid`;
   if (problem.kind === 'noIncome' && problem.reason === 'noIncome')
     return `${name} on ${on} has no income before it`;
   if (problem.kind === 'noIncome' && problem.reason === 'noPick')
@@ -275,19 +335,16 @@ export function describeProblemShort(problem: LookaheadProblem) {
 }
 
 /** One problem as a list row: what is short or missing, and on which day. */
-export function describeProblemRow(problem: LookaheadProblem) {
+export function describeProblemRow(problem: LookaheadProblem, today: number) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
-  if (problem.kind === 'overdue') {
-    return { title: FIX_WORDS.notPaid(name), detail: FIX_WORDS.dueOn(on) };
-  }
   if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
       title:
         problem.reason === 'noPick'
           ? FIX_WORDS.noPick(name)
           : FIX_WORDS.noIncome(name),
-      detail: FIX_WORDS.dueOn(on),
+      detail: FIX_WORDS.dueOn(formatRelativeDayUTC(problem.on, today)),
     };
   }
   return {

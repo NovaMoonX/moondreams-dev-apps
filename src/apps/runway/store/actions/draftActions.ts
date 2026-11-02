@@ -231,17 +231,30 @@ export const EMPTY_TIER_RANKS: Record<Priority, number> = Object.fromEntries(
   PRIORITIES.map((priority) => [priority, 0]),
 ) as Record<Priority, number>;
 
-/** The highest rank used in each priority tier of a list of items. */
+/** The highest rank used in each priority tier of a list of items, their extras' ranks included. */
 export const toTopRanks = (
-  list: { version: { payload: { priority: Priority; orderIndex: number } } }[],
+  list: {
+    version: {
+      payload: {
+        priority: Priority;
+        orderIndex: number;
+        extras?: readonly { tier: Priority; orderIndex: number }[] | null;
+      };
+    };
+  }[],
 ) =>
-  list.reduce<Record<Priority, number>>(
-    (acc, { version }) => ({
-      ...acc,
-      [version.payload.priority]: Math.max(
-        acc[version.payload.priority],
-        version.payload.orderIndex,
-      ),
-    }),
-    { ...EMPTY_TIER_RANKS },
-  );
+  list
+    .flatMap(({ version }) => [
+      {
+        tier: version.payload.priority,
+        orderIndex: version.payload.orderIndex,
+      },
+      ...(version.payload.extras ?? []),
+    ])
+    .reduce<Record<Priority, number>>(
+      (acc, { tier, orderIndex }) => ({
+        ...acc,
+        [tier]: Math.max(acc[tier], orderIndex),
+      }),
+      { ...EMPTY_TIER_RANKS },
+    );

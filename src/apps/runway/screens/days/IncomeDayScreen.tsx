@@ -24,7 +24,10 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import DraftLine from '@apps/runway/components/DraftLine';
+import UndatedBillsRow from '@apps/runway/components/UndatedBillsRow';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
+  BILL_WORDS,
   CONFIRM_WORDS,
   CHECKLIST_R3_WORDS,
   DAYS_WORDS,
@@ -48,6 +51,7 @@ import ConfirmSheet from '@apps/runway/screens/days/ConfirmSheet';
 import NotArrivedView from '@apps/runway/screens/days/NotArrivedView';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
+import { getPartName } from '@apps/runway/engine/parts';
 import { effectiveStance } from '@apps/runway/engine/stance';
 import type { HoldChoice } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -93,6 +97,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
   const changeableIds = useAppSelector(selectChangeableKey);
+  const { openDueBill, openUndatedBills, showPlanSection, showTab } =
+    useRunwayUrlState();
 
   if (!view || !isDaysLoaded || !isRecordsReady) {
     return (
@@ -257,11 +263,20 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         : [],
     ),
   );
+  const isFix = (line: DraftLineData) =>
+    line.part === null && fixIds.has(line.itemId);
   const lesserCount =
-    lookahead === null
-      ? 0
-      : unfunded.filter((line) => !fixIds.has(line.itemId)).length;
+    lookahead === null ? 0 : unfunded.filter((line) => !isFix(line)).length;
   const title = day.sourceName ?? day.payLineName;
+
+  const undated = lookahead?.undated ?? [];
+  const openUndated = () => {
+    onClose();
+    showPlanSection('bills');
+    showTab('plan');
+    if (undated.length === 1) openDueBill(undated[0].billId);
+    else openUndatedBills();
+  };
 
   const renderLine = (line: (typeof draft.lines)[number]) => {
     const isKnown = Object.hasOwn(items, line.itemId);
@@ -275,10 +290,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       <DraftLine
         key={line.lineId}
         line={line}
-        isWarning={fixIds.has(line.itemId)}
+        isWarning={isFix(line)}
         isOpen={openLineId === line.lineId}
         onOpenChange={(isOpen) => setOpenLineId(isOpen ? line.lineId : null)}
-        name={envelope.name}
+        name={getPartName(envelope.name, line, draft.lines)}
         kind={isKnown ? (line.bill ? 'bill' : 'envelope') : null}
         sourceNames={sourceNames}
         daySourceId={day.sourceId}
@@ -325,6 +340,16 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             <MaskedText>{statusLine}</MaskedText>
           </p>
         </div>
+        {undated.length > 0 && (
+          <UndatedBillsRow
+            names={undated.map(({ name }) => name)}
+            label={BILL_WORDS.offPlanTitle(
+              undated.map(({ name }) => (name === '' ? 'A bill' : name)),
+            )}
+            detail={BILL_WORDS.offPlanDetail(undated.length)}
+            onOpen={openUndated}
+          />
+        )}
         {draft.lines.length === 0 ? (
           <EmptyCard icon={<Mail className='h-5 w-5' />}>
             Nothing is set to be funded from this day. Add an envelope or a bill

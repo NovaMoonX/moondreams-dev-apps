@@ -15,6 +15,8 @@ import { GROUP_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
+import { fundingAtLevel, getExtras } from '@apps/runway/engine/parts';
+import type { GoalSealed, Priority } from '@apps/runway/types';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import GoalForm from '@apps/runway/forms/GoalForm';
@@ -84,6 +86,24 @@ function GoalsScreen() {
   const isRequested = addRequest === 'goal';
   const [query, setQuery] = useState('');
 
+  /** The dial a goal's finish date is counted at: only a counted goal with an extra the dial leaves out moves. */
+  const getPaceDial = (goal: GoalSealed): Priority | null => {
+    if (dial === 'want' || !isCountedAt(goal.priority, dial)) return null;
+    const isTrimmed = getExtras(goal).some(
+      (extra) => !isCountedAt(extra.tier, dial),
+    );
+    return isTrimmed ? dial : null;
+  };
+  const getPaceFunding = (goal: GoalSealed) => {
+    const paceDial = getPaceDial(goal);
+    return paceDial === null
+      ? {}
+      : {
+          funding: fundingAtLevel(goal, paceDial) ?? goal.funding,
+          extras: null,
+        };
+  };
+
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
   );
@@ -98,8 +118,13 @@ function GoalsScreen() {
     .map(({ item, version }) => ({
       item,
       payload: version.payload,
+      paceDial: getPaceDial(version.payload),
       pace: getPace(
-        { ...version.payload, heldCents: heldByItem[item.id] ?? 0 },
+        {
+          ...version.payload,
+          ...getPaceFunding(version.payload),
+          heldCents: heldByItem[item.id] ?? 0,
+        },
         comingDays.map((day) => ({
           ...day,
           moneyCents: pick(
@@ -140,12 +165,13 @@ function GoalsScreen() {
           <p className='text-muted-foreground text-sm'>No goal matches that.</p>
         ) : (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {visible.map(({ item, payload, pace }) => (
+            {visible.map(({ item, payload, pace, paceDial }) => (
               <GoalRow
                 key={item.id}
                 goalId={item.id}
                 goal={payload}
                 pace={pace}
+                paceDial={paceDial}
                 heldCents={heldByItem[item.id] ?? 0}
                 today={today}
                 isFaded={!isCountedAt(payload.priority, dial)}

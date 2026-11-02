@@ -9,15 +9,13 @@ import {
   HandCoins,
   ArrowRightLeft,
   Scale,
-  CircleMinus,
   History,
   Link2,
   Pause,
   Pencil,
-  PiggyBank,
   Play,
-  Ruler,
   ReceiptText,
+  Ruler,
   ShoppingBag,
   Undo2,
 } from 'lucide-react';
@@ -65,7 +63,6 @@ import {
   CARD_WORDS,
   CHANGE_WORDS,
   GOAL_CHART_WORDS,
-  HOW_OFTEN_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
   FORM_FLOW_WORDS,
@@ -182,7 +179,7 @@ export interface ItemSheetProps {
   /** A caveat about the figure (the end of a range, a pairing), behind a help icon by it. */
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
-  quickChange?: { label: string; step: string };
+  quickChange?: { label: string; subtitle?: string; step: string };
   /** An action that takes the place of the first row and swaps its own view in, for a change that belongs to the income day the sheet was opened from. */
   dayAction?: {
     label: string;
@@ -791,6 +788,7 @@ function ItemSheet({
             hasChevron
             icon={<Pencil />}
             label={quickChange.label}
+            subtitle={quickChange.subtitle}
             onClick={() => openChange(quickChange.step)}
           />
         )}
@@ -812,24 +810,6 @@ function ItemSheet({
             label={maxAction.label}
             subtitle={maxAction.subtitle}
             onClick={() => openChange(maxAction.step)}
-          />
-        )}
-        {canChange && goal && goal.funding.cadence.kind !== 'none' && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<CircleMinus />}
-            label={HOW_OFTEN_WORDS.changeOften}
-            onClick={() => openChange('often')}
-          />
-        )}
-        {canChange && goal && goal.funding.cadence.kind === 'none' && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<PiggyBank />}
-            label={HOW_OFTEN_WORDS.startAdding}
-            onClick={() => openChange('often')}
           />
         )}
         {canChange && isTrackEnvelope && isArchivable && heldCents > 0 && (

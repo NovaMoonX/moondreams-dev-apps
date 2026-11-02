@@ -125,7 +125,12 @@ import {
   selectReachedEndingsKey,
 } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
 import {
+  describeHoldsBlocks,
+  getCreatedProblems,
+} from '../../src/apps/runway/utils/lookaheadText.ts';
+import {
   describeChange,
+  isMoneylessChange,
   isSamePayload,
   type ItemPayload,
 } from '../../src/apps/runway/utils/changeText.ts';
@@ -244,7 +249,11 @@ import {
   percentShares,
 } from '../../src/apps/runway/engine/money.ts';
 import {
+  applyFieldChanges,
+  getChangedKeys,
   getVersionStretches,
+  isSameValue,
+  planStretches,
   resolve,
   resolveCurrentOrNext,
   resolveNextChange,
@@ -5353,38 +5362,117 @@ const version = (
     'an undated bill does not shorten how far the plan holds',
   );
 
-  // An overdue unpaid bill stops "covered" and holds through nothing; one before the bill began is ignored.
+  // A bill due today or past due is a to-do, never a problem; one before the bill began, or paid, is nowhere.
   const overdue = run(weekly.slice(0, 3), {
     bills: billsOf('rent'),
     payments: {
       rent: [payment(today - 3 * DAY_MS, 0), payment(today + 9 * DAY_MS, 2)],
     },
   });
-  assert.equal(overdue.problems[0].kind, 'overdue');
-  assert.equal(overdue.holdsThrough, null);
-  assert.equal(
-    run(weekly.slice(0, 3), {
-      bills: [{ id: 'rent', name: 'rent', since: today, isUndated: false }],
-      payments: { rent: [payment(today - 3 * DAY_MS, 0)] },
-    }).problems.length,
-    0,
-    'a due date before the bill was tracked is not overdue',
+  assert.equal(overdue.problems.length, 0, 'an overdue bill is no problem');
+  assert.deepEqual(overdue.due, [
+    {
+      billId: 'rent',
+      name: 'rent',
+      dueOn: today - 3 * DAY_MS,
+      isOverdue: true,
+      laterDueOn: [],
+    },
+  ]);
+  assert.notEqual(
+    overdue.holdsThrough,
+    null,
+    'an overdue bill does not stop the plan',
   );
+  const dueToday = run(weekly.slice(0, 3), {
+    bills: billsOf('rent'),
+    payments: { rent: [payment(today, 0)] },
+  });
   assert.equal(
+    dueToday.problems.length,
+    0,
+    'a bill due today has no income problem',
+  );
+  assert.deepEqual(dueToday.due, [
+    {
+      billId: 'rent',
+      name: 'rent',
+      dueOn: today,
+      isOverdue: false,
+      laterDueOn: [],
+    },
+  ]);
+  assert.deepEqual(
     run(weekly.slice(0, 3), {
       bills: billsOf('rent'),
       payments: {
         rent: [
-          {
-            ...(payment(today - 3 * DAY_MS, 0) as object),
-            paid: { moveId: 'm' },
-          } as never,
+          payment(today - 14 * DAY_MS, 0),
+          payment(today - 7 * DAY_MS, 0),
+          payment(today, 0),
         ],
       },
-    }).problems.length,
-    0,
-    'a bill marked paid is not overdue',
+    }).due,
+    [
+      {
+        billId: 'rent',
+        name: 'rent',
+        dueOn: today - 14 * DAY_MS,
+        isOverdue: true,
+        laterDueOn: [today - 7 * DAY_MS, today],
+      },
+    ],
+    'a bill missed more than once shows its oldest payment and lists the later due dates',
   );
+  assert.deepEqual(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent', 'car', 'gym'),
+      payments: {
+        rent: [payment(today - 3 * DAY_MS, 0)],
+        car: [payment(today - 3 * DAY_MS, 0)],
+        gym: [payment(today - 9 * DAY_MS, 0)],
+      },
+    }).due.map((entry) => entry.name),
+    ['gym', 'car', 'rent'],
+    'bills due the same day are listed by name',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: { rent: [payment(today + DAY_MS, 0)] },
+    }).due.length,
+    0,
+    'a bill due tomorrow is not to pay yet',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: { rent: [payment(today + DAY_MS, 0)] },
+    }).problems.length,
+    1,
+    'a bill due tomorrow with no income still warns',
+  );
+  assert.equal(
+    run(weekly.slice(0, 3), {
+      bills: [{ id: 'rent', name: 'rent', since: today, isUndated: false }],
+      payments: { rent: [payment(today - 3 * DAY_MS, 0)] },
+    }).due.length,
+    0,
+    'a due date before the bill was tracked is not to pay',
+  );
+  const paidLook = run(weekly.slice(0, 3), {
+    bills: billsOf('rent'),
+    payments: {
+      rent: [
+        {
+          ...(payment(today - 3 * DAY_MS, 0) as object),
+          paid: { moveId: 'm' },
+        } as never,
+      ],
+    },
+  });
+  assert.equal(paidLook.problems.length, 0, 'a bill marked paid is no problem');
+  assert.equal(paidLook.due.length, 0, 'a bill marked paid is not to pay');
 
   // The walk carries what each day gave a bill into the next, and names the item that runs short.
   const seen: number[] = [];
@@ -7584,6 +7672,7 @@ const version = (
     shortByDay: {},
     firstShortDay: null,
     incomeEndsOn: null,
+    due: [],
     undated: [],
   });
   const short = (on: number, name: string, shortBy: number) =>
@@ -7637,7 +7726,7 @@ const version = (
   );
   const noted = describeHoldsBlocks(
     look(day, [rentShort]),
-    look(day, [rentShort, short(utc(2026, 11, 7), 'Rent', 29600)]),
+    look(day, [rentShort, short(utc(2026, 11, 7), 'Phone', 29600)]),
     false,
     {
       [`k${utc(2026, 11, 7)}`]: 'Freelance payment is one-time and brings $120',
@@ -7645,9 +7734,24 @@ const version = (
   );
   assert.ok(
     noted[0]?.text.includes(
-      'Rent $296 short on Nov 7: Freelance payment is one-time and brings $120.',
+      'Phone $296.00 short on Nov 7: Freelance payment is one-time and brings $120.',
     ),
     'a short pay that is one-time says why',
+  );
+  assert.ok(
+    describeHoldsChange(
+      look(day, []),
+      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+    )?.includes('1 more item needs a look'),
+    'the sentence counts the other problems the change creates',
+  );
+  const onlyCar = describeHoldsChange(
+    look(day, [rentShort]),
+    look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+  );
+  assert.ok(
+    onlyCar?.includes('Car') && !onlyCar.includes('more item'),
+    "a problem the plan already had is not counted as the change's",
   );
   const text = describeHoldsChange(
     look(day, [short(utc(2026, 10, 30), 'Rent', 22000)]),
@@ -9817,6 +9921,418 @@ const version = (
       foreignCurrency: 'EUR',
     }),
     'Read the store, the day and 9 items. This receipt is in EUR, so type the amount in dollars.',
+  );
+}
+
+{
+  const stretches = [
+    {
+      payload: { name: 'Rent', cents: 125000 },
+      effectiveFrom: 10,
+      effectiveUntil: 40,
+    },
+    {
+      payload: { name: 'Rent', cents: 130000 },
+      effectiveFrom: 40,
+      effectiveUntil: null,
+    },
+  ];
+  assert.deepEqual(
+    getChangedKeys(
+      { name: 'Rent', cents: 125000 },
+      { name: 'Home', cents: 125000 },
+    ),
+    ['name'],
+  );
+  assert.deepEqual(
+    applyFieldChanges(
+      stretches,
+      { name: 'Rent', cents: 125000 },
+      { name: 'Home', cents: 125000 },
+    ),
+    [
+      {
+        payload: { name: 'Home', cents: 125000 },
+        effectiveFrom: 10,
+        effectiveUntil: 40,
+      },
+      {
+        payload: { name: 'Home', cents: 130000 },
+        effectiveFrom: 40,
+        effectiveUntil: null,
+      },
+    ],
+    "a rename keeps the later version's own amount",
+  );
+}
+
+{
+  const D = 86_400_000;
+  const v = (
+    id: string,
+    createdAt: number,
+    from: number,
+    until: number | null,
+    name: string,
+    cents: number,
+  ) => ({
+    id,
+    itemId: 'x',
+    createdAt,
+    effectiveFrom: from,
+    effectiveUntil: until,
+    payload: { name, cents },
+  });
+  const versions = [
+    v('base', 1, 0, null, 'Rent', 125000),
+    v('raise', 2, 60 * D, null, 'Rent', 130000),
+  ];
+  const rent = { name: 'Rent', cents: 125000 };
+
+  const single = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 70 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 130000 },
+    { name: 'Home', cents: 130000 },
+  );
+  assert.deepEqual(
+    single.written,
+    [
+      {
+        payload: { name: 'Home', cents: 130000 },
+        effectiveFrom: 70 * D,
+        effectiveUntil: null,
+      },
+    ],
+    'a change from a day inside the last version is one stretch, still written as a stretch',
+  );
+
+  const rename = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 10 * D, effectiveUntil: null },
+    rent,
+    { name: 'Home', cents: 125000 },
+  );
+  assert.deepEqual(
+    rename.written.map(({ payload }) => payload),
+    [
+      { name: 'Home', cents: 125000 },
+      { name: 'Home', cents: 130000 },
+    ],
+    'a rename keeps the later raise',
+  );
+  assert.equal(rename.replaced.length, 0, 'a rename replaces nothing');
+
+  const amount = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 10 * D, effectiveUntil: null },
+    rent,
+    { name: 'Rent', cents: 140000 },
+  );
+  assert.deepEqual(
+    amount.written.map(({ payload }) => payload.cents),
+    [140000, 140000],
+    'an amount edit from now on replaces the scheduled raise of that amount',
+  );
+  assert.deepEqual(
+    amount.replaced.map(({ effectiveFrom, before, after }) => [
+      effectiveFrom,
+      before.cents,
+      after.cents,
+    ]),
+    [[60 * D, 125000, 130000]],
+    'and says which change it replaces',
+  );
+
+  const window = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 50 * D, effectiveUntil: 70 * D },
+    rent,
+    { name: 'Home', cents: 125000 },
+  );
+  assert.deepEqual(
+    window.written,
+    [
+      {
+        payload: { name: 'Home', cents: 125000 },
+        effectiveFrom: 50 * D,
+        effectiveUntil: 60 * D,
+      },
+      {
+        payload: { name: 'Home', cents: 130000 },
+        effectiveFrom: 60 * D,
+        effectiveUntil: 70 * D,
+      },
+    ],
+    'a temporary window over a later version is clipped to the window and keeps the later amount',
+  );
+  assert.equal(window.replaced.length, 0);
+
+  const windowOver = planStretches(
+    versions,
+    'x',
+    { effectiveFrom: 50 * D, effectiveUntil: 70 * D },
+    rent,
+    { name: 'Rent', cents: 127000 },
+  );
+  assert.deepEqual(
+    windowOver.replaced.map(
+      ({ effectiveFrom, effectiveUntil, before, after }) => [
+        effectiveFrom,
+        effectiveUntil,
+        before.cents,
+        after.cents,
+      ],
+    ),
+    [[60 * D, null, 125000, 130000]],
+    'a temporary change over a scheduled change of the same field names the one it overwrites',
+  );
+
+  const bounded = [
+    v('base', 1, 0, null, 'Rent', 100),
+    v('temp', 2, 20 * D, 30 * D, 'Rent', 200),
+  ];
+  const permanent = planStretches(
+    bounded,
+    'x',
+    { effectiveFrom: 10 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 100 },
+    { name: 'Rent', cents: 150 },
+  );
+  assert.deepEqual(
+    permanent.replaced.map(({ effectiveFrom, effectiveUntil }) => [
+      effectiveFrom,
+      effectiveUntil,
+    ]),
+    [[20 * D, 30 * D]],
+    'the return to what held before a temporary change is part of its entry, not a change of its own',
+  );
+
+  assert.deepEqual(
+    getChangedKeys(
+      { a: 1, b: { x: 1, y: null } },
+      { b: { y: undefined, x: 1 }, a: 1, c: null },
+    ),
+    [],
+    'key order and null against missing do not count as a change',
+  );
+  assert.equal(
+    isSameValue({ a: [1, { b: 2, c: 3 }] }, { a: [1, { c: 3, b: 2 }] }),
+    true,
+  );
+}
+
+{
+  const base = {
+    name: 'Rent',
+    emoji: null,
+    priority: 'must' as const,
+    orderIndex: 1,
+  };
+  const bill = {
+    ...base,
+    amount: { kind: 'exact', cents: 125000 },
+    timing: {
+      kind: 'date',
+      schedule: { kind: 'monthly', anchor: 0, monthDays: [1] },
+    },
+    ending: { onDate: null, afterCount: null },
+    fundedBy: { kind: 'suggested' },
+    stanceOverride: null,
+    groupId: null,
+    paidByCardId: null,
+  } as unknown as ItemPayload;
+  const envelope = {
+    ...base,
+    funding: {
+      amount: { kind: 'exact', cents: 5000 },
+      cadence: { kind: 'everyIncomeDay' },
+    },
+    maxCents: null,
+    groupId: null,
+  } as unknown as ItemPayload;
+  const goal = {
+    ...base,
+    targetCents: 20000,
+    targetDate: null,
+    funding: {
+      amount: { kind: 'exact', cents: 5000 },
+      cadence: { kind: 'everyIncomeDay' },
+    },
+    state: 'active',
+  } as unknown as ItemPayload;
+  const payLine = {
+    name: 'Paycheck',
+    amount: { kind: 'exact', cents: 300000 },
+    schedule: { kind: 'weekly', anchor: 0, monthDays: [] },
+  } as unknown as ItemPayload;
+  [bill, envelope, goal, payLine].forEach((payload) => {
+    assert.equal(
+      isMoneylessChange(payload, {
+        ...payload,
+        name: 'Renamed',
+      } as ItemPayload),
+      true,
+      'a rename moves nothing for every kind',
+    );
+    assert.equal(
+      isMoneylessChange(payload, {
+        ...payload,
+        emoji: '🏠',
+        name: 'Renamed',
+      } as ItemPayload),
+      true,
+    );
+    assert.equal(
+      isMoneylessChange(payload, { ...payload } as ItemPayload),
+      false,
+      'no difference is not a change',
+    );
+  });
+  assert.equal(
+    isMoneylessChange(bill, {
+      ...bill,
+      name: 'Home',
+      amount: { kind: 'exact', cents: 130000 },
+    } as unknown as ItemPayload),
+    false,
+    'a name and an amount together still move money',
+  );
+  assert.equal(
+    isMoneylessChange(payLine, {
+      ...payLine,
+      schedule: { kind: 'weekly', anchor: 7, monthDays: [] },
+    } as unknown as ItemPayload),
+    false,
+    'a pay day moves money',
+  );
+  assert.equal(
+    isMoneylessChange(
+      envelope,
+      JSON.parse(
+        JSON.stringify({ ...envelope, name: 'X' }, [
+          'groupId',
+          'maxCents',
+          'funding',
+          'cadence',
+          'kind',
+          'amount',
+          'cents',
+          'name',
+          'emoji',
+          'priority',
+          'orderIndex',
+        ]),
+      ) as ItemPayload,
+    ),
+    true,
+    'key order never makes a rename look like more',
+  );
+}
+
+{
+  const water = {
+    kind: 'noIncome' as const,
+    on: 1_000,
+    billId: 'water',
+    name: 'Water',
+  };
+  const rent = { ...water, billId: 'rent', name: 'Rent', on: 2_000 };
+  const look = (problems: (typeof water)[]) => ({
+    hasBills: true,
+    holdsThrough: 5_000,
+    problems,
+    shortByDay: {},
+    firstShortDay: null,
+    incomeEndsOn: null,
+    undated: [],
+    due: [],
+  });
+  assert.equal(
+    describeHoldsBlocks(look([water]), look([water, rent]))
+      .filter((block) => block.tone === 'warning')[0]
+      ?.text.includes('Rent'),
+    true,
+    'a warning names the problem the change creates',
+  );
+  assert.equal(
+    describeHoldsBlocks(look([water]), look([water, rent]))
+      .filter((block) => block.tone === 'warning')[0]
+      ?.text.includes('more'),
+    false,
+    "and does not count the plan's existing problems",
+  );
+  assert.equal(
+    describeHoldsBlocks(look([water]), {
+      ...look([water]),
+      holdsThrough: 6_000,
+    }).some((block) => block.tone === 'warning'),
+    false,
+    "a plan's existing problem is not warned about again",
+  );
+  assert.equal(
+    describeHoldsBlocks(look([water]), look([{ ...water, on: 1_500 }])).some(
+      (block) => block.tone === 'warning',
+    ),
+    false,
+    'a problem a bill already had, moved to another day, is not created by the change',
+  );
+  const short = (on: number, shortBy: number) => ({
+    kind: 'short' as const,
+    on,
+    dayKey: `d${on}`,
+    itemId: 'rent',
+    name: 'Rent',
+    shortBy,
+    isBill: true,
+    tier: 'must' as const,
+  });
+  const created = (
+    before: (typeof water | ReturnType<typeof short>)[],
+    after: (typeof water | ReturnType<typeof short>)[],
+  ) => getCreatedProblems(before, after);
+  assert.equal(
+    created([short(2_000, 5_000)], [short(1_000, 5_000)]).length,
+    1,
+    "a shortfall that moves earlier is the change's",
+  );
+  assert.equal(
+    created([short(2_000, 5_000)], [short(2_000, 5_000), short(3_000, 5_000)])
+      .length,
+    1,
+    "an extra day is the change's",
+  );
+  assert.equal(
+    created([short(2_000, 5_000)], [short(2_000, 6_000)])[0]?.grewBy,
+    1_000,
+    'a bigger shortfall names how much more',
+  );
+  assert.equal(
+    created([short(2_000, 5_000)], [short(2_500, 5_000)]).length,
+    0,
+    'the same shortfall moved later is old',
+  );
+  assert.equal(
+    created(
+      [short(2_000, 500), short(4_000, 100)],
+      [short(5_000, 100), short(6_000, 400)],
+    ).length,
+    0,
+    'two shortfalls that each fit an old one are old, whatever order they are matched in',
+  );
+  assert.equal(
+    created([short(4_000, 5_000)], [short(3_000, 5_000)]).length,
+    1,
+    "a shortfall that moved earlier is the change's",
+  );
+  assert.equal(
+    created([water], [{ ...water, on: 500 }]).length,
+    1,
+    "a no-income problem on an earlier day is the change's",
   );
 }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
@@ -26,6 +26,7 @@ interface BillRowProps {
   /** The next payment and what each income day sets aside for it; null once the bill has no payment left. */
   payment: BillPayment | null;
   planStance: Stance;
+  today: number;
   /** A one-time bill in a group: the group's monthly total leaves it out, and its row says so. */
   isOutsideTotal?: boolean;
   /** Said in the row's one line in place of the due date. */
@@ -48,10 +49,14 @@ interface BillSheetProps {
   onClose: () => void;
 }
 
-const getDueLine = (payment: BillPayment | null, isUndated: boolean) => {
+const getDueLine = (
+  payment: BillPayment | null,
+  isUndated: boolean,
+  today: number,
+) => {
   if (isUndated) return BILL_WORDS.needsDueDate;
   if (!payment) return 'No payment left';
-  const date = formatDateShortUTC(payment.dueOn);
+  const date = formatRelativeDayUTC(payment.dueOn, today);
   return payment.paid ? `Paid · due ${date}` : `Due ${date}`;
 };
 
@@ -72,6 +77,7 @@ function BillRow({
   bill,
   payment,
   planStance,
+  today,
   isOutsideTotal = false,
   detailOverride = null,
   reorder,
@@ -84,8 +90,8 @@ function BillRow({
   const isUndated = isUndatedBill(bill);
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
   const dueLine = isOutsideTotal
-    ? `${getDueLine(payment, isUndated)} · ${GROUP_WORDS.oneTimeNote}`
-    : getDueLine(payment, isUndated);
+    ? `${getDueLine(payment, isUndated, today)} · ${GROUP_WORDS.oneTimeNote}`
+    : getDueLine(payment, isUndated, today);
 
   return (
     <ItemRow
@@ -124,7 +130,7 @@ export function BillSheet({
     schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);
   const getDueFact = () => {
     if (isUndated) return null;
-    if (payment) return `due ${formatDateShortUTC(payment.dueOn)}`;
+    if (payment) return `due ${formatRelativeDayUTC(payment.dueOn, today)}`;
     return 'No payment left';
   };
   const fact = [
@@ -154,7 +160,11 @@ export function BillSheet({
       quickChange={
         isUndated
           ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
-          : { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+          : {
+              label: ITEM_SHEET_R2_WORDS.change,
+              subtitle: ITEM_SHEET_R2_WORDS.changeBillSub,
+              step: 'amount',
+            }
       }
       maxAction={paidFromAction}
       dayAction={dayAction}

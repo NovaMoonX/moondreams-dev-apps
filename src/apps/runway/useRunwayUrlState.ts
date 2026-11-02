@@ -139,6 +139,22 @@ export function useRunwayUrlState() {
     setRequestedDueBill(billId, { history: 'replace' });
   const closeDueBill = () => setRequestedDueBill(null, { history: 'replace' });
 
+  const [requestedUndatedBills, setRequestedUndatedBills] = useQueryState(
+    'undatedBills',
+    parseAsBoolean,
+  );
+  const openUndatedBills = () =>
+    setRequestedUndatedBills(true, { history: 'replace' });
+  const closeUndatedBills = () =>
+    setRequestedUndatedBills(null, { history: 'replace' });
+
+  const [requestedAllDue, setRequestedAllDue] = useQueryState(
+    'allDue',
+    parseAsBoolean,
+  );
+  const openAllDue = () => setRequestedAllDue(true, { history: 'replace' });
+  const closeAllDue = () => setRequestedAllDue(null, { history: 'replace' });
+
   const [requestedGroups, setRequestedGroups] = useQueryState(
     'groups',
     parseAsBoolean,
@@ -201,6 +217,8 @@ export function useRunwayUrlState() {
     if (requestedFixes !== null) closeFixes();
     if (requestedAdd !== null) clearAdd();
     if (requestedDueBill !== null) closeDueBill();
+    if (requestedUndatedBills !== null) closeUndatedBills();
+    if (requestedAllDue !== null) closeAllDue();
     if (tab === DEFAULT_RUNWAY_TAB) {
       if (window.history.state?.runwayTabStep) {
         navigate(-1);
@@ -248,6 +266,7 @@ export function useRunwayUrlState() {
   const showPlanSection = (section: PlanSection) => {
     if (requestedAdd !== null && section !== requestedSection) clearAdd();
     if (requestedDueBill !== null) closeDueBill();
+    if (requestedAllDue !== null && section !== 'bills') closeAllDue();
     return setRequestedSection(
       section === DEFAULT_PLAN_SECTION ? null : section,
       { history: 'replace' },
@@ -335,6 +354,12 @@ export function useRunwayUrlState() {
     dueBillId: requestedDueBill,
     openDueBill,
     closeDueBill,
+    isUndatedBillsOnly: requestedUndatedBills === true,
+    openUndatedBills,
+    closeUndatedBills,
+    isAllDueOpen: requestedAllDue === true,
+    openAllDue,
+    closeAllDue,
     isGroupsOpen: requestedGroups === true,
     openGroups,
     closeGroups,

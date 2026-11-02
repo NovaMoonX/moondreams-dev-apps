@@ -1,3 +1,5 @@
+import { DAY_MS } from '@apps/runway/engine/dates';
+import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateUTC } from '@/utils/formatUtils';
 import {
@@ -7,6 +9,7 @@ import {
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import { describeBillTiming } from '@apps/runway/utils/billText';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
@@ -49,8 +52,7 @@ export type ItemPayload =
 /** The name of a group by its id, from the plan's groups. */
 export type GroupNamer = (groupId: string) => string;
 
-const same = (a: unknown, b: unknown) =>
-  JSON.stringify(a) === JSON.stringify(b);
+const same = isSameValue;
 
 type Part = [label: string, before: string, after: string] | null;
 
@@ -205,7 +207,12 @@ const getParts = (
         goalAfter.priority,
         (value) => PRIORITY_LABELS[value],
       ),
-      diff('Funding', goalBefore.funding, goalAfter.funding, describeFunding),
+      diff(
+        'Funding',
+        { funding: goalBefore.funding, extras: getExtras(goalBefore) },
+        { funding: goalAfter.funding, extras: getExtras(goalAfter) },
+        (value) => describeFunding(value.funding, value.extras),
+      ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
             diff(
@@ -250,6 +257,16 @@ const getParts = (
   return base;
 };
 
+const MONEYLESS_KEYS = ['name', 'emoji', 'groupId', 'paidByCardId'];
+
+/** A change to only a name, emoji, group or card: it moves no money on any income day. */
+export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
+  const changed = getChangedKeys(before, after) as string[];
+  return (
+    changed.length > 0 && changed.every((key) => MONEYLESS_KEYS.includes(key))
+  );
+};
+
 /** True when two payloads say the same thing. */
 export const isSamePayload = (a: ItemPayload, b: ItemPayload) => same(a, b);
 
@@ -265,5 +282,22 @@ export function describeChange(
     .flatMap((part) => (part === null ? [] : [part]))
     .map(([label, from, to]) => `${label} ${from} to ${to}`)
     .join('; ');
+  return result;
+}
+
+/** What an edit from a day on replaces: "This replaces your change from Jan 1, 2027 (Amount $1,250.00 to $1,300.00)."; null when it replaces nothing. */
+export function describeReplaced(
+  replaced: readonly {
+    effectiveFrom: number;
+    effectiveUntil: number | null;
+    before: ItemPayload;
+    after: ItemPayload;
+  }[],
+  cardNameOf: (cardId: string | null) => string,
+) {
+  const [first] = replaced;
+  if (!first) return null;
+  const more = replaced.length - 1;
+  const result = `This replaces your change from ${formatDateUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }

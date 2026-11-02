@@ -12,8 +12,9 @@ import {
   type ResolvedBill,
   type ResolvedEnvelope,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { fundingAtLevel } from '@apps/runway/engine/parts';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
-import type { Priority } from '@apps/runway/types';
+import type { FundingRule, Priority } from '@apps/runway/types';
 import { getGroupMemberNames } from '@apps/runway/utils/billText';
 
 const toBillMember = ({ version: bill }: ResolvedBill) => ({
@@ -28,9 +29,10 @@ const toEnvelopeMember = (
   { version: envelope }: ResolvedEnvelope,
   today: number,
   payLines: Parameters<typeof getIncomeDaysPerMonth>[0],
+  funding: FundingRule,
 ) => ({
   name: envelope.payload.name,
-  funding: envelope.payload.funding,
+  funding,
   startsOn: envelope.effectiveFrom,
   incomeDaysPerMonth: getIncomeDaysPerMonth(
     payLines,
@@ -38,6 +40,20 @@ const toEnvelopeMember = (
     envelope.payload.funding.sourceId ?? null,
   ),
 });
+
+/** The envelopes that count at `dial`, each with only its parts at or above it. */
+const toCountedMembers = (
+  envelopes: readonly ResolvedEnvelope[],
+  dial: Priority,
+  today: number,
+  payLines: Parameters<typeof getIncomeDaysPerMonth>[0],
+) =>
+  envelopes.flatMap((envelope) => {
+    const funding = fundingAtLevel(envelope.version.payload, dial);
+    return funding
+      ? [toEnvelopeMember(envelope, today, payLines, funding)]
+      : [];
+  });
 
 const useResolvedPayLines = (today: number) => {
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
@@ -57,14 +73,10 @@ export function usePlanTotals(
   today: number,
   dial: Priority = 'want',
 ): Record<'income' | 'bills' | 'envelopes', GroupTotal> {
-  const isCounted = ({ version }: ResolvedBill | ResolvedEnvelope) =>
-    isCountedAt(version.payload.priority, dial);
   const bills = useAppSelector((state) => selectBills(state, today)).filter(
-    isCounted,
+    ({ version }) => isCountedAt(version.payload.priority, dial),
   );
-  const envelopes = useAppSelector((state) =>
-    selectEnvelopes(state, today),
-  ).filter(isCounted);
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const payLines = useResolvedPayLines(today);
   // A month from today, so items starting later this month or early next one still count late in a month.
   const usualMonth = today + 30 * 86_400_000;
@@ -74,7 +86,7 @@ export function usePlanTotals(
     envelopes: monthlyTotal(
       [],
       usualMonth,
-      envelopes.map((envelope) => toEnvelopeMember(envelope, today, payLines)),
+      toCountedMembers(envelopes, dial, today, payLines),
     ),
   };
 }
@@ -110,17 +122,21 @@ export function useGroupFigures(
       ({ version: envelope }) => envelope.payload.groupId === item.id,
     );
     const billMembers = memberBills.map(toBillMember);
-    const envelopeMembers = memberEnvelopes.map((envelope) =>
-      toEnvelopeMember(envelope, today, payLines),
+    const envelopeMembers = toCountedMembers(
+      memberEnvelopes,
+      'want',
+      today,
+      payLines,
     );
     const countedBills = memberBills
       .filter(({ version: bill }) => isCountedAt(bill.payload.priority, dial))
       .map(toBillMember);
-    const countedEnvelopes = memberEnvelopes
-      .filter(({ version: envelope }) =>
-        isCountedAt(envelope.payload.priority, dial),
-      )
-      .map((envelope) => toEnvelopeMember(envelope, today, payLines));
+    const countedEnvelopes = toCountedMembers(
+      memberEnvelopes,
+      dial,
+      today,
+      payLines,
+    );
     return {
       id: item.id,
       name: version.payload.name,

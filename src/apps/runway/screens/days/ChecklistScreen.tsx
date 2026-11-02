@@ -9,7 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
 import { useRecordedEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -136,7 +136,7 @@ function ChecklistBillRow({
           today={today}
           figureLabel='From this day'
           figure={amount}
-          fact={[`Due ${formatDateShortUTC(payment.dueOn)}`, progress]
+          fact={[`Due ${formatRelativeDayUTC(payment.dueOn, today)}`, progress]
             .filter(Boolean)
             .join(' · ')}
           payment={payment}
