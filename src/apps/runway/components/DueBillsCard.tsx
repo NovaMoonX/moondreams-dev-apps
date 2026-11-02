@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -6,6 +6,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SectionHeader from '@/components/SectionHeader';
 import SensitiveValue from '@/components/SensitiveValue';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { formatRelativeDayUTC } from '@/utils/formatUtils';
@@ -130,7 +131,10 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
             )}
           >
             {due.isOverdue
-              ? DUE_WORDS.wasDue(formatRelativeDayUTC(due.dueOn, today))
+              ? DUE_WORDS.wasDue(
+                  formatRelativeDayUTC(due.dueOn, today),
+                  due.laterCount,
+                )
               : DUE_WORDS.today}
           </span>
         </span>
@@ -158,20 +162,31 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
   );
 }
 
+/** Rows a crowded card shows before it folds the rest away. */
+const SHOWN_DUE = 3;
+
 interface DueBillsCardProps {
   /** Null before the plan can look ahead; nothing is drawn then. */
   lookahead: Lookahead | null;
   today: number;
   /** Opens the bill where the screen can; the default goes to the Bills section. */
   onOpenBill?: (billId: string) => void;
+  /** Past the first few rows: `door` ends the card with a row that opens Bills, `unfold` shows the rest in place. */
+  overflow: 'door' | 'unfold';
 }
 
 /** The bills due today or already past due and not marked paid: a to-do with Mark paid on each, never a gap in the plan. */
-function DueBillsCard({ lookahead, today, onOpenBill }: DueBillsCardProps) {
+function DueBillsCard({
+  lookahead,
+  today,
+  onOpenBill,
+  overflow,
+}: DueBillsCardProps) {
   const { showPlanSection, showTab } = useRunwayUrlState();
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const emojiOf = useLiveEmojiResolver();
+  const [isUnfolded, setIsUnfolded] = useState(false);
   const due = lookahead?.due ?? [];
   if (due.length === 0) return null;
 
@@ -179,18 +194,36 @@ function DueBillsCard({ lookahead, today, onOpenBill }: DueBillsCardProps) {
     showPlanSection('bills');
     showTab('plan');
   };
+  const paymentOf = (entry: DueBill) =>
+    (payments[entry.billId] ?? []).find(
+      (payment) => payment.dueOn === entry.dueOn,
+    ) ?? null;
+  const hidden = due.slice(SHOWN_DUE);
+  const isFolded =
+    overflow === 'door'
+      ? hidden.length > 0
+      : hidden.length > SHOWN_DUE && !isUnfolded;
+  const shown = isFolded ? due.slice(0, SHOWN_DUE) : due;
+  const isAnyLate = due.some((entry) => entry.isOverdue);
 
   return (
     <section className='space-y-2'>
       <SectionHeader
-        title={
-          due.some((entry) => entry.isOverdue)
-            ? DUE_WORDS.titleLate
-            : DUE_WORDS.title
+        title={isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title}
+        action={
+          overflow === 'door' &&
+          isFolded && (
+            <ShowMoreButton isHeaderAction onClick={openBills}>
+              {DUE_WORDS.seeAll}
+            </ShowMoreButton>
+          )
+        }
+        subtitle={
+          due.length > 1 ? DUE_WORDS.count(due.length, isAnyLate) : undefined
         }
       />
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-        {due.map((entry) => {
+        {shown.map((entry) => {
           const payload =
             bills.find(({ item }) => item.id === entry.billId)?.version
               .payload ?? null;
@@ -198,11 +231,7 @@ function DueBillsCard({ lookahead, today, onOpenBill }: DueBillsCardProps) {
             <DueBillRow
               key={entry.billId}
               due={entry}
-              payment={
-                (payments[entry.billId] ?? []).find(
-                  (payment) => payment.dueOn === entry.dueOn,
-                ) ?? null
-              }
+              payment={paymentOf(entry)}
               emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
               today={today}
               onOpen={() =>
@@ -212,6 +241,14 @@ function DueBillsCard({ lookahead, today, onOpenBill }: DueBillsCardProps) {
           );
         })}
       </ul>
+      {overflow === 'unfold' && hidden.length > SHOWN_DUE && (
+        <ShowMoreButton
+          isOpen={isUnfolded}
+          onClick={() => setIsUnfolded(!isUnfolded)}
+        >
+          {isUnfolded ? DUE_WORDS.fewer : DUE_WORDS.more(hidden.length)}
+        </ShowMoreButton>
+      )}
     </section>
   );
 }

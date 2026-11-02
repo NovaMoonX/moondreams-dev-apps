@@ -177,7 +177,7 @@ function HomeScreen() {
           </Button>
         </div>
       </div>
-      <DueBillsCard lookahead={lookahead} today={today} />
+      <DueBillsCard lookahead={lookahead} today={today} overflow='door' />
       {!isAddingPurchase && (
         <DraftPickUpRow
           isTrack={isTrack}

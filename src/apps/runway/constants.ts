@@ -668,17 +668,30 @@ export const BILL_WORDS = {
   waiting: 'Waiting for the rest',
   readyToPay: 'Set aside in full',
   needsDueDate: 'Needs a due date',
+  allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
-  offPlanOne: (name: string) => `${name} needs a due date to show`,
-  offPlanMany: (count: number) => `${count} bills need a due date`,
+  offPlanOne: (name: string) => `${name} isn't planned for yet`,
+  offPlanMany: (count: number) => `${count} bills aren't planned for yet`,
+  offPlanDetail: (count: number) =>
+    count === 1
+      ? 'It has no due date, so this pay sets nothing aside for it'
+      : 'They have no due dates, so this pay sets nothing aside for them',
 } as const;
 
 export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
-  wasDue: (when: string) => `Was due ${when}`,
+  wasDue: (when: string, laterCount: number) =>
+    laterCount === 0
+      ? `Was due ${when}`
+      : `Was due ${when} · ${laterCount} more since`,
+  count: (count: number, isAnyLate: boolean) =>
+    isAnyLate ? `${count} bills, oldest first` : `${count} bills`,
+  more: (count: number) => `Show ${count} more`,
+  fewer: 'Show fewer',
+  seeAll: 'See all',
   markPaid: 'Mark paid',
   openBills: (name: string) => `Open ${name}`,
   undoOffline: (name: string) =>

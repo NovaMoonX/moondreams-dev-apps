@@ -57,6 +57,7 @@ function BillsScreen() {
   );
   const bills = useAppSelector((state) => selectBills(state, today));
   const lookahead = useDeferredLookahead(today, isLoaded);
+  const hasDue = (lookahead?.due.length ?? 0) > 0;
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);
@@ -183,11 +184,17 @@ function BillsScreen() {
     }
     return (
       <div className='space-y-3'>
-        <DueBillsCard
-          lookahead={lookahead}
-          today={today}
-          onOpenBill={setOpenBillId}
-        />
+        {!isNarrowed && (
+          <DueBillsCard
+            lookahead={lookahead}
+            today={today}
+            onOpenBill={setOpenBillId}
+            overflow='unfold'
+          />
+        )}
+        {hasDue && !isNarrowed && (
+          <SectionDivider label={BILL_WORDS.allBills} />
+        )}
         {undated.length > 0 &&
           (isNarrowed ? (
             <div>

@@ -4832,6 +4832,7 @@ const version = (
       name: 'rent',
       dueOn: today - 3 * DAY_MS,
       isOverdue: true,
+      laterCount: 0,
     },
   ]);
   assert.notEqual(
@@ -4849,8 +4850,36 @@ const version = (
     'a bill due today has no income problem',
   );
   assert.deepEqual(dueToday.due, [
-    { billId: 'rent', name: 'rent', dueOn: today, isOverdue: false },
+    {
+      billId: 'rent',
+      name: 'rent',
+      dueOn: today,
+      isOverdue: false,
+      laterCount: 0,
+    },
   ]);
+  assert.deepEqual(
+    run(weekly.slice(0, 3), {
+      bills: billsOf('rent'),
+      payments: {
+        rent: [
+          payment(today - 14 * DAY_MS, 0),
+          payment(today - 7 * DAY_MS, 0),
+          payment(today, 0),
+        ],
+      },
+    }).due,
+    [
+      {
+        billId: 'rent',
+        name: 'rent',
+        dueOn: today - 14 * DAY_MS,
+        isOverdue: true,
+        laterCount: 2,
+      },
+    ],
+    'a bill missed more than once shows its oldest payment and counts the rest',
+  );
   assert.equal(
     run(weekly.slice(0, 3), {
       bills: billsOf('rent'),

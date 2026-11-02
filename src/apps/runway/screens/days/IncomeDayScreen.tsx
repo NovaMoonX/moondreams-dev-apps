@@ -280,6 +280,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                 ? BILL_WORDS.offPlanOne(undated[0].name)
                 : BILL_WORDS.offPlanMany(undated.length)
             }
+            detail={BILL_WORDS.offPlanDetail(undated.length)}
             onOpen={openUndated}
           />
         )}
