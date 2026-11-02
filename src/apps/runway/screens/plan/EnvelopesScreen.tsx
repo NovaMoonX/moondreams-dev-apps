@@ -26,6 +26,10 @@ import {
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import PlanTotal from '@apps/runway/components/PlanTotal';
+import {
+  isCountedAt,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import { usePlanTotals } from '@apps/runway/hooks/useGroupFigures';
 import { describePlanTotal } from '@apps/runway/utils/billText';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
@@ -50,10 +54,15 @@ function EnvelopesScreen() {
   const isRequested = addRequest === 'envelope';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
-  const figuresByGroup = useGroupFigures(today);
-  const total = usePlanTotals(today).envelopes;
+  const { dial } = usePriorityDial();
+  const figuresByGroup = useGroupFigures(today, dial);
+  const total = usePlanTotals(today, dial).envelopes;
   const stance = useAppSelector(selectStance);
-  const totalFigure = describePlanTotal({ kind: 'monthly', total });
+  const totalFigure = describePlanTotal(
+    { kind: 'monthly', total },
+    dial,
+    envelopes.length > 0,
+  );
 
   const hasSearch = envelopes.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -86,6 +95,7 @@ function EnvelopesScreen() {
           cents={balances.assignedByItem[item.id] ?? 0}
           pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
           today={today}
+          isFaded={!isCountedAt(version.payload.priority, dial)}
         />
       ))}
     </ul>
@@ -155,6 +165,7 @@ function EnvelopesScreen() {
           isLoaded && totalFigure ? (
             <PlanTotal
               figure={totalFigure}
+              dial={dial}
               help={
                 <GroupTotalHelp
                   total={total}
@@ -177,6 +188,7 @@ function EnvelopesScreen() {
         <GroupSheet
           groupId={openGroupId}
           today={today}
+          dial={dial}
           onClose={() => setOpenGroupId(null)}
         />
       )}

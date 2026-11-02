@@ -25,6 +25,7 @@ interface GoalRowProps {
   today: number;
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
+  isFaded?: boolean;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -60,6 +61,7 @@ function GoalRow({
   today,
   reorder,
   isHighlighted = false,
+  isFaded = false,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const savedCents = Math.min(heldCents, goal.targetCents);
@@ -79,6 +81,7 @@ function GoalRow({
         onOpen={reorder ? undefined : () => setIsOpen(true)}
         reorder={reorder}
         isHighlighted={isHighlighted}
+        isFaded={isFaded}
       />
       {isOpen && (
         <ItemSheet

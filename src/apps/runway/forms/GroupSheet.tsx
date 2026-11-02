@@ -23,6 +23,7 @@ import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   GROUP_WORDS,
+  PRIORITY_DIAL_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
@@ -65,6 +66,7 @@ type StartingChoice = Priority | 'none';
 interface GroupSheetProps {
   groupId: string;
   today: number;
+  dial: Priority;
   onClose: () => void;
 }
 
@@ -74,7 +76,7 @@ const startingOptions = [
 ];
 
 /** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
-function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
+function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -95,7 +97,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     null,
   );
   const allGroups = useAppSelector((state) => selectGroups(state, today));
-  const figures = useGroupFigures(today).find(({ id }) => id === groupId);
+  const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
   const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
 
   if (!group || !figures) return null;
@@ -345,7 +347,9 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
               label={
                 lead.isOneTime
                   ? GROUP_WORDS.oneTimeLabel
-                  : GROUP_WORDS.monthLabel
+                  : dial === 'want'
+                    ? GROUP_WORDS.monthLabel
+                    : `${GROUP_WORDS.monthLabel}, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial]}`
               }
               figure={
                 lead.amount === null ? undefined : (

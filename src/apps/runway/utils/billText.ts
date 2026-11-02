@@ -3,6 +3,7 @@ import {
   BILL_FREQUENCY_LABELS,
   BILL_FREQUENCIES,
   GROUP_WORDS,
+  PRIORITY_DIAL_WORDS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { monthlyTotal } from '@apps/runway/engine/groups';
@@ -11,7 +12,12 @@ import type {
   GroupMember,
   GroupTotal,
 } from '@apps/runway/engine/groups';
-import type { BillFundedBy, MoneyRange, Schedule } from '@apps/runway/types';
+import type {
+  BillFundedBy,
+  MoneyRange,
+  Priority,
+  Schedule,
+} from '@apps/runway/types';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 
@@ -150,22 +156,25 @@ export function describePlanTotal(
   figure:
     | { kind: 'monthly'; total: GroupTotal }
     | { kind: 'saved'; savedCents: number; targetCents: number },
+  dial: Priority = 'want',
+  hasItems = false,
 ) {
+  const isTrimmed = dial !== 'want' && hasItems;
   if (figure.kind === 'monthly') {
-    return figure.total.total.highCents === 0
+    return figure.total.total.highCents === 0 && !isTrimmed
       ? null
       : {
           amount: describeGroupTotal(figure.total.total),
           whole: null,
-          rest: 'a month',
+          rest: PRIORITY_DIAL_WORDS.monthRest[dial],
         };
   }
-  return figure.targetCents === 0
+  return figure.targetCents === 0 && !isTrimmed
     ? null
     : {
         amount: formatCents(figure.savedCents),
         whole: null,
-        rest: GROUP_WORDS.saved,
+        rest: PRIORITY_DIAL_WORDS.savedRest[dial],
       };
 }
 
