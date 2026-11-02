@@ -40,7 +40,11 @@ async function openChange(
       summary: payload.summary,
       note: payload.note ?? null,
       move: payload.move
-        ? { ...payload.move, isOutside: payload.move.isOutside ?? false }
+        ? {
+            ...payload.move,
+            isOutside: payload.move.isOutside ?? false,
+            bill: payload.move.bill ?? null,
+          }
         : null,
       isUnreadable: false,
     };

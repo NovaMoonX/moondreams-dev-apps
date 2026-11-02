@@ -10,7 +10,12 @@ import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ActionChips from '@/components/ActionChips';
-import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
+import {
+  formatDateShortUTC,
+  formatDateTime,
+  formatDateUTC,
+} from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHANGE_KIND_LABELS,
@@ -49,39 +54,47 @@ function ChangeRow({
     if (move === null) return;
     const isConfirmed = await confirm({
       title: words.undoTitle,
-      message: mask(`${move.undoText}.`),
+      message: move.bill
+        ? mask(
+            PAID_HISTORY_WORDS.confirm(
+              move.bill.name,
+              formatDateShortUTC(move.bill.dueOn),
+              move.bill.fromFreeCents > 0
+                ? formatCents(move.bill.fromFreeCents)
+                : null,
+            ),
+          )
+        : mask(`${move.undoText}.`),
       confirmText: words.undoThis,
     });
     if (isConfirmed) await undoMove(move);
   };
-  const head = (
-    <>
-      <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
-        {change.kind !== 'planChange' && (
-          <span className='border-border bg-muted/50 text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-xs font-medium whitespace-nowrap'>
-            {CHANGE_KIND_LABELS[change.kind] ?? 'Change'}
-          </span>
-        )}
-        <span className='text-muted-foreground text-xs'>
-          {formatDateTime(change.createdAt)}
+  const headTop = (
+    <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+      {change.kind !== 'planChange' && (
+        <span className='border-border bg-muted/50 text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-xs font-medium whitespace-nowrap'>
+          {CHANGE_KIND_LABELS[change.kind] ?? 'Change'}
         </span>
-        {canUndo && (
-          <ChevronRight
-            className='text-muted-foreground ml-auto h-4 w-4 shrink-0'
-            aria-hidden='true'
-          />
-        )}
-      </div>
-      {change.isUnreadable ? (
-        <InlineNotice tone='info'>
-          This entry could not be opened on this device.
-        </InlineNotice>
-      ) : (
-        <p className='text-sm break-words'>
-          <MaskedText>{change.summary}</MaskedText>
-        </p>
       )}
-    </>
+      <span className='text-muted-foreground text-xs'>
+        {formatDateTime(change.createdAt)}
+      </span>
+      {canUndo && (
+        <ChevronRight
+          className='text-muted-foreground ml-auto h-4 w-4 shrink-0'
+          aria-hidden='true'
+        />
+      )}
+    </div>
+  );
+  const headText = change.isUnreadable ? (
+    <InlineNotice tone='info'>
+      This entry could not be opened on this device.
+    </InlineNotice>
+  ) : (
+    <p className='text-sm break-words'>
+      <MaskedText>{change.summary}</MaskedText>
+    </p>
   );
   return (
     <li className='space-y-1.5 p-3'>
@@ -93,10 +106,14 @@ function ChangeRow({
           aria-label={`${words.openMove}. ${change.summary}`}
           onClick={() => setIsOpen(true)}
         >
-          {head}
+          {headTop}
+          {headText}
         </Button>
       ) : (
-        head
+        <>
+          {headTop}
+          {headText}
+        </>
       )}
       {change.effectiveFrom !== null && (
         <p className='text-muted-foreground text-sm'>

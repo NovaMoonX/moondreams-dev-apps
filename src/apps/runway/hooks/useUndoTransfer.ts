@@ -2,7 +2,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { MOVE_WORDS } from '@apps/runway/constants';
+import { MOVE_WORDS, PAID_HISTORY_WORDS } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoPaymentPaid } from '@apps/runway/hooks/useBillPaid';
@@ -22,14 +22,26 @@ export function useUndoTransfer() {
     if (!user) return false;
     try {
       if (moved.bill) {
-        await undoPaymentPaid(user.uid, moved.bill.billId, moved.bill.name, {
-          moveId: moved.moveId,
-          dueOn: moved.bill.dueOn,
-          amountCents: moved.bill.amountCents,
-          paidOn: moved.bill.paidOn,
-          fromFreeCents: moved.bill.fromFreeCents,
-          cardId: moved.bill.cardId,
-        });
+        const isWritten = await undoPaymentPaid(
+          user.uid,
+          moved.bill.billId,
+          moved.bill.name,
+          {
+            moveId: moved.moveId,
+            dueOn: moved.bill.dueOn,
+            amountCents: moved.bill.amountCents,
+            paidOn: moved.bill.paidOn,
+            fromFreeCents: moved.bill.fromFreeCents,
+            cardId: moved.bill.cardId,
+          },
+        );
+        if (!isWritten) {
+          addToast({
+            title: PAID_HISTORY_WORDS.alreadyTakenBack(moved.bill.name),
+            type: 'info',
+          });
+          return false;
+        }
       } else {
         const encryption = await getRunwayEncryption(user.uid);
         await undoTransfer(user.uid, encryption, moved);

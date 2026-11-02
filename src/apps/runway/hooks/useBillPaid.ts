@@ -23,6 +23,14 @@ import {
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
+/** Paid marks share the plan document, so two at once would contend and one would stall in retries; they run one after another. */
+let paidWrites: Promise<unknown> = Promise.resolve();
+const inTurn = <T>(task: () => Promise<T>): Promise<T> => {
+  const next = paidWrites.then(task, task);
+  paidWrites = next.catch(() => undefined);
+  return next;
+};
+
 /** Records a bill's payment paid today; resolves with what it wrote, or null when the payment was already paid. */
 export async function markPaymentPaid(
   uid: string,
@@ -32,20 +40,22 @@ export async function markPaymentPaid(
   moves: Parameters<typeof countMarks>[0],
 ) {
   const encryption = await getRunwayEncryption(uid);
-  const written = await markBillPaid(uid, encryption, {
-    billId,
-    billName,
-    cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
-    dueOn: payment.dueOn,
-    amountCents: payment.totalCents,
-    fundedCents: payment.heldNowCents,
-    paidOn: todayAsUtcDate(),
-    marks: countMarks(moves, billId, payment.dueOn),
-  });
+  const written = await inTurn(() =>
+    markBillPaid(uid, encryption, {
+      billId,
+      billName,
+      cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
+      dueOn: payment.dueOn,
+      amountCents: payment.totalCents,
+      fundedCents: payment.heldNowCents,
+      paidOn: todayAsUtcDate(),
+      marks: countMarks(moves, billId, payment.dueOn),
+    }),
+  );
   return written;
 }
 
-/** Takes a payment's paid mark back. */
+/** Takes a payment's paid mark back; resolves false when it had already been taken back. */
 export async function undoPaymentPaid(
   uid: string,
   billId: string,
@@ -53,20 +63,23 @@ export async function undoPaymentPaid(
   paid: Omit<WrittenPaidMark, 'billId'>,
 ) {
   const encryption = await getRunwayEncryption(uid);
-  await undoBillPaid(
-    uid,
-    encryption,
-    {
-      moveId: paid.moveId,
-      billId,
-      dueOn: paid.dueOn,
-      amountCents: paid.amountCents,
-      paidOn: paid.paidOn,
-      fromFreeCents: paid.fromFreeCents,
-      cardId: paid.cardId ?? null,
-    },
-    billName,
+  const isWritten = await inTurn(() =>
+    undoBillPaid(
+      uid,
+      encryption,
+      {
+        moveId: paid.moveId,
+        billId,
+        dueOn: paid.dueOn,
+        amountCents: paid.amountCents,
+        paidOn: paid.paidOn,
+        fromFreeCents: paid.fromFreeCents,
+        cardId: paid.cardId ?? null,
+      },
+      billName,
+    ),
   );
+  return isWritten;
 }
 
 interface UseBillPaidOptions {

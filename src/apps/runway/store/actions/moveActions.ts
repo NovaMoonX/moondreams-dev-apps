@@ -127,7 +127,11 @@ export async function markBillPaid(
   const written = await runTransaction(db, async (transaction) => {
     const plan = await transaction.get(ref);
     const findOpenMark = async (marks: number): Promise<string | null> => {
-      if (marks >= input.marks + MAX_MARK_PROBES) return null;
+      if (marks >= input.marks + MAX_MARK_PROBES) {
+        throw new Error(
+          'This payment was marked and taken back too many times. Open the bill to change it.',
+        );
+      }
       const id = getPaidMoveId(input.billId, input.dueOn, marks);
       const existing = await transaction.get(moveRef(uid, id));
       if (!existing.exists()) return id;
@@ -174,7 +178,7 @@ export async function undoBillPaid(
     dueOn: DateOnly;
   } & BillPaidSealed,
   billName: string,
-): Promise<void> {
+): Promise<boolean> {
   const id = getUndoMoveId(paid.moveId);
   const sealed = await sealJson(
     {
@@ -186,12 +190,12 @@ export async function undoBillPaid(
     encryption,
   );
   const ref = moveRef(uid, id);
-  await runTransaction(db, async (transaction) => {
+  const isWritten = await runTransaction(db, async (transaction) => {
     const [existing, plan] = await Promise.all([
       transaction.get(ref),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
     ]);
-    if (existing.exists()) return;
+    if (existing.exists()) return false;
     const change = await getPaymentChange(encryption, paid, billName, true);
     markLedgerWrite(transaction, uid, plan.data(), [paid.dueOn]);
     transaction.set(ref, {
@@ -204,7 +208,9 @@ export async function undoBillPaid(
       sealed,
     } satisfies MoveDoc);
     transaction.set(changeRef(uid, change.id), change);
+    return true;
   });
+  return isWritten;
 }
 
 /** Bills one transaction marks or unmarks at most, so its rule reads stay under the limit for one request. */

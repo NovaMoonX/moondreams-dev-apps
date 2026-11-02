@@ -266,6 +266,7 @@ export function useRunwayUrlState() {
   const showPlanSection = (section: PlanSection) => {
     if (requestedAdd !== null && section !== requestedSection) clearAdd();
     if (requestedDueBill !== null) closeDueBill();
+    if (requestedAllDue !== null && section !== 'bills') closeAllDue();
     return setRequestedSection(
       section === DEFAULT_PLAN_SECTION ? null : section,
       { history: 'replace' },

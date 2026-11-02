@@ -676,13 +676,11 @@ export const BILL_WORDS = {
   offPlanTitle: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} has no due date`
-      : names.length <= 3
-        ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} have no due date`
-        : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more have no due date`,
+      : names.length === 2
+        ? `${names[0]} and ${names[1]} have no due date`
+        : `${names.length} bills have no due date`,
   offPlanDetail: (count: number) =>
-    count === 1
-      ? 'So this pay sets nothing aside for it, and has less to spare than it looks'
-      : 'So this pay sets nothing aside for them, and has less to spare than it looks',
+    `This pay sets nothing aside for ${count === 1 ? 'it' : 'them'}, so it has less to spare than it looks.`,
 } as const;
 
 export const DUE_WORDS = {
@@ -713,6 +711,19 @@ export const DUE_WORDS = {
   seeAll: 'See all',
   markPaid: 'Mark paid',
   alreadyPaid: (name: string) => `${name} was already marked paid`,
+  paidMissed: (
+    name: string,
+    due: string,
+    later: readonly string[],
+    isDueAgainToday: boolean,
+  ) =>
+    `Paid ${name}'s ${due} payment · ${
+      later.length + (isDueAgainToday ? 1 : 0) > 1
+        ? `${later.length + (isDueAgainToday ? 1 : 0)} more still due`
+        : isDueAgainToday
+          ? "today's is still due"
+          : `the ${later[0]} payment is still due`
+    }`,
   openBills: (name: string) => `Open ${name}`,
   undoOffline: (name: string) =>
     `${name} is still marked paid. Undoing needs a connection`,
@@ -1368,18 +1379,21 @@ export const ITEM_SHEET_WORDS = {
   notArrivedSub: 'Takes this day off your plan until you put it back',
 } as const;
 
-/** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
 export const PAID_HISTORY_WORDS = {
   summary: (name: string, due: string, amount: string) =>
     `Marked ${name} paid: ${amount} due ${due}.`,
   undoText: (name: string, due: string) =>
-    `${name}'s ${due} payment is not marked paid`,
+    `Took back the ${due} payment of ${name}`,
+  confirm: (name: string, due: string, freeCents: string | null) =>
+    `${name}'s ${due} payment goes back to unpaid${freeCents === null ? '' : `, and ${freeCents} returns to Free to Spend`}.`,
+  alreadyTakenBack: (name: string) => `${name} was already taken back`,
   title: 'Payment',
   openMove: 'Open this payment',
   undoThis: 'Take back this payment',
   undoTitle: 'Take back this payment?',
 } as const;
 
+/** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
   title: (name: string) => `Move money from ${name}`,

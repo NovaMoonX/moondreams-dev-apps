@@ -190,10 +190,7 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
           ]
         : [];
     })
-    .sort(
-      (a, b) =>
-        a.dueOn - b.dueOn || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
-    );
+    .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name));
 
 /** The first payment of each bill with no income day to set it aside before it is due. */
 const findNoIncome = (input: LookaheadInput): LookaheadProblem[] =>

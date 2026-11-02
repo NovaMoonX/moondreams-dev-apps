@@ -427,6 +427,33 @@ export async function seedRunwayScale(
       };
     },
   );
+  const undatedBills: PlanItem[] = ['Gym', 'Health insurance'].map(
+    (name, index) => {
+      const payload: BillSealed = {
+        name,
+        emoji: null,
+        priority: 'should',
+        orderIndex: BILL_COUNT + index + 1,
+        amount: exact(2_500 + index * 15_000),
+        timing: {
+          kind: 'date',
+          schedule: { kind: 'monthly', anchor: null, monthDays: [] },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' },
+        stanceOverride: null,
+        groupId: null,
+      };
+      return {
+        id: `scale-bill-undated-${index}`,
+        kind: 'bill',
+        parentId: null,
+        createdAt: planCreatedAt + 45_000 + index * 1000,
+        payload,
+        priority: 'should',
+      };
+    },
+  );
   const goalItems: PlanItem[] = Array.from(
     { length: GOAL_COUNT },
     (_, index) => {
@@ -461,6 +488,7 @@ export async function seedRunwayScale(
     ...payLines,
     ...envelopeItems,
     ...billItems,
+    ...undatedBills,
     ...goalItems,
   ];
 

@@ -16,6 +16,7 @@ import {
   CARD_WORDS,
   DUE_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
@@ -74,7 +75,18 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
     }
     isUndoing.current = true;
     try {
-      await undoPaymentPaid(user.uid, due.billId, name, written);
+      const isWritten = await undoPaymentPaid(
+        user.uid,
+        due.billId,
+        name,
+        written,
+      );
+      addToast({
+        title: isWritten
+          ? ITEM_SHEET_R2_WORDS.unmarkedPaid(name)
+          : PAID_HISTORY_WORDS.alreadyTakenBack(name),
+        type: isWritten ? 'success' : 'info',
+      });
     } catch {
       addToast({ title: DUE_WORDS.undoFailed(name), type: 'error' });
     } finally {
@@ -84,9 +96,6 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
 
   const markPaid = async () => {
     if (!paid.isReady || paid.isBusy) return;
-    const fromFreeCents = payment
-      ? Math.max(0, payment.totalCents - payment.heldNowCents)
-      : 0;
     const result = await paid.markWritten();
     if (result === null) return;
     const { mark: written } = result;
@@ -104,17 +113,31 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
             due.dueOn,
           )
         : null;
+    const laterDates = due.laterDueOn.filter((on) => on !== today);
+    const isDueAgainToday = due.laterDueOn.includes(today);
+    const missedTitle = DUE_WORDS.paidMissed(
+      name,
+      formatDateShortUTC(due.dueOn),
+      laterDates.map(formatDateShortUTC),
+      isDueAgainToday,
+    );
     addToast({
       title:
-        cardName === null
-          ? ITEM_SHEET_R2_WORDS.markedPaid(name)
-          : CARD_WORDS.markedPaidWith(name, cardName),
+        due.laterDueOn.length > 0
+          ? missedTitle
+          : cardName === null
+            ? ITEM_SHEET_R2_WORDS.markedPaid(name)
+            : CARD_WORDS.markedPaidWith(name, cardName),
       description:
-        cardName === null && fromFreeCents > 0
-          ? maskText(
-              ITEM_SHEET_R2_WORDS.paidFromFreeText(formatCents(fromFreeCents)),
-            )
-          : undefined,
+        cardName !== null && due.laterDueOn.length > 0
+          ? CARD_WORDS.markedAllWith(cardName)
+          : cardName === null && written.fromFreeCents > 0
+            ? maskText(
+                ITEM_SHEET_R2_WORDS.paidFromFreeText(
+                  formatCents(written.fromFreeCents),
+                ),
+              )
+            : undefined,
       type: 'success',
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,
@@ -248,11 +271,6 @@ function DueBillsCard({
               </span>
             )}
           </h3>
-          {hasFold && isUnfolded && (
-            <ShowMoreButton isOpen onClick={toggleUnfolded}>
-              {DUE_WORDS.fewer}
-            </ShowMoreButton>
-          )}
         </div>
       )}
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
