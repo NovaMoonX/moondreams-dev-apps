@@ -300,7 +300,7 @@ const getBlocker = (
   if (!isEditing && start !== undefined && start < today)
     return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
-  if (isChosen && pickedCount === 0) return 'Pick at least one income day.';
+  if (isChosen && pickedCount === 0) return FORM_FLOW_WORDS.pickDays;
   return null;
 };
 
@@ -425,7 +425,8 @@ function BillFormBody({
 
   const planStance = useAppSelector(selectStance);
   const isOnce = formData.frequency === 'once';
-  const isDueWord = isOnce || formData.frequency === null;
+  const isDueWord =
+    isOnce || formData.frequency === null || (editing && noun === 'bill');
   const dueDate = formData.isLater
     ? undefined
     : fromDateInputValue(formData.startDate);
@@ -437,11 +438,18 @@ function BillFormBody({
   const pickedCount = dueDays.filter((day) =>
     formData.dayKeys.includes(day.dayKey),
   ).length;
+  const isFundingUntouched =
+    editing !== undefined &&
+    formData.funding === startData.funding &&
+    formData.startDate === startData.startDate &&
+    formData.frequency === startData.frequency &&
+    formData.isLater === startData.isLater &&
+    JSON.stringify(formData.dayKeys) === JSON.stringify(startData.dayKeys);
   const blocker = getBlocker(
     formData,
     parseAmountDraft(formData.amount) !== null,
     today,
-    isChosen,
+    isChosen && !isFundingUntouched,
     pickedCount,
     editing !== undefined,
     noun,
@@ -500,7 +508,7 @@ function BillFormBody({
             value={formData.name}
             onChange={(event) => set({ name: event.target.value })}
           />
-          {noun === 'bill' && (
+          {noun === 'bill' && !editing && (
             <SuggestionChips
               label={FORM_FLOW_WORDS.commonBills}
               suggestions={BILL_QUICK_PICKS.map(toPickLabel)}
@@ -565,9 +573,6 @@ function BillFormBody({
         dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
       render: ({ moveOn }) => (
         <div className='space-y-2'>
-          <p className='text-muted-foreground text-xs'>
-            {isDueWord ? 'Due' : 'Starts'}
-          </p>
           <DateInput
             variant='outline'
             aria-label={isDueWord ? 'Due' : 'Starts'}
@@ -582,6 +587,11 @@ function BillFormBody({
               })
             }
           />
+          {editing && dueDate !== undefined && dueDate < today && (
+            <p className='text-muted-foreground text-sm'>
+              {FORM_FLOW_WORDS.dayPassed}
+            </p>
+          )}
           {canLater && !formData.isLater && (
             <RevealChip
               onClick={() => {
@@ -867,7 +877,9 @@ function BillFormBody({
         : getNextTierRank([...bills, ...envelopes, ...goals], priority);
     const { groupId, newGroup } = resolveGroup(data);
     const fundedBy: BillFundedBy = isChosen
-      ? { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
+      ? isFundingUntouched && editing
+        ? editing.payload.fundedBy
+        : { kind: 'chosen', dayKeys: getChosenKeys(data.dayKeys) }
       : { kind: 'suggested' };
     const result: BillSealed = {
       name: data.name.trim(),
@@ -945,11 +957,15 @@ function BillFormBody({
       : FORM_FLOW_WORDS.discardNew(noun),
   });
   const quickStep = steps.find((step) => step.id === openStep) ?? null;
-  const isQuick = !!editing && openStep !== null && !isAll;
+  const isQuick = !!editing && openStep !== null;
   const isAsking = !questions.hasReviewed;
   const isFirstDate =
     isQuick && editing?.payload.timing.schedule.anchor === null;
   const shownBlocker = editing ? editBlocker : blocker;
+  const changeSection =
+    editing && questions.hasReviewed && !isFirstDate ? (
+      <ChangeSection isIdleShown />
+    ) : null;
 
   const handleSubmit = async () => {
     const bill = buildBill(formData);
@@ -1012,7 +1028,12 @@ function BillFormBody({
             {isQuick && quickStep ? (
               <QuickChange
                 step={quickStep}
+                flow={questions}
+                rowIds={['name', 'due', 'repeats']}
+                after={changeSection}
+                isAll={isAll}
                 onAll={() => setIsAll(true)}
+                onBack={() => setIsAll(false)}
                 isFirstDate={isFirstDate}
               />
             ) : (
@@ -1023,12 +1044,13 @@ function BillFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && questions.hasReviewed && !isFirstDate && (
-              <ChangeSection />
-            )}
+            {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
-                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+                error ??
+                flow.error ??
+                maskNote(isAsking ? questions.blocker : shownBlocker) ??
+                flow.warningHint
               }
               cancelAction={
                 <Button
@@ -1064,7 +1086,8 @@ function BillFormBody({
                         return;
                       }
                       if (editing) {
-                        flow.setStep('reason');
+                        if (flow.isMoneyless) void flow.save(null);
+                        else flow.setStep('reason');
                         return;
                       }
                       void handleSubmit();
@@ -1073,7 +1096,9 @@ function BillFormBody({
                     {isFirstDate
                       ? 'Save'
                       : editing
-                        ? CHANGE_WORDS.review
+                        ? flow.isMoneyless
+                          ? 'Save'
+                          : CHANGE_WORDS.review
                         : draft?.initial
                           ? 'Save'
                           : 'Add'}

@@ -553,7 +553,7 @@ function IncomeFormBody({
         <RangeAmountField
           isHero
           label={FORM_FLOW_WORDS.takeHome}
-          hint={FORM_FLOW_WORDS.howOftenNext}
+          hint={isEditing ? '' : FORM_FLOW_WORDS.howOftenNext}
           side='income'
           planStance={planStance}
           value={formData.amount}
@@ -784,8 +784,12 @@ function IncomeFormBody({
   });
   const quickStep =
     questions.steps.find((step) => step.id === openStep) ?? null;
-  const isQuick = !!isEditing && openStep !== null && !isAll;
+  const isQuick = !!isEditing && openStep !== null;
   const isAsking = !questions.hasReviewed;
+  const changeSection =
+    editing && !isEditingSource && questions.hasReviewed ? (
+      <ChangeSection isIdleShown />
+    ) : null;
   const shownBlocker = editing ? editBlocker : blocker;
 
   const handleSubmit = async () => {
@@ -867,7 +871,15 @@ function IncomeFormBody({
               />
             )}
             {isQuick && quickStep ? (
-              <QuickChange step={quickStep} onAll={() => setIsAll(true)} />
+              <QuickChange
+                step={quickStep}
+                flow={questions}
+                rowIds={['payName', 'schedule']}
+                after={changeSection}
+                isAll={isAll}
+                onAll={() => setIsAll(true)}
+                onBack={() => setIsAll(false)}
+              />
             ) : (
               <>
                 {openStep !== null && isEditing && (
@@ -876,12 +888,13 @@ function IncomeFormBody({
                 <QuestionFlow flow={questions} />
               </>
             )}
-            {editing && !isEditingSource && questions.hasReviewed && (
-              <ChangeSection />
-            )}
+            {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
               note={
-                error ?? maskNote(isAsking ? questions.blocker : shownBlocker)
+                error ??
+                flow.error ??
+                maskNote(isAsking ? questions.blocker : shownBlocker) ??
+                flow.warningHint
               }
               cancelAction={
                 <Button
@@ -909,14 +922,17 @@ function IncomeFormBody({
                     disabled={isSaving || shownBlocker !== null}
                     onClick={() => {
                       if (editing) {
-                        flow.setStep('reason');
+                        if (flow.isMoneyless) void flow.save(null);
+                        else flow.setStep('reason');
                         return;
                       }
                       void handleSubmit();
                     }}
                   >
                     {editing
-                      ? CHANGE_WORDS.review
+                      ? flow.isMoneyless
+                        ? 'Save'
+                        : CHANGE_WORDS.review
                       : draft?.initial
                         ? 'Save'
                         : 'Add'}

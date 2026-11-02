@@ -292,7 +292,16 @@ export function previewOverrideCarry(
   >,
   change: PreviewChange,
 ): OverrideCarry {
-  if (change.kind !== 'version' || change.version.kind !== 'payLine') {
+  const written =
+    change.kind === 'version'
+      ? [change.version]
+      : change.kind === 'versions'
+        ? change.versions
+        : [];
+  if (
+    written.length === 0 ||
+    written.some((entry) => entry.kind !== 'payLine')
+  ) {
     return { carried: [], stranded: [] };
   }
   const { items, versions, openDays, today } = inputs;
@@ -306,7 +315,7 @@ export function previewOverrideCarry(
   const result = planOverrideCarry(
     openDays,
     daysOf(versions),
-    daysOf(layerVersion<OpenVersion>(versions, change.version)),
+    daysOf(layerPlan({ items, versions, openDays }, change).versions),
   );
   return result;
 }
