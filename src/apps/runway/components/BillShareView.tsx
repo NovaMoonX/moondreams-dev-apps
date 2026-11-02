@@ -106,6 +106,7 @@ interface BillShareViewProps {
 }
 
 type PayRule = Extract<BillFundedBy, { kind: 'pay' }>;
+type KeepRule = Extract<BillFundedBy, { kind: 'pay' | 'lastBefore' }>;
 
 /** What taking a saved change back needs, kept from before the write. */
 interface Pending {
@@ -236,8 +237,12 @@ function KeepChoice({ title, body, isDisabled, onPick }: KeepChoiceProps) {
   );
 }
 
-const isSameRule = (a: BillFundedBy, b: PayRule) =>
-  a.kind === 'pay' && a.payLineId === b.payLineId && a.monthDay === b.monthDay;
+const isSameRule = (a: BillFundedBy, b: KeepRule) =>
+  b.kind === 'lastBefore'
+    ? a.kind === 'lastBefore'
+    : a.kind === 'pay' &&
+      a.payLineId === b.payLineId &&
+      a.monthDay === b.monthDay;
 
 const SHOWN_ROWS = 3;
 
@@ -290,7 +295,7 @@ function BillShareView({
   const [isAllShown, setIsAllShown] = useState(false);
   const [saved, setSaved] = useState<{
     pending: Pending;
-    rule: PayRule | null;
+    rule: KeepRule | null;
     leaveOut: string;
     isPartial: boolean;
     needsMoney: Cents;
@@ -538,7 +543,7 @@ function BillShareView({
       setSaved({
         pending,
         rule,
-        leaveOut: describePayChoice(rule ?? (thisPay as PayRule), plan, true),
+        leaveOut: describePaidFrom(rule ?? (thisPay as PayRule), plan, true),
         isPartial: false,
         needsMoney: share.totalCents,
       });
@@ -616,7 +621,7 @@ function BillShareView({
           { ...withRule, cleared: keep(cleared) },
           PAY_SHARE_WORDS.ruleToast(
             bill.name,
-            describePayChoice(rule, plan, true),
+            describePaidFrom(rule, plan, true),
           ),
         );
       } catch (partial) {
@@ -629,7 +634,7 @@ function BillShareView({
         addToast({
           title: PAY_SHARE_WORDS.keepPartial(
             bill.name,
-            describePayChoice(rule, plan, true),
+            describePaidFrom(rule, plan, true),
           ),
           type: 'error',
           action: {
@@ -638,7 +643,7 @@ function BillShareView({
           },
         });
         setError(
-          `${PAY_SHARE_WORDS.keepPartial(bill.name, describePayChoice(rule, plan, true))} ${getErrorMessage(partial, '')}`.trim(),
+          `${PAY_SHARE_WORDS.keepPartial(bill.name, describePaidFrom(rule, plan, true))} ${getErrorMessage(partial, '')}`.trim(),
         );
       }
     });
@@ -657,7 +662,7 @@ function BillShareView({
     onBack();
   };
 
-  const getRuleChangeJson = (rule: PayRule) => {
+  const getRuleChangeJson = (rule: KeepRule) => {
     const live = store
       .getState()
       .runway.versions.filter(

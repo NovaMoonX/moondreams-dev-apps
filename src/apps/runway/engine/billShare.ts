@@ -206,15 +206,15 @@ export function previewBillShare(
 /**
  * The Paid from rule that says what one change to a pay's share says for every paycheck: a pay set to
  * nothing while exactly one other repeating pay is in the window, or a pay set to the whole payment.
- * One-time pays are never part of a rule. Null when the change does not name one pay, or the rule
- * would pick other pays too.
+ * One-time pays are never part of a rule. A pay its line can't single out (every other week) that is the
+ * last repeating pay before the bill is due maps to "the pay right before it's due". Null otherwise.
  */
 export function findPayRule(
   effect: BillShareEffect,
   dayKey: string,
   getMonthDay: (payLineId: string, on: number) => number | null,
   isOneTime: (payLineId: string) => boolean,
-): Extract<BillFundedBy, { kind: 'pay' }> | null {
+): Extract<BillFundedBy, { kind: 'pay' | 'lastBefore' }> | null {
   const repeating = effect.window.filter(
     (day) => !isOneTime(payLineIdOfDayKey(day.dayKey)),
   );
@@ -234,7 +234,8 @@ export function findPayRule(
     monthDay: getMonthDay(payLineId, target.on),
   };
   const picked = getEligibleDays(effect.window, rule);
-  return picked.length === 1 && picked[0].dayKey === target.dayKey
-    ? rule
+  if (picked.length === 1 && picked[0].dayKey === target.dayKey) return rule;
+  return repeating[repeating.length - 1].dayKey === target.dayKey
+    ? { kind: 'lastBefore' }
     : null;
 }

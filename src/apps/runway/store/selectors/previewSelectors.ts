@@ -423,7 +423,9 @@ export interface BillShareView {
   /** What the pay has left for this bill after the lines drawn before it. */
   availableCents: number;
   /** Whether a Paid from rule would give every payment to the horizon exactly one pay to come from. */
-  isRuleClean: (rule: Extract<BillFundedBy, { kind: 'pay' }>) => boolean;
+  isRuleClean: (
+    rule: Extract<BillFundedBy, { kind: 'pay' | 'lastBefore' }>,
+  ) => boolean;
 }
 
 const beforeCache = new WeakMap<

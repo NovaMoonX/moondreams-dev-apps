@@ -1688,10 +1688,23 @@ const version = (
       { kind: 'pay', payLineId: 'work', monthDay: 30 },
       'one other pay carrying it all maps to a Paid from rule',
     );
-    assert.equal(
+    assert.deepEqual(
       zero && findPayRule(zero, nov15, () => null, never),
+      { kind: 'lastBefore' },
+      "a pay its line can't single out, last before the due date, is the pay right before it's due",
+    );
+    const lateZero = previewBillShare(
+      base,
+      workPays,
+      horizon,
+      'conservative',
+      nov30,
+      0,
+    );
+    assert.equal(
+      lateZero && findPayRule(lateZero, nov30, () => null, never),
       null,
-      "a rule that would pick the line's other pays too is not offered",
+      "an earlier pay its line can't single out is not offered as a rule",
     );
     const withFreelance = [
       workPays[0],
