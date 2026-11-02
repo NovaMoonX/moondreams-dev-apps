@@ -286,18 +286,29 @@ export function planReorder(
   );
 }
 
-/** The rank after the highest in a tier across every kind of item, since bills, envelopes and goals share one scale. */
+/** The rank after the highest in a tier across every kind of item and every extra, since they all share one scale. */
 export const getNextTierRank = (
   items: readonly {
-    version: { payload: { priority: Priority; orderIndex: number } };
+    version: {
+      payload: {
+        priority: Priority;
+        orderIndex: number;
+        extras?: readonly { tier: Priority; orderIndex: number }[] | null;
+      };
+    };
   }[],
   priority: Priority,
 ) =>
   Math.max(
     0,
-    ...items
-      .filter(({ version }) => version.payload.priority === priority)
-      .map(({ version }) => version.payload.orderIndex),
+    ...items.flatMap(({ version }) => [
+      ...(version.payload.priority === priority
+        ? [version.payload.orderIndex]
+        : []),
+      ...(version.payload.extras ?? [])
+        .filter((extra) => extra.tier === priority)
+        .map((extra) => extra.orderIndex),
+    ]),
   ) + ENVELOPE_ORDER_STEP;
 
 /** Whether a bill's own line on a short day is due before the next income day after it; null when the bill has no such line that day. */
