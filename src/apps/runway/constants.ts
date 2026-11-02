@@ -275,6 +275,8 @@ export const PRIORITY_DIAL_WORDS = {
   counted: { must: 'Musts', should: 'Musts and Shoulds' },
   notCounted: 'Not in this total',
   sheetSuffix: { must: 'Musts only', should: 'without Wants' },
+  /** After a goal's finish date counted at the dial: "reaches it May 2027 on Musts". */
+  paceSuffix: { must: 'on Musts', should: 'without Wants' },
 } as const;
 
 export const PRIORITIES_NUDGE_WORDS = {
@@ -1457,6 +1459,19 @@ export const FORM_FLOW_WORDS = {
   maxTitle: 'Stop filling at',
   max: 'Stop filling at',
   maxHint: 'It gets nothing more once it holds this much.',
+  extrasTitle: "Should it get more when there's room?",
+  extras: "Extra when there's room",
+  noExtras: 'None',
+  extraAsShould: 'Extra as a Should',
+  extraAsWant: 'Extra as a Want',
+  /** Said where the extras question was when a change leaves an extra with nowhere to go. */
+  extrasDropped: (extras: string, why: string) =>
+    `${why}, so ${extras} comes off when you save.`,
+  extrasDroppedWant: 'A Want has no lower level for an extra',
+  extrasDroppedLevel: "An extra sits below its item's own level",
+  extrasDroppedAmount: 'Only an exact amount on a schedule can get an extra',
+  extrasHint:
+    'Paid after everything above it, so a short income day trims it first.',
   noMax: 'No limit',
   clearMax: 'Remove the limit',
   billAmountTitle: 'How much is it?',

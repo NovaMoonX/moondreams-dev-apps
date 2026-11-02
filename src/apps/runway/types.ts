@@ -173,6 +173,8 @@ export interface DayRecordDoc {
 export interface RecordLine {
   lineId: string;
   itemId: string;
+  /** The extra this line funded, by its level; null (or missing on an older record) for the item's own amount. */
+  part?: Priority | null;
   name: string;
   emoji: string | null;
   tier: Priority;
@@ -281,6 +283,14 @@ export interface FundingRule {
   sourceId?: string | null;
 }
 
+/** Money an envelope or goal asks for at a lower priority than its own, on the same days as its amount. */
+export interface PriorityExtra {
+  tier: Priority;
+  cents: Cents;
+  /** A fractional rank inside its own tier. */
+  orderIndex: number;
+}
+
 export interface EnvelopeSealed {
   name: string;
   emoji: string | null;
@@ -294,6 +304,8 @@ export interface EnvelopeSealed {
   groupId: string | null;
   /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
   startingCents?: Cents | null;
+  /** Extras at lower priorities ("+$250 want"); a version written before they existed has none. */
+  extras?: PriorityExtra[] | null;
 }
 
 /** How a bill is funded: spread over the income days before it is due, or on days the person picked. */
@@ -341,6 +353,8 @@ export interface GoalSealed {
   startingCents?: Cents | null;
   /** Paused stops new money and keeps the balance; a version written before it existed has none and reads as active. */
   state: GoalState;
+  /** Extras at lower priorities, on the same days as its contribution; a version written before they existed has none. */
+  extras?: PriorityExtra[] | null;
 }
 
 export interface PlanItemDoc {

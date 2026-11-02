@@ -3,8 +3,13 @@ import {
   CALENDAR_PERIOD_LABELS,
   CALENDAR_PERIOD_UNITS,
   HOW_OFTEN_WORDS,
+  PRIORITY_LABELS,
 } from '@apps/runway/constants';
-import type { FundingAmount, FundingRule } from '@apps/runway/types';
+import type {
+  FundingAmount,
+  FundingRule,
+  PriorityExtra,
+} from '@apps/runway/types';
 
 const describeCadence = (cadence: FundingRule['cadence']) => {
   if (cadence.kind === 'calendar') return CALENDAR_PERIOD_UNITS[cadence.period];
@@ -41,10 +46,27 @@ export function describeAmount(amount: FundingAmount, of?: string) {
   return result;
 }
 
-/** An envelope's funding in the words a row and a change entry share: "$50.00 every income day". */
-export function describeFunding(funding: FundingRule) {
+/** An item's extras after its own amount: ", +$250 want", or nothing without any. */
+export function describeExtras(
+  extras: readonly PriorityExtra[],
+  format: (cents: number) => string = formatCents,
+) {
+  const result = extras
+    .map(
+      (extra) =>
+        `, +${format(extra.cents)} ${PRIORITY_LABELS[extra.tier].toLowerCase()}`,
+    )
+    .join('');
+  return result;
+}
+
+/** An envelope's funding in the words a row and a change entry share: "$50.00 every income day", "$250.00 every income day, +$250.00 want". */
+export function describeFunding(
+  funding: FundingRule,
+  extras: readonly PriorityExtra[] = [],
+) {
   if (funding.cadence.kind === 'none') return 'no contribution';
-  const result = `${describeAmount(funding.amount)} ${describeCadence(funding.cadence)}`;
+  const result = `${describeAmount(funding.amount)} ${describeCadence(funding.cadence)}${describeExtras(extras)}`;
   return result;
 }
 
@@ -71,13 +93,16 @@ export function describeCadenceLine(cadence: FundingRule['cadence']) {
   return result;
 }
 
-/** A funding rule in a short line: "$200 every income day", "10% of the day's money every other income day". */
-export function describeFundingShort(funding: FundingRule) {
+/** A funding rule in a short line: "$200 every income day", "10% of the day's money every other income day", "$250 a month, +$250 want". */
+export function describeFundingShort(
+  funding: FundingRule,
+  extras: readonly PriorityExtra[] = [],
+) {
   if (funding.cadence.kind === 'none') return HOW_OFTEN_WORDS.notBeingAdded;
   const amount =
     funding.amount.kind === 'exact'
       ? formatCentsShort(funding.amount.cents)
       : describeAmount(funding.amount);
-  const result = `${amount} ${describeCadence(funding.cadence)}`;
+  const result = `${amount} ${describeCadence(funding.cadence)}${describeExtras(extras, formatCentsShort)}`;
   return result.charAt(0).toUpperCase() + result.slice(1);
 }
