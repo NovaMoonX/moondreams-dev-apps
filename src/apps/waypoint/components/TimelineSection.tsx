@@ -30,6 +30,7 @@ import EventSuggestionsList from '@apps/waypoint/components/EventSuggestionsList
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import DayHeader from '@apps/waypoint/components/DayHeader';
+import { formatMissingMealsNote, getMealPrefill, getMissingMeals, getWatchedMeals } from '@apps/waypoint/utils/missingMeals';
 import SectionHeader from '@/components/SectionHeader';
 import TimelineViewOptions from '@apps/waypoint/components/TimelineViewOptions';
 import WeatherAttribution from '@apps/waypoint/components/WeatherAttribution';
@@ -432,6 +433,26 @@ export function TimelineSection({
     />
   );
 
+  const renderMissingMeals = (day: number) => {
+    const missing =
+      day < weather.todayIndex || day >= dayCount ? [] : getMissingMeals(events, day, getWatchedMeals(trip));
+    if (missing.length === 0) return null;
+    const note = formatMissingMealsNote(missing);
+    return canAddEvents ? (
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className="relative h-auto p-0 text-xs before:absolute before:-inset-x-1 before:-inset-y-3 before:content-['']"
+        onClick={() => openNew(day, getMealPrefill(day, missing[0]))}
+      >
+        {note}
+      </Button>
+    ) : (
+      <p className='text-muted-foreground text-xs'>{note}</p>
+    );
+  };
+
   const renderDayWeather = (dayIndex: number, isMinimized: boolean) => {
     const forecast = weather.getDay(dayIndex);
     const also = weather.getAlso(dayIndex);
@@ -492,7 +513,12 @@ export function TimelineSection({
     }
 
     if (scope !== 'all') {
-      return <div className='space-y-3'>{renderEventItems(visibleEvents, scope)}</div>;
+      return (
+        <div className='space-y-3'>
+          {renderMissingMeals(scope)}
+          {renderEventItems(visibleEvents, scope)}
+        </div>
+      );
     }
 
     const eventDays = groupByIndexBucket(
@@ -516,6 +542,7 @@ export function TimelineSection({
           ({ bucket, items }, dayPosition) => (
             <div
               key={bucket}
+              data-day-section=''
               className='defer-offscreen space-y-3'
               style={{ '--defer-size': `${getItemHeight(items) + getLogisticsHeight(bucket)}px` } as CSSProperties}
             >
@@ -526,6 +553,7 @@ export function TimelineSection({
                 canOpen={typeof bucket === 'number' && canAddEvents}
                 onOpen={() => typeof bucket === 'number' && dayDetailRef.current?.open(bucket)}
               />
+              {typeof bucket === 'number' && renderMissingMeals(bucket)}
               {typeof bucket === 'number' && !compactAllDaysWeather && renderDayWeather(bucket, false)}
               <div className='space-y-3 pb-3'>
                 <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={getItemHeight(items) + getLogisticsHeight(bucket)}>

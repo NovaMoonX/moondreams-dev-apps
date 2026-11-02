@@ -272,6 +272,19 @@ export const MEAL_TYPE_LABELS: Record<MealType, string> = {
   SNACK: 'Snack',
 };
 
+/** The start a meal pick suggests while the person hasn't set a time; a snack leaves the time alone. */
+export const MEAL_DEFAULT_TIMES: Record<Exclude<MealType, 'SNACK'>, string> = {
+  BREAKFAST: '08:00',
+  LUNCH: '12:30',
+  DINNER: '19:00',
+};
+
+/** Meals a day is checked for when the trip hasn't chosen. */
+export const DEFAULT_WATCHED_MEALS: readonly MealType[] = ['LUNCH', 'DINNER'];
+
+/** Meals a trip can ask the Timeline to point out; a snack isn't one. */
+export const WATCHABLE_MEALS = ['BREAKFAST', 'LUNCH', 'DINNER'] as const satisfies readonly MealType[];
+
 export const MEAL_TYPE_EMOJIS: Record<MealType, string> = {
   BREAKFAST: '🥐',
   LUNCH: '🥪',
@@ -475,6 +488,25 @@ export const TRIP_SECTION_TABS = [
 ] as const;
 
 export type TripSectionTab = (typeof TRIP_SECTION_TABS)[number];
+
+/** Desktop keys that switch the trip's tab; `''` is Overview and `'overview'` is the Timeline tab. */
+export const TRIP_TAB_SHORTCUTS: readonly { key: string; tab: '' | TripSectionTab; label: string }[] = [
+  { key: 'o', tab: '', label: 'Overview' },
+  { key: 't', tab: 'overview', label: 'Timeline' },
+  { key: 'm', tab: 'members', label: 'Members' },
+  { key: 'e', tab: 'expenses', label: 'Expenses' },
+  { key: 's', tab: 'stays', label: 'Stays' },
+  { key: 'r', tab: 'rentals', label: 'Rentals' },
+  { key: 'c', tab: 'checklist', label: 'Checklist' },
+  { key: 'i', tab: 'ideas', label: 'Ideas' },
+];
+
+/** Desktop keys that act on the Timeline and the help sheet, listed with the tab keys in "Keyboard shortcuts". */
+export const OTHER_SHORTCUTS: readonly { key: string; label: string }[] = [
+  { key: 'j', label: 'Jump to the next day on the Timeline' },
+  { key: 'k', label: 'Jump to the previous day on the Timeline' },
+  { key: '?', label: 'Show keyboard shortcuts' },
+];
 
 /** Sections that are not in a phone's bottom nav: each opens from Overview as a subview. */
 export const TRIP_SUBVIEW_LABELS: Partial<Record<TripSectionTab, string>> = {

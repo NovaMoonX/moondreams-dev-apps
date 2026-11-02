@@ -72,6 +72,8 @@ export interface TripSpace {
   city: TripCity | null;
   /** Link keys (`getExpenseLinkKey`) of plans whose owner said no expense is needed. Older documents lack it. */
   noExpenseKeys: string[];
+  /** Meals the Timeline points out when a day has none; `null` means the default (lunch and dinner), `[]` means off. Older documents lack it. */
+  watchedMeals: MealType[] | null;
   /**
    * @deprecated The date-shift lock no longer exists; kept so trips that already carry the
    * field keep their history. New trips write `null`.

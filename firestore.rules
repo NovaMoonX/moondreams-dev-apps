@@ -375,7 +375,7 @@ service cloud.firestore {
 
       // Editors change what the trip is about; members, ownership, archiving, the invite code and the album are not theirs.
       function isContentUpdate() {
-        return changedKeys().hasOnly(['title', 'coverImageUrl', 'startDate', 'endDate', 'timezone', 'city', 'defaultCurrency', 'noExpenseKeys', 'lastEditedAt']);
+        return changedKeys().hasOnly(['title', 'coverImageUrl', 'startDate', 'endDate', 'timezone', 'city', 'defaultCurrency', 'noExpenseKeys', 'watchedMeals', 'lastEditedAt']);
       }
 
       // Any member sets the album once; changing or clearing it is an editor's, and the setter is always the caller.
