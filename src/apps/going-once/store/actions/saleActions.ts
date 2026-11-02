@@ -5,7 +5,6 @@ import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db, functions } from '@/lib/firebase/config';
 import { ADMIN_NAME } from '@lib/app/app.constants';
 import { generateUuid } from '@/utils';
-import { getErrorMessage } from '@/utils/errorUtils';
 import {
   MAX_BUYER_NOTE_LENGTH,
   MAX_PICKUP_AREA_LENGTH,
@@ -79,18 +78,37 @@ export function updateSaleDetail(
   });
 }
 
-/** Deletes a sale with its things and photos; resolves to the reason when it didn't, else `null`. */
-export async function deleteSale(saleId: string): Promise<string | null> {
+const DELETE_TIMEOUT_MS = 540_000;
+const DELETE_FAILED =
+  "We couldn't delete this sale. Check your connection and try again.";
+const SERVER_SENTENCES = [
+  "The sale wasn't fully deleted. Delete it again to finish.",
+];
+
+export type DeleteSaleResult =
+  { outcome: 'deleted' } | { outcome: 'failed'; reason: string };
+
+/** Deletes a sale with its things and photos; a sale that is already gone counts as deleted. */
+export async function deleteSale(saleId: string): Promise<DeleteSaleResult> {
   try {
     await httpsCallable<{ saleId: string }, { deleted: boolean }>(
       functions,
       'deleteSale',
+      { timeout: DELETE_TIMEOUT_MS },
     )({ saleId });
-    return null;
+    return { outcome: 'deleted' };
   } catch (error) {
-    return getErrorMessage(
-      error,
-      "We couldn't delete this sale. Check your connection and try again.",
-    );
+    const code = error instanceof FirebaseError ? error.code : '';
+    if (code === 'functions/not-found') return { outcome: 'deleted' };
+    const reason = ((): string => {
+      if (code === 'functions/deadline-exceeded')
+        return 'Still deleting. Check again in a moment.';
+      if (code === 'functions/unauthenticated')
+        return 'Sign in again to delete this sale.';
+      if (error instanceof Error && SERVER_SENTENCES.includes(error.message))
+        return error.message;
+      return DELETE_FAILED;
+    })();
+    return { outcome: 'failed', reason };
   }
 }

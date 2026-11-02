@@ -31,7 +31,7 @@ export function useGoingOnceUrlState() {
 
   const [thingId, setThingId] = useQueryState('thing', parseAsString);
   const [requestedView, setRequestedView] = useQueryState(
-    'view',
+    'status',
     parseAsStringLiteral(VIEW_PARAMS),
   );
 
@@ -72,6 +72,7 @@ export function useGoingOnceUrlState() {
   };
   const showTab = (tab: GoingOnceTab) => {
     void closeThing();
+    if (tab !== 'things') void setRequestedView(null, { history: 'replace' });
     return setRequestedTab(tab === DEFAULT_GOING_ONCE_TAB ? null : tab, {
       history: 'replace',
     });

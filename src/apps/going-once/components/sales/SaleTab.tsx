@@ -7,6 +7,7 @@ import ActionRow from '@/components/ActionRow';
 import SectionDivider from '@/components/SectionDivider';
 import StatTile from '@/components/StatTile';
 import SummaryRow from '@/components/SummaryRow';
+import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppSelector } from '@/store';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
@@ -17,10 +18,16 @@ import {
   selectStatusSummary,
 } from '@apps/going-once/store/selectors';
 import type { Sale, SaleDetailField } from '@apps/going-once/types';
+import { toFirstName } from '@apps/going-once/utils/personName';
 import { formatOfAsked, type StatusView } from '@apps/going-once/utils/status';
 import { formatStatusTotal } from '@apps/going-once/utils/statusSummary';
 
 const DETAIL_FIELDS: SaleDetailField[] = ['name', 'pickupArea', 'buyerNote'];
+
+const joinNames = (names: string[]) =>
+  names.length < 3
+    ? names.join(' and ')
+    : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`;
 
 const pluralize = (count: number, one: string, many: string) =>
   `${count} ${count === 1 ? one : many}`;
@@ -41,6 +48,13 @@ function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
     selectStatusSummary(state, sale.id),
   );
   const items = useAppSelector((state) => selectItems(state, sale.id));
+  const areItemsReady = useAppSelector(
+    (state) =>
+      state.goingOnce.items.saleId === sale.id &&
+      state.goingOnce.items.status === 'ready',
+  );
+  const coSellerIds = sale.members.filter((id) => id !== sale.ownerUid);
+  const people = useUserInfo(coSellerIds);
   const [editing, setEditing] = useState<SaleDetailField | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -48,22 +62,34 @@ function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
 
   const handleDelete = async () => {
     const photoCount = items.reduce((sum, item) => sum + item.photos.length, 0);
+    const collected = summary.SOLD.collectedCents;
+    const names = coSellerIds.map((id) =>
+      toFirstName(people?.map[id]?.displayName),
+    );
+    const losers =
+      coSellerIds.length === 0
+        ? []
+        : [
+            names.includes('Someone')
+              ? `${pluralize(coSellerIds.length, 'co-seller', 'co-sellers')} ${coSellerIds.length === 1 ? 'loses' : 'lose'} access`
+              : `${joinNames(names)} ${names.length === 1 ? 'loses' : 'lose'} access`,
+          ];
     const isConfirmed = await confirm({
       title: `Delete ${sale.name}?`,
-      message: `This deletes the sale, its ${pluralize(items.length, 'thing', 'things')} and ${pluralize(photoCount, 'photo', 'photos')}${summary.SOLD.count > 0 ? ', and what you recorded as sold' : ''}. It can't be undone.`,
+      message: `This deletes the sale, its ${pluralize(items.length, 'thing', 'things')} and ${pluralize(photoCount, 'photo', 'photos')}${collected > 0 ? `, and the ${formatCentsShort(collected)} you recorded as collected` : ''}. ${losers.map((line) => `${line}. `).join('')}It can't be undone.`,
       confirmText: 'Delete this sale',
       destructive: true,
     });
     if (!isConfirmed) return;
     setIsDeleting(true);
     setDeleteError(null);
-    const reason = await deleteSale(sale.id);
-    if (reason === null) {
+    const result = await deleteSale(sale.id);
+    if (result.outcome === 'deleted') {
       onDeleted();
       return;
     }
     setIsDeleting(false);
-    setDeleteError(reason);
+    setDeleteError(result.reason);
   };
 
   return (
@@ -106,10 +132,12 @@ function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
         {DETAIL_FIELDS.map((field) => {
           const { label, empty } = SALE_DETAILS[field];
           const value = sale[field];
+          const isPublic = field !== 'name';
           return (
             <SummaryRow
               key={field}
               label={label}
+              detail={isPublic ? 'Buyers see this' : undefined}
               onClick={isSeller ? () => setEditing(field) : undefined}
             >
               {value === null || value === '' ? (
@@ -131,8 +159,8 @@ function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
             isDestructive
             icon={<Trash2 />}
             label={isDeleting ? 'Deleting…' : 'Delete this sale'}
-            subtitle='Removes it, its things and their photos for good.'
-            isDisabled={isDeleting}
+            subtitle='Removes its things and photos for good.'
+            isDisabled={isDeleting || !areItemsReady}
             onClick={() => void handleDelete()}
           />
           {deleteError && (

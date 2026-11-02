@@ -8,8 +8,8 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
-const BATCH_SIZE = 400;
 const FILE_PAGE_SIZE = 500;
+const SALE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 const salePath = (saleId: string) => `apps/going-once/sales/${saleId}`;
 const storagePrefix = (saleId: string) => `apps/going-once/sales/${saleId}/`;
@@ -48,40 +48,19 @@ export async function deleteSaleFiles(
   );
 }
 
-/** Deletes the sale's things in batches until none are left, and returns how many it removed. */
-export async function deleteSaleItems(
-  firestore: Firestore,
-  saleId: string,
-): Promise<number> {
-  const removeBatch = async (removed: number): Promise<number> => {
-    const snapshot = await firestore
-      .collection(`${salePath(saleId)}/items`)
-      .select()
-      .limit(BATCH_SIZE)
-      .get();
-    if (snapshot.empty) return removed;
-    const batch = firestore.batch();
-    snapshot.docs.forEach((item) => batch.delete(item.ref));
-    await batch.commit();
-    return removeBatch(removed + snapshot.size);
-  };
-  return removeBatch(0);
-}
-
-/** Photos first, then things, then the sale, so an interrupted run leaves the sale and a rerun finishes it. */
+/** Photos first, then the sale with everything under it, so an interrupted run leaves the sale and a rerun finishes it. */
 export async function deleteSaleContents(
   firestore: Firestore,
   bucket: SaleBucket,
   saleId: string,
 ) {
   const files = await deleteSaleFiles(bucket, saleId);
-  const items = await deleteSaleItems(firestore, saleId);
-  await firestore.doc(salePath(saleId)).delete();
-  return { files, items };
+  await firestore.recursiveDelete(firestore.doc(salePath(saleId)));
+  return { files };
 }
 
 /**
- * Deletes a sale the caller started, with its things and their photos. A sale that is missing and one that belongs to
+ * Deletes a sale the caller started, with everything under it and its photos. A sale that is missing and one that belongs to
  * someone else both answer not-found. Run it again after a failure: each step tolerates what is already gone.
  */
 export const deleteSale = onCall(
@@ -102,7 +81,7 @@ export const deleteSale = onCall(
       typeof request.data?.saleId === 'string'
         ? request.data.saleId.trim()
         : '';
-    if (saleId === '' || saleId.includes('/')) {
+    if (!SALE_ID_PATTERN.test(saleId)) {
       throw new HttpsError('invalid-argument', 'A sale is required.');
     }
 
@@ -116,16 +95,17 @@ export const deleteSale = onCall(
     }
 
     try {
-      const { files, items } = await deleteSaleContents(
+      const { files } = await deleteSaleContents(
         firestore,
         getStorage().bucket(),
         saleId,
       );
-      logger.info('goingOnce.sale.deleted', { items, files });
+      logger.info('goingOnce.sale.deleted', { saleId, files });
       return { deleted: true };
     } catch (error) {
       const code = (error as { code?: unknown } | null)?.code;
       logger.error('goingOnce.sale.deleteFailed', {
+        saleId,
         code:
           typeof code === 'string' || typeof code === 'number'
             ? code

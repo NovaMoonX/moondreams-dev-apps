@@ -96,7 +96,7 @@ export const STATUS_LABELS: Record<ItemStatus, string> = {
 /** The Things tab's switch; taken-off things sit at the end of Sold. */
 export const STATUS_VIEWS = ['AVAILABLE', 'PENDING', 'SOLD'] as const;
 
-/** The Things tab's status in the address (`?view=sold`); Available is the default and leaves the address clean. */
+/** The Things tab's status in the address (`?status=sold`); Available is the default and leaves the address clean. */
 export const STATUS_VIEW_PARAMS = {
   available: 'AVAILABLE',
   pending: 'PENDING',

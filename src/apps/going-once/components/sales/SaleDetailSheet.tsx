@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import Field from '@/components/forms/Field';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
@@ -89,36 +88,30 @@ function SaleDetailSheet({
           void done();
         }}
       >
-        <Field label={label}>
-          {() =>
-            field === 'buyerNote' ? (
-              <Textarea
-                variant='outline'
-                aria-label={label}
-                rows={4}
-                placeholder='Evenings and weekends. Cash or Venmo.'
-                maxLength={MAX_BUYER_NOTE_LENGTH}
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-            ) : (
-              <Input
-                variant='outline'
-                aria-label={label}
-                placeholder={
-                  field === 'name' ? 'Fall clear-out' : 'Capitol Hill, Seattle'
-                }
-                maxLength={
-                  field === 'name'
-                    ? MAX_SALE_NAME_LENGTH
-                    : MAX_PICKUP_AREA_LENGTH
-                }
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-              />
-            )
-          }
-        </Field>
+        {field === 'buyerNote' ? (
+          <Textarea
+            variant='outline'
+            aria-label={label}
+            rows={4}
+            placeholder='Evenings and weekends. Cash or Venmo.'
+            maxLength={MAX_BUYER_NOTE_LENGTH}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        ) : (
+          <Input
+            variant='outline'
+            aria-label={label}
+            placeholder={
+              field === 'name' ? 'Fall clear-out' : 'Capitol Hill, Seattle'
+            }
+            maxLength={
+              field === 'name' ? MAX_SALE_NAME_LENGTH : MAX_PICKUP_AREA_LENGTH
+            }
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+          />
+        )}
         {hint && <p className='text-muted-foreground text-xs'>{hint}</p>}
       </form>
       <ModalFooterActions
