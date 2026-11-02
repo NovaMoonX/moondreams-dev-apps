@@ -124,10 +124,7 @@ import {
   computeDraftView,
   selectReachedEndingsKey,
 } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
-import {
-  describeHoldsBlocks,
-  getCreatedProblems,
-} from '../../src/apps/runway/utils/lookaheadText.ts';
+import { getCreatedProblems } from '../../src/apps/runway/utils/lookaheadText.ts';
 import {
   describeChange,
   isMoneylessChange,
@@ -10240,6 +10237,8 @@ const version = (
     on: 1_000,
     billId: 'water',
     name: 'Water',
+    reason: 'noIncome' as const,
+    shortBy: 0,
   };
   const rent = { ...water, billId: 'rent', name: 'Rent', on: 2_000 };
   const look = (problems: (typeof water)[]) => ({
