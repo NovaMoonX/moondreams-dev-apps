@@ -149,7 +149,11 @@ function EnvelopeTile({
           figure={isPlan ? (eachTime ?? undefined) : value}
           fact={[
             PRIORITY_LABELS[envelope.priority],
-            isPlan && eachTime ? null : funding,
+            isPlan && eachTime
+              ? extras.length > 0
+                ? describeExtras(extras, formatCentsShort).slice(2)
+                : null
+              : funding,
             envelope.maxCents === null
               ? null
               : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
