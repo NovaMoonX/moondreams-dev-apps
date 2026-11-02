@@ -37,6 +37,7 @@ import {
   FORM_FLOW_WORDS,
   GROUP_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PRIORITY_DIAL_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
@@ -100,6 +101,7 @@ interface DueWritten {
 interface GroupSheetProps {
   groupId: string;
   today: number;
+  dial: Priority;
   onClose: () => void;
 }
 
@@ -139,7 +141,7 @@ const describeRepeatsOn = (kinds: string[], date: number): string | null => {
   return notes.length === 0 ? null : notes.join(' ');
 };
 
-function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
+function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -160,7 +162,7 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
     null,
   );
   const allGroups = useAppSelector((state) => selectGroups(state, today));
-  const figures = useGroupFigures(today).find(({ id }) => id === groupId);
+  const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
   const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const [isSettingDue, setIsSettingDue] = useState(false);
@@ -727,7 +729,9 @@ function GroupSheet({ groupId, today, onClose }: GroupSheetProps) {
               label={
                 lead.isOneTime
                   ? GROUP_WORDS.oneTimeLabel
-                  : GROUP_WORDS.monthLabel
+                  : dial === 'want'
+                    ? GROUP_WORDS.monthLabel
+                    : `${GROUP_WORDS.monthLabel}, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial]}`
               }
               figure={
                 lead.amount === null ? undefined : (

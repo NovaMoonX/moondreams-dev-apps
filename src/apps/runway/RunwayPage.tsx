@@ -11,6 +11,7 @@ import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
 import Loading from '@/ui/Loading';
+import PriorityDial from '@apps/runway/components/PriorityDial';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
@@ -44,6 +45,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
+import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
@@ -118,7 +120,10 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
           <h1 className='text-2xl font-semibold'>
             {RUNWAY_TAB_LABELS[activeTab]}
           </h1>
-          {hasFigures && <ValuesEyeButton />}
+          <div className='flex shrink-0 items-center gap-2.5'>
+            {activeTab === 'plan' && <PriorityDial />}
+            {hasFigures && <ValuesEyeButton />}
+          </div>
         </div>
         {getScreen(activeTab)}
       </div>
@@ -129,6 +134,7 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
 
 function RunwayContent() {
   const { user, loading } = useAuth();
+  useClearPriorityDialOnLeave();
   const {
     activeTab: requestedTab,
     showTab,
