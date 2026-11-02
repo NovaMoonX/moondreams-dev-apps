@@ -101,7 +101,7 @@ function pickOpenSaleId(
   if (!isReady) return null;
   if (isListChosen && saleId === null) return null;
   if (sales.some((sale) => sale.id === saleId)) return saleId;
-  if (sales.length === 1) return sales[0].id;
+  if (saleId === null && sales.length === 1) return sales[0].id;
   return null;
 }
 

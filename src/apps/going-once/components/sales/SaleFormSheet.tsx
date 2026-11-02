@@ -1,9 +1,10 @@
-import { useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { MapPin, StickyNote } from 'lucide-react';
 
+import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import AddFieldChips, {
   RemovableField,
 } from '@/components/forms/AddFieldChips';
@@ -12,6 +13,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SuggestionChips from '@/components/SuggestionChips';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { useAppDispatch } from '@/store';
 import {
   MAX_BUYER_NOTE_LENGTH,
@@ -41,6 +43,29 @@ const EXTRA_CHIPS = [
   },
 ];
 
+const START_SALE_DRAFT_KEY = 'going-once:start-sale:new';
+
+interface SaleDraft {
+  name: string;
+  pickupArea: string | null;
+  buyerNote: string | null;
+}
+
+const isTextOrNull = (value: unknown) =>
+  value === null || typeof value === 'string';
+
+const parseSaleDraft = (stored: unknown): SaleDraft | null => {
+  if (typeof stored !== 'object' || stored === null) return null;
+  const { name, pickupArea, buyerNote } = stored as Record<string, unknown>;
+  if (typeof name !== 'string') return null;
+  if (!isTextOrNull(pickupArea) || !isTextOrNull(buyerNote)) return null;
+  return {
+    name,
+    pickupArea: pickupArea as string | null,
+    buyerNote: buyerNote as string | null,
+  };
+};
+
 /** Starts a sale: a name, and the pickup area and note for buyers as extras. */
 function SaleFormSheet({
   isOpen,
@@ -50,14 +75,40 @@ function SaleFormSheet({
 }: SaleFormSheetProps) {
   const dispatch = useAppDispatch();
   const { addToast } = useToast();
-  const [name, setName] = useState('');
-  const [pickupArea, setPickupArea] = useState<string | null>(null);
-  const [buyerNote, setBuyerNote] = useState<string | null>(null);
+  const kept = useFormDraft({
+    key: START_SALE_DRAFT_KEY,
+    base: null,
+    parse: parseSaleDraft,
+  });
+  const [name, setName] = useState(kept.restored?.name ?? '');
+  const [pickupArea, setPickupArea] = useState<string | null>(
+    kept.restored?.pickupArea ?? null,
+  );
+  const [buyerNote, setBuyerNote] = useState<string | null>(
+    kept.restored?.buyerNote ?? null,
+  );
 
   const isDirty =
     name.trim() !== '' ||
     (pickupArea?.trim() ?? '') !== '' ||
     (buyerNote?.trim() ?? '') !== '';
+  const keptValue = useMemo<SaleDraft>(
+    () => ({ name, pickupArea, buyerNote }),
+    [name, pickupArea, buyerNote],
+  );
+  useKeepFormDraft({
+    isRestored: kept.restored !== null,
+    key: START_SALE_DRAFT_KEY,
+    base: null,
+    value: keptValue,
+    isDirty,
+  });
+  const startOver = () => {
+    setName('');
+    setPickupArea(null);
+    setBuyerNote(null);
+    kept.hideNotice();
+  };
   const requestClose = useDiscardGuard({
     isDirty,
     onClose,
@@ -81,10 +132,13 @@ function SaleFormSheet({
 
   return (
     <FormSheet isOpen={isOpen} onClose={requestClose} title='Start a sale'>
-      <form
-        className='space-y-4'
-        onSubmit={(event) => void handleSubmit(event)}
-      >
+      <form className='space-y-4' onSubmit={handleSubmit}>
+        {kept.isNoticeShown && (
+          <DraftRestoredNotice
+            onStartOver={startOver}
+            onDismiss={kept.hideNotice}
+          />
+        )}
         <div className='space-y-3'>
           <Field label='Name'>
             {() => (
