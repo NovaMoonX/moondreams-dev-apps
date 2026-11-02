@@ -15,6 +15,7 @@ import {
   Pencil,
   Play,
   ReceiptText,
+  Ruler,
   ShoppingBag,
   Undo2,
 } from 'lucide-react';
@@ -157,10 +158,11 @@ type View =
   | 'check'
   | 'group'
   | 'move'
-  | 'setHeld';
+  | 'setHeld'
+  | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
-interface ItemSheetProps {
+export interface ItemSheetProps {
   itemId: string;
   /** The kind the row knows, until the item's own version is read. */
   kind: ItemKind;
@@ -178,6 +180,25 @@ interface ItemSheetProps {
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
   quickChange?: { label: string; subtitle?: string; step: string };
+  /** An action that takes the place of the first row and swaps its own view in, for a change that belongs to the income day the sheet was opened from. */
+  dayAction?: {
+    label: string;
+    subtitle?: string;
+    /** Opens somewhere else instead of a view, closing this sheet first. */
+    onOpen?: () => void;
+    renderView?: (controls: {
+      onBack: () => void;
+      onClose: () => void;
+      openChange: (step: string) => void;
+    }) => ReactNode;
+  };
+  /** An optional extra's own action row, opening the change at that question. */
+  maxAction?: {
+    label: string;
+    subtitle?: string;
+    step: string;
+    icon?: ReactNode;
+  };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -223,6 +244,7 @@ const VIEW_NOTES: Record<View, string> = {
   group: '',
   move: '',
   setHeld: '',
+  dayAction: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -237,6 +259,8 @@ function ItemSheet({
   fact,
   help,
   quickChange,
+  dayAction,
+  maxAction,
   startsAtStep,
   payment = null,
   onMarked,
@@ -750,7 +774,21 @@ function ItemSheet({
       />
       {extra}
       <ActionGroup>
-        {canChange && quickChange && (
+        {canChange && dayAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Pencil />}
+            label={dayAction.label}
+            subtitle={dayAction.subtitle}
+            onClick={() => {
+              if (!dayAction.onOpen) return goTo('dayAction');
+              onClose();
+              dayAction.onOpen();
+            }}
+          />
+        )}
+        {canChange && !dayAction && quickChange && (
           <ActionRow
             isGrouped
             hasChevron
@@ -760,7 +798,7 @@ function ItemSheet({
             onClick={() => openChange(quickChange.step)}
           />
         )}
-        {canChange && !quickChange && (
+        {canChange && !quickChange && !dayAction && (
           <ActionRow
             isGrouped
             hasChevron
@@ -768,6 +806,16 @@ function ItemSheet({
             label={ITEM_SHEET_WORDS.change}
             subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
             onClick={() => openChange(null)}
+          />
+        )}
+        {canChange && maxAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={maxAction.icon ?? <Ruler />}
+            label={maxAction.label}
+            subtitle={maxAction.subtitle}
+            onClick={() => openChange(maxAction.step)}
           />
         )}
         {canChange && isTrackEnvelope && isArchivable && heldCents > 0 && (
@@ -1195,7 +1243,13 @@ function ItemSheet({
                 ? moveView
                 : view === 'setHeld'
                   ? setHeldView
-                  : action
+                  : view === 'dayAction' && dayAction?.renderView
+                    ? dayAction.renderView({
+                        onBack: () => goTo('menu'),
+                        onClose,
+                        openChange,
+                      })
+                    : action
         }
       >
         {menu}

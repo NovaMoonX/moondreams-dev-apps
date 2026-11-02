@@ -11,11 +11,13 @@ import ActionRow from '@/components/ActionRow';
 import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
+import LeftOutBillRow from '@apps/runway/components/LeftOutBillRow';
 import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useAppSelector } from '@/store';
+import { formatDateUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -30,6 +32,7 @@ import {
   CHECKLIST_R3_WORDS,
   DAYS_WORDS,
   DRAFT_WORDS,
+  PAY_SHARE_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
   NEEDS_LOOK_WORDS,
@@ -39,6 +42,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   EMPTY_OVERRIDE,
   markNotArrived,
+  saveBillShare,
   saveDayOverride,
   undoNotArrived,
 } from '@apps/runway/store/actions/dayActions';
@@ -80,6 +84,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const [isEditingFunds, setIsEditingFunds] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [openLineId, setOpenLineId] = useState<string | null>(null);
+  const [fundsFromLineId, setFundsFromLineId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate(useNow(60_000));
@@ -120,7 +125,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     override !== null &&
     (override.pairings !== null ||
       Object.keys(override.holdResolutions).length > 0 ||
-      Object.keys(override.payloads).length > 0);
+      Object.keys(override.payloads).length > 0 ||
+      Object.keys(override.billCents).length > 0);
 
   const persist = async (
     change: (current: typeof EMPTY_OVERRIDE) => typeof EMPTY_OVERRIDE,
@@ -191,6 +197,64 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         ),
       ),
     }));
+  const resetShare = async (line: DraftLineData) => {
+    const before = override?.billCents?.[line.itemId];
+    if (!user || before === undefined) return;
+    const name = Object.hasOwn(items, line.itemId)
+      ? items[line.itemId].name
+      : DRAFT_WORDS.billFallback;
+    const dayRef = {
+      payLineId: day.payLineId,
+      sourceId: day.sourceId,
+      expectedOn: day.on,
+    };
+    const date = formatDateUTC(day.on);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      await saveBillShare(user.uid, encryption, dayRef, line.itemId, null, {
+        itemId: line.itemId,
+        summary: PAY_SHARE_WORDS.resetSummary(name, date),
+        note: null,
+      });
+      addToast({
+        title: PAY_SHARE_WORDS.resetToast(name),
+        type: 'success',
+        action: {
+          label: PAY_SHARE_WORDS.undo,
+          onClick: () =>
+            void saveBillShare(
+              user.uid,
+              encryption,
+              dayRef,
+              line.itemId,
+              before,
+              {
+                itemId: line.itemId,
+                summary: PAY_SHARE_WORDS.restoreSummary(
+                  name,
+                  formatCents(before),
+                  date,
+                ),
+                note: null,
+              },
+              { was: undefined },
+            ).catch((undoError: unknown) =>
+              addToast({
+                title: PAY_SHARE_WORDS.undoFailed,
+                description: getErrorMessage(undoError, ''),
+                type: 'error',
+              }),
+            ),
+        },
+      });
+    } catch (resetError) {
+      addToast({
+        title: PAY_SHARE_WORDS.saveFailed,
+        description: getErrorMessage(resetError, ''),
+        type: 'error',
+      });
+    }
+  };
   const funded = draft.lines.filter((line) => line.shortBy === 0);
   const unfunded = draft.lines.filter((line) => line.shortBy > 0);
   const fixIds = new Set(
@@ -239,8 +303,16 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         onChoose={choose}
         onUndoChoice={undoChoice}
         isChoosing={isSaving}
-        isDayOnly={Object.hasOwn(override?.payloads ?? {}, line.itemId)}
+        isDayOnly={
+          Object.hasOwn(override?.payloads ?? {}, line.itemId) ||
+          Object.hasOwn(override?.billCents ?? {}, line.itemId)
+        }
+        onResetShare={resetShare}
         canChange={day.on >= today && changeableIds.has(line.itemId)}
+        onOpenFunds={() => {
+          setFundsFromLineId(line.lineId);
+          setIsEditingFunds(true);
+        }}
       />
     );
   };
@@ -296,6 +368,23 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
               </ul>
             )}
             {dayLeft}
+            {view.leftOut.length > 0 && (
+              <div className='space-y-2'>
+                <SectionDivider label={PAY_SHARE_WORDS.leftOutHeading} />
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {view.leftOut.map((entry) => (
+                    <LeftOutBillRow
+                      key={entry.itemId}
+                      billId={entry.itemId}
+                      fundedBy={entry.fundedBy}
+                      today={today}
+                      dayKey={dayKey}
+                      dayOn={day.on}
+                    />
+                  ))}
+                </ul>
+              </div>
+            )}
             {unfunded.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider
@@ -409,7 +498,12 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           fromLabel={title}
           locked={[]}
           initial={effectivePairings}
-          onClose={() => setIsEditingFunds(false)}
+          day={day}
+          onClose={() => {
+            setIsEditingFunds(false);
+            setOpenLineId(fundsFromLineId);
+            setFundsFromLineId(null);
+          }}
           onSave={(pairings) =>
             persist((current) => ({ ...current, pairings }))
           }
