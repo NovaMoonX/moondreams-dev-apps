@@ -22,9 +22,29 @@ const JPEG_ENDS = [
   '7d14515d2729ffd9',
   '9a8a28ae33d53fffd9',
 ];
-const JPEG_SIZE = { width: 16, height: 12 };
+export const JPEG_SIZE = { width: 16, height: 12 };
 
 type SeedCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WELL_USED';
+
+/** A thing's optional fields as an older thing has them: every key present, nothing filled in. */
+export const EMPTY_OPTIONALS = {
+  description: null as string | null,
+  brandModel: null as string | null,
+  size: null as string | null,
+  originalPriceCents: null as number | null,
+  showOriginalPrice: false,
+  boughtFrom: null as string | null,
+  boughtOn: null as number | null,
+  boughtUrl: null as string | null,
+  boughtUrlPreview: null as {
+    title: string | null;
+    description: string | null;
+    imageUrl: string | null;
+    siteName: string | null;
+    fetchedAt: number;
+  } | null,
+  notes: null as string | null,
+};
 
 interface SeedThing {
   id: string;
@@ -33,10 +53,10 @@ interface SeedThing {
   condition: SeedCondition;
   askingPriceCents: number | null;
   floorPriceCents: number | null;
+  optionals?: Partial<typeof EMPTY_OPTIONALS>;
 }
 
-// The table in canvas.md "Example data". Only what exists so far is seeded: statuses, the original price and where each
-// thing was bought arrive with the issues that read them, so every thing here is Available.
+// The table in canvas.md "Example data". Statuses arrive with the issues that read them, so every thing here is Available.
 const SEED_THINGS: SeedThing[] = [
   {
     id: 'gray-sofa',
@@ -45,6 +65,25 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'LIKE_NEW',
     askingPriceCents: 35000,
     floorPriceCents: 30000,
+    optionals: {
+      description:
+        'Three-seat sofa in light gray fabric. No stains, smoke-free home.',
+      brandModel: 'West Elm Haven',
+      size: '84 in wide',
+      originalPriceCents: 129900,
+      showOriginalPrice: true,
+      boughtFrom: 'West Elm',
+      boughtOn: Date.UTC(2023, 2, 14),
+      boughtUrl: 'https://www.westelm.com/products/haven-sofa/',
+      boughtUrlPreview: {
+        title: 'Haven Sofa',
+        description: 'A deep, comfortable sofa with a clean, modern shape.',
+        imageUrl: null,
+        siteName: 'West Elm',
+        fetchedAt: Date.UTC(2025, 9, 1),
+      },
+      notes: 'Delivery was $120. The legs unscrew, so it fits through a door.',
+    },
   },
   {
     id: 'dining-chairs',
@@ -69,6 +108,9 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'GOOD',
     askingPriceCents: 2500,
     floorPriceCents: null,
+    optionals: {
+      description: 'Brushed brass with a linen shade.',
+    },
   },
   {
     id: 'area-rug',
@@ -93,6 +135,11 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'GOOD',
     askingPriceCents: 20000,
     floorPriceCents: 16000,
+    optionals: {
+      brandModel: 'Trek Domane',
+      size: '56 cm frame',
+      notes: 'New tires last spring. Pedals not included.',
+    },
   },
   {
     id: 'oak-desk',
@@ -101,6 +148,13 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'GOOD',
     askingPriceCents: 15000,
     floorPriceCents: 12000,
+    optionals: {
+      description: 'Solid oak with a small ring mark near the left corner.',
+      size: '60 x 30 in',
+      originalPriceCents: 24000,
+      boughtFrom: 'Craigslist',
+      notes: 'Two drawers; the left one sticks in humid weather.',
+    },
   },
   {
     id: 'monitor',
@@ -109,6 +163,12 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'GOOD',
     askingPriceCents: 9000,
     floorPriceCents: null,
+    optionals: {
+      brandModel: 'Dell U2720Q',
+      originalPriceCents: 54900,
+      showOriginalPrice: true,
+      boughtFrom: 'Best Buy',
+    },
   },
   {
     id: 'stand-mixer',
@@ -156,7 +216,7 @@ const getPhotoPath = (thingId: string, photoId: string) =>
   `apps/going-once/sales/${SALE_ID}/items/seed-go-${thingId}/${photoId}.jpg`;
 
 /** Uploads a seeded photo to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
-async function uploadSeedPhoto(path: string, colorIndex: number) {
+export async function uploadSeedPhoto(path: string, colorIndex: number) {
   const bucket =
     process.env.STORAGE_BUCKET ??
     process.env.VITE_FIREBASE_STORAGE_BUCKET ??
@@ -229,6 +289,8 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
           condition: thing.condition,
           askingPriceCents: thing.askingPriceCents,
           floorPriceCents: thing.floorPriceCents,
+          ...EMPTY_OPTIONALS,
+          ...thing.optionals,
           photos: photos.map(({ photo }) => photo),
           status: 'AVAILABLE',
           createdBy: maya.uid,

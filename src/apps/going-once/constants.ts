@@ -25,6 +25,23 @@ export const MAX_BUYER_NOTE_LENGTH = 300;
 
 export const MAX_ITEM_PHOTOS = 12;
 export const MAX_ITEM_TITLE_LENGTH = 120;
+export const MAX_ITEM_DESCRIPTION_LENGTH = 2000;
+export const MAX_ITEM_BRAND_LENGTH = 80;
+export const MAX_ITEM_SIZE_LENGTH = 80;
+export const MAX_BOUGHT_FROM_LENGTH = 120;
+export const MAX_ITEM_NOTES_LENGTH = 1000;
+
+/** How long after adding a thing its co-seller can still delete it; `firestore.rules` holds the same ten minutes. */
+export const CO_SELLER_DELETE_WINDOW_MS = 10 * 60_000;
+
+/** The Things tab shows a search field from this many things. */
+export const SEARCH_FROM_ITEMS = 8;
+
+export const ITEM_SORT_OPTIONS = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'price', label: 'Price' },
+  { value: 'name', label: 'Name' },
+] as const;
 
 export const CONDITION_OPTIONS = [
   { value: 'NEW', label: 'New' },

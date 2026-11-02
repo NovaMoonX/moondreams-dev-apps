@@ -93,6 +93,11 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/apps/going-once/sales/$(saleId)).data.members;
     }
 
+    function isSaleSeller(saleId) {
+      return request.auth != null
+        && request.auth.uid == get(/databases/$(database)/documents/apps/going-once/sales/$(saleId)).data.ownerUid;
+    }
+
     // Trips are judged by calendar day, and `endDate` is the UTC midnight that starts the last day.
     function isTripActive(trip) {
       return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate + 86400000;
@@ -351,12 +356,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // A thing is read and written by the sale's members, judged by the sale in its path and never a field of the thing. Deleting arrives with its issue.
+    // A thing is read and written by the sale's members, judged by the sale in its path and never a field of the thing.
+    // Who made it and when never change after it is made; the seller may delete any thing, a co-seller only one they
+    // made in the last ten minutes that was never held or sold (`createdAt` is epoch milliseconds).
     match /apps/going-once/sales/{saleId}/items/{itemId} {
       allow read: if isSaleMember(saleId);
       allow create: if isSaleMember(saleId) && isCreatedByMe();
-      allow update: if isSaleMember(saleId) && isCreatedByKept();
-      allow delete: if false;
+      allow update: if isSaleMember(saleId) && isCreatedByKept()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'saleId', 'id']);
+      allow delete: if isSaleSeller(saleId)
+        || (isSaleMember(saleId)
+          && resource.data.createdBy == request.auth.uid
+          && request.time.toMillis() < resource.data.createdAt + 600000
+          && resource.data.get('sale', null) == null
+          && resource.data.get('pending', null) == null);
     }
 
     // --- App: waypoint ---

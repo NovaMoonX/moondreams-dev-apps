@@ -2,6 +2,7 @@ import { createSeedContext, resetEmulatorData } from './seeds/client.ts';
 import { seedAList } from './seeds/aList.ts';
 import { seedCore } from './seeds/core.ts';
 import { seedGoingOnce } from './seeds/goingOnce.ts';
+import { seedGoingOnceScale } from './seeds/goingOnceScale.ts';
 import {
   combineSeedResults,
   SEED_PROJECT_ID,
@@ -30,13 +31,14 @@ function readScope(args: string[]): SeedScope {
     scope === 'pinch-scale' ||
     scope === 'runway' ||
     scope === 'going-once' ||
+    scope === 'going-once-scale' ||
     scope === 'runway-scale'
   ) {
     return scope;
   }
 
   throw new Error(
-    'Use --scope all, core, worth-the-wait, nine-lives, waypoint, a-list, pinch, pinch-scale, runway, runway-scale, or going-once.',
+    'Use --scope all, core, worth-the-wait, nine-lives, waypoint, a-list, pinch, pinch-scale, runway, runway-scale, going-once, or going-once-scale.',
   );
 }
 
@@ -63,6 +65,7 @@ async function main() {
     scope === 'pinch-scale' ||
     scope === 'runway' ||
     scope === 'going-once' ||
+    scope === 'going-once-scale' ||
     scope === 'runway-scale'
   ) {
     results.push(await seedCore(context));
@@ -94,6 +97,10 @@ async function main() {
 
   if (scope === 'all' || scope === 'going-once') {
     results.push(await seedGoingOnce(context));
+  }
+
+  if (scope === 'going-once-scale') {
+    results.push(await seedGoingOnceScale(context));
   }
 
   if (scope === 'runway-scale') {

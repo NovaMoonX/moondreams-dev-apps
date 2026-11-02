@@ -1,3 +1,4 @@
+import type { LinkPreview } from '@/lib/linkMetadata/types';
 import type { GOING_ONCE_TABS } from '@apps/going-once/constants';
 
 export type GoingOnceTab = (typeof GOING_ONCE_TABS)[number];
@@ -47,6 +48,21 @@ export interface Item {
   askingPriceCents: number | null;
   /** Private: the lowest price the sellers will take. */
   floorPriceCents: number | null;
+  description: string | null;
+  brandModel: string | null;
+  size: string | null;
+  /** Private unless `showOriginalPrice`. */
+  originalPriceCents: number | null;
+  showOriginalPrice: boolean;
+  /** Private: where it was bought. */
+  boughtFrom: string | null;
+  /** Private: a date-only value (UTC midnight). */
+  boughtOn: number | null;
+  /** Private: the store's page. */
+  boughtUrl: string | null;
+  boughtUrlPreview: LinkPreview | null;
+  /** Private. */
+  notes: string | null;
   photos: ItemPhoto[];
   status: ItemStatus;
   createdBy: string;

@@ -1,97 +1,85 @@
 import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import AmountHero from '@/components/AmountHero';
+import AddFieldChips from '@/components/forms/AddFieldChips';
+import OptionalDetailRows from '@/components/forms/OptionalDetailRows';
 import PhotoSetPicker from '@/components/forms/PhotoSetPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import MoneyInput from '@/components/MoneyInput';
-import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import RevealChip from '@/components/RevealChip';
 import Subview from '@/components/Subview';
 import { usePhotoSetUploads } from '@/hooks/usePhotoSetUploads';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import {
-  centsToInputValue,
-  formatCentsShort,
-  parseMoneyToCents,
-} from '@/utils/moneyUtils';
+  ConditionQuestion,
+  NameQuestion,
+  PriceQuestion,
+} from '@apps/going-once/components/things/ThingQuestions';
 import {
-  CONDITION_LABELS,
-  CONDITION_OPTIONS,
-  MAX_ITEM_PHOTOS,
-  MAX_ITEM_TITLE_LENGTH,
-} from '@apps/going-once/constants';
+  EXTRA_ANSWER_KEYS,
+  EXTRA_KEYS,
+  getRowTitle,
+  THING_ROWS,
+  type ExtraKey,
+} from '@apps/going-once/components/things/thingRows';
+import { CONDITION_LABELS, MAX_ITEM_PHOTOS } from '@apps/going-once/constants';
 import { useItemPhotoUrls } from '@apps/going-once/queries/photoUrlQueries';
 import {
   addItemPhoto,
   createItem,
+  deleteItem,
   removeItemPhoto,
   reorderItemPhotos,
   updateItemFields,
   type ItemFields,
 } from '@apps/going-once/store/actions/itemActions';
 import { selectItems } from '@apps/going-once/store/selectors';
-import type { Item, ItemCondition } from '@apps/going-once/types';
+import type { Item } from '@apps/going-once/types';
+import {
+  diffFields,
+  EMPTY_ANSWERS,
+  EMPTY_FIELDS,
+  toAnswers,
+  toFields,
+  type ThingAnswers,
+  type ThingFields,
+} from '@apps/going-once/utils/thingAnswers';
 
-interface Answers {
-  title: string;
-  price: string;
-  isFree: boolean;
-  floor: string;
-  isFloorShown: boolean;
-  condition: ItemCondition | null;
+interface Answers extends ThingAnswers {
   /** Questions the person chose to answer later. */
   deferred: string[];
+  /** The extras already added to the review, in the order they were added. */
+  extras: ExtraKey[];
 }
 
 const INITIAL_ANSWERS: Answers = {
-  title: '',
-  price: '',
-  isFree: false,
-  floor: '',
-  isFloorShown: false,
-  condition: null,
+  ...EMPTY_ANSWERS,
   deferred: [],
+  extras: [],
 };
 
-const EMPTY_FIELDS: Required<ItemFields> = {
-  title: '',
-  condition: null,
-  askingPriceCents: null,
-  floorPriceCents: null,
+const toExtraKey = (key: string): ExtraKey | null =>
+  EXTRA_KEYS.find((found) => found === key) ?? null;
+
+const toResumeAnswers = (item: Item): Answers => {
+  const answers = toAnswers(item);
+  return {
+    ...answers,
+    deferred: [],
+    extras: EXTRA_KEYS.filter((key) => THING_ROWS[key].summary(answers) !== ''),
+  };
 };
-
-const toFields = (answers: Answers): Required<ItemFields> => ({
-  title: answers.title.trim(),
-  condition: answers.condition,
-  askingPriceCents: answers.isFree ? 0 : parseMoneyToCents(answers.price),
-  floorPriceCents:
-    answers.isFree || !answers.isFloorShown
-      ? null
-      : parseMoneyToCents(answers.floor),
-});
-
-const toAnswers = (item: Item): Answers => ({
-  title: item.title,
-  price:
-    item.askingPriceCents === null || item.askingPriceCents === 0
-      ? ''
-      : centsToInputValue(item.askingPriceCents),
-  isFree: item.askingPriceCents === 0,
-  floor: centsToInputValue(item.floorPriceCents),
-  isFloorShown: item.floorPriceCents !== null,
-  condition: item.condition,
-  deferred: [],
-});
 
 const SAVE_FAILED =
   "That didn't save. Check your connection; what you typed is still here.";
 
-const getListedNote = (photoCount: number, fields: Required<ItemFields>) => {
+const getListedNote = (photoCount: number, fields: ThingFields) => {
   if (photoCount === 0) return 'Saved · Not listed yet: add a photo';
   if (fields.title === '') return 'Saved · Not listed yet: add a name';
   if (fields.askingPriceCents === null)
@@ -102,22 +90,19 @@ const getListedNote = (photoCount: number, fields: Required<ItemFields>) => {
 interface ThingFormProps {
   saleId: string;
   uid: string;
-  /** Said under the title after a first thing, in the same sitting. */
-  statusLine: string | null;
   /** A thing that was started and left, picked up where it stopped. */
   resume: Item | null;
   onTitleChange: (title: string) => void;
   /** Filled with a function that saves the open answer, for the screen's Back, close and Escape. */
   saveOnExitRef: MutableRefObject<(() => void) | null>;
   onLeave: () => void;
-  onNext: (addedName: string) => void;
+  onNext: (added: { id: string; name: string }) => void;
 }
 
 /** One thing's walk-through: it is written from its first answer, and each later answer saves as the person moves on. */
 function ThingForm({
   saleId,
   uid,
-  statusLine,
   resume,
   onTitleChange,
   saveOnExitRef,
@@ -127,7 +112,7 @@ function ThingForm({
   const dispatch = useAppDispatch();
   const [itemId] = useState(() => resume?.id ?? generateUuid());
   const [initialAnswers] = useState(() =>
-    resume === null ? INITIAL_ANSWERS : toAnswers(resume),
+    resume === null ? INITIAL_ANSWERS : toResumeAnswers(resume),
   );
   const [answers, setAnswers] = useState<Answers>(initialAnswers);
   const latestAnswers = useRef<Answers>(initialAnswers);
@@ -135,7 +120,7 @@ function ThingForm({
   const creation = useRef<Promise<void> | null>(
     resume === null ? null : Promise.resolve(),
   );
-  const saved = useRef<Required<ItemFields>>(
+  const saved = useRef<ThingFields>(
     resume === null ? EMPTY_FIELDS : toFields(initialAnswers),
   );
   const item = useAppSelector(
@@ -143,6 +128,7 @@ function ThingForm({
       selectItems(state, saleId).find((found) => found.id === itemId) ?? null,
   );
   const photoUrls = useItemPhotoUrls(item?.photos ?? []);
+  const [openExtra, setOpenExtra] = useState<ExtraKey | null>(null);
 
   const set = (patch: Partial<Answers>) => {
     const next = { ...latestAnswers.current, ...patch };
@@ -161,12 +147,8 @@ function ThingForm({
     return creation.current;
   };
 
-  const save = (next: Required<ItemFields>) => {
-    const changed = Object.fromEntries(
-      Object.entries(next).filter(
-        ([key, value]) => saved.current[key as keyof ItemFields] !== value,
-      ),
-    ) as ItemFields;
+  const save = (next: ThingFields) => {
+    const changed = diffFields(saved.current, next);
     if (Object.keys(changed).length === 0) return;
     const isFirst = creation.current === null;
     const previous = saved.current;
@@ -283,14 +265,10 @@ function ThingForm({
       isAnswered: fields.title !== '' || isDeferred('name'),
       render: ({ moveOn }) => (
         <div className='space-y-4'>
-          <Input
-            variant='outline'
-            aria-label='Name'
-            placeholder='Oak desk'
-            maxLength={MAX_ITEM_TITLE_LENGTH}
-            value={answers.title}
-            onChange={(event) => set({ title: event.target.value })}
-            onBlur={() => saveAnswers()}
+          <NameQuestion
+            answers={answers}
+            onChange={set}
+            onCommit={() => saveAnswers()}
           />
           {photoCount > 0 && decideLater('name', moveOn)}
         </div>
@@ -309,52 +287,7 @@ function ThingForm({
           : 'Enter the price as a dollar amount.',
       render: ({ moveOn }) => (
         <div className='space-y-4'>
-          {answers.isFree ? (
-            <div className='space-y-3 text-center'>
-              <p className='text-5xl font-semibold'>Free</p>
-              <RevealChip onClick={() => set({ isFree: false })}>
-                Set a price
-              </RevealChip>
-            </div>
-          ) : (
-            <AmountHero
-              label='Asking price'
-              value={answers.price}
-              onChange={(price) => set({ price })}
-              autoFocus
-              ways={[
-                {
-                  label: "It's free",
-                  onClick: () => set({ isFree: true, isFloorShown: false }),
-                },
-              ]}
-            />
-          )}
-          {!answers.isFree &&
-            (answers.isFloorShown ? (
-              <div className='space-y-1'>
-                <p className='text-sm font-medium'>🔒 Floor price</p>
-                <MoneyInput
-                  ariaLabel='Floor price'
-                  value={answers.floor}
-                  onChange={(floor) => set({ floor })}
-                  autoFocus
-                  wrapperClassName='max-w-48'
-                />
-                <p className='text-muted-foreground text-xs'>
-                  Only you and your co-sellers see this. Buyers never do.
-                </p>
-              </div>
-            ) : (
-              <div className='flex justify-center'>
-                <RevealChip
-                  icon='+'
-                  onClick={() => set({ isFloorShown: true })}
-                >
-                  🔒 Floor price
-                </RevealChip>
-              </div>
-            ))}
+          <PriceQuestion answers={answers} onChange={set} />
           {!answers.isFree && decideLater('price', moveOn)}
         </div>
       ),
@@ -372,11 +305,9 @@ function ThingForm({
       isAnswered: answers.condition !== null || isDeferred('condition'),
       render: ({ moveOn }) => (
         <div className='space-y-4'>
-          <PillGroup
-            label='Condition'
-            options={CONDITION_OPTIONS}
-            value={answers.condition}
-            onChange={(condition) => {
+          <ConditionQuestion
+            answers={answers}
+            onChange={({ condition }) => {
               set({ condition });
               saveAnswers({ condition });
               moveOn();
@@ -404,6 +335,34 @@ function ThingForm({
     return floorNote ?? flow.blocker ?? (item === null ? null : 'Saved');
   };
 
+  const extraDetails = answers.extras.map((key) => {
+    const { label, summary, Question } = THING_ROWS[key];
+    const text = summary(answers);
+    return {
+      key,
+      label,
+      value:
+        text === '' ? 'Add it' : <span className='line-clamp-2'>{text}</span>,
+      isEmpty: text === '',
+      render: () => <Question answers={answers} onChange={set} />,
+    };
+  });
+  const addExtra = (key: ExtraKey | null) => {
+    if (key === null) return;
+    set({ extras: [...latestAnswers.current.extras, key] });
+    setOpenExtra(key);
+  };
+  const removeExtra = (key: string) => {
+    const extra = toExtraKey(key);
+    if (extra === null) return;
+    set({
+      extras: latestAnswers.current.extras.filter((found) => found !== extra),
+      ...Object.fromEntries(
+        EXTRA_ANSWER_KEYS[extra].map((name) => [name, EMPTY_ANSWERS[name]]),
+      ),
+    });
+  };
+
   const leave = () => {
     saveAnswers();
     onLeave();
@@ -411,13 +370,36 @@ function ThingForm({
 
   return (
     <>
-      {statusLine && (
-        <p className='text-muted-foreground -mt-1 mb-3 text-sm' role='status'>
-          {statusLine}
-        </p>
-      )}
       <div className='space-y-5'>
         <QuestionFlow flow={flow} />
+        {isReview && (
+          <>
+            <OptionalDetailRows
+              heading='More about it'
+              details={extraDetails}
+              openKey={openExtra}
+              onOpen={(key) => setOpenExtra(toExtraKey(key))}
+              onClose={() => {
+                setOpenExtra(null);
+                saveAnswers();
+              }}
+              onRemove={removeExtra}
+            />
+            <AddFieldChips
+              heading='Add more details'
+              chips={EXTRA_KEYS.filter(
+                (key) => !answers.extras.includes(key),
+              ).map((key) => ({
+                key,
+                label: getRowTitle(key),
+                icon: THING_ROWS[key].label.startsWith('🔒')
+                  ? '🔒'
+                  : THING_ROWS[key].icon,
+              }))}
+              onAdd={(key) => addExtra(toExtraKey(key))}
+            />
+          </>
+        )}
         <ModalFooterActions
           note={getNote()}
           cancelAction={
@@ -433,7 +415,10 @@ function ThingForm({
                 type='button'
                 onClick={() => {
                   saveAnswers();
-                  onNext(fields.title === '' ? 'a thing' : fields.title);
+                  onNext({
+                    id: itemId,
+                    name: fields.title === '' ? 'a thing' : fields.title,
+                  });
                 }}
               >
                 Next thing
@@ -470,19 +455,55 @@ function NewThingFlow({
   resume = null,
   onClose,
 }: NewThingFlowProps) {
-  const [added, setAdded] = useState<string[]>([]);
+  const [added, setAdded] = useState<{ id: string; name: string }[]>([]);
+  const [sittingStep, setSittingStep] = useState(0);
   const [title, setTitle] = useState(resume?.title.trim() ?? '');
   const saveOnExit = useRef<(() => void) | null>(null);
+  const { addToast } = useToast();
+  const { pending, showUndo, undo } = useUndoRemoval();
+  const items = useAppSelector((state) => selectItems(state, saleId));
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  });
   const close = () => {
     saveOnExit.current?.();
     onClose();
   };
-  const lastAdded = added.at(-1) ?? null;
+
+  const takeBack = (thing: { id: string; name: string }) => {
+    setAdded((current) => current.filter((found) => found.id !== thing.id));
+    const item = itemsRef.current.find((found) => found.id === thing.id);
+    if (item === undefined) return;
+    deleteItem(saleId, item).catch(() =>
+      addToast({
+        title: `${thing.name} couldn't be taken back`,
+        description: 'Delete it from the Things tab instead.',
+        type: 'error',
+      }),
+    );
+  };
 
   const statusLine =
-    lastAdded === null
-      ? null
-      : `Added ${lastAdded}${added.length > 1 ? ` · ${added.length} things added this sitting` : ''}`;
+    added.length === 0 ? null : (
+      <p className='text-muted-foreground -mt-1 mb-3 text-sm' role='status'>
+        {`Added ${added[added.length - 1].name}${added.length > 1 ? ` · ${added.length} things added this sitting` : ''}`}
+        {pending && (
+          <>
+            {' · '}
+            <Button
+              type='button'
+              variant='link'
+              size='sm'
+              className="text-foreground! relative h-auto p-0 font-medium tabular-nums underline before:absolute before:-inset-3 before:content-['']"
+              onClick={undo}
+            >
+              Undo · {pending.secondsLeft}
+            </Button>
+          </>
+        )}
+      </p>
+    );
 
   return (
     <Subview
@@ -491,18 +512,21 @@ function NewThingFlow({
       onClose={close}
       isTitleWrapped
     >
+      {statusLine}
       <ThingForm
-        key={added.length}
+        key={sittingStep}
         saleId={saleId}
         uid={uid}
-        statusLine={statusLine}
-        resume={added.length === 0 ? resume : null}
+        resume={sittingStep === 0 ? resume : null}
         onTitleChange={setTitle}
         saveOnExitRef={saveOnExit}
         onLeave={onClose}
-        onNext={(name) => {
-          setAdded((current) => [...current, name]);
+        onNext={(thing) => {
+          setAdded((current) => [...current, thing]);
+          setSittingStep((current) => current + 1);
           setTitle('');
+          if (thing.id !== resume?.id)
+            showUndo(`Added ${thing.name}`, () => takeBack(thing));
         }}
       />
     </Subview>

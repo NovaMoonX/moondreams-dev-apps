@@ -140,6 +140,7 @@ Each transition is one `runTransaction` that re-reads the thing and aborts with 
 - Field edits save as the person goes with `updateDoc` of only that field (never `status`, `pending`, `sale`, `photos`, `statusHistory`).
 - **Add a photo:** shrink with `usePhotoSetUploads` (the `listing` use of `compressImageForUse`), upload, then append the `ItemPhoto` in a transaction that refuses a 13th. Reorder and remove are transactions on `photos`; a removed photo's file is deleted after the commit, and an orphan is swept by the sale delete.
 - A thing is created from its first answer (photo or name) with `title: ''` and `askingPriceCents: null`, so it starts Not listed yet.
+- **Delete** (`deleteItem`) deletes each photo file first (a failure is logged and the rest go on), then the document.
 - **Undo right after adding** (S9) deletes the thing and its photos. The seller can delete any thing; a co-seller can delete only a thing they created in the last 10 minutes that has no `sale` and no `pending` (a narrow rule). Deleting a thing never deletes its inquiries; they keep `itemTitleAtSend` and read "(No longer listed)".
 
 ### Inquiry
@@ -234,6 +235,7 @@ A member may write any `photos[].path` on a thing, so the public function (and t
 | delete | yes | no | the invitee, in the join commit | no |
 | update | no | no | no | no |
 | `sales/{saleId}/items/{itemId}` read, create, update | yes | yes | no | no |
+| update: `createdBy`, `createdAt`, `saleId`, `id` | no | no | no | no |
 | delete | yes | only when `createdBy == me`, `createdAt` within 10 minutes, `sale == null`, `pending == null` | no | no |
 | `sales/{saleId}/inquiries/{id}` read, delete | yes | yes | no | no |
 | update | yes, only `status`, `handledBy`, `handledAt` | same | no | no |
@@ -384,16 +386,17 @@ src/apps/going-once/
   types.ts  constants.ts  going-once.css
   components/
     sales/        SalesList, SaleFormSheet, SaleTab (StatTiles, LinkCard, People, Details, Finish, Delete)
-    things/       ThingRow, StatusDot, PriceTag, ThingDrawer (getThingOffer), ThingForm, MarkPendingView,
-                  MarkSoldView, HistoryView, NewThingFlow (QuestionFlow)
+    things/       ThingRow, StatusDot, PriceTag, ThingDrawer (getThingOffer), ThingForm (Modify), MarkPendingView,
+                  MarkSoldView, HistoryView, NewThingFlow (QuestionFlow), ThingQuestions + thingRows (the questions
+                  both share, and each row's label, fields and summary), ItemsSection (search, sort, the door)
     inbox/        InboxTab, InquiryRow, InquiryDrawer, PushCapsule
     people/       PeopleSection, AddCoSellerSheet, CoSellerIntro
     relist/       CopyListingTextRow, SavePhotosRow, SaveAllPhotosSheet
     public/       BuyerCard, BuyerThingDrawer, InterestView
-  hooks/          useGoingOnceSync.ts, useGoingOnceUrlState.ts, useThingInquiries.ts (drawer-only listener)
+  hooks/          useGoingOnceSync.ts, useGoingOnceUrlState.ts, useDeleteThing.ts (the confirm and the delete), useThingInquiries.ts (drawer-only listener)
   store/          index.ts (slice), listeners/, actions/, selectors.ts
   queries/        photoUrlQueries.ts (a photo's download address), salePageQueries.ts, inquiryQueries.ts
-  utils/          listing.ts (isListable, listingText), totals.ts
+  utils/          listing.ts (isListable, canDeleteItem, sortItems, listingText), thingAnswers.ts (answers <-> stored fields), totals.ts
 functions/src/apps/going-once/
   salePageView.ts (allowlist, limits, mirrored constants), getSalePage.ts, changeSalePublicLink.ts,
   syncSalePublicPhotos.ts, submitSaleInterest.ts, notifySaleInquiry.ts, buildSalePhotoArchive.ts,
