@@ -6,6 +6,8 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 
+import { getIntervalMonths } from './schedule';
+
 export interface GroupMember {
   amount: MoneyRange;
   schedule: Schedule;
@@ -31,7 +33,10 @@ export interface GroupTotal {
 }
 
 /** Times per month as a ratio; null for a schedule with no fixed beat. */
-const getMonthlyFactor = (kind: Schedule['kind']): [number, number] | null => {
+const getMonthlyFactor = (schedule: Schedule): [number, number] | null => {
+  const { kind } = schedule;
+  const interval = getIntervalMonths(schedule);
+  if (interval !== null) return [1, interval];
   if (kind === 'weekly') return [52, 12];
   if (kind === 'everyOtherWeek') return [26, 12];
   if (kind === 'twiceMonthly') return [2, 1];
@@ -61,7 +66,7 @@ export function getIncomeDaysPerMonth(
   return lines
     .filter((line) => sourceId === null || line.sourceId === sourceId)
     .reduce((total, { schedule, startsOn, ending }) => {
-      const factor = getMonthlyFactor(schedule.kind);
+      const factor = getMonthlyFactor(schedule);
       const isLive =
         startsOn < nextMonth &&
         (ending.onDate === null || ending.onDate >= monthStart);
@@ -106,7 +111,7 @@ export function monthlyTotal(
   const isOnce = ({ schedule }: GroupMember) => schedule.kind === 'once';
   const weights = members.map((member): [number, number] | null => {
     if (!isLive(member) || isOnce(member)) return [0, 1];
-    return getMonthlyFactor(member.schedule.kind);
+    return getMonthlyFactor(member.schedule);
   });
   const hasBegun = ({ startsOn, funding: { cadence } }: GroupEnvelopeMember) =>
     startsOn < nextMonth &&

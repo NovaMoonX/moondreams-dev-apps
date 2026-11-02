@@ -2,7 +2,7 @@ import { SchemaType, type SchemaRequest } from 'firebase/ai';
 
 import { generativeModel } from '@/lib/firebase/ai';
 import {
-  BILL_FREQUENCIES,
+  BILL_REPEAT_KINDS,
   BUDGET_LIMITS,
   BUDGET_TEXT_EXTENSIONS,
   BUDGET_WORDS,
@@ -122,7 +122,7 @@ const responseSchema = {
         description:
           'The day of the month it is due (1 to 31), when only that is written.',
       },
-      repeats: choice(BILL_FREQUENCIES, 'How often it comes round.'),
+      repeats: choice(BILL_REPEAT_KINDS, 'How often it comes round.'),
       writtenCadence: text(
         'How often the document says it repeats, in its own words (monthly, yearly, quarterly, every 6 months). Null when no repeat is written.',
       ),

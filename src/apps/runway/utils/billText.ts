@@ -1,12 +1,14 @@
 import {
   BILL_WORDS,
   BILL_FREQUENCY_LABELS,
-  BILL_FREQUENCIES,
+  BILL_REPEAT_KINDS,
   GROUP_WORDS,
   PRIORITY_DIAL_WORDS,
+  SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { monthlyTotal } from '@apps/runway/engine/groups';
+import { getIntervalMonths } from '@apps/runway/engine/schedule';
 import type {
   GroupEnvelopeMember,
   GroupMember,
@@ -85,22 +87,39 @@ export function getGroupMemberNames(
   );
 }
 
-export function describeBillRepeat(kind: Schedule['kind']) {
-  const known = BILL_FREQUENCIES.find((frequency) => frequency === kind);
-  const result = known ? BILL_FREQUENCY_LABELS[known] : kind;
+/** How often a bill repeats every few months, from the months between its dates: "Every other month", "Every 3 months", "Yearly", "Every 2 years". */
+export function describeEveryMonths(interval: number) {
+  if (interval === 1) return BILL_FREQUENCY_LABELS.monthly;
+  if (interval === 2) return 'Every other month';
+  if (interval === 12) return BILL_FREQUENCY_LABELS.yearly;
+  if (interval % 12 === 0) return `Every ${interval / 12} years`;
+  return `Every ${interval} months`;
+}
+
+export function describeBillRepeat(schedule: Schedule) {
+  const interval = getIntervalMonths(schedule);
+  if (interval !== null) return describeEveryMonths(interval);
+  const known = BILL_REPEAT_KINDS.find((kind) => kind === schedule.kind);
+  const result = known
+    ? BILL_FREQUENCY_LABELS[known]
+    : SCHEDULE_LABELS[schedule.kind];
   return result;
 }
+
+/** A bill that comes round less often than monthly is saved up for over the pays before it. */
+export const isSavingUpBill = (schedule: Schedule) =>
+  getIntervalMonths(schedule) !== null;
 
 /** When a bill falls due, in the words a row and a change entry share: "Due Dec 1", "Monthly from Dec 1" or, with no date yet, "Monthly · due date later". */
 export function describeBillTiming(schedule: Schedule) {
   if (schedule.anchor === null) {
     return schedule.kind === 'once'
       ? 'Due date later'
-      : `${describeBillRepeat(schedule.kind)} · due date later`;
+      : `${describeBillRepeat(schedule)} · due date later`;
   }
   const start = formatDateUTC(schedule.anchor);
   if (schedule.kind === 'once') return `Due ${start}`;
-  const result = `${describeBillRepeat(schedule.kind)} from ${start}`;
+  const result = `${describeBillRepeat(schedule)} from ${start}`;
   return result;
 }
 

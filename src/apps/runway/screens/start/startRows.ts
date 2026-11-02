@@ -119,7 +119,7 @@ const describeBillLine = (schedule: Schedule) => {
   const start = formatDateShortUTC(schedule.anchor);
   return schedule.kind === 'once'
     ? `Due ${start}`
-    : `${describeBillRepeat(schedule.kind)} from ${start}`;
+    : `${describeBillRepeat(schedule)} from ${start}`;
 };
 
 export const toBillRow = (id: string, bill: BillSealed): StartRow => ({

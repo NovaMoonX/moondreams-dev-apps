@@ -40,6 +40,33 @@ const monthlyDates = (schedule: Schedule, anchor: number, to: number) => {
   return result;
 };
 
+/** Every `interval` months from the anchor, on the anchor's day of the month or a short month's last day. */
+const everyMonthsDates = (anchor: number, to: number, interval: number) => {
+  const first = new Date(anchor);
+  const last = new Date(to);
+  const year = first.getUTCFullYear();
+  const day = first.getUTCDate();
+  const months =
+    (last.getUTCFullYear() - year) * 12 +
+    last.getUTCMonth() -
+    first.getUTCMonth();
+  const count = months < 0 ? 0 : Math.floor(months / interval) + 1;
+  const result = Array.from(
+    { length: Math.min(count, MAX_OCCURRENCES) },
+    (_, index) => {
+      const month = first.getUTCMonth() + index * interval;
+      return Date.UTC(year, month, Math.min(day, daysInUtcMonth(year, month)));
+    },
+  ).filter((date) => date <= to);
+  return result;
+};
+
+/** The months between a schedule's dates when it repeats every few months, else null. */
+export const getIntervalMonths = (schedule: Schedule): number | null =>
+  schedule.kind === 'everyMonths'
+    ? Math.max(1, Math.round(schedule.intervalMonths ?? 12))
+    : null;
+
 const MAX_CACHED_SCHEDULES = 512;
 const candidateCache = new Map<string, readonly number[]>();
 
@@ -52,12 +79,14 @@ const generateCandidates = (schedule: Schedule, to: number) => {
   if (schedule.kind === 'monthly' || schedule.kind === 'twiceMonthly') {
     return monthlyDates(schedule, anchor, to);
   }
+  const interval = getIntervalMonths(schedule);
+  if (interval !== null) return everyMonthsDates(anchor, to, interval);
   return [];
 };
 
 /** A schedule's dates up to `to`, kept by what names them: a lookahead asks the same bills for the same dates once per income day. */
 const candidateDates = (schedule: Schedule, to: number): readonly number[] => {
-  const key = `${schedule.kind}|${schedule.anchor}|${String(schedule.monthDays)}|${to}`;
+  const key = `${schedule.kind}|${schedule.anchor}|${String(schedule.monthDays)}|${schedule.intervalMonths ?? ''}|${to}`;
   const cached = candidateCache.get(key);
   if (cached) return cached;
   const result = generateCandidates(schedule, to);
