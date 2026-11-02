@@ -26,6 +26,7 @@ import { useAppSelector, type RootState } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import {
   BILL_EVERY_UNIT_LABELS,
   BILL_EVERY_UNITS,
@@ -326,6 +327,13 @@ const toRepeatAnswers = (
   }
   const frequency = BILL_FREQUENCIES.find((kind) => kind === schedule.kind);
   return frequency ? { frequency, everyCount: '', everyUnit: 'months' } : null;
+};
+
+const getSavingAmount = (data: BillFormData) => {
+  const amount = parseAmountDraft(data.amount);
+  return amount === null || amount.highCents <= 0
+    ? null
+    : formatCents(amount.highCents);
 };
 
 const describeRepeatAnswer = (data: BillFormData) => {
@@ -904,7 +912,12 @@ function BillFormBody({
           {getEveryMonths(formData) !== null &&
             formData.paidFrom !== 'lastBefore' && (
               <p className='text-muted-foreground text-sm text-pretty'>
-                {FORM_FLOW_WORDS.savingUpNote}
+                <MaskedText>
+                  {FORM_FLOW_WORDS.savingUpNote(
+                    getSavingAmount(formData),
+                    dueDate === undefined ? null : formatDateShortUTC(dueDate),
+                  )}
+                </MaskedText>
               </p>
             )}
           {draft?.repeatNote && (

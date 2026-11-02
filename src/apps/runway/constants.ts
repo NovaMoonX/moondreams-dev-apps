@@ -1874,8 +1874,10 @@ export const FORM_FLOW_WORDS = {
   every: 'Every',
   everyCount: 'How many',
   everyUnit: 'Months or years',
-  savingUpNote:
-    'Runway saves up for it a little from each pay before it is due.',
+  savingUpNote: (amount: string | null, dueOn: string | null) =>
+    amount && dueOn
+      ? `Runway sets aside a little of each pay toward the ${amount}, so it's ready by ${dueOn}.`
+      : "Runway sets aside a little of each pay toward it, so it's ready when it's due.",
   badAmount: 'Enter an amount above $0, like 45.00.',
   overLimit: 'That is more than an amount can be here.',
   badRange: 'Make the top of the range higher than the low end.',
