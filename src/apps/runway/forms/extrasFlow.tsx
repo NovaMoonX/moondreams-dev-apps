@@ -126,7 +126,34 @@ export function buildExtrasSteps({
   priority: Priority | null;
   set: (patch: Partial<ExtrasFormData>) => void;
 }): QuestionStep[] {
-  if (!canAskForExtras(data, priority) || priority === null) return [];
+  if (!canAskForExtras(data, priority) || priority === null) {
+    const typed = TIERS_BELOW.must.flatMap((tier): PriorityExtra[] => {
+      const cents = parseMoneyToCents(data.extras[tier]) ?? 0;
+      const isKept = priority !== null && TIERS_BELOW[priority].includes(tier);
+      return cents > 0 && !isKept ? [{ tier, cents, orderIndex: 0 }] : [];
+    });
+    if (typed.length === 0 || priority === null) return [];
+    const why =
+      priority === 'want'
+        ? FORM_FLOW_WORDS.extrasDroppedWant
+        : FORM_FLOW_WORDS.extrasDroppedAmount;
+    const extras = describeExtras(typed, formatCentsShort).slice(2);
+    return [
+      {
+        id: 'extras',
+        title: FORM_FLOW_WORDS.extrasTitle,
+        summaryLabel: FORM_FLOW_WORDS.extras,
+        summaryValue: FORM_FLOW_WORDS.extrasDropped(extras, why),
+        isAnswered: true,
+        isPreAnswered: true,
+        render: () => (
+          <p className='text-muted-foreground text-sm'>
+            {FORM_FLOW_WORDS.extrasDropped(extras, why)}
+          </p>
+        ),
+      },
+    ];
+  }
   const tiers = TIERS_BELOW[priority];
   const chosen = tiers.flatMap((tier): PriorityExtra[] => {
     const cents = parseMoneyToCents(data.extras[tier]) ?? 0;

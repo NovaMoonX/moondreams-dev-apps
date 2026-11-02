@@ -1462,8 +1462,13 @@ export const FORM_FLOW_WORDS = {
   extrasTitle: "Should it get more when there's room?",
   extras: "Extra when there's room",
   noExtras: 'None',
-  extraAsShould: 'As a Should',
-  extraAsWant: 'As a Want',
+  extraAsShould: 'Extra as a Should',
+  extraAsWant: 'Extra as a Want',
+  /** Said where the extras question was when a change leaves an extra with nowhere to go. */
+  extrasDropped: (extras: string, why: string) =>
+    `${why}, so ${extras} comes off when you save.`,
+  extrasDroppedWant: 'A Want has no lower level for an extra',
+  extrasDroppedAmount: 'Only an exact amount on a schedule can get an extra',
   extrasHint:
     'Paid after everything above it, so a short income day trims it first.',
   noMax: 'No limit',
