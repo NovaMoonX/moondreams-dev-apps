@@ -4,9 +4,12 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
+  query,
   runTransaction,
   setDoc,
   updateDoc,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -509,6 +512,13 @@ export const deleteEvent = createAsyncThunk<
 
     const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
     await deleteDoc(eventRef);
+    const ideasRef = collection(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas');
+    // The event is gone either way; an idea that can't be cleared still reads as off the itinerary.
+    await getDocs(query(ideasRef, where('convertedToEntityId', '==', eventId)))
+      .then((snapshot) =>
+        Promise.allSettled(snapshot.docs.map((ideaDoc) => updateDoc(ideaDoc.ref, { convertedToEntityId: null }))),
+      )
+      .catch(() => undefined);
     await cancelEventReminder(current?.reminderId ?? null);
     return eventId;
   },

@@ -10,6 +10,7 @@ import {
   TRANSIT_TYPE_EMOJIS,
 } from '@apps/waypoint/constants';
 import type { ChecklistItem, Rental, Stay, TimelineEvent, TripIdea, TripSpace } from '@apps/waypoint/types';
+import { isIdeaOnItinerary } from '@apps/waypoint/store/selectors';
 import { getEventAttendeeIds } from '@apps/waypoint/utils/attendeeCalculators';
 import { getLogisticsEntries, toMinutes } from '@apps/waypoint/utils/timelineLogistics';
 import { getTransitSummary } from '@apps/waypoint/utils/transitDetails';
@@ -212,9 +213,10 @@ function buildChecklistSections({ trip, memberNames, checklist }: TripMarkdownSo
   );
 }
 
-function buildIdeaLines({ ideas }: TripMarkdownSource) {
+function buildIdeaLines({ ideas, events, stays }: TripMarkdownSource) {
+  const liveIds = new Set([...events, ...stays].map((item) => item.id));
   const lines = ideas
-    .filter((idea) => idea.convertedToEntityId === null)
+    .filter((idea) => !isIdeaOnItinerary(idea, liveIds))
     .flatMap((idea) => [
       bullet(
         `${IDEA_TYPE_EMOJIS[idea.ideaType]} **${esc(idea.title)}**${idea.voterUids.length > 0 ? ` — ${idea.voterUids.length} ${idea.voterUids.length === 1 ? 'vote' : 'votes'}` : ''}`,

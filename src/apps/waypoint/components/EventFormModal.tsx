@@ -58,6 +58,7 @@ import {
   EVENT_LINK_KINDS_BY_TYPE,
   EVENT_TYPE_EMOJIS,
   EVENT_TYPE_LABELS,
+  MEAL_DEFAULT_TIMES,
   MEAL_TYPE_EMOJIS,
   MEAL_TYPE_LABELS,
   MAX_REMINDER_MINUTES_BEFORE,
@@ -139,6 +140,7 @@ export interface EventPrefill {
   endTime?: string;
   timezone?: string | null;
   endTimezone?: string | null;
+  mealType?: MealType;
   locationName?: string;
   place?: PlaceSelectionResult;
   groupLabel?: string;
@@ -204,6 +206,8 @@ interface EventDraft {
   /** Transit type for travel, meal type for dining; unused otherwise. */
   quickField: string;
   isMealTouched: boolean;
+  /** False while the start is still the untouched default, so picking a meal may set it. */
+  isTimeTouched: boolean;
   settings: ActivitySetting[];
   hasSettings: boolean;
   hasAddress: boolean;
@@ -411,7 +415,9 @@ function getPrefilledDraft(trip: TripSpace, prefill: EventPrefill): EventDraft {
     time: prefill.time,
     timezone: prefill.timezone ?? null,
     endTimezone: prefill.endTimezone ?? null,
-    quickField: prefill.transitType ?? getDefaultSubtype(prefill.eventType, prefill.time),
+    quickField: prefill.transitType ?? prefill.mealType ?? getDefaultSubtype(prefill.eventType, prefill.time),
+    isMealTouched: Boolean(prefill.mealType),
+    isTimeTouched: !prefill.mealType,
     settings: prefill.settings,
     hasSettings: prefill.settings.length > 0,
     cuisines: prefill.cuisines.join(', '),
@@ -489,6 +495,7 @@ function getBaseDraft(trip: TripSpace, event: TimelineEvent | undefined, initial
             ? ''
             : getDefaultSubtype('ACTIVITY', '09:00'),
     isMealTouched: Boolean(event),
+    isTimeTouched: Boolean(event),
     settings:
       event?.eventType === 'ACTIVITY' && event.eventDetails && 'settings' in event.eventDetails
         ? (event.eventDetails.settings ?? [])
@@ -653,7 +660,7 @@ function EventFormModal({
     setDraft((current) => ({ ...current, ...changes }));
 
   // Moving the start keeps the same start->end window by shifting the end by the same delta.
-  const updateStart = (nextDayIndex: number | null, nextTime: string) => {
+  const updateStart = (nextDayIndex: number | null, nextTime: string, extra: Partial<EventDraft> = {}) => {
     const applyChanges = (changes: Partial<EventDraft>) =>
       updateDraft({
         ...(draft.eventType === 'DINING' && !draft.isMealTouched
@@ -661,6 +668,7 @@ function EventFormModal({
           : {}),
         ...getShiftedArriveBy(draft, nextTime),
         ...changes,
+        ...extra,
       });
     if (nextDayIndex === null) {
       applyChanges({ dayIndex: null, endDayIndex: null, time: nextTime, hasEndTime: false, endTime: '' });
@@ -689,8 +697,17 @@ function EventFormModal({
     });
   };
 
+  const selectMeal = (meal: MealType) => {
+    const mealChanges = { quickField: meal, isMealTouched: true };
+    if (draft.isTimeTouched || meal === 'SNACK') {
+      updateDraft(mealChanges);
+      return;
+    }
+    updateStart(draft.dayIndex, MEAL_DEFAULT_TIMES[meal], mealChanges);
+  };
+
   const selectEventType = (eventType: EventType) => {
-    const isNewEvent = !event && !prefill && !legFrom;
+    const isNewEvent = !event && (!prefill || Boolean(prefill.mealType)) && !legFrom;
     const becomesTravel =
       eventType === 'TRAVEL' && isNewEvent && draft.attendeeTargetType === 'EVERYONE_INCLUDING_FUTURE';
     const leavesTravel = eventType !== 'TRAVEL' && draft.isAttendeeAuto;
@@ -1266,7 +1283,7 @@ function EventFormModal({
                   key={meal}
                   emoji={MEAL_TYPE_EMOJIS[meal]}
                   isSelected={draft.quickField === meal}
-                  onClick={() => updateDraft({ quickField: meal, isMealTouched: true })}
+                  onClick={() => selectMeal(meal)}
                 >
                   {MEAL_TYPE_LABELS[meal]}
                 </Pill>
@@ -1319,7 +1336,9 @@ function EventFormModal({
               type='time'
               aria-label='Start time'
               value={draft.time}
-              onChange={(changeEvent) => updateStart(draft.dayIndex, changeEvent.target.value)}
+              onChange={(changeEvent) =>
+                updateStart(draft.dayIndex, changeEvent.target.value, { isTimeTouched: true })
+              }
             />
           </div>
           {dayNeighbors && (

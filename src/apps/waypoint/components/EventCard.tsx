@@ -9,6 +9,7 @@ import EventAttendeeAvatars from '@apps/waypoint/components/EventAttendeeAvatars
 import EventWeatherChip from '@apps/waypoint/components/EventWeatherChip';
 import LocationLink from '@apps/waypoint/components/LocationLink';
 import SlimTimelineRow from '@apps/waypoint/components/SlimTimelineRow';
+import LinkedExpensesBadge from '@apps/waypoint/components/LinkedExpensesBadge';
 import LinkedTodosBadge from '@apps/waypoint/components/LinkedTodosBadge';
 import NoExpenseBadge from '@apps/waypoint/components/NoExpenseBadge';
 import { getEventSubject } from '@apps/waypoint/utils/relatedSubjects';
@@ -181,6 +182,7 @@ export function EventDetailLines({
           {!showTitle && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
             <>
               <LinkedTodosBadge getSubject={() => getEventSubject(trip, event)} isStatic />
+              <LinkedExpensesBadge getSubject={() => getEventSubject(trip, event)} isStatic />
               <NoExpenseBadge getSubject={() => getEventSubject(trip, event)} isStatic />
             </>
           )}
@@ -280,6 +282,8 @@ export function EventCard({
   const stackActionLabel = isStacked ? 'Edit stack' : isGrouped ? 'Stack whole group' : 'Stack event';
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const hasDesktopNotes = Boolean(event.notes) || canModify;
+  const hasDesktopBadges = EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived;
   const closeDrawer = () => setIsDrawerOpen(false);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const imageUrl = showCover ? getDisplayImage(event) : null;
@@ -376,6 +380,7 @@ export function EventCard({
         {...drawerTriggerProps}
         className={join(
           'border-border bg-card relative overflow-hidden rounded-lg border',
+          imageUrl && 'md:flex',
           isSmallScreen && 'cursor-pointer',
           event.isArchived && 'opacity-60',
         )}
@@ -384,85 +389,93 @@ export function EventCard({
           <FallbackImage
             src={imageUrl}
             alt=''
-            className='aspect-video w-full object-cover sm:aspect-2/1'
+            className='aspect-video w-full object-cover sm:aspect-2/1 md:aspect-auto md:w-44 md:shrink-0 md:self-stretch'
           />
         )}
-        <div className='flex items-start justify-between gap-3 p-4'>
-          <div className='min-w-0 flex-1 space-y-1'>
-            <EventDetailLines
-              trip={trip}
-              event={event}
-              showTitle
-              showNotes={false}
-              showNotesIndicator={isSmallScreen}
-              showAttendees={showAttendees}
-              weather={weather}
-              weatherPlace={weatherPlace}
-              canEdit={canModify}
-              onSaveNotes={onSaveNotes}
-            />
+        <div className={join(imageUrl && 'md:flex md:min-w-0 md:flex-1 md:flex-col')}>
+          <div className='flex items-start justify-between gap-3 p-4'>
+            <div className='min-w-0 flex-1 space-y-1'>
+              <EventDetailLines
+                trip={trip}
+                event={event}
+                showTitle
+                showNotes={false}
+                showNotesIndicator={isSmallScreen}
+                showAttendees={showAttendees}
+                weather={weather}
+                weatherPlace={weatherPlace}
+                canEdit={canModify}
+                onSaveNotes={onSaveNotes}
+              />
+            </div>
+            {!isSmallScreen && (
+              <div className='flex shrink-0 gap-2'>
+                {!event.isArchived && <MapNavigationButton {...getEventNavigationLocation(event)} />}
+                {canToggleArchive && showArchiveToggle && (
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant='secondary'
+                    aria-label={event.isArchived ? 'Unarchive event' : 'Archive event'}
+                    onClick={() => onToggleArchived(event)}
+                  >
+                    {event.isArchived ? (
+                      <ArchiveRestore className='h-4 w-4' />
+                    ) : (
+                      <Archive className='h-4 w-4' />
+                    )}
+                  </Button>
+                )}
+                {canModify && (
+                  <Button
+                    type='button'
+                    size='sm'
+                    variant='secondary'
+                    aria-label={stackActionLabel}
+                    title={stackActionLabel}
+                    onClick={() => onStack(event)}
+                  >
+                    <Layers className={join('h-4 w-4', isStacked && 'fill-current text-primary')} />
+                  </Button>
+                )}
+                {canModify && (
+                  <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
+                    Modify
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
-          {!isSmallScreen && (
-            <div className='flex shrink-0 gap-2'>
-              {!event.isArchived && <MapNavigationButton {...getEventNavigationLocation(event)} />}
-              {canToggleArchive && showArchiveToggle && (
-                <Button
-                  type='button'
-                  size='sm'
-                  variant='secondary'
-                  aria-label={event.isArchived ? 'Unarchive event' : 'Archive event'}
-                  onClick={() => onToggleArchived(event)}
-                >
-                  {event.isArchived ? (
-                    <ArchiveRestore className='h-4 w-4' />
-                  ) : (
-                    <Archive className='h-4 w-4' />
-                  )}
-                </Button>
-              )}
-              {canModify && (
-                <Button
-                  type='button'
-                  size='sm'
-                  variant='secondary'
-                  aria-label={stackActionLabel}
-                  title={stackActionLabel}
-                  onClick={() => onStack(event)}
-                >
-                  <Layers className={join('h-4 w-4', isStacked && 'fill-current text-primary')} />
-                </Button>
-              )}
-              {canModify && (
-                <Button type='button' size='sm' variant='secondary' onClick={() => onEdit(event)}>
-                  Modify
-                </Button>
+          {!isSmallScreen && (hasDesktopNotes || hasDesktopBadges) && (
+            <div className='-mt-2 flex items-end gap-3 px-4 pb-3'>
+              <div className='min-w-0 flex-1'>
+                {hasDesktopNotes && (
+                  <NotesField
+                    key={event.id}
+                    notes={event.notes}
+                    canEdit={canModify}
+                    onSave={(notes) => onSaveNotes(event, notes)}
+                    variant='subtle'
+                    onEditingChange={setIsEditingNotes}
+                    placeholder={EVENT_NOTES_PLACEHOLDER}
+                  />
+                )}
+              </div>
+              {hasDesktopBadges && (
+                <div className={join('flex shrink-0 items-center gap-2', isEditingNotes && 'hidden')}>
+                  <LinkedTodosBadge getSubject={() => getEventSubject(trip, event)} />
+                  <LinkedExpensesBadge getSubject={() => getEventSubject(trip, event)} />
+                  <NoExpenseBadge getSubject={() => getEventSubject(trip, event)} />
+                </div>
               )}
             </div>
           )}
         </div>
-        {!isSmallScreen && (event.notes || canModify) && (
-          <div className='-mt-2 px-4 pb-3'>
-            <NotesField
-              key={event.id}
-              notes={event.notes}
-              canEdit={canModify}
-              onSave={(notes) => onSaveNotes(event, notes)}
-              variant='subtle'
-              onEditingChange={setIsEditingNotes}
-              placeholder={EVENT_NOTES_PLACEHOLDER}
-            />
-          </div>
-        )}
-        {!isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
-          <div className={join('absolute right-4 bottom-4 flex items-center gap-2', isEditingNotes && 'hidden')}>
-            <LinkedTodosBadge getSubject={() => getEventSubject(trip, event)} />
-            <NoExpenseBadge getSubject={() => getEventSubject(trip, event)} />
-          </div>
-        )}
       </article>
       {isSmallScreen && EXPENSE_TRACKED_EVENT_TYPES.includes(event.eventType) && !event.isArchived && (
         <div className='flex justify-end gap-2 pr-4'>
           <LinkedTodosBadge variant='tab' getSubject={() => getEventSubject(trip, event)} />
+          <LinkedExpensesBadge variant='tab' getSubject={() => getEventSubject(trip, event)} />
           <NoExpenseBadge variant='tab' getSubject={() => getEventSubject(trip, event)} />
         </div>
       )}
