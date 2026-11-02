@@ -339,10 +339,12 @@ const getSavingAmount = (data: BillFormData) => {
 const describeRepeatAnswer = (data: BillFormData) => {
   if (data.frequency === null) return '';
   const interval = getEveryMonths(data);
-  if (data.frequency === 'custom') {
-    return interval === null ? '' : describeEveryMonths(interval);
-  }
-  return BILL_FREQUENCY_LABELS[data.frequency];
+  if (data.frequency === 'custom' && interval === null) return '';
+  if (interval === null) return BILL_FREQUENCY_LABELS[data.frequency];
+  const label = describeEveryMonths(interval);
+  return data.paidFrom === 'lastBefore'
+    ? label
+    : `${label}, ${FORM_FLOW_WORDS.savedUpSummary}`;
 };
 
 const endingOptions = INCOME_ENDINGS.map((value) => ({
@@ -453,7 +455,7 @@ const getBlocker = (
   const start = fromDateInputValue(data.startDate);
   if (start === undefined && !data.isLater) return 'Pick when it is due.';
   if (data.frequency === null) return 'Pick how often it repeats.';
-  if (!isRepeatAnswered(data)) return FORM_FLOW_WORDS.pickEvery;
+  if (!isRepeatAnswered(data)) return FORM_FLOW_WORDS.pickEvery(data.everyUnit);
   if (!isEditing && start !== undefined && start < today)
     return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
@@ -864,7 +866,7 @@ function BillFormBody({
       isAnswered: isRepeatAnswered(formData),
       blocker:
         formData.frequency === 'custom'
-          ? FORM_FLOW_WORDS.pickEvery
+          ? FORM_FLOW_WORDS.pickEvery(formData.everyUnit)
           : FORM_FLOW_WORDS.pickRepeat,
       render: ({ moveOn }) => (
         <div className='space-y-2'>
