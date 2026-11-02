@@ -13,16 +13,21 @@ import { ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucid
 
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
+import LockedButton from '@/components/LockedButton';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import DetailSheet from '@/components/DetailSheet';
+import SegmentedControl from '@/components/SegmentedControl';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { canChangeExpense, isTripMember } from '@apps/waypoint/utils/roleGuards';
 import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  DAY_TOTAL_KIND_OPTIONS,
   EXPENSE_SORT_OPTIONS,
   LIST_SEARCH_THRESHOLD,
   EXPENSE_TOTALS_VIEW_HINTS,
@@ -68,6 +73,7 @@ import {
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
 import type {
+  DayTotalKind,
   ExpenseSortBy,
   ExpenseStatus,
   ExpenseTotalsView,
@@ -165,6 +171,9 @@ const PERSONAL_PREVIEW_COUNT = 3;
 const EAGER_DAYS = 3;
 const ESTIMATED_ROW_HEIGHT = 72;
 
+const parseDayTotalKind = (stored: unknown): DayTotalKind | null =>
+  DAY_TOTAL_KIND_OPTIONS.find((option) => option.value === stored)?.value ?? null;
+
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
 // An en dash, not a hyphen: it lets a long range wrap there instead of overflowing its box.
@@ -254,6 +263,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const expenses = useAppSelector(selectTripExpenses);
   const personalExpenses = useAppSelector(selectPersonalExpenses);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
+  const [dayTotalKind, setDayTotalKind] = useLocalStorageState<DayTotalKind>(
+    'waypoint:dayTotalKind',
+    'total',
+    parseDayTotalKind,
+  );
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [dayFilter, setDayFilter] = useState<string[]>([]);
@@ -415,6 +429,16 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   const dayGroups =
     sortBy === 'day' ? groupByIndexBucket(sortedExpenses, (expense) => expense.dayIndex, dayCount) : null;
+
+  const formatDayTotal = (items: TripExpense[]) => {
+    const mine = { paid: 'paidByMe', expected: 'expectedForMe', total: 'myTotal' } as const;
+    const dayTotal =
+      totalsView === 'me'
+        ? computeMemberTotals(items, memberIds, currentUserId)[mine[dayTotalKind]]
+        : toTotalsView(computeExpenseTotals(items, memberIds)[dayTotalKind]);
+    const basis = { me: ' yours', 'per-person': ' per person', group: '' }[totalsView];
+    return `${formatTotal(dayTotal.min, dayTotal.max, currency)}${basis}`;
+  };
 
   const handleSubmit = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
@@ -653,7 +677,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
-    ...(canAddExpenses && getResolvedExpenseAmount(expense) !== null
+    ...(canChangeExpense(trip, currentUserId, expense) && getResolvedExpenseAmount(expense) !== null
       ? [
           {
             key: 'edit-split',
@@ -663,7 +687,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
-    ...(canAddExpenses
+    ...(canChangeExpense(trip, currentUserId, expense)
       ? [
           {
             key: 'modify',
@@ -676,7 +700,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           },
         ]
       : []),
-    ...(canAddExpenses && expense.status === 'PAID'
+    ...(canChangeExpense(trip, currentUserId, expense) && expense.status === 'PAID'
       ? [
           {
             key: 'mark-unpaid',
@@ -687,6 +711,28 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         ]
       : []),
   ];
+
+  const getPayerLock = (expense: TripExpense) => {
+    if (!canAddExpenses || expense.payerUid === null || canChangeExpense(trip, currentUserId, expense)) {
+      return null;
+    }
+    return isTripMember(trip, expense.payerUid)
+      ? {
+          title: `Only ${memberLabel(expense.payerUid)} can change this`,
+          reason: `${memberLabel(expense.payerUid)} paid for this, so only they can change it, edit its split, mark it unpaid or delete it.`,
+        }
+      : {
+          title: 'Only an Admin can change this',
+          reason: 'Whoever paid for this has left the trip, so only an Admin can change it now.',
+        };
+  };
+
+  const renderPayerLock = (lock: { reason: string }) => (
+    <>
+      <p>{lock.reason}</p>
+      <p>You can still mark your own share as repaid.</p>
+    </>
+  );
 
   const renderEarlyPayments = (expense: TripExpense) => {
     const entries = Object.entries(getEarlyPayments(expense));
@@ -708,7 +754,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     );
   };
 
-  const renderExpenseDetail = (expense: TripExpense) => {
+  const renderExpenseDetail = (expense: TripExpense, isRow: boolean) => {
     const splitDescription = describeSplit(expense, memberIds, memberLabel);
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
@@ -744,6 +790,40 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       );
     };
 
+    const breakdown = splitBreakdown && (
+      <div className='mt-0.5 space-y-1'>
+        {splitBreakdown.perPersonLabel !== null ? (
+          <div className='flex items-baseline justify-end gap-2'>
+            {!expense.isPerPerson && (
+              <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                {splitBreakdown.perPersonLabel}
+              </p>
+            )}
+            {renderRepaidControl(splitBreakdown.shares.find((share) => share.uid === currentUserId))}
+          </div>
+        ) : (
+          splitBreakdown.shares.map((share) => (
+            <div key={share.uid} className='flex items-baseline justify-end gap-2'>
+              <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                {memberLabel(share.uid)} {share.amountLabel}
+              </p>
+              {share.uid === currentUserId && renderRepaidControl(share)}
+            </div>
+          ))
+        )}
+        {splitBreakdown.payerShare && (
+          <p className='text-muted-foreground text-xs'>
+            {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
+          </p>
+        )}
+        {expense.payerUid === currentUserId && repaidNames.length > 0 && (
+          <p className='text-muted-foreground text-right text-xs'>
+            Repaid so far: {repaidNames.join(', ')}
+          </p>
+        )}
+      </div>
+    );
+
     return (
       <>
         <div className='flex min-w-0 gap-3'>
@@ -765,7 +845,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
           </div>
         </div>
-        <div className='col-span-2'>
+        <div className={isRow ? 'text-right' : 'col-span-2'}>
           <p className='whitespace-nowrap font-medium'>
             {formatTotal(displayRange.min, displayRange.max, expense.currency)}
             {expense.isPerPerson && (
@@ -782,42 +862,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
             </p>
           )}
-          {splitBreakdown && (
-            <div className='mt-0.5 space-y-1'>
-              {splitBreakdown.perPersonLabel !== null ? (
-                <div className='flex items-baseline justify-end gap-2'>
-                  {!expense.isPerPerson && (
-                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
-                      {splitBreakdown.perPersonLabel}
-                    </p>
-                  )}
-                  {renderRepaidControl(
-                    splitBreakdown.shares.find((share) => share.uid === currentUserId),
-                  )}
-                </div>
-              ) : (
-                splitBreakdown.shares.map((share) => (
-                  <div key={share.uid} className='flex items-baseline justify-end gap-2'>
-                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
-                      {memberLabel(share.uid)} {share.amountLabel}
-                    </p>
-                    {share.uid === currentUserId && renderRepaidControl(share)}
-                  </div>
-                ))
-              )}
-              {splitBreakdown.payerShare && (
-                <p className='text-muted-foreground text-xs'>
-                  {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
-                </p>
-              )}
-              {expense.payerUid === currentUserId && repaidNames.length > 0 && (
-                <p className='text-muted-foreground text-right text-xs'>
-                  Repaid so far: {repaidNames.join(', ')}
-                </p>
-              )}
-            </div>
-          )}
+          {!isRow && breakdown}
         </div>
+        {isRow && breakdown && <div className='col-span-2 pl-12'>{breakdown}</div>}
       </>
     );
   };
@@ -863,11 +910,17 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
 
     const actions = getActions(expense);
+    const payerLock = getPayerLock(expense);
     return (
-      <li key={expense.id} className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'>
-        {renderExpenseDetail(expense)}
-        {actions.length > 0 && (
-          <div className='col-start-2 row-start-1 flex items-start gap-2 self-start'>
+      <li key={expense.id} className='grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 py-3'>
+        {renderExpenseDetail(expense, true)}
+        {(actions.length > 0 || payerLock !== null) && (
+          <div className='col-span-2 flex flex-wrap items-start justify-end gap-2'>
+            {payerLock !== null && (
+              <LockedButton size='sm' label='Modify' title={payerLock.title}>
+                {renderPayerLock(payerLock)}
+              </LockedButton>
+            )}
             {actions.map((action) => (
               <Button
                 key={action.key}
@@ -888,6 +941,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const detailExpense = expenses.find((expense) => expense.id === detailExpenseId);
+  const detailPayerLock = detailExpense ? getPayerLock(detailExpense) : null;
 
   const renderClusters = (items: TripExpense[]) =>
     clusterByGroup(items).map((cluster, index) => {
@@ -906,7 +960,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
               </p>
             </div>
-            <p className='text-muted-foreground max-w-32 pr-2 text-right text-sm'>
+            <p className='text-muted-foreground max-w-32 pr-2 text-right text-sm sm:pr-0'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
             </p>
           </div>
@@ -1179,6 +1233,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
         </Button>
       </div>
+      {sortBy === 'day' && (
+        <div className='flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3'>
+          <span className='text-muted-foreground shrink-0 text-sm'>Each day&apos;s total</span>
+          <SegmentedControl
+            label="Each day's total"
+            options={DAY_TOTAL_KIND_OPTIONS}
+            value={dayTotalKind}
+            onChange={setDayTotalKind}
+            className='w-full sm:w-72'
+          />
+        </div>
+      )}
       <Drawer
         isOpen={isFilterDrawerOpen}
         onClose={() => setIsFilterDrawerOpen(false)}
@@ -1261,7 +1327,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 className='defer-offscreen space-y-3'
                 style={{ '--defer-size': `${items.length * ESTIMATED_ROW_HEIGHT}px` } as CSSProperties}
               >
-                <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
+                <SectionDivider
+                  label={getBucketLabel(bucket, trip.startDate)}
+                  trailing={
+                    <span className='text-foreground text-sm font-semibold'>{formatDayTotal(items)}</span>
+                  }
+                />
                 <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_ROW_HEIGHT}>
                   <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
                 </LazyMount>
@@ -1288,7 +1359,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         initialExpense={editingExpense ?? undefined}
         currentUserId={currentUserId}
         initialAudience={newExpenseAudience}
-        canShare={canAddExpenses}
+        canShare={canAddExpenses || editingExpense !== null}
         onSubmitPersonal={editingExpense ? undefined : handlePersonalCreate}
         onSplitReceipt={(prefill) => {
           setReceiptPrefill(prefill);
@@ -1351,7 +1422,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>
           {detailExpense && (
             <div className='space-y-4'>
-              <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense)}</div>
+              <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense, false)}</div>
+              {detailPayerLock !== null && (
+                <div className='text-muted-foreground flex gap-2 text-sm'>
+                  <Lock className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+                  <div className='space-y-1'>{renderPayerLock(detailPayerLock)}</div>
+                </div>
+              )}
               {getActions(detailExpense).length > 0 && (
                 <div className='border-border divide-border divide-y rounded-xl border'>
                   {getActions(detailExpense).map((action) => (

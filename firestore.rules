@@ -375,7 +375,7 @@ service cloud.firestore {
 
       // Editors change what the trip is about; members, ownership, archiving, the invite code and the album are not theirs.
       function isContentUpdate() {
-        return changedKeys().hasOnly(['title', 'coverImageUrl', 'startDate', 'endDate', 'timezone', 'city', 'defaultCurrency', 'noExpenseKeys', 'lastEditedAt']);
+        return changedKeys().hasOnly(['title', 'coverImageUrl', 'startDate', 'endDate', 'timezone', 'city', 'defaultCurrency', 'noExpenseKeys', 'watchedMeals', 'lastEditedAt']);
       }
 
       // Any member sets the album once; changing or clearing it is an editor's, and the setter is always the caller.
@@ -536,14 +536,21 @@ service cloud.firestore {
         || (isIdeaPoster()
           && hasSafeLinkUrl()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ideaType', 'title', 'notes', 'linkUrl', 'ideaDetails', 'lastEditedAt']))
-        // Turning an idea into an event is the creator of that event's call, with the event written in the same commit.
+        // Turning an idea into an event (again, if its old one is gone) is the creator of that event's call, with the event written in the same commit.
         || (canAddToTrip(tripId)
-          && resource.data.get('convertedToEntityId', null) == null
+          && (resource.data.get('convertedToEntityId', null) == null
+            || !exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(resource.data.convertedToEntityId)))
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['convertedToEntityId'])
           && request.resource.data.convertedToEntityId is string
           && !exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
           && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
-          && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId)).data.createdBy == request.auth.uid);
+          && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId)).data.createdBy == request.auth.uid)
+        // Whoever may delete events takes an idea back off the itinerary once its event no longer exists.
+        || (canEditTripPlan(tripId)
+          && resource.data.get('convertedToEntityId', null) is string
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['convertedToEntityId'])
+          && request.resource.data.convertedToEntityId == null
+          && !existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(resource.data.convertedToEntityId)));
       allow delete: if isIdeaPoster() || isTripAdminOf(tripId);
     }
 
@@ -602,11 +609,20 @@ service cloud.firestore {
               && isEarlyPaymentAmountBounded(after[request.auth.uid])));
       }
 
+      // Once one person has paid it, it is theirs to change or delete (an Admin takes over if they have left the trip).
+      function canChangeExpense() {
+        let payerUid = resource.data.get('payerUid', null);
+        return resource.data.status == 'PAID' && payerUid != null
+          ? (isTripMemberOf(tripId) && request.auth.uid == payerUid)
+            || (!(payerUid in getTrip(tripId).members) && isTripAdminOf(tripId))
+          : isTripEditorOf(tripId);
+      }
+
       allow read: if isTripMemberOf(tripId);
       allow create: if isTripEditorOf(tripId)
         && isCreatedByMe()
         && earlyPaymentsOf(request.resource.data).size() == 0;
-      allow update: if isTripEditorOf(tripId)
+      allow update: if canChangeExpense()
         && isTripIdKept()
         && isCreatedByKept()
         && earlyPaymentsOf(request.resource.data) == earlyPaymentsOf(resource.data);
@@ -619,12 +635,19 @@ service cloud.firestore {
       allow update: if isTripMemberOf(tripId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
         && isOwnEarlyPaymentChangeValid();
+      // Linking it to an event, stay or rental leaves the money alone, so it stays open to editors.
+      allow update: if isTripEditorOf(tripId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedTo', 'dayIndex', 'lastEditedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAll(['linkedTo'])
+        && request.resource.data.linkedTo != null
+        && (request.resource.data.get('dayIndex', null) == resource.data.get('dayIndex', null)
+          || resource.data.get('dayIndex', null) == null);
       // An editor can take an early payment off an expense, never add or change one.
       allow update: if isTripEditorOf(tripId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['earlyPayments'])
         && earlyPaymentsOf(request.resource.data).diff(earlyPaymentsOf(resource.data)).affectedKeys()
           .intersection(earlyPaymentsOf(request.resource.data).keys().toSet()).size() == 0;
-      allow delete: if isTripEditorOf(tripId) && earlyPaymentsOf(resource.data).size() == 0;
+      allow delete: if canChangeExpense() && earlyPaymentsOf(resource.data).size() == 0;
     }
 
     // Private to its owner: no one else on the trip can read or change it.

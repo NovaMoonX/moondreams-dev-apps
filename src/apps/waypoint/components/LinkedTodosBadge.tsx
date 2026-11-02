@@ -42,7 +42,20 @@ function LinkedTodosBadge({ getSubject, isStatic = false, variant = 'inline' }: 
 
   const content = getBadgeContent(open, total);
   if (content === null) {
-    return null;
+    return canManageChecklist && !isStatic && variant === 'inline' ? (
+      <Button
+        type='button'
+        variant='tertiary'
+        size='sm'
+        className="text-muted-foreground relative h-auto px-0! text-xs font-medium whitespace-nowrap after:absolute after:-inset-x-2 after:-inset-y-2 after:content-['']"
+        onClick={(event) => {
+          event.stopPropagation();
+          startLinkChecklist(subject);
+        }}
+      >
+        Add a to-do
+      </Button>
+    ) : null;
   }
 
   const label = (

@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import EventFormModal, {
   type DeleteLinked,
   type EventFormValues,
+  type EventPrefill,
   type NextLegSeed,
   type SubmitOptions,
 } from '@apps/waypoint/components/EventFormModal';
@@ -42,6 +43,7 @@ export function useEventEditor(trip: TripSpace, currentUserId: string, events: T
   const [legSeed, setLegSeed] = useState<NextLegSeed | undefined>();
   const [legCount, setLegCount] = useState(0);
   const [newDayIndex, setNewDayIndex] = useState<number | undefined>();
+  const [newPrefill, setNewPrefill] = useState<EventPrefill | undefined>();
   // The mobile details drawer's own close, threaded through from whichever card opened the edit
   // form — invoked only once that edit actually succeeds, never on cancel.
   const editSuccessRef = useRef<(() => void) | undefined>(undefined);
@@ -148,9 +150,10 @@ export function useEventEditor(trip: TripSpace, currentUserId: string, events: T
     editSuccessRef.current = onSuccess;
   };
 
-  const openNew = (dayIndex?: number) => {
+  const openNew = (dayIndex?: number, prefill?: EventPrefill) => {
     setEditingEvent(undefined);
     setNewDayIndex(dayIndex);
+    setNewPrefill(prefill);
     setIsOpen(true);
   };
 
@@ -165,6 +168,7 @@ export function useEventEditor(trip: TripSpace, currentUserId: string, events: T
       event={editingEvent}
       events={events}
       initialDayIndex={newDayIndex}
+      prefill={newPrefill}
       placeBias={placeBias}
       isSubmitting={isSubmitting}
       onSubmit={handleSubmit}

@@ -7,7 +7,7 @@ import { CalendarDays } from 'lucide-react';
 
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { getDayLabel } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import IdeaToEventModal from '@apps/waypoint/components/IdeaToEventModal';
@@ -19,6 +19,7 @@ import {
   IDEA_TYPE_LABELS,
 } from '@apps/waypoint/constants';
 import { deleteIdea, updateIdea } from '@apps/waypoint/store/actions/ideaActions';
+import { selectIsIdeaOnItinerary } from '@apps/waypoint/store/selectors';
 import type { TripIdea, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTags, getIdeaTiming } from '@apps/waypoint/utils/ideaLabels';
 import { canCreateItem, canDeleteIdea, canEditIdea } from '@apps/waypoint/utils/roleGuards';
@@ -80,6 +81,7 @@ function IdeaDetailsBody({
 }: IdeaDetailsBodyProps) {
   const adderInfo = useUserInfo(idea.addedByUid);
   const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
+  const isOnItinerary = useAppSelector((state) => selectIsIdeaOnItinerary(state, idea));
   const tags = getIdeaTags(idea);
   const { days, blocks } = getIdeaTiming(trip, idea);
   const timingText = [days.map((day) => getDayLabel(trip.startDate, day)).join(', '), blocks.join(' / ')]
@@ -97,7 +99,7 @@ function IdeaDetailsBody({
       {IDEA_TYPE_EMOJIS[idea.ideaType]}
     </span>
   );
-  const itineraryBadge = idea.convertedToEntityId !== null && (
+  const itineraryBadge = isOnItinerary && (
     <Badge variant='success' use='status'>
       On the itinerary
     </Badge>
@@ -197,6 +199,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
   const adderInfo = useUserInfo(idea.addedByUid);
   const adderName = adderInfo?.displayName || adderInfo?.email || 'Someone';
   const isSmallScreen = useMediaQuery().isBelow('sm');
+  const isOnItinerary = useAppSelector((state) => selectIsIdeaOnItinerary(state, idea));
   // Keyed per rendered card, not per idea: the same idea can sit on Overview and in the Ideas list.
   const overlayId = useId();
   const isOpen = useSyncExternalStore(subscribeToOpenIdea, () => openOverlayId === overlayId);
@@ -219,7 +222,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
     },
   };
   const startConverting =
-    idea.convertedToEntityId === null && canCreateItem(trip, currentUserId)
+    !isOnItinerary && canCreateItem(trip, currentUserId)
       ? () => {
           setIsOpen(false);
           setIsConverting(true);
@@ -262,7 +265,7 @@ function IdeaDetailsOverlay({ trip, idea, currentUserId, renderTrigger }: IdeaDe
     const confirmed = await confirm({
       title: 'Delete idea',
       message: `This is ${adderName}'s idea, not yours. Delete "${idea.title}" for everyone?${
-        idea.convertedToEntityId === null ? '' : " It's already on the itinerary, and that event stays exactly as it is."
+        isOnItinerary ? " It's already on the itinerary, and that event stays exactly as it is." : ''
       }`,
       destructive: true,
     });
