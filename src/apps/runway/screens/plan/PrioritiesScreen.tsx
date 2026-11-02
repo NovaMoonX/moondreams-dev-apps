@@ -354,6 +354,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             isHighlighted={isHighlighted}
             key={rowId}
             itemId={item.id}
+            isPart={rowId !== item.id}
             envelope={envelope}
             cents={balances.assignedByItem[item.id] ?? 0}
             pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
@@ -372,6 +373,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             isHighlighted={isHighlighted}
             key={rowId}
             goalId={item.id}
+            isPart={rowId !== item.id}
             goal={goal}
             pace={paces[item.id]}
             heldCents={heldByItem[item.id] ?? 0}

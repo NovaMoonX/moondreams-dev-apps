@@ -24,7 +24,7 @@ export interface PriorityItem {
   isRest: boolean;
   /** Its next payment is due before the pay after the next one, so the engine funds it first in its tier. */
   isDueFirst: boolean;
-  /** How a draft line names this row when it is not the item id: an extra's level (`getPartLineKey`). */
+  /** How a draft line names this row when it is not the item id: the item and an extra's level. */
   lineKey?: string;
 }
 
@@ -395,8 +395,8 @@ export interface PriorityMove<P> {
   /** The item's own level and rank; null keeps each segment's. */
   priority: Priority | null;
   orderIndex: number | null;
-  /** Extras that moved, by their place among the item's extras (1 first). */
-  extras: { index: number; tier: Priority; orderIndex: number }[];
+  /** Extras that moved: the level each is at today, and the level and rank it moves to. */
+  extras: { fromTier: Priority; tier: Priority; orderIndex: number }[];
 }
 
 /** A segment's payload with a move applied: the item's own level and rank, and each moved extra's. */
@@ -414,14 +414,12 @@ export function applyMove<P>(
   const orderIndex = move.orderIndex ?? own.orderIndex;
   if (own.funding === undefined || move.extras.length === 0)
     return { ...own, priority, orderIndex };
-  const extras = getExtras({ ...own, funding: own.funding }).map(
-    (extra, index) => {
-      const moved = move.extras.find((entry) => entry.index === index + 1);
-      return moved
-        ? { ...extra, tier: moved.tier, orderIndex: moved.orderIndex }
-        : extra;
-    },
-  );
+  const extras = (own.extras ?? []).map((extra) => {
+    const moved = move.extras.find((entry) => entry.fromTier === extra.tier);
+    return moved
+      ? { ...extra, tier: moved.tier, orderIndex: moved.orderIndex }
+      : extra;
+  });
   return { ...own, priority, orderIndex, extras };
 }
 
@@ -445,6 +443,10 @@ export function buildMoves<
       today,
     );
     const own = list.find((entry) => entry.itemId === itemId) ?? null;
+    const current = segments[0]?.payload as
+      Parameters<typeof getExtras>[0] | undefined;
+    const currentExtras =
+      current?.funding === undefined ? [] : getExtras(current);
     return kind === undefined || segments.length === 0
       ? []
       : [
@@ -456,11 +458,19 @@ export function buildMoves<
             orderIndex: own?.orderIndex ?? null,
             extras: list
               .filter((entry) => entry.itemId !== itemId)
-              .map((entry) => ({
-                index: readPartRowId(entry.itemId).index,
-                tier: entry.tier,
-                orderIndex: entry.orderIndex,
-              })),
+              .flatMap((entry) => {
+                const from =
+                  currentExtras[readPartRowId(entry.itemId).index - 1];
+                return from
+                  ? [
+                      {
+                        fromTier: from.tier,
+                        tier: entry.tier,
+                        orderIndex: entry.orderIndex,
+                      },
+                    ]
+                  : [];
+              }),
           },
         ];
   });

@@ -294,4 +294,57 @@ assert.deepEqual(
   ['should', [{ tier: 'want', cents: 25_000, orderIndex: 3 }]],
 );
 
+// An older stretch's extras are matched by level, never by position in today's version.
+const split = {
+  ...groceries,
+  extras: [
+    { tier: 'should' as const, cents: 1_000, orderIndex: 1 },
+    { tier: 'want' as const, cents: 2_000, orderIndex: 1 },
+  ],
+};
+const stretched = [
+  {
+    id: 'v1',
+    itemId: 'groceries',
+    kind: 'envelope' as const,
+    createdAt: 1,
+    effectiveFrom: 0,
+    effectiveUntil: null,
+    payload: split,
+  },
+  {
+    id: 'v2',
+    itemId: 'groceries',
+    kind: 'envelope' as const,
+    createdAt: 2,
+    effectiveFrom: 30 * D,
+    effectiveUntil: null,
+    payload: {
+      ...groceries,
+      extras: [{ tier: 'want' as const, cents: 3_000, orderIndex: 1 }],
+    },
+  },
+];
+const [stretchMove] = buildMoves(
+  [{ itemId: 'groceries:1', tier: 'should', orderIndex: 5 }],
+  stretched,
+  10 * D,
+);
+assert.deepEqual(stretchMove.extras, [
+  { fromTier: 'should', tier: 'should', orderIndex: 5 },
+]);
+assert.deepEqual(
+  stretchMove.segments.map(
+    (segment) => applyMove(segment.payload, stretchMove).extras,
+  ),
+  [
+    [
+      { tier: 'should', cents: 1_000, orderIndex: 5 },
+      { tier: 'want', cents: 2_000, orderIndex: 1 },
+    ],
+    [{ tier: 'want', cents: 3_000, orderIndex: 1 }],
+  ],
+  'a later stretch with only a Want extra keeps it',
+);
+
 console.log('runway priority parts: ok');

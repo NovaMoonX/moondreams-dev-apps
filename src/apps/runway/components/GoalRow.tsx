@@ -30,6 +30,8 @@ interface GoalRowProps {
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
   isFaded?: boolean;
+  /** One part of a split goal (its contribution alone), so the row shows that part and never repeats the saved figure. */
+  isPart?: boolean;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -67,6 +69,7 @@ function GoalRow({
   reorder,
   isHighlighted = false,
   isFaded = false,
+  isPart = false,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const savedCents = Math.min(heldCents, goal.targetCents);
@@ -83,9 +86,13 @@ function GoalRow({
       <ItemRow
         name={goal.name}
         emoji={goal.emoji}
-        detail={paceLine}
-        figure={formatCentsShort(savedCents)}
-        figureWord={`of ${formatCentsShort(goal.targetCents)}`}
+        detail={isPart ? funding : paceLine}
+        figure={
+          isPart && goal.funding.amount.kind === 'exact'
+            ? formatCentsShort(goal.funding.amount.cents)
+            : formatCentsShort(savedCents)
+        }
+        figureWord={isPart ? null : `of ${formatCentsShort(goal.targetCents)}`}
         ariaLabel={`${goal.name}, ${progress} saved. ${paceLine}. Open`}
         onOpen={reorder ? undefined : () => setIsOpen(true)}
         reorder={reorder}

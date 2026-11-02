@@ -624,7 +624,8 @@ export function buildDraft(input: DraftInput): Draft {
   );
   const returning = new Set(input.plan.returns ?? []);
   const lines = [...pairingLines, ...ordinaryLines].map((line) =>
-    returning.has(line.lineId) && line.reason.code === 'funded'
+    returning.has(getLineId(line.dayKey, line.itemId)) &&
+    line.reason.code === 'funded'
       ? { ...line, reason: { ...line.reason, code: 'returns' as const } }
       : line,
   );

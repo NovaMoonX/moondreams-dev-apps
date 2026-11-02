@@ -35,6 +35,8 @@ interface EnvelopeTileProps {
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
   isFaded?: boolean;
+  /** One part of a split envelope (its amount alone), so the row shows that part's amount and never repeats the balance. */
+  isPart?: boolean;
 }
 
 const capitalize = (text: string) =>
@@ -51,6 +53,7 @@ function EnvelopeTile({
   reorder,
   isHighlighted = false,
   isFaded = false,
+  isPart = false,
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -62,14 +65,15 @@ function EnvelopeTile({
   const { amount } = envelope.funding;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
   const isPlan = level === 'plan';
-  const rowFigure = isPlan ? eachTime : value;
-  const rowDetail = isPlan
-    ? eachTime
-      ? `${describeCadenceLine(envelope.funding.cadence)}${describeExtras(extras, formatCentsShort)}`
-      : funding
-    : isHidden
-      ? funding
-      : `${capitalize(word)} · ${funding}`;
+  const rowFigure = isPlan || isPart ? eachTime : value;
+  const rowDetail =
+    isPlan || isPart
+      ? eachTime
+        ? `${describeCadenceLine(envelope.funding.cadence)}${describeExtras(extras, formatCentsShort)}`
+        : funding
+      : isHidden
+        ? funding
+        : `${capitalize(word)} · ${funding}`;
   const isOver = word === 'over';
   const open = () => setIsOpen(true);
 

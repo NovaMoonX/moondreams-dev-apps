@@ -90,11 +90,7 @@ export function fundingAtLevel(
   return withExtras({ ...item, extras: counted });
 }
 
-/**
- * What each part asks of each funded day: an exact rule asks each part's amount, a calendar rule
- * spreads each part's amount over its period like the item's own. Null for a rule with no extras,
- * whose one ask the caller already knows.
- */
+/** What each part asks of each funded day (a calendar rule spreads each part over its period); null without extras. */
 export function getPartAsks(
   item: Splittable,
   funded: readonly { dayKey: string; on: number; sourceId?: string | null }[],
