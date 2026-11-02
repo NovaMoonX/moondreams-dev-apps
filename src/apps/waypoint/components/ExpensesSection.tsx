@@ -796,7 +796,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               ? `Marked by ${memberLabel(share.markedByUid)}`
               : 'Marked paid back'}
           </span>
-          <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
+          <Button type='button' variant='secondary' size='sm' className='h-10' onClick={toggle}>
             Undo
           </Button>
         </span>
