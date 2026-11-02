@@ -118,7 +118,7 @@ const boardQuery = <T>(query: string, variables: Record<string, string | number>
 };
 
 const readProject = (login: string) => {
-  const query = `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) { id fields(first: 50) { nodes { ... on __typename ... on ProjectV2FieldCommon { id name } ... on ProjectV2SingleSelectField { options { id name } } } } } } }`;
+  const query = `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) { id fields(first: 50) { nodes { __typename ... on ProjectV2FieldCommon { id name } ... on ProjectV2SingleSelectField { options { id name } } } } } } }`;
   const project =
     boardQuery<{
       user: {
