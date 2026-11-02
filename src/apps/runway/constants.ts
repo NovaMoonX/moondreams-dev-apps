@@ -772,6 +772,7 @@ export const BILL_WORDS = {
   readyToPay: 'Set aside in full',
   savingUp: 'Saving up',
   savingUpFor: 'Saving up for',
+  nothingSaved: 'Nothing saved yet',
   saved: (cents: string, total: string) => `${cents} of ${total} saved`,
   needsDueDate: 'Needs a due date',
   allBills: 'All bills',

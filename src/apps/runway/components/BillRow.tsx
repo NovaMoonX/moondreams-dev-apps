@@ -73,7 +73,8 @@ const getProgress = (payment: BillPayment | null, isSavingUp: boolean) => {
   if (paid) {
     return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateShortUTC(paid.paidOn)}`;
   }
-  if (fundedCents <= 0) return 'Nothing set aside yet';
+  if (fundedCents <= 0)
+    return isSavingUp ? BILL_WORDS.nothingSaved : 'Nothing set aside yet';
   if (fundedCents >= totalCents) return 'Set aside in full';
   const cents = formatCentsShort(fundedCents);
   const total = formatCentsShort(totalCents);

@@ -872,30 +872,33 @@ function BillFormBody({
           {formData.frequency === 'custom' && (
             <div className='flex items-center gap-2'>
               <span className='text-sm'>{FORM_FLOW_WORDS.every}</span>
-              <Input
-                type='number'
-                inputMode='numeric'
-                min={1}
-                max={
-                  formData.everyUnit === 'years'
-                    ? MAX_EVERY_MONTHS / 12
-                    : MAX_EVERY_MONTHS
-                }
-                variant='outline'
-                aria-label={FORM_FLOW_WORDS.everyCount}
-                placeholder={formData.everyUnit === 'years' ? '2' : '3'}
-                className='w-20'
-                autoFocus
-                value={formData.everyCount}
-                onChange={(event) => set({ everyCount: event.target.value })}
-              />
-              <PillGroup
-                label={FORM_FLOW_WORDS.everyUnit}
-                options={everyUnitOptions}
-                value={formData.everyUnit}
-                isThin
-                onChange={(everyUnit) => set({ everyUnit })}
-              />
+              <div className='w-20 shrink-0'>
+                <Input
+                  type='number'
+                  inputMode='numeric'
+                  min={1}
+                  max={
+                    formData.everyUnit === 'years'
+                      ? MAX_EVERY_MONTHS / 12
+                      : MAX_EVERY_MONTHS
+                  }
+                  variant='outline'
+                  aria-label={FORM_FLOW_WORDS.everyCount}
+                  placeholder={formData.everyUnit === 'years' ? '2' : '3'}
+                  autoFocus
+                  value={formData.everyCount}
+                  onChange={(event) => set({ everyCount: event.target.value })}
+                />
+              </div>
+              <div className='shrink-0'>
+                <PillGroup
+                  label={FORM_FLOW_WORDS.everyUnit}
+                  options={everyUnitOptions}
+                  value={formData.everyUnit}
+                  isThin
+                  onChange={(everyUnit) => set({ everyUnit })}
+                />
+              </div>
             </div>
           )}
           {getEveryMonths(formData) !== null && (
