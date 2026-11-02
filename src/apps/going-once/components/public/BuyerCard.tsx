@@ -22,11 +22,11 @@ function BuyerCard({ thing, onOpen }: BuyerCardProps) {
       <span className='bg-accent/60 text-accent-foreground grid aspect-[4/3] w-full place-items-center'>
         <Camera className='size-7 opacity-60' aria-hidden='true' />
       </span>
-      <span className='block min-w-0 space-y-1.5 p-3'>
+      <span className='flex min-w-0 flex-1 flex-col gap-1.5 p-3'>
         <span className='text-foreground line-clamp-2 text-base leading-snug font-medium break-words'>
           {thing.title}
         </span>
-        <span className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+        <span className='mt-auto flex flex-wrap items-center gap-x-2 gap-y-1'>
           <PriceTag askingPriceCents={thing.askingPriceCents} />
           {thing.status === 'PENDING' && (
             <StatusDot status='PENDING' className='text-muted-foreground' />

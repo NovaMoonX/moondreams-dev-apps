@@ -84,3 +84,8 @@ html.going-once-theme
   ) {
   padding-inline: 1rem;
 }
+
+/* The search field's native clear icon is drawn in the browser's blue; it is a control, not a link. */
+html.going-once-theme input[type='search']::-webkit-search-cancel-button {
+  filter: grayscale(1);
+}

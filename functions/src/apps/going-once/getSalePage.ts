@@ -3,6 +3,7 @@ import { onCall } from 'firebase-functions/v2/https';
 
 import { linkRef, saleRef } from './saleLinkStore.js';
 import {
+  FINISHED_SALE_STATUS,
   NOT_FOUND_RESULT,
   SALE_PAGE_LIMITS,
   isLinkId,
@@ -31,7 +32,7 @@ async function readPage(
   if (
     !sale.exists ||
     sale.get('publicLinkId') !== linkId ||
-    sale.get('status') === 'FINISHED'
+    sale.get('status') === FINISHED_SALE_STATUS
   ) {
     return NOT_FOUND_RESULT;
   }

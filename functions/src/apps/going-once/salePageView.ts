@@ -19,6 +19,8 @@ export const PUBLIC_CONDITIONS = [
 ] as const;
 
 /** Only a thing buyers can still ask about is served; Sold and taken-off things never leave. */
+export const FINISHED_SALE_STATUS = 'FINISHED';
+
 export const PUBLIC_STATUSES = ['AVAILABLE', 'PENDING'] as const;
 
 export type PublicCondition = (typeof PUBLIC_CONDITIONS)[number];

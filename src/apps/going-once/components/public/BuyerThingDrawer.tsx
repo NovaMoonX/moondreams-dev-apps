@@ -1,3 +1,4 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Camera } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
@@ -22,7 +23,21 @@ function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
   ].filter((fact) => fact !== null);
 
   return (
-    <DetailSheet isOpen onClose={onClose} title={thing.title}>
+    <DetailSheet
+      isOpen
+      onClose={onClose}
+      title={thing.title}
+      footer={
+        <div className='space-y-3'>
+          <p className='text-muted-foreground text-center text-sm'>
+            Want it? Ask whoever sent you this link.
+          </p>
+          <Button type='button' className='h-11 w-full' onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      }
+    >
       <div className='space-y-4'>
         <div className='bg-accent/60 text-accent-foreground grid h-48 w-full place-items-center rounded-2xl'>
           <Camera className='size-8 opacity-60' aria-hidden='true' />

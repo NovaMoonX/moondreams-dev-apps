@@ -5,7 +5,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { describeError, removeFolderFiles } from '../../share/shareFiles.js';
 import { mintShareId } from '../../share/shareIds.js';
 import { linkRef, publicFolder, saleRef } from './saleLinkStore.js';
-import { isRecord, isSafeId } from './salePageView.js';
+import { FINISHED_SALE_STATUS, isRecord, isSafeId } from './salePageView.js';
 
 type LinkAction = 'create' | 'renew' | 'stop';
 
@@ -44,7 +44,7 @@ async function changeLink(uid: string, saleId: string, action: LinkAction) {
     throw notFound();
   }
 
-  if (action !== 'stop' && before.get('status') === 'FINISHED') {
+  if (action !== 'stop' && before.get('status') === FINISHED_SALE_STATUS) {
     throw new HttpsError(
       'failed-precondition',
       'This sale is finished. Reopen it to turn the page on.',

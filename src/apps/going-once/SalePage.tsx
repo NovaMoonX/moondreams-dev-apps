@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button, Skeleton } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery } from '@tanstack/react-query';
@@ -14,13 +14,14 @@ import { useNoIndex } from '@/hooks/useNoIndex';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import BuyerCard from '@apps/going-once/components/public/BuyerCard';
 import BuyerThingDrawer from '@apps/going-once/components/public/BuyerThingDrawer';
-import { SEARCH_FROM_ITEMS } from '@apps/going-once/constants';
+import { GOING_ONCE_TABS, SEARCH_FROM_ITEMS } from '@apps/going-once/constants';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
 import { salePageQueryOptions } from '@apps/going-once/queries/salePageQueries';
 import type { PublicThing, SalePageResult } from '@apps/going-once/types';
 
 const CARD_HEIGHT = 220;
 const EAGER_CARDS = 8;
+const SALE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 
 type OkPage = Extract<SalePageResult, { status: 'ok' }>;
 
@@ -42,7 +43,7 @@ function Cards({
   onOpen: (id: string) => void;
 }) {
   return (
-    <ul className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+    <ul className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'>
       {things.map((thing, index) => (
         <li key={thing.id} className='min-w-0'>
           <LazyMount estimatedHeight={CARD_HEIGHT} eager={index < EAGER_CARDS}>
@@ -56,10 +57,13 @@ function Cards({
 
 function NotHere() {
   return (
-    <div className='grid min-h-[60dvh] place-items-center text-center'>
+    <div className='flex min-h-[60dvh] flex-col items-center justify-center gap-2 text-center'>
       <h1 className='text-xl font-semibold text-balance'>
         This sale isn&apos;t here anymore.
       </h1>
+      <p className='text-muted-foreground text-sm'>
+        Ask whoever sent it for a new link.
+      </p>
     </div>
   );
 }
@@ -73,7 +77,7 @@ function PageSkeleton() {
     >
       <Skeleton className='h-8 w-2/3' />
       <Skeleton className='h-4 w-1/2' />
-      <div className='grid grid-cols-2 gap-3 sm:grid-cols-3'>
+      <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4'>
         {Array.from({ length: 4 }, (_, index) => (
           <Skeleton key={index} className='h-52 w-full' />
         ))}
@@ -98,6 +102,13 @@ function PageFailed({ onRetry }: { onRetry: () => void }) {
 
 function OwnPageBand() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  const saleId = params.get('sale');
+  const tab = GOING_ONCE_TABS.find((choice) => choice === params.get('tab'));
+  const backPath =
+    saleId !== null && SALE_ID_PATTERN.test(saleId)
+      ? `/going-once?sale=${saleId}${tab === undefined ? '' : `&tab=${tab}`}`
+      : '/going-once';
   return (
     <div className='bg-accent text-accent-foreground flex flex-wrap items-center justify-between gap-2 rounded-2xl px-4 py-3'>
       <p className='text-sm font-medium'>
@@ -108,7 +119,7 @@ function OwnPageBand() {
         size='sm'
         variant='secondary'
         rounded='full'
-        onClick={() => navigate('/going-once')}
+        onClick={() => navigate(backPath)}
       >
         Back to Going Once
       </Button>
@@ -135,7 +146,7 @@ function SaleView({ page }: { page: OkPage }) {
     .join(' · ');
 
   return (
-    <div className='mx-auto max-w-3xl space-y-5'>
+    <div className='mx-auto max-w-3xl space-y-5 lg:max-w-5xl'>
       {page.isMember && <OwnPageBand />}
       <header className='space-y-1'>
         <h1 className='text-[26px] leading-tight font-semibold text-balance break-words'>

@@ -6,7 +6,7 @@
 
 - **Co-sellers join by email, Waypoint's way.** The seller adds an email; when that person opens Going Once signed in with that verified email, the app joins them by writing themselves into `members` and deleting the invite in one commit (Waypoint's `emailInvites` + `isTripEmailInviteJoinValid` shape). No accept step and no pending-request collection: the seller's Add is the consent. No email is sent.
 - **The app route is open to any signed-in person (Waypoint's shape, not a `ProtectedRoute appId`)**, so a co-seller never needs an access grant; who may *start* a sale is a server-enforced feature switch, `create-sales` (see "For the owner" in the hand-off).
-- **The public page is live, not a snapshot** (the documented exception to `security-privacy.md` "A share is a snapshot unless it says otherwise"; product asks for it). A function reads the sale and its things with the admin SDK on every call and runs each through an allowlist. Only photos are copied out.
+- **The public page is live, not a snapshot** (the documented exception to `security-privacy.md` "A share is a snapshot unless it says otherwise"; product asks for it). A function reads the sale and its things with the admin SDK on every call and runs each through an allowlist. Only photos are copied out. Cost: every open is one call that reads the sale and up to 300 things (the cap is applied before the listable filter, so a sale with many unlisted things reads them all for fewer cards), with `maxInstances` 10.
 - **One stored file per photo; public copies made by a trigger.** Each photo is uploaded once at the shared `listing` size. A trigger keeps a folder named by the public link equal to what the page shows (480px and 1,280px WebP copies) and deletes copies of anything that stops showing. Visitors never receive the listing-size file.
 - **Signed-out interest is written by a callable** with field caps, 100 a day per sale, 40 per thing, a per-instance IP throttle, a honeypot and a deterministic id. No CAPTCHA.
 - **Save all photos is a zip built by a function** from Available and Pending things, streamed into Storage.
@@ -156,6 +156,8 @@ OPEN → FINISHED   (seller; callable `finishSale`: turns the public link off, s
 FINISHED → OPEN   (seller; same callable: clears contactsClearAt if contacts are not yet cleared; the link stays off until turned on)
 ```
 
+The functions name the finished status once (`FINISHED_SALE_STATUS` in `salePageView.ts`); `check:going-once-share` should assert it against the client's sale status type once the finish issue adds one (the type is not in `types.ts` yet).
+
 Contacts already cleared stay cleared after a reopen.
 
 ### Public link
@@ -291,7 +293,7 @@ Verified per `firestore-rules.md`: the matrix above as seller, co-seller, other 
 
 - Fields are copied by name into a new object when shaping and again before returning; a thing failing the allowlist is dropped whole.
 - A malformed, unknown, stopped or renewed-away id, a finished sale and a deleted sale all answer `{ status: 'not_found' }` through one path.
-- The page calls `useNoIndex`; `cloudflare-worker.js` gets a `pages` entry for `/going-once/s/` with a generic preview ("Things for sale"), `noindex, nofollow`, `no-referrer`. `Layout` shortens the route before writing presence. Functions log at most four characters of a link id and only a Storage error's code.
+- The page calls `useNoIndex`; `cloudflare-worker.js` gets a `pages` entry for `/going-once/s/` with a generic preview ("Things for sale"), `noindex, nofollow`, `no-referrer`. `Layout` shortens the route before writing presence and leaves its header (menu, theme, account button) off the route, since a visitor with a link has no use for it. Functions log at most four characters of a link id and only a Storage error's code.
 - Nothing third-party loads on the public page.
 
 ### The interest form's limits (in `submitSaleInterest`, not the UI)
@@ -360,7 +362,7 @@ All `region: 'us-central1'`, callables with the site's `cors` list. Errors are `
 | `clearSaleContacts` | scheduled, daily 04:30 UTC | — | — | counts logged | A sale that fails is left for the next run |
 | `notifySaleInquiry` | Firestore trigger, `apps/going-once/sales/{saleId}/inquiries/{inquiryId}` written | — | before/after of the inquiry | `queueBundledPush` per recipient, and an immediate push where it says "send now" | Logs; a push failure never touches the inquiry |
 | `sendDueBundledPushes` | scheduled, every minute (shared, every app) | — | — | summaries sent | A bundle that fails keeps its items for the next run |
-| `deleteSale` | callable, 540 s | seller | `{ saleId }` | `{ deleted: true }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike, and a sale a finished run already removed); `internal` "The sale wasn't fully deleted. Delete it again to finish." (the sale stays, so a rerun finishes it). Order: its Storage files, then `recursiveDelete` of the sale, which takes the things and any other subcollection (inquiries, invites) with it. The client calls it with a 540 s timeout, counts `not-found` as deleted, and reads `deadline-exceeded` as "Still deleting. Check again in a moment." |
+| `deleteSale` | callable, 540 s | seller | `{ saleId }` | `{ deleted: true }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike, and a sale a finished run already removed); `internal` "The sale wasn't fully deleted. Delete it again to finish." (the sale stays, so a rerun finishes it). Order: its Storage files, the public links (photo copies, then record), the waiting invitations, `recursiveDelete` of the sale (things and any other subcollection), then the links again: a link minted by `changeSalePublicLink` between the first query and the sale's removal would otherwise outlive it. The client calls it with a 540 s timeout, counts `not-found` as deleted, and reads `deadline-exceeded` as "Still deleting. Check again in a moment." |
 | `findFirstActivityAt` | usage finder for `registerAppUsage` | — | uid | oldest `createdAt` of a sale they are in, or `null` | — |
 
 `PublicThing = { id, title, description, brandModel, size, condition, askingPriceCents, originalPriceCents, status, photos: { s: string, m: string }[] }`, the copy paths only; `originalPriceCents` is `null` unless shown.

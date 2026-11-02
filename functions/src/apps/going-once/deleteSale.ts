@@ -94,7 +94,9 @@ export async function deleteSaleContents(
   const links = await deleteSaleLinks(firestore, bucket, saleId);
   const invites = await deleteSaleInvites(firestore, saleId);
   await firestore.recursiveDelete(firestore.doc(salePath(saleId)));
-  return { files, links, invites };
+  // A link minted while the sale was being deleted would outlive it; the sale is gone now, so no later one can be.
+  const lateLinks = await deleteSaleLinks(firestore, bucket, saleId);
+  return { files, links: links + lateLinks, invites };
 }
 
 /**
