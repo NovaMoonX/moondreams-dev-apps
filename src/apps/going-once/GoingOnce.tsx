@@ -38,7 +38,7 @@ const TAB_ICONS: Record<GoingOnceTab, ReactNode> = {
 const TAB_PLACEHOLDERS: Record<GoingOnceTab, { icon: string; text: string }> = {
   things: {
     icon: '🏷️',
-    text: 'Add your first thing: photos first, then a name and a price.',
+    text: 'The things you add to this sale will show here.',
   },
   inbox: {
     icon: '📬',
@@ -61,13 +61,13 @@ function SaleTabs({
   return (
     <nav
       aria-label='Sale sections'
-      className='fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-20 -translate-x-1/2'
+      className='fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-20 max-w-[calc(100vw-2rem)] -translate-x-1/2'
     >
       <ul className='border-border bg-background flex items-center gap-1 rounded-full border p-1.5 shadow-lg'>
         {GOING_ONCE_TABS.map((tab) => {
           const isSelected = value === tab;
           return (
-            <li key={tab}>
+            <li key={tab} className='w-[4.5rem] min-w-0 sm:w-20'>
               <Button
                 type='button'
                 variant='tertiary'
@@ -75,7 +75,7 @@ function SaleTabs({
                 aria-current={isSelected ? 'page' : undefined}
                 onClick={() => onChange(tab)}
                 className={join(
-                  'focus-visible:outline-foreground! h-auto min-w-[4.5rem] flex-col gap-0.5 rounded-full! px-1! py-2 text-[11px] font-medium focus:outline-transparent! focus-visible:outline-2 sm:min-w-20 sm:px-4!',
+                  'focus-visible:outline-foreground! h-auto w-full min-w-0 flex-col gap-0.5 rounded-full! px-1! py-2 text-[11px] font-medium focus:outline-transparent! focus-visible:outline-2 sm:px-4!',
                   isSelected
                     ? 'bg-accent text-accent-foreground! font-semibold'
                     : 'text-muted-foreground!',
@@ -96,8 +96,10 @@ function pickOpenSaleId(
   sales: Sale[],
   saleId: string | null,
   isReady: boolean,
+  isListChosen: boolean,
 ): string | null {
   if (!isReady) return null;
+  if (isListChosen && saleId === null) return null;
   if (sales.some((sale) => sale.id === saleId)) return saleId;
   if (sales.length === 1) return sales[0].id;
   return null;
@@ -118,8 +120,14 @@ function GoingOnce() {
   const sales = useAppSelector(selectSales);
   const salesStatus = useAppSelector(selectSalesStatus);
   const [isStartOpen, setIsStartOpen] = useState(false);
+  const [isListChosen, setIsListChosen] = useState(false);
 
-  const openSaleId = pickOpenSaleId(sales, saleId, salesStatus === 'ready');
+  const openSaleId = pickOpenSaleId(
+    sales,
+    saleId,
+    salesStatus === 'ready',
+    isListChosen,
+  );
   useGoingOnceSync(uid, openSaleId);
   const sale = useAppSelector((state) => selectSaleById(state, openSaleId));
 
@@ -156,18 +164,19 @@ function GoingOnce() {
         <div className='page'>
           <div className='mx-auto max-w-2xl space-y-4 pb-28'>
             <header className='flex items-center gap-2'>
-              {sales.length > 1 && (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='icon'
-                  aria-label='Your sales'
-                  className='text-foreground! -ml-2 size-10 min-w-10 shrink-0 p-0'
-                  onClick={closeSale}
-                >
-                  <ChevronLeft className='size-6' aria-hidden='true' />
-                </Button>
-              )}
+              <Button
+                type='button'
+                variant='tertiary'
+                size='icon'
+                aria-label='Your sales'
+                className='text-foreground! -ml-2 size-10 min-w-10 shrink-0 p-0'
+                onClick={() => {
+                  setIsListChosen(true);
+                  closeSale();
+                }}
+              >
+                <ChevronLeft className='size-6' aria-hidden='true' />
+              </Button>
               <div className='min-w-0'>
                 <h1 className='line-clamp-2 text-[22px] font-semibold break-words'>
                   {sale.name}
@@ -187,7 +196,10 @@ function GoingOnce() {
         <SalesList
           sales={sales}
           canCreate={canCreateSales}
-          onOpen={openSale}
+          onOpen={(id) => {
+            setIsListChosen(false);
+            openSale(id);
+          }}
           onNew={() => setIsStartOpen(true)}
         />
       )}
@@ -196,7 +208,10 @@ function GoingOnce() {
         isOpen={isStartOpen}
         uid={user.uid}
         onClose={() => setIsStartOpen(false)}
-        onStarted={openSale}
+        onStarted={(id) => {
+          setIsListChosen(false);
+          openSale(id);
+        }}
       />
     </>
   );

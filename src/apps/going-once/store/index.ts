@@ -33,6 +33,11 @@ export const goingOnceSlice = createSlice({
         action.payload,
       ];
     },
+    removeSale(state, action: PayloadAction<string>) {
+      state.sales.items = state.sales.items.filter(
+        (sale) => sale.id !== action.payload,
+      );
+    },
     setOpenSale(state, action: PayloadAction<Sale | null>) {
       state.openSale = { sale: action.payload, status: 'ready' };
     },
@@ -52,6 +57,7 @@ export const {
   setSales,
   setSalesError,
   upsertSale,
+  removeSale,
   setOpenSale,
   setOpenSaleError,
   clearOpenSale,

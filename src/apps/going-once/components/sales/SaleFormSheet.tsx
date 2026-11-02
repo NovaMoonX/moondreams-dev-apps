@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { MapPin, StickyNote } from 'lucide-react';
 
@@ -12,14 +13,13 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import SuggestionChips from '@/components/SuggestionChips';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useAppDispatch } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
 import {
   MAX_BUYER_NOTE_LENGTH,
   MAX_PICKUP_AREA_LENGTH,
   MAX_SALE_NAME_LENGTH,
   SALE_NAME_SUGGESTIONS,
 } from '@apps/going-once/constants';
-import { createSale } from '@apps/going-once/store/actions/saleActions';
+import { startSale } from '@apps/going-once/store/actions/saleActions';
 
 interface SaleFormSheetProps {
   isOpen: boolean;
@@ -49,11 +49,10 @@ function SaleFormSheet({
   onStarted,
 }: SaleFormSheetProps) {
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
   const [name, setName] = useState('');
   const [pickupArea, setPickupArea] = useState<string | null>(null);
   const [buyerNote, setBuyerNote] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const isDirty =
     name.trim() !== '' ||
@@ -62,30 +61,22 @@ function SaleFormSheet({
   const requestClose = useDiscardGuard({
     isDirty,
     onClose,
-    isBusy: isSubmitting,
   });
   const canStart = name.trim() !== '';
 
   const revealExtra = (key: string) =>
     key === 'pickupArea' ? setPickupArea('') : setBuyerNote('');
 
-  const handleSubmit = async (event: FormEvent) => {
+  const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
-    if (!canStart || isSubmitting) return;
-    setError(null);
-    setIsSubmitting(true);
-    try {
-      const sale = await dispatch(
-        createSale({ uid, name, pickupArea, buyerNote }),
-      ).unwrap();
-      onClose();
-      onStarted(sale.id);
-    } catch (submitError) {
-      setError(
-        getErrorMessage(submitError, 'We couldn’t start this sale. Try again.'),
-      );
-      setIsSubmitting(false);
-    }
+    if (!canStart) return;
+    const sale = startSale(
+      dispatch,
+      { uid, name, pickupArea, buyerNote },
+      (message) => addToast({ title: message, type: 'error' }),
+    );
+    onClose();
+    onStarted(sale.id);
   };
 
   return (
@@ -162,12 +153,6 @@ function SaleFormSheet({
           onAdd={revealExtra}
         />
 
-        {error && (
-          <p role='alert' className='text-destructive text-sm'>
-            {error}
-          </p>
-        )}
-
         <ModalFooterActions
           note={canStart ? undefined : 'Give your sale a name to start it.'}
           cancelAction={
@@ -176,17 +161,12 @@ function SaleFormSheet({
               variant='secondary'
               rounded='full'
               onClick={requestClose}
-              disabled={isSubmitting}
             >
               Cancel
             </Button>
           }
           rightActions={
-            <Button
-              type='submit'
-              rounded='full'
-              disabled={!canStart || isSubmitting}
-            >
+            <Button type='submit' rounded='full' disabled={!canStart}>
               Start
             </Button>
           }
