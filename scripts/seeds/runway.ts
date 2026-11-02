@@ -1373,6 +1373,7 @@ async function writeSeedEnvelopes(
         groupId: null,
         maxCents: null,
         funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
+        extras: [{ tier: 'want', cents: 5_000, orderIndex: 9 }],
       },
     },
     {
