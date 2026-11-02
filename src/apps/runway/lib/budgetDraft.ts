@@ -390,6 +390,7 @@ export function moveBudgetValue(
   const groupId = 'groupId' in value ? value.groupId : null;
   const { cents, period } = toSpread(from, value, monthlyCents);
   const own = from === 'bill' ? null : (value as EnvelopeSealed | GoalSealed);
+  const extras = own?.extras ?? null;
   const keepsFunding =
     own !== null &&
     own.funding.amount.kind === 'exact' &&
@@ -412,6 +413,7 @@ export function moveBudgetValue(
       orderIndex,
       groupId,
       maxCents: null,
+      ...(keepsFunding && extras !== null ? { extras } : {}),
       funding:
         funding.cadence.kind === 'none'
           ? {
@@ -436,6 +438,7 @@ export function moveBudgetValue(
         oneOff === null
           ? funding
           : { amount: { kind: 'exact', cents: 0 }, cadence: { kind: 'none' } },
+      ...(keepsFunding && extras !== null ? { extras } : {}),
       startingCents: null,
       state: 'active',
     } satisfies GoalSealed;

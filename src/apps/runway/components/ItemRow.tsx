@@ -108,30 +108,8 @@ function ItemRow({
   ) : (
     shownBadge
   );
-  const text = (
-    <span className={join('block min-w-0 flex-1', !hasDetail && 'pt-2')}>
-      <span className='flex items-start justify-between gap-3'>
-        <span className='block min-w-0 font-medium break-words'>
-          <span className='line-clamp-2'>{name}</span>
-        </span>
-        {figure && (
-          <span className='block shrink-0 text-right'>
-            <span
-              className={join(
-                'block whitespace-nowrap tabular-nums',
-                isFaded ? 'text-muted-foreground font-medium' : 'font-semibold',
-              )}
-            >
-              {hide(figure, isPrivate)}
-            </span>
-            {figureWord && (
-              <span className='text-muted-foreground block text-xs'>
-                {isPrivate && isHidden ? '\u00a0' : figureWord}
-              </span>
-            )}
-          </span>
-        )}
-      </span>
+  const detailLines = (
+    <>
       {warningLine && (
         <span className='flex items-center text-sm text-(--runway-warning-ink)'>
           <span className='flex w-5 shrink-0 justify-center'>
@@ -163,6 +141,45 @@ function ItemRow({
           </span>
         </span>
       )}
+    </>
+  );
+  const nameLine = (
+    <span className='block min-w-0 font-medium break-words'>
+      <span className='line-clamp-2'>{name}</span>
+    </span>
+  );
+  // A two-line figure would push the detail down, so the detail sits under the name instead.
+  const isStacked = Boolean(figure && figureWord);
+  const text = (
+    <span className={join('block min-w-0 flex-1', !hasDetail && 'pt-2')}>
+      <span className='flex items-start justify-between gap-3'>
+        {isStacked ? (
+          <span className='block min-w-0 flex-1'>
+            {nameLine}
+            {detailLines}
+          </span>
+        ) : (
+          nameLine
+        )}
+        {figure && (
+          <span className='block shrink-0 text-right'>
+            <span
+              className={join(
+                'block whitespace-nowrap tabular-nums',
+                isFaded ? 'text-muted-foreground font-medium' : 'font-semibold',
+              )}
+            >
+              {hide(figure, isPrivate)}
+            </span>
+            {figureWord && (
+              <span className='text-muted-foreground block text-xs'>
+                {isPrivate && isHidden ? '\u00a0' : figureWord}
+              </span>
+            )}
+          </span>
+        )}
+      </span>
+      {!isStacked && detailLines}
     </span>
   );
   const chevron = (

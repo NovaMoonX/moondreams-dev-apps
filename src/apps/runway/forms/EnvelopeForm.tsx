@@ -55,6 +55,16 @@ import {
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
+  buildExtras,
+  buildExtrasSteps,
+  getExtrasBlocker,
+  INITIAL_EXTRAS_FORM,
+  isExtrasAnswer,
+  toExtrasForm,
+  withExtrasDefault,
+  type ExtrasFormData,
+} from '@apps/runway/forms/extrasFlow';
+import {
   withStartOver,
   type StartOverProps,
 } from '@apps/runway/forms/withStartOver';
@@ -92,7 +102,7 @@ import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
-interface EnvelopeFormData extends FundingFormData {
+interface EnvelopeFormData extends FundingFormData, ExtrasFormData {
   name: string;
   priority: Priority | null;
   /** Null until the person adds one. */
@@ -104,13 +114,14 @@ interface EnvelopeFormData extends FundingFormData {
 }
 
 const parseEnvelopeDraftFields = (stored: unknown) =>
-  readDraftFields<EnvelopeFormData>(stored, {
+  readDraftFields<EnvelopeFormData>(withExtrasDefault(stored), {
     ...fundingFieldChecks,
     name: isText,
     priority: isNullableOneOf(PRIORITIES),
     emoji: isNullableText,
     group: isPickOrCreate,
     max: isText,
+    extras: isExtrasAnswer,
   });
 
 const parseEnvelopeDraft = (stored: unknown) =>
@@ -141,6 +152,7 @@ export type EnvelopeStepId =
   | 'cadence'
   | 'group'
   | 'priority'
+  | 'extras'
   | 'emoji'
   | 'max';
 
@@ -169,6 +181,7 @@ const getEditingData = (payload: EnvelopeSealed): EnvelopeFormData => ({
   emoji: payload.emoji,
   group: { choice: payload.groupId ?? '', newText: '' },
   max: centsToInputValue(payload.maxCents),
+  ...toExtrasForm(payload),
 });
 
 const INITIAL_DATA: EnvelopeFormData = {
@@ -178,6 +191,7 @@ const INITIAL_DATA: EnvelopeFormData = {
   emoji: null,
   group: { choice: '', newText: '' },
   max: '',
+  ...INITIAL_EXTRAS_FORM,
 };
 
 const getBlocker = (data: EnvelopeFormData, hasDays: boolean) => {
@@ -268,7 +282,9 @@ function EnvelopeFormBody({
   };
 
   const hasDays = comingDays.length > 0 || !!draft;
-  const blocker = getBlocker(formData, hasDays);
+  const blocker =
+    getBlocker(formData, hasDays) ??
+    getExtrasBlocker(formData, getPriority(formData));
 
   const fundingSteps = buildFundingSteps({
     data: formData,
@@ -374,6 +390,11 @@ function EnvelopeFormBody({
         />
       ),
     },
+    ...buildExtrasSteps({
+      data: formData,
+      priority: getPriority(formData),
+      set,
+    }),
     {
       id: 'emoji',
       title: FORM_FLOW_WORDS.emojiTitle,
@@ -444,6 +465,14 @@ function EnvelopeFormBody({
         ? editing.payload.orderIndex
         : getNextTierRank([...bills, ...envelopes, ...goals], priority);
     const { groupId, newGroup } = resolveGroup(data);
+    const extras = buildExtras({
+      data,
+      priority,
+      funding,
+      saved: editing?.payload.extras,
+      getNextRank: (tier) =>
+        getNextTierRank([...bills, ...envelopes, ...goals], tier),
+    });
     const result: EnvelopeSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,
@@ -452,6 +481,9 @@ function EnvelopeFormBody({
       groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       maxCents: parseMoneyToCents(data.max) || null,
       funding,
+      ...(extras === null && editing?.payload.extras === undefined
+        ? {}
+        : { extras }),
     };
     return result;
   };
