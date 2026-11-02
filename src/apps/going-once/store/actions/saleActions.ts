@@ -1,4 +1,3 @@
-import { createAsyncThunk } from '@reduxjs/toolkit';
 import { FirebaseError } from 'firebase/app';
 import { doc, setDoc } from 'firebase/firestore';
 
@@ -10,7 +9,8 @@ import {
   MAX_PICKUP_AREA_LENGTH,
   MAX_SALE_NAME_LENGTH,
 } from '@apps/going-once/constants';
-import { upsertSale } from '@apps/going-once/store';
+import type { AppDispatch } from '@/store';
+import { removeSale, upsertSale } from '@apps/going-once/store';
 import type { Sale } from '@apps/going-once/types';
 
 interface CreateSaleInput {
@@ -25,51 +25,42 @@ const toTrimmedOrNull = (value: string | null) => {
   return trimmed === '' ? null : trimmed;
 };
 
-export const createSale = createAsyncThunk<
-  Sale,
-  CreateSaleInput,
-  { rejectValue: string }
->(
-  'goingOnce/sales/create',
-  async (
-    { uid, name, pickupArea, buyerNote },
-    { dispatch, rejectWithValue },
-  ) => {
-    const trimmedName = name.trim();
-    if (trimmedName === '') {
-      return rejectWithValue('Give your sale a name.');
-    }
+/**
+ * Starts a sale locally at once and saves it in the background, so a slow or offline phone never holds the sheet.
+ * When the save is refused, the sale is taken back out and `onSaveFailed` gets a sentence to show.
+ */
+export function startSale(
+  dispatch: AppDispatch,
+  { uid, name, pickupArea, buyerNote }: CreateSaleInput,
+  onSaveFailed: (message: string) => void,
+): Sale {
+  const sale: Sale = {
+    id: generateUuid(),
+    name: name.trim().slice(0, MAX_SALE_NAME_LENGTH),
+    pickupArea:
+      toTrimmedOrNull(pickupArea)?.slice(0, MAX_PICKUP_AREA_LENGTH) ?? null,
+    buyerNote:
+      toTrimmedOrNull(buyerNote)?.slice(0, MAX_BUYER_NOTE_LENGTH) ?? null,
+    currency: 'USD',
+    ownerUid: uid,
+    createdBy: uid,
+    members: [uid],
+    createdAt: Date.now(),
+    lastEditedAt: null,
+  };
 
-    const sale: Sale = {
-      id: generateUuid(),
-      name: trimmedName.slice(0, MAX_SALE_NAME_LENGTH),
-      pickupArea:
-        toTrimmedOrNull(pickupArea)?.slice(0, MAX_PICKUP_AREA_LENGTH) ?? null,
-      buyerNote:
-        toTrimmedOrNull(buyerNote)?.slice(0, MAX_BUYER_NOTE_LENGTH) ?? null,
-      currency: 'USD',
-      ownerUid: uid,
-      createdBy: uid,
-      members: [uid],
-      createdAt: Date.now(),
-      lastEditedAt: null,
-    };
-
-    try {
-      await setDoc(doc(db, 'apps', 'going-once', 'sales', sale.id), sale);
-    } catch (error) {
-      if (
-        error instanceof FirebaseError &&
-        error.code === 'permission-denied'
-      ) {
-        return rejectWithValue(
-          `We couldn't start this sale. Starting sales may be turned off for you right now: ask ${ADMIN_NAME} if you'd like it on, or refresh the page and try again.`,
-        );
-      }
-      throw error;
-    }
-
-    dispatch(upsertSale(sale));
-    return sale;
-  },
-);
+  dispatch(upsertSale(sale));
+  setDoc(doc(db, 'apps', 'going-once', 'sales', sale.id), sale).catch(
+    (error: unknown) => {
+      dispatch(removeSale(sale.id));
+      const isRefused =
+        error instanceof FirebaseError && error.code === 'permission-denied';
+      onSaveFailed(
+        isRefused
+          ? `We couldn't start ${sale.name}. Starting sales may be turned off for you right now: ask ${ADMIN_NAME} if you'd like it on.`
+          : `We couldn't save ${sale.name}. Check your connection and start it again.`,
+      );
+    },
+  );
+  return sale;
+}

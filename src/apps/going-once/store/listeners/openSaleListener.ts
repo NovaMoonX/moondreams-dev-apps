@@ -10,7 +10,7 @@ import { toItem } from '@apps/going-once/store/listeners/toItem';
 import { toSale } from '@apps/going-once/store/listeners/toSale';
 import type { Item, Sale } from '@apps/going-once/types';
 
-/** The sale on screen; `null` when it no longer exists. */
+/** The sale on screen. A sale that is gone or that you left arrives as an error, since the read rule needs the document. */
 export function startOpenSaleListener(
   saleId: string,
   onChange: (sale: Sale | null) => void,
