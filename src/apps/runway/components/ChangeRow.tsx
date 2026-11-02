@@ -10,9 +10,18 @@ import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ActionChips from '@/components/ActionChips';
-import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
+import {
+  formatDateShortUTC,
+  formatDateTime,
+  formatDateUTC,
+} from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { CHANGE_KIND_LABELS, MOVE_WORDS } from '@apps/runway/constants';
+import {
+  CHANGE_KIND_LABELS,
+  MOVE_WORDS,
+  PAID_HISTORY_WORDS,
+} from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useUndoTransfer } from '@apps/runway/hooks/useUndoTransfer';
 import type { OpenChange } from '@apps/runway/types';
@@ -39,44 +48,53 @@ function ChangeRow({
   const move = change.move !== null && !change.move.isUndo ? change.move : null;
   const isUndone = move !== null && (undoneMoveIds?.has(move.moveId) ?? false);
   const canUndo = move !== null && !isUndone;
+  const words = move?.bill ? PAID_HISTORY_WORDS : MOVE_WORDS;
   const [isOpen, setIsOpen] = useState(false);
   const takeBack = async () => {
     if (move === null) return;
     const isConfirmed = await confirm({
-      title: MOVE_WORDS.undoTitle,
-      message: mask(`${move.undoText}.`),
-      confirmText: MOVE_WORDS.undoThis,
+      title: words.undoTitle,
+      message: move.bill
+        ? mask(
+            PAID_HISTORY_WORDS.confirm(
+              move.bill.name,
+              formatDateShortUTC(move.bill.dueOn),
+              move.bill.fromFreeCents > 0
+                ? formatCents(move.bill.fromFreeCents)
+                : null,
+            ),
+          )
+        : mask(`${move.undoText}.`),
+      confirmText: words.undoThis,
     });
     if (isConfirmed) await undoMove(move);
   };
-  const head = (
-    <>
-      <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
-        {change.kind !== 'planChange' && (
-          <span className='border-border bg-muted/50 text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-xs font-medium whitespace-nowrap'>
-            {CHANGE_KIND_LABELS[change.kind] ?? 'Change'}
-          </span>
-        )}
-        <span className='text-muted-foreground text-xs'>
-          {formatDateTime(change.createdAt)}
+  const headTop = (
+    <div className='flex flex-wrap items-center gap-x-2 gap-y-1'>
+      {change.kind !== 'planChange' && (
+        <span className='border-border bg-muted/50 text-muted-foreground inline-flex h-6 shrink-0 items-center rounded-full border px-2.5 text-xs font-medium whitespace-nowrap'>
+          {CHANGE_KIND_LABELS[change.kind] ?? 'Change'}
         </span>
-        {canUndo && (
-          <ChevronRight
-            className='text-muted-foreground ml-auto h-4 w-4 shrink-0'
-            aria-hidden='true'
-          />
-        )}
-      </div>
-      {change.isUnreadable ? (
-        <InlineNotice tone='info'>
-          This entry could not be opened on this device.
-        </InlineNotice>
-      ) : (
-        <p className='text-sm break-words'>
-          <MaskedText>{change.summary}</MaskedText>
-        </p>
       )}
-    </>
+      <span className='text-muted-foreground text-xs'>
+        {formatDateTime(change.createdAt)}
+      </span>
+      {canUndo && (
+        <ChevronRight
+          className='text-muted-foreground ml-auto h-4 w-4 shrink-0'
+          aria-hidden='true'
+        />
+      )}
+    </div>
+  );
+  const headText = change.isUnreadable ? (
+    <InlineNotice tone='info'>
+      This entry could not be opened on this device.
+    </InlineNotice>
+  ) : (
+    <p className='text-sm break-words'>
+      <MaskedText>{change.summary}</MaskedText>
+    </p>
   );
   return (
     <li className='space-y-1.5 p-3'>
@@ -85,13 +103,17 @@ function ChangeRow({
           type='button'
           variant='tertiary'
           className='text-foreground! h-auto w-full flex-col items-stretch! gap-1.5 rounded-none p-0! text-left font-normal whitespace-normal'
-          aria-label={`${MOVE_WORDS.openMove}. ${change.summary}`}
+          aria-label={`${words.openMove}. ${change.summary}`}
           onClick={() => setIsOpen(true)}
         >
-          {head}
+          {headTop}
+          {headText}
         </Button>
       ) : (
-        head
+        <>
+          {headTop}
+          {headText}
+        </>
       )}
       {change.effectiveFrom !== null && (
         <p className='text-muted-foreground text-sm'>
@@ -124,7 +146,7 @@ function ChangeRow({
           isOpen
           isDrawerWhenShort
           onClose={() => setIsOpen(false)}
-          title={MOVE_WORDS.moveTitle}
+          title={move?.bill ? PAID_HISTORY_WORDS.title : MOVE_WORDS.moveTitle}
           actions={<ValuesEyeButton />}
         >
           <div className='space-y-4 pb-4'>
@@ -136,7 +158,7 @@ function ChangeRow({
                 isGrouped
                 isDestructive
                 icon={<Undo2 />}
-                label={MOVE_WORDS.undoThis}
+                label={words.undoThis}
                 onClick={() => {
                   setIsOpen(false);
                   void takeBack();

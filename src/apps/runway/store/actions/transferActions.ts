@@ -114,6 +114,7 @@ export async function moveLeftover(
       getItemIds(input.fromId, input.toId),
       {
         moveId: input.moveId,
+        bill: null,
         date,
         fromId: input.fromId,
         toId: input.toId,

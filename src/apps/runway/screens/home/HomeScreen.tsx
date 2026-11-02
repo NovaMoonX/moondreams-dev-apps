@@ -13,6 +13,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
+import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
@@ -130,13 +131,15 @@ function HomeScreen() {
       )
     : [];
   const hasRanges = rangeSides.income || rangeSides.expense;
+  const hasWarnings =
+    dueCards.length > 0 ||
+    (lookahead !== null &&
+      lookahead.problems.length + lookahead.undated.length > 0);
 
   return (
     <div className='space-y-6'>
       <div className='space-y-2'>
-        {dueCards.length > 0 ||
-        (lookahead !== null &&
-          lookahead.problems.length + lookahead.undated.length > 0) ? (
+        {hasWarnings ? (
           <LookaheadWarnings lookahead={lookahead} dueCards={dueCards} />
         ) : lookahead ? (
           <HoldsThroughLine lookahead={lookahead} />
@@ -177,14 +180,19 @@ function HomeScreen() {
           </Button>
         </div>
       </div>
+      <DueBillsCard lookahead={lookahead} today={today} overflow='door' />
       {!isAddingPurchase && (
         <DraftPickUpRow
           isTrack={isTrack}
           onPickUpPurchase={() => setIsAddingPurchase(true)}
         />
       )}
-      <PrioritiesNudge />
-      <TrackInviteCard />
+      <PrioritiesNudge
+        isHeldBack={
+          lookahead === null || hasWarnings || lookahead.due.length > 0
+        }
+        otherwise={<TrackInviteCard />}
+      />
       {isSetupOpen && (
         <EmptyCard
           icon={<ListChecks className='h-5 w-5' />}
