@@ -23,7 +23,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { canChangeExpense } from '@apps/waypoint/utils/roleGuards';
+import { canChangeExpense, isTripMember } from '@apps/waypoint/utils/roleGuards';
 import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -712,15 +712,24 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       : []),
   ];
 
-  /** The payer's name when the viewer could change expenses but this one is the payer's alone. */
-  const getLockedPayerName = (expense: TripExpense) =>
-    canAddExpenses && expense.payerUid !== null && !canChangeExpense(trip, currentUserId, expense)
-      ? memberLabel(expense.payerUid)
-      : null;
+  const getPayerLock = (expense: TripExpense) => {
+    if (!canAddExpenses || expense.payerUid === null || canChangeExpense(trip, currentUserId, expense)) {
+      return null;
+    }
+    return isTripMember(trip, expense.payerUid)
+      ? {
+          title: `Only ${memberLabel(expense.payerUid)} can change this`,
+          reason: `${memberLabel(expense.payerUid)} paid for this, so only they can change it, edit its split, mark it unpaid or delete it.`,
+        }
+      : {
+          title: 'Only an Admin can change this',
+          reason: 'Whoever paid for this has left the trip, so only an Admin can change it now.',
+        };
+  };
 
-  const renderPayerLock = (payerName: string) => (
+  const renderPayerLock = (lock: { reason: string }) => (
     <>
-      <p>{payerName} paid for this, so only they can change it, edit its split, mark it unpaid or delete it.</p>
+      <p>{lock.reason}</p>
       <p>You can still mark your own share as repaid.</p>
     </>
   );
@@ -901,15 +910,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
 
     const actions = getActions(expense);
-    const lockedPayerName = getLockedPayerName(expense);
+    const payerLock = getPayerLock(expense);
     return (
       <li key={expense.id} className='grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 py-3'>
         {renderExpenseDetail(expense, true)}
-        {(actions.length > 0 || lockedPayerName !== null) && (
+        {(actions.length > 0 || payerLock !== null) && (
           <div className='col-span-2 flex flex-wrap items-start justify-end gap-2'>
-            {lockedPayerName !== null && (
-              <LockedButton size='sm' label='Modify' title={`Only ${lockedPayerName} can change this`}>
-                {renderPayerLock(lockedPayerName)}
+            {payerLock !== null && (
+              <LockedButton size='sm' label='Modify' title={payerLock.title}>
+                {renderPayerLock(payerLock)}
               </LockedButton>
             )}
             {actions.map((action) => (
@@ -932,7 +941,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const detailExpense = expenses.find((expense) => expense.id === detailExpenseId);
-  const detailLockedPayerName = detailExpense ? getLockedPayerName(detailExpense) : null;
+  const detailPayerLock = detailExpense ? getPayerLock(detailExpense) : null;
 
   const renderClusters = (items: TripExpense[]) =>
     clusterByGroup(items).map((cluster, index) => {
@@ -1414,10 +1423,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {detailExpense && (
             <div className='space-y-4'>
               <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense, false)}</div>
-              {detailLockedPayerName !== null && (
+              {detailPayerLock !== null && (
                 <div className='text-muted-foreground flex gap-2 text-sm'>
                   <Lock className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
-                  <div className='space-y-1'>{renderPayerLock(detailLockedPayerName)}</div>
+                  <div className='space-y-1'>{renderPayerLock(detailPayerLock)}</div>
                 </div>
               )}
               {getActions(detailExpense).length > 0 && (

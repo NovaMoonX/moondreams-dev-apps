@@ -91,8 +91,7 @@ export function canCreateItem(trip: TripSpace, uid: string) {
   return hasTripStarted(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
 }
 
-/** Whose call a shared expense is: once one person has paid it, only they change or delete it (an Admin
- * takes over if they have left the trip); otherwise Admins and Editors. Mirrors firestore.rules. */
+/** Who may change or delete a shared expense: its payer once one person paid it, else Admins and Editors. */
 export function canChangeExpense(
   trip: TripSpace,
   uid: string,

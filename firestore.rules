@@ -638,6 +638,8 @@ service cloud.firestore {
       // Linking it to an event, stay or rental leaves the money alone, so it stays open to editors.
       allow update: if isTripEditorOf(tripId)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['linkedTo', 'dayIndex', 'lastEditedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasAll(['linkedTo'])
+        && request.resource.data.linkedTo != null
         && (request.resource.data.get('dayIndex', null) == resource.data.get('dayIndex', null)
           || resource.data.get('dayIndex', null) == null);
       // An editor can take an early payment off an expense, never add or change one.
