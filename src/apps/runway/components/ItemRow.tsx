@@ -14,7 +14,11 @@ import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import { PRIORITIES_WORDS, TICK_HIT_CLASS } from '@apps/runway/constants';
+import {
+  PRIORITIES_WORDS,
+  PRIORITY_DIAL_WORDS,
+  TICK_HIT_CLASS,
+} from '@apps/runway/constants';
 
 /** A row in the priorities list while it is being reordered: tapped to lift, nudged up or down, or fixed in place. */
 export interface ItemRowReorder {
@@ -61,6 +65,7 @@ interface ItemRowProps {
   reorder?: ItemRowReorder;
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
   isHighlighted?: boolean;
+  isFaded?: boolean;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -81,20 +86,28 @@ function ItemRow({
   tick,
   reorder,
   isHighlighted = false,
+  isFaded = false,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
-  const ariaLabel =
+  const baseAriaLabel =
     isPrivate && isHidden && givenAriaLabel
       ? (hiddenAriaLabel ?? `${name}. Amount hidden. Open`)
       : givenAriaLabel;
+  const ariaLabel =
+    isFaded && baseAriaLabel
+      ? `${baseAriaLabel}. ${PRIORITY_DIAL_WORDS.notCounted}`
+      : baseAriaLabel;
   const hide = (node: ReactNode, isOn: boolean) =>
     isOn ? <SensitiveValue>{node}</SensitiveValue> : node;
   const shownDetail =
     reorder?.isFixed && reorder.fixedNote ? reorder.fixedNote : detail;
   const hasDetail = Boolean(shownDetail) || Boolean(warningLine);
-  const badge = tick
-    ? null
-    : (leading ?? <ItemBadge name={name} emoji={emoji} />);
+  const shownBadge = leading ?? <ItemBadge name={name} emoji={emoji} />;
+  const badge = tick ? null : isFaded ? (
+    <span className='contents [&>*]:opacity-45'>{shownBadge}</span>
+  ) : (
+    shownBadge
+  );
   const text = (
     <span className={join('block min-w-0 flex-1', !hasDetail && 'pt-2')}>
       <span className='flex items-start justify-between gap-3'>
@@ -103,7 +116,12 @@ function ItemRow({
         </span>
         {figure && (
           <span className='block shrink-0 text-right'>
-            <span className='block font-semibold whitespace-nowrap tabular-nums'>
+            <span
+              className={join(
+                'block whitespace-nowrap tabular-nums',
+                isFaded ? 'text-muted-foreground font-medium' : 'font-semibold',
+              )}
+            >
               {hide(figure, isPrivate)}
             </span>
             {figureWord && (
