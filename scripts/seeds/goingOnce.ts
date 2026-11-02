@@ -419,12 +419,26 @@ const SEED_THINGS: SeedThing[] = [
 const getPhotoPath = (thingId: string, photoId: string) =>
   `apps/going-once/sales/${SALE_ID}/items/seed-go-${thingId}/${photoId}.jpg`;
 
+const getSeedBucket = () =>
+  process.env.STORAGE_BUCKET ??
+  process.env.VITE_FIREBASE_STORAGE_BUCKET ??
+  'moondreams-dev-apps.firebasestorage.app';
+
+/** Makes the seeded sale's public photo copies with the same code the trigger runs, so the seeded page shows photos even when the Functions emulator is down or points at another bucket. Emulators only. */
+async function makeSeedCopies() {
+  process.env.FIREBASE_CONFIG ??= JSON.stringify({
+    projectId: process.env.GCLOUD_PROJECT ?? 'moondreams-dev-apps',
+    storageBucket: getSeedBucket(),
+  });
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST ??= '127.0.0.1:9199';
+  const { syncSaleCopies } =
+    await import('../../functions/src/apps/going-once/salePhotoCopies.ts');
+  return syncSaleCopies(SALE_ID);
+}
+
 /** Uploads a seeded photo to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
 export async function uploadSeedPhoto(path: string, colorIndex: number) {
-  const bucket =
-    process.env.STORAGE_BUCKET ??
-    process.env.VITE_FIREBASE_STORAGE_BUCKET ??
-    'moondreams-dev-apps.firebasestorage.app';
+  const bucket = getSeedBucket();
   const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
   const body = Buffer.concat([
     JPEG_START,
@@ -546,6 +560,13 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
   if (uploads.some(({ isUploaded }) => !isUploaded)) {
     console.warn(
       'Going Once seed: could not upload photos to the Storage emulator, so the things list photos that cannot be opened.',
+    );
+  }
+
+  const copies = await makeSeedCopies().catch(() => null);
+  if (copies === null) {
+    console.warn(
+      'Going Once seed: the public page has no photo copies yet; the Functions emulator makes them when it runs.',
     );
   }
 

@@ -1,4 +1,5 @@
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 import { onCall } from 'firebase-functions/v2/https';
 
 import { linkRef, saleRef } from './saleLinkStore.js';
@@ -9,6 +10,7 @@ import {
   isLinkId,
   isRecord,
   isSafeId,
+  publicFolder,
   sealPage,
   toSalePage,
   type SalePageResult,
@@ -42,6 +44,9 @@ async function readPage(
     .orderBy('createdAt', 'desc')
     .limit(SALE_PAGE_LIMITS.MAX_PAGE_THINGS)
     .get();
+  const [copies] = await getStorage()
+    .bucket()
+    .getFiles({ prefix: publicFolder(linkId) });
   const members: unknown = sale.get('members');
   const isMember =
     uid !== undefined && Array.isArray(members) && members.includes(uid);
@@ -49,6 +54,7 @@ async function readPage(
     sale.data(),
     items.docs.map((item) => item.data()),
     isMember,
+    { saleId, linkId, paths: new Set(copies.map((file) => file.name)) },
   );
 }
 

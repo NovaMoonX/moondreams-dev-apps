@@ -11,6 +11,4 @@ export const saleRef = (saleId: string) =>
 export const linkRef = (linkId: string) =>
   getFirestore().doc(`apps/going-once/publicLinks/${linkId}`);
 
-/** The folder of a link's public photo copies. */
-export const publicFolder = (linkId: string) =>
-  `apps/going-once/public/${linkId}/`;
+export { publicFolder } from './salePageView.js';

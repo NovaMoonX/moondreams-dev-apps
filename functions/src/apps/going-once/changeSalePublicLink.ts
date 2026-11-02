@@ -4,6 +4,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { describeError, removeFolderFiles } from '../../share/shareFiles.js';
 import { mintShareId } from '../../share/shareIds.js';
+import { syncSaleCopies } from './salePhotoCopies.js';
 import { linkRef, publicFolder, saleRef } from './saleLinkStore.js';
 import { FINISHED_SALE_STATUS, isRecord, isSafeId } from './salePageView.js';
 
@@ -38,6 +39,20 @@ async function removeOldFiles(linkId: string | null) {
   });
 }
 
+/** On renew the old folder goes only after the new address has its copies; the old record is already gone, so a failure here is logged and never undoes the renewal. */
+async function removeRetiredFolder(linkId: string | null) {
+  if (linkId === null) {
+    return;
+  }
+
+  await removeFolderFiles(publicFolder(linkId)).catch((error: unknown) =>
+    logger.error('goingOnce.link.retiredFilesFailed', {
+      link: linkId.slice(0, 4),
+      code: describeError(error),
+    }),
+  );
+}
+
 async function changeLink(uid: string, saleId: string, action: LinkAction) {
   const before = await saleRef(saleId).get();
   if (!before.exists || before.get('ownerUid') !== uid) {
@@ -59,7 +74,7 @@ async function changeLink(uid: string, saleId: string, action: LinkAction) {
     return { linkId: null };
   }
 
-  await removeOldFiles(action === 'create' ? null : oldId);
+  await removeOldFiles(action === 'stop' ? oldId : null);
   const newId = action === 'stop' ? null : mintShareId();
   const now = Date.now();
   await getFirestore().runTransaction(async (transaction) => {
@@ -91,6 +106,13 @@ async function changeLink(uid: string, saleId: string, action: LinkAction) {
       publicLinkChangedAt: newId === null ? null : now,
     });
   });
+  if (newId !== null) {
+    const counts = await syncSaleCopies(saleId);
+    logger.info('goingOnce.link.copied', { action, ...counts });
+  }
+  if (action === 'renew') {
+    await removeRetiredFolder(oldId);
+  }
   logger.info('goingOnce.link.changed', {
     action,
     link: (newId ?? oldId ?? '').slice(0, 4),
@@ -100,13 +122,14 @@ async function changeLink(uid: string, saleId: string, action: LinkAction) {
 
 /**
  * Turns the sale's public page on, gives it a new address or turns it off, for the seller only. A missing sale, someone else's and a co-seller's call all answer one `not-found`.
- * Files go before the record they belong to, and the sale's own fields are written only here: `firestore.rules` refuses every client write to them.
+ * On stop, files go before the record they belong to; on create and renew the new address's photo copies are made before the call returns (renew then removes the old folder), and the sale's own fields are written only here: `firestore.rules` refuses every client write to them.
  */
 export const changeSalePublicLink = onCall(
   {
     region: 'us-central1',
     maxInstances: 10,
-    timeoutSeconds: 60,
+    memory: '1GiB',
+    timeoutSeconds: 300,
     cors: [
       'https://apps.moondreams.dev',
       /^https:\/\/moondreams-dev-apps.*\.web\.app$/,

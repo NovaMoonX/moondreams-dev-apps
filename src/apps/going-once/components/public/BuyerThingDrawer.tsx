@@ -2,11 +2,13 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Camera } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
+import PhotoStrip from '@/components/PhotoStrip';
 import InlineNotice from '@/components/InlineNotice';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import { CONDITION_LABELS } from '@apps/going-once/constants';
+import { usePublicPhotoUrls } from '@apps/going-once/queries/publicPhotoQueries';
 import type { PublicThing } from '@apps/going-once/types';
 
 interface BuyerThingDrawerProps {
@@ -16,6 +18,9 @@ interface BuyerThingDrawerProps {
 
 /** A thing's public details in a drawer (a modal from `sm`): only the fields the page is allowed to carry. */
 function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
+  const photos = usePublicPhotoUrls(thing.photos, 'm').flatMap(({ id, url }) =>
+    url === null ? [] : [{ id, url }],
+  );
   const facts = [
     thing.condition === null ? null : CONDITION_LABELS[thing.condition],
     thing.brandModel,
@@ -39,9 +44,13 @@ function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
       }
     >
       <div className='space-y-4'>
-        <div className='bg-accent/60 text-accent-foreground grid h-48 w-full place-items-center rounded-2xl'>
-          <Camera className='size-8 opacity-60' aria-hidden='true' />
-        </div>
+        {photos.length > 0 ? (
+          <PhotoStrip photos={photos} label={thing.title} />
+        ) : (
+          <div className='bg-accent/60 text-accent-foreground grid h-48 w-full place-items-center rounded-2xl'>
+            <Camera className='size-8 opacity-60' aria-hidden='true' />
+          </div>
+        )}
         <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
           <PriceTag askingPriceCents={thing.askingPriceCents} />
           {thing.originalPriceCents !== null && (

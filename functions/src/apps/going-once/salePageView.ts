@@ -23,6 +23,27 @@ export const FINISHED_SALE_STATUS = 'FINISHED';
 /** Only a thing buyers can still ask about is served; Sold and taken-off things never leave. */
 export const PUBLIC_STATUSES = ['AVAILABLE', 'PENDING'] as const;
 
+/** The two sizes of public copy, the longest side of each in pixels. */
+export const COPY_SIZES = { s: 480, m: 1280 } as const;
+
+export type CopySize = keyof typeof COPY_SIZES;
+
+export const COPY_SIZE_KEYS = Object.keys(COPY_SIZES) as CopySize[];
+
+/** The most photos of one thing that get copies. */
+export const MAX_COPIED_PHOTOS = 12;
+
+/** The folder of a link's public photo copies. */
+export const publicFolder = (linkId: string) =>
+  `apps/going-once/public/${linkId}/`;
+
+export const publicCopyPath = (
+  linkId: string,
+  itemId: string,
+  photoId: string,
+  size: CopySize,
+) => `${publicFolder(linkId)}${itemId}/${photoId}-${size}.webp`;
+
 export type PublicCondition = (typeof PUBLIC_CONDITIONS)[number];
 export type PublicStatus = (typeof PUBLIC_STATUSES)[number];
 
@@ -30,6 +51,12 @@ export interface PublicSale {
   name: string;
   pickupArea: string | null;
   buyerNote: string | null;
+}
+
+/** One photo's two copies, as Storage paths. */
+export interface PublicPhoto {
+  s: string;
+  m: string;
 }
 
 export interface PublicThing {
@@ -42,6 +69,7 @@ export interface PublicThing {
   askingPriceCents: number;
   originalPriceCents: number | null;
   status: PublicStatus;
+  photos: PublicPhoto[];
 }
 
 export type SalePageResult =
@@ -57,6 +85,9 @@ export const NOT_FOUND_RESULT: SalePageResult = { status: 'not_found' };
 
 const LINK_ID_PATTERN = /^[2-9a-hj-np-z]{26}$/;
 const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+const PHOTO_ID_PATTERN = /^[A-Za-z0-9-]{8,40}$/;
+const COPY_PATH_PATTERN =
+  /^apps\/going-once\/public\/[2-9a-hj-np-z]{26}\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9-]{8,40}-(?:s|m)\.webp$/;
 const MAX_CENTS = 10_000_000_000;
 
 export const isLinkId = (value: unknown): value is string =>
@@ -82,6 +113,56 @@ export function isListable(item: unknown): boolean {
     item.title.trim() !== '' &&
     typeof item.askingPriceCents === 'number'
   );
+}
+
+/** The first photos of a stored thing that can have copies: a plain id, and a file inside the thing's own folder. */
+export function readCopyablePhotos(
+  saleId: string,
+  itemId: string,
+  item: unknown,
+): { id: string; path: string }[] {
+  if (!isRecord(item) || item.id !== itemId) {
+    return [];
+  }
+
+  const folder = `apps/going-once/sales/${saleId}/items/${itemId}/`;
+  const stored: unknown[] = Array.isArray(item.photos) ? item.photos : [];
+  return stored
+    .slice(0, MAX_COPIED_PHOTOS)
+    .flatMap((photo) =>
+      isRecord(photo) &&
+      typeof photo.id === 'string' &&
+      PHOTO_ID_PATTERN.test(photo.id) &&
+      typeof photo.path === 'string' &&
+      photo.path.startsWith(folder) &&
+      !photo.path.slice(folder.length).includes('/')
+        ? [{ id: photo.id, path: photo.path }]
+        : [],
+    );
+}
+
+/** What a link's folder holds, so a page names only copies that exist. */
+export interface CopyListing {
+  saleId: string;
+  linkId: string;
+  paths: ReadonlySet<string>;
+}
+
+/** A thing's photos in its own order, each only once both of its copies exist; never the listing-size path. */
+export function toPublicPhotos(
+  raw: unknown,
+  listing: CopyListing | null,
+): PublicPhoto[] {
+  if (listing === null || !isRecord(raw) || !isSafeId(raw.id)) {
+    return [];
+  }
+
+  const itemId = raw.id;
+  return readCopyablePhotos(listing.saleId, itemId, raw).flatMap((photo) => {
+    const s = publicCopyPath(listing.linkId, itemId, photo.id, 's');
+    const m = publicCopyPath(listing.linkId, itemId, photo.id, 'm');
+    return listing.paths.has(s) && listing.paths.has(m) ? [{ s, m }] : [];
+  });
 }
 
 const toText = (value: unknown, max: number) => {
@@ -133,7 +214,10 @@ export function toPublicSale(raw: unknown): PublicSale | null {
  * Copies a stored thing's public fields by name into a new object; null when it is not showing (not Available or Pending, not listable) or its id is not a plain key.
  * The original price leaves only when the seller chose to show it.
  */
-export function toPublicThing(raw: unknown): PublicThing | null {
+export function toPublicThing(
+  raw: unknown,
+  listing: CopyListing | null = null,
+): PublicThing | null {
   if (!isRecord(raw)) {
     return null;
   }
@@ -165,6 +249,7 @@ export function toPublicThing(raw: unknown): PublicThing | null {
     originalPriceCents:
       raw.showOriginalPrice === true ? toCents(raw.originalPriceCents) : null,
     status,
+    photos: toPublicPhotos(raw, listing),
   };
 }
 
@@ -209,6 +294,17 @@ export function sealPage(page: SalePageResult): SalePageResult {
       askingPriceCents,
       originalPriceCents: toCents(thing.originalPriceCents),
       status,
+      photos: (Array.isArray(thing.photos) ? thing.photos : [])
+        .slice(0, MAX_COPIED_PHOTOS)
+        .flatMap((photo: unknown) =>
+          isRecord(photo) &&
+          typeof photo.s === 'string' &&
+          typeof photo.m === 'string' &&
+          COPY_PATH_PATTERN.test(photo.s) &&
+          COPY_PATH_PATTERN.test(photo.m)
+            ? [{ s: photo.s, m: photo.m }]
+            : [],
+        ),
     };
     return isSafeId(sealed.id) ? [sealed] : [];
   });
@@ -225,6 +321,7 @@ export function toSalePage(
   sale: unknown,
   items: unknown[],
   isMember: boolean,
+  listing: CopyListing | null = null,
 ): SalePageResult {
   const publicSale = toPublicSale(sale);
   if (publicSale === null) {
@@ -232,7 +329,7 @@ export function toSalePage(
   }
 
   const things = items.flatMap((item) => {
-    const thing = toPublicThing(item);
+    const thing = toPublicThing(item, listing);
     return thing === null ? [] : [thing];
   });
   return sealPage({

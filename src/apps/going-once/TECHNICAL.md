@@ -112,7 +112,7 @@ The buyer types one "Phone or email" field; the function reads it as an email wh
 |---|---|---|
 | `apps/going-once/sales/{saleId}/items/{itemId}/{photoId}.jpg` | members read, create, delete; < 5 MB, `image/*`, name `^[A-Za-z0-9-]{8,40}[.]jpg$` | The one stored listing-size file |
 | `apps/going-once/sales/{saleId}/exports/photos.zip` | members `get`; no client writes | Save all photos; replaced on each build |
-| `apps/going-once/public/{linkId}/{itemId}/{photoId}-{s\|m}.webp` | anyone `get` on a path matching the id patterns; nobody `list` or writes | Public copies, each under its own download token |
+| `apps/going-once/public/{linkId}/{itemId}/{photoId}-{s\|m}.webp` | anyone `get` on a path matching the id patterns (`linkId` `^[2-9a-hj-np-z]{26}$`, `itemId` `^[A-Za-z0-9_-]{1,128}$`, file `^[A-Za-z0-9-]{8,40}-(s\|m)[.]webp$`); nobody `list` or writes | Public copies, each under its own download token |
 
 ### Shared image size
 
@@ -162,7 +162,7 @@ Contacts already cleared stay cleared after a reopen.
 
 ### Public link
 
-`none → on → renewed → … → none`, seller only, through `changeSalePublicLink`. Turning it off deletes the link, so turning it on again makes a new address. Renew and stop delete the old public folder first (files first), then one transaction writes the new link document, deletes the old one and sets the sale's `publicLinkId` and `publicLinkChangedAt`. Create on a sale that has a link answers that link.
+`none → on → renewed → … → none`, seller only, through `changeSalePublicLink`. Turning it off deletes the link, so turning it on again makes a new address. Stop deletes the public folder first (files first), then one transaction removes the link. Renew writes the new link first, in one transaction that deletes the old link document and sets the sale's `publicLinkId` and `publicLinkChangedAt`; the new address's copies are made before the call returns and only then is the old folder deleted (a failure there is logged and never undoes the renewal). Create runs the same sync for the new address. Create on a sale that has a link answers that link.
 
 ### Totals
 
@@ -261,7 +261,7 @@ The item create/update and the sale create checks above use the item's own `sale
 | update, list | no | no | no | no |
 | `…/sales/{saleId}/exports/photos.zip` get | yes | yes | no | no |
 | write, list | no (function) | no | no | no |
-| `apps/going-once/public/{linkId}/{itemId}/{file}` get | anyone, when `linkId` matches `^[2-9a-hj-np-z]{26}$` and `file` matches `^[A-Za-z0-9-]{8,40}-(s\|m)[.]webp$` | same | same | same |
+| `apps/going-once/public/{linkId}/{itemId}/{file}` get | anyone, when `linkId` matches `^[2-9a-hj-np-z]{26}$`, `itemId` matches `^[A-Za-z0-9_-]{1,128}$` and `file` matches `^[A-Za-z0-9-]{8,40}-(s\|m)[.]webp$` | same | same | same |
 | list, write | no | no | no | no |
 
 ### What each rule widens
@@ -286,7 +286,7 @@ Verified per `firestore-rules.md`: the matrix above as seller, co-seller, other 
 | `title`, `description`, `brandModel`, `size`, `condition`, `askingPriceCents` | include | What a buyer decides on |
 | `originalPriceCents` | only when `showOriginalPrice === true` | The seller's per-thing choice |
 | `status` | `AVAILABLE \| PENDING` only | Sold and withdrawn things are never served |
-| Photo copies (`s`, `m` paths, first 12) | include once the copies exist | Smaller copies only; until then `getSalePage` sends no photo field at all and the page draws a placeholder |
+| Photo copies (`s`, `m` paths, first 12) | include | Smaller copies only, listed from the link's public folder, so a photo appears once both its sizes exist; never the listing-size path. Until then the thing's `photos` is shorter or empty and the page draws a placeholder |
 | `floorPriceCents`, `boughtFrom`, `boughtOn`, `boughtUrl`, `boughtUrlPreview`, `notes`, `pending`, `sale`, `statusHistory`, `createdBy`, `lastEditedBy`, timestamps | exclude | Private money, notes, people, history |
 | Inquiries and their counts | exclude | Buyer contacts are members-only; a count says how wanted a thing is |
 | `isMember` | computed per caller | Maya or Theo signed in sees "This is your sale's public page", with no id that says whose |
@@ -327,7 +327,8 @@ Available and Pending things only. 60 things × 5 photos × ~1 MB ≈ **300 MB**
 
 ### Public copies
 
-`syncSalePublicPhotos` (trigger on thing writes) re-reads the thing and the sale fresh (never the event payload, so out-of-order runs converge), lists `public/{linkId}/{itemId}/`, makes the missing `s`/`m` WebP copies of the first 12 photos with `sharp` (auto-rotated, metadata stripped) and deletes copies no longer wanted (not showing, photo removed, link off or renewed). A rerun finds nothing to do. Until a copy exists the card shows the photo placeholder for a few seconds. Turning the link on or renewing it runs the same sync for every thing from the callable.
+`syncSalePublicPhotos` (trigger on thing writes) re-reads the thing and the sale fresh (never the event payload, so out-of-order runs converge), lists `public/{linkId}/{itemId}/`, makes the missing `s`/`m` WebP copies of the first 12 photos with `sharp` (auto-rotated, metadata stripped) and deletes copies no longer wanted (not showing, photo removed, link off or renewed). A copy is named `{photoId}-{s|m}.webp` (480 and 1,280 px on the longest side, never enlarged, quality 80) and saved under its own download token, so the wanted set is computable from the thing alone. A photo counts only when its file sits in the thing's own folder and its id matches the file-name pattern. Each pass deletes first, then makes what is missing, and a pass that changed anything is followed by another (up to three), so a thing that sold while a slower run was copying loses what that run just made; a rerun on unchanged state finds nothing to do. The Admin SDK writes these files, so the Storage rules refuse every client write. Until a copy exists the card shows the photo placeholder for a few seconds. Turning the link on or renewing it runs the same sync for every thing from the callable (four things at a time). A finished sale's copies are not touched by the trigger; the link is stopped by Finish, which deletes the folder. `getSalePage` lists the link's folder once and returns a thing's photos in its stored order, each only once both sizes exist; the client reads each path with `getDownloadURL` (`queries/publicPhotoQueries.ts`), `s` for the card's cover and `m` for the drawer's `PhotoStrip`.
+The emulator: the trigger makes copies when the Functions emulator runs with the project's real bucket; the seed also runs the same sync itself (`makeSeedCopies`), so a seeded page shows photos either way.
 
 ## Client State Management (Redux Toolkit)
 
@@ -355,7 +356,7 @@ All `region: 'us-central1'`, callables with the site's `cors` list. Errors are `
 |---|---|---|---|---|---|
 | `getSalePage` | callable, auth optional | anyone with the link | `{ linkId }` | `{ status: 'ok', sale: { name, pickupArea, buyerNote }, things: PublicThing[], isMember }` or `{ status: 'not_found' }` | Only `not_found` (malformed, unknown, stopped, renewed-away, finished, deleted alike) |
 | `submitSaleInterest` | callable, auth optional | anyone with the link | `{ linkId, itemId, name, contact, message, website }` (`website` is the honeypot) | `{ status: 'sent', contact: 'email' \| 'phone' }`, or `not_found`, `not_available`, `busy`, `slow_down`, `invalid` (with `field: 'name' \| 'contact' \| 'message'`) | `invalid` names the field; nothing else says more |
-| `changeSalePublicLink` | callable | seller | `{ saleId, action: 'create' \| 'renew' \| 'stop' }` | `{ linkId: string \| null }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike); `failed-precondition` "This sale is finished. Reopen it to turn the page on."; `aborted` "The link just changed. Check it and try again." (two changes at once); `internal` when the old public folder could not be cleared (nothing else was changed, so trying again is safe) |
+| `changeSalePublicLink` | callable | seller | `{ saleId, action: 'create' \| 'renew' \| 'stop' }` | `{ linkId: string \| null }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike); `failed-precondition` "This sale is finished. Reopen it to turn the page on."; `aborted` "The link just changed. Check it and try again." (two changes at once); `internal` when a stopped link's public folder could not be cleared (nothing else was changed, so trying again is safe); create and renew also make the new address's copies before answering (512 MiB-1 GiB, 300 s) |
 | `syncSalePublicPhotos` | Firestore trigger, `apps/going-once/sales/{saleId}/items/{itemId}` written | — | the event's ids (re-reads both docs) | public copies made or deleted | Logs and returns; a failed copy is retried on the thing's next write or by the link callable's full sync |
 | `buildSalePhotoArchive` | callable, 1 GiB, 540 s | members | `{ saleId }` | `{ path, photoCount, sizeBytes }` | `not-found`; `failed-precondition` "Nothing to save yet: no Available or Pending thing has a photo." or "This sale is finished."; `resource-exhausted` "That's more than 1,500 photos. Save fewer at a time." |
 | `finishSale` | callable | seller | `{ saleId, action: 'finish' \| 'reopen' }` | `{ status: 'OPEN' \| 'FINISHED', contactsClearAt }` | `not-found`; `failed-precondition` "Already finished." / "Already open." |
@@ -365,7 +366,7 @@ All `region: 'us-central1'`, callables with the site's `cors` list. Errors are `
 | `deleteSale` | callable, 540 s | seller | `{ saleId }` | `{ deleted: true }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike, and a sale a finished run already removed); `internal` "The sale wasn't fully deleted. Delete it again to finish." (the sale stays, so a rerun finishes it). Order: its Storage files, the public links (photo copies, then record), the waiting invitations, `recursiveDelete` of the sale (things and any other subcollection), then the links again: a link minted by `changeSalePublicLink` between the first query and the sale's removal would otherwise outlive it. The client calls it with a 540 s timeout, counts `not-found` as deleted, and reads `deadline-exceeded` as "Still deleting. Check again in a moment." |
 | `findFirstActivityAt` | usage finder for `registerAppUsage` | — | uid | oldest `createdAt` of a sale they are in, or `null` | — |
 
-`PublicThing = { id, title, description, brandModel, size, condition, askingPriceCents, originalPriceCents, status, photos: { s: string, m: string }[] }`, the copy paths only; `originalPriceCents` is `null` unless shown.
+`PublicThing = { id, title, description, brandModel, size, condition, askingPriceCents, originalPriceCents, status, photos: { s: string, m: string }[] }`, the copy Storage paths only (cover first); `originalPriceCents` is `null` unless shown.
 
 ### Everything else
 

@@ -24,7 +24,8 @@ Built:
 Next:
 - [x] Sales, things with photos and private fields, and co-sellers
 - [x] A live public page for buyers without an account, with a link the seller turns on, off or renews
-- [ ] An interest form on the public page, and photos on it
+- [x] Photos on the public page, smaller copies that go when a thing sells
+- [ ] An interest form on the public page
 - [ ] A shared inbox, with a bundled push when someone is interested
 - [ ] Copy listing text, Save photos and Save all photos for relisting
 - [ ] Finish the sale, with buyers' details cleared after 30 days

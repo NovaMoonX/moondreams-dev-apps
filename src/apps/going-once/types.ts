@@ -148,6 +148,12 @@ export interface Item {
   lastEditedBy: string | null;
 }
 
+/** One photo's two public copies (480px and 1,280px WebP), as Storage paths. */
+export interface PublicPhoto {
+  s: string;
+  m: string;
+}
+
 /** A thing as the public page shows it: only the fields `getSalePage` allows. */
 export interface PublicThing {
   id: string;
@@ -160,6 +166,8 @@ export interface PublicThing {
   /** Set only when the seller chose to show it. */
   originalPriceCents: number | null;
   status: Extract<ItemStatus, 'AVAILABLE' | 'PENDING'>;
+  /** Cover first, in the thing's order; only photos whose copies exist. */
+  photos: PublicPhoto[];
 }
 
 /** What `getSalePage` answers: the page, or one `not_found` for every link that shows nothing. */

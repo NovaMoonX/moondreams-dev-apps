@@ -30,6 +30,25 @@ export async function copyFileUnderNewToken(fromPath: string, toPath: string) {
   return true;
 }
 
+/** Saves bytes as a new file under its own download token, replacing any file at the path. */
+export async function saveFileUnderNewToken(
+  path: string,
+  data: Buffer,
+  contentType: string,
+) {
+  await getStorage()
+    .bucket()
+    .file(path)
+    .save(data, {
+      contentType,
+      resumable: false,
+      metadata: {
+        cacheControl: 'public, max-age=31536000',
+        metadata: { firebaseStorageDownloadTokens: randomUUID() },
+      },
+    });
+}
+
 /** Deletes the files under a folder (all but `keep`); throws when one can't be deleted, so a caller never reports a link ended while its files are still there. */
 export async function removeFolderFiles(
   prefix: string,

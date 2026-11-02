@@ -12,7 +12,10 @@ import {
   PUBLIC_STATUSES,
   SALE_PAGE_LIMITS,
   isLinkId,
+  COPY_SIZES,
   isListable as isListableOnServer,
+  publicCopyPath,
+  readCopyablePhotos,
   sealPage,
   toPublicSale,
   toPublicThing,
@@ -97,6 +100,7 @@ const THING_KEYS = [
   'description',
   'id',
   'originalPriceCents',
+  'photos',
   'size',
   'status',
   'title',
@@ -332,6 +336,132 @@ check('link ids are the minted 26-character shape and nothing looser', () => {
   ].forEach((value) => assert.equal(isLinkId(value), false, String(value)));
 });
 
+const LINK = 'seedsalefall23456789abcdef';
+const PHOTO_A = 'photo-aaaa-1';
+const PHOTO_B = 'photo-bbbb-2';
+const listedPhoto = (id: string, itemId = 'gray-sofa') => ({
+  ...photo,
+  id,
+  path: `apps/going-once/sales/sale-id-secret/items/${itemId}/${id}.jpg`,
+});
+const copyListing = (ids: string[], itemId = 'gray-sofa') => ({
+  saleId: 'sale-id-secret',
+  linkId: LINK,
+  paths: new Set(
+    ids.flatMap((id) => [
+      publicCopyPath(LINK, itemId, id, 's'),
+      publicCopyPath(LINK, itemId, id, 'm'),
+    ]),
+  ),
+});
+
+check(
+  'photos are the public copies only, cover first, in the thing order, and only once both sizes exist',
+  () => {
+    const item = thing({
+      photos: [listedPhoto(PHOTO_A), listedPhoto(PHOTO_B)],
+    });
+    const result = toPublicThing(item, copyListing([PHOTO_A, PHOTO_B]));
+    assert.ok(result);
+    assert.deepEqual(
+      result.photos.map((entry) => entry.s),
+      [
+        publicCopyPath(LINK, 'gray-sofa', PHOTO_A, 's'),
+        publicCopyPath(LINK, 'gray-sofa', PHOTO_B, 's'),
+      ],
+    );
+    assert.deepEqual(
+      toPublicThing(
+        { ...item, photos: [...item.photos].reverse() },
+        copyListing([PHOTO_A, PHOTO_B]),
+      )?.photos[0].m,
+      publicCopyPath(LINK, 'gray-sofa', PHOTO_B, 'm'),
+    );
+    assert.equal(toPublicThing(item, copyListing([PHOTO_B]))?.photos.length, 1);
+    assert.equal(toPublicThing(item, null)?.photos.length, 0);
+    const half = copyListing([PHOTO_A]);
+    half.paths = new Set([publicCopyPath(LINK, 'gray-sofa', PHOTO_A, 's')]);
+    assert.equal(toPublicThing(item, half)?.photos.length, 0);
+    const body = JSON.stringify(
+      toSalePage(sale(), [item], false, copyListing([PHOTO_A, PHOTO_B])),
+    );
+    assert.ok(
+      !body.includes('/sales/'),
+      'a listing-size path reached the page',
+    );
+    assert.ok(!body.includes('.jpg'));
+    assert.ok(body.includes('/public/'));
+  },
+);
+
+check(
+  'at most 12 photos get copies and a path outside the thing is refused',
+  () => {
+    const ids = Array.from(
+      { length: 14 },
+      (_, index) => `photo-id-${index + 10}`,
+    );
+    const many = thing({ photos: ids.map((id) => listedPhoto(id)) });
+    assert.equal(
+      readCopyablePhotos('sale-id-secret', 'gray-sofa', many).length,
+      12,
+    );
+    const odd = thing({
+      photos: [
+        listedPhoto(PHOTO_A, 'other-thing'),
+        { ...listedPhoto(PHOTO_B), id: '../x' },
+        {
+          ...listedPhoto('photo-cccc-3'),
+          path: 'apps/going-once/sales/sale-id-secret/items/gray-sofa/../x.jpg',
+        },
+        listedPhoto('photo-dddd-4'),
+      ],
+    });
+    assert.deepEqual(
+      readCopyablePhotos('sale-id-secret', 'gray-sofa', odd).map(
+        (entry) => entry.id,
+      ),
+      ['photo-dddd-4'],
+    );
+    assert.deepEqual(COPY_SIZES, { s: 480, m: 1280 });
+  },
+);
+
+check(
+  'the final pass keeps a well-formed copy path and drops any other string',
+  () => {
+    const page = toSalePage(
+      sale(),
+      [thing({ photos: [listedPhoto(PHOTO_A)] })],
+      false,
+      copyListing([PHOTO_A]),
+    );
+    assert.ok(page.status === 'ok');
+    const tampered = {
+      ...page,
+      things: [
+        {
+          ...page.things[0],
+          photos: [
+            ...page.things[0].photos,
+            { s: 'apps/going-once/sales/x/items/y/z.jpg', m: 'x' },
+            { s: 5, m: null },
+            { ...page.things[0].photos[0], extra: 'secret-extra' },
+          ],
+        },
+      ],
+    };
+    const sealed = sealPage(tampered as never);
+    assert.ok(sealed.status === 'ok');
+    assert.equal(sealed.things[0].photos.length, 2);
+    assert.deepEqual(Object.keys(sealed.things[0].photos[1]).sort(), [
+      'm',
+      's',
+    ]);
+    assert.ok(!JSON.stringify(sealed).includes('secret-extra'));
+  },
+);
+
 const firestoreRules = readFileSync('firestore.rules', 'utf8');
 const saleBlock = firestoreRules.slice(
   firestoreRules.indexOf('match /apps/going-once/sales/{saleId} {'),
@@ -358,6 +488,7 @@ check(
     [
       'functions/src/share/shareIds.ts',
       'functions/src/share/shareFiles.ts',
+      'functions/src/share/imageCopies.ts',
     ].forEach((path) =>
       assert.ok(
         !/recipe|pinch|sale|trip/i.test(readFileSync(path, 'utf8')),
