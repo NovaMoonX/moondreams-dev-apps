@@ -1,9 +1,10 @@
 import { getFirestore, type DocumentData } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { describeError } from '../../share/shareFiles.js';
+import { isShareId, mintShareId } from '../../share/shareIds.js';
 import {
   copyCoverFile,
-  describeError,
   removeShareFiles,
   shareRef,
   shareSnapshotRef,
@@ -12,10 +13,8 @@ import {
   SHARE_LIMITS,
   getCopyRecipes,
   isRecord,
-  isShareId,
   isSourceId,
   kitchenCoverPath,
-  mintShareId,
   readStoredCopy,
   shareCoverPath,
   toCoverRefs,

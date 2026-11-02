@@ -1,5 +1,3 @@
-import { randomInt } from 'node:crypto';
-
 // A function can't import src/apps/pinch/constants.ts, so its caps and lists are repeated here; scripts/checks/pinchShare.ts fails when they drift.
 export const SHARE_LIMITS = {
   MAX_RECIPE_TITLE_LENGTH: 200,
@@ -135,8 +133,6 @@ export type ShareResult =
       meal: SharedMeal | null;
     };
 
-const SHARE_ID_ALPHABET = '23456789abcdefghjklmnpqrstuvwxyz';
-const SHARE_ID_PATTERN = /^[2-9a-hj-np-z]{26}$/;
 const CATALOG_ID_PATTERN = /^cat-[a-z0-9-]{1,80}$/;
 const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const TRAILING_HIGH_SURROGATE = /[\uD800-\uDBFF]$/;
@@ -144,9 +140,6 @@ const TRAILING_HIGH_SURROGATE = /[\uD800-\uDBFF]$/;
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
-
-export const isShareId = (value: unknown): value is string =>
-  typeof value === 'string' && SHARE_ID_PATTERN.test(value);
 
 export const isRecipeId = (value: unknown): value is string =>
   typeof value === 'string' && SAFE_ID_PATTERN.test(value);
@@ -157,15 +150,6 @@ export const isSourceId = (value: unknown): value is string =>
   value.length >= 1 &&
   value.length <= 128 &&
   !value.includes('/');
-
-/** Mints a 26-character, 130-bit id from `crypto.randomInt`; `random` is a test seam. */
-export function mintShareId(random: (max: number) => number = randomInt) {
-  const id = Array.from(
-    { length: SHARE_LIMITS.SHARE_ID_LENGTH },
-    () => SHARE_ID_ALPHABET[random(SHARE_ID_ALPHABET.length)],
-  ).join('');
-  return id;
-}
 
 export const shareFolder = (shareId: string) => `apps/pinch/shares/${shareId}/`;
 
