@@ -31,6 +31,7 @@ function ChangeSection() {
         isCompact
         changeJson={flow.changeJson}
         emptyText={pairedText ?? undefined}
+        warningActions={value.warningActions}
       />
     </div>
   );

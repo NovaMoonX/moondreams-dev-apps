@@ -32,12 +32,15 @@ import {
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectBillProgress,
+  selectComingDays,
+  selectResolvedPlan,
   selectIsMovesLoaded,
   selectIsRecordsReady,
   selectDraftHeldByItem,
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { getOneTimeNotes } from '@apps/runway/utils/payFrom';
 
 const MAX_LINES_SHOWN = 3;
 const NO_PINNED: ReadonlySet<string> = new Set();
@@ -59,6 +62,10 @@ interface EffectPreviewProps {
   ) => ReactNode;
   /** Items whose rows lead every day's card, so a reorder shows the gain beside the losses. */
   pinnedItemIds?: ReadonlySet<string>;
+  /** Offered under a warning that says why a pay is short, so the way out is next to the problem. */
+  warningActions?: ReactNode;
+  /** Replaces the section's caption. */
+  caption?: string;
 }
 
 interface EffectEntry {
@@ -184,6 +191,8 @@ function EffectPreview({
   isCompact = false,
   describeLead,
   pinnedItemIds,
+  warningActions,
+  caption,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -198,6 +207,7 @@ function EffectPreview({
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );
   const [isOpen, setIsOpen] = useState(false);
+  const [isEvery, setIsEvery] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
   const { isHidden } = useValuesHidden();
   const settledJson = useDeferredValue(changeJson);
@@ -271,6 +281,12 @@ function EffectPreview({
     return result;
   }, [settledVirtual, items, versions, openDays, today, settledKey]);
 
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const plan = useAppSelector((state) => selectResolvedPlan(state, today));
+  const oneTimeNotes = useMemo(
+    () => getOneTimeNotes(comingDays, plan, stance),
+    [comingDays, plan, stance],
+  );
   const holdsText = useMemo(() => {
     if (settledVirtual === null || !isLedgerReady) return null;
     const { before, after } = previewLookahead(
@@ -279,7 +295,10 @@ function EffectPreview({
       settledVirtual,
     );
     const isSame = isSameLookahead(before, after);
-    return { blocks: describeHoldsBlocks(before, after, isHidden), isSame };
+    return {
+      blocks: describeHoldsBlocks(before, after, isHidden, oneTimeNotes),
+      isSame,
+    };
     // The plan slices are what the lookahead reads; the store snapshot is read at that moment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -290,6 +309,7 @@ function EffectPreview({
     versions,
     openDays,
     isHidden,
+    oneTimeNotes,
   ]);
 
   const isMoveSaid =
@@ -303,10 +323,8 @@ function EffectPreview({
 
   const getBody = () => {
     if (virtual === null || days === null) {
-      return (
-        <p className='text-muted-foreground text-sm'>
-          {waitingText ?? CHANGE_WORDS.previewWaiting}
-        </p>
+      return waitingText === undefined ? null : (
+        <p className='text-muted-foreground text-sm'>{waitingText}</p>
       );
     }
     if (days.length === 0) {
@@ -322,7 +340,10 @@ function EffectPreview({
       );
     }
     const entries = toEntries(days, pinnedItemIds ?? NO_PINNED);
-    const shown = isOpen ? entries : entries.slice(0, PREVIEW_SHOWN);
+    const isCapped =
+      isCompact && isOpen && !isEvery && entries.length > PREVIEW_SHOWN;
+    const shown =
+      isOpen && !isCapped ? entries : entries.slice(0, PREVIEW_SHOWN);
     if (isCompact && !isOpen) {
       const first = getMoves(days).isMove
         ? undefined
@@ -412,8 +433,19 @@ function EffectPreview({
             </li>
           ))}
         </ul>
-        {(entries.length > PREVIEW_SHOWN || isCompact) && (
-          <ShowMoreButton isOpen={isOpen} onClick={() => setIsOpen(!isOpen)}>
+        {isCapped && (
+          <ShowMoreButton isOpen={false} onClick={() => setIsEvery(true)}>
+            {`Show ${entries.length - PREVIEW_SHOWN} more`}
+          </ShowMoreButton>
+        )}
+        {(entries.length > PREVIEW_SHOWN || isCompact) && !isCapped && (
+          <ShowMoreButton
+            isOpen={isOpen}
+            onClick={() => {
+              setIsOpen(!isOpen);
+              setIsEvery(false);
+            }}
+          >
             {isOpen
               ? 'Show fewer'
               : `Show ${entries.length - PREVIEW_SHOWN} more`}
@@ -452,20 +484,32 @@ function EffectPreview({
       ))
     : [];
 
+  const body = getBody();
+  const visibleNotes = movedNotes.filter(
+    (note) => !(note.isOneCarried && isCarrySaid),
+  );
+  if (
+    body === null &&
+    visibleNotes.length === 0 &&
+    shownBlocks.length === 0 &&
+    !isLeadShown
+  ) {
+    return null;
+  }
+  const hasNote = shownBlocks.some((block) => block.hasNote === true);
+
   return (
-    <ActionSection caption={CHANGE_WORDS.previewHeading}>
+    <ActionSection caption={caption ?? CHANGE_WORDS.previewHeading}>
       {isLeadShown &&
         isHidden &&
         shownBlocks.map((block) => <NeedsALookRow key={block.text} />)}
       {isLeadShown && describeLead(days, isHidden, leadShortfalls)}
-      {getBody()}
-      {movedNotes
-        .filter((note) => !(note.isOneCarried && isCarrySaid))
-        .map((note) => (
-          <InlineNotice key={note.text} tone={note.tone}>
-            {note.text}
-          </InlineNotice>
-        ))}
+      {body}
+      {visibleNotes.map((note) => (
+        <InlineNotice key={note.text} tone={note.tone}>
+          {note.text}
+        </InlineNotice>
+      ))}
       {!isLeadShown &&
         shownBlocks.map((block) =>
           isHidden && block.tone === 'warning' ? (
@@ -476,6 +520,7 @@ function EffectPreview({
             </InlineNotice>
           ),
         )}
+      {hasNote && !isHidden && warningActions}
     </ActionSection>
   );
 }

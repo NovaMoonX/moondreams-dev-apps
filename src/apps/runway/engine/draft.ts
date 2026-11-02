@@ -17,6 +17,7 @@ import {
   compareDays,
   compareDemands,
   compareText,
+  type BillPayment,
   type BillShare,
   type DraftAsk,
   type Demand,
@@ -226,7 +227,7 @@ export function pickPairings(day: DraftDayInput): readonly Pairing[] {
   return sets.payLine.length > 0 ? sets.payLine : sets.source;
 }
 
-type WalkMode = 'ordinary' | 'topUp' | 'hold';
+type WalkMode = 'ordinary' | 'topUp' | 'hold' | 'addOn';
 type WalkItem = Demand & { mode: WalkMode };
 
 interface PairingOutcome {
@@ -366,7 +367,29 @@ function fundPairings(
  * input gives the same output, whatever order the arrays arrive in.
  */
 export function buildDraft(input: DraftInput): Draft {
-  const days = [...input.days].sort(compareDays);
+  const pinnedKeys = new Set(
+    input.plan.bills.flatMap((bill) =>
+      Object.keys(bill.fixed ?? {}).map((dayKey) => `${dayKey}:${bill.itemId}`),
+    ),
+  );
+  const unpinned = (list: readonly Pairing[], dayKey: string) =>
+    list.filter(
+      (pairing) => !pinnedKeys.has(`${dayKey}:${pairing.targetItemId}`),
+    );
+  const days = input.days
+    .map((day) =>
+      day.pairings && pinnedKeys.size > 0
+        ? {
+            ...day,
+            pairings: {
+              day: day.pairings.day && unpinned(day.pairings.day, day.dayKey),
+              payLine: unpinned(day.pairings.payLine, day.dayKey),
+              source: unpinned(day.pairings.source, day.dayKey),
+            },
+          }
+        : day,
+    )
+    .sort(compareDays);
   const dayMoney = days.map((day) => ({
     day,
     moneyCents: getDayMoney(day, input.overrides, input.stance),
@@ -449,6 +472,18 @@ export function buildDraft(input: DraftInput): Draft {
         planBillPayments(bill, chronological, input.plan.horizon, input.stance),
       ]),
   );
+  const fixedByBill = new Map(
+    input.plan.bills.map((bill) => [bill.itemId, bill.fixed ?? {}]),
+  );
+  /** What the pays with a figure of their own put into a payment: the pairing pays only ask for the rest. */
+  const getPinned = (itemId: string, payment: BillPayment) =>
+    payment.parts.reduce(
+      (sum, part) =>
+        Object.hasOwn(fixedByBill.get(itemId) ?? {}, part.day.dayKey)
+          ? sum + part.cents
+          : sum,
+      0,
+    );
   const getNeed = (
     itemId: string,
     on: number,
@@ -461,10 +496,13 @@ export function buildDraft(input: DraftInput): Draft {
     if (!payment || payment.paid) return { key: itemId, cents: 0 };
     return {
       key: `${itemId}:${payment.dueOn}`,
-      cents: Math.max(0, payment.totalCents - payment.fundedCents),
+      cents: Math.max(
+        0,
+        payment.totalCents - payment.fundedCents - getPinned(itemId, payment),
+      ),
     };
   };
-  const paired = dayMoney.reduce<{
+  const pairRun = dayMoney.reduce<{
     used: Map<string, Cents>;
     list: {
       day: DraftDayInput;
@@ -493,7 +531,8 @@ export function buildDraft(input: DraftInput): Draft {
       return { used: acc.used, list: [...acc.list, { day, ...funded }] };
     },
     { used: new Map(), list: [] },
-  ).list;
+  );
+  const paired = pairRun.list;
   const pairedKeys = new Set(
     paired.flatMap((entry) =>
       pickPairings(entry.day)
@@ -507,15 +546,35 @@ export function buildDraft(input: DraftInput): Draft {
       ? [{ dayKey: day.dayKey, sourceId: day.sourceId, cents: leftCents }]
       : [],
   );
+  /** Where a pay with a figure of its own leaves the rest to a pay that also pairs, the pairings come first and the rest is added to that line. */
+  const addOns = allDemands.flatMap((demand): WalkItem[] => {
+    const payment = billPayments
+      .get(demand.itemId)
+      ?.find((entry) => entry.dueOn === demand.bill?.dueOn);
+    if (
+      !payment ||
+      demand.cents <= 0 ||
+      !pairedKeys.has(`${demand.dayKey}:${demand.itemId}`) ||
+      getPinned(demand.itemId, payment) === 0
+    )
+      return [];
+    const extra =
+      demand.cents -
+      (pairRun.used.get(`${demand.itemId}:${payment.dueOn}`) ?? 0);
+    return extra > 0 ? [{ ...demand, cents: extra, mode: 'addOn' }] : [];
+  });
   const ordinary = allDemands
     .filter(
       (demand) =>
         !pairedKeys.has(`${demand.dayKey}:${demand.itemId}`) &&
-        (demand.cents > 0 || demand.ask.kind === 'rest'),
+        (demand.cents > 0 ||
+          demand.ask.kind === 'rest' ||
+          demand.isFixed === true),
     )
     .map((demand): WalkItem => ({ ...demand, mode: 'ordinary' }));
   const walkItems = [
     ...ordinary,
+    ...addOns,
     ...paired.flatMap((entry) => entry.outcomes.flatMap(({ items }) => items)),
   ].sort(
     (a, b) =>
@@ -555,8 +614,15 @@ export function buildDraft(input: DraftInput): Draft {
             }
           : {
               ...base,
+              demandCents:
+                demand.mode === 'addOn'
+                  ? base.demandCents + demand.cents
+                  : base.demandCents,
               cents: base.cents + got,
-              shortBy: taken.left,
+              shortBy:
+                demand.mode === 'addOn'
+                  ? base.shortBy + taken.left
+                  : taken.left,
               paidBy: [...base.paidBy, ...taken.paidBy],
               reason: {
                 ...base.reason,

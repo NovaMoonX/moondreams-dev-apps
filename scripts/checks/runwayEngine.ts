@@ -60,7 +60,11 @@ import {
   splitReceiptRow,
 } from '../../src/apps/runway/utils/receiptText.ts';
 import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
-import type { OpenDay, Pairing } from '../../src/apps/runway/types.ts';
+import type {
+  BillFundedBy,
+  OpenDay,
+  Pairing,
+} from '../../src/apps/runway/types.ts';
 import type { DraftDayInput } from '../../src/apps/runway/engine/demands.ts';
 import type { ComingDay } from '../../src/apps/runway/engine/comingDays.ts';
 import {
@@ -71,14 +75,24 @@ import {
   getIncomeDaysPerMonth,
   monthlyTotal,
 } from '../../src/apps/runway/engine/groups.ts';
+import {
+  clipStretches,
+  withFundedBy,
+  findPayRule,
+  getFixedByBill,
+  previewBillShare,
+} from '../../src/apps/runway/engine/billShare.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
+import { hasPaysToChoose } from '../../src/apps/runway/utils/payFrom.ts';
 import {
   describePurchaseEdit,
   describePurchaseRemoval,
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
+  describeHoldsBlocks,
   describeHoldsChange,
+  describeProblemShort,
   isSameLookahead,
   sortProblems,
 } from '../../src/apps/runway/utils/lookaheadText.ts';
@@ -102,7 +116,10 @@ import type {
 import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
 import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
 import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
-import { previewChange } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
+import {
+  previewBillShareView,
+  previewChange,
+} from '../../src/apps/runway/store/selectors/previewSelectors.ts';
 import {
   computeDraftView,
   selectReachedEndingsKey,
@@ -181,6 +198,7 @@ import {
   DAY_MS,
   addUtcMonths,
   toDayKey,
+  payLineIdOfDayKey,
   toDayStamp,
   todayAsUtcDate,
 } from '../../src/apps/runway/engine/dates.ts';
@@ -1414,6 +1432,457 @@ const version = (
     ['20261231', '20270131', '20270228'],
     'day 31 clamps to the month length',
   );
+
+  // Paid from: the pay before it's due, or one pay line (and day of the month).
+  {
+    const payDay = (payLineId: string, on: number) => ({
+      dayKey: toDayKey(payLineId, on),
+      on,
+    });
+    assert.equal(payLineIdOfDayKey(toDayKey('pl1', utc(2026, 3, 9))), 'pl1');
+    const workPays = [
+      payDay('work', utc(2026, 11, 15)),
+      payDay('work', utc(2026, 11, 30)),
+      payDay('work', utc(2026, 12, 15)),
+    ];
+    const pays = [...workPays, payDay('side', utc(2026, 11, 20))].sort(
+      (a, b) => a.on - b.on,
+    );
+    const rent = (
+      fundedBy: DraftBillInput['fundedBy'],
+      fixed: Record<string, number> = {},
+    ) => makeBill({ schedule: once(utc(2026, 12, 1)), fundedBy, fixed });
+    const partsOf = (bill: DraftBillInput, days = pays) =>
+      planBillPayments(bill, days, horizon)[0].parts.map((part) => [
+        toDayStamp(part.day.on),
+        part.cents,
+      ]);
+    assert.deepEqual(
+      partsOf(rent({ kind: 'lastBefore' }), workPays),
+      [['20261130', 150_000]],
+      'the pay before it is due carries the whole payment',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'work', monthDay: 15 })),
+      [['20261115', 150_000]],
+      'a pay on the 15th carries it all',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'work', monthDay: null })),
+      [
+        ['20261115', 75_000],
+        ['20261130', 75_000],
+      ],
+      'a pay line without a day shares it over its days',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'gone', monthDay: null })),
+      [],
+      'a pay that is no longer coming funds nothing',
+    );
+    assert.deepEqual(
+      partsOf(rent({ kind: 'pay', payLineId: 'work', monthDay: 15 }), [
+        payDay('work', utc(2026, 11, 30)),
+      ]),
+      [],
+      'a pay on another day of the month funds nothing',
+    );
+    const february = planBillPayments(
+      makeBill({
+        schedule: once(utc(2027, 3, 1)),
+        fundedBy: { kind: 'pay', payLineId: 'work', monthDay: 30 },
+      }),
+      [payDay('work', utc(2027, 2, 15)), payDay('work', utc(2027, 2, 28))],
+      horizon,
+    );
+    assert.deepEqual(
+      february[0].parts.map((part) => toDayStamp(part.day.on)),
+      ['20270228'],
+      'the 30th lands on the 28th in February',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent({ kind: 'suggested' }, { [workPays[0].dayKey]: 0 }),
+        workPays,
+      ),
+      [
+        ['20261115', 0],
+        ['20261130', 150_000],
+      ],
+      'the 30th takes the whole when the 15th is fixed at nothing',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent(
+          { kind: 'pay', payLineId: 'work', monthDay: null },
+          { [workPays[0].dayKey]: 1_000_000, [workPays[1].dayKey]: 0 },
+        ),
+      ),
+      [
+        ['20261115', 150_000],
+        ['20261130', 0],
+      ],
+      'a fixed share is capped at what remains, and with no other day the rest stays unfunded',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent(
+          { kind: 'pay', payLineId: 'work', monthDay: null },
+          { [workPays[0].dayKey]: 50_000 },
+        ),
+      ),
+      [
+        ['20261115', 50_000],
+        ['20261130', 100_000],
+      ],
+      'a fixed day under a pay leaves the rest to its other days',
+    );
+    assert.deepEqual(
+      partsOf(
+        rent(
+          { kind: 'pay', payLineId: 'work', monthDay: 15 },
+          { [workPays[1].dayKey]: 10_000 },
+        ),
+      ),
+      [['20261115', 150_000]],
+      'a fixed share on a day the pay does not allow is ignored',
+    );
+
+    // The change log says what changed in plain words.
+    const logBill = {
+      name: 'Rent',
+      emoji: null,
+      priority: 'must',
+      orderIndex: 1,
+      amount: { lowCents: 125_000, highCents: 125_000 },
+      timing: { kind: 'date', schedule: once(utc(2026, 12, 1)) },
+      ending: NEVER,
+      fundedBy: { kind: 'suggested' },
+      stanceOverride: null,
+      groupId: null,
+    } as const;
+    assert.equal(
+      describeChange(
+        logBill as never,
+        {
+          ...logBill,
+          fundedBy: { kind: 'pay', payLineId: 'work', monthDay: 30 },
+        } as never,
+        () => '',
+        undefined,
+        () => 'the pay on the 30th',
+      ),
+      'Paid from spread across your pays to the pay on the 30th',
+      'a Paid from change reads as plain words',
+    );
+    // A window with no pin of its own spreads as before, whatever is pinned in other months.
+    assert.deepEqual(
+      partsOf(
+        rent({ kind: 'suggested' }, { [workPays[2].dayKey]: 0 }),
+        workPays,
+      ),
+      [
+        ['20261115', 75_000],
+        ['20261130', 75_000],
+      ],
+      'a pin outside the payment window leaves its spread alone',
+    );
+
+    // A pay that puts in less pushes the rest onto the next repeating pay, never onto one-time pays or all the others.
+    const oneTimeIds = new Set(['free', 'bonus']);
+    const mixed = [
+      payDay('free', utc(2026, 11, 7)),
+      workPays[0],
+      payDay('bonus', utc(2026, 11, 21)),
+      workPays[1],
+    ];
+    const rentOneTime = (fixed: Record<string, number>) => ({
+      ...rent({ kind: 'suggested' }, fixed),
+      oneTimePayLineIds: oneTimeIds,
+    });
+    assert.deepEqual(
+      partsOf(rentOneTime({ [workPays[0].dayKey]: 0 }), mixed),
+      [
+        ['20261107', 0],
+        ['20261115', 0],
+        ['20261121', 0],
+        ['20261130', 150_000],
+      ],
+      'the next repeating pay carries all of it when the 15th puts in nothing',
+    );
+    assert.deepEqual(
+      partsOf(rentOneTime({ [workPays[0].dayKey]: 50_000 }), mixed),
+      [
+        ['20261107', 0],
+        ['20261115', 50_000],
+        ['20261121', 0],
+        ['20261130', 100_000],
+      ],
+      'a pay that puts in less pushes exactly the rest onto the next repeating pay',
+    );
+    assert.deepEqual(
+      partsOf(rentOneTime({ [workPays[1].dayKey]: 0 }), mixed).map(
+        (part) => part[1],
+      ),
+      [0, 150_000, 0, 0],
+      'with no repeating pay after the pinned one, the first repeating pay in the window carries it',
+    );
+    assert.deepEqual(
+      partsOf(
+        rentOneTime({ [workPays[0].dayKey]: 0, [workPays[1].dayKey]: 0 }),
+        mixed,
+      ).map((part) => part[1]),
+      [0, 0, 0, 0],
+      'with every repeating pay pinned the rest is unfunded, not given to a one-time pay',
+    );
+
+    // A temporary change is cut off where it ends.
+    const clipFrom = utc(2026, 10, 24);
+    const clipped = clipStretches(
+      [
+        { effectiveFrom: clipFrom, effectiveUntil: clipFrom + 10 * DAY_MS },
+        { effectiveFrom: clipFrom + 10 * DAY_MS, effectiveUntil: null },
+      ],
+      clipFrom + 5 * DAY_MS,
+    );
+    assert.deepEqual(
+      clipped.map((stretch) => [stretch.effectiveFrom, stretch.effectiveUntil]),
+      [[clipFrom, clipFrom + 5 * DAY_MS]],
+      'stretches that start after the end go and the last one ends there',
+    );
+    assert.deepEqual(
+      clipStretches(
+        [{ effectiveFrom: clipFrom, effectiveUntil: null }],
+        clipFrom + 5 * DAY_MS,
+      ).map((stretch) => stretch.effectiveUntil),
+      [clipFrom + 5 * DAY_MS],
+      'an open stretch ends where the change ends',
+    );
+
+    // A pay's own share of a bill: the other pays, the shortfall and the rule it could become.
+    const never = () => false;
+    const monthDayOf = (_payLineId: string, on: number) =>
+      new Date(on).getUTCDate();
+    const base = rent({ kind: 'suggested' });
+    const nov15 = workPays[0].dayKey;
+    const nov30 = workPays[1].dayKey;
+    const zero = previewBillShare(
+      base,
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      0,
+    );
+    assert.deepEqual(
+      zero?.rows.map((row) => [row.dayKey, row.beforeCents, row.afterCents]),
+      [
+        [nov15, 75_000, 0],
+        [nov30, 75_000, 150_000],
+      ],
+      'setting a pay to nothing moves its share to the other pay in the window',
+    );
+    assert.equal(zero?.shortCents, 0, 'the other pay carries the rest');
+    assert.deepEqual(
+      zero && findPayRule(zero, nov15, monthDayOf, never),
+      { kind: 'pay', payLineId: 'work', monthDay: 30 },
+      'one other pay carrying it all maps to a Paid from rule',
+    );
+    assert.equal(
+      zero && findPayRule(zero, nov15, () => null, never),
+      null,
+      "a rule that would pick the line's other pays too is not offered",
+    );
+    const withFreelance = [
+      workPays[0],
+      payDay('free', utc(2026, 11, 7)),
+      workPays[1],
+    ].sort((a, b) => a.on - b.on);
+    const isFree = (payLineId: string) => payLineId === 'free';
+    const amongOneTime = previewBillShare(
+      base,
+      withFreelance,
+      horizon,
+      'conservative',
+      nov15,
+      0,
+    );
+    assert.deepEqual(
+      amongOneTime && findPayRule(amongOneTime, nov15, monthDayOf, isFree),
+      { kind: 'pay', payLineId: 'work', monthDay: 30 },
+      'a one-time pay in the window does not stop the rule',
+    );
+    assert.equal(
+      amongOneTime && findPayRule(amongOneTime, nov15, monthDayOf, never),
+      null,
+      'counted as a pay, the one-time pay leaves two others, so no rule',
+    );
+    const freeZero = previewBillShare(
+      base,
+      withFreelance,
+      horizon,
+      'conservative',
+      toDayKey('free', utc(2026, 11, 7)),
+      0,
+    );
+    assert.equal(
+      freeZero &&
+        findPayRule(
+          freeZero,
+          toDayKey('free', utc(2026, 11, 7)),
+          monthDayOf,
+          isFree,
+        ),
+      null,
+      'a rule is never offered for a one-time pay',
+    );
+    const capped = previewBillShare(
+      base,
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      999_999,
+    );
+    assert.equal(
+      capped?.cents,
+      150_000,
+      'a share above what the bill needs is capped',
+    );
+    assert.deepEqual(
+      capped && findPayRule(capped, nov15, monthDayOf, never),
+      { kind: 'pay', payLineId: 'work', monthDay: 15 },
+      'the pay set to the whole amount maps to that pay',
+    );
+    const middle = previewBillShare(
+      base,
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      100_000,
+    );
+    assert.equal(
+      middle && findPayRule(middle, nov15, monthDayOf, never),
+      null,
+      'two pays sharing it is not a rule',
+    );
+    const stuck = previewBillShare(
+      rent({ kind: 'suggested' }, { [nov30]: 0 }),
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      0,
+    );
+    assert.equal(
+      stuck?.shortCents,
+      150_000,
+      'with no other pay the whole payment is short',
+    );
+    assert.equal(
+      previewBillShare(
+        base,
+        workPays,
+        horizon,
+        'conservative',
+        'work_20300101',
+        0,
+      ),
+      null,
+      'a pay outside any payment window has no preview',
+    );
+
+    // A day's own share reaches the demands, and the line stays at nothing.
+    const fixedDemands = buildDemands(
+      workPays.slice(0, 2).map((entry) => ({
+        ...entry,
+        sourceId: 'src',
+        amount: { lowCents: 500_000, highCents: 500_000 },
+      })),
+      workPays.slice(0, 2),
+      [],
+      [rent({ kind: 'suggested' }, { [nov15]: 0 })],
+      horizon,
+    ).map((demand) => [demand.dayKey, demand.cents, demand.isFixed]);
+    assert.deepEqual(
+      fixedDemands,
+      [
+        [nov15, 0, true],
+        [nov30, 150_000, false],
+      ],
+      'a pay fixed at nothing still has its line and the other takes the rest',
+    );
+    const open = (
+      id: string,
+      status: 'draft' | 'confirmed',
+      billCents: Record<string, number>,
+    ) => ({
+      id,
+      status,
+      override: { billCents },
+    });
+    assert.deepEqual(
+      [
+        ...getFixedByBill([
+          open(nov15, 'draft', { rent: 0 }),
+          open(nov30, 'confirmed', { rent: 5 }),
+          open('other', 'draft', {}),
+        ]).entries(),
+      ],
+      [['rent', { [nov15]: 0 }]],
+      'only draft days set a share',
+    );
+    assert.notEqual(
+      hashOverride({
+        pairings: null,
+        holdResolutions: {},
+        billCents: { rent: 0 },
+      }),
+      hashOverride({ pairings: null, holdResolutions: {} }),
+      'a changed share changes the day fingerprint',
+    );
+    assert.equal(
+      hashOverride({ pairings: null, holdResolutions: {}, billCents: {} }),
+      hashOverride({ pairings: null, holdResolutions: {} }),
+      'an empty set of shares is the legacy fingerprint',
+    );
+
+    // A chosen bill honours a pinned share too, and over-asked pins name the pay they cut.
+    const chosenFixed = planBillPayments(
+      makeBill({
+        schedule: once(utc(2026, 12, 1)),
+        fundedBy: { kind: 'chosen', dayKeys: [nov15, nov30] },
+        fixed: { [nov15]: 0 },
+      }),
+      workPays,
+      horizon,
+    )[0].parts.map((part) => [toDayStamp(part.day.on), part.cents]);
+    assert.deepEqual(
+      chosenFixed,
+      [
+        ['20261115', 0],
+        ['20261130', 150_000],
+      ],
+      'a chosen day pinned at nothing leaves the rest to the others',
+    );
+    const overAsked = previewBillShare(
+      rent({ kind: 'suggested' }, { [nov30]: 100_000 }),
+      workPays,
+      horizon,
+      'conservative',
+      nov15,
+      100_000,
+    );
+    assert.deepEqual(
+      overAsked?.rows.map((row) => [row.dayKey, row.afterCents, row.isPinned]),
+      [
+        [nov15, 100_000, false],
+        [nov30, 50_000, true],
+      ],
+      'a pinned pay that is cut is named as one the person set',
+    );
+  }
 
   // Endings reuse the schedule machinery.
   const sixTimes = makeBill({
@@ -4235,6 +4704,7 @@ const version = (
       pairings: null,
       holdResolutions: {},
       payloads: { vac: envelope(5_000) },
+      billCents: {},
     },
   };
   const withDay = [dayOverride] as never[];
@@ -4753,7 +5223,7 @@ const version = (
       paid: null,
       parts: Array.from({ length: parts }, () => ({
         day: day(today),
-        cents: 1,
+        cents: 1_000 / parts,
       })),
     }) as never;
   const billsOf = (...ids: string[]) =>
@@ -4775,6 +5245,58 @@ const version = (
     noIncome.holdsThrough,
     today + 39 * DAY_MS,
     'the plan holds through the day before a bill with no income',
+  );
+  // A payment its pays do not carry in full is reported, with the reason.
+  const shortPayment = (over: Record<string, unknown>, parts: number) =>
+    ({ ...(payment(today + 40 * DAY_MS, parts) as object), ...over }) as never;
+  const reasonOf = (
+    payments: ReturnType<typeof shortPayment>[],
+    isPick = false,
+  ) =>
+    run(weekly.slice(0, 3), {
+      bills: [{ id: 'rent', name: 'rent', since: 0, isUndated: false, isPick }],
+      payments: { rent: payments },
+    }).problems.map((problem) =>
+      problem.kind === 'noIncome'
+        ? [problem.reason, problem.shortBy]
+        : [problem.kind],
+    );
+  assert.deepEqual(
+    reasonOf([shortPayment({ parts: [{ day: day(today), cents: 250 }] }, 1)]),
+    [['short', 1_000]],
+    'pays that carry less than the payment needs are reported as short, by what the walk funds',
+  );
+  assert.deepEqual(
+    reasonOf([
+      shortPayment(
+        { parts: [{ day: day(today), cents: 250 }], fundedCents: 750 },
+        1,
+      ),
+    ]),
+    [],
+    'what confirmed days already set aside counts',
+  );
+  assert.deepEqual(
+    reasonOf([shortPayment({}, 0)], true),
+    [['noPick', 1_000]],
+    'a named pay that does not come before it is due says so',
+  );
+  assert.deepEqual(
+    reasonOf([shortPayment({}, 0)]),
+    [['noIncome', 1_000]],
+    'no pay at all keeps its reason',
+  );
+  assert.equal(
+    describeProblemShort({
+      kind: 'noIncome',
+      on: today + 40 * DAY_MS,
+      billId: 'rent',
+      name: 'Rent',
+      reason: 'short',
+      shortBy: 75_000,
+    }).startsWith('The plan leaves Rent $750'),
+    true,
+    'a short payment is worded as the plan leaving the bill short',
   );
   assert.equal(
     run(weekly.slice(0, 3), {
@@ -7085,9 +7607,34 @@ const version = (
   assert.ok(
     describeHoldsChange(
       look(day, [rentShort]),
-      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+      look(day, [
+        rentShort,
+        short(utc(2026, 11, 2), 'Car', 5000),
+        short(utc(2026, 11, 3), 'Gas', 100),
+      ]),
     )?.includes('1 more item needs a look'),
-    'the sentence counts the other problems',
+    'the sentence names the first problem the change causes and counts the other new ones',
+  );
+  assert.ok(
+    !describeHoldsChange(
+      look(day, [rentShort]),
+      look(day, [rentShort, short(utc(2026, 11, 2), 'Car', 5000)]),
+    )?.includes('Rent'),
+    'a problem the plan already had is never named as caused by the change',
+  );
+  const noted = describeHoldsBlocks(
+    look(day, [rentShort]),
+    look(day, [rentShort, short(utc(2026, 11, 7), 'Rent', 29600)]),
+    false,
+    {
+      [`k${utc(2026, 11, 7)}`]: 'Freelance payment is one-time and brings $120',
+    },
+  );
+  assert.ok(
+    noted[0]?.text.includes(
+      'Rent $296 short on Nov 7: Freelance payment is one-time and brings $120.',
+    ),
+    'a short pay that is one-time says why',
   );
   const text = describeHoldsChange(
     look(day, [short(utc(2026, 10, 30), 'Rent', 22000)]),
@@ -7104,6 +7651,254 @@ const version = (
       'would hold through',
     ),
     'a later last day reads as a move',
+  );
+}
+
+// A pay's share of a bill: the preview is the day screens' own drafts, one-time pays are left out of a named pay, and a Paid from edit keeps later versions.
+{
+  const today = utc(2026, 10, 23);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const never = { onDate: null, afterCount: null };
+  const item = (
+    id: string,
+    kind: PlanItemDoc['kind'],
+    parentId: string | null = null,
+  ): PlanItemDoc => ({
+    id,
+    kind,
+    parentId,
+    createdAt: 1,
+    endedAt: null,
+    archivedAt: null,
+    heldReleasedOn: null,
+  });
+  const version = (
+    id: string,
+    itemId: string,
+    kind: OpenVersion['kind'],
+    payload: unknown,
+    effectiveFrom = today,
+    effectiveUntil: number | null = null,
+  ) =>
+    ({
+      id,
+      itemId,
+      kind,
+      createdAt: 1,
+      effectiveFrom,
+      effectiveUntil,
+      changeId: 'c',
+      payload,
+    }) as unknown as OpenVersion;
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
+  const free = today + 5 * DAY_MS;
+  const dueOn = today + 30 * DAY_MS;
+  const rentPayload = (fundedBy: BillFundedBy, cents = 100_000) => ({
+    name: 'Rent',
+    emoji: null,
+    priority: 'must',
+    orderIndex: 1,
+    amount: exact(cents),
+    timing: {
+      kind: 'date',
+      schedule: { kind: 'once', anchor: dueOn, monthDays: [] },
+    },
+    ending: never,
+    fundedBy,
+    stanceOverride: null,
+    groupId: null,
+  });
+  const planItems = [
+    item('src', 'source'),
+    item('pay', 'payLine', 'src'),
+    item('free', 'payLine', 'src'),
+    item('rent', 'bill'),
+  ];
+  const versions = [
+    version('vsrc', 'src', 'source', { name: 'Acme', pairings: [] }),
+    version('vpay', 'pay', 'payLine', {
+      name: 'Paycheck',
+      schedule: weekly,
+      amount: exact(100_000),
+      ending: never,
+      stanceOverride: null,
+      pairings: [],
+    }),
+    version('vfree', 'free', 'payLine', {
+      name: 'Freelance',
+      schedule: { kind: 'once', anchor: free, monthDays: [] },
+      amount: exact(30_000),
+      ending: never,
+      stanceOverride: null,
+      pairings: [
+        {
+          targetItemId: 'rent',
+          amount: { kind: 'exact', cents: 30_000 },
+          topUpFromAnySource: false,
+        },
+      ],
+    }),
+    version('vrent', 'rent', 'bill', rentPayload({ kind: 'suggested' })),
+  ];
+  const inputs = {
+    items: planItems,
+    versions,
+    openDays: [] as never[],
+    stance: 'conservative' as const,
+    today,
+    heldByItem: {},
+    settledKey: '',
+    billProgress: {},
+  };
+  const coming = buildComingDays(planItems, versions, today);
+  const target = coming.find((day) => day.payLineId === 'pay' && day.on > free);
+  assert.ok(target, 'there is a repeating pay after the one-time one');
+  const shown = previewBillShareView(inputs, {
+    kind: 'dayBill',
+    day: target,
+    billId: 'rent',
+    cents: 0,
+  });
+  assert.ok(shown, 'a pay in the payment window has a preview');
+  const layered = [
+    {
+      id: target.dayKey,
+      payLineId: 'pay',
+      sourceId: 'src',
+      expectedOn: target.on,
+      arrivedOn: null,
+      confirmedAt: null,
+      status: 'draft',
+      doneLineIds: [],
+      override: {
+        pairings: null,
+        holdResolutions: {},
+        payloads: {},
+        billCents: { rent: 0 },
+      },
+    },
+  ] as never[];
+  const rentCents = (openDays: never[], dayKey: string) =>
+    computeDraftView(
+      planItems,
+      versions,
+      'conservative',
+      openDays,
+      dayKey,
+      today,
+      {},
+      '',
+      {},
+    )?.draft.lines.find((line) => line.itemId === 'rent')?.cents ?? 0;
+  assert.ok(
+    shown.rows.every(
+      (row) =>
+        row.beforeCents === rentCents([], row.dayKey) &&
+        row.afterCents === rentCents(layered, row.dayKey),
+    ),
+    'every preview row is the bill line the day screen draws, before and after',
+  );
+  assert.ok(
+    !shown.rows.some((row) => row.dayKey === toDayKey('free', free)),
+    'a pay that pays the bill first does not change and is not listed',
+  );
+  assert.equal(
+    rentCents(layered, target.dayKey),
+    0,
+    'the pinned pay puts in nothing',
+  );
+
+  const freeDay = toDayKey('free', free);
+  const pinnedFree = [
+    {
+      id: freeDay,
+      payLineId: 'free',
+      sourceId: 'src',
+      expectedOn: free,
+      arrivedOn: null,
+      confirmedAt: null,
+      status: 'draft',
+      doneLineIds: [],
+      override: {
+        pairings: null,
+        holdResolutions: {},
+        payloads: {},
+        billCents: { rent: 5_000 },
+      },
+    },
+  ] as never[];
+  assert.equal(
+    rentCents([], freeDay),
+    30_000,
+    'a pay that pays the bill first puts in what the pairing says',
+  );
+  assert.equal(
+    rentCents(pinnedFree, freeDay),
+    5_000,
+    "a pay's own figure for the bill replaces what it pays first",
+  );
+
+  // A named pay and the pay before it's due never use a one-time pay.
+  const winDays = coming.filter((day) => day.on <= dueOn);
+  const oneTime = new Set(['free']);
+  const lastOne = planBillPayments(
+    {
+      itemId: 'rent',
+      createdAt: 1,
+      priority: 'must',
+      orderIndex: 1,
+      amount: exact(100_000),
+      ending: never,
+      schedule: { kind: 'once', anchor: dueOn, monthDays: [] },
+      fundedBy: { kind: 'lastBefore' },
+      oneTimePayLineIds: oneTime,
+    },
+    winDays,
+    dueOn,
+  )[0];
+  assert.ok(
+    lastOne.parts.every((part) => part.day.dayKey.startsWith('pay_')),
+    'the pay before it is due is a repeating pay',
+  );
+
+  // A Paid from edit keeps a later version and its end.
+  const later = today + 40 * DAY_MS;
+  const stretchVersions = [
+    version(
+      'v1',
+      'rent',
+      'bill',
+      rentPayload({ kind: 'suggested' }),
+      today,
+      later,
+    ),
+    version(
+      'v2',
+      'rent',
+      'bill',
+      rentPayload({ kind: 'suggested' }, 130_000),
+      later,
+      later + 60 * DAY_MS,
+    ),
+  ] as never[];
+  const stretches = withFundedBy(
+    getVersionStretches(stretchVersions, 'rent', today) as never[],
+    { kind: 'lastBefore' },
+  ) as unknown as {
+    payload: { amount: { lowCents: number }; fundedBy: { kind: string } };
+    effectiveUntil: number | null;
+  }[];
+  assert.deepEqual(
+    stretches.map((stretch) => [
+      stretch.payload.amount.lowCents,
+      stretch.payload.fundedBy.kind,
+      stretch.effectiveUntil,
+    ]),
+    [
+      [100_000, 'lastBefore', later],
+      [130_000, 'lastBefore', later + 60 * DAY_MS],
+    ],
+    'Paid from changes in every stretch and the later raise and its end stay',
   );
 }
 
@@ -7726,6 +8521,7 @@ const version = (
       pairings: null,
       holdResolutions: { rent: 'leaveShort' },
       payloads: {},
+      billCents: {},
     },
   });
   const carry = planOverrideCarry([ownDay(utc(2026, 11, 20))], before, after);
@@ -9432,6 +10228,115 @@ console.log('runway engine: ok');
   );
 }
 
+// A figure pinned on one pay of a pay line that pays the bill first is counted against what its other pays still ask for.
+{
+  const rentOver = (
+    pairedCents: number,
+    fixed: Record<string, number>,
+    setAsideCents = 0,
+  ) => {
+    const pairing: Pairing = {
+      targetItemId: 'rent',
+      amount: { kind: 'exact', cents: pairedCents },
+      topUpFromAnySource: false,
+    };
+    const keys = ['pay_a', 'pay_b', 'pay_c', 'pay_d'];
+    const ons = [
+      utc(2026, 11, 20),
+      utc(2026, 11, 27),
+      utc(2026, 12, 4),
+      utc(2026, 12, 11),
+    ];
+    const draft = buildDraft({
+      days: keys.map((dayKey, index) => ({
+        dayKey,
+        sourceId: 'src',
+        on: ons[index],
+        amount: { lowCents: 300_000, highCents: 300_000 },
+        pairings: { day: null, payLine: [pairing], source: [] },
+      })),
+      plan: {
+        envelopes: [],
+        bills: [
+          {
+            itemId: 'rent',
+            createdAt: 1,
+            priority: 'must',
+            orderIndex: 1,
+            amount: { lowCents: 100_000, highCents: 100_000 },
+            stanceOverride: null,
+            schedule: {
+              kind: 'monthly',
+              anchor: utc(2026, 12, 15),
+              monthDays: [15],
+            },
+            ending: NEVER,
+            fundedBy: { kind: 'suggested' },
+            fixed,
+            progress: {
+              funded:
+                setAsideCents > 0
+                  ? [
+                      {
+                        dayKey: 'old',
+                        on: utc(2026, 11, 18),
+                        cents: setAsideCents,
+                      },
+                    ]
+                  : [],
+              paid: [],
+            },
+          },
+        ],
+        goals: [],
+        horizon: utc(2027, 6, 1),
+        incomeDays: keys.map((dayKey, index) => ({
+          dayKey,
+          on: ons[index],
+          moneyCents: 300_000,
+        })),
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+    return keys.map(
+      (key) =>
+        draft.lines.find((line) => line.lineId === `${key}:rent`)?.cents ?? 0,
+    );
+  };
+  const total = (parts: number[]) =>
+    parts.reduce((sum, cents) => sum + cents, 0);
+  assert.deepEqual(
+    rentOver(40_000, {}),
+    [40_000, 40_000, 20_000, 0],
+    'without a figure of its own the pairings fund the bill, once',
+  );
+  const over = rentOver(40_000, { pay_b: 5_000 });
+  assert.equal(over[1], 5_000, 'the pinned pay puts in its figure');
+  assert.equal(
+    total(over),
+    100_000,
+    'a pin counts against what the other pairing pays still ask for: the bill is not over-funded',
+  );
+  const under = rentOver(10_000, { pay_b: 5_000 });
+  assert.equal(under[1], 5_000);
+  assert.equal(
+    total(under),
+    100_000,
+    'the rest after the pairings goes to the next pay even when that pay also pairs: the bill is not under-funded',
+  );
+  assert.ok(
+    under[2] > 10_000,
+    'the carrier pay keeps its pairing and adds the rest',
+  );
+  const partlySetAside = rentOver(10_000, { pay_b: 5_000 }, 20_000);
+  assert.equal(
+    total(partlySetAside),
+    80_000,
+    'what a confirmed day already set aside is not asked for again',
+  );
+}
+
 // Round 7, package G9: a correction that leaves its day short is covered or cut like Confirm.
 {
   const start = 10 * DAY_MS;
@@ -10682,6 +11587,31 @@ console.log('runway engine: ok');
       foreignCurrency: 'EUR',
     }),
     'Read the store, the day and 9 items. This receipt is in EUR, so type the amount in dollars.',
+  );
+}
+
+{
+  // A bill set up years ago still offers a pay to pick: payments are counted from today, not from its first due date.
+  const today = utc(2026, 11, 2);
+  const pays = [5, 20].flatMap((day) =>
+    [11, 12].map((month) => ({
+      dayKey: `pay_${month}_${day}`,
+      on: utc(2026, month, day),
+    })),
+  );
+  const oldRent: Schedule = {
+    kind: 'monthly',
+    anchor: utc(2021, 12, 22),
+    monthDays: [22],
+  };
+  assert.equal(hasPaysToChoose(pays, oldRent, today), true);
+  assert.equal(
+    hasPaysToChoose(
+      pays.filter((pay) => pay.dayKey.endsWith('_5')),
+      oldRent,
+      today,
+    ),
+    false,
   );
 }
 

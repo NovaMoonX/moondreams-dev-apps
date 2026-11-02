@@ -332,7 +332,12 @@ export const BILL_FUNDING_LABELS: Record<
 > = { suggested: 'Spread over income days', chosen: 'Days I choose' };
 
 /** How a draft line for a bill was decided, beside the envelope cadences. */
-export const BILL_DRAFT_CADENCES = ['billSuggested', 'billChosen'] as const;
+export const BILL_DRAFT_CADENCES = [
+  'billSuggested',
+  'billChosen',
+  'billLastBefore',
+  'billPay',
+] as const;
 export const MAX_CHOSEN_DAYS = 60;
 export const MAX_EMOJI_LENGTH = 8;
 
@@ -500,6 +505,8 @@ export const PREVIEW_SHOWN = 3;
 export const MAX_CHANGE_DAYS_AHEAD = 3600;
 
 export const CHANGE_WORDS = {
+  savedButStale:
+    'Saved, but the changes you made for one pay could not be cleared. They are still on those pays.',
   fromHeading: 'From when',
   fromNow: 'From now on',
   fromDate: 'From a date ahead',
@@ -615,6 +622,8 @@ export const DRAFT_CADENCE_WORDS: Record<
   pairing: 'First from this pay',
   billSuggested: 'Spread over your income days',
   billChosen: 'A day you chose',
+  billLastBefore: "Comes from the pay before it's due",
+  billPay: 'Comes from the pay you picked',
   everyIncomeDay: 'Every income day',
   every2: 'Every other income day',
   every3: 'Every third income day',
@@ -700,6 +709,159 @@ export const BILL_WORDS = {
   needsDueDate: 'Needs a due date',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
+} as const;
+
+/** A repeating bill's "Paid from": which of the plan's pays carries it. */
+export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
+
+export const PAID_FROM_WORDS = {
+  title: 'Which pay covers it?',
+  title2: 'Paid from',
+  spreadRow: 'Spread across your pays',
+  chosenRow: 'Days you chose',
+  spreadMeaning: 'Every pay before it is due puts in a share.',
+  lastBeforeMeaning: 'Only the last pay before it is due puts it in.',
+  payMeaning: 'Only the pay you pick puts it in.',
+  replacesPins: (dates: readonly string[]) =>
+    dates.length === 1
+      ? `This replaces your change for the ${dates[0]} pay.`
+      : dates.length <= 3
+        ? `This replaces your changes for the ${dates.slice(0, -1).join(', ')} and ${dates[dates.length - 1]} pays.`
+        : `This replaces your changes for the ${dates.slice(0, 3).join(', ')} and ${dates.length - 3} more pays.`,
+  summaryLabel: 'Paid from',
+  label: 'Paid from',
+  spread: 'Spread across my pays',
+  lastBefore: "The pay right before it's due",
+  lastBeforeLower: "the pay right before it's due",
+  pay: 'A pay I pick',
+  whichPay: 'Which pay',
+  onlyRepeating:
+    'Only repeating pays can be picked. A one-time pay can still top it up from its own day.',
+  seeChanges: 'See what this changes below',
+  seePays: 'Pick a pay below.',
+  pickPay: 'Pick a pay.',
+  gone: 'A pay that is no longer in the plan',
+  /** The change log's phrase for the choice. */
+  logSpread: 'spread across your pays',
+  logLastBefore: "the pay right before it's due",
+  noticeNoPay: (pay: string, name: string, dueOn: string) =>
+    `${pay} doesn't come before ${name} is due ${dueOn}`,
+  noticeNoPayAtAll: (name: string, dueOn: string) =>
+    `No pay comes before ${name} is due ${dueOn}`,
+  noticeShort: (name: string, short: string, on: string) =>
+    `${name} is ${short} short on ${on}`,
+  keepSpread: 'Spread across my pays',
+  pickAnother: 'Pick another pay',
+  changed: (name: string) => `${name} is now spread across your pays`,
+  paidFromBack: (name: string, was: string) =>
+    `${name}: Paid from is back to ${was}.`,
+  undoFailed: 'That could not be undone.',
+  pinsLeft: (name: string) =>
+    `${name} is now spread, but some per-pay changes are still on.`,
+  undoPartial: (name: string) =>
+    `${name} is back to its old Paid from, but the per-pay changes could not be put back.`,
+  undo: 'Undo',
+  saveFailed: 'This did not save. Nothing was changed.',
+} as const;
+
+/** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */
+export const PAY_SHARE_WORDS = {
+  action: 'Change what this pay puts in',
+  title: (name: string) => `How much should this pay put toward ${name}?`,
+  amount: 'Amount',
+  changes: 'What changes',
+  payRow: (name: string, date: string) => `${name}, ${date} pay`,
+  short: (name: string, short: string, dueOn: string) =>
+    `${name} would be ${short} short on ${dueOn}`,
+  capped: (name: string, needs: string, set: string, max: string) =>
+    set === ''
+      ? `${name} needs ${needs}, so ${max} is the most this pay can put in.`
+      : `${name} needs ${needs} and ${set} is already set aside, so ${max} is the most this pay can put in.`,
+  needsAmount: 'Enter an amount.',
+  unchanged: 'Change the amount to save it.',
+  save: 'Save for this pay',
+  saveFailed: 'This did not save. Nothing was changed.',
+  changedFor: 'Changed for this pay',
+  backToPlan: "Back to the plan's amount",
+  backToPlanSub: 'This pay goes back to its share of the plan',
+  keepTitle: 'Keep it this way for every paycheck?',
+  savedStatus: 'Saved for this pay',
+  tryAgain: 'Try again',
+  tryAgainBody: 'Clears the per-pay changes that are still on.',
+  undoBody: 'Takes this whole change back.',
+  showMore: (count: number) => `Show ${count} more`,
+  andMore: (count: number) => `and ${count} more`,
+  keepYes: (pay: string) => `Yes, always from ${pay}`,
+  keepYesBody: (name: string, pay: string, total: string, each: string) =>
+    `From now on ${name} comes only from ${pay} (${total} ${each}).`,
+  keepJustOnce: 'Just this time',
+  keepJustOnceBody: (date: string, later: string) =>
+    `Only ${date} changes; ${later}.`,
+  laterSpread: 'other months keep spreading it',
+  laterSame: 'other months stay as they are',
+  eachMonth: 'each month',
+  eachTime: 'each time',
+  actionSub: (name: string, total: string) =>
+    `${name} stays ${total}; only this pay changes`,
+  leftOutDetail: (pay: string) => `Paid from ${pay}`,
+  restSetAside: (cents: string, due: string) =>
+    `${cents} · already set aside · due ${due}`,
+  completesIt: (cents: string, due: string) =>
+    `${cents} · this pay completes it · due ${due}`,
+  undoPins: 'Put them back',
+  theDatePay: (date: string) => `the ${date} pay`,
+  leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
+  leftOutHeading: 'Paid from another pay',
+  summary: (name: string, cents: string, date: string) =>
+    `${name}: this pay puts in ${cents}, for ${date} only.`,
+  savedToast: (name: string) => `Changed what this pay puts toward ${name}`,
+  ruleToast: (name: string, pay: string) => `${name} now comes from ${pay}`,
+  undo: 'Undo',
+  undoFailed: 'That could not be undone. Nothing was changed.',
+  overPay: (money: string, over: string) =>
+    `This pay has ${money} left for it, so ${over} would stay short.`,
+  savedTitle: 'Saved for this pay',
+  withheld: (pay: string, name: string) =>
+    `Only this pay changed. To always leave ${pay} out, set ${name}'s Paid from.`,
+  done: 'Done',
+  setPaidFrom: 'Set Paid from',
+  pinsClearedToast: (name: string, count: number) =>
+    count === 1
+      ? `${name}: 1 per-pay change was cleared`
+      : `${name}: ${count} per-pay changes were cleared`,
+  pinsCleared: (name: string, dates: string) =>
+    `${name}: per-pay changes on ${dates} cleared.`,
+  pinsNotBack: (name: string, count: number) =>
+    `${name}: ${count} per-pay ${count === 1 ? 'change was' : 'changes were'} changed again since, so ${count === 1 ? 'it was' : 'they were'} left as is`,
+  oneTimePay: (pay: string, name: string) =>
+    `${pay} is one-time and ${name} isn't paid from it. Pick a repeating pay, or change Paid from.`,
+  whyNothing: 'Why this pay puts nothing in',
+  leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
+  leftOutBody: 'This pay puts nothing toward it.',
+  firstOnlyTitle: (name: string) => `${name} comes out of this pay first`,
+  firstOnlyBody: (from: string) =>
+    `Its Paid from is ${from}, so what this pay puts in is set by Pay these first, not here.`,
+  hiddenEffects: 'Other pays and items may move',
+  whyOthers:
+    'Other items move because this pay has less or more left for them.',
+  overCapHidden: (name: string) =>
+    `That is more than ${name} still needs. Show amounts to see how much.`,
+  keepEffect: 'If you keep it every paycheck',
+  pinsBack: (name: string, dates: string) =>
+    `${name}: per-pay changes on ${dates} put back.`,
+  pinnedRow: (name: string, date: string) => `${name}, ${date} pay, set by you`,
+  resetSummary: (name: string, date: string) =>
+    `${name}: this pay goes back to the plan's amount, for ${date} only.`,
+  restoreSummary: (name: string, cents: string, date: string) =>
+    `${name}: this pay puts in ${cents} again, for ${date} only.`,
+  resetToast: (name: string) =>
+    `${name} is back to the plan's amount for this pay`,
+  paidFromBack: (name: string, was: string) =>
+    `${name}: Paid from is back to ${was}.`,
+  keepPartial: (name: string, pay: string) =>
+    `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
+  undoPartial: (name: string) =>
+    `${name} is back to its old Paid from, but this pay's figure could not be restored.`,
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
@@ -1333,6 +1495,8 @@ export const ITEM_SHEET_WORDS = {
   fundsTitle: (source: string) => `Paid first from ${source}`,
   fundsNotice:
     'Everything in your plan is paid from your income. Items here come out of this pay first.',
+  fundsBillNote:
+    'For a bill, this is what this pay puts in, whatever its Paid from says.',
   history: 'History',
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
@@ -1688,6 +1852,8 @@ export const HOW_OFTEN_WORDS = {
 export const FIX_WORDS = {
   notPaid: (name: string) => `${name} is not marked paid`,
   noIncome: (name: string) => `${name} has no income before it is due`,
+  noPick: (name: string) =>
+    `${name} comes from a pay that is not before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,
   dueOn: (date: string) => `Due ${date}`,
   runsShortOn: (date: string) => `On ${date}`,

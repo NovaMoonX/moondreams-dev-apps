@@ -1,8 +1,13 @@
+import { useState } from 'react';
+
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
-import ItemSheet from '@apps/runway/components/ItemSheet';
+import ItemSheet, {
+  type ItemSheetProps,
+} from '@apps/runway/components/ItemSheet';
+import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   BILL_WORDS,
   GROUP_WORDS,
@@ -13,6 +18,7 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
 import { describeBillRepeat, isUndatedBill } from '@apps/runway/utils/billText';
+import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
 interface BillRowProps {
@@ -37,6 +43,8 @@ interface BillSheetProps {
   planStance: Stance;
   today: number;
   startsAtStep?: string;
+  /** An action that opens first for a change that belongs to an income day. */
+  dayAction?: ItemSheetProps['dayAction'];
   onClose: () => void;
 }
 
@@ -103,8 +111,11 @@ export function BillSheet({
   planStance,
   today,
   startsAtStep,
+  dayAction,
   onClose,
 }: BillSheetProps) {
+  const [pickedStep, setPickedStep] = useState<string | null>(null);
+  const paidFromAction = usePaidFromAction(billId, today);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
@@ -145,7 +156,19 @@ export function BillSheet({
           ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
           : { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
       }
-      startsAtStep={startsAtStep}
+      maxAction={paidFromAction}
+      dayAction={dayAction}
+      key={pickedStep ?? 'sheet'}
+      startsAtStep={pickedStep ?? startsAtStep}
+      extra={
+        <BillPaidFromNotice
+          billId={billId}
+          bill={bill}
+          payment={payment}
+          today={today}
+          onPickAnother={() => setPickedStep('funding')}
+        />
+      }
       payment={payment}
       onClose={onClose}
     />

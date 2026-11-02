@@ -42,6 +42,7 @@ async function openDay(
       pairings: opened?.pairings ?? null,
       holdResolutions: opened?.holdResolutions ?? {},
       payloads: opened?.payloads ?? {},
+      billCents: opened?.billCents ?? {},
     },
   };
   return result;

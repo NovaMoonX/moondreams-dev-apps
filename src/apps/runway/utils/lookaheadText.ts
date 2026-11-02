@@ -1,5 +1,5 @@
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import { FIX_WORDS } from '@apps/runway/constants';
 import {
   isSameLookahead,
@@ -9,19 +9,6 @@ import {
 } from '@apps/runway/engine/lookahead';
 
 export { isSameLookahead, sortProblems };
-
-/** One problem in a sentence: what stops the plan, on which day, never as missing money. */
-export function describeProblem(problem: LookaheadProblem) {
-  const name = problem.name === '' ? 'A bill' : problem.name;
-  if (problem.kind === 'overdue') {
-    return `${name} was due ${formatDateUTC(problem.on)} and is not marked paid.`;
-  }
-  if (problem.kind === 'noIncome') {
-    return `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
-  }
-  const result = `On ${formatDateUTC(problem.on)}, the plan leaves ${name} ${formatCents(problem.shortBy)} short.`;
-  return result;
-}
 
 /** The headline: how far the plan holds, or null when there is nothing to hold yet. */
 export function describeHoldsThrough(lookahead: Lookahead) {
@@ -131,10 +118,25 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
   const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {
     const problem = group.problem;
+    if (problem.kind === 'noIncome' && problem.reason === 'short') {
+      return isHidden
+        ? {
+            before: `The plan leaves ${getName(problem)} short on ${on}`,
+            figure: null,
+            after: '',
+          }
+        : {
+            before: `The plan leaves ${getName(problem)} `,
+            figure: formatCentsShort(problem.shortBy),
+            after: ` short on ${on}`,
+          };
+    }
     const before =
       problem.kind === 'overdue'
         ? `${getName(problem)} was due ${on}, not marked paid`
-        : `${getName(problem)} on ${on} has no income before it`;
+        : problem.kind === 'noIncome' && problem.reason === 'noPick'
+          ? `${getName(problem)} on ${on} comes from a pay that is not before it`
+          : `${getName(problem)} on ${on} has no income before it`;
     return { before, figure: null, after: '' };
   }
   if (group.shorts.length > 1) {
@@ -164,6 +166,8 @@ export interface HoldsBlock {
   text: string;
   /** The amount inside `text`, so it can be drawn in the warning colour. */
   figure: string | null;
+  /** The text says why a one-time pay leaves the bill short. */
+  hasNote?: boolean;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -171,6 +175,7 @@ function describeChangeProblem(
   problem: LookaheadProblem,
   more: number,
   isHidden: boolean,
+  note: string | null,
 ) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
@@ -184,9 +189,9 @@ function describeChangeProblem(
       figure: null,
     };
   }
-  if (problem.kind === 'noIncome') {
+  if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
-      text: `With this change, ${name} on ${on} has no income before it is due.${tail}`,
+      text: `With this change, ${name} on ${on} ${problem.reason === 'noPick' ? 'is set to come from a pay that is not before it is due' : 'has no income before it is due'}.${tail}`,
       figure: null,
     };
   }
@@ -197,17 +202,26 @@ function describeChangeProblem(
     };
   }
   const figure = formatCentsShort(problem.shortBy);
+  const why = note === null || problem.kind !== 'short' ? '' : `: ${note}`;
   return {
-    text: `With this change, the plan leaves ${name} ${figure} short on ${on}.${tail}`,
+    text: `With this change, the plan leaves ${name} ${figure} short on ${on}${why}.${tail}`,
     figure,
+    hasNote: why !== '',
   };
 }
+
+const getProblemKey = (problem: LookaheadProblem) =>
+  problem.kind === 'short'
+    ? `short:${problem.dayKey}:${problem.itemId}`
+    : `${problem.kind}:${problem.billId}:${problem.on}`;
 
 /** What a change does to how far the plan holds, as separate blocks: the plan holding is one idea, a shortfall another. */
 export function describeHoldsBlocks(
   before: Lookahead,
   after: Lookahead,
   isHidden = false,
+  /** Why a pay is short, by its day key ("Freelance payment is one-time and brings $120"). */
+  notes: Readonly<Record<string, string>> = {},
 ): HoldsBlock[] {
   const holds = (through: number): HoldsBlock => ({
     tone: 'success',
@@ -224,17 +238,26 @@ export function describeHoldsBlocks(
   if (isSameLookahead(before, after)) {
     return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
   }
-  const [first] = sortProblems(after.problems);
+  const known = new Set(before.problems.map(getProblemKey));
+  const created = sortProblems(
+    after.problems.filter((entry) => !known.has(getProblemKey(entry))),
+  );
+  const [first] = created;
   const problem: HoldsBlock[] = first
     ? [
         {
           tone: 'warning',
-          ...describeChangeProblem(first, after.problems.length - 1, isHidden),
+          ...describeChangeProblem(
+            first,
+            created.length - 1,
+            isHidden,
+            first.kind === 'short' ? (notes[first.dayKey] ?? null) : null,
+          ),
         },
       ]
     : [];
-  if (after.holdsThrough === null || problem.length > 0) return problem;
-  return [holds(after.holdsThrough)];
+  if (problem.length > 0 || after.problems.length > 0) return problem;
+  return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
 }
 
 /** One problem in a few words, in the plan's terms: "The plan leaves Rent $30 short on Nov 1". */
@@ -243,8 +266,10 @@ export function describeProblemShort(problem: LookaheadProblem) {
   const on = formatDateShortUTC(problem.on).replace(/ /g, '\u00a0');
   if (problem.kind === 'overdue')
     return `${name} was due ${on}, not marked paid`;
-  if (problem.kind === 'noIncome')
+  if (problem.kind === 'noIncome' && problem.reason === 'noIncome')
     return `${name} on ${on} has no income before it`;
+  if (problem.kind === 'noIncome' && problem.reason === 'noPick')
+    return `${name} on ${on} comes from a pay that is not before it`;
   const result = `The plan leaves ${name} ${formatCentsShort(problem.shortBy)} short on ${on}`;
   return result;
 }
@@ -256,8 +281,14 @@ export function describeProblemRow(problem: LookaheadProblem) {
   if (problem.kind === 'overdue') {
     return { title: FIX_WORDS.notPaid(name), detail: FIX_WORDS.dueOn(on) };
   }
-  if (problem.kind === 'noIncome') {
-    return { title: FIX_WORDS.noIncome(name), detail: FIX_WORDS.dueOn(on) };
+  if (problem.kind === 'noIncome' && problem.reason !== 'short') {
+    return {
+      title:
+        problem.reason === 'noPick'
+          ? FIX_WORDS.noPick(name)
+          : FIX_WORDS.noIncome(name),
+      detail: FIX_WORDS.dueOn(on),
+    };
   }
   return {
     title: FIX_WORDS.short(name, formatCentsShort(problem.shortBy)),

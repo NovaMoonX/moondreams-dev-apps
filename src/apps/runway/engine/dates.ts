@@ -44,6 +44,12 @@ export function toDayKey(payLineId: string, date: number): string {
   return result;
 }
 
+/** The pay line a day key names (ids hold no underscore after the stamp, so the last one splits it). */
+export function payLineIdOfDayKey(dayKey: string): string {
+  const result = dayKey.slice(0, Math.max(0, dayKey.lastIndexOf('_')));
+  return result;
+}
+
 /** The only reader of the viewer's local day: today as UTC midnight. */
 export function todayAsUtcDate(now: number = Date.now()): number {
   const local = new Date(now);

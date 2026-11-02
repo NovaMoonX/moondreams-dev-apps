@@ -56,7 +56,8 @@ export function matchMovedDates(
 export const hasOwnChoices = (override: DayOverrideSealed) =>
   override.pairings !== null ||
   Object.keys(override.holdResolutions).length > 0 ||
-  Object.keys(override.payloads).length > 0;
+  Object.keys(override.payloads).length > 0 ||
+  Object.keys(override.billCents ?? {}).length > 0;
 
 export interface OverrideCarry {
   /** Days whose own choices move to the date their pay line now falls on. */

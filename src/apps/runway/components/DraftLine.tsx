@@ -8,7 +8,10 @@ import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
-import ItemSheet from '@apps/runway/components/ItemSheet';
+import BillShareView from '@apps/runway/components/BillShareView';
+import ItemSheet, {
+  type ItemSheetProps,
+} from '@apps/runway/components/ItemSheet';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHECKLIST_R3_WORDS,
@@ -16,8 +19,11 @@ import {
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
   NEEDS_LOOK_WORDS,
+  PAY_SHARE_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
@@ -45,6 +51,8 @@ interface DraftLineProps {
   canChange?: boolean;
   /** This income day takes its own version of the line. */
   isDayOnly?: boolean;
+  /** Takes back a bill's changed share for this day; absent where the day cannot change. */
+  onResetShare?: (line: DraftLineData) => void;
   /** The shortfall is one of the plan's things to fix, so it wears the warning; any other short line stays neutral. */
   isWarning?: boolean;
   /** Set where the day opens the line's sheet itself (a door from the footer). */
@@ -66,6 +74,7 @@ function DraftLine({
   isChoosing = false,
   canChange = false,
   isDayOnly = false,
+  onResetShare,
   isWarning = false,
   isOpen: isOpenProp,
   onOpenChange,
@@ -119,9 +128,17 @@ function DraftLine({
     return null;
   };
   const pairingShort = getPairingShort();
-  const billShareShort = line.bill
-    ? `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatDateShortUTC(line.bill.dueOn)}`
-    : null;
+  const getBillShareShort = () => {
+    if (!line.bill) return null;
+    const { setAsideCents = 0, totalCents, dueOn } = line.bill;
+    const due = formatDateShortUTC(dueOn);
+    if (setAsideCents >= totalCents)
+      return PAY_SHARE_WORDS.restSetAside(formatCentsShort(line.cents), due);
+    if (setAsideCents > 0 && line.cents + setAsideCents >= totalCents)
+      return PAY_SHARE_WORDS.completesIt(formatCentsShort(line.cents), due);
+    return `${formatCentsShort(line.cents)} of ${formatCentsShort(totalCents)} · due ${due}`;
+  };
+  const billShareShort = getBillShareShort();
   const getDetail = () => {
     if (isHidden && (state === 'held' || shortText))
       return { text: NEEDS_LOOK_WORDS.short, isStrong: false };
@@ -134,6 +151,8 @@ function DraftLine({
         isStrong: true,
       };
     if (shortText) return { text: shortText, isStrong: isWarning };
+    if (isDayOnly && line.bill)
+      return { text: PAY_SHARE_WORDS.changedFor, isStrong: false };
     return { text: billShareShort ?? reason, isStrong: false };
   };
   const detail = getDetail();
@@ -149,7 +168,8 @@ function DraftLine({
           line.bill.ranged.isOwnStance,
         )
       : null,
-    isDayOnly ? DRAFT_WORDS.dayOnly : null,
+    isDayOnly && line.bill ? PAY_SHARE_WORDS.changedFor : null,
+    isDayOnly && !line.bill ? DRAFT_WORDS.dayOnly : null,
     tieNote,
   ].filter((text): text is string => Boolean(text));
   const canChoose = Boolean(onChoose);
@@ -187,8 +207,10 @@ function DraftLine({
         : [];
   const canUndo =
     Boolean(onUndoChoice) && (state === 'toppedUp' || state === 'leftShort');
+  const canResetShare =
+    Boolean(onResetShare) && isDayOnly && line.bill !== null;
   const extra =
-    choices.length > 0 || canUndo ? (
+    choices.length > 0 || canUndo || canResetShare ? (
       <ActionGroup caption={ITEM_SHEET_WORDS.lineHeading}>
         {choices.map(({ choice, label, subtitle, icon }) => (
           <ActionRow
@@ -201,6 +223,16 @@ function DraftLine({
             onClick={() => onChoose?.(line, choice)}
           />
         ))}
+        {canResetShare && (
+          <ActionRow
+            isGrouped
+            icon={<Undo2 />}
+            label={PAY_SHARE_WORDS.backToPlan}
+            subtitle={PAY_SHARE_WORDS.backToPlanSub}
+            isDisabled={isChoosing}
+            onClick={() => onResetShare?.(line)}
+          />
+        )}
         {canUndo && (
           <ActionRow
             isGrouped
@@ -214,6 +246,36 @@ function DraftLine({
       </ActionGroup>
     ) : null;
 
+  const sheetProps: ItemSheetProps | null =
+    kind === null
+      ? null
+      : {
+          itemId: line.itemId,
+          kind,
+          today,
+          figureLabel: ITEM_SHEET_WORDS.fromThisDay,
+          figure: amount,
+          fact: `${PRIORITY_LABELS[line.tier]} · ${isHidden && (pairingShort || shortText) ? NEEDS_LOOK_WORDS.short : (pairingShort ?? billShareShort ?? reason)}`,
+          help:
+            helpLines.length > 0 ? (
+              <span className='block space-y-2'>
+                {helpLines.map((text) => (
+                  <span key={text} className='block'>
+                    <MaskedText>{text}</MaskedText>
+                  </span>
+                ))}
+              </span>
+            ) : undefined,
+          presetDayKey: dayKey,
+          quickChange:
+            kind === 'bill' || kind === 'envelope' || kind === 'goal'
+              ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
+              : undefined,
+          canChange,
+          extra,
+          onClose: () => setIsOpen(false),
+        };
+
   return (
     <>
       <ItemRow
@@ -226,37 +288,60 @@ function DraftLine({
         ariaLabel={`${name}: ${PRIORITY_LABELS[line.tier]}, ${amount}. ${detail.text}`}
         onOpen={kind === null ? undefined : () => setIsOpen(true)}
       />
-      {isOpen && kind !== null && (
-        <ItemSheet
-          itemId={line.itemId}
-          kind={kind}
-          today={today}
-          figureLabel={ITEM_SHEET_WORDS.fromThisDay}
-          figure={amount}
-          fact={`${PRIORITY_LABELS[line.tier]} · ${isHidden && (pairingShort || shortText) ? NEEDS_LOOK_WORDS.short : (pairingShort ?? billShareShort ?? reason)}`}
-          help={
-            helpLines.length > 0 ? (
-              <span className='block space-y-2'>
-                {helpLines.map((text) => (
-                  <span key={text} className='block'>
-                    <MaskedText>{text}</MaskedText>
-                  </span>
-                ))}
-              </span>
-            ) : undefined
-          }
-          presetDayKey={dayKey}
-          quickChange={
-            kind === 'bill' || kind === 'envelope' || kind === 'goal'
-              ? { label: ITEM_SHEET_R2_WORDS.changeAmount, step: 'amount' }
-              : undefined
-          }
-          canChange={canChange}
-          extra={extra}
-          onClose={() => setIsOpen(false)}
+      {isOpen && sheetProps !== null && kind === 'bill' && (
+        <BillLineSheet
+          line={line}
+          name={name}
+          dayKey={dayKey}
+          sheetProps={sheetProps}
         />
       )}
+      {isOpen && sheetProps !== null && kind !== 'bill' && (
+        <ItemSheet {...sheetProps} />
+      )}
     </>
+  );
+}
+
+interface BillLineSheetProps {
+  line: DraftLineData;
+  name: string;
+  dayKey: string;
+  sheetProps: ItemSheetProps;
+}
+
+/** A bill's sheet from an income day: its Paid from row, and a change to what this one pay puts in (not on a pay that pays it first, where the figure comes from the pairing). */
+function BillLineSheet({ line, name, dayKey, sheetProps }: BillLineSheetProps) {
+  const paidFromAction = usePaidFromAction(line.itemId, sheetProps.today);
+  const mask = useMaskedText();
+  return (
+    <ItemSheet
+      {...sheetProps}
+      maxAction={paidFromAction}
+      dayAction={
+        line.bill
+          ? {
+              label: PAY_SHARE_WORDS.action,
+              subtitle: mask(
+                PAY_SHARE_WORDS.actionSub(
+                  name,
+                  formatCents(line.bill.totalCents),
+                ),
+              ),
+              renderView: ({ onBack, onClose, openChange }) => (
+                <BillShareView
+                  billId={line.itemId}
+                  dayKey={dayKey}
+                  currentCents={line.demandCents}
+                  onBack={onBack}
+                  onClose={onClose}
+                  onOpenPaidFrom={() => openChange('funding')}
+                />
+              ),
+            }
+          : undefined
+      }
+    />
   );
 }
 

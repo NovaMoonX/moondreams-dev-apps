@@ -92,6 +92,7 @@ export function computeLookahead(
       id: item.id,
       name: version.payload.name,
       isUndated: version.payload.timing.schedule.anchor === null,
+      isPick: version.payload.fundedBy.kind === 'pay',
       since: Math.max(
         startOfUtcDay(item.createdAt),
         inputs.startDate ?? 0,
