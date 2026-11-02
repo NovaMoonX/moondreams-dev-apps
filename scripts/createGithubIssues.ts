@@ -37,10 +37,28 @@ interface RoadmapIssue {
   body: string;
 }
 
+interface SelectOption {
+  id: string;
+  name: string;
+  color: string;
+  description: string;
+}
+
+type FieldKind = 'single' | 'multi' | 'other';
+
 interface ProjectField {
   id: string;
   name: string;
-  options?: { id: string; name: string }[];
+  kind: FieldKind;
+  options: SelectOption[] | null;
+}
+
+interface RawField {
+  __typename: string;
+  id?: string;
+  name?: string;
+  options?: SelectOption[];
+  multiSelectOptions?: SelectOption[];
 }
 
 const isDryRun =
@@ -103,49 +121,92 @@ const ghJson = <T>(args: string[]): T => {
 
 // Board calls are plain GraphQL: `gh project` can fail to resolve a user-owned
 // board with a token that has the project scope ("unknown owner type").
-const boardQuery = <T>(query: string, variables: Record<string, string | number>) => {
-  const variableArgs = Object.entries(variables).flatMap(([name, value]) =>
-    typeof value === 'number' ? ['-F', `${name}=${value}`] : ['-f', `${name}=${value}`],
-  );
-  const result = ghJson<{ data: T }>([
-    'api',
-    'graphql',
-    '-f',
-    `query=${query}`,
-    ...variableArgs,
-  ]).data;
+const boardQuery = <T>(query: string, variables: Record<string, unknown>) => {
+  const args = ['api', 'graphql', '--input', '-'];
+  const output = execFileSync('gh', args, {
+    input: JSON.stringify({ query, variables }),
+    encoding: 'utf8',
+    stdio: ['pipe', 'pipe', 'inherit'],
+    env: ghEnv(args),
+  });
+  const result = (JSON.parse(output) as { data: T }).data;
+  return result;
+};
+
+const OPTION_FIELDS = 'id name color description';
+const FIELD_SELECTION = `__typename ... on ProjectV2FieldCommon { id name } ... on ProjectV2SingleSelectField { options { ${OPTION_FIELDS} } } ... on ProjectV2MultiSelectField { multiSelectOptions { ${OPTION_FIELDS} } }`;
+
+const toField = (node: RawField): ProjectField => {
+  const kinds: Record<string, FieldKind> = {
+    ProjectV2SingleSelectField: 'single',
+    ProjectV2MultiSelectField: 'multi',
+  };
+  const result = {
+    id: node.id ?? '',
+    name: node.name ?? '',
+    kind: kinds[node.__typename] ?? 'other',
+    options: node.options ?? node.multiSelectOptions ?? null,
+  };
   return result;
 };
 
 const readProject = (login: string) => {
-  const query = `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) { id fields(first: 50) { nodes { __typename ... on ProjectV2FieldCommon { id name } ... on ProjectV2SingleSelectField { options { id name } } } } } } }`;
+  const query = `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) { id fields(first: 50) { nodes { ${FIELD_SELECTION} } } } } }`;
   const project =
     boardQuery<{
       user: {
-        projectV2: { id: string; fields: { nodes: ProjectField[] } } | null;
+        projectV2: { id: string; fields: { nodes: RawField[] } } | null;
       };
     }>(query, { login, number: PROJECT_NUMBER }).user.projectV2 ??
     fail(`${login} has no project ${PROJECT_NUMBER}.`);
-  const result = { id: project.id, fields: project.fields.nodes };
+  const result = { id: project.id, fields: project.fields.nodes.map(toField) };
   return result;
 };
 
-const setOption = (
+// A single-select field holds one option and a multi-select field a list.
+const setOptions = (
   projectId: string,
   itemId: string,
-  fieldId: string,
-  optionId: string,
+  field: { id: string; kind: FieldKind },
+  optionIds: string[],
 ) =>
   boardQuery(
-    `mutation($project: ID!, $item: ID!, $field: ID!, $option: String!) { updateProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field, value: { singleSelectOptionId: $option } }) { projectV2Item { id } } }`,
-    { project: projectId, item: itemId, field: fieldId, option: optionId },
+    `mutation($project: ID!, $item: ID!, $field: ID!, $value: ProjectV2FieldValue!) { updateProjectV2ItemFieldValue(input: { projectId: $project, itemId: $item, fieldId: $field, value: $value }) { projectV2Item { id } } }`,
+    {
+      project: projectId,
+      item: itemId,
+      field: field.id,
+      value:
+        field.kind === 'multi'
+          ? { multiSelectOptionIds: optionIds }
+          : { singleSelectOptionId: optionIds[0] },
+    },
   );
 
-const addToProject = (projectId: string, contentId: string) =>
-  boardQuery<{ addProjectV2ItemById: { item: { id: string } } }>(
-    `mutation($project: ID!, $content: ID!) { addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id } } }`,
+const VALUE_SELECTION = `... on ProjectV2ItemFieldSingleSelectValue { optionId } ... on ProjectV2ItemFieldMultiSelectValue { options { id } }`;
+
+const toOptionIds = (
+  value: { optionId?: string; options?: { id: string }[] } | null,
+) => {
+  const result = value?.options?.map((option) => option.id) ?? (value?.optionId ? [value.optionId] : []);
+  return result;
+};
+
+const addToProject = (projectId: string, contentId: string) => {
+  const item = boardQuery<{
+    addProjectV2ItemById: {
+      item: {
+        id: string;
+        apps: { optionId?: string; options?: { id: string }[] } | null;
+      };
+    };
+  }>(
+    `mutation($project: ID!, $content: ID!) { addProjectV2ItemById(input: { projectId: $project, contentId: $content }) { item { id apps: fieldValueByName(name: "${APPS_FIELD}") { ${VALUE_SELECTION} } } } }`,
     { project: projectId, content: contentId },
-  ).addProjectV2ItemById.item.id;
+  ).addProjectV2ItemById.item;
+  const result = { id: item.id, appsOptionIds: toOptionIds(item.apps) };
+  return result;
+};
 
 const parseRoadmap = (text: string): RoadmapIssue[] => {
   const lines = text.split('\n');
@@ -266,57 +327,56 @@ const ensureLabel = (repo: string, label: string, existing: Set<string>) => {
   existing.add(label);
 };
 
-interface SelectOption {
-  id: string;
-  name: string;
-  color: string;
-  description: string;
-}
-
 const readOptions = (fieldId: string) => {
-  const query = `query($field: ID!) { node(id: $field) { __typename ... on ProjectV2SingleSelectField { options { id name color description } } } }`;
-  const node = ghJson<{
-    data: { node: { __typename: string; options?: SelectOption[] } | null };
-  }>(['api', 'graphql', '-f', `query=${query}`, '-f', `field=${fieldId}`])
-    .data.node;
+  const node = boardQuery<{ node: RawField | null }>(
+    `query($field: ID!) { node(id: $field) { ${FIELD_SELECTION} } }`,
+    { field: fieldId },
+  ).node;
   const result =
-    node?.options ??
+    (node ? toField(node).options : null) ??
     fail(
-      `The board's ${APPS_FIELD} field (${fieldId}) is a ${node?.__typename ?? 'missing node'}, not a single-select field, so its options can't be read.`,
+      `The board's ${APPS_FIELD} field (${fieldId}) is a ${node?.__typename ?? 'missing node'}, not a select field, so its options can't be read.`,
     );
   return result;
 };
 
-// Every item's current Apps option id, so it can be put back if rewriting the
-// option list gives the options new ids.
-const readAppsValues = (projectId: string) => {
-  const query = `query($project: ID!, $endCursor: String) { node(id: $project) { ... on ProjectV2 { items(first: 100, after: $endCursor) { nodes { id fieldValueByName(name: "${APPS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { optionId } } } pageInfo { hasNextPage endCursor } } } } }`;
-  const lines = gh([
-    'api',
-    'graphql',
-    '--paginate',
-    '-f',
-    `query=${query}`,
-    '-f',
-    `project=${projectId}`,
-    '--jq',
-    '.data.node.items.nodes[] | select(.fieldValueByName.optionId != null) | [.id, .fieldValueByName.optionId] | @tsv',
-  ]);
-  const result = lines
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => {
-      const [itemId, optionId] = line.split('\t');
-      return { itemId, optionId };
-    });
+interface ItemsPage {
+  node: {
+    items: {
+      nodes: {
+        id: string;
+        apps: { optionId?: string; options?: { id: string }[] } | null;
+      }[];
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+  };
+}
+
+// Every item's current Apps option ids, so they can be put back if rewriting
+// the option list gives the options new ids.
+const readAppsValues = (
+  projectId: string,
+  after: string | null = null,
+): { itemId: string; optionIds: string[] }[] => {
+  const page = boardQuery<ItemsPage>(
+    `query($project: ID!, $after: String) { node(id: $project) { ... on ProjectV2 { items(first: 100, after: $after) { nodes { id apps: fieldValueByName(name: "${APPS_FIELD}") { ${VALUE_SELECTION} } } pageInfo { hasNextPage endCursor } } } } }`,
+    { project: projectId, after },
+  ).node.items;
+  const values = page.nodes
+    .map((item) => ({ itemId: item.id, optionIds: toOptionIds(item.apps) }))
+    .filter(({ optionIds }) => optionIds.length > 0);
+  const result = page.pageInfo.hasNextPage
+    ? [...values, ...readAppsValues(projectId, page.pageInfo.endCursor)]
+    : values;
   return result;
 };
 
 interface AppsBackup {
   fieldId: string;
+  kind: FieldKind;
   projectId: string;
   before: SelectOption[];
-  values: { itemId: string; optionId: string }[];
+  values: { itemId: string; optionIds: string[] }[];
 }
 
 const backupPath = (fieldId: string) =>
@@ -326,22 +386,22 @@ const backupPath = (fieldId: string) =>
 // order with the new option last, so this holds even for duplicate names.
 const restoreAppsValues = (backup: AppsBackup, after: SelectOption[]) => {
   const newIdByOld = new Map(
-    backup.before.map((option, index) => [option.id, after[index]?.id]),
+    backup.before.map((option, index) => [option.id, after[index]?.id ?? option.id]),
   );
-  const moved = backup.values.filter(
-    ({ optionId }) => newIdByOld.get(optionId) !== optionId,
+  const moved = backup.values.filter(({ optionIds }) =>
+    optionIds.some((id) => newIdByOld.get(id) !== id),
   );
   if (moved.length === 0) return;
   console.log(
     `GitHub gave the ${APPS_FIELD} options new ids; putting back ${moved.length} items' values`,
   );
-  const failed = moved.filter(({ itemId, optionId }) => {
+  const failed = moved.filter(({ itemId, optionIds }) => {
     try {
-      setOption(
+      setOptions(
         backup.projectId,
         itemId,
-        backup.fieldId,
-        newIdByOld.get(optionId) ?? '',
+        { id: backup.fieldId, kind: backup.kind },
+        optionIds.map((id) => newIdByOld.get(id) ?? id),
       );
       return false;
     } catch {
@@ -356,6 +416,7 @@ const restoreAppsValues = (backup: AppsBackup, after: SelectOption[]) => {
 
 interface AppsPlan {
   fieldId: string;
+  kind: FieldKind;
   optionId: string | null;
   backup: AppsBackup | null;
   resumed: AppsBackup | null;
@@ -369,33 +430,41 @@ const planAppsOption = (
   const appsField =
     fields.find((field) => field.name === APPS_FIELD) ??
     fail(`No "${APPS_FIELD}" field on project ${PROJECT_NUMBER}.`);
-  console.log(
-    `${APPS_FIELD} field: ${appsField.id}, ${appsField.options?.length ?? 'no'} options read`,
-  );
   const resumed = existsSync(backupPath(appsField.id))
     ? (JSON.parse(readFileSync(backupPath(appsField.id), 'utf8')) as AppsBackup)
     : null;
   const existing = appsField.options?.find((entry) => entry.name === appName);
+  if (appsField.kind === 'other')
+    fail(`The board's ${APPS_FIELD} field is not a select field.`);
   if (existing)
     return {
       fieldId: appsField.id,
+      kind: appsField.kind,
       optionId: existing.id,
       backup: null,
       resumed,
     };
   const backup = {
     fieldId: appsField.id,
+    kind: appsField.kind,
     projectId,
     before: readOptions(appsField.id),
     values: readAppsValues(projectId),
   };
-  const result = { fieldId: appsField.id, optionId: null, backup, resumed };
+  const result = {
+    fieldId: appsField.id,
+    kind: appsField.kind,
+    optionId: null,
+    backup,
+    resumed,
+  };
   return result;
 };
 
-// The API adds an option only by rewriting the whole list, without ids, so
-// every item's value is saved to disk first and restored from it, on this
-// run or, when this run is cut short, on the next.
+// The API adds an option only by rewriting the whole list. A multi-select
+// list keeps the ids it is sent, a single-select one may not, so every item's
+// value is saved to disk first and restored from it, on this run or, when this
+// run is cut short, on the next.
 const applyAppsOption = (plan: AppsPlan, appName: string) => {
   if (plan.resumed) {
     console.log(
@@ -404,38 +473,35 @@ const applyAppsOption = (plan: AppsPlan, appName: string) => {
     restoreAppsValues(plan.resumed, readOptions(plan.fieldId));
     unlinkSync(backupPath(plan.fieldId));
   }
-  if (plan.optionId) return { fieldId: plan.fieldId, optionId: plan.optionId };
+  const field = { fieldId: plan.fieldId, kind: plan.kind };
+  if (plan.optionId) return { ...field, optionId: plan.optionId };
   const backup = plan.backup ?? fail(`No plan for the ${APPS_FIELD} option.`);
   writeFileSync(backupPath(plan.fieldId), JSON.stringify(backup));
   console.log(
     `Adding "${appName}" to the board's ${APPS_FIELD} field (${backup.values.length} items' values backed up at ${backupPath(plan.fieldId)})`,
   );
+  const isMulti = plan.kind === 'multi';
   const options = [
-    ...backup.before.map(({ name, color, description }) => ({
-      name,
-      color,
-      description,
-    })),
+    ...backup.before.map(({ id, name, color, description }) =>
+      isMulti ? { id, name, color, description } : { name, color, description },
+    ),
     { name: appName, color: 'GRAY', description: '' },
   ];
-  const mutation = `mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) { updateProjectV2Field(input: { fieldId: $field, singleSelectOptions: $options }) { projectV2Field { ... on ProjectV2SingleSelectField { id } } } }`;
-  const mutationArgs = ['api', 'graphql', '--input', '-'];
-  execFileSync('gh', mutationArgs, {
-    input: JSON.stringify({
-      query: mutation,
-      variables: { field: plan.fieldId, options },
-    }),
-    encoding: 'utf8',
-    stdio: ['pipe', 'ignore', 'inherit'],
-    env: ghEnv(mutationArgs),
-  });
+  const optionsInput = isMulti
+    ? 'multiSelectOptions: [ProjectV2MultiSelectFieldOptionInput!]'
+    : 'singleSelectOptions: [ProjectV2SingleSelectFieldOptionInput!]';
+  const [optionsKey, optionsType] = optionsInput.split(': ');
+  boardQuery(
+    `mutation($field: ID!, $options: ${optionsType}) { updateProjectV2Field(input: { fieldId: $field, ${optionsKey}: $options }) { projectV2Field { __typename } } }`,
+    { field: plan.fieldId, options },
+  );
   const after = readOptions(plan.fieldId);
   restoreAppsValues(backup, after);
   unlinkSync(backupPath(plan.fieldId));
   const optionId =
     after[backup.before.length]?.id ??
     fail(`The new ${APPS_FIELD} option did not come back.`);
-  const result = { fieldId: plan.fieldId, optionId };
+  const result = { ...field, optionId };
   return result;
 };
 
@@ -625,9 +691,17 @@ const run = async () => {
       '--jq',
       '.id',
     ]);
-    const itemId = addToProject(projectId, contentId);
-    if (isNew) setOption(projectId, itemId, statusField.id, statusOption.id);
-    setOption(projectId, itemId, apps.fieldId, apps.optionId);
+    const item = addToProject(projectId, contentId);
+    if (isNew) setOptions(projectId, item.id, statusField, [statusOption.id]);
+    if (!item.appsOptionIds.includes(apps.optionId))
+      setOptions(
+        projectId,
+        item.id,
+        { id: apps.fieldId, kind: apps.kind },
+        apps.kind === 'multi'
+          ? [...item.appsOptionIds, apps.optionId]
+          : [apps.optionId],
+      );
   });
 
   const numbersByRoadmap = new Map(

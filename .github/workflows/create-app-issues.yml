@@ -27,10 +27,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Introspect (temporary)
-        env:
-          PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
-        run: node scratch-introspect.ts
       - name: Create the issues and put them on the board
         env:
           GH_TOKEN: ${{ github.token }}
