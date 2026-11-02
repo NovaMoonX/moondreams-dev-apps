@@ -82,6 +82,9 @@ export function describeReversal(
   }
   const who = (uid: string) => (uid === viewerUid ? 'you' : label(uid));
   const previous = log.at(-2);
+  if (previous?.isPaid && previous.byUid === last.byUid) {
+    return `${sentence(who(last.byUid))} marked this paid back, then not paid back.`;
+  }
   const was = previous?.isPaid ? ` ${sentence(who(previous.byUid))} had marked it paid back.` : '';
   return `${sentence(who(last.byUid))} marked this not paid back.${was}`;
 }
