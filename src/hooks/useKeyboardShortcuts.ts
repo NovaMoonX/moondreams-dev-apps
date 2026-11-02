@@ -2,7 +2,14 @@ import { useEffect, useRef } from 'react';
 
 const TYPING_SELECTOR =
   'input, textarea, select, [contenteditable=""], [contenteditable="true"]';
-const OPEN_LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"]';
+const LAYER_SELECTOR = '[role="dialog"], [role="alertdialog"]';
+
+// A closed popover stays in the page as an invisible, inert dialog, so only a shown one counts.
+const isLayerOpen = () =>
+  Array.from(document.querySelectorAll(LAYER_SELECTOR)).some((layer) => {
+    const style = getComputedStyle(layer);
+    return style.pointerEvents !== 'none' && style.opacity !== '0' && style.visibility !== 'hidden';
+  });
 
 /** Runs the handler for a pressed key (lower-case; `?` for Shift+/) while `isEnabled`. Desktop only: ignores typing in a field, an open dialog or drawer, and Ctrl, Meta or Alt. */
 export function useKeyboardShortcuts(
@@ -29,7 +36,7 @@ export function useKeyboardShortcuts(
         keyEvent.target instanceof Element ? keyEvent.target : null;
       if (
         target?.closest(TYPING_SELECTOR) ||
-        document.querySelector(OPEN_LAYER_SELECTOR)
+        isLayerOpen()
       )
         return;
       const handler = handlersRef.current[keyEvent.key.toLowerCase()];
