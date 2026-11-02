@@ -38,6 +38,8 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import EarlyPaymentModal from '@apps/waypoint/components/EarlyPaymentModal';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
+import PaidBackSheet from '@apps/waypoint/components/PaidBackSheet';
+import { describeReversal, getRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ReceiptSplitScreen, { type ReceiptSplitPrefill } from '@apps/waypoint/components/ReceiptSplitScreen';
 import PersonalExpenseFormModal, {
@@ -189,6 +191,8 @@ interface SplitShare {
   uid: string;
   amountLabel: string;
   isPaid: boolean;
+  markedByUid: string | null;
+  paidAt: number | null;
 }
 
 interface SplitBreakdown {
@@ -219,7 +223,9 @@ function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBrea
           .map((uid) => ({
             uid,
             amountLabel: formatTotal(amounts[uid] ?? 0, amounts[uid] ?? 0, expense.currency),
-            isPaid: (expense.paidMemberStatus ?? {})[uid]?.isPaid ?? false,
+            isPaid: getRepaidStatus(expense, uid).isPaid,
+            markedByUid: getRepaidStatus(expense, uid).markedByUid,
+            paidAt: getRepaidStatus(expense, uid).paidAt,
           }));
 
   const perPersonLabel =
@@ -230,7 +236,7 @@ function getSplitBreakdown(expense: TripExpense, memberIds: string[]): SplitBrea
   const payerAmount = expense.payerUid === null ? undefined : amounts[expense.payerUid];
   const payerShare =
     customAmounts !== null && expense.payerUid !== null && payerAmount !== undefined
-      ? { uid: expense.payerUid, amountLabel: formatTotal(payerAmount, payerAmount, expense.currency), isPaid: true }
+      ? { uid: expense.payerUid, amountLabel: formatTotal(payerAmount, payerAmount, expense.currency), isPaid: true, markedByUid: null, paidAt: null }
       : null;
 
   return { perPersonLabel, shares, payerShare };
@@ -296,6 +302,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [personalQuery, setPersonalQuery] = useState('');
   const [isDuesOpen, setIsDuesOpen] = useState(true);
   const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
+  const [paidBackExpenseId, setPaidBackExpenseId] = useState<string | null>(null);
+  const [paidBackReturnId, setPaidBackReturnId] = useState<string | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -562,7 +570,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     }
     setError(null);
     try {
-      await dispatch(markExpenseUnpaid({ expense })).unwrap();
+      await dispatch(markExpenseUnpaid({ expense, actorUid: currentUserId })).unwrap();
     } catch (markError) {
       setError(getErrorMessage(markError, 'Unable to mark this expense as unpaid.'));
     }
@@ -759,17 +767,18 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
     const splitBreakdown = getSplitBreakdown(expense, memberIds);
-    const repaidNames = (splitBreakdown?.shares ?? [])
-      .filter((share) => share.isPaid)
-      .map((share) => memberLabel(share.uid));
+    const isPayer = expense.payerUid === currentUserId;
     const renderRepaidControl = (share: SplitShare | undefined) => {
       if (!share) {
         return null;
       }
 
       const toggle = () =>
-        void dispatch(
-          toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+        void runAction(
+          dispatch(
+            toggleExpenseRepaid({ uid: share.uid, actorUid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+          ).unwrap(),
+          'Unable to update this mark. Someone may have just changed the expense.',
         );
 
       if (!share.isPaid) {
@@ -782,43 +791,83 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
-          <span className='text-muted-foreground text-xs'>You repaid this</span>
-          <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
+          <span className='text-muted-foreground text-xs'>
+            {share.markedByUid !== null && share.markedByUid !== currentUserId
+              ? `Marked by ${memberLabel(share.markedByUid)}`
+              : 'Marked paid back'}
+          </span>
+          <Button type='button' variant='secondary' size='sm' className='h-10' onClick={toggle}>
             Undo
           </Button>
         </span>
       );
     };
+    const myShare = splitBreakdown?.shares.find((share) => share.uid === currentUserId);
+    const renderMarkedBy = (share: SplitShare | undefined) => {
+      if (!share) {
+        return null;
+      }
+      const reversal = describeReversal(expense, share.uid, currentUserId, memberLabel);
+      if (reversal !== null) {
+        return <p className='text-muted-foreground text-pretty text-right text-xs'>{reversal}</p>;
+      }
+      return null;
+    };
+    const renderPayerRow = (shares: SplitShare[]) => (
+      <Button
+        type='button'
+        variant='tertiary'
+        className='bg-muted/50 h-auto min-h-10 w-full justify-start gap-2 rounded-xl px-3! py-2 text-left text-sm font-normal sm:max-w-sm'
+        onClick={() => {
+          setPaidBackReturnId(isRow ? null : expense.id);
+          setDetailExpenseId(null);
+          setPaidBackExpenseId(expense.id);
+        }}
+      >
+        <span className='min-w-0 flex-1'>
+          Paid back by {shares.filter((share) => share.isPaid).length} of {shares.length}
+        </span>
+        <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
+      </Button>
+    );
 
     const breakdown = splitBreakdown && (
       <div className='mt-0.5 space-y-1'>
-        {splitBreakdown.perPersonLabel !== null ? (
-          <div className='flex items-baseline justify-end gap-2'>
-            {!expense.isPerPerson && (
-              <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
-                {splitBreakdown.perPersonLabel}
-              </p>
+        {isPayer ? (
+          <>
+            {splitBreakdown.perPersonLabel !== null && !expense.isPerPerson && (
+              <p className='text-muted-foreground text-xs'>{splitBreakdown.perPersonLabel}</p>
             )}
-            {renderRepaidControl(splitBreakdown.shares.find((share) => share.uid === currentUserId))}
-          </div>
+            {renderPayerRow(splitBreakdown.shares)}
+          </>
+        ) : splitBreakdown.perPersonLabel !== null ? (
+          <>
+            <div className='flex flex-wrap items-baseline justify-end gap-x-2'>
+              {!expense.isPerPerson && (
+                <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                  {splitBreakdown.perPersonLabel}
+                </p>
+              )}
+              {renderRepaidControl(myShare)}
+            </div>
+            {renderMarkedBy(myShare)}
+          </>
         ) : (
           splitBreakdown.shares.map((share) => (
-            <div key={share.uid} className='flex items-baseline justify-end gap-2'>
-              <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
-                {memberLabel(share.uid)} {share.amountLabel}
-              </p>
-              {share.uid === currentUserId && renderRepaidControl(share)}
+            <div key={share.uid}>
+              <div className='flex flex-wrap items-baseline justify-end gap-x-2'>
+                <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                  {memberLabel(share.uid)} {share.amountLabel}
+                </p>
+                {share.uid === currentUserId && renderRepaidControl(share)}
+              </div>
+              {share.uid === currentUserId && renderMarkedBy(share)}
             </div>
           ))
         )}
         {splitBreakdown.payerShare && (
           <p className='text-muted-foreground text-xs'>
             {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
-          </p>
-        )}
-        {expense.payerUid === currentUserId && repaidNames.length > 0 && (
-          <p className='text-muted-foreground text-right text-xs'>
-            Repaid so far: {repaidNames.join(', ')}
           </p>
         )}
       </div>
@@ -941,6 +990,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   };
 
   const detailExpense = expenses.find((expense) => expense.id === detailExpenseId);
+  const paidBackExpense = expenses.find((expense) => expense.id === paidBackExpenseId && expense.payerUid === currentUserId);
+  const paidBackShares = paidBackExpense ? (getSplitBreakdown(paidBackExpense, memberIds)?.shares ?? []) : [];
   const detailPayerLock = detailExpense ? getPayerLock(detailExpense) : null;
 
   const renderClusters = (items: TripExpense[]) =>
@@ -1165,8 +1216,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               currentUserId={currentUserId}
               memberLabel={memberLabel}
               formatAmount={(amount) => formatTotal(amount, amount, currency)}
-              onToggleRepaid={(expenseId) =>
-                void dispatch(toggleExpenseRepaid({ uid: currentUserId, tripId: trip.id, expenseId }))
+              onToggleRepaid={(expenseId, debtorUid) =>
+                void runAction(
+                  dispatch(toggleExpenseRepaid({ uid: debtorUid, actorUid: currentUserId, tripId: trip.id, expenseId })).unwrap(),
+                  'Unable to update this mark. Someone may have just changed the expense.',
+                )
               }
               onSetEarlyReturned={(expenseId, isReturned) =>
                 void runAction(
@@ -1452,6 +1506,26 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
         </DetailSheet>
       )}
+      <PaidBackSheet
+        isOpen={paidBackExpense !== undefined}
+        onClose={() => {
+          setPaidBackExpenseId(null);
+          setDetailExpenseId(paidBackReturnId);
+          setPaidBackReturnId(null);
+        }}
+        expense={paidBackExpense}
+        shares={paidBackShares}
+        currentUserId={currentUserId}
+        memberLabel={memberLabel}
+        onToggle={(uid) =>
+          runAction(
+            dispatch(
+              toggleExpenseRepaid({ uid, actorUid: currentUserId, tripId: trip.id, expenseId: paidBackExpense?.id ?? '' }),
+            ).unwrap(),
+            'Unable to update this mark. Someone may have just changed the expense.',
+          )
+        }
+      />
       <EarlyPaymentModal
         key={`early-${earlyExpense?.id ?? 'none'}`}
         isOpen={earlyExpense !== null}
