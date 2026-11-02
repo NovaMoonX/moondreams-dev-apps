@@ -4,12 +4,21 @@ import { httpsCallable } from 'firebase/functions';
 
 import { auth, functions } from '@/lib/firebase/config';
 import { SALE_LINK_ID_PATTERN } from '@apps/going-once/constants';
-import type { SalePageResult } from '@apps/going-once/types';
+import type {
+  InterestRequest,
+  InterestResult,
+  SalePageResult,
+} from '@apps/going-once/types';
 
 const getSalePageCallable = httpsCallable<{ linkId: string }, SalePageResult>(
   functions,
   'getSalePage',
 );
+
+const submitSaleInterestCallable = httpsCallable<
+  InterestRequest,
+  InterestResult
+>(functions, 'submitSaleInterest');
 
 const NOT_FOUND: SalePageResult = { status: 'not_found' };
 
@@ -19,10 +28,10 @@ export const salePageQueryKeys = {
     [...salePageQueryKeys.all, linkId, uid] as const,
 };
 
-/** A token the server won't take answers even this public call with a 401, so the person's token is renewed and the call made once more. */
-const readPage = async (linkId: string): Promise<SalePageResult> => {
+/** A token the server won't take answers even a public call with a 401, so the person's token is renewed and the call made once more. */
+const callOnceRenewed = async <T>(call: () => Promise<T>): Promise<T> => {
   try {
-    return (await getSalePageCallable({ linkId })).data;
+    return await call();
   } catch (error) {
     if (
       !(error instanceof FirebaseError) ||
@@ -31,9 +40,18 @@ const readPage = async (linkId: string): Promise<SalePageResult> => {
       throw error;
     }
     await auth.currentUser?.getIdToken(true);
-    return (await getSalePageCallable({ linkId })).data;
+    return call();
   }
 };
+
+const readPage = (linkId: string): Promise<SalePageResult> =>
+  callOnceRenewed(async () => (await getSalePageCallable({ linkId })).data);
+
+/** A buyer's interest in a thing; every refusal comes back as a status, and only a failed call throws. */
+export const sendInterest = (
+  request: InterestRequest,
+): Promise<InterestResult> =>
+  callOnceRenewed(async () => (await submitSaleInterestCallable(request)).data);
 
 /**
  * What a link shows now, read for whoever is signed in (a member is told so). The page is live: fresh for 30 seconds and read again when the person comes back to the tab.

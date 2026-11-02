@@ -1,4 +1,6 @@
 import type {
+  InboxView,
+  InterestResult,
   ItemCondition,
   ItemStatus,
   PaymentMethod,
@@ -125,3 +127,41 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   ZELLE: 'Zelle',
   OTHER: 'Other',
 };
+
+export const MAX_INQUIRY_NAME_LENGTH = 80;
+export const MAX_INQUIRY_CONTACT_LENGTH = 254;
+export const MAX_INQUIRY_MESSAGE_LENGTH = 1000;
+
+/** How many Handled inquiries the Inbox keeps listening to. */
+export const HANDLED_INBOX_LIMIT = 30;
+
+export const INBOX_VIEWS = [
+  'new',
+  'handled',
+] as const satisfies readonly InboxView[];
+
+export const INBOX_VIEW_LABELS: Record<InboxView, string> = {
+  new: 'New',
+  handled: 'Handled',
+};
+
+/** One sentence per reason the interest form was refused, shown with everything typed kept. */
+export const INTEREST_REFUSALS: Record<
+  Exclude<InterestResult['status'], 'sent' | 'invalid'>,
+  string
+> = {
+  not_found: "This sale isn't taking messages anymore.",
+  not_available: 'This one just sold, sorry.',
+  busy: "This sale isn't taking messages right now. Try again tomorrow.",
+  full: 'This one already has plenty of messages. Try again later.',
+  slow_down: "That's a few messages in a row. Try again in a little while.",
+};
+
+export const INTEREST_FAILURE =
+  "Couldn't send. Check your connection and try again.";
+
+export const INTEREST_INVALID_FIELDS = {
+  name: 'Add your name.',
+  contact: "That phone or email doesn't look right.",
+  message: 'That message is too long.',
+} as const;

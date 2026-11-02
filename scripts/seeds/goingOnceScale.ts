@@ -1,4 +1,5 @@
 import {
+  buildSeedInquiry,
   buildSeedStatus,
   EMPTY_OPTIONALS,
   JPEG_SIZE,
@@ -40,6 +41,9 @@ const NOUNS = [
   'Toaster',
 ];
 const MATERIALS = ['oak', 'steel', 'walnut', 'wicker', 'glass', 'linen'];
+
+const NEW_INQUIRY_COUNT = 12;
+const HANDLED_INQUIRY_COUNT = 36;
 
 const BUYERS = ['Nate', 'Dev', 'Priya', 'Marcus', 'Lena'];
 const METHODS = ['CASH', 'VENMO', 'ZELLE', 'OTHER'] as const;
@@ -197,8 +201,44 @@ export async function seedGoingOnceScale(
     }),
   );
 
+  // Handled outnumbers the Inbox's 30 so the Handled view shows its "most recent" cap; every fifth sender and message is long.
+  await Promise.all(
+    Array.from(
+      { length: NEW_INQUIRY_COUNT + HANDLED_INQUIRY_COUNT },
+      (_, index) => {
+        const thing = buildThing(index % THING_COUNT);
+        const isHandled = index >= NEW_INQUIRY_COUNT;
+        const isLong = index % 5 === 0;
+        const stored = buildSeedInquiry(SALE_ID, {
+          itemId: `seed-go-${thing.id}`,
+          itemTitle: thing.title,
+          name: isLong
+            ? 'Alexandra Wilhelmina Featherstonehaugh-Smythe'
+            : `${BUYERS[index % BUYERS.length]} ${index + 1}`,
+          contact: `206555${String(1000 + index).padStart(4, '0')}`,
+          message: isLong
+            ? 'Hello! I saw this on the link a friend sent me and wondered whether it is still available, whether you would take a little less, and whether I could pick it up on a weekday evening after work because I do not drive on weekends.'
+            : 'Is this still available?',
+          sentAt: context.now - (index + 1) * 47 * MINUTE_MS,
+          handled: isHandled
+            ? {
+                by: index % 2 === 0 ? maya.uid : theo.uid,
+                at: context.now - (index + 1) * 41 * MINUTE_MS,
+              }
+            : undefined,
+        });
+        return sale.collection('inquiries').doc(stored.id).set(stored);
+      },
+    ),
+  );
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 1 + waitingEmails.length + THING_COUNT,
+    firestoreDocuments:
+      1 +
+      waitingEmails.length +
+      THING_COUNT +
+      NEW_INQUIRY_COUNT +
+      HANDLED_INQUIRY_COUNT,
   };
 }

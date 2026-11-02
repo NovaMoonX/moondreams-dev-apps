@@ -182,3 +182,46 @@ export type SalePageResult =
     };
 
 export type SaleLinkAction = 'create' | 'renew' | 'stop';
+
+export type InquiryStatus = 'NEW' | 'HANDLED';
+
+/** A buyer's message about a thing (`apps/going-once/sales/{saleId}/inquiries/{inquiryId}`); made and resent only by `submitSaleInterest`. */
+export interface Inquiry {
+  id: string;
+  saleId: string;
+  itemId: string;
+  /** Still reads if the thing is renamed or deleted. */
+  itemTitleAtSend: string;
+  /** `null` once cleared after the sale finished. */
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  status: InquiryStatus;
+  handledBy: string | null;
+  handledAt: number | null;
+  sendCount: number;
+  createdAt: number;
+  lastSentAt: number;
+  contactClearedAt: number | null;
+}
+
+/** What `submitSaleInterest` answers; every refusal is its own status. */
+export type InterestResult =
+  | { status: 'sent'; contact: 'email' | 'phone' }
+  | {
+      status: 'not_found' | 'not_available' | 'busy' | 'full' | 'slow_down';
+    }
+  | { status: 'invalid'; field: 'name' | 'contact' | 'message' };
+
+export interface InterestRequest {
+  linkId: string;
+  itemId: string;
+  name: string;
+  contact: string;
+  message: string;
+  /** The honeypot: a person leaves it empty. */
+  website: string;
+}
+
+export type InboxView = 'new' | 'handled';

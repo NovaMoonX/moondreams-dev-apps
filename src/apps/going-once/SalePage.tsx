@@ -127,7 +127,7 @@ function OwnPageBand() {
   );
 }
 
-function SaleView({ page }: { page: OkPage }) {
+function SaleView({ page, linkId }: { page: OkPage; linkId: string }) {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const { sale, things } = page;
@@ -184,7 +184,11 @@ function SaleView({ page }: { page: OkPage }) {
         </>
       )}
       {openThing && (
-        <BuyerThingDrawer thing={openThing} onClose={() => setOpenId(null)} />
+        <BuyerThingDrawer
+          thing={openThing}
+          linkId={linkId}
+          onClose={() => setOpenId(null)}
+        />
       )}
     </div>
   );
@@ -210,7 +214,7 @@ function SalePage() {
       return <PageFailed onRetry={() => void query.refetch()} />;
     if (query.data === undefined) return <PageSkeleton />;
     if (query.data.status === 'not_found') return <NotHere />;
-    return <SaleView key={linkId} page={query.data} />;
+    return <SaleView key={linkId} page={query.data} linkId={linkId} />;
   };
 
   return (

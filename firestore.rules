@@ -459,6 +459,26 @@ service cloud.firestore {
           && resource.data.get('pending', null) == null);
     }
 
+    // An inquiry is written only by `submitSaleInterest`, so no client creates one. The sale's members read it, delete it,
+    // and change only whether it has been handled and by whom: Handled carries the caller and a time, New carries neither.
+    // `limits` (the callable's daily count) has no rule, so no client reads or writes it.
+    match /apps/going-once/sales/{saleId}/inquiries/{inquiryId} {
+      function isHandledChange() {
+        let next = request.resource.data;
+        return next.status in ['NEW', 'HANDLED']
+          && (next.status == 'HANDLED'
+            ? next.handledBy == request.auth.uid && next.handledAt is int
+            : next.handledBy == null && next.handledAt == null);
+      }
+
+      allow read: if isSaleMember(saleId);
+      allow create: if false;
+      allow update: if isSaleMember(saleId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy', 'handledAt'])
+        && isHandledChange();
+      allow delete: if isSaleMember(saleId);
+    }
+
     // --- App: waypoint ---
 
     match /apps/waypoint/inviteCodes/{inviteCode} {

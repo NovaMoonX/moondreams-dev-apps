@@ -6,12 +6,14 @@ import { ChevronLeft, Inbox, Store, Tag } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import EmptyCard from '@/components/EmptyCard';
+import IconBadge from '@/components/IconBadge';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
+import InboxTab from '@apps/going-once/components/inbox/InboxTab';
 import CoSellerIntro from '@apps/going-once/components/people/CoSellerIntro';
 import RemovedFromSale from '@apps/going-once/components/people/RemovedFromSale';
 import ItemsSection from '@apps/going-once/components/things/ItemsSection';
@@ -30,6 +32,7 @@ import { useGoingOnceUrlState } from '@apps/going-once/hooks/useGoingOnceUrlStat
 import { setRemovedFrom, type RemovedFrom } from '@apps/going-once/store';
 import {
   selectMyInvites,
+  selectNewInquiries,
   selectRemovedFrom,
   selectSaleById,
   selectSales,
@@ -41,23 +44,20 @@ import type {
   SaleEmailInvite,
 } from '@apps/going-once/types';
 
-const TAB_ICONS: Record<GoingOnceTab, ReactNode> = {
-  things: <Tag className='h-5 w-5' />,
-  inbox: <Inbox className='h-5 w-5' />,
-  sale: <Store className='h-5 w-5' />,
-};
-
-const INBOX_PLACEHOLDER = {
-  icon: '📬',
-  text: 'When someone is interested in a thing, their message will land here.',
+const getTabIcon = (tab: GoingOnceTab, newCount: number): ReactNode => {
+  if (tab === 'things') return <Tag className='h-5 w-5' />;
+  if (tab === 'sale') return <Store className='h-5 w-5' />;
+  return <IconBadge icon={<Inbox className='h-5 w-5' />} count={newCount} />;
 };
 
 /** A floating pill at the bottom of the screen with the sale's three tabs. */
 function SaleTabs({
   value,
+  newCount,
   onChange,
 }: {
   value: GoingOnceTab;
+  newCount: number;
   onChange: (tab: GoingOnceTab) => void;
 }) {
   return (
@@ -74,7 +74,7 @@ function SaleTabs({
               <Button
                 type='button'
                 variant='tertiary'
-                aria-label={`${GOING_ONCE_TAB_LABELS[tab]} tab`}
+                aria-label={`${GOING_ONCE_TAB_LABELS[tab]} tab${tab === 'inbox' && newCount > 0 ? `, ${newCount} new` : ''}`}
                 aria-current={isSelected ? 'page' : undefined}
                 onClick={() => onChange(tab)}
                 className={join(
@@ -84,7 +84,7 @@ function SaleTabs({
                     : 'text-muted-foreground!',
                 )}
               >
-                {TAB_ICONS[tab]}
+                {getTabIcon(tab, newCount)}
                 {GOING_ONCE_TAB_LABELS[tab]}
               </Button>
             </li>
@@ -134,6 +134,11 @@ function GoingOnce() {
   const {
     saleId,
     thingId,
+    inquiryId,
+    inboxView,
+    showInboxView,
+    openInquiry,
+    closeInquiry,
     activeTab,
     statusView,
     showStatusView,
@@ -162,6 +167,9 @@ function GoingOnce() {
   const storedRemoval = useAppSelector(selectRemovedFrom);
   const myInvites = useAppSelector(selectMyInvites);
   const sale = useAppSelector((state) => selectSaleById(state, openSaleId));
+  const newInquiryCount = useAppSelector(
+    (state) => selectNewInquiries(state, openSaleId).length,
+  );
 
   if (loading) {
     return <Loading />;
@@ -264,12 +272,22 @@ function GoingOnce() {
               />
             )}
             {activeTab === 'inbox' && (
-              <EmptyCard icon={INBOX_PLACEHOLDER.icon}>
-                {INBOX_PLACEHOLDER.text}
-              </EmptyCard>
+              <InboxTab
+                saleId={sale.id}
+                uid={user.uid}
+                view={inboxView}
+                onViewChange={showInboxView}
+                openId={inquiryId}
+                onOpen={openInquiry}
+                onClose={closeInquiry}
+              />
             )}
           </div>
-          <SaleTabs value={activeTab} onChange={showTab} />
+          <SaleTabs
+            value={activeTab}
+            newCount={newInquiryCount}
+            onChange={showTab}
+          />
         </div>
       ) : (
         <SalesList

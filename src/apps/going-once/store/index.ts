@@ -2,7 +2,12 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { resetAllState } from '@/store/actions/globalActions';
-import type { Item, Sale, SaleEmailInvite } from '@apps/going-once/types';
+import type {
+  Inquiry,
+  Item,
+  Sale,
+  SaleEmailInvite,
+} from '@apps/going-once/types';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
@@ -18,6 +23,12 @@ export interface GoingOnceState {
   openSale: { sale: Sale | null; status: LoadStatus };
   /** The open sale's things, tagged with the sale they were read for so a stale list is never shown. */
   items: { saleId: string | null; items: Item[]; status: LoadStatus };
+  /** The open sale's New inquiries and its newest Handled ones, tagged with the sale they were read for. */
+  inquiries: {
+    saleId: string | null;
+    new: { items: Inquiry[]; status: LoadStatus };
+    handled: { items: Inquiry[]; status: LoadStatus };
+  };
   /** Invitations addressed to the signed-in person's verified email. */
   myInvites: SaleEmailInvite[];
   /** The open sale's waiting invitations, tagged with the sale they were read for. */
@@ -34,6 +45,11 @@ const initialState: GoingOnceState = {
   sales: { items: [], status: 'loading' },
   openSale: { sale: null, status: 'loading' },
   items: { saleId: null, items: [], status: 'loading' },
+  inquiries: {
+    saleId: null,
+    new: { items: [], status: 'loading' },
+    handled: { items: [], status: 'loading' },
+  },
   myInvites: [],
   saleInvites: { saleId: null, invites: [] },
   removedFrom: null,
@@ -80,6 +96,31 @@ export const goingOnceSlice = createSlice({
     clearItems(state) {
       state.items = initialState.items;
     },
+    setInquiries(
+      state,
+      action: PayloadAction<{
+        saleId: string;
+        list: 'new' | 'handled';
+        items: Inquiry[];
+      }>,
+    ) {
+      const { saleId, list, items } = action.payload;
+      if (state.inquiries.saleId !== saleId)
+        state.inquiries = { ...initialState.inquiries, saleId };
+      state.inquiries[list] = { items, status: 'ready' };
+    },
+    setInquiriesError(
+      state,
+      action: PayloadAction<{ saleId: string; list: 'new' | 'handled' }>,
+    ) {
+      const { saleId, list } = action.payload;
+      if (state.inquiries.saleId !== saleId)
+        state.inquiries = { ...initialState.inquiries, saleId };
+      state.inquiries[list].status = 'error';
+    },
+    clearInquiries(state) {
+      state.inquiries = initialState.inquiries;
+    },
     setMyInvites(state, action: PayloadAction<SaleEmailInvite[]>) {
       state.myInvites = action.payload;
     },
@@ -124,6 +165,9 @@ export const {
   setItems,
   setItemsError,
   clearItems,
+  setInquiries,
+  setInquiriesError,
+  clearInquiries,
   setMyInvites,
   setSaleInvites,
   clearSaleInvites,
