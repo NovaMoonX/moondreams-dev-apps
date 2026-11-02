@@ -456,9 +456,25 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     ownerUid: maya.uid,
     createdBy: maya.uid,
     members: [maya.uid, theo.uid],
+    memberJoinedAt: { [theo.uid]: context.now - 5 * DAY_MS },
     createdAt: context.now - 6 * DAY_MS,
     lastEditedAt: null,
   });
+
+  const waitingEmail = 'sam@example.test';
+  await context.firestore
+    .collection('apps')
+    .doc('going-once')
+    .collection('emailInvites')
+    .doc(`${SALE_ID}_${waitingEmail}`)
+    .set({
+      saleId: SALE_ID,
+      email: waitingEmail,
+      invitedBy: maya.uid,
+      saleName: 'Fall clear-out',
+      inviterName: 'Maya',
+      createdAt: context.now - 2 * DAY_MS,
+    });
 
   const things = await Promise.all(
     SEED_THINGS.map(async (thing, thingIndex) => {
@@ -516,5 +532,5 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     );
   }
 
-  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 1 + SEED_THINGS.length };
+  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 2 + SEED_THINGS.length };
 }

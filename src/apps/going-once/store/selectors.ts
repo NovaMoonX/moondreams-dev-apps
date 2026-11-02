@@ -1,7 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import type { Item, Sale } from '@apps/going-once/types';
+import type { Item, Sale, SaleEmailInvite } from '@apps/going-once/types';
 import { getStatusSummary } from '@apps/going-once/utils/statusSummary';
 
 export const selectSales = (state: RootState) => state.goingOnce.sales.items;
@@ -44,3 +44,22 @@ export const selectItemsStatus = (state: RootState) =>
 
 export const selectPhotoUploads = (state: RootState) =>
   state.goingOnce.photoUploads;
+
+export const selectMyInvites = (state: RootState) => state.goingOnce.myInvites;
+
+/** The open sale's waiting invitations, oldest first; empty while another sale's are still arriving. */
+export const selectSaleInvites = createSelector(
+  [
+    (state: RootState) => state.goingOnce.saleInvites,
+    (_state: RootState, saleId: string | null) => saleId,
+  ],
+  (saleInvites, saleId): SaleEmailInvite[] =>
+    saleInvites.saleId === saleId
+      ? [...saleInvites.invites].sort(
+          (first, second) => first.createdAt - second.createdAt,
+        )
+      : [],
+);
+
+export const selectRemovedFrom = (state: RootState) =>
+  state.goingOnce.removedFrom;

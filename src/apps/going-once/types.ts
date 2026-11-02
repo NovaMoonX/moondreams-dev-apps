@@ -21,8 +21,22 @@ export interface Sale {
   createdBy: string;
   /** The seller and any co-sellers; every rule keys off it. */
   members: string[];
+  /** When each member joined, by uid; a sale from before co-sellers may lack some. */
+  memberJoinedAt: Record<string, number>;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+/** The seller's standing welcome for an email address (`apps/going-once/emailInvites/{saleId}_{email}`). */
+export interface SaleEmailInvite {
+  saleId: string;
+  /** Lowercased. */
+  email: string;
+  invitedBy: string;
+  /** Copied in so the invitee never reads the sale before joining. */
+  saleName: string;
+  inviterName: string;
+  createdAt: number;
 }
 
 export type ItemCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WELL_USED';

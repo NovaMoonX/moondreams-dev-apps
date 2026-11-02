@@ -185,7 +185,7 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 
 - [ ] **Seller:** start a sale with a name, pickup area and note (behind the `create-sales` switch, open to everyone); keep several, open or finished
 - [x] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, "Not listed yet" until it has a photo, a name and a price; no categories, found by status and search
-- [ ] **Seller:** add co-sellers by email and remove them, with a confirm that says what they marked stays; **Co-seller:** join, leave, and be told plainly when removed
+- [x] **Seller:** add co-sellers by email and remove them, with a confirm that says what they marked stays; **Co-seller:** join, leave, and be told plainly when removed
 - [x] **Co-seller:** Available, Pending (optionally who and a pickup day) and Sold with what was paid, how and when; Not sold after all; take off the list and put back; a short history per thing; refused in words from a stale screen (the seller has the same controls)
 - [ ] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating
 - [ ] **Seller:** delete a thing, with a confirm that names its pickup, its inquiries and any change to Collected, and offers Take it off the list instead

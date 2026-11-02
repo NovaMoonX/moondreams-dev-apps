@@ -9,9 +9,11 @@ import EmptyCard from '@/components/EmptyCard';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
+import CoSellerIntro from '@apps/going-once/components/people/CoSellerIntro';
+import RemovedFromSale from '@apps/going-once/components/people/RemovedFromSale';
 import ItemsSection from '@apps/going-once/components/things/ItemsSection';
 import SaleFormSheet from '@apps/going-once/components/sales/SaleFormSheet';
 import SaleTab from '@apps/going-once/components/sales/SaleTab';
@@ -23,8 +25,11 @@ import {
 } from '@apps/going-once/constants';
 import { useGoingOnceSync } from '@apps/going-once/hooks/useGoingOnceSync';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
+import { useJoinFromInvites } from '@apps/going-once/hooks/useJoinFromInvites';
 import { useGoingOnceUrlState } from '@apps/going-once/hooks/useGoingOnceUrlState';
+import { setRemovedFrom } from '@apps/going-once/store';
 import {
+  selectRemovedFrom,
   selectSaleById,
   selectSales,
   selectSalesStatus,
@@ -131,7 +136,11 @@ function GoingOnce() {
     salesStatus === 'ready',
     isListChosen,
   );
-  useGoingOnceSync(uid, openSaleId);
+  const verifiedEmail = user?.emailVerified ? (user.email ?? null) : null;
+  useGoingOnceSync(uid, verifiedEmail, openSaleId);
+  useJoinFromInvites(uid);
+  const dispatch = useAppDispatch();
+  const removedFrom = useAppSelector(selectRemovedFrom);
   const sale = useAppSelector((state) => selectSaleById(state, openSaleId));
 
   if (loading) {
@@ -156,6 +165,19 @@ function GoingOnce() {
           </EmptyCard>
         </div>
       </div>
+    );
+  }
+
+  if (removedFrom) {
+    return (
+      <RemovedFromSale
+        saleName={removedFrom.name}
+        onBack={() => {
+          dispatch(setRemovedFrom(null));
+          setIsListChosen(true);
+          closeSale();
+        }}
+      />
     );
   }
 
@@ -189,6 +211,7 @@ function GoingOnce() {
                 )}
               </div>
             </header>
+            <CoSellerIntro sale={sale} uid={user.uid} />
             {activeTab === 'things' && (
               <ItemsSection
                 saleId={sale.id}
@@ -204,6 +227,11 @@ function GoingOnce() {
               <SaleTab
                 sale={sale}
                 uid={user.uid}
+                myEmail={user.email}
+                onLeft={() => {
+                  setIsListChosen(true);
+                  closeSale();
+                }}
                 onOpenStatus={showThingsOn}
                 onDeleted={() => {
                   setIsListChosen(true);

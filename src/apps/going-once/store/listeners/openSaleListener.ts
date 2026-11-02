@@ -14,7 +14,7 @@ import type { Item, Sale } from '@apps/going-once/types';
 export function startOpenSaleListener(
   saleId: string,
   onChange: (sale: Sale | null) => void,
-  onError: () => void,
+  onError: (error: unknown) => void,
 ): Unsubscribe {
   return onSnapshot(
     doc(db, 'apps', 'going-once', 'sales', saleId),
@@ -28,7 +28,7 @@ export function startOpenSaleListener(
 export function startOpenSaleItemsListener(
   saleId: string,
   onChange: (items: Item[]) => void,
-  onError: () => void,
+  onError: (error: unknown) => void,
 ): Unsubscribe {
   return onSnapshot(
     collection(db, 'apps', 'going-once', 'sales', saleId, 'items'),

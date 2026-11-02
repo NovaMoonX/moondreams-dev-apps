@@ -120,9 +120,36 @@ export async function seedGoingOnceScale(
     ownerUid: maya.uid,
     createdBy: maya.uid,
     members: [maya.uid, theo.uid],
+    memberJoinedAt: { [theo.uid]: context.now - 8 * DAY_MS },
     createdAt: context.now - 9 * DAY_MS,
     lastEditedAt: null,
   });
+
+  // Eight waiting emails, one of them very long, so People still reads at the cap of ten with Theo.
+  const waitingEmails = [
+    ...Array.from(
+      { length: 7 },
+      (_, index) => `helper${index + 1}@example.test`,
+    ),
+    'a.very.long.email.address.for.a.helper.who.is.waiting@a-surprisingly-long-example-domain.test',
+  ];
+  await Promise.all(
+    waitingEmails.map((email, index) =>
+      context.firestore
+        .collection('apps')
+        .doc('going-once')
+        .collection('emailInvites')
+        .doc(`${SALE_ID}_${email}`)
+        .set({
+          saleId: SALE_ID,
+          email,
+          invitedBy: maya.uid,
+          saleName: 'Big garage sale (scale test)',
+          inviterName: 'Maya',
+          createdAt: context.now - (index + 1) * 3 * MINUTE_MS,
+        }),
+    ),
+  );
 
   await Promise.all(
     Array.from({ length: THING_COUNT }, async (_, index) => {
@@ -168,5 +195,8 @@ export async function seedGoingOnceScale(
     }),
   );
 
-  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 1 + THING_COUNT };
+  return {
+    ...EMPTY_SEED_RESULT,
+    firestoreDocuments: 1 + waitingEmails.length + THING_COUNT,
+  };
 }

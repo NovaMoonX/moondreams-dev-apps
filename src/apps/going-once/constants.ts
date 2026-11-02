@@ -28,6 +28,9 @@ export const MAX_SALE_NAME_LENGTH = 80;
 export const MAX_PICKUP_AREA_LENGTH = 80;
 export const MAX_BUYER_NOTE_LENGTH = 300;
 
+/** Co-sellers and waiting invites together, per sale. */
+export const MAX_CO_SELLERS = 10;
+
 /** The sale's editable details on the Sale tab: what each is called, what an empty one invites and what it tells the seller. */
 export const SALE_DETAILS: Record<
   SaleDetailField,

@@ -48,15 +48,31 @@ export async function deleteSaleFiles(
   );
 }
 
-/** Photos first, then the sale with everything under it, so an interrupted run leaves the sale and a rerun finishes it. */
+/** Deletes the sale's waiting invitations, which live beside the sale rather than under it, and returns how many it removed. */
+export async function deleteSaleInvites(
+  firestore: Firestore,
+  saleId: string,
+): Promise<number> {
+  const invites = await firestore
+    .collection('apps/going-once/emailInvites')
+    .where('saleId', '==', saleId)
+    .get();
+  const writer = firestore.bulkWriter();
+  invites.docs.forEach((invite) => void writer.delete(invite.ref));
+  await writer.close();
+  return invites.size;
+}
+
+/** Photos and invitations first, then the sale with everything under it, so an interrupted run leaves the sale and a rerun finishes it. */
 export async function deleteSaleContents(
   firestore: Firestore,
   bucket: SaleBucket,
   saleId: string,
 ) {
   const files = await deleteSaleFiles(bucket, saleId);
+  const invites = await deleteSaleInvites(firestore, saleId);
   await firestore.recursiveDelete(firestore.doc(salePath(saleId)));
-  return { files };
+  return { files, invites };
 }
 
 /**
@@ -95,12 +111,12 @@ export const deleteSale = onCall(
     }
 
     try {
-      const { files } = await deleteSaleContents(
+      const { files, invites } = await deleteSaleContents(
         firestore,
         getStorage().bucket(),
         saleId,
       );
-      logger.info('goingOnce.sale.deleted', { saleId, files });
+      logger.info('goingOnce.sale.deleted', { saleId, files, invites });
       return { deleted: true };
     } catch (error) {
       const code = (error as { code?: unknown } | null)?.code;

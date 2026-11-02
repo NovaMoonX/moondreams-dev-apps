@@ -28,6 +28,7 @@ import {
   selectSaleById,
 } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
+import { isSaleSeller } from '@apps/going-once/utils/roles';
 import { keepEntryFor } from '@/hooks/useBackHistory';
 import {
   isListable,
@@ -84,7 +85,7 @@ function ItemsSection({
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
   const openItem = items.find((item) => item.id === openId) ?? null;
   const isModifying = openItem !== null && modifyId === openItem.id;
-  const isSeller = sale?.ownerUid === uid;
+  const isSeller = isSaleSeller(sale, uid);
 
   const hasTools = items.length >= SEARCH_FROM_ITEMS;
   const searched = items.filter(

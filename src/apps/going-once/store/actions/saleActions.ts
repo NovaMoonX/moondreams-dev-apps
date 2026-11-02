@@ -46,6 +46,7 @@ export function startSale(
     ownerUid: uid,
     createdBy: uid,
     members: [uid],
+    memberJoinedAt: {},
     createdAt: Date.now(),
     lastEditedAt: null,
   };

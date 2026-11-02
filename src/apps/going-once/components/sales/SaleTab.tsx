@@ -10,6 +10,7 @@ import SummaryRow from '@/components/SummaryRow';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppSelector } from '@/store';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import PeopleSection from '@apps/going-once/components/people/PeopleSection';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
 import { SALE_DETAILS } from '@apps/going-once/constants';
 import { deleteSale } from '@apps/going-once/store/actions/saleActions';
@@ -19,6 +20,7 @@ import {
 } from '@apps/going-once/store/selectors';
 import type { Sale, SaleDetailField } from '@apps/going-once/types';
 import { toFirstName } from '@apps/going-once/utils/personName';
+import { isSaleSeller } from '@apps/going-once/utils/roles';
 import { formatOfAsked, type StatusView } from '@apps/going-once/utils/status';
 import { formatStatusTotal } from '@apps/going-once/utils/statusSummary';
 
@@ -35,6 +37,9 @@ const pluralize = (count: number, one: string, many: string) =>
 interface SaleTabProps {
   sale: Sale;
   uid: string;
+  myEmail: string | null;
+  /** The person left the sale: go back to Your sales. */
+  onLeft: () => void;
   /** Opens the Things tab on this status. */
   onOpenStatus: (view: StatusView) => void;
   /** The sale is gone: leave it. */
@@ -50,7 +55,14 @@ const describeLosers = (count: number, names: string[]) => {
   return [`${joinNames(names)} ${verb} access`];
 };
 
-function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
+function SaleTab({
+  sale,
+  uid,
+  myEmail,
+  onLeft,
+  onOpenStatus,
+  onDeleted,
+}: SaleTabProps) {
   const { confirm } = useActionModal();
   const summary = useAppSelector((state) =>
     selectStatusSummary(state, sale.id),
@@ -66,7 +78,7 @@ function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
   const [editing, setEditing] = useState<SaleDetailField | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const isSeller = sale.ownerUid === uid;
+  const isSeller = isSaleSeller(sale, uid);
 
   const handleDelete = async () => {
     const photoCount = items.reduce((sum, item) => sum + item.photos.length, 0);
@@ -127,6 +139,8 @@ function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
           }}
         />
       </div>
+
+      <PeopleSection sale={sale} uid={uid} myEmail={myEmail} onLeft={onLeft} />
 
       <div className='space-y-2'>
         <SectionDivider label='Details' />
