@@ -191,6 +191,7 @@ export interface Inquiry {
   saleId: string;
   itemId: string;
   itemTitleAtSend: string;
+  /** `null` once the sale's contacts are cleared. */
   name: string | null;
   email: string | null;
   phone: string | null;
@@ -217,6 +218,7 @@ export interface InterestRequest {
   name: string;
   contact: string;
   message: string;
+  /** Left empty by a person; anything in it is a bot. */
   website: string;
 }
 

@@ -117,10 +117,11 @@ async function send(
     if (existing.exists) {
       const sendCount = Number(existing.get('sendCount') ?? 1);
       const lastSentAt = Number(existing.get('lastSentAt') ?? 0);
-      if (
-        sendCount >= INQUIRY_LIMITS.MAX_SENDS_PER_INQUIRY ||
-        now - lastSentAt < INQUIRY_LIMITS.RESEND_GAP_MS
-      ) {
+      if (sendCount >= INQUIRY_LIMITS.MAX_SENDS_PER_INQUIRY) {
+        return false;
+      }
+      if (now - lastSentAt < INQUIRY_LIMITS.RESEND_GAP_MS) {
+        transaction.update(inquiry, { name, message });
         return false;
       }
       transaction.update(inquiry, {

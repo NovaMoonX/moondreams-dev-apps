@@ -21,6 +21,7 @@ export interface GoingOnceState {
   sales: { items: Sale[]; status: LoadStatus };
   /** The sale on screen, read on its own so it stays current while its tabs are open. */
   openSale: { sale: Sale | null; status: LoadStatus };
+  /** Tagged with the sale they were read for, so a stale list is never shown. */
   items: { saleId: string | null; items: Item[]; status: LoadStatus };
   inquiries: {
     saleId: string | null;

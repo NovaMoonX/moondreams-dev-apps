@@ -17,6 +17,7 @@ import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { sendInterest } from '@apps/going-once/queries/salePageQueries';
 import type { InterestResult, PublicThing } from '@apps/going-once/types';
 import { formatPhone, readContact } from '@apps/going-once/utils/contact';
+import { toPrefilledMessage } from '@apps/going-once/utils/inquiries';
 
 interface InterestViewProps {
   thing: PublicThing;
@@ -49,9 +50,7 @@ function InterestView({
 }: InterestViewProps) {
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
-  const [message, setMessage] = useState(
-    `Hi! Is the ${thing.title} still available?`,
-  );
+  const [message, setMessage] = useState(toPrefilledMessage(thing.title));
   const [website, setWebsite] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<Sent | null>(null);

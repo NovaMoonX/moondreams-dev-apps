@@ -1,4 +1,5 @@
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
+import { MAX_ITEM_TITLE_LENGTH } from '@apps/going-once/constants';
 import type { Inquiry, Item } from '@apps/going-once/types';
 
 const DAY_MS = 86_400_000;
@@ -39,6 +40,10 @@ export function describeInquiryThing(
 /** Who asked: the name, or "A buyer" once the sale's contacts have been cleared. */
 export const getInquirerName = (inquiry: Inquiry) => inquiry.name ?? 'A buyer';
 
+/** The message the interest form starts with, from the title as the server keeps it. */
+export const toPrefilledMessage = (title: string) =>
+  `Hi! Is the ${title.trim().slice(0, MAX_ITEM_TITLE_LENGTH)} still available?`;
+
 /** Whether the message is just the one the form starts with, so a row has nothing of the buyer's own to show. */
 export const isPrefilledMessage = (inquiry: Inquiry) =>
-  inquiry.message === `Hi! Is the ${inquiry.itemTitleAtSend} still available?`;
+  inquiry.message === toPrefilledMessage(inquiry.itemTitleAtSend);
