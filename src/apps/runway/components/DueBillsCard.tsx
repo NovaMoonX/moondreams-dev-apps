@@ -200,6 +200,7 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
       </span>
       {isAsking && payment && (
         <PaidAmountSheet
+          billId={due.billId}
           billName={due.name}
           payment={payment}
           onMark={markPaid}

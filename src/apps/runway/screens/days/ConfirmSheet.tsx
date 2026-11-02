@@ -45,6 +45,7 @@ import {
   FORM_FLOW_WORDS,
   MAX_NOTE_LENGTH,
   RUNWAY_SEARCH_THRESHOLD,
+  VARIES_HINT,
 } from '@apps/runway/constants';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import {
@@ -414,9 +415,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
           disabled={isSaving}
           hint={
             isVarying && (
-              <MaskedText>
-                {CONFIRM_WORDS.variesHint(formatRange(day.amount))}
-              </MaskedText>
+              <MaskedText>{VARIES_HINT(formatRange(day.amount))}</MaskedText>
             )
           }
         />

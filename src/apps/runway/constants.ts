@@ -441,7 +441,6 @@ export const CONFIRM_WORDS = {
   extraTo: 'The extra is left from this day.',
   shortFrom: 'The shortfall comes out of what is left from this day.',
   needsAmount: 'Enter the amount that arrived.',
-  variesHint: (range: string) => `It varies, usually ${range}`,
   needsDate: 'Pick the date it arrived.',
   holds: 'Choose what to do for each item that is short first.',
   linesTakeTooMuch:
@@ -707,12 +706,15 @@ export const CHECKLIST_WORDS = {
   tickFailed: 'That tick did not save. Try again.',
 } as const;
 
+/** Under an amount that turns a range into a record: what it usually is. */
+export const VARIES_HINT = (range: string) => `It varies, usually ${range}`;
+
 /** A bill whose amount varies is marked paid with what it really came to, never the planned figure. */
 export const PAID_AMOUNT_WORDS = {
   title: (name: string) => `What did ${name} come to?`,
   amount: 'Amount paid',
-  planned: (range: string) => `It varies, usually ${range}`,
   markSub: 'It varies, so say what it came to',
+  rowHint: 'Varies · tick to say what it came to',
   needsAmount: 'Enter what it came to.',
   fromFree: (amount: string) =>
     `${amount} more than was set aside comes out of Free to Spend`,

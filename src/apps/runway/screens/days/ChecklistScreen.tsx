@@ -79,9 +79,13 @@ function ChecklistBillRow({
     latest.current = paid;
   });
   const [pending, setPending] = useState<boolean | null>(null);
-  const progress = payment
-    ? (getChecklistProgress(payment) ?? BILL_WORDS.readyToPay)
-    : null;
+  const getProgress = () => {
+    if (!payment) return null;
+    if (payment.paid === null && needsPaidAmount(payment))
+      return PAID_AMOUNT_WORDS.rowHint;
+    return getChecklistProgress(payment) ?? BILL_WORDS.readyToPay;
+  };
+  const progress = getProgress();
   const amount = formatCents(line.cents);
   const settled = payment ? paid.isPaid : isDone;
   const isChecked = pending ?? settled;
@@ -159,6 +163,7 @@ function ChecklistBillRow({
       )}
       {isAsking && payment && (
         <PaidAmountSheet
+          billId={line.itemId}
           billName={line.name}
           payment={payment}
           onMark={(cents) => toggle(true, cents)}

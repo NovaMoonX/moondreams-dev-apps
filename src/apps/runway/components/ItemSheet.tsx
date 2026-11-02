@@ -828,6 +828,7 @@ function ItemSheet({
         )}
         {isAskingPaid && payment && (
           <PaidAmountSheet
+            billId={itemId}
             billName={payload.name}
             payment={payment}
             onMark={paid.mark}
