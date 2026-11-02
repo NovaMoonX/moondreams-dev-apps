@@ -1,6 +1,6 @@
 import { FirebaseError } from 'firebase/app';
 import { httpsCallable } from 'firebase/functions';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 
 import { db, functions } from '@/lib/firebase/config';
 import { ADMIN_NAME } from '@lib/app/app.constants';
@@ -85,6 +85,24 @@ const SERVER_SENTENCES = [
   "The sale wasn't fully deleted. Delete it again to finish.",
 ];
 
+const toDeleteReason = (code: string, error: unknown) => {
+  if (code === 'functions/deadline-exceeded')
+    return 'Still deleting. Check again in a moment.';
+  if (code === 'functions/unauthenticated')
+    return 'Sign in again to delete this sale.';
+  if (error instanceof Error && SERVER_SENTENCES.includes(error.message))
+    return error.message;
+  return DELETE_FAILED;
+};
+
+// A missing callable also answers not-found, so "already gone" is checked against the sale itself; a read refused for a missing sale counts as gone.
+const isSaleGone = (saleId: string) =>
+  getDoc(doc(db, 'apps', 'going-once', 'sales', saleId)).then(
+    (snapshot) => !snapshot.exists(),
+    (error: unknown) =>
+      error instanceof FirebaseError && error.code === 'permission-denied',
+  );
+
 export type DeleteSaleResult =
   { outcome: 'deleted' } | { outcome: 'failed'; reason: string };
 
@@ -99,16 +117,8 @@ export async function deleteSale(saleId: string): Promise<DeleteSaleResult> {
     return { outcome: 'deleted' };
   } catch (error) {
     const code = error instanceof FirebaseError ? error.code : '';
-    if (code === 'functions/not-found') return { outcome: 'deleted' };
-    const reason = ((): string => {
-      if (code === 'functions/deadline-exceeded')
-        return 'Still deleting. Check again in a moment.';
-      if (code === 'functions/unauthenticated')
-        return 'Sign in again to delete this sale.';
-      if (error instanceof Error && SERVER_SENTENCES.includes(error.message))
-        return error.message;
-      return DELETE_FAILED;
-    })();
-    return { outcome: 'failed', reason };
+    if (code === 'functions/not-found' && (await isSaleGone(saleId)))
+      return { outcome: 'deleted' };
+    return { outcome: 'failed', reason: toDeleteReason(code, error) };
   }
 }

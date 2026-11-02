@@ -42,6 +42,14 @@ interface SaleTabProps {
 }
 
 /** The Sale tab: where the sale stands, its details, and for the seller deleting it. */
+const describeLosers = (count: number, names: string[]) => {
+  if (count === 0) return [];
+  const verb = count === 1 ? 'loses' : 'lose';
+  if (names.includes('Someone'))
+    return [`${pluralize(count, 'co-seller', 'co-sellers')} ${verb} access`];
+  return [`${joinNames(names)} ${verb} access`];
+};
+
 function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
   const { confirm } = useActionModal();
   const summary = useAppSelector((state) =>
@@ -66,14 +74,7 @@ function SaleTab({ sale, uid, onOpenStatus, onDeleted }: SaleTabProps) {
     const names = coSellerIds.map((id) =>
       toFirstName(people?.map[id]?.displayName),
     );
-    const losers =
-      coSellerIds.length === 0
-        ? []
-        : [
-            names.includes('Someone')
-              ? `${pluralize(coSellerIds.length, 'co-seller', 'co-sellers')} ${coSellerIds.length === 1 ? 'loses' : 'lose'} access`
-              : `${joinNames(names)} ${names.length === 1 ? 'loses' : 'lose'} access`,
-          ];
+    const losers = describeLosers(coSellerIds.length, names);
     const isConfirmed = await confirm({
       title: `Delete ${sale.name}?`,
       message: `This deletes the sale, its ${pluralize(items.length, 'thing', 'things')} and ${pluralize(photoCount, 'photo', 'photos')}${collected > 0 ? `, and the ${formatCentsShort(collected)} you recorded as collected` : ''}. ${losers.map((line) => `${line}. `).join('')}It can't be undone.`,
