@@ -1,4 +1,5 @@
 import type { EarlyPayment, TripExpense } from '@apps/waypoint/types';
+import { getRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
 
 const EPSILON = 0.005;
 
@@ -191,6 +192,8 @@ export interface OwedItem {
   expense: TripExpense;
   share: number;
   isRepaid: boolean;
+  /** Who marked it paid back; null when nobody did or the document predates it. */
+  markedByUid: string | null;
   /** The part of the share already covered by an early payment to the person owed. */
   applied: number;
 }
@@ -258,14 +261,14 @@ function groupOwedByDirection(expenses: TripExpense[], currentMemberIds: string[
       }
 
       const share = amounts[debtorUid] ?? 0;
-      const isRepaid = (expense.paidMemberStatus ?? {})[debtorUid]?.isPaid ?? false;
+      const { isPaid: isRepaid, markedByUid } = getRepaidStatus(expense, debtorUid);
       const early = getEarlyPayments(expense)[debtorUid];
       const applied = early && early.toUid === creditorUid && !early.isReturned ? Math.min(early.amount, share) : 0;
       const covered = isRepaid ? share : applied;
       const isSettled = share - covered <= EPSILON;
       const key = directionKey(debtorUid, creditorUid);
       const owed = byDirection.get(key) ?? emptyOwed();
-      owed.items.push({ expense, share, isRepaid, applied });
+      owed.items.push({ expense, share, isRepaid, markedByUid, applied });
       owed.total += share;
       owed.repaid += covered;
       owed.remaining += share - covered;
