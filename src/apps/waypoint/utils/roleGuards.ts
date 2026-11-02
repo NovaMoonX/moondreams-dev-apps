@@ -1,4 +1,4 @@
-import type { TripSpace, UserRole } from '@apps/waypoint/types';
+import type { TripExpense, TripSpace, UserRole } from '@apps/waypoint/types';
 
 export function getTripMember(trip: TripSpace, uid: string) {
   return trip.members[uid] ?? null;
@@ -89,4 +89,19 @@ export function canArchiveEvent(trip: TripSpace, uid: string) {
  * as editing an existing item. */
 export function canCreateItem(trip: TripSpace, uid: string) {
   return hasTripStarted(trip) ? isTripAdmin(trip, uid) : hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
+}
+
+/** Who may change or delete a shared expense: its payer once one person paid it, else Admins and Editors. */
+export function canChangeExpense(
+  trip: TripSpace,
+  uid: string,
+  expense: Pick<TripExpense, 'status' | 'payerUid'>,
+) {
+  if (expense.status !== 'PAID' || expense.payerUid === null) {
+    return hasTripRole(trip, uid, ['ADMIN', 'EDITOR']);
+  }
+  if (expense.payerUid === uid) {
+    return isTripMember(trip, uid);
+  }
+  return !isTripMember(trip, expense.payerUid) && isTripAdmin(trip, uid);
 }

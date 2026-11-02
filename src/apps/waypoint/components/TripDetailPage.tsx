@@ -24,15 +24,22 @@ import {
   ClipboardCopy,
   Globe,
   Image,
+  Keyboard,
   Link,
   Megaphone,
   MapPin,
   MoreHorizontal,
   Pencil,
+  Utensils,
   Trash2,
 } from 'lucide-react';
 
+import AppToggle from '@/components/AppToggle';
+import DetailSheet from '@/components/DetailSheet';
+import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
+import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useAppDispatch, type RootState } from '@/store';
+import EditTripMealsModal from '@apps/waypoint/components/EditTripMealsModal';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -72,8 +79,10 @@ import RentalsEntry from '@apps/waypoint/components/RentalsEntry';
 import TripEntryPoints from '@apps/waypoint/components/TripEntryPoints';
 import TripProgressBar from '@apps/waypoint/components/TripProgressBar';
 import {
+  OTHER_SHORTCUTS,
   TRIP_SECTION_TABS,
   TRIP_SUBVIEW_LABELS,
+  TRIP_TAB_SHORTCUTS,
   type TripSectionTab,
 } from '@apps/waypoint/constants';
 import { createAnnouncement } from '@apps/waypoint/store/actions/announcementActions';
@@ -82,11 +91,12 @@ import {
   deleteTrip,
   editTrip,
   setTripCity,
+  setTripWatchedMeals,
   setTripArchived,
   type EditTripValues,
 } from '@apps/waypoint/store/actions/tripActions';
 import { getTripStatus, selectIsTripDataLoaded, selectSortedIdeas, selectSortedRentals, selectSortedStays } from '@apps/waypoint/store/selectors';
-import type { ChecklistCategory, IdeaType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
+import type { ChecklistCategory, IdeaType, MealType, TimelineEvent, TripCity, TripSpace } from '@apps/waypoint/types';
 import { canAddIdea, hasTripRole, hasTripStarted, isTripAdmin } from '@apps/waypoint/utils/roleGuards';
 import { buildTimelineMarkdown, buildTripMarkdown } from '@apps/waypoint/utils/itineraryMarkdown';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
@@ -102,7 +112,10 @@ interface TripDetailPageProps {
   onBack: () => void;
 }
 
-type EditingField = 'title' | 'dates' | 'city' | 'cover' | null;
+type EditingField = 'title' | 'dates' | 'city' | 'meals' | 'cover' | null;
+
+const DAY_SECTION_SELECTOR = '[data-day-section]';
+const DAY_SCROLL_OFFSET_PX = 96;
 
 function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageProps) {
   const now = useNow();
@@ -164,6 +177,28 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     setSearchParams(nextSearchParams, { replace: true });
   };
   const [dayTab, setDayTab] = useState('all');
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [isUsingShortcuts, setIsUsingShortcuts] = useLocalStoragePreference('waypoint:keyboardShortcuts', true);
+
+  const jumpToDay = (direction: 1 | -1) => {
+    if (sectionTab !== 'overview') return;
+    const tops = Array.from(document.querySelectorAll(DAY_SECTION_SELECTOR)).map(
+      (section) => section.getBoundingClientRect().top - DAY_SCROLL_OFFSET_PX,
+    );
+    const target = direction === 1 ? tops.find((top) => top > 1) : tops.filter((top) => top < -1).pop();
+    if (target === undefined) return;
+    window.scrollTo({ top: window.scrollY + target, behavior: 'smooth' });
+  };
+
+  useKeyboardShortcuts(
+    {
+      ...Object.fromEntries(TRIP_TAB_SHORTCUTS.map(({ key, tab }) => [key, () => setSectionTab(tab)])),
+      j: () => jumpToDay(1),
+      k: () => jumpToDay(-1),
+      '?': () => setIsShortcutsOpen(true),
+    },
+    !isSmallScreen && isUsingShortcuts,
+  );
   const [isAnnouncementFormOpen, setIsAnnouncementFormOpen] = useState(false);
   const [isSubmittingAnnouncement, setIsSubmittingAnnouncement] = useState(false);
   const [editingField, setEditingField] = useState<EditingField>(null);
@@ -320,6 +355,16 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
     }
   };
 
+  const handleSetWatchedMeals = async (watchedMeals: MealType[]) => {
+    setIsSubmittingTripEdit(true);
+    try {
+      await dispatch(setTripWatchedMeals({ uid: currentUserId, trip, watchedMeals })).unwrap();
+      setEditingField(null);
+    } finally {
+      setIsSubmittingTripEdit(false);
+    }
+  };
+
   const handleToggleArchived = async () => {
     setIsMobileActionsOpen(false);
     if (!trip.isArchived) {
@@ -402,6 +447,25 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         },
       })
     : null;
+  const mealsActionItem = canEdit
+    ? option({
+        label: 'Meals to plan',
+        value: 'meals',
+        icon: <Utensils className='h-4 w-4' />,
+        onClick: () => {
+          setEditingField('meals');
+          setIsMobileActionsOpen(false);
+        },
+      })
+    : null;
+  const shortcutsActionItem = !isSmallScreen
+    ? option({
+        label: 'Keyboard shortcuts',
+        value: 'shortcuts',
+        icon: <Keyboard className='h-4 w-4' />,
+        onClick: () => setIsShortcutsOpen(true),
+      })
+    : null;
   const coverActionItem = canEdit
     ? option({
         label: 'Set cover photo',
@@ -467,10 +531,10 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
       ))
     : null;
 
-  const actionItems = [cityActionItem, coverActionItem, announcementActionItem, copyMarkdownActionItem, archiveActionItem, deleteDesktopMenuItem].filter(
+  const actionItems = [cityActionItem, mealsActionItem, coverActionItem, announcementActionItem, copyMarkdownActionItem, shortcutsActionItem, archiveActionItem, deleteDesktopMenuItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
-  const groupedEditActionItems = [titleActionItem, datesActionItem, cityActionItem, coverActionItem].filter(
+  const groupedEditActionItems = [titleActionItem, datesActionItem, cityActionItem, mealsActionItem, coverActionItem].filter(
     (item): item is NonNullable<typeof item> => item !== null,
   );
   const standaloneActionItems = [announcementActionItem, copyMarkdownActionItem, archiveActionItem].filter(
@@ -759,13 +823,13 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         >
           {!hasAppNav && (
             <TabsList>
-              <TabsTrigger value='overview'>Timeline</TabsTrigger>
-              <TabsTrigger value='members'>Members</TabsTrigger>
-              <TabsTrigger value='expenses'>Expenses</TabsTrigger>
-              <TabsTrigger value='stays'>Stays</TabsTrigger>
-              <TabsTrigger value='rentals'>Rentals</TabsTrigger>
-              <TabsTrigger value='checklist'>Checklist</TabsTrigger>
-              <TabsTrigger value='ideas'>Ideas</TabsTrigger>
+              <TabsTrigger value='overview'><span title='Timeline (T)'>Timeline</span></TabsTrigger>
+              <TabsTrigger value='members'><span title='Members (M)'>Members</span></TabsTrigger>
+              <TabsTrigger value='expenses'><span title='Expenses (E)'>Expenses</span></TabsTrigger>
+              <TabsTrigger value='stays'><span title='Stays (S)'>Stays</span></TabsTrigger>
+              <TabsTrigger value='rentals'><span title='Rentals (R)'>Rentals</span></TabsTrigger>
+              <TabsTrigger value='checklist'><span title='Checklist (C)'>Checklist</span></TabsTrigger>
+              <TabsTrigger value='ideas'><span title='Ideas (I)'>Ideas</span></TabsTrigger>
             </TabsList>
           )}
           {sectionTab !== '' && !hasAppNav && (
@@ -775,6 +839,7 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
                 variant='link'
                 size='sm'
                 className='h-auto p-0 text-xs'
+                title='Overview (O)'
                 onClick={() => setSectionTab('')}
               >
                 Collapse view
@@ -872,6 +937,36 @@ function TripDetailPage({ trip, events, currentUserId, onBack }: TripDetailPageP
         onSubmit={handleSetCity}
         onClose={() => setEditingField(null)}
       />
+      <EditTripMealsModal
+        key={`meals-${editingField === 'meals' ? 'open' : 'closed'}`}
+        isOpen={editingField === 'meals'}
+        trip={trip}
+        isSubmitting={isSubmittingTripEdit}
+        onSubmit={handleSetWatchedMeals}
+        onClose={() => setEditingField(null)}
+      />
+      <DetailSheet isOpen={isShortcutsOpen} onClose={() => setIsShortcutsOpen(false)} title='Keyboard shortcuts'>
+        <div className='border-border mb-2 flex items-center justify-between gap-3 border-b pr-1 pb-3'>
+          <span className='text-sm'>
+            <span className='block font-medium'>Use keyboard shortcuts</span>
+            <span className='text-muted-foreground block text-xs'>Single letters jump around this trip. Turn them off if they get in the way.</span>
+          </span>
+          <AppToggle checked={isUsingShortcuts} onCheckedChange={setIsUsingShortcuts} aria-label='Use keyboard shortcuts' />
+        </div>
+        <ul className='divide-border divide-y'>
+          {[
+            ...TRIP_TAB_SHORTCUTS.map(({ key, label }) => ({ key, label: `Go to ${label}` })),
+            ...OTHER_SHORTCUTS,
+          ].map(({ key, label }) => (
+            <li key={key} className='flex items-center gap-3 py-2 text-sm'>
+              <kbd className='border-border bg-secondary w-8 shrink-0 rounded border px-1.5 py-0.5 text-center font-mono text-xs'>
+                {key.toUpperCase()}
+              </kbd>
+              <span>{label}</span>
+            </li>
+          ))}
+        </ul>
+      </DetailSheet>
       <EditTripDatesModal
         key={`dates-${editingField === 'dates' ? 'open' : 'closed'}`}
         isOpen={editingField === 'dates'}

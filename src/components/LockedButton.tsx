@@ -13,11 +13,12 @@ interface LockedButtonProps {
   title: string;
   /** Why it is locked and what the person can still do. */
   children: ReactNode;
+  size?: 'sm';
   className?: string;
 }
 
 /** A control the person is kept out of: visible, with a lock and a dashed outline; a tap (never a hover) opens a dialog that says why. Not natively `disabled`, which a phone gives no hover or tap, and never faded with `opacity-*` (the label stayed under 3:1); the state is in the accessible name because Dreamer UI's `Button` drops `aria-disabled`. */
-function LockedButton({ label, title, children, className }: LockedButtonProps) {
+function LockedButton({ label, title, children, size, className }: LockedButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { dialogId, onDialogClose } = useSheetHistory(isOpen, () =>
     setIsOpen(false),
@@ -27,6 +28,7 @@ function LockedButton({ label, title, children, className }: LockedButtonProps) 
     <>
       <Button
         variant='secondary'
+        size={size}
         className={join('gap-2 border border-dashed', className)}
         onClick={() => setIsOpen(true)}
       >

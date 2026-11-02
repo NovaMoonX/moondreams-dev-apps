@@ -9,7 +9,7 @@ import { deleteFile, uploadFile } from '@/lib/firebase/storage';
 import { ADMIN_NAME } from '@lib/app/app.constants';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
-import type { TripCity, TripSpace } from '@apps/waypoint/types';
+import type { MealType, TripCity, TripSpace } from '@apps/waypoint/types';
 import { isRelativeTrip } from '@apps/waypoint/utils/tripTime';
 import {
   createTripSpace,
@@ -280,6 +280,22 @@ export const setTripCity = createAsyncThunk<
   const lastEditedAt = Date.now();
   await updateDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id), { city, lastEditedAt });
   const updatedTrip: TripSpace = { ...trip, city, lastEditedAt };
+  dispatch(upsertTrip(updatedTrip));
+  return updatedTrip;
+});
+
+export const setTripWatchedMeals = createAsyncThunk<
+  TripSpace,
+  { uid: string; trip: TripSpace; watchedMeals: MealType[] | null },
+  { rejectValue: string }
+>('waypoint/trips/setWatchedMeals', async ({ uid, trip, watchedMeals }, { dispatch, rejectWithValue }) => {
+  if (!['ADMIN', 'EDITOR'].includes(trip.members[uid]?.role ?? '')) {
+    return rejectWithValue('You do not have permission to edit this trip.');
+  }
+
+  const lastEditedAt = Date.now();
+  await updateDoc(doc(db, ...TRIP_COLLECTION_PATH, trip.id), { watchedMeals, lastEditedAt });
+  const updatedTrip: TripSpace = { ...trip, watchedMeals, lastEditedAt };
   dispatch(upsertTrip(updatedTrip));
   return updatedTrip;
 });

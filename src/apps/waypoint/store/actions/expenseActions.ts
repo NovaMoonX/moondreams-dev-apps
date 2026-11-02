@@ -39,6 +39,13 @@ interface CreateExpenseInput {
   splitAmounts?: Record<string, number> | null;
 }
 
+// Rules move a paid expense to its payer, so a screen opened before someone paid it is refused.
+const explainDenied = (error: unknown): never => {
+  throw (error as { code?: string } | null)?.code === 'permission-denied'
+    ? new Error('You can no longer change this expense. Once someone has paid it, only they can change it.')
+    : error;
+};
+
 export const createExpense = createAsyncThunk<
   TripExpense,
   CreateExpenseInput,
@@ -185,7 +192,7 @@ export const updateExpense = createAsyncThunk<
     lastEditedAt: Date.now(),
   };
 
-  await updateDoc(getExpenseRef(input.expense.tripId, input.expense.id), changes);
+  await updateDoc(getExpenseRef(input.expense.tripId, input.expense.id), changes).catch(explainDenied);
   return { ...input.expense, ...changes };
 });
 
@@ -262,7 +269,7 @@ export const updateExpenseSplit = createAsyncThunk<
     };
     transaction.update(expenseRef, changes);
     return { ...current, ...changes };
-  });
+  }).catch(explainDenied);
   return typeof result === 'string' ? rejectWithValue(result) : result;
 });
 
@@ -273,7 +280,7 @@ export const deleteExpense = createAsyncThunk<
 >('waypoint/expenses/delete', async (expense) => {
   await deleteDoc(
     doc(db, 'apps', 'waypoint', 'trips', expense.tripId, 'expenses', expense.id),
-  );
+  ).catch(explainDenied);
   return expense.id;
 });
 
@@ -347,7 +354,7 @@ export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripEx
       };
       transaction.update(expenseRef, changes);
       return { ...current, ...changes } as TripExpense;
-    });
+    }).catch(explainDenied);
     return updatedExpense;
   },
 );

@@ -8,7 +8,7 @@ import IdeaDetailsOverlay from '@apps/waypoint/components/IdeaDetailsOverlay';
 import IdeaVoteButton from '@apps/waypoint/components/IdeaVoteButton';
 import SectionEntryRow from '@apps/waypoint/components/SectionEntryRow';
 import { IDEA_TYPE_EMOJIS, IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
-import { selectSortedIdeas } from '@apps/waypoint/store/selectors';
+import { isIdeaOnItinerary, selectLiveItineraryIds, selectSortedIdeas } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TripSpace } from '@apps/waypoint/types';
 import { getIdeaTimingSummary } from '@apps/waypoint/utils/ideaLabels';
 
@@ -26,10 +26,11 @@ const PREVIEW_COUNT = 3;
 
 function IdeasOverview({ trip, currentUserId, canAdd, isProminent, onOpen, onAdd }: IdeasOverviewProps) {
   const ideas = useAppSelector((state) => selectSortedIdeas(state, trip.id));
+  const liveIds = useAppSelector((state) => selectLiveItineraryIds(state, trip.id));
   const [ideaType, setIdeaType] = useState<IdeaType>('ACTIVITY');
   const undecided = useMemo(
-    () => ideas.filter((idea) => idea.convertedToEntityId === null),
-    [ideas],
+    () => ideas.filter((idea) => !isIdeaOnItinerary(idea, liveIds)),
+    [ideas, liveIds],
   );
   const onItinerary = ideas.length - undecided.length;
 
