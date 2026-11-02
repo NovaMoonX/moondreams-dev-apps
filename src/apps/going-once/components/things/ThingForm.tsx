@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormScreen from '@/components/FormScreen';
@@ -47,7 +48,6 @@ const BUYERS_SEE: RowKey[] = [
 const PRIVATE: RowKey[] = ['floor', 'original', 'bought', 'notes'];
 
 const SAVE_FAILED = "That didn't save. Check your connection and try again.";
-const SAVE_FAILED_LATER = "A change didn't save. Open that row and try again.";
 /** An offline write never settles, so after this long it counts as kept on the phone and the sheet closes. */
 const QUEUED_AFTER_MS = 2000;
 
@@ -70,6 +70,7 @@ function RowSheet({
   onClose,
 }: RowSheetProps) {
   const { label, fields, Question } = THING_ROWS[rowKey];
+  const { addToast } = useToast();
   const [base] = useState(() => toFields(toAnswers(item)));
   const [draft, setDraft] = useState(() => ({
     ...toAnswers(item),
@@ -107,7 +108,15 @@ function RowSheet({
       setError(SAVE_FAILED);
       return;
     }
-    if (outcome === 'queued') write.catch(onSaveFailedLater);
+    if (outcome === 'queued')
+      write.catch(() => {
+        addToast({
+          title: `${label} didn't save`,
+          description: 'Open it in Modify and try again.',
+          type: 'error',
+        });
+        onSaveFailedLater();
+      });
     onWritten();
     onClose();
   };
@@ -264,10 +273,7 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
             setHasSaved(true);
             setSaveError(null);
           }}
-          onSaveFailedLater={() => {
-            setHasSaved(false);
-            setSaveError(SAVE_FAILED_LATER);
-          }}
+          onSaveFailedLater={() => setHasSaved(false)}
           onClose={() => setOpenKey(null)}
         />
       )}

@@ -4,6 +4,9 @@ import { deleteItem } from '@apps/going-once/store/actions/itemActions';
 import type { Item } from '@apps/going-once/types';
 import { getDeleteEffects, getItemName } from '@apps/going-once/utils/listing';
 
+const isRefused = (error: unknown) =>
+  (error as { code?: string } | null)?.code === 'permission-denied';
+
 /** Asks before deleting a thing and deletes it in the background; resolves true once the person has confirmed. */
 export function useDeleteThing(saleId: string) {
   const { confirm } = useActionModal();
@@ -19,11 +22,12 @@ export function useDeleteThing(saleId: string) {
       destructive: true,
     });
     if (!confirmed) return false;
-    deleteItem(saleId, item, () =>
+    deleteItem(saleId, item, (error) =>
       addToast({
         title: `${name} wasn't deleted`,
-        description:
-          'Only the seller can delete it now. It is back on your list.',
+        description: isRefused(error)
+          ? 'Only the seller can delete it now. It is back on your list.'
+          : 'Something went wrong. It is back on your list; try again.',
         type: 'error',
       }),
     );

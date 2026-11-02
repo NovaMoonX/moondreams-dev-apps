@@ -232,11 +232,6 @@ const useHistoryLayer = (
   }, [isOpen, kind, dialogId]);
 };
 
-const MAX_BACK_STEPS = 6;
-const BACK_STEP_TIMEOUT_MS = 1500;
-let isSteppingBack = false;
-
-/** Runs `action` once the history entries of every open sheet have been stepped back over (the sheets close as for a back gesture), or at once when none is open, so a route change made from inside a sheet never replaces the sheet's own entry. A call made while another is stepping is ignored, and a sheet that keeps its entry stops the stepping after a few presses. */
 /** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL carries `param`. */
 export function keepEntryFor(param: string) {
   if (!new URLSearchParams(window.location.search).has(param)) return;
@@ -246,6 +241,11 @@ export function keepEntryFor(param: string) {
   window.history.pushState({ ...entry, keptFor: param }, '');
 }
 
+const MAX_BACK_STEPS = 6;
+const BACK_STEP_TIMEOUT_MS = 1500;
+let isSteppingBack = false;
+
+/** Runs `action` once the history entries of every open sheet have been stepped back over (the sheets close as for a back gesture), or at once when none is open, so a route change made from inside a sheet never replaces the sheet's own entry. A call made while another is stepping is ignored, and a sheet that keeps its entry stops the stepping after a few presses. */
 export function afterBackLayersClose(action: () => void) {
   if (isSteppingBack) return;
   const step = (stepsLeft: number) => {

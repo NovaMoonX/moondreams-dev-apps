@@ -57,11 +57,12 @@ function ItemsSection({
   const uploads = useAppSelector(selectPhotoUploads);
   const sale = useAppSelector((state) => selectSaleById(state, saleId));
   const [adding, setAdding] = useState<{ resume: Item | null } | null>(null);
-  const [isModifying, setIsModifying] = useState(false);
+  const [modifyId, setModifyId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
   const openItem = items.find((item) => item.id === openId) ?? null;
+  const isModifying = openItem !== null && modifyId === openItem.id;
   const isSeller = sale?.ownerUid === uid;
 
   const hasTools = items.length >= SEARCH_FROM_ITEMS;
@@ -77,9 +78,14 @@ function ItemsSection({
 
   // A link to a thing that is gone (deleted, or from another sale) opens nothing, so the address drops it.
   useEffect(() => {
-    if (openId !== null && openItem === null && status === 'ready')
+    if (
+      openId !== null &&
+      openItem === null &&
+      status === 'ready' &&
+      items.length > 0
+    )
       onCloseThing();
-  }, [openId, openItem, status, onCloseThing]);
+  }, [openId, openItem, status, items.length, onCloseThing]);
 
   const addButton = (
     <Button
@@ -185,7 +191,7 @@ function ItemsSection({
           }}
           onModify={() => {
             keepEntryFor('thing');
-            setIsModifying(true);
+            setModifyId(openItem.id);
           }}
         />
       )}
@@ -194,7 +200,7 @@ function ItemsSection({
           item={openItem}
           uid={uid}
           isSeller={isSeller}
-          onClose={() => setIsModifying(false)}
+          onClose={() => setModifyId(null)}
         />
       )}
       {adding && (
