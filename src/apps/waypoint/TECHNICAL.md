@@ -442,7 +442,12 @@ interface TripExpense {
   /** `markedByUid` and `log` (the last 10 flips: { isPaid, byUid, at, isReset }) are missing on older documents; read through `getRepaidStatus`. */
   paidMemberStatus: Record<
     string,
-    { isPaid: boolean; paidAt: number | null; markedByUid: string | null; log: RepaidLogEntry[] }
+    {
+      isPaid: boolean;
+      paidAt: number | null;
+      markedByUid: string | null;
+      log: RepaidLogEntry[];
+    }
   >;
   createdBy: string;
   createdAt: number;
