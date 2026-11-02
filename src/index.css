@@ -11,7 +11,8 @@
 
 @utility page {
 	/* Use the available layout width instead of the viewport width, which can include the scrollbar on mobile browsers. */
-  @apply min-h-dvh w-full max-w-full px-4 pb-12 pt-16;
+  @apply w-full max-w-full px-4 pb-12 pt-16;
+  min-height: calc(100dvh - var(--site-banner-inset, 0px));
 }
 
 /* A long list's day or section: the browser skips style, layout and paint until it nears the screen.
@@ -180,14 +181,10 @@ html.dark .subview-card {
 .subview-page {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: calc(100dvh - var(--site-banner-inset, 0px));
   width: 100%;
   padding: var(--subview-inset);
   padding-top: max(var(--subview-inset), env(safe-area-inset-top));
-}
-
-html[data-site-banner='true'] .subview-page {
-  padding-top: calc(var(--subview-inset) + 2.25rem);
 }
 
 .subview-page > .subview-card {
@@ -261,6 +258,14 @@ html[data-site-banner='true'] .subview-backdrop {
 
 #root {
   @apply min-h-dvh w-full max-w-full bg-background text-foreground;
+  padding-top: var(--site-banner-inset, 0px);
+  transition: padding-top 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* The top strip (offline / new version) is fixed over the screen, so every page starts below it: its height is the one place that
+ * says how far, shared by the header, the sticky bars and the page's own padding. */
+html[data-site-banner='true'] {
+  --site-banner-inset: 2.25rem;
 }
 
 body {
