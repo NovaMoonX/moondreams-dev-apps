@@ -1,3 +1,4 @@
+import { onIdTokenChanged } from 'firebase/auth';
 import {
   collection,
   onSnapshot,
@@ -8,7 +9,7 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 
-import { db } from '@/lib/firebase/config';
+import { auth, db } from '@/lib/firebase/config';
 import { normalizeEmail } from '@/utils/emailUtils';
 import type { SaleEmailInvite } from '@apps/going-once/types';
 
@@ -34,19 +35,28 @@ const listen = (
     invitesQuery,
     (snapshot) =>
       onChange(snapshot.docs.map((entry) => toInvite(entry.data()))),
-    // Someone whose email isn't verified can't read these; that just means no invitations.
-    () => onChange([]),
+    // A failed read says nothing about what is there, so the last list stands; someone whose email isn't verified never had one.
+    () => undefined,
   );
 
-/** Invitations addressed to this verified email. */
+/** Invitations addressed to this verified email. It listens again whenever the sign-in token is renewed, so an email verified a moment ago is picked up. */
 export function startMyInvitesListener(
   email: string,
   onChange: (invites: SaleEmailInvite[]) => void,
 ): Unsubscribe {
-  return listen(
-    query(INVITES, where('email', '==', normalizeEmail(email))),
-    onChange,
+  const invitesQuery = query(
+    INVITES,
+    where('email', '==', normalizeEmail(email)),
   );
+  const stopReading = { current: () => {} };
+  const stopTokens = onIdTokenChanged(auth, () => {
+    stopReading.current();
+    stopReading.current = listen(invitesQuery, onChange);
+  });
+  return () => {
+    stopTokens();
+    stopReading.current();
+  };
 }
 
 /** The open sale's invitations, for its sellers. */

@@ -32,9 +32,9 @@ function CoSellerIntro({ sale, uid }: CoSellerIntroProps) {
         icon='👋'
         lead={`${toFirstName(seller?.displayName)} added you to ${sale.name}.`}
       >
-        You see everything, floor prices and notes included, and can do all of
-        it but delete things, manage co-sellers or change the sale&apos;s
-        details.
+        You see everything, floor prices and notes included, and can do
+        everything but delete other people&apos;s things, manage co-sellers or
+        change the sale&apos;s details. You can leave from People.
       </IntroCard>
       <div className='flex justify-end'>
         <Button

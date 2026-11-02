@@ -9,6 +9,7 @@ import {
   setItemsError,
   setMyInvites,
   setOpenSale,
+  setLeavingSaleId,
   setOpenSaleError,
   setRemovedFrom,
   setSaleInvites,
@@ -20,13 +21,12 @@ import {
   startSaleInvitesListener,
 } from '@apps/going-once/store/listeners/invitesListener';
 import {
+  canReadSale,
+  isPermissionDenied,
   startOpenSaleItemsListener,
   startOpenSaleListener,
 } from '@apps/going-once/store/listeners/openSaleListener';
 import { startSalesListener } from '@apps/going-once/store/listeners/salesListener';
-
-const isRefused = (error: unknown) =>
-  (error as { code?: string } | null)?.code === 'permission-denied';
 
 /** Keeps the name of the sale on screen when it stops being the person's, before its data is cleared. */
 function noteRemoval(
@@ -38,7 +38,25 @@ function noteRemoval(
   const open = openSale.sale;
   if (!open || open.ownerUid === uid || leavingSaleId === open.id) return;
   if (!isStillMine(open.id))
-    dispatch(setRemovedFrom({ saleId: open.id, name: open.name }));
+    dispatch(
+      setRemovedFrom({
+        saleId: open.id,
+        name: open.name,
+        ownerUid: open.ownerUid,
+      }),
+    );
+}
+
+/** A refused read of the sale's things alone could be a one-off, so removal is declared only once the sale itself is refused too. */
+function noteRemovalIfSaleRefused(
+  uid: string,
+  saleId: string,
+  dispatch: AppDispatch,
+) {
+  void canReadSale(saleId).then((isReadable) => {
+    if (!isReadable && store.getState().goingOnce.openSale.sale?.id === saleId)
+      noteRemoval(uid, dispatch, () => false);
+  });
 }
 
 /** Starts the listeners: the person's sales and invitations, and the open sale, its things and its invitations once one is chosen. */
@@ -57,6 +75,9 @@ export function useGoingOnceSync(
         noteRemoval(uid, dispatch, (id) =>
           sales.some((sale) => sale.id === id),
         );
+        const { leavingSaleId } = store.getState().goingOnce;
+        if (leavingSaleId && !sales.some((sale) => sale.id === leavingSaleId))
+          dispatch(setLeavingSaleId(null));
         dispatch(setSales(sales));
       },
       () => dispatch(setSalesError()),
@@ -80,7 +101,7 @@ export function useGoingOnceSync(
       saleId,
       (sale) => dispatch(setOpenSale(sale)),
       (error) => {
-        if (isRefused(error)) noteRemoval(uid, dispatch, () => false);
+        if (isPermissionDenied(error)) noteRemoval(uid, dispatch, () => false);
         dispatch(setOpenSaleError());
       },
     );
@@ -88,7 +109,8 @@ export function useGoingOnceSync(
       saleId,
       (items) => dispatch(setItems({ saleId, items })),
       (error) => {
-        if (isRefused(error)) noteRemoval(uid, dispatch, () => false);
+        if (isPermissionDenied(error))
+          noteRemovalIfSaleRefused(uid, saleId, dispatch);
         dispatch(setItemsError());
       },
     );

@@ -369,6 +369,7 @@ service cloud.firestore {
           && request.resource.data.members.size() == resource.data.members.size() - 1
           && request.resource.data.members.hasAll(resource.data.members.removeAll(removed))
           && joinedAtOf(request.resource.data).diff(joinedAtOf(resource.data)).affectedKeys().hasOnly([removed[0]])
+          && !(removed[0] in joinedAtOf(request.resource.data))
           && request.resource.data.lastEditedAt is int;
       }
 

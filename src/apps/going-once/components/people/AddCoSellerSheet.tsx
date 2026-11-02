@@ -14,6 +14,31 @@ import { toFirstName } from '@apps/going-once/utils/personName';
 
 const ADD_FAILED = "That didn't save. Check your connection and try again.";
 
+interface Problem {
+  email: string;
+  myEmail: string | null;
+  memberEmails: string[];
+  invites: SaleEmailInvite[];
+  isFull: boolean;
+}
+
+function findProblem({
+  email,
+  myEmail,
+  memberEmails,
+  invites,
+  isFull,
+}: Problem): string | null {
+  if (!isValidEmail(email)) return null;
+  if (email === normalizeEmail(myEmail ?? '')) return "That's your own email.";
+  if (memberEmails.some((member) => normalizeEmail(member) === email))
+    return 'They are already on this sale.';
+  if (invites.some((invite) => invite.email === email))
+    return 'They are already waiting to join.';
+  if (isFull) return `A sale has room for ${MAX_CO_SELLERS} co-sellers.`;
+  return null;
+}
+
 interface AddCoSellerSheetProps {
   sale: Sale;
   uid: string;
@@ -41,17 +66,13 @@ function AddCoSellerSheet({
 
   const normalized = normalizeEmail(email);
   const isFull = sale.members.length - 1 + invites.length >= MAX_CO_SELLERS;
-  const problem = (() => {
-    if (!isValidEmail(normalized)) return null;
-    if (normalized === normalizeEmail(myEmail ?? ''))
-      return "That's your own email.";
-    if (memberEmails.some((member) => normalizeEmail(member) === normalized))
-      return 'They are already on this sale.';
-    if (invites.some((invite) => invite.email === normalized))
-      return 'They are already waiting to join.';
-    if (isFull) return `A sale has room for ${MAX_CO_SELLERS} co-sellers.`;
-    return null;
-  })();
+  const problem = findProblem({
+    email: normalized,
+    myEmail,
+    memberEmails,
+    invites,
+    isFull,
+  });
   const canAdd = isValidEmail(normalized) && problem === null && !isSaving;
 
   const add = async () => {
@@ -62,8 +83,7 @@ function AddCoSellerSheet({
       await addCoSeller(sale, uid, toFirstName(me?.displayName), normalized);
       addToast({
         title: `Added ${normalized}`,
-        description:
-          'They join when they open Going Once signed in with that email.',
+        description: 'Copy a message to send them from their row.',
         type: 'success',
       });
       onClose();
@@ -94,11 +114,13 @@ function AddCoSellerSheet({
             setError(null);
           }}
         />
-        <p className='text-muted-foreground text-sm'>
-          Nothing is sent. When they open Going Once signed in with this email,
-          {` ${sale.name} `}is waiting for them, floor prices and notes
-          included.
-        </p>
+        <div className='text-muted-foreground space-y-1 text-sm'>
+          <p>They&apos;ll see everything, floor prices and notes included.</p>
+          <p>
+            Nothing is sent: they join when they open Going Once signed in with
+            this email.
+          </p>
+        </div>
         {(problem ?? error) && (
           <p role='alert' className='text-destructive text-sm'>
             {problem ?? error}

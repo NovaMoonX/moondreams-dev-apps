@@ -1,5 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import CopyTextButton from '@/components/CopyTextButton';
 import DetailSheet from '@/components/DetailSheet';
 
 export interface PersonSheetAction {
@@ -14,6 +15,8 @@ interface PersonSheetProps {
   role: string;
   /** "Added Oct 28"; left out when the date is not known. */
   addedLabel: string | null;
+  /** A message the seller can copy and send to a person who is only waiting; nothing is sent for them. */
+  copyMessage?: string;
   action: PersonSheetAction | null;
   onClose: () => void;
 }
@@ -23,6 +26,7 @@ function PersonSheet({
   name,
   role,
   addedLabel,
+  copyMessage,
   action,
   onClose,
 }: PersonSheetProps) {
@@ -51,6 +55,14 @@ function PersonSheet({
       <p className='text-sm'>{role}</p>
       {addedLabel && (
         <p className='text-muted-foreground text-sm'>{addedLabel}</p>
+      )}
+      {copyMessage && (
+        <CopyTextButton
+          text={copyMessage}
+          label='Copy a message to send'
+          variant='secondary'
+          className='mt-3'
+        />
       )}
     </DetailSheet>
   );

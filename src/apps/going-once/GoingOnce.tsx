@@ -27,14 +27,19 @@ import { useGoingOnceSync } from '@apps/going-once/hooks/useGoingOnceSync';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
 import { useJoinFromInvites } from '@apps/going-once/hooks/useJoinFromInvites';
 import { useGoingOnceUrlState } from '@apps/going-once/hooks/useGoingOnceUrlState';
-import { setRemovedFrom } from '@apps/going-once/store';
+import { setRemovedFrom, type RemovedFrom } from '@apps/going-once/store';
 import {
+  selectMyInvites,
   selectRemovedFrom,
   selectSaleById,
   selectSales,
   selectSalesStatus,
 } from '@apps/going-once/store/selectors';
-import type { GoingOnceTab, Sale } from '@apps/going-once/types';
+import type {
+  GoingOnceTab,
+  Sale,
+  SaleEmailInvite,
+} from '@apps/going-once/types';
 
 const TAB_ICONS: Record<GoingOnceTab, ReactNode> = {
   things: <Tag className='h-5 w-5' />,
@@ -58,6 +63,7 @@ function SaleTabs({
   return (
     <nav
       aria-label='Sale sections'
+      data-bottom-bar
       className='fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-20 max-w-[calc(100vw-2rem)] -translate-x-1/2'
     >
       <ul className='border-border bg-background flex items-center gap-1 rounded-full border p-1.5 shadow-lg'>
@@ -102,6 +108,19 @@ function pickOpenSaleId(
   return null;
 }
 
+/** A `?sale=` link to a sale that isn't in the person's sales (and that they aren't about to join): the same card as a removal, with nothing known about the sale. */
+function toUnreadableLink(
+  saleId: string | null,
+  sales: Sale[],
+  invites: SaleEmailInvite[],
+  isListChosen: boolean,
+): RemovedFrom | null {
+  if (saleId === null || isListChosen) return null;
+  if (sales.some((sale) => sale.id === saleId)) return null;
+  if (invites.some((invite) => invite.saleId === saleId)) return null;
+  return { saleId, name: null, ownerUid: null };
+}
+
 function GoingOnce() {
   useGoingOnceTheme();
   const { user, loading } = useAuth();
@@ -140,7 +159,8 @@ function GoingOnce() {
   useGoingOnceSync(uid, verifiedEmail, openSaleId);
   useJoinFromInvites(uid);
   const dispatch = useAppDispatch();
-  const removedFrom = useAppSelector(selectRemovedFrom);
+  const storedRemoval = useAppSelector(selectRemovedFrom);
+  const myInvites = useAppSelector(selectMyInvites);
   const sale = useAppSelector((state) => selectSaleById(state, openSaleId));
 
   if (loading) {
@@ -168,10 +188,14 @@ function GoingOnce() {
     );
   }
 
+  const removedFrom =
+    storedRemoval ?? toUnreadableLink(saleId, sales, myInvites, isListChosen);
+
   if (removedFrom) {
     return (
       <RemovedFromSale
         saleName={removedFrom.name}
+        sellerUid={removedFrom.ownerUid}
         onBack={() => {
           dispatch(setRemovedFrom(null));
           setIsListChosen(true);

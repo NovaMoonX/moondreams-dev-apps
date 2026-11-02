@@ -6,6 +6,12 @@ import type { Item, Sale, SaleEmailInvite } from '@apps/going-once/types';
 
 type LoadStatus = 'loading' | 'ready' | 'error';
 
+export interface RemovedFrom {
+  saleId: string;
+  name: string | null;
+  ownerUid: string | null;
+}
+
 export interface GoingOnceState {
   sales: { items: Sale[]; status: LoadStatus };
   /** The sale on screen, read on its own so it stays current while its tabs are open. */
@@ -16,8 +22,8 @@ export interface GoingOnceState {
   myInvites: SaleEmailInvite[];
   /** The open sale's waiting invitations, tagged with the sale they were read for. */
   saleInvites: { saleId: string | null; invites: SaleEmailInvite[] };
-  /** The sale the person was just taken off, kept by name once its data is cleared. */
-  removedFrom: { saleId: string; name: string } | null;
+  /** The sale the person was just taken off (or followed an old link to), kept once its data is cleared; the name and seller are null when the sale was never read. */
+  removedFrom: RemovedFrom | null;
   /** A sale the person is leaving right now, so the departure is not shown as a removal. */
   leavingSaleId: string | null;
   /** Photos being saved right now, by thing, so its row can say so. */
@@ -86,10 +92,7 @@ export const goingOnceSlice = createSlice({
     clearSaleInvites(state) {
       state.saleInvites = initialState.saleInvites;
     },
-    setRemovedFrom(
-      state,
-      action: PayloadAction<{ saleId: string; name: string } | null>,
-    ) {
+    setRemovedFrom(state, action: PayloadAction<RemovedFrom | null>) {
       state.removedFrom = action.payload;
     },
     setLeavingSaleId(state, action: PayloadAction<string | null>) {

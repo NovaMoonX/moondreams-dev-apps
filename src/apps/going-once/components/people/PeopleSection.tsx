@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Mail } from 'lucide-react';
 
 import SectionHeader from '@/components/SectionHeader';
@@ -21,7 +22,10 @@ import {
   removeMember,
   restoreInvite,
 } from '@apps/going-once/store/actions/memberActions';
-import { selectSaleInvites } from '@apps/going-once/store/selectors';
+import {
+  selectItems,
+  selectSaleInvites,
+} from '@apps/going-once/store/selectors';
 import type { Sale, SaleEmailInvite } from '@apps/going-once/types';
 import { toFirstName } from '@apps/going-once/utils/personName';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
@@ -50,6 +54,7 @@ function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
   const { addToast } = useToast();
   const { pending, showUndo, undo } = useUndoRemoval();
   const invites = useAppSelector((state) => selectSaleInvites(state, sale.id));
+  const items = useAppSelector((state) => selectItems(state, sale.id));
   const people = useUserInfo(sale.members);
   const [isAdding, setIsAdding] = useState(false);
   const [open, setOpen] = useState<OpenPerson | null>(null);
@@ -74,9 +79,17 @@ function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
 
   const removeCoSeller = async (memberUid: string) => {
     const name = nameOf(memberUid);
+    const holds = items.filter(
+      (item) =>
+        item.status === 'PENDING' && item.pending?.markedBy === memberUid,
+    ).length;
     const isConfirmed = await confirm({
       title: `Remove ${name} from ${sale.name}?`,
-      message: 'They lose access at once. What they marked keeps their name.',
+      message: `They lose access at once. What they marked keeps their name.${
+        holds > 0
+          ? ` ${holds === 1 ? '1 pickup they set up is' : `${holds} pickups they set up are`} still Pending.`
+          : ''
+      }`,
       confirmText: 'Remove from this sale',
       destructive: true,
     });
@@ -168,7 +181,7 @@ function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
           }}
         />
       ),
-      isInert: isSeller && memberUid === uid,
+      isInert: isSeller ? memberUid === uid : memberUid !== uid,
       onOpen: () => setOpen({ kind: 'member', uid: memberUid }),
     })),
     ...invites.map((invite) => ({
@@ -180,7 +193,7 @@ function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
           <Mail className='size-4' aria-hidden='true' />
         </span>
       ),
-      isInert: false,
+      isInert: !isSeller,
       onOpen: () => setOpen({ kind: 'invite', email: invite.email }),
     })),
   ];
@@ -206,16 +219,26 @@ function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
         {rows.map((row) => (
           <li key={row.key}>
             {row.isInert ? (
-              <div className={`${ROW_CLASS} flex`}>
+              <div className={join(ROW_CLASS, 'flex')}>
                 {row.avatar}
-                <span className='min-w-0 flex-1 truncate'>{row.name}</span>
+                <span className='min-w-0 flex-1'>
+                  <span className='block truncate'>{row.name}</span>
+                  {row.detail && (
+                    <span className='text-muted-foreground block text-sm'>
+                      {row.detail}
+                    </span>
+                  )}
+                </span>
               </div>
             ) : (
               <Button
                 type='button'
                 variant='tertiary'
                 onClick={row.onOpen}
-                className={`${ROW_CLASS} hover:bg-muted text-foreground! h-auto justify-start font-normal`}
+                className={join(
+                  ROW_CLASS,
+                  'hover:bg-muted text-foreground! h-auto justify-start font-normal',
+                )}
               >
                 {row.avatar}
                 <span className='min-w-0 flex-1'>
@@ -250,6 +273,7 @@ function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
           name={openInvite.email}
           role='Waiting for them to sign in'
           addedLabel={formatAdded(openInvite.createdAt)}
+          copyMessage={`I added you to ${sale.name} on Going Once. Open ${window.location.origin}/going-once signed in with ${openInvite.email}.`}
           action={
             isSeller
               ? {
