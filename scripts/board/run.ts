@@ -88,7 +88,7 @@ const readProject = async () => {
     user: {
       projectV2: {
         id: string;
-        fields: { nodes: (SelectField | Record<string, never>)[] };
+        fields: { nodes: (RawSelectField | Record<string, never>)[] };
       } | null;
     };
   }>(
@@ -107,6 +107,14 @@ const readProject = async () => {
                     name
                   }
                 }
+                ... on ProjectV2MultiSelectField {
+                  id
+                  name
+                  multiSelectOptions {
+                    id
+                    name
+                  }
+                }
               }
             }
           }
@@ -117,9 +125,14 @@ const readProject = async () => {
   );
   const project = data.user.projectV2;
   if (!project) throw new Error(`${login} has no project ${PROJECT_NUMBER}`);
-  const fields = project.fields.nodes.filter(
-    (node): node is SelectField => 'options' in node,
-  );
+  const fields = project.fields.nodes.flatMap((node): SelectField[] => {
+    if (!('id' in node)) return [];
+    const { id, name, options, multiSelectOptions } = node as RawSelectField;
+    if (options) return [{ id, name, options }];
+    if (multiSelectOptions)
+      return [{ id, name, options: multiSelectOptions, isMulti: true }];
+    return [];
+  });
   return {
     id: project.id,
     apps: fields.find((field) => field.name === APPS_FIELD),
@@ -127,23 +140,31 @@ const readProject = async () => {
   };
 };
 
+interface RawSelectField {
+  id: string;
+  name: string;
+  options?: { id: string; name: string }[];
+  multiSelectOptions?: { id: string; name: string }[];
+}
+
 type Project = Awaited<ReturnType<typeof readProject>>;
 
+// A multi-select field takes a list of options, a single-select field one.
 const setOption = (
   project: Project,
   itemId: string,
-  fieldId: string,
+  field: SelectField,
   optionId: string,
 ) =>
   graphql(
     `
-      mutation ($project: ID!, $item: ID!, $field: ID!, $option: String!) {
+      mutation ($project: ID!, $item: ID!, $field: ID!, $value: ProjectV2FieldValue!) {
         updateProjectV2ItemFieldValue(
           input: {
             projectId: $project
             itemId: $item
             fieldId: $field
-            value: { singleSelectOptionId: $option }
+            value: $value
           }
         ) {
           projectV2Item {
@@ -152,7 +173,14 @@ const setOption = (
         }
       }
     `,
-    { project: project.id, item: itemId, field: fieldId, option: optionId },
+    {
+      project: project.id,
+      item: itemId,
+      field: field.id,
+      value: field.isMulti
+        ? { multiSelectOptionIds: [optionId] }
+        : { singleSelectOptionId: optionId },
+    },
   );
 
 const placeIssue = async (project: Project, issue: Issue) => {
@@ -179,7 +207,7 @@ const placeIssue = async (project: Project, issue: Issue) => {
       item: {
         id: string;
         status: { name: string } | null;
-        apps: { name: string } | null;
+        apps: { name?: string; options?: { name: string }[] } | null;
       };
     };
   }>(
@@ -188,19 +216,21 @@ const placeIssue = async (project: Project, issue: Issue) => {
         item {
           id
           status: fieldValueByName(name: "${STATUS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
-          apps: fieldValueByName(name: "${APPS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } }
+          apps: fieldValueByName(name: "${APPS_FIELD}") { ... on ProjectV2ItemFieldSingleSelectValue { name } ... on ProjectV2ItemFieldMultiSelectValue { options { name } } }
         }
       }
     }`,
     { project: project.id, content: issue.node_id },
   );
   const item = added.addProjectV2ItemById.item;
-  if (item.apps) {
-    console.log(
-      `#${issue.number}: ${APPS_FIELD} already "${item.apps.name}", kept`,
-    );
+  const appsNow =
+    item.apps?.name ??
+    item.apps?.options?.map((option) => option.name).join(', ') ??
+    '';
+  if (appsNow) {
+    console.log(`#${issue.number}: ${APPS_FIELD} already "${appsNow}", kept`);
   } else if (apps && project.apps) {
-    await setOption(project, item.id, project.apps.id, apps.id);
+    await setOption(project, item.id, project.apps, apps.id);
   } else {
     console.log(
       `::warning::#${issue.number}: the board has no ${APPS_FIELD} option "${appName}". Add it on the board (or run npm run issues:create for a new app) and re-run.`,
@@ -208,7 +238,7 @@ const placeIssue = async (project: Project, issue: Issue) => {
   }
   const ready = findOption(project.status, STATUS_VALUE);
   if (!item.status && ready && project.status) {
-    await setOption(project, item.id, project.status.id, ready.id);
+    await setOption(project, item.id, project.status, ready.id);
   }
   console.log(
     `#${issue.number}: on the board${apps ? ` as ${apps.name}` : ''}${item.status ? '' : `, ${STATUS_VALUE}`}`,
