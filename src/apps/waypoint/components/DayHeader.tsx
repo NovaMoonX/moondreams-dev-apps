@@ -72,7 +72,12 @@ function DayHeader({ label, trailing, isSticky, canOpen, onOpen }: DayHeaderProp
   }, [isSticky]);
 
   if (!isSticky) {
-    return <SectionDivider label={labelNode} trailing={trailing} />;
+    return (
+      <div className='bg-primary/15 mt-2 flex min-h-12 items-center justify-between gap-3 rounded-xl px-4 py-2'>
+        <span className='text-foreground text-lg font-semibold tracking-tight [&>button]:text-lg [&>button]:font-semibold'>{labelNode}</span>
+        {trailing}
+      </div>
+    );
   }
 
   return (

@@ -15,6 +15,7 @@ import { setPlanNeedsNoExpense } from '@apps/waypoint/store/actions/tripActions'
 import { selectTimelineEvents, selectTripExpenses } from '@apps/waypoint/store/selectors';
 import type { TripExpense, TripSpace } from '@apps/waypoint/types';
 import { getExpenseCategoryKey, getExpenseCategoryKeyLabel } from '@apps/waypoint/utils/expenseCategories';
+import { formatExpenseAmount } from '@apps/waypoint/utils/formatExpenseAmount';
 import { getExpenseLinkKey, type RelatedSubject } from '@apps/waypoint/utils/relatedSubjects';
 
 interface LinkExpenseSheetProps {
@@ -24,20 +25,6 @@ interface LinkExpenseSheetProps {
   onAddNew: () => void;
   onClose: () => void;
 }
-
-const currencyFormatters = new Map<string, Intl.NumberFormat>();
-
-function formatAmount(expense: TripExpense) {
-  const formatter =
-    currencyFormatters.get(expense.currency) ??
-    new Intl.NumberFormat(undefined, { style: 'currency', currency: expense.currency });
-  currencyFormatters.set(expense.currency, formatter);
-  return expense.amount !== null
-    ? formatter.format(expense.amount)
-    : `${formatter.format(expense.amountMin ?? 0)}–${formatter.format(expense.amountMax ?? 0)}`;
-}
-
-const KIND_NOUNS = { EVENT: 'event', STAY: 'stay', RENTAL: 'rental' } as const;
 
 function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: LinkExpenseSheetProps) {
   const dispatch = useAppDispatch();
@@ -70,16 +57,29 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
     }
   };
 
+  const setNeedsNone = (needsNone: boolean) =>
+    dispatch(
+      setPlanNeedsNoExpense({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone }),
+    ).unwrap();
+
   const markNoExpense = async () => {
     setLinkingId('none');
     try {
-      await dispatch(
-        setPlanNeedsNoExpense({ uid: currentUserId, trip, linkKey: getExpenseLinkKey(subject.link), needsNone: true }),
-      ).unwrap();
+      await setNeedsNone(true);
       addToast({
         title: `No expense needed for ${subject.title}`,
-        description: `You can undo it from this ${KIND_NOUNS[subject.link.kind]}'s details.`,
         type: 'success',
+        action: {
+          label: 'Undo',
+          onClick: () =>
+            void setNeedsNone(false).catch((undoError) =>
+              addToast({
+                title: 'Unable to undo that',
+                description: getErrorMessage(undoError, 'Please try again.'),
+                type: 'error',
+              }),
+            ),
+        },
       });
       onClose();
     } catch (markError) {
@@ -106,7 +106,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
             No expense needed
           </Button>
           <p className='text-muted-foreground text-center text-xs'>
-            <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> Undo it from this {KIND_NOUNS[subject.link.kind]}&apos;s details.
+            <span className='text-foreground font-medium'>Hides this reminder for everyone.</span> You can bring it back later.
           </p>
         </div>
       }
@@ -144,7 +144,7 @@ function LinkExpenseSheet({ trip, subject, currentUserId, onAddNew, onClose }: L
                       {expense.dayIndex === null ? 'No specific day' : getDayLabel(trip.startDate, expense.dayIndex, dayCount)}
                     </span>
                   </span>
-                  <span className='shrink-0 text-sm whitespace-nowrap'>{formatAmount(expense)}</span>
+                  <span className='shrink-0 text-sm whitespace-nowrap'>{formatExpenseAmount(expense)}</span>
                 </Button>
               </li>
             ))}

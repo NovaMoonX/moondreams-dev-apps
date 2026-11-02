@@ -38,6 +38,7 @@ export function createTripSpace(values: CreateTripValues): TripSpace {
     timezone: values.timezone,
     city: values.city ?? null,
     noExpenseKeys: [],
+    watchedMeals: null,
     dateShiftStatus: null,
     createdBy: values.createdBy,
     createdAt: values.createdAt,

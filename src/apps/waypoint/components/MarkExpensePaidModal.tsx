@@ -166,6 +166,11 @@ function MarkExpensePaidModal({
                 {keepAsRange ? 'Enter a known amount instead' : 'Keep as an estimated range instead'}
               </Button>
             )}
+            {formData.payerUid !== PAID_BY_EACH_PERSON && formData.payerUid !== currentUserId && (
+              <p className='text-muted-foreground text-sm'>
+                Once it&apos;s marked paid by {memberLabel(formData.payerUid)}, only they can change or delete it.
+              </p>
+            )}
             {(error ?? submitError) && <p className='text-destructive text-sm'>{error ?? submitError}</p>}
             <div className='flex justify-end gap-2'>
               <Button type='button' variant='secondary' onClick={onClose}>

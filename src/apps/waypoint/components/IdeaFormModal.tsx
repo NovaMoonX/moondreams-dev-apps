@@ -14,6 +14,8 @@ import AddFieldChips, { RemovableField } from '@/components/forms/AddFieldChips'
 import LinkAttachField from '@/components/forms/LinkAttachField';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useAppSelector } from '@/store';
+import { selectIsIdeaOnItinerary } from '@apps/waypoint/store/selectors';
 import { getDayOptions } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { isValidHttpUrl } from '@/utils/urlUtils';
@@ -287,6 +289,7 @@ function IdeaFormModal({
   onClose,
 }: IdeaFormModalProps) {
   const { confirm } = useActionModal();
+  const isOnItinerary = useAppSelector((state) => idea !== null && selectIsIdeaOnItinerary(state, idea));
   const initialData = useMemo(() => getInitialData(defaultType, idea), [defaultType, idea]);
   const [formData, setFormData] = useState<IdeaFormData>(initialData);
   const [error, setError] = useState<string | null>(null);
@@ -340,9 +343,9 @@ function IdeaFormModal({
     const confirmed = await confirm({
       title: 'Delete idea',
       message:
-        idea.convertedToEntityId === null
-          ? `Delete "${idea.title}"? This action cannot be undone.`
-          : `Delete "${idea.title}"? It's already on the itinerary, and that event stays exactly as it is.`,
+        isOnItinerary
+          ? `Delete "${idea.title}"? It's already on the itinerary, and that event stays exactly as it is.`
+          : `Delete "${idea.title}"? This action cannot be undone.`,
       destructive: true,
     });
     if (!confirmed) {
