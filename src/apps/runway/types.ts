@@ -446,6 +446,16 @@ export interface ChangeMove {
   /** The sentence that says what taking it back restores, for the confirm, the toast and the log. */
   undoText: string;
   isUndo: boolean;
+  /** Set when the entry is a bill's payment marked paid; the transfer fields then only name its amount. Null elsewhere; read as null on older entries. */
+  bill: {
+    billId: string;
+    name: string;
+    dueOn: DateOnly;
+    paidOn: DateOnly;
+    amountCents: Cents;
+    fromFreeCents: Cents;
+    cardId: string | null;
+  } | null;
 }
 
 export interface ChangeSealed {

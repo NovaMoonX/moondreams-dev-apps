@@ -16,22 +16,25 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   markBillPaid,
   undoBillPaid,
+  type WrittenPaidMark,
 } from '@apps/runway/store/actions/moveActions';
 import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
 
-/** Records a bill's payment paid today. */
+/** Records a bill's payment paid today; resolves with what it wrote, or null when the payment was already paid. */
 export async function markPaymentPaid(
   uid: string,
   billId: string,
+  billName: string,
   payment: BillPayment,
   moves: Parameters<typeof countMarks>[0],
 ) {
   const encryption = await getRunwayEncryption(uid);
-  await markBillPaid(uid, encryption, {
+  const written = await markBillPaid(uid, encryption, {
     billId,
+    billName,
     cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
     dueOn: payment.dueOn,
     amountCents: payment.totalCents,
@@ -39,24 +42,31 @@ export async function markPaymentPaid(
     paidOn: todayAsUtcDate(),
     marks: countMarks(moves, billId, payment.dueOn),
   });
+  return written;
 }
 
 /** Takes a payment's paid mark back. */
 export async function undoPaymentPaid(
   uid: string,
   billId: string,
-  paid: NonNullable<BillPayment['paid']>,
+  billName: string,
+  paid: Omit<WrittenPaidMark, 'billId'>,
 ) {
   const encryption = await getRunwayEncryption(uid);
-  await undoBillPaid(uid, encryption, {
-    moveId: paid.moveId,
-    billId,
-    dueOn: paid.dueOn,
-    amountCents: paid.amountCents,
-    paidOn: paid.paidOn,
-    fromFreeCents: paid.fromFreeCents,
-    cardId: paid.cardId,
-  });
+  await undoBillPaid(
+    uid,
+    encryption,
+    {
+      moveId: paid.moveId,
+      billId,
+      dueOn: paid.dueOn,
+      amountCents: paid.amountCents,
+      paidOn: paid.paidOn,
+      fromFreeCents: paid.fromFreeCents,
+      cardId: paid.cardId ?? null,
+    },
+    billName,
+  );
 }
 
 interface UseBillPaidOptions {
@@ -91,21 +101,24 @@ export function useBillPaid({
   const [isBusy, setIsBusy] = useState(false);
   const isBusyRef = useRef(false);
 
-  const run = async (task: (uid: string) => Promise<void>, failure: string) => {
-    if (!user || isBusyRef.current) return false;
+  const run = async <T>(
+    task: (uid: string) => Promise<T>,
+    failure: string,
+  ): Promise<{ value: T } | null> => {
+    if (!user || isBusyRef.current) return null;
     if (!navigator.onLine) {
       addToast({
         title: failure,
         description: CHECKLIST_R3_WORDS.needsConnection,
         type: 'error',
       });
-      return false;
+      return null;
     }
     isBusyRef.current = true;
     setIsBusy(true);
     try {
-      await task(user.uid);
-      return true;
+      const value = await task(user.uid);
+      return { value };
     } catch (error) {
       addToast({
         title: failure,
@@ -118,15 +131,18 @@ export function useBillPaid({
             : getErrorMessage(error, 'Nothing was changed.'),
         type: 'error',
       });
-      return false;
+      return null;
     } finally {
       isBusyRef.current = false;
       setIsBusy(false);
     }
   };
 
-  const mark = async () => {
-    if (!payment || payment.paid) return false;
+  /** Resolves with what was written (null when the payment was already paid), or null when nothing was done. */
+  const markWritten = async (): Promise<{
+    mark: WrittenPaidMark | null;
+  } | null> => {
+    if (!payment || payment.paid) return null;
     const unfundedCents = Math.max(
       0,
       payment.totalCents - payment.heldNowCents,
@@ -137,28 +153,40 @@ export function useBillPaid({
         message: `${mask(formatCents(unfundedCents))} of it is not set aside yet and comes out of Free to Spend. Later income days stop setting this payment aside.`,
         confirmText: CHECKLIST_WORDS.markPaid,
       });
-      if (!isConfirmed) return false;
+      if (!isConfirmed) return null;
     }
-    const isDone = await run(async (uid) => {
-      await markPaymentPaid(uid, billId, payment, moves);
+    const done = await run(async (uid) => {
+      const written = await markPaymentPaid(
+        uid,
+        billId,
+        billName,
+        payment,
+        moves,
+      );
       onMarked?.();
+      return written;
     }, `${billName} was not marked paid`);
-    return isDone;
+    return done === null ? null : { mark: done.value };
   };
 
-  const undo = () =>
-    run(async (uid) => {
+  const mark = async () => (await markWritten()) !== null;
+
+  const undo = async () => {
+    const done = await run(async (uid) => {
       const paid = payment?.paid ?? null;
       if (!paid) return;
-      await undoPaymentPaid(uid, billId, paid);
+      await undoPaymentPaid(uid, billId, billName, paid);
       onUndone?.();
     }, `${billName} was not changed`);
+    return done !== null;
+  };
 
   const result = {
     isReady: isLedgerReady && payment !== null,
     isPaid: payment?.paid != null,
     isBusy,
     mark,
+    markWritten,
     undo,
   };
   return result;

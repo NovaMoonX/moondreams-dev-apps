@@ -74,13 +74,13 @@ export interface Lookahead {
   } | null;
   /** The last income day when nothing follows it for a long stretch. */
   incomeEndsOn: DateOnly | null;
-  /** Bills to pay now: the first unpaid payment of each bill due today or before, soonest first, with how many more unpaid ones fell due after it. They are to-dos, not gaps in the plan, so they are not in `problems`. */
+  /** Bills to pay now: the first unpaid payment of each bill due today or before, soonest first (a tie by name), with the due dates of the unpaid ones after it. They are to-dos, not gaps in the plan, so they are not in `problems`. */
   due: {
     billId: string;
     name: string;
     dueOn: DateOnly;
     isOverdue: boolean;
-    laterCount: number;
+    laterDueOn: DateOnly[];
   }[];
   /** Bills with no due date yet, in the order given. They never stop the plan, so they are not in `problems`. */
   undated: { billId: string; name: string }[];
@@ -185,12 +185,15 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
               name: bill.name,
               dueOn: first.dueOn,
               isOverdue: first.dueOn < input.today,
-              laterCount: unpaid.length - 1,
+              laterDueOn: unpaid.slice(1).map((payment) => payment.dueOn),
             },
           ]
         : [];
     })
-    .sort((a, b) => a.dueOn - b.dueOn);
+    .sort(
+      (a, b) =>
+        a.dueOn - b.dueOn || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0),
+    );
 
 /** The first payment of each bill with no income day to set it aside before it is due. */
 const findNoIncome = (input: LookaheadInput): LookaheadProblem[] =>

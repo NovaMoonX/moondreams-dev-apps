@@ -275,11 +275,9 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         {undated.length > 0 && (
           <UndatedBillsRow
             names={undated.map(({ name }) => name)}
-            label={
-              undated.length === 1
-                ? BILL_WORDS.offPlanOne(undated[0].name)
-                : BILL_WORDS.offPlanMany(undated.length)
-            }
+            label={BILL_WORDS.offPlanTitle(
+              undated.map(({ name }) => (name === '' ? 'A bill' : name)),
+            )}
             detail={BILL_WORDS.offPlanDetail(undated.length)}
             onOpen={openUndated}
           />

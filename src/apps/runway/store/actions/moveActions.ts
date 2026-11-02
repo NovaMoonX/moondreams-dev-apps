@@ -9,8 +9,9 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
-import { MAX_DONE_LINE_IDS } from '@apps/runway/constants';
+import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
+import { MAX_DONE_LINE_IDS, PAID_HISTORY_WORDS } from '@apps/runway/constants';
 import { getPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
 import {
@@ -47,6 +48,61 @@ export interface MarkBillPaidInput {
   marks: number;
 }
 
+const changeRef = (uid: string, changeId: string) =>
+  doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId);
+
+/** The History entry for one payment marked paid or taken back, which carries what its Undo needs. */
+async function getPaymentChange(
+  encryption: RunwayEncryption,
+  paid: WrittenPaidMark,
+  billName: string,
+  isUndo: boolean,
+) {
+  const due = formatDateShortUTC(paid.dueOn);
+  const undoText = PAID_HISTORY_WORDS.undoText(billName, due);
+  const id = generateUuid();
+  return {
+    id,
+    kind: 'paymentChange',
+    createdAt: Date.now(),
+    effectiveFrom: null,
+    itemIds: [paid.billId],
+    sealed: await sealJson(
+      {
+        summary: isUndo
+          ? `${undoText}.`
+          : PAID_HISTORY_WORDS.summary(
+              billName,
+              due,
+              formatCents(paid.amountCents),
+            ),
+        note: null,
+        move: {
+          moveId: paid.moveId,
+          date: paid.dueOn,
+          fromId: null,
+          toId: null,
+          cents: paid.amountCents,
+          note: null,
+          isOutside: false,
+          undoText,
+          isUndo,
+          bill: {
+            billId: paid.billId,
+            name: billName,
+            dueOn: paid.dueOn,
+            paidOn: paid.paidOn,
+            amountCents: paid.amountCents,
+            fromFreeCents: paid.fromFreeCents,
+            cardId: paid.cardId ?? null,
+          },
+        },
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  } satisfies ChangeDoc;
+}
+
 /** How many earlier marks of one payment are looked past when a mark was undone, which the device may not have loaded. */
 const MAX_MARK_PROBES = 12;
 
@@ -58,8 +114,8 @@ const MAX_MARK_PROBES = 12;
 export async function markBillPaid(
   uid: string,
   encryption: RunwayEncryption,
-  input: MarkBillPaidInput,
-): Promise<void> {
+  input: MarkBillPaidInput & { billName: string },
+): Promise<WrittenPaidMark | null> {
   const payload: BillPaidSealed = {
     amountCents: input.amountCents,
     paidOn: input.paidOn,
@@ -68,7 +124,7 @@ export async function markBillPaid(
   };
   const sealed = await sealJson(payload, encryption);
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
-  await runTransaction(db, async (transaction) => {
+  const written = await runTransaction(db, async (transaction) => {
     const plan = await transaction.get(ref);
     const findOpenMark = async (marks: number): Promise<string | null> => {
       if (marks >= input.marks + MAX_MARK_PROBES) return null;
@@ -79,7 +135,19 @@ export async function markBillPaid(
       return undone.exists() ? findOpenMark(marks + 1) : null;
     };
     const id = await findOpenMark(input.marks);
-    if (id === null) return;
+    if (id === null) return null;
+    const mark: WrittenPaidMark = {
+      moveId: id,
+      billId: input.billId,
+      dueOn: input.dueOn,
+      ...payload,
+    };
+    const change = await getPaymentChange(
+      encryption,
+      mark,
+      input.billName,
+      false,
+    );
     markLedgerWrite(transaction, uid, plan.data(), [input.dueOn]);
     transaction.set(moveRef(uid, id), {
       id,
@@ -90,7 +158,10 @@ export async function markBillPaid(
       createdAt: Date.now(),
       sealed,
     } satisfies MoveDoc);
+    transaction.set(changeRef(uid, change.id), change);
+    return mark;
   });
+  return written;
 }
 
 /** Undoes a paid mark by appending a move that names it; the mark itself stays in the ledger. */
@@ -102,6 +173,7 @@ export async function undoBillPaid(
     billId: string;
     dueOn: DateOnly;
   } & BillPaidSealed,
+  billName: string,
 ): Promise<void> {
   const id = getUndoMoveId(paid.moveId);
   const sealed = await sealJson(
@@ -120,6 +192,7 @@ export async function undoBillPaid(
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
     ]);
     if (existing.exists()) return;
+    const change = await getPaymentChange(encryption, paid, billName, true);
     markLedgerWrite(transaction, uid, plan.data(), [paid.dueOn]);
     transaction.set(ref, {
       id,
@@ -130,6 +203,7 @@ export async function undoBillPaid(
       createdAt: Date.now(),
       sealed,
     } satisfies MoveDoc);
+    transaction.set(changeRef(uid, change.id), change);
   });
 }
 

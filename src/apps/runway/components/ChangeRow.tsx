@@ -12,7 +12,11 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ActionChips from '@/components/ActionChips';
 import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { CHANGE_KIND_LABELS, MOVE_WORDS } from '@apps/runway/constants';
+import {
+  CHANGE_KIND_LABELS,
+  MOVE_WORDS,
+  PAID_HISTORY_WORDS,
+} from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useUndoTransfer } from '@apps/runway/hooks/useUndoTransfer';
 import type { OpenChange } from '@apps/runway/types';
@@ -39,13 +43,14 @@ function ChangeRow({
   const move = change.move !== null && !change.move.isUndo ? change.move : null;
   const isUndone = move !== null && (undoneMoveIds?.has(move.moveId) ?? false);
   const canUndo = move !== null && !isUndone;
+  const words = move?.bill ? PAID_HISTORY_WORDS : MOVE_WORDS;
   const [isOpen, setIsOpen] = useState(false);
   const takeBack = async () => {
     if (move === null) return;
     const isConfirmed = await confirm({
-      title: MOVE_WORDS.undoTitle,
+      title: words.undoTitle,
       message: mask(`${move.undoText}.`),
-      confirmText: MOVE_WORDS.undoThis,
+      confirmText: words.undoThis,
     });
     if (isConfirmed) await undoMove(move);
   };
@@ -85,7 +90,7 @@ function ChangeRow({
           type='button'
           variant='tertiary'
           className='text-foreground! h-auto w-full flex-col items-stretch! gap-1.5 rounded-none p-0! text-left font-normal whitespace-normal'
-          aria-label={`${MOVE_WORDS.openMove}. ${change.summary}`}
+          aria-label={`${words.openMove}. ${change.summary}`}
           onClick={() => setIsOpen(true)}
         >
           {head}
@@ -124,7 +129,7 @@ function ChangeRow({
           isOpen
           isDrawerWhenShort
           onClose={() => setIsOpen(false)}
-          title={MOVE_WORDS.moveTitle}
+          title={move?.bill ? PAID_HISTORY_WORDS.title : MOVE_WORDS.moveTitle}
           actions={<ValuesEyeButton />}
         >
           <div className='space-y-4 pb-4'>
@@ -136,7 +141,7 @@ function ChangeRow({
                 isGrouped
                 isDestructive
                 icon={<Undo2 />}
-                label={MOVE_WORDS.undoThis}
+                label={words.undoThis}
                 onClick={() => {
                   setIsOpen(false);
                   void takeBack();

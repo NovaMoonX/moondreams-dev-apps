@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -9,7 +9,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
-import { formatRelativeDayUTC } from '@/utils/formatUtils';
+import { formatDateShortUTC, formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import {
@@ -22,6 +22,7 @@ import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { undoPaymentPaid, useBillPaid } from '@apps/runway/hooks/useBillPaid';
+import type { WrittenPaidMark } from '@apps/runway/store/actions/moveActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectBillPayments,
@@ -40,6 +41,17 @@ interface DueBillRowProps {
   onOpen: () => void;
 }
 
+const getDueLine = (due: DueBill, today: number) => {
+  if (!due.isOverdue) return DUE_WORDS.today;
+  const when = formatRelativeDayUTC(due.dueOn, today);
+  if (due.laterDueOn.length === 0) return DUE_WORDS.wasDue(when);
+  return DUE_WORDS.missed(
+    when,
+    due.laterDueOn.filter((on) => on !== today).map(formatDateShortUTC),
+    due.laterDueOn.includes(today),
+  );
+};
+
 /** One bill to pay: its name and when it fell due, the amount, and a quick Mark paid with an Undo toast. */
 function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
   const { user } = useAuth();
@@ -54,22 +66,15 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
   const isUndoing = useRef(false);
   const maskText = useMaskedText();
 
-  const undo = async () => {
+  const undo = async (written: WrittenPaidMark) => {
     if (!user || isUndoing.current) return;
     if (!navigator.onLine) {
       addToast({ title: DUE_WORDS.undoOffline(name), type: 'error' });
       return;
     }
-    const written = (
-      selectBillPayments(store.getState(), today)[due.billId] ?? []
-    ).find((entry) => entry.dueOn === due.dueOn)?.paid;
-    if (!written) {
-      addToast({ title: DUE_WORDS.undoFailed(name), type: 'error' });
-      return;
-    }
     isUndoing.current = true;
     try {
-      await undoPaymentPaid(user.uid, due.billId, written);
+      await undoPaymentPaid(user.uid, due.billId, name, written);
     } catch {
       addToast({ title: DUE_WORDS.undoFailed(name), type: 'error' });
     } finally {
@@ -82,8 +87,13 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
     const fromFreeCents = payment
       ? Math.max(0, payment.totalCents - payment.heldNowCents)
       : 0;
-    const isWritten = await paid.mark();
-    if (!isWritten) return;
+    const result = await paid.markWritten();
+    if (result === null) return;
+    const { mark: written } = result;
+    if (written === null) {
+      addToast({ title: DUE_WORDS.alreadyPaid(name), type: 'info' });
+      return;
+    }
     const state = store.getState();
     const cardName =
       selectLevel(state) === 'track'
@@ -106,7 +116,10 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
             )
           : undefined,
       type: 'success',
-      action: { label: ITEM_SHEET_R2_WORDS.undo, onClick: () => void undo() },
+      action: {
+        label: ITEM_SHEET_R2_WORDS.undo,
+        onClick: () => void undo(written),
+      },
     });
   };
 
@@ -130,12 +143,7 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
                 : 'text-muted-foreground',
             )}
           >
-            {due.isOverdue
-              ? DUE_WORDS.wasDue(
-                  formatRelativeDayUTC(due.dueOn, today),
-                  due.laterCount,
-                )
-              : DUE_WORDS.today}
+            {getDueLine(due, today)}
           </span>
         </span>
       </Button>
@@ -171,7 +179,7 @@ interface DueBillsCardProps {
   today: number;
   /** Opens the bill where the screen can; the default goes to the Bills section. */
   onOpenBill?: (billId: string) => void;
-  /** Past the first few rows: `door` ends the card with a row that opens Bills, `unfold` shows the rest in place. */
+  /** Past the first few rows: `door` ends the card with "See all" on a section header that opens Bills; `unfold` is the card inside Bills, under a caption-sized heading, and shows the rest in place. */
   overflow: 'door' | 'unfold';
 }
 
@@ -182,11 +190,11 @@ function DueBillsCard({
   onOpenBill,
   overflow,
 }: DueBillsCardProps) {
-  const { showPlanSection, showTab } = useRunwayUrlState();
+  const { showPlanSection, showTab, openAllDue, closeAllDue, isAllDueOpen } =
+    useRunwayUrlState();
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const emojiOf = useLiveEmojiResolver();
-  const [isUnfolded, setIsUnfolded] = useState(false);
   const due = lookahead?.due ?? [];
   if (due.length === 0) return null;
 
@@ -194,34 +202,59 @@ function DueBillsCard({
     showPlanSection('bills');
     showTab('plan');
   };
+  const seeAll = () => {
+    openBills();
+    openAllDue();
+  };
   const paymentOf = (entry: DueBill) =>
     (payments[entry.billId] ?? []).find(
       (payment) => payment.dueOn === entry.dueOn,
     ) ?? null;
   const hidden = due.slice(SHOWN_DUE);
+  const isUnfolded = overflow === 'unfold' && isAllDueOpen;
   const isFolded =
     overflow === 'door'
       ? hidden.length > 0
       : hidden.length > SHOWN_DUE && !isUnfolded;
+  const hasFold = overflow === 'unfold' && hidden.length > SHOWN_DUE;
   const shown = isFolded ? due.slice(0, SHOWN_DUE) : due;
   const isAnyLate = due.some((entry) => entry.isOverdue);
+  const title = isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title;
+  const count = due.length > 1 ? DUE_WORDS.count(due.length, isAnyLate) : null;
+  const toggleUnfolded = () => (isUnfolded ? closeAllDue() : openAllDue());
 
   return (
     <section className='space-y-2'>
-      <SectionHeader
-        title={isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title}
-        action={
-          overflow === 'door' &&
-          isFolded && (
-            <ShowMoreButton isHeaderAction onClick={openBills}>
-              {DUE_WORDS.seeAll}
+      {overflow === 'door' ? (
+        <SectionHeader
+          title={title}
+          action={
+            isFolded && (
+              <ShowMoreButton isHeaderAction onClick={seeAll}>
+                {DUE_WORDS.seeAll}
+              </ShowMoreButton>
+            )
+          }
+          subtitle={count ?? undefined}
+        />
+      ) : (
+        <div className='flex min-h-7 items-center justify-between gap-3'>
+          <h3 className='min-w-0 text-sm font-semibold'>
+            {title}
+            {count && (
+              <span className='text-muted-foreground font-normal'>
+                {' · '}
+                {count}
+              </span>
+            )}
+          </h3>
+          {hasFold && isUnfolded && (
+            <ShowMoreButton isOpen onClick={toggleUnfolded}>
+              {DUE_WORDS.fewer}
             </ShowMoreButton>
-          )
-        }
-        subtitle={
-          due.length > 1 ? DUE_WORDS.count(due.length, isAnyLate) : undefined
-        }
-      />
+          )}
+        </div>
+      )}
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {shown.map((entry) => {
           const payload =
@@ -241,11 +274,8 @@ function DueBillsCard({
           );
         })}
       </ul>
-      {overflow === 'unfold' && hidden.length > SHOWN_DUE && (
-        <ShowMoreButton
-          isOpen={isUnfolded}
-          onClick={() => setIsUnfolded(!isUnfolded)}
-        >
+      {hasFold && (
+        <ShowMoreButton isOpen={isUnfolded} onClick={toggleUnfolded}>
           {isUnfolded ? DUE_WORDS.fewer : DUE_WORDS.more(hidden.length)}
         </ShowMoreButton>
       )}

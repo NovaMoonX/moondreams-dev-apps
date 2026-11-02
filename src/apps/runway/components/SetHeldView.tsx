@@ -210,6 +210,7 @@ function SetHeldView({
           onClick: () =>
             void undoMove({
               moveId,
+              bill: null,
               date,
               fromId,
               toId,

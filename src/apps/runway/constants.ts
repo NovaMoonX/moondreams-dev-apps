@@ -107,6 +107,7 @@ export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
     purchaseChange: 'Purchase',
     cardChange: 'Card',
     moveChange: 'Move',
+    paymentChange: 'Payment',
   };
 
 export const RANGE_END_WORDS = {
@@ -197,6 +198,7 @@ export const CHANGE_KINDS = [
   'purchaseChange',
   'cardChange',
   'moveChange',
+  'paymentChange',
 ] as const;
 
 export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
@@ -671,28 +673,46 @@ export const BILL_WORDS = {
   allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
-  offPlanOne: (name: string) => `${name} isn't planned for yet`,
-  offPlanMany: (count: number) => `${count} bills aren't planned for yet`,
+  offPlanTitle: (names: readonly string[]) =>
+    names.length === 1
+      ? `${names[0]} has no due date`
+      : names.length <= 3
+        ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} have no due date`
+        : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more have no due date`,
   offPlanDetail: (count: number) =>
     count === 1
-      ? 'It has no due date, so this pay sets nothing aside for it'
-      : 'They have no due dates, so this pay sets nothing aside for them',
+      ? 'So this pay sets nothing aside for it, and has less to spare than it looks'
+      : 'So this pay sets nothing aside for them, and has less to spare than it looks',
 } as const;
 
 export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
-  wasDue: (when: string, laterCount: number) =>
-    laterCount === 0
-      ? `Was due ${when}`
-      : `Was due ${when} · ${laterCount} more since`,
+  wasDue: (when: string) => `Was due ${when}`,
+  missed: (
+    when: string,
+    later: readonly string[],
+    isDueAgainToday: boolean,
+  ) => {
+    const dates = [when, ...later];
+    const list =
+      dates.length === 2
+        ? `${dates[0]} and ${dates[1]}`
+        : dates.length === 3
+          ? `${dates[0]}, ${dates[1]} and ${dates[2]}`
+          : dates.length > 3
+            ? `${when} and ${later.length} more`
+            : when;
+    return `Missed ${list}${isDueAgainToday ? ' · due again today' : ''}`;
+  },
   count: (count: number, isAnyLate: boolean) =>
     isAnyLate ? `${count} bills, oldest first` : `${count} bills`,
   more: (count: number) => `Show ${count} more`,
   fewer: 'Show fewer',
   seeAll: 'See all',
   markPaid: 'Mark paid',
+  alreadyPaid: (name: string) => `${name} was already marked paid`,
   openBills: (name: string) => `Open ${name}`,
   undoOffline: (name: string) =>
     `${name} is still marked paid. Undoing needs a connection`,
@@ -1349,6 +1369,17 @@ export const ITEM_SHEET_WORDS = {
 } as const;
 
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
+export const PAID_HISTORY_WORDS = {
+  summary: (name: string, due: string, amount: string) =>
+    `Marked ${name} paid: ${amount} due ${due}.`,
+  undoText: (name: string, due: string) =>
+    `${name}'s ${due} payment is not marked paid`,
+  title: 'Payment',
+  openMove: 'Open this payment',
+  undoThis: 'Take back this payment',
+  undoTitle: 'Take back this payment?',
+} as const;
+
 export const MOVE_WORDS = {
   open: "Move what's left",
   title: (name: string) => `Move money from ${name}`,

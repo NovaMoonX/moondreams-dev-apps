@@ -110,7 +110,7 @@ export const MOVE_KINDS = [
   'start', 'billPaid', 'cardPayment', 'transfer', 'withdrawal',
   'balanceCorrection', 'trackingChange',
 ] as const;
-export const CHANGE_KINDS = ['planChange', 'start', 'levelMove', 'whatIfApplied', 'ended', 'correction', 'purchaseChange', 'cardChange', 'moveChange'] as const;
+export const CHANGE_KINDS = ['planChange', 'start', 'levelMove', 'whatIfApplied', 'ended', 'correction', 'purchaseChange', 'cardChange', 'moveChange', 'paymentChange'] as const;
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
 export const ACCOUNT_KINDS = ['checking', 'savings', 'cashManagement', 'investment', 'other'] as const;
 export const LINK_STATUSES = ['linking', 'ok', 'needsReauth', 'revoked'] as const;
