@@ -48,6 +48,12 @@ const formatAdded = (at: number | undefined) =>
   at === undefined ? null : `Added ${formatDateShort(at)}`;
 
 /** The Sale tab's People: the seller, each co-seller and each email waiting to sign in; a row opens the person's sheet. */
+const describeHolds = (holds: number) => {
+  if (holds === 0) return '';
+  if (holds === 1) return ' 1 pickup they set up is still Pending.';
+  return ` ${holds} pickups they set up are still Pending.`;
+};
+
 function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
   const dispatch = useAppDispatch();
   const { confirm } = useActionModal();
@@ -85,11 +91,7 @@ function PeopleSection({ sale, uid, myEmail, onLeft }: PeopleSectionProps) {
     ).length;
     const isConfirmed = await confirm({
       title: `Remove ${name} from ${sale.name}?`,
-      message: `They lose access at once. What they marked keeps their name.${
-        holds > 0
-          ? ` ${holds === 1 ? '1 pickup they set up is' : `${holds} pickups they set up are`} still Pending.`
-          : ''
-      }`,
+      message: `They lose access at once. What they marked keeps their name.${describeHolds(holds)}`,
       confirmText: 'Remove from this sale',
       destructive: true,
     });

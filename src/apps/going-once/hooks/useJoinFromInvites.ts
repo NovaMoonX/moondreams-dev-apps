@@ -12,9 +12,8 @@ import {
 } from '@apps/going-once/store/selectors';
 
 /**
- * Joins each sale the person's verified email was invited to, once per invitation at a time. An invitation for a sale
- * they are already on is deleted instead, so it can never bring them back after they are removed. A refused join or
- * delete (the seller took it back a second ago) is dropped quietly and may be tried again on the next change.
+ * Joins each sale the person's verified email was invited to; an invitation for a sale they joined after it was made
+ * is deleted instead, so it can never bring them back once removed. Each invitation is tried once per membership state.
  */
 export function useJoinFromInvites(uid: string | null) {
   const invites = useAppSelector(selectMyInvites);
@@ -24,20 +23,17 @@ export function useJoinFromInvites(uid: string | null) {
 
   useEffect(() => {
     if (!uid || !isSalesReady) return;
-    const waiting = new Set(
-      invites.map((invite) => `${invite.saleId}_${invite.email}`),
-    );
-    tried.current.forEach((id) => {
-      if (!waiting.has(id)) tried.current.delete(id);
-    });
     invites.forEach((invite) => {
-      const id = `${invite.saleId}_${invite.email}`;
-      if (tried.current.has(id)) return;
-      tried.current.add(id);
-      const isMember = sales.some((sale) => sale.id === invite.saleId);
-      (isMember ? cancelInvite(invite) : joinSale(uid, invite)).catch(() =>
-        tried.current.delete(id),
-      );
+      const sale = sales.find((found) => found.id === invite.saleId) ?? null;
+      const key = `${invite.saleId}_${invite.email}:${invite.createdAt}:${sale !== null}`;
+      if (tried.current.has(key)) return;
+      tried.current.add(key);
+      if (sale === null) {
+        joinSale(uid, invite).catch(() => undefined);
+        return;
+      }
+      if ((sale.memberJoinedAt[uid] ?? 0) >= invite.createdAt)
+        cancelInvite(invite).catch(() => undefined);
     });
   }, [uid, invites, sales, isSalesReady]);
 }
