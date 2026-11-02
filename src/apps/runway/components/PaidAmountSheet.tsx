@@ -21,7 +21,7 @@ import {
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { getHeldFor } from '@apps/runway/hooks/useBillPaid';
-import type { Cents } from '@apps/runway/types';
+import type { Cents, MoneyRange } from '@apps/runway/types';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { getBillCardName } from '@apps/runway/utils/cardText';
 import { formatRange } from '@apps/runway/utils/rangeText';
@@ -81,7 +81,9 @@ function PaidAmountSheet({
     if (paidCents > heldCents)
       return (
         <InlineNotice tone='info'>
-          {PAID_AMOUNT_WORDS.fromFree(formatCents(paidCents - heldCents))}
+          {heldCents === 0
+            ? PAID_AMOUNT_WORDS.allFromFree
+            : PAID_AMOUNT_WORDS.fromFree(formatCents(paidCents - heldCents))}
         </InlineNotice>
       );
     return leftCents === 0 ? null : (
@@ -102,6 +104,15 @@ function PaidAmountSheet({
     }
     setIsSaving(false);
     setError(PAID_AMOUNT_WORDS.failed);
+  };
+
+  const getRangeHint = (range: MoneyRange) => {
+    const usual = formatRange(range);
+    if (paidCents !== null && paidCents > range.highCents)
+      return PAID_AMOUNT_WORDS.aboveRange(usual);
+    if (paidCents !== null && paidCents < range.lowCents)
+      return PAID_AMOUNT_WORDS.belowRange(usual);
+    return VARIES_HINT(usual);
   };
 
   const getFooterNote = () => {
@@ -127,9 +138,7 @@ function PaidAmountSheet({
             disabled={isSaving}
             hint={
               payment.ranged && (
-                <MaskedText>
-                  {VARIES_HINT(formatRange(payment.ranged.range))}
-                </MaskedText>
+                <MaskedText>{getRangeHint(payment.ranged.range)}</MaskedText>
               )
             }
           />

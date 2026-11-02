@@ -716,6 +716,9 @@ export const PAID_AMOUNT_WORDS = {
   markSub: 'It varies, so say what it came to',
   rowHint: 'Varies · tick to say what it came to',
   needsAmount: 'Enter what it came to.',
+  allFromFree: 'Nothing was set aside yet, so it comes out of Free to Spend',
+  aboveRange: (range: string) => `Above its usual ${range}`,
+  belowRange: (range: string) => `Below its usual ${range}`,
   fromFree: (amount: string) =>
     `${amount} more than was set aside comes out of Free to Spend`,
   stays: (amount: string, name: string) =>
