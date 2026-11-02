@@ -1,3 +1,4 @@
+import { formatDate } from '@/utils/formatUtils';
 import type { RepaidLogEntry, RepaidStatus, TripExpense } from '@apps/waypoint/types';
 
 const MAX_REPAID_LOG = 10;
@@ -83,8 +84,8 @@ export function describeReversal(
   const who = (uid: string) => (uid === viewerUid ? 'you' : label(uid));
   const previous = log.at(-2);
   if (previous?.isPaid && previous.byUid === last.byUid) {
-    return `${sentence(who(last.byUid))} marked this paid back, then not paid back.`;
+    return `${sentence(who(last.byUid))} marked this paid back, then not paid back, on ${formatDate(last.at)}.`;
   }
   const was = previous?.isPaid ? ` ${sentence(who(previous.byUid))} had marked it paid back.` : '';
-  return `${sentence(who(last.byUid))} marked this not paid back.${was}`;
+  return `${sentence(who(last.byUid))} marked this not paid back on ${formatDate(last.at)}.${was}`;
 }

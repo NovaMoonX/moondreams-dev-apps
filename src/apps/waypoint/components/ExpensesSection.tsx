@@ -809,7 +809,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       }
       const reversal = describeReversal(expense, share.uid, currentUserId, memberLabel);
       if (reversal !== null) {
-        return <p className='text-muted-foreground text-right text-xs'>{reversal}</p>;
+        return <p className='text-muted-foreground text-pretty text-right text-xs'>{reversal}</p>;
       }
       return null;
     };
@@ -842,7 +842,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           </>
         ) : splitBreakdown.perPersonLabel !== null ? (
           <>
-            <div className='flex items-baseline justify-end gap-2'>
+            <div className='flex flex-wrap items-baseline justify-end gap-x-2'>
               {!expense.isPerPerson && (
                 <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
                   {splitBreakdown.perPersonLabel}
@@ -855,7 +855,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         ) : (
           splitBreakdown.shares.map((share) => (
             <div key={share.uid}>
-              <div className='flex items-baseline justify-end gap-2'>
+              <div className='flex flex-wrap items-baseline justify-end gap-x-2'>
                 <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
                   {memberLabel(share.uid)} {share.amountLabel}
                 </p>

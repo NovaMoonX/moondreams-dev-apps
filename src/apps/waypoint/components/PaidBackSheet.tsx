@@ -45,6 +45,7 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
   const [view, setView] = useState<'owed' | 'paid' | 'history' | null>(null);
   const [pending, setPending] = useState<Record<string, { isPaid: boolean; at: number }>>({});
   const [lastMark, setLastMark] = useState<{ uid: string; isPaid: boolean } | null>(null);
+  const [hasMarked, setHasMarked] = useState(false);
   const lastMarkTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(new Map<string, Promise<unknown>>());
   const [query, setQuery] = useState('');
@@ -77,6 +78,7 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
   const run = async (uid: string, nextIsPaid: boolean) => {
     setPending((current) => ({ ...current, [uid]: { isPaid: nextIsPaid, at: Date.now() } }));
     setLastMark({ uid, isPaid: nextIsPaid });
+    setHasMarked(true);
     if (lastMarkTimer.current) {
       clearTimeout(lastMarkTimer.current);
     }
@@ -89,6 +91,15 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
       inFlight.current.delete(uid);
       setPending((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== uid)));
     }
+  };
+
+  const getEmptyText = () => {
+    if (needle === '') {
+      return shownView === 'owed' ? 'Everyone has paid you back.' : 'Nobody has paid you back yet.';
+    }
+    return lastMark && matches(lastMark.uid)
+      ? `${memberLabel(lastMark.uid)} moved to ${lastMark.isPaid ? 'Paid back' : 'Still owed'}.`
+      : 'Nobody matches that.';
   };
 
   const toggle = (share: PaidBackShare) => {
@@ -127,12 +138,16 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
   return (
     <DetailSheet isOpen={isOpen} onClose={onClose} title="Who's paid you back">
       {expense && (
-        <div className='space-y-4'>
-          <p className='text-muted-foreground text-sm'>
-            {expense.title} · {paidCount} of {shares.length} paid back. Tap a name once you&apos;ve received their
-            share.
-          </p>
+        <div
+          className={join(
+            'space-y-4',
+            !isDrawer && (shares.length >= LIST_SEARCH_THRESHOLD ? 'min-h-[calc(100dvh-16rem)]' : 'min-h-[min(26rem,calc(100dvh-16rem))]'),
+          )}
+        >
           <div className={join('bg-popover sticky z-10 -mx-1 space-y-3 px-1 pb-2', isDrawer ? '-top-6 -mt-6 pt-6' : 'top-0')}>
+            <p className='text-muted-foreground text-sm'>
+              {expense.title} · Tap a name once you&apos;ve received their share.
+            </p>
             <PillGroup
               label='Show'
               isThin
@@ -148,28 +163,26 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
             {shares.length >= LIST_SEARCH_THRESHOLD && (
               <SearchInput value={query} onChange={setQuery} placeholder='Search people' />
             )}
-            {lastMark && (
-              <div className='bg-muted/50 flex items-center justify-between gap-2 rounded-xl px-3 py-1 text-sm'>
+            {hasMarked && (
+              <div className='min-h-10'>
+                {lastMark && (
+                  <div className='bg-muted/50 flex min-h-10 items-center justify-between gap-2 rounded-xl px-3 py-1 text-sm'>
                 <span className='min-w-0 truncate'>
                   {lastMark.isPaid ? 'Marked' : 'Took back'} {memberLabel(lastMark.uid)}
                   {lastMark.isPaid ? ' as received' : ''}
                 </span>
-                <Button
-                  type='button'
-                  variant='link'
-                  size='sm'
-                  className='h-10 shrink-0 px-0!'
-                  onClick={() => void undoLastMark()}
-                >
-                  Undo
-                </Button>
+                    <Button type='button' variant='secondary' size='sm' className='h-7 shrink-0 text-xs' onClick={() => void undoLastMark()}>
+                      Undo
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>
           {shownView !== 'history' &&
             (visibleShares.length === 0 ? (
               <p className='text-muted-foreground text-sm'>
-                {needle !== '' ? 'Nobody matches that.' : shownView === 'owed' ? 'Everyone has paid you back.' : 'Nobody has paid you back yet.'}
+                {getEmptyText()}
               </p>
             ) : (
               <ul className='divide-border divide-y'>
