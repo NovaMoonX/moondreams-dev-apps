@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import HelpTip from '@/components/HelpTip';
 import SensitiveValue from '@/components/SensitiveValue';
 import { GROUP_WORDS, PRIORITY_DIAL_WORDS } from '@apps/runway/constants';
-import { usePriorityDial } from '@apps/runway/hooks/usePriorityDial';
+import type { Priority } from '@apps/runway/types';
 import type { describePlanTotal } from '@apps/runway/utils/billText';
 
 interface PlanTotalProps {
@@ -12,11 +12,12 @@ interface PlanTotalProps {
   help?: ReactNode;
   /** The info icon's title when it is not about how a month is worked out. */
   helpTitle?: string;
+  /** The priority dial the figure was trimmed to; a figure that never follows it leaves this out. */
+  dial?: Priority;
 }
 
 /** The one total on a Plan view's header line, right-aligned and masked until amounts are shown. */
-function PlanTotal({ figure, help, helpTitle }: PlanTotalProps) {
-  const { dial } = usePriorityDial();
+function PlanTotal({ figure, help, helpTitle, dial = 'want' }: PlanTotalProps) {
   const shownHelp =
     dial === 'want' ? (
       help
@@ -29,8 +30,8 @@ function PlanTotal({ figure, help, helpTitle }: PlanTotalProps) {
       </div>
     );
   return (
-    <div className='text-muted-foreground flex items-center gap-1 text-sm'>
-      <span className='text-right'>
+    <div className='text-muted-foreground flex max-w-[min(15rem,calc(100vw-10rem))] items-center gap-1 text-sm leading-5'>
+      <span className='text-right text-balance'>
         <SensitiveValue className='text-foreground font-medium whitespace-nowrap'>
           {figure.amount}
         </SensitiveValue>{' '}

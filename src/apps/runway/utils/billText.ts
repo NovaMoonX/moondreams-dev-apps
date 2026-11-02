@@ -153,8 +153,9 @@ export function describePlanTotal(
     | { kind: 'monthly'; total: GroupTotal }
     | { kind: 'saved'; savedCents: number; targetCents: number },
   dial: Priority = 'want',
+  hasItems = false,
 ) {
-  const isTrimmed = dial !== 'want';
+  const isTrimmed = dial !== 'want' && hasItems;
   if (figure.kind === 'monthly') {
     return figure.total.total.highCents === 0 && !isTrimmed
       ? null

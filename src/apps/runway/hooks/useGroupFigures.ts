@@ -93,8 +93,11 @@ export interface GroupFigures {
   names: string[];
 }
 
-/** Every live group with the bills and envelopes that are for it and their monthly totals, combined and for each kind alone; one with an archived group sits in none. */
-export function useGroupFigures(today: number): GroupFigures[] {
+/** Every live group with the bills and envelopes that are for it and their monthly totals (counting only those at or above `dial`), combined and for each kind alone; one with an archived group sits in none. */
+export function useGroupFigures(
+  today: number,
+  dial: Priority = 'want',
+): GroupFigures[] {
   const groups = useAppSelector((state) => selectGroups(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -110,12 +113,20 @@ export function useGroupFigures(today: number): GroupFigures[] {
     const envelopeMembers = memberEnvelopes.map((envelope) =>
       toEnvelopeMember(envelope, today, payLines),
     );
+    const countedBills = memberBills
+      .filter(({ version: bill }) => isCountedAt(bill.payload.priority, dial))
+      .map(toBillMember);
+    const countedEnvelopes = memberEnvelopes
+      .filter(({ version: envelope }) =>
+        isCountedAt(envelope.payload.priority, dial),
+      )
+      .map((envelope) => toEnvelopeMember(envelope, today, payLines));
     return {
       id: item.id,
       name: version.payload.name,
-      total: monthlyTotal(billMembers, today, envelopeMembers),
-      billsTotal: monthlyTotal(billMembers, today),
-      envelopesTotal: monthlyTotal([], today, envelopeMembers),
+      total: monthlyTotal(countedBills, today, countedEnvelopes),
+      billsTotal: monthlyTotal(countedBills, today),
+      envelopesTotal: monthlyTotal([], today, countedEnvelopes),
       bills: memberBills,
       envelopes: memberEnvelopes,
       names: getGroupMemberNames(billMembers, envelopeMembers, today),

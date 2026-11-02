@@ -25,7 +25,6 @@ interface GoalRowProps {
   today: number;
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
-  /** Left out of the view's total by the priority dial. */
   isFaded?: boolean;
 }
 

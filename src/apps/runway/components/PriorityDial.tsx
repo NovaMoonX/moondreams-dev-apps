@@ -19,7 +19,7 @@ const OPTIONS = PRIORITIES.map((value) => ({
   ...PRIORITY_DIAL_WORDS.options[value],
 }));
 
-/** Plan's Must, Should, Want dial on the tab's title line, drawn on the Bills, Envelopes and Goals views while the view lists something; tinted whenever it leaves something out. */
+/** The Must, Should, Want dial, drawn only while the open view lists something to count; tinted whenever it leaves something out. */
 function PriorityDial() {
   const today = todayAsUtcDate(useNow(60_000));
   const { planSection } = useRunwayUrlState();

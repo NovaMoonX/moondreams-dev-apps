@@ -54,11 +54,15 @@ function EnvelopesScreen() {
   const isRequested = addRequest === 'envelope';
   const [query, setQuery] = useState('');
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
-  const figuresByGroup = useGroupFigures(today);
   const { dial } = usePriorityDial();
+  const figuresByGroup = useGroupFigures(today, dial);
   const total = usePlanTotals(today, dial).envelopes;
   const stance = useAppSelector(selectStance);
-  const totalFigure = describePlanTotal({ kind: 'monthly', total }, dial);
+  const totalFigure = describePlanTotal(
+    { kind: 'monthly', total },
+    dial,
+    envelopes.length > 0,
+  );
 
   const hasSearch = envelopes.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
@@ -161,6 +165,7 @@ function EnvelopesScreen() {
           isLoaded && totalFigure ? (
             <PlanTotal
               figure={totalFigure}
+              dial={dial}
               help={
                 <GroupTotalHelp
                   total={total}

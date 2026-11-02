@@ -32,7 +32,6 @@ interface EnvelopeTileProps {
   look?: 'row' | 'tile';
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
-  /** Left out of the view's total by the priority dial. */
   isFaded?: boolean;
 }
 

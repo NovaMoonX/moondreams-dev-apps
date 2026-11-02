@@ -17,13 +17,17 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 const DISMISSED_KEY_PREFIX = 'runway.prioritiesNudgeDismissed.';
 const MIN_ITEMS = 3;
 
-/** Home's nudge to sort priorities while every bill, envelope and goal is still Should; gone once one is changed or the person hides it on this device. */
+/** Asks the person to sort priorities while every item is still the default; gone once one changes, or for good on this device once hidden. */
 function PrioritiesNudge() {
   const { user } = useAuth();
+  return user ? <PrioritiesNudgeRow key={user.uid} uid={user.uid} /> : null;
+}
+
+function PrioritiesNudgeRow({ uid }: { uid: string }) {
   const today = todayAsUtcDate(useNow(60_000));
   const { openMoreEntry } = useRunwayUrlState();
   const [isDismissed, setIsDismissed] = useLocalStoragePreference(
-    `${DISMISSED_KEY_PREFIX}${user?.uid ?? ''}`,
+    `${DISMISSED_KEY_PREFIX}${uid}`,
     false,
   );
   const priorities = useAppSelector((state) =>
@@ -39,7 +43,7 @@ function PrioritiesNudge() {
   const isUnsorted =
     listed.length >= MIN_ITEMS && listed.every((value) => value === 'should');
 
-  if (!user || isDismissed || !isUnsorted) return null;
+  if (isDismissed || !isUnsorted) return null;
   return (
     <section
       aria-label={PRIORITIES_NUDGE_WORDS.title}

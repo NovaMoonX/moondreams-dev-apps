@@ -26,7 +26,6 @@ interface BillRowProps {
   detailOverride?: string | null;
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
-  /** Left out of the view's total by the priority dial. */
   isFaded?: boolean;
   onOpen?: () => void;
 }

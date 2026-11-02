@@ -45,6 +45,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
+import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
@@ -133,6 +134,7 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
 
 function RunwayContent() {
   const { user, loading } = useAuth();
+  useClearPriorityDialOnLeave();
   const {
     activeTab: requestedTab,
     showTab,

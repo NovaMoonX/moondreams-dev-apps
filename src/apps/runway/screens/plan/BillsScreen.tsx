@@ -97,9 +97,13 @@ function BillsScreen() {
       .includes(needle);
   const { dial } = usePriorityDial();
   const total = usePlanTotals(today, dial).bills;
-  const totalFigure = describePlanTotal({ kind: 'monthly', total }, dial);
+  const totalFigure = describePlanTotal(
+    { kind: 'monthly', total },
+    dial,
+    bills.length > 0,
+  );
   const visible = listed.filter(isShown);
-  const figuresByGroup = useGroupFigures(today);
+  const figuresByGroup = useGroupFigures(today, dial);
   const sections = figuresByGroup
     .map((figures) => ({
       figures,
@@ -247,6 +251,7 @@ function BillsScreen() {
           isLoaded && totalFigure ? (
             <PlanTotal
               figure={totalFigure}
+              dial={dial}
               help={
                 <GroupTotalHelp
                   total={total}

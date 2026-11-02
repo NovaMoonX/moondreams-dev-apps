@@ -68,6 +68,7 @@ function GoalsScreen() {
       targetCents,
     },
     dial,
+    goals.some(({ version }) => version.payload.targetCents > 0),
   );
   const items = useAppSelector((state) => state.runway.items);
   const versions = useAppSelector((state) => state.runway.versions);
@@ -164,6 +165,7 @@ function GoalsScreen() {
           isLoaded && totalFigure ? (
             <PlanTotal
               figure={totalFigure}
+              dial={dial}
               helpTitle={GROUP_WORDS.goalsHelpTitle}
               help={
                 <div className='space-y-2'>

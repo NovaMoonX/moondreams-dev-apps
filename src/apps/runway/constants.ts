@@ -273,12 +273,13 @@ export const PRIORITY_DIAL_WORDS = {
   trimmedNote: (counted: string) =>
     `Counting ${counted} only. Move the dial to Want to count everything; it goes back there the next time you open Runway.`,
   counted: { must: 'Musts', should: 'Musts and Shoulds' },
+  notCounted: 'Not in this total',
 } as const;
 
 export const PRIORITIES_NUDGE_WORDS = {
   title: 'Mark what you must pay',
-  subtitle: 'Everything starts as Should. Mark your Musts and Wants.',
-  dismiss: 'Not now',
+  subtitle: 'Everything starts as Should. Move yours into Must and Want.',
+  dismiss: "Don't show this again",
 } as const;
 
 /** Every income day, or every Nth: the cadences the envelope form offers. */
