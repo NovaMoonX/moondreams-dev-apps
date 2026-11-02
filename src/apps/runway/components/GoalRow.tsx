@@ -10,16 +10,20 @@ import {
   LIFECYCLE_WORDS,
   PACE_STATE_LABELS,
   PACE_WORDS,
+  PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { Pace } from '@apps/runway/engine/pace';
-import type { GoalSealed } from '@apps/runway/types';
+import type { GoalSealed, Priority } from '@apps/runway/types';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
 
 interface GoalRowProps {
   goalId: string;
   goal: GoalSealed;
   pace: Pace;
+  /** The dial its finish date was counted at, when that leaves an extra out. */
+  paceDial?: Priority | null;
   /** What the goal holds now. */
   heldCents: number;
   today: number;
@@ -57,6 +61,7 @@ function GoalRow({
   goalId,
   goal,
   pace,
+  paceDial = null,
   heldCents,
   today,
   reorder,
@@ -66,8 +71,12 @@ function GoalRow({
   const [isOpen, setIsOpen] = useState(false);
   const savedCents = Math.min(heldCents, goal.targetCents);
   const progress = `${formatCentsShort(savedCents)} of ${formatCentsShort(goal.targetCents)}`;
-  const paceLine = describePaceShort(goal, pace, savedCents);
-  const funding = describeFundingShort(goal.funding);
+  const paceLine = `${describePaceShort(goal, pace, savedCents)}${
+    paceDial === null || paceDial === 'want' || !pace.reachedOn
+      ? ''
+      : ` ${PRIORITY_DIAL_WORDS.paceSuffix[paceDial]}`
+  }`;
+  const funding = describeFundingShort(goal.funding, getExtras(goal));
 
   return (
     <>

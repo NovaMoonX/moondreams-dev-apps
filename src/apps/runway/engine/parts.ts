@@ -141,3 +141,29 @@ export const getLineId = (
   itemId: string,
   part: Priority | null = null,
 ) => (part === null ? `${dayKey}:${itemId}` : `${dayKey}:${itemId}:${part}`);
+
+/** A line's name: an item split into parts names each by its level ("Groceries · must", "Groceries · want"); an unsplit item keeps its name. */
+export function getPartName(
+  name: string,
+  line: {
+    itemId: string;
+    dayKey?: string;
+    part?: Priority | null;
+    tier: Priority;
+  },
+  lines: readonly {
+    itemId: string;
+    dayKey?: string;
+    part?: Priority | null;
+  }[],
+): string {
+  const isSplit =
+    (line.part ?? null) !== null ||
+    lines.some(
+      (other) =>
+        other.itemId === line.itemId &&
+        other.dayKey === line.dayKey &&
+        (other.part ?? null) !== null,
+    );
+  return isSplit && name !== '' ? `${name} · ${line.tier}` : name;
+}

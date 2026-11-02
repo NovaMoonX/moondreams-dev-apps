@@ -7,6 +7,7 @@ import { formatDateUTC } from '@/utils/formatUtils';
 
 import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
 import { DAY_MS } from '@apps/runway/engine/dates';
@@ -182,7 +183,7 @@ export async function createEnvelope(
     ? { ...draftEnvelope, groupId: groupDocs.groupId }
     : draftEnvelope;
   const changePayload: ChangeSealed = {
-    summary: `Added ${envelope.name}, ${describeFunding(envelope.funding)}.`,
+    summary: `Added ${envelope.name}, ${describeFunding(envelope.funding, getExtras(envelope))}.`,
   };
 
   const [envelopeSealed, changeSealed] = await Promise.all([
@@ -388,7 +389,7 @@ export async function createGoal(
   const dateText =
     goal.targetDate === null ? '' : ` by ${formatDateUTC(goal.targetDate)}`;
   const changePayload: ChangeSealed = {
-    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding)}.`,
+    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding, getExtras(goal))}.`,
   };
 
   const [goalSealed, changeSealed] = await Promise.all([

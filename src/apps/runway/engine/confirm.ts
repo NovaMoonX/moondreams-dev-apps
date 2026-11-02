@@ -9,6 +9,7 @@ import type {
 
 import { getEffectiveSplits } from './correct';
 import type { Draft } from './draft';
+import { getPartName } from './parts';
 import {
   applyLineEdits,
   getLineDifferences,
@@ -25,7 +26,11 @@ export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
     lineId: line.lineId,
     itemId: line.itemId,
     part: line.part,
-    name: Object.hasOwn(names, line.itemId) ? names[line.itemId].name : '',
+    name: getPartName(
+      Object.hasOwn(names, line.itemId) ? names[line.itemId].name : '',
+      line,
+      draft.lines,
+    ),
     emoji: Object.hasOwn(names, line.itemId) ? names[line.itemId].emoji : null,
     tier: line.tier,
     demandCents: line.demandCents,

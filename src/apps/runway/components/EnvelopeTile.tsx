@@ -16,8 +16,10 @@ import type { EnvelopeSealed } from '@apps/runway/types';
 import {
   describeCadenceLine,
   describeFundingShort,
+  describeExtras,
 } from '@apps/runway/utils/fundingText';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 
 interface EnvelopeTileProps {
@@ -54,7 +56,8 @@ function EnvelopeTile({
   const { isHidden } = useValuesHidden();
   const level = useAppSelector(selectLevel);
   const { value, word } = describeEnvelopeFigure(level, cents);
-  const funding = describeFundingShort(envelope.funding);
+  const extras = getExtras(envelope);
+  const funding = describeFundingShort(envelope.funding, extras);
   const emoji = useItemEmoji(envelope.emoji, envelope.groupId);
   const { amount } = envelope.funding;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
@@ -62,7 +65,7 @@ function EnvelopeTile({
   const rowFigure = isPlan ? eachTime : value;
   const rowDetail = isPlan
     ? eachTime
-      ? describeCadenceLine(envelope.funding.cadence)
+      ? `${describeCadenceLine(envelope.funding.cadence)}${describeExtras(extras, formatCentsShort)}`
       : funding
     : isHidden
       ? funding

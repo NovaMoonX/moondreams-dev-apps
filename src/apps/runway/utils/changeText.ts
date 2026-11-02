@@ -6,6 +6,7 @@ import {
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import { describeBillTiming } from '@apps/runway/utils/billText';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
@@ -185,7 +186,12 @@ const getParts = (
         goalAfter.priority,
         (value) => PRIORITY_LABELS[value],
       ),
-      diff('Funding', goalBefore.funding, goalAfter.funding, describeFunding),
+      diff(
+        'Funding',
+        { funding: goalBefore.funding, extras: getExtras(goalBefore) },
+        { funding: goalAfter.funding, extras: getExtras(goalAfter) },
+        (value) => describeFunding(value.funding, value.extras),
+      ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
             diff(
