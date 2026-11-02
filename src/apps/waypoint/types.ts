@@ -219,6 +219,8 @@ export interface RepaidLogEntry {
   isPaid: boolean;
   byUid: string;
   at: number;
+  /** True for the entry written when the whole expense is put back to expected; missing on older entries. */
+  isReset: boolean;
 }
 
 export interface RepaidStatus {

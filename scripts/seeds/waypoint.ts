@@ -523,7 +523,7 @@ export async function seedWaypoint(context: SeedContext): Promise<SeedResult> {
               isPaid: true,
               paidAt: context.now - 3_600_000,
               markedByUid: uid,
-              log: [{ isPaid: true, byUid: uid, at: context.now - 3_600_000 }],
+              log: [{ isPaid: true, byUid: uid, at: context.now - 3_600_000, isReset: false }],
             },
           ]),
         ),

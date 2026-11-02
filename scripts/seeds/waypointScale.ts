@@ -281,10 +281,10 @@ export async function seedWaypointScaleTrip({ context, tripStart, alexUid, taylo
               }
               if (position % 5 === 2) {
                 const byUid = position % 10 === 2 ? payerUid : uid;
-                return [uid, { isPaid: true, paidAt: context.now - 3_600_000, markedByUid: byUid, log: [{ isPaid: true, byUid, at: context.now - 3_600_000 }] }];
+                return [uid, { isPaid: true, paidAt: context.now - 3_600_000, markedByUid: byUid, log: [{ isPaid: true, byUid, at: context.now - 3_600_000, isReset: false }] }];
               }
               if (position % 11 === 3) {
-                return [uid, { isPaid: false, paidAt: null, markedByUid: null, log: [{ isPaid: true, byUid: uid, at: context.now - 7_200_000 }, { isPaid: false, byUid: payerUid, at: context.now - 3_600_000 }] }];
+                return [uid, { isPaid: false, paidAt: null, markedByUid: null, log: [{ isPaid: true, byUid: uid, at: context.now - 7_200_000, isReset: false }, { isPaid: false, byUid: payerUid, at: context.now - 3_600_000, isReset: false }] }];
               }
               return [uid, paidStatus[uid]];
             }),

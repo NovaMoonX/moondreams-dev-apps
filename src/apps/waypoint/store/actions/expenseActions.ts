@@ -3,7 +3,7 @@ import { collection, deleteDoc, deleteField, doc, runTransaction, setDoc, update
 
 import { db } from '@/lib/firebase/config';
 import { PLAN_COLLECTIONS } from '@apps/waypoint/constants';
-import { emptyRepaidStatus, flipRepaidStatus, getRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
+import { emptyRepaidStatus, flipRepaidStatus, getRepaidStatus, resetRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
 import type {
   EarlyPayment,
   ExpenseCategory,
@@ -330,7 +330,7 @@ export const markExpensePaid = createAsyncThunk<TripExpense, MarkExpensePaidInpu
   },
 );
 
-/** Puts a paid expense back to expected, clearing everyone's "repaid" marks so paying it again starts clean. */
+/** Puts a paid expense back to expected, clearing everyone's "repaid" marks (their history stays, with one reset entry) so paying it again starts clean. */
 export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripExpense; actorUid: string }>(
   'waypoint/expenses/markUnpaid',
   async ({ expense, actorUid }) => {
@@ -352,7 +352,7 @@ export const markExpenseUnpaid = createAsyncThunk<TripExpense, { expense: TripEx
         paidMemberStatus: Object.fromEntries(
           Object.keys(current.paidMemberStatus ?? {}).map((uid) => {
             const status = getRepaidStatus(current, uid);
-            return [uid, status.isPaid ? flipRepaidStatus(status, actorUid, now) : status];
+            return [uid, status.isPaid ? resetRepaidStatus(status, actorUid, now) : status];
           }),
         ),
         lastEditedAt: now,
@@ -386,10 +386,7 @@ export const toggleExpenseRepaid = createAsyncThunk<void, ToggleExpenseRepaidInp
       }
       const current = snapshot.data() as TripExpense;
       transaction.update(expenseRef, {
-        paidMemberStatus: {
-          ...(current.paidMemberStatus ?? {}),
-          [uid]: flipRepaidStatus(getRepaidStatus(current, uid), actorUid, Date.now()),
-        },
+        [`paidMemberStatus.${uid}`]: flipRepaidStatus(getRepaidStatus(current, uid), actorUid, Date.now()),
       });
     });
   },

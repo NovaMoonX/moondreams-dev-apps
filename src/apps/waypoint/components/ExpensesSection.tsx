@@ -9,7 +9,7 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Check, ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucide-react';
+import { ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
@@ -39,7 +39,7 @@ import SectionHeader from '@/components/SectionHeader';
 import EarlyPaymentModal from '@apps/waypoint/components/EarlyPaymentModal';
 import DuesSummary from '@apps/waypoint/components/DuesSummary';
 import PaidBackSheet from '@apps/waypoint/components/PaidBackSheet';
-import { getRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
+import { describeReversal, getRepaidStatus } from '@apps/waypoint/utils/repaidStatus';
 import ExpenseFormModal from '@apps/waypoint/components/ExpenseFormModal';
 import ReceiptSplitScreen, { type ReceiptSplitPrefill } from '@apps/waypoint/components/ReceiptSplitScreen';
 import PersonalExpenseFormModal, {
@@ -301,6 +301,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const [isDuesOpen, setIsDuesOpen] = useState(true);
   const [detailExpenseId, setDetailExpenseId] = useState<string | null>(null);
   const [paidBackExpenseId, setPaidBackExpenseId] = useState<string | null>(null);
+  const [paidBackReturnId, setPaidBackReturnId] = useState<string | null>(null);
   const isSmallScreen = useMediaQuery().isBelow('sm');
   const [isSplitSubmitting, setIsSplitSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -771,8 +772,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       }
 
       const toggle = () =>
-        void dispatch(
-          toggleExpenseRepaid({ uid: share.uid, actorUid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+        void runAction(
+          dispatch(
+            toggleExpenseRepaid({ uid: share.uid, actorUid: currentUserId, tripId: trip.id, expenseId: expense.id }),
+          ).unwrap(),
+          'Unable to update this mark. Someone may have just changed the expense.',
         );
 
       if (!share.isPaid) {
@@ -785,7 +789,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
-          <span className='text-muted-foreground text-xs'>Marked paid back</span>
+          <span className='text-muted-foreground text-xs'>
+            {share.markedByUid !== null && share.markedByUid !== currentUserId
+              ? `Marked by ${memberLabel(share.markedByUid)}`
+              : 'Marked paid back'}
+          </span>
           <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
             Undo
           </Button>
@@ -793,21 +801,27 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       );
     };
     const myShare = splitBreakdown?.shares.find((share) => share.uid === currentUserId);
-    const renderMarkedBy = (share: SplitShare | undefined) =>
-      share?.isPaid && share.markedByUid !== null && share.markedByUid !== currentUserId ? (
-        <p className='text-muted-foreground text-right text-xs'>Marked by {memberLabel(share.markedByUid)}</p>
-      ) : null;
+    const renderMarkedBy = (share: SplitShare | undefined) => {
+      if (!share) {
+        return null;
+      }
+      const reversal = describeReversal(expense, share.uid, currentUserId, memberLabel);
+      if (reversal !== null) {
+        return <p className='text-muted-foreground text-right text-xs'>{reversal}</p>;
+      }
+      return null;
+    };
     const renderPayerRow = (shares: SplitShare[]) => (
       <Button
         type='button'
         variant='tertiary'
-        className='h-auto w-full justify-start gap-2 rounded-md px-0! py-2 text-left text-sm font-normal'
+        className='bg-muted/50 h-auto min-h-10 w-full justify-start gap-2 rounded-xl px-3! py-2 text-left text-sm font-normal sm:max-w-sm'
         onClick={() => {
+          setPaidBackReturnId(isRow ? null : expense.id);
           setDetailExpenseId(null);
           setPaidBackExpenseId(expense.id);
         }}
       >
-        <Check className='text-muted-foreground h-4 w-4 shrink-0' aria-hidden='true' />
         <span className='min-w-0 flex-1'>
           Paid back by {shares.filter((share) => share.isPaid).length} of {shares.length}
         </span>
@@ -1201,7 +1215,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               memberLabel={memberLabel}
               formatAmount={(amount) => formatTotal(amount, amount, currency)}
               onToggleRepaid={(expenseId, debtorUid) =>
-                void dispatch(toggleExpenseRepaid({ uid: debtorUid, actorUid: currentUserId, tripId: trip.id, expenseId }))
+                void runAction(
+                  dispatch(toggleExpenseRepaid({ uid: debtorUid, actorUid: currentUserId, tripId: trip.id, expenseId })).unwrap(),
+                  'Unable to update this mark. Someone may have just changed the expense.',
+                )
               }
               onSetEarlyReturned={(expenseId, isReturned) =>
                 void runAction(
@@ -1489,15 +1506,21 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       )}
       <PaidBackSheet
         isOpen={paidBackExpense !== undefined}
-        onClose={() => setPaidBackExpenseId(null)}
+        onClose={() => {
+          setPaidBackExpenseId(null);
+          setDetailExpenseId(paidBackReturnId);
+          setPaidBackReturnId(null);
+        }}
         expense={paidBackExpense}
         shares={paidBackShares}
         currentUserId={currentUserId}
         memberLabel={memberLabel}
         onToggle={(uid) =>
-          paidBackExpense &&
-          void dispatch(
-            toggleExpenseRepaid({ uid, actorUid: currentUserId, tripId: trip.id, expenseId: paidBackExpense.id }),
+          runAction(
+            dispatch(
+              toggleExpenseRepaid({ uid, actorUid: currentUserId, tripId: trip.id, expenseId: paidBackExpense?.id ?? '' }),
+            ).unwrap(),
+            'Unable to update this mark. Someone may have just changed the expense.',
           )
         }
       />

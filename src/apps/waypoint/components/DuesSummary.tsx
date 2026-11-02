@@ -6,6 +6,7 @@ import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 import DetailSheet from '@/components/DetailSheet';
 import InlineNotice from '@/components/InlineNotice';
+import { describeReversal } from '@apps/waypoint/utils/repaidStatus';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Check, ChevronRight, Circle, HandCoins } from 'lucide-react';
@@ -124,6 +125,11 @@ function DuesSummary({
             {isRepaid && markedByUid !== null && (
               <span className='text-muted-foreground block truncate text-xs'>
                 Marked by {markedByUid === currentUserId ? 'you' : memberLabel(markedByUid)}
+              </span>
+            )}
+            {!isRepaid && describeReversal(expense, debtorUid, currentUserId, memberLabel) !== null && (
+              <span className='text-muted-foreground block text-xs'>
+                {describeReversal(expense, debtorUid, currentUserId, memberLabel)}
               </span>
             )}
           </span>
