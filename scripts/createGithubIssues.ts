@@ -118,7 +118,7 @@ const boardQuery = <T>(query: string, variables: Record<string, string | number>
 };
 
 const readProject = (login: string) => {
-  const query = `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) { id fields(first: 50) { nodes { ... on ProjectV2FieldCommon { id name } ... on ProjectV2SingleSelectField { options { id name } } } } } } }`;
+  const query = `query($login: String!, $number: Int!) { user(login: $login) { projectV2(number: $number) { id fields(first: 50) { nodes { ... on __typename ... on ProjectV2FieldCommon { id name } ... on ProjectV2SingleSelectField { options { id name } } } } } } }`;
   const project =
     boardQuery<{
       user: {
@@ -274,15 +274,16 @@ interface SelectOption {
 }
 
 const readOptions = (fieldId: string) => {
-  const query = `query($field: ID!) { node(id: $field) { ... on ProjectV2SingleSelectField { options { id name color description } } } }`;
-  const result = ghJson<{ data: { node: { options: SelectOption[] } } }>([
-    'api',
-    'graphql',
-    '-f',
-    `query=${query}`,
-    '-f',
-    `field=${fieldId}`,
-  ]).data.node.options;
+  const query = `query($field: ID!) { node(id: $field) { __typename ... on ProjectV2SingleSelectField { options { id name color description } } } }`;
+  const node = ghJson<{
+    data: { node: { __typename: string; options?: SelectOption[] } | null };
+  }>(['api', 'graphql', '-f', `query=${query}`, '-f', `field=${fieldId}`])
+    .data.node;
+  const result =
+    node?.options ??
+    fail(
+      `The board's ${APPS_FIELD} field (${fieldId}) is a ${node?.__typename ?? 'missing node'}, not a single-select field, so its options can't be read.`,
+    );
   return result;
 };
 
@@ -368,6 +369,9 @@ const planAppsOption = (
   const appsField =
     fields.find((field) => field.name === APPS_FIELD) ??
     fail(`No "${APPS_FIELD}" field on project ${PROJECT_NUMBER}.`);
+  console.log(
+    `${APPS_FIELD} field: ${appsField.id}, ${appsField.options?.length ?? 'no'} options read`,
+  );
   const resumed = existsSync(backupPath(appsField.id))
     ? (JSON.parse(readFileSync(backupPath(appsField.id), 'utf8')) as AppsBackup)
     : null;
