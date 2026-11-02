@@ -892,8 +892,8 @@ export const PAID_FROM_WORDS = {
 /** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */
 export const PAY_SHARE_WORDS = {
   action: 'Change what this pay puts in',
-  savingToward: (total: string, due: string) =>
-    `Saving up toward ${total} · due ${due}`,
+  savingToward: (cents: string, total: string, due: string) =>
+    `Saving up · ${cents} of ${total} · due ${due}`,
   title: (name: string) => `How much should this pay put toward ${name}?`,
   amount: 'Amount',
   changes: 'What changes',
@@ -1874,7 +1874,7 @@ export const FORM_FLOW_WORDS = {
     unit === 'years'
       ? 'Pick 1 to 10 years apart.'
       : 'Pick 2 to 120 months apart.',
-  savedUpSummary: 'saved up from each pay',
+  savedUpSummary: 'saved up each pay',
   every: 'Every',
   everyCount: 'How many',
   everyUnit: 'Months or years',

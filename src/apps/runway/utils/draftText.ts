@@ -76,11 +76,12 @@ export function describeLineReason(
   return result;
 }
 
-/** A bill line's second sentence: "Due Dec 1 · $500.00 of $1,200.00", or "Saving up toward $300.00 · due Jan 15" for one saved up for. */
+/** A bill line's second sentence: "Due Dec 1 · $500.00 of $1,200.00", or "Saving up · $50.00 of $300.00 · due Jan 15" for one saved up for. */
 export function describeBillShare(line: DraftLine) {
   if (line.bill === null) return null;
   if (line.bill.isSavingUp)
     return PAY_SHARE_WORDS.savingToward(
+      formatCents(line.cents),
       formatCents(line.bill.totalCents),
       formatDateUTC(line.bill.dueOn),
     );
