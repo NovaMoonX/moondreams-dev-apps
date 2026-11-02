@@ -52,7 +52,10 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getPace } from '@apps/runway/engine/pace';
 import {
+  applyMove,
   buildMoves,
+  canPlacePart,
+  getPartRows,
   isDueBeforeNext,
   isMovable,
   orderPriorities,
@@ -85,7 +88,12 @@ import {
   selectPairedBy,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenVersion, Priority } from '@apps/runway/types';
+import type {
+  EnvelopeSealed,
+  GoalSealed,
+  OpenVersion,
+  Priority,
+} from '@apps/runway/types';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import {
@@ -262,6 +270,44 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     };
   };
 
+  /** An envelope's or goal's rows: one when it has no extras, else its own amount and each extra, named by level. */
+  const toPartEntries = <P extends EnvelopeSealed | GoalSealed>(
+    itemId: string,
+    payload: P,
+    render: Entry['render'] extends (...args: infer A) => ReactNode
+      ? (rowId: string, payload: P, ...rest: A) => ReactNode
+      : never,
+  ): [string, Entry][] => {
+    const parts = getPartRows(itemId, payload);
+    const asRow = (rowId: string, shown: P): [string, Entry] => [
+      rowId,
+      {
+        name: shown.name,
+        render: (reorder, isHighlighted) =>
+          render(rowId, shown, reorder, isHighlighted),
+      },
+    ];
+    if (parts.length === 0) return [asRow(itemId, payload)];
+    return [
+      asRow(itemId, {
+        ...payload,
+        name: `${payload.name} · ${payload.priority}`,
+        extras: null,
+      }),
+      ...parts.map((part) =>
+        asRow(part.rowId, {
+          ...payload,
+          name: `${payload.name} · ${part.tier}`,
+          funding: {
+            ...payload.funding,
+            amount: { kind: 'exact' as const, cents: part.cents },
+          },
+          extras: null,
+        }),
+      ),
+    ];
+  };
+
   const entries = new Map<string, Entry>([
     ...bills.map(({ item, version }): [string, Entry] => {
       const payload = version.payload;
@@ -298,42 +344,42 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         },
       ];
     }),
-    ...envelopes.map(({ item, version }): [string, Entry] => [
-      item.id,
-      {
-        name: version.payload.name,
-        render: (reorder, isHighlighted) => (
+    ...envelopes.flatMap(({ item, version }) =>
+      toPartEntries(
+        item.id,
+        version.payload,
+        (rowId, envelope, reorder, isHighlighted) => (
           <EnvelopeTile
-            key={item.id}
+            reorder={reorder}
+            isHighlighted={isHighlighted}
+            key={rowId}
             itemId={item.id}
-            envelope={version.payload}
+            envelope={envelope}
             cents={balances.assignedByItem[item.id] ?? 0}
             pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
             today={today}
-            reorder={reorder}
-            isHighlighted={isHighlighted}
           />
         ),
-      },
-    ]),
-    ...goals.map(({ item, version }): [string, Entry] => [
-      item.id,
-      {
-        name: version.payload.name,
-        render: (reorder, isHighlighted) => (
+      ),
+    ),
+    ...goals.flatMap(({ item, version }) =>
+      toPartEntries(
+        item.id,
+        version.payload,
+        (rowId, goal, reorder, isHighlighted) => (
           <GoalRow
-            key={item.id}
+            reorder={reorder}
+            isHighlighted={isHighlighted}
+            key={rowId}
             goalId={item.id}
-            goal={version.payload}
+            goal={goal}
             pace={paces[item.id]}
             heldCents={heldByItem[item.id] ?? 0}
             today={today}
-            reorder={reorder}
-            isHighlighted={isHighlighted}
           />
         ),
-      },
-    ]),
+      ),
+    ),
   ]);
 
   const priorityItems: PriorityItem[] = [
@@ -346,15 +392,27 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       isRest: false,
       isDueFirst: getDueFirst(item.id).isFirst,
     })),
-    ...[...envelopes, ...goals].map(({ item, version }) => ({
-      itemId: item.id,
-      kind: item.kind as 'envelope' | 'goal',
-      tier: version.payload.priority,
-      orderIndex: version.payload.orderIndex,
-      createdAt: item.createdAt,
-      isRest: version.payload.funding.amount.kind === 'rest',
-      isDueFirst: false,
-    })),
+    ...[...envelopes, ...goals].flatMap(({ item, version }) => [
+      {
+        itemId: item.id,
+        kind: item.kind as 'envelope' | 'goal',
+        tier: version.payload.priority,
+        orderIndex: version.payload.orderIndex,
+        createdAt: item.createdAt,
+        isRest: version.payload.funding.amount.kind === 'rest',
+        isDueFirst: false,
+      },
+      ...getPartRows(item.id, version.payload).map((part) => ({
+        itemId: part.rowId,
+        kind: item.kind as 'envelope' | 'goal',
+        tier: part.tier,
+        orderIndex: part.orderIndex,
+        createdAt: item.createdAt,
+        isRest: false,
+        isDueFirst: false,
+        lineKey: part.lineKey,
+      })),
+    ]),
   ];
   const shortOn = shortDay?.on ?? null;
   const shortCents = (shortDay?.draft.lines ?? [])
@@ -424,11 +482,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                 effectiveFrom: segment.effectiveFrom,
                 effectiveUntil: segment.effectiveUntil,
                 changeId: 'what-if',
-                payload: {
-                  ...segment.payload,
-                  priority: move.priority,
-                  orderIndex: move.orderIndex,
-                },
+                payload: applyMove(segment.payload, move),
               }) as PreviewVersion,
           ),
         ),
@@ -687,6 +741,18 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     }));
   };
 
+  /** Whether a row may go to a tier as the reorder now stands: an item's parts keep their order. */
+  const canPlace = (rowId: string, tier: Priority) =>
+    canPlacePart(
+      rowId,
+      tier,
+      (other) =>
+        (live === null
+          ? undefined
+          : PRIORITIES.find((key) => live[key].includes(other))) ??
+        itemById.get(other)?.tier,
+    );
+
   const isShown = (itemId: string) =>
     !isSearching || nameOf(itemId).toLowerCase().includes(needle);
 
@@ -761,6 +827,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     liftedAt: number,
   ): Unit[] => {
     if (lifted === null) return [];
+    if (!canPlace(lifted, tier)) return [];
     if (liftedAt >= 0 && (gap === liftedAt || gap === liftedAt + 1)) return [];
     return [
       {
@@ -812,11 +879,14 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
           note: null,
         })),
       onMoveUp:
-        unit.tierIndex === 0 && tierRank === 0
+        unit.tierIndex === 0 &&
+        (tierRank === 0 || !canPlace(id, PRIORITIES[tierRank - 1]))
           ? null
           : () => nudge(id, tier, -1),
       onMoveDown:
-        unit.tierIndex === list.length - 1 && tierRank === PRIORITIES.length - 1
+        unit.tierIndex === list.length - 1 &&
+        (tierRank === PRIORITIES.length - 1 ||
+          !canPlace(id, PRIORITIES[tierRank + 1]))
           ? null
           : () => nudge(id, tier, 1),
     });

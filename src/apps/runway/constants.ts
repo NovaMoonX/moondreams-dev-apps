@@ -1459,6 +1459,13 @@ export const FORM_FLOW_WORDS = {
   maxTitle: 'Stop filling at',
   max: 'Stop filling at',
   maxHint: 'It gets nothing more once it holds this much.',
+  extrasTitle: "Should it get more when there's room?",
+  extras: "Extra when there's room",
+  noExtras: 'None',
+  extraAsShould: 'As a Should',
+  extraAsWant: 'As a Want',
+  extrasHint:
+    'Paid after everything above it, so a short income day trims it first.',
   noMax: 'No limit',
   clearMax: 'Remove the limit',
   billAmountTitle: 'How much is it?',

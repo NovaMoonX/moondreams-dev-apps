@@ -1,9 +1,10 @@
-import type { Priority } from '@apps/runway/types';
+import type { Priority, PriorityExtra } from '@apps/runway/types';
 
 import { ENVELOPE_ORDER_STEP } from '@apps/runway/constants';
 
 import { compareText, TIER_RANK } from './demands';
 import type { Draft } from './draft';
+import { getExtras } from './parts';
 import {
   getVersionStretches,
   type VersionStretch,
@@ -23,6 +24,8 @@ export interface PriorityItem {
   isRest: boolean;
   /** Its next payment is due before the pay after the next one, so the engine funds it first in its tier. */
   isDueFirst: boolean;
+  /** How a draft line names this row when it is not the item id: an extra's level (`getPartLineKey`). */
+  lineKey?: string;
 }
 
 export interface PrioritySection {
@@ -49,6 +52,58 @@ export const comparePriorityItems = (a: PriorityItem, b: PriorityItem) =>
 
 const TIERS: readonly Priority[] = ['must', 'should', 'want'];
 
+/** A row of the funding order: an item's own amount is its id, an extra is the id and its place among the item's extras (1 first). */
+export const toPartRowId = (itemId: string, index: number) =>
+  index === 0 ? itemId : `${itemId}:${index}`;
+
+export const readPartRowId = (rowId: string) => {
+  const [itemId, index] = rowId.split(':');
+  return { itemId, index: index === undefined ? 0 : Number(index) };
+};
+
+/** How a draft line names the row it funds: its item, or its item and the extra's level. */
+export const getPartLineKey = (itemId: string, part?: Priority | null) =>
+  (part ?? null) === null ? itemId : `${itemId}@${part}`;
+
+/** An envelope's or goal's extras as rows after its own amount, each with its row id and the key its draft lines carry. */
+export function getPartRows<
+  T extends {
+    priority: Priority;
+    orderIndex: number;
+    funding: Parameters<typeof getExtras>[0]['funding'];
+    extras?: readonly PriorityExtra[] | null;
+  },
+>(itemId: string, payload: T) {
+  const result = getExtras(payload).map((extra, index) => ({
+    rowId: toPartRowId(itemId, index + 1),
+    lineKey: getPartLineKey(itemId, extra.tier),
+    tier: extra.tier,
+    orderIndex: extra.orderIndex,
+    cents: extra.cents,
+  }));
+  return result;
+}
+
+/**
+ * Whether a row may sit in `tier`: an item's parts keep their order (its own amount above its first
+ * extra, that above the second), so each sits strictly between its neighbours' levels.
+ */
+export function canPlacePart(
+  rowId: string,
+  tier: Priority,
+  tierOf: (rowId: string) => Priority | undefined,
+): boolean {
+  const { itemId, index } = readPartRowId(rowId);
+  const rank = TIER_RANK[tier];
+  const above =
+    index === 0 ? undefined : tierOf(toPartRowId(itemId, index - 1));
+  const below = tierOf(toPartRowId(itemId, index + 1));
+  return (
+    (above === undefined || TIER_RANK[above] < rank) &&
+    (below === undefined || rank < TIER_RANK[below])
+  );
+}
+
 /**
  * The items in funding order by tier, and where one income day's money runs out: above the first
  * item whose own line is short (a pairing's line is not the item's own ask). An item with no line
@@ -57,7 +112,12 @@ const TIERS: readonly Priority[] = ['must', 'should', 'want'];
 export function orderPriorities(
   items: readonly PriorityItem[],
   draft: {
-    lines: readonly { itemId: string; shortBy: number; pairing: unknown }[];
+    lines: readonly {
+      itemId: string;
+      part?: Priority | null;
+      shortBy: number;
+      pairing: unknown;
+    }[];
   } | null,
 ): PriorityOrder {
   const sorted = [...items].sort(comparePriorityItems);
@@ -69,10 +129,14 @@ export function orderPriorities(
       { tier, items: sorted.filter((item) => item.tier === tier), start },
     ];
   }, []);
-  const position = new Map(sorted.map((item, index) => [item.itemId, index]));
+  const position = new Map(
+    sorted.map((item, index) => [item.lineKey ?? item.itemId, index]),
+  );
   const shortPositions = (draft?.lines ?? [])
     .filter((line) => line.pairing === null && line.shortBy > 0)
-    .flatMap((line) => position.get(line.itemId) ?? []);
+    .flatMap(
+      (line) => position.get(getPartLineKey(line.itemId, line.part)) ?? [],
+    );
   return {
     sections,
     cutIndex: shortPositions.length === 0 ? null : Math.min(...shortPositions),
@@ -328,11 +392,40 @@ export interface PriorityMove<P> {
   itemId: string;
   kind: PriorityKind;
   segments: VersionStretch<P>[];
-  priority: Priority;
-  orderIndex: number;
+  /** The item's own level and rank; null keeps each segment's. */
+  priority: Priority | null;
+  orderIndex: number | null;
+  /** Extras that moved, by their place among the item's extras (1 first). */
+  extras: { index: number; tier: Priority; orderIndex: number }[];
 }
 
-/** What a reorder writes, for the preview and the save alike: every assignment with one segment per stretch its item's version covers from `today`. */
+/** A segment's payload with a move applied: the item's own level and rank, and each moved extra's. */
+export function applyMove<P>(
+  payload: P,
+  move: Pick<PriorityMove<P>, 'priority' | 'orderIndex' | 'extras'>,
+): P {
+  const own = payload as P & {
+    priority: Priority;
+    orderIndex: number;
+    funding?: Parameters<typeof getExtras>[0]['funding'];
+    extras?: PriorityExtra[] | null;
+  };
+  const priority = move.priority ?? own.priority;
+  const orderIndex = move.orderIndex ?? own.orderIndex;
+  if (own.funding === undefined || move.extras.length === 0)
+    return { ...own, priority, orderIndex };
+  const extras = getExtras({ ...own, funding: own.funding }).map(
+    (extra, index) => {
+      const moved = move.extras.find((entry) => entry.index === index + 1);
+      return moved
+        ? { ...extra, tier: moved.tier, orderIndex: moved.orderIndex }
+        : extra;
+    },
+  );
+  return { ...own, priority, orderIndex, extras };
+}
+
+/** What a reorder writes, for the preview and the save alike: one move per item its assignments touch, with one segment per stretch its version covers from `today`. */
 export function buildMoves<
   V extends Versioned & { id: string; kind: PriorityKind; payload: unknown },
 >(
@@ -340,24 +433,34 @@ export function buildMoves<
   versions: readonly V[],
   today: number,
 ): PriorityMove<V['payload']>[] {
-  return assignments.flatMap((assignment) => {
-    const kind = versions.find(
-      (version) => version.itemId === assignment.itemId,
-    )?.kind;
+  const byItem = assignments.reduce((acc, assignment) => {
+    const { itemId } = readPartRowId(assignment.itemId);
+    return acc.set(itemId, [...(acc.get(itemId) ?? []), assignment]);
+  }, new Map<string, PriorityAssignment[]>());
+  return [...byItem.entries()].flatMap(([itemId, list]) => {
+    const kind = versions.find((version) => version.itemId === itemId)?.kind;
     const segments = getVersionStretches<V, V['payload']>(
       versions,
-      assignment.itemId,
+      itemId,
       today,
     );
+    const own = list.find((entry) => entry.itemId === itemId) ?? null;
     return kind === undefined || segments.length === 0
       ? []
       : [
           {
-            itemId: assignment.itemId,
+            itemId,
             kind,
             segments,
-            priority: assignment.tier,
-            orderIndex: assignment.orderIndex,
+            priority: own?.tier ?? null,
+            orderIndex: own?.orderIndex ?? null,
+            extras: list
+              .filter((entry) => entry.itemId !== itemId)
+              .map((entry) => ({
+                index: readPartRowId(entry.itemId).index,
+                tier: entry.tier,
+                orderIndex: entry.orderIndex,
+              })),
           },
         ];
   });

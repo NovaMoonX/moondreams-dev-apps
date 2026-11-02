@@ -53,6 +53,16 @@ import {
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
 import {
+  buildExtras,
+  buildExtrasSteps,
+  getExtrasBlocker,
+  INITIAL_EXTRAS_FORM,
+  isExtrasAnswer,
+  toExtrasForm,
+  withExtrasDefault,
+  type ExtrasFormData,
+} from '@apps/runway/forms/extrasFlow';
+import {
   withStartOver,
   type StartOverProps,
 } from '@apps/runway/forms/withStartOver';
@@ -88,7 +98,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import DateInput from '@/components/DateInput';
 
-interface GoalFormData extends FundingFormData {
+interface GoalFormData extends FundingFormData, ExtrasFormData {
   name: string;
   priority: Priority | null;
   target: string;
@@ -101,7 +111,7 @@ interface GoalFormData extends FundingFormData {
 }
 
 const parseGoalDraftFields = (stored: unknown) =>
-  readDraftFields<GoalFormData>(stored, {
+  readDraftFields<GoalFormData>(withExtrasDefault(stored), {
     ...fundingFieldChecks,
     name: isText,
     priority: isNullableOneOf(PRIORITIES),
@@ -109,6 +119,7 @@ const parseGoalDraftFields = (stored: unknown) =>
     date: isNullableText,
     current: isText,
     emoji: isNullableText,
+    extras: isExtrasAnswer,
   });
 
 const parseGoalDraft = (stored: unknown) =>
@@ -139,6 +150,7 @@ export type GoalStepId =
   | 'amount'
   | 'cadence'
   | 'priority'
+  | 'extras'
   | 'emoji';
 
 const priorityOptions = PRIORITIES.map((value) => ({
@@ -169,6 +181,7 @@ const getEditingData = (payload: GoalSealed): GoalFormData => ({
     payload.targetDate === null ? null : toDateInputValue(payload.targetDate),
   current: '',
   emoji: payload.emoji,
+  ...toExtrasForm(payload),
 });
 
 const INITIAL_DATA: GoalFormData = {
@@ -179,6 +192,7 @@ const INITIAL_DATA: GoalFormData = {
   date: null,
   current: '',
   emoji: null,
+  ...INITIAL_EXTRAS_FORM,
 };
 
 const getBlocker = (
@@ -255,7 +269,9 @@ function GoalFormBody({
 
   const targetCents = parseMoneyToCents(formData.target);
   const hasDays = comingDays.length > 0 || !!draft;
-  const blocker = getBlocker(formData, targetCents, hasDays, today);
+  const blocker =
+    getBlocker(formData, targetCents, hasDays, today) ??
+    getExtrasBlocker(formData, formData.priority);
   const currentCents = parseMoneyToCents(formData.current) ?? 0;
 
   const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
@@ -438,6 +454,11 @@ function GoalFormBody({
         />
       ),
     },
+    ...buildExtrasSteps({
+      data: formData,
+      priority: formData.priority,
+      set,
+    }),
     {
       id: 'emoji',
       title: FORM_FLOW_WORDS.emojiTitle,
@@ -493,6 +514,14 @@ function GoalFormBody({
       editing && editing.payload.priority === data.priority
         ? editing.payload.orderIndex
         : getNextTierRank([...bills, ...envelopes, ...goals], data.priority);
+    const extras = buildExtras({
+      data,
+      priority: data.priority,
+      funding,
+      saved: editing?.payload.extras,
+      getNextRank: (tier) =>
+        getNextTierRank([...bills, ...envelopes, ...goals], tier),
+    });
     const result: GoalSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,
@@ -502,6 +531,9 @@ function GoalFormBody({
       targetDate:
         data.date === null ? null : (fromDateInputValue(data.date) ?? null),
       funding,
+      ...(extras === null && editing?.payload.extras === undefined
+        ? {}
+        : { extras }),
       ...(editing
         ? editing.payload.startingCents === undefined
           ? {}

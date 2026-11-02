@@ -8,6 +8,13 @@ import {
   getExtras,
   getLineId,
 } from '../../src/apps/runway/engine/parts.ts';
+import {
+  applyMove,
+  buildMoves,
+  canPlacePart,
+  getPartRows,
+  orderPriorities,
+} from '../../src/apps/runway/engine/priorities.ts';
 import type { DraftEnvelopeInput } from '../../src/apps/runway/engine/demands.ts';
 import type { FundingRule } from '../../src/apps/runway/types.ts';
 
@@ -176,6 +183,115 @@ assert.equal(
   fundingAtLevel({ ...longTrip, priority: 'should' }, 'must'),
   null,
   'a Should goal adds nothing on Musts only',
+);
+
+// Priorities lists each part as its own row, and a short extra puts the cut at that row.
+const rows = getPartRows('groceries', groceries);
+assert.deepEqual(
+  rows.map((row) => [row.rowId, row.tier]),
+  [['groceries:1', 'want']],
+);
+const order = orderPriorities(
+  [
+    {
+      itemId: 'groceries',
+      kind: 'envelope',
+      tier: 'must',
+      orderIndex: 1,
+      createdAt: 1,
+      isRest: false,
+      isDueFirst: false,
+    },
+    {
+      itemId: 'dining',
+      kind: 'envelope',
+      tier: 'should',
+      orderIndex: 1,
+      createdAt: 2,
+      isRest: false,
+      isDueFirst: false,
+    },
+    ...rows.map((row) => ({
+      itemId: row.rowId,
+      kind: 'envelope' as const,
+      tier: row.tier,
+      orderIndex: row.orderIndex,
+      createdAt: 1,
+      isRest: false,
+      isDueFirst: false,
+      lineKey: row.lineKey,
+    })),
+  ],
+  draftOf(40_000, [groceries, dining]),
+);
+assert.equal(order.cutIndex, 2, 'the cut sits above the short Want extra');
+
+// A part stays between its neighbours' levels.
+const tiers: Record<string, 'must' | 'should' | 'want'> = {
+  trip: 'must',
+  'trip:1': 'should',
+  'trip:2': 'want',
+};
+const tierOf = (rowId: string) => tiers[rowId];
+assert.equal(canPlacePart('trip', 'should', tierOf), false);
+assert.equal(canPlacePart('trip:1', 'must', tierOf), false);
+assert.equal(canPlacePart('trip:1', 'should', tierOf), true);
+assert.equal(canPlacePart('trip:2', 'should', tierOf), false);
+assert.equal(
+  canPlacePart('groceries', 'should', (id) =>
+    id === 'groceries:1' ? 'want' : undefined,
+  ),
+  true,
+  'its own amount can drop while it stays above its extra',
+);
+assert.equal(
+  canPlacePart('dining', 'want', () => undefined),
+  true,
+);
+
+// A reorder writes an extra's new rank into its own item's version, leaving the item's own level.
+const D = 86_400_000;
+const versions = [
+  {
+    id: 'v1',
+    itemId: 'groceries',
+    kind: 'envelope' as const,
+    createdAt: 1,
+    effectiveFrom: 0,
+    effectiveUntil: null,
+    payload: groceries,
+  },
+];
+const moves = buildMoves(
+  [{ itemId: 'groceries:1', tier: 'want', orderIndex: 7 }],
+  versions,
+  10 * D,
+);
+assert.equal(moves.length, 1);
+assert.deepEqual(
+  [moves[0].itemId, moves[0].priority, moves[0].orderIndex],
+  ['groceries', null, null],
+);
+const moved = applyMove(moves[0].segments[0].payload, moves[0]);
+assert.equal(moved.priority, 'must');
+assert.deepEqual(moved.extras, [
+  { tier: 'want', cents: 25_000, orderIndex: 7 },
+]);
+const both = buildMoves(
+  [
+    { itemId: 'groceries', tier: 'should', orderIndex: 2 },
+    { itemId: 'groceries:1', tier: 'want', orderIndex: 3 },
+  ],
+  versions,
+  10 * D,
+);
+assert.equal(both.length, 1, 'one move per item');
+assert.deepEqual(
+  [
+    applyMove(both[0].segments[0].payload, both[0]).priority,
+    applyMove(both[0].segments[0].payload, both[0]).extras,
+  ],
+  ['should', [{ tier: 'want', cents: 25_000, orderIndex: 3 }]],
 );
 
 console.log('runway priority parts: ok');
