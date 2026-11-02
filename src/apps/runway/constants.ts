@@ -282,7 +282,7 @@ export const PRIORITY_DIAL_WORDS = {
 export const PRIORITIES_NUDGE_WORDS = {
   title: 'Mark what you must pay',
   subtitle: 'Everything starts as Should. Move yours into Must and Want.',
-  dismiss: "Don't show this again",
+  dismiss: "Don't ask again",
 } as const;
 
 /** Every income day, or every Nth: the cadences the envelope form offers. */

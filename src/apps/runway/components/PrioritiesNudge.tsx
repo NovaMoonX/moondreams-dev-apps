@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, ListOrdered, X } from 'lucide-react';
+import { ChevronRight, ListOrdered } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
@@ -17,7 +17,7 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 const DISMISSED_KEY_PREFIX = 'runway.prioritiesNudgeDismissed.';
 const MIN_ITEMS = 3;
 
-/** Asks the person to sort priorities while every item is still the default; gone once one changes, or for good on this device once hidden. */
+/** Asks the person to sort priorities while every item is still the default; gone once one changes, or for good on this device once hidden; Home leaves it out while bills are due. */
 function PrioritiesNudge() {
   const { user } = useAuth();
   return user ? <PrioritiesNudgeRow key={user.uid} uid={user.uid} /> : null;
@@ -47,12 +47,12 @@ function PrioritiesNudgeRow({ uid }: { uid: string }) {
   return (
     <section
       aria-label={PRIORITIES_NUDGE_WORDS.title}
-      className='bg-card border-border flex min-h-12 items-stretch rounded-2xl border'
+      className='bg-card border-border flex flex-col rounded-2xl border'
     >
       <Button
         type='button'
         variant='tertiary'
-        className='hover:bg-muted/60 h-auto min-h-0 min-w-0 flex-1 justify-start gap-3 rounded-2xl px-4! py-3.5! text-left max-[359px]:px-3!'
+        className='hover:bg-muted/60 h-auto min-h-0 min-w-0 flex-1 justify-start gap-3 rounded-2xl px-4! pt-3.5! pb-1! text-left max-[359px]:px-3!'
         onClick={() => openMoreEntry('priorities')}
       >
         <ListOrdered
@@ -72,17 +72,17 @@ function PrioritiesNudgeRow({ uid }: { uid: string }) {
           aria-hidden='true'
         />
       </Button>
-      <Button
-        type='button'
-        variant='tertiary'
-        size='icon'
-        aria-label={PRIORITIES_NUDGE_WORDS.dismiss}
-        title={PRIORITIES_NUDGE_WORDS.dismiss}
-        className='text-muted-foreground! mr-1 size-10 min-w-10 shrink-0 self-center rounded-full p-0'
-        onClick={() => setIsDismissed(true)}
-      >
-        <X className='h-5 w-5' aria-hidden='true' />
-      </Button>
+      <div className='flex justify-end px-2 pb-1.5'>
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          className='text-muted-foreground! relative text-xs after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[""]'
+          onClick={() => setIsDismissed(true)}
+        >
+          {PRIORITIES_NUDGE_WORDS.dismiss}
+        </Button>
+      </div>
     </section>
   );
 }

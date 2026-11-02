@@ -185,7 +185,7 @@ function HomeScreen() {
           onPickUpPurchase={() => setIsAddingPurchase(true)}
         />
       )}
-      <PrioritiesNudge />
+      {lookahead !== null && lookahead.due.length === 0 && <PrioritiesNudge />}
       <TrackInviteCard />
       {isSetupOpen && (
         <EmptyCard
