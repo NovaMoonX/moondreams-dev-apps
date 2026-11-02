@@ -1,17 +1,14 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import BackLink from '@/components/BackLink';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import BillShareView from '@apps/runway/components/BillShareView';
-import { ActionTitle } from '@apps/runway/components/ActionSection';
 import ItemSheet, {
   type ItemSheetProps,
 } from '@apps/runway/components/ItemSheet';
@@ -338,33 +335,7 @@ function BillLineSheet({
   const pairedAction = onOpenFunds && {
     label: PAY_SHARE_WORDS.action,
     subtitle: PAY_SHARE_WORDS.pairedSub,
-    renderView: ({
-      onBack,
-      onClose,
-    }: {
-      onBack: () => void;
-      onClose: () => void;
-    }) => (
-      <div className='flex flex-col gap-3'>
-        <BackLink onBack={onBack} />
-        <ActionTitle>{PAY_SHARE_WORDS.firstOnlyTitle(name)}</ActionTitle>
-        <p className='text-muted-foreground text-sm'>
-          {PAY_SHARE_WORDS.pairedBody}
-        </p>
-        <div>
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={() => {
-              onClose();
-              onOpenFunds();
-            }}
-          >
-            {PAY_SHARE_WORDS.openFunds}
-          </Button>
-        </div>
-      </div>
-    ),
+    onOpen: onOpenFunds,
   };
   return (
     <ItemSheet

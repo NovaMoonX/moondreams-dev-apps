@@ -335,7 +335,9 @@ function PairingsEditor({
         ? 'Percent not set'
         : 'Amount not set'
       : amount.kind === 'exact'
-        ? `${describeAmount(amount)} each pay`
+        ? day
+          ? `Asks ${describeAmount(amount)} of this pay`
+          : `${describeAmount(amount)} each pay`
         : describeAmount(amount, fromLabel);
   };
 

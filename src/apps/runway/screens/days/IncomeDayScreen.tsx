@@ -84,6 +84,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const [isEditingFunds, setIsEditingFunds] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [openLineId, setOpenLineId] = useState<string | null>(null);
+  const [fundsFromLineId, setFundsFromLineId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate(useNow(60_000));
@@ -308,7 +309,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         }
         onResetShare={resetShare}
         canChange={day.on >= today && changeableIds.has(line.itemId)}
-        onOpenFunds={() => setIsEditingFunds(true)}
+        onOpenFunds={() => {
+          setFundsFromLineId(line.lineId);
+          setIsEditingFunds(true);
+        }}
       />
     );
   };
@@ -495,7 +499,11 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
           locked={[]}
           initial={effectivePairings}
           day={day}
-          onClose={() => setIsEditingFunds(false)}
+          onClose={() => {
+            setIsEditingFunds(false);
+            setOpenLineId(fundsFromLineId);
+            setFundsFromLineId(null);
+          }}
           onSave={(pairings) =>
             persist((current) => ({ ...current, pairings }))
           }

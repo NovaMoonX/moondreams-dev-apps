@@ -184,7 +184,9 @@ export interface ItemSheetProps {
   dayAction?: {
     label: string;
     subtitle?: string;
-    renderView: (controls: {
+    /** Opens somewhere else instead of a view, closing this sheet first. */
+    onOpen?: () => void;
+    renderView?: (controls: {
       onBack: () => void;
       onClose: () => void;
       openChange: (step: string) => void;
@@ -779,7 +781,11 @@ function ItemSheet({
             icon={<Pencil />}
             label={dayAction.label}
             subtitle={dayAction.subtitle}
-            onClick={() => goTo('dayAction')}
+            onClick={() => {
+              if (!dayAction.onOpen) return goTo('dayAction');
+              onClose();
+              dayAction.onOpen();
+            }}
           />
         )}
         {canChange && !dayAction && quickChange && (
@@ -1237,7 +1243,7 @@ function ItemSheet({
                 ? moveView
                 : view === 'setHeld'
                   ? setHeldView
-                  : view === 'dayAction' && dayAction
+                  : view === 'dayAction' && dayAction?.renderView
                     ? dayAction.renderView({
                         onBack: () => goTo('menu'),
                         onClose,

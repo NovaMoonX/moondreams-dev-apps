@@ -156,7 +156,21 @@ export function previewBillShare(
     payment.parts.some((part) => part.day.dayKey === dayKey),
   );
   if (!before) return null;
-  const maxCents = Math.max(0, before.totalCents - before.fundedCents);
+  const pairedElsewhere = before.parts
+    .filter(
+      (part) =>
+        part.day.dayKey !== dayKey &&
+        bill.paired !== undefined &&
+        Object.hasOwn(bill.paired, part.day.dayKey) &&
+        !(
+          bill.fixed !== undefined && Object.hasOwn(bill.fixed, part.day.dayKey)
+        ),
+    )
+    .reduce((sum, part) => sum + part.cents, 0);
+  const maxCents = Math.max(
+    0,
+    before.totalCents - before.fundedCents - pairedElsewhere,
+  );
   const capped = Math.min(Math.max(0, cents), maxCents);
   const after = plan({
     ...bill,

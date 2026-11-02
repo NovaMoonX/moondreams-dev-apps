@@ -772,9 +772,7 @@ function BillShareView({
           </>
         ) : (
           <>
-            <p className='text-sm'>
-              {PAY_SHARE_WORDS.withheld(saved.leaveOut, bill.name)}
-            </p>
+            <p className='text-sm'>{PAY_SHARE_WORDS.withheld(bill.name)}</p>
             <div className='flex flex-wrap gap-2'>
               <Button
                 type='button'
@@ -942,7 +940,7 @@ function BillShareView({
           <InlineNotice tone='warning'>{shortLine}</InlineNotice>
         ))}
       <ModalFooterActions
-        note={error ?? blocker ?? (isHidden ? null : shortLine)}
+        note={error ?? blocker}
         cancelAction={
           <Button
             type='button'
