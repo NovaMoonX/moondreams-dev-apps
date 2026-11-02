@@ -171,7 +171,7 @@ function PaidBackSheet({ isOpen, onClose, expense, shares, currentUserId, member
                   {lastMark.isPaid ? 'Marked' : 'Took back'} {memberLabel(lastMark.uid)}
                   {lastMark.isPaid ? ' as received' : ''}
                 </span>
-                    <Button type='button' variant='secondary' size='sm' className='h-7 shrink-0 text-xs' onClick={() => void undoLastMark()}>
+                    <Button type='button' variant='secondary' size='sm' className="relative h-7 shrink-0 text-xs after:absolute after:-inset-y-1.5 after:inset-x-0 after:content-['']" onClick={() => void undoLastMark()}>
                       Undo
                     </Button>
                   </div>
