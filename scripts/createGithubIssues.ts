@@ -526,8 +526,9 @@ const readNameFromReadme = (appId: string) => {
 };
 
 const run = async () => {
-  const { appId, file, appName: givenName, skipConfirm } = readArgs();
-  if (!appId)
+  const { appId: givenId, file, appName: givenName, skipConfirm } = readArgs();
+  const appId =
+    givenId ??
     fail(
       'Usage: npm run issues:create -- <app-id> [--app-name <name>] [--file <path>] [--yes]',
     );
