@@ -136,7 +136,7 @@ function Layout() {
       <div
         data-site-chrome=''
         className={join(
-          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 max-[380px]:gap-2 max-md:pointer-events-auto max-md:h-16 max-md:py-2 max-md:backdrop-blur md:absolute md:px-6',
+          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 ease-out max-[380px]:gap-2 max-md:pointer-events-auto max-md:h-16 max-md:py-2 max-md:backdrop-blur md:absolute md:px-6',
           isSiteCanvas
             ? 'max-md:bg-muted/80 dark:max-md:bg-background/80'
             : 'max-md:bg-background/80',
