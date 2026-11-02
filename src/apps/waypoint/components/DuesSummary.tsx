@@ -58,6 +58,10 @@ function DuesSummary({
     `waypoint:${currentUserId}:receivedHintSeen`,
     false,
   );
+  const [isNoteDismissed, setIsNoteDismissed] = useLocalStoragePreference(
+    `waypoint:${currentUserId}:repaidNoteDismissed`,
+    false,
+  );
   const selectedSettlement = settlements.find((settlement) => getPairKey(settlement) === selectedPairKey);
 
   const getDirection = ({ personA, personB, netAmount, aOwesB, bOwesA }: PairSettlement) => {
@@ -79,6 +83,15 @@ function DuesSummary({
       return `${isRepaid ? 'Mark not received' : 'Mark received'}: ${title}`;
     }
     return `${isRepaid ? 'Mark not repaid' : 'Mark repaid'}: ${title}`;
+  };
+
+  const getNoteText = (needsSend: boolean, needsCollect: boolean) => {
+    if (needsSend && needsCollect) {
+      return 'Tap a name below, then tap what you paid or what they paid you.';
+    }
+    return needsSend
+      ? 'Tap their name below, then tap what you paid.'
+      : 'Tap their name below, then tap what they paid you.';
   };
 
   const getDirectionHint = (fromUid: string, toUid: string, isReceiving: boolean) => {
@@ -173,7 +186,7 @@ function DuesSummary({
           {owed.items.map((item) => renderItem(item, fromUid, isReceiving, canToggle))}
         </ul>
         {canToggle && (
-          <p className={join('text-xs', (isReceiving ? hasReceivedBefore : hasPaidBefore) ? 'text-muted-foreground' : 'text-foreground font-medium')}>
+          <p className='text-muted-foreground text-xs'>
             {getDirectionHint(fromUid, toUid, isReceiving)}
           </p>
         )}
@@ -465,20 +478,14 @@ function DuesSummary({
             )}
           </div>
         ))}
-      {(needsSendNote || needsCollectNote) && (
+      {!isNoteDismissed && (needsSendNote || needsCollectNote) && (
         <InlineNotice
           tone='info'
           title='Settled up outside the app?'
           className='mt-3'
-          onDismiss={() => {
-            setHasPaidBefore(true);
-            setHasReceivedBefore(true);
-          }}
+          onDismiss={() => setIsNoteDismissed(true)}
         >
-          Open a row and tap what was paid.{' '}
-          {needsSendNote && 'If you sent money, mark it paid back. '}
-          {needsCollectNote && 'If someone sent you money, mark it received. '}
-          That&apos;s what updates what&apos;s owed.
+          {getNoteText(needsSendNote, needsCollectNote)}
         </InlineNotice>
       )}
       {renderGroup('Money to send', capGroup(toSend))}

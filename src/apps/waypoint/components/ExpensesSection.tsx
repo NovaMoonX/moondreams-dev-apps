@@ -772,7 +772,13 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       if (!share.isPaid) {
         return (
-          <Button type='button' variant='secondary' size='sm' className='h-10 shrink-0' onClick={toggle}>
+          <Button
+            type='button'
+            variant={isReceiving ? 'tertiary' : 'secondary'}
+            size='sm'
+            className='h-10 shrink-0'
+            onClick={toggle}
+          >
             {isReceiving ? 'Mark as received' : 'Mark as repaid'}
           </Button>
         );
@@ -780,7 +786,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
       return (
         <span className='inline-flex shrink-0 items-baseline gap-1.5 whitespace-nowrap'>
-          <span className='text-muted-foreground text-xs'>{isReceiving ? 'You received this' : 'You repaid this'}</span>
+          <span className='text-muted-foreground text-xs'>{isReceiving ? 'Marked received' : 'Marked paid back'}</span>
           <Button type='button' variant='tertiary' size='sm' className='h-10' onClick={toggle}>
             Undo
           </Button>
@@ -803,8 +809,8 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         {splitBreakdown.perPersonLabel !== null && expense.payerUid === currentUserId && (
           <div className='space-y-1'>
             {splitBreakdown.shares.map((share) => (
-              <div key={share.uid} className='flex items-baseline justify-end gap-2'>
-                <p className='text-muted-foreground mr-auto text-xs'>
+              <div key={share.uid} className='flex items-center justify-end gap-2'>
+                <p className='text-muted-foreground mr-auto min-w-0 truncate text-xs'>
                   {memberLabel(share.uid)} {share.amountLabel}
                 </p>
                 {renderRepaidControl(share)}

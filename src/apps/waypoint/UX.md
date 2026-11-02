@@ -414,7 +414,7 @@ flowchart LR
 
 An expected expense row offers "I paid early" to anyone in its split: pick who you paid (pills, search past 12 people), the amount (capped at your share; an estimate defaults to the share of its minimum), Save. The Dues summary opens with a notice about your own early payments; the pair sheet adds a "paid early" block (Got it back, Remove) and "How the net adds up". When the recipient pays the expense it covers the sender's share and any excess stays owed back.
 
-**Marking money paid back.** In a Dues pair sheet the person who owes taps an item once they have sent the money ("Mark repaid"), and the person owed taps it once it arrived ("Mark received"); either can undo it. The first time, the Dues summary opens with a short "Settled up outside the app?" note and the sheet's hint says what a tap does; after the first tap the note is gone and the hint is one muted line. The expense details give the payer a "Mark as received" for each person who owes them.
+**Marking money paid back.** In a Dues pair sheet the person who owes taps an item once they have sent the money ("Mark repaid"), and the person owed taps it once it arrived ("Mark received"); either can undo it. The first time, the Dues summary opens with a short "Settled up outside the app?" note and the sheet's hint says what a tap does in full until that direction is used, then is one short line. The expense details give the payer a "Mark as received" for each person who owes them.
 
 **Copy as Markdown.** The trip menu's "Copy trip as Markdown" (every member sees it) copies the whole itinerary; the Timeline's "Copy" button beside View options copies only the timeline. Both toast once the text is on the clipboard and ignore the view options and filters.
 
