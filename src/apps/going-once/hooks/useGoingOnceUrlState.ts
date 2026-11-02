@@ -7,7 +7,7 @@ import {
 } from '@apps/going-once/constants';
 import type { GoingOnceTab } from '@apps/going-once/types';
 
-/** The open sale and its tab, kept in the URL so a reload, a link and a return from another app land on the same screen. */
+/** The open sale, its tab and the open thing, kept in the URL so a reload, a link and a return from another app land on the same screen. */
 export function useGoingOnceUrlState() {
   const navigate = useNavigate();
   const [saleId, setSaleId] = useQueryState('sale', parseAsString);
@@ -15,6 +15,8 @@ export function useGoingOnceUrlState() {
     'tab',
     parseAsStringLiteral(GOING_ONCE_TABS),
   );
+
+  const [thingId, setThingId] = useQueryState('thing', parseAsString);
 
   const activeTab: GoingOnceTab = requestedTab ?? DEFAULT_GOING_ONCE_TAB;
 
@@ -29,7 +31,10 @@ export function useGoingOnceUrlState() {
       ),
     );
   };
+  const openThing = (id: string) => setThingId(id, { history: 'replace' });
+  const closeThing = () => setThingId(null, { history: 'replace' });
   const closeSale = () => {
+    void closeThing();
     if (window.history.state?.goingOnceSaleStep) {
       navigate(-1);
       return;
@@ -37,10 +42,21 @@ export function useGoingOnceUrlState() {
     void setRequestedTab(null, { history: 'replace' });
     void setSaleId(null, { history: 'replace' });
   };
-  const showTab = (tab: GoingOnceTab) =>
-    setRequestedTab(tab === DEFAULT_GOING_ONCE_TAB ? null : tab, {
+  const showTab = (tab: GoingOnceTab) => {
+    void closeThing();
+    return setRequestedTab(tab === DEFAULT_GOING_ONCE_TAB ? null : tab, {
       history: 'replace',
     });
+  };
 
-  return { saleId, activeTab, openSale, closeSale, showTab };
+  return {
+    saleId,
+    thingId,
+    activeTab,
+    openSale,
+    closeSale,
+    showTab,
+    openThing,
+    closeThing,
+  };
 }

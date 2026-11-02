@@ -115,8 +115,16 @@ function GoingOnce() {
   const areGatesRead = useAppSelector(
     (state) => state.featureGates.byApp['going-once'] !== undefined,
   );
-  const { saleId, activeTab, openSale, closeSale, showTab } =
-    useGoingOnceUrlState();
+  const {
+    saleId,
+    thingId,
+    activeTab,
+    openSale,
+    closeSale,
+    showTab,
+    openThing,
+    closeThing,
+  } = useGoingOnceUrlState();
   const sales = useAppSelector(selectSales);
   const salesStatus = useAppSelector(selectSalesStatus);
   const [isStartOpen, setIsStartOpen] = useState(false);
@@ -187,7 +195,13 @@ function GoingOnce() {
               </div>
             </header>
             {activeTab === 'things' ? (
-              <ItemsSection saleId={sale.id} uid={user.uid} />
+              <ItemsSection
+                saleId={sale.id}
+                uid={user.uid}
+                openId={thingId}
+                onOpenThing={openThing}
+                onCloseThing={closeThing}
+              />
             ) : (
               <EmptyCard icon={TAB_PLACEHOLDERS[activeTab].icon}>
                 {TAB_PLACEHOLDERS[activeTab].text}

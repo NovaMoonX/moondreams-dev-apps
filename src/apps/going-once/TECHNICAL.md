@@ -140,7 +140,7 @@ Each transition is one `runTransaction` that re-reads the thing and aborts with 
 - Field edits save as the person goes with `updateDoc` of only that field (never `status`, `pending`, `sale`, `photos`, `statusHistory`).
 - **Add a photo:** shrink with `usePhotoSetUploads` (the `listing` use of `compressImageForUse`), upload, then append the `ItemPhoto` in a transaction that refuses a 13th. Reorder and remove are transactions on `photos`; a removed photo's file is deleted after the commit, and an orphan is swept by the sale delete.
 - A thing is created from its first answer (photo or name) with `title: ''` and `askingPriceCents: null`, so it starts Not listed yet.
-- **Delete** (`deleteItem`) deletes each photo file first (a failure is logged and the rest go on), then the document.
+- **Delete** (`deleteItem`) deletes the document first, then its photo files, best-effort (a failure is logged and the rest go on; an orphan is swept by the sale delete). The document write is not awaited, since offline it never settles: a refusal shows a toast and the thing comes back in the list. A photo added after the document is gone fails its transaction and deletes its own file.
 - **Undo right after adding** (S9) deletes the thing and its photos. The seller can delete any thing; a co-seller can delete only a thing they created in the last 10 minutes that has no `sale` and no `pending` (a narrow rule). Deleting a thing never deletes its inquiries; they keep `itemTitleAtSend` and read "(No longer listed)".
 
 ### Inquiry
@@ -234,7 +234,7 @@ A member may write any `photos[].path` on a thing, so the public function (and t
 | create | yes, id matches `saleId + '_' + email`, `invitedBy == me`, email not already a member's (client check) | no | no | no |
 | delete | yes | no | the invitee, in the join commit | no |
 | update | no | no | no | no |
-| `sales/{saleId}/items/{itemId}` read, create, update | yes | yes | no | no |
+| `sales/{saleId}/items/{itemId}` read, create, update | yes | yes (a create's `createdAt` is a number at most a minute ahead of the server) | no | no |
 | update: `createdBy`, `createdAt`, `saleId`, `id` | no | no | no | no |
 | delete | yes | only when `createdBy == me`, `createdAt` within 10 minutes, `sale == null`, `pending == null` | no | no |
 | `sales/{saleId}/inquiries/{id}` read, delete | yes | yes | no | no |

@@ -44,16 +44,26 @@ export function NameQuestion({
   );
 }
 
-export function FloorField({ answers, onChange }: QuestionProps) {
+/** A question's caption for a screen reader only, where its sheet's title already says it. */
+const HIDE_FIELD_CAPTION = '[&_label>span:first-child]:sr-only';
+
+const hiddenLabel = (text: string) => <span className='sr-only'>{text}</span>;
+
+/** The floor price; `isTitled` is for a sheet whose title already says it. */
+export function FloorField({
+  answers,
+  onChange,
+  isTitled = false,
+}: QuestionProps & { isTitled?: boolean }) {
   return (
     <div className='space-y-1'>
-      <p className='text-sm font-medium'>🔒 Floor price</p>
+      {!isTitled && <p className='text-sm font-medium'>🔒 Floor price</p>}
       <MoneyInput
         ariaLabel='Floor price'
         value={answers.floor}
         onChange={(floor) => onChange({ floor })}
         autoFocus
-        wrapperClassName='max-w-48'
+        wrapperClassName={isTitled ? undefined : 'max-w-48'}
       />
       <p className='text-muted-foreground text-xs'>
         Only you and your co-sellers see this. Buyers never do.
@@ -122,19 +132,21 @@ export function ConditionQuestion({ answers, onChange }: QuestionProps) {
 
 export function DescriptionQuestion({ answers, onChange }: QuestionProps) {
   return (
-    <NoteTextField
-      label='Description'
-      value={answers.description}
-      onChange={(description) => onChange({ description })}
-      placeholder='Solid oak, a few light scratches on the top.'
-      maxLength={MAX_ITEM_DESCRIPTION_LENGTH}
-    />
+    <div className={HIDE_FIELD_CAPTION}>
+      <NoteTextField
+        label='Description'
+        value={answers.description}
+        onChange={(description) => onChange({ description })}
+        placeholder='Solid oak, a few light scratches on the top.'
+        maxLength={MAX_ITEM_DESCRIPTION_LENGTH}
+      />
+    </div>
   );
 }
 
 export function BrandQuestion({ answers, onChange }: QuestionProps) {
   return (
-    <Field label='Brand or model'>
+    <Field label={hiddenLabel('Brand or model')}>
       {() => (
         <Input
           variant='outline'
@@ -150,7 +162,7 @@ export function BrandQuestion({ answers, onChange }: QuestionProps) {
 
 export function SizeQuestion({ answers, onChange }: QuestionProps) {
   return (
-    <Field label='Size'>
+    <Field label={hiddenLabel('Size')}>
       {() => (
         <Input
           variant='outline'
@@ -168,7 +180,7 @@ export function ShowOriginalQuestion({ answers, onChange }: QuestionProps) {
   if (parseMoneyToCents(answers.original) === null)
     return (
       <p className='text-muted-foreground text-sm'>
-        Add the original price first, then choose whether buyers see it.
+        Add the original price above, then choose whether buyers see it.
       </p>
     );
   return (
@@ -193,15 +205,11 @@ export function ShowOriginalQuestion({ answers, onChange }: QuestionProps) {
 export function OriginalPriceQuestion({ answers, onChange }: QuestionProps) {
   return (
     <div className='space-y-4'>
-      <div className='space-y-1'>
-        <p className='text-sm font-medium'>Original price</p>
-        <MoneyInput
-          ariaLabel='Original price'
-          value={answers.original}
-          onChange={(original) => onChange({ original })}
-          wrapperClassName='max-w-48'
-        />
-      </div>
+      <MoneyInput
+        ariaLabel='Original price'
+        value={answers.original}
+        onChange={(original) => onChange({ original })}
+      />
       <ShowOriginalQuestion answers={answers} onChange={onChange} />
     </div>
   );
@@ -210,7 +218,7 @@ export function OriginalPriceQuestion({ answers, onChange }: QuestionProps) {
 export function BoughtQuestion({ answers, onChange }: QuestionProps) {
   return (
     <div className='space-y-4'>
-      <Field label='Where you got it'>
+      <Field label={hiddenLabel('Where you got it')}>
         {() => (
           <Input
             variant='outline'
@@ -246,13 +254,15 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
 
 export function NotesQuestion({ answers, onChange }: QuestionProps) {
   return (
-    <NoteTextField
-      label='Notes'
-      value={answers.notes}
-      onChange={(notes) => onChange({ notes })}
-      placeholder='Bought in 2021; the left drawer sticks.'
-      maxLength={MAX_ITEM_NOTES_LENGTH}
-      rows={4}
-    />
+    <div className={HIDE_FIELD_CAPTION}>
+      <NoteTextField
+        label='Notes'
+        value={answers.notes}
+        onChange={(notes) => onChange({ notes })}
+        placeholder='Bought in 2021; the left drawer sticks.'
+        maxLength={MAX_ITEM_NOTES_LENGTH}
+        rows={4}
+      />
+    </div>
   );
 }

@@ -4,7 +4,7 @@ import { deleteItem } from '@apps/going-once/store/actions/itemActions';
 import type { Item } from '@apps/going-once/types';
 import { getDeleteEffects, getItemName } from '@apps/going-once/utils/listing';
 
-/** Asks before deleting a thing and deletes it; resolves true once it is gone. */
+/** Asks before deleting a thing and deletes it in the background; resolves true once the person has confirmed. */
 export function useDeleteThing(saleId: string) {
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -19,16 +19,14 @@ export function useDeleteThing(saleId: string) {
       destructive: true,
     });
     if (!confirmed) return false;
-    try {
-      await deleteItem(saleId, item);
-      return true;
-    } catch {
+    deleteItem(saleId, item, () =>
       addToast({
         title: `${name} wasn't deleted`,
-        description: 'Check your connection and try again.',
+        description:
+          'Only the seller can delete it now. It is back on your list.',
         type: 'error',
-      });
-      return false;
-    }
+      }),
+    );
+    return true;
   };
 }

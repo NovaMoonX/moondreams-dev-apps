@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Plus, X } from 'lucide-react';
@@ -24,6 +24,7 @@ import {
   selectSaleById,
 } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
+import { keepEntryFor } from '@/hooks/useBackHistory';
 import {
   isListable,
   matchesSearch,
@@ -37,35 +38,48 @@ const EAGER_ROWS = 10;
 interface ItemsSectionProps {
   saleId: string;
   uid: string;
+  /** The thing whose drawer is open, kept in the address. */
+  openId: string | null;
+  onOpenThing: (id: string) => void;
+  onCloseThing: () => void;
 }
 
 /** The Things tab: the sale's things, newest first, with a search and a sort once there are enough to need them, and the way to add one. */
-function ItemsSection({ saleId, uid }: ItemsSectionProps) {
+function ItemsSection({
+  saleId,
+  uid,
+  openId,
+  onOpenThing,
+  onCloseThing,
+}: ItemsSectionProps) {
   const items = useAppSelector((state) => selectItems(state, saleId));
   const status = useAppSelector(selectItemsStatus);
   const uploads = useAppSelector(selectPhotoUploads);
   const sale = useAppSelector((state) => selectSaleById(state, saleId));
   const [adding, setAdding] = useState<{ resume: Item | null } | null>(null);
-  const [openId, setOpenId] = useState<string | null>(null);
-  const [modifyId, setModifyId] = useState<string | null>(null);
+  const [isModifying, setIsModifying] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
   const openItem = items.find((item) => item.id === openId) ?? null;
-  const modifyItem = items.find((item) => item.id === modifyId) ?? null;
   const isSeller = sale?.ownerUid === uid;
 
   const hasTools = items.length >= SEARCH_FROM_ITEMS;
-  const unlistedCount = items.filter((item) => !isListable(item)).length;
+  const searched = items.filter(
+    (item) => !hasTools || matchesSearch(item, query),
+  );
+  const unlistedCount = searched.filter((item) => !isListable(item)).length;
   const isNarrowed = isUnlistedOnly && unlistedCount > 0;
   const shown = sortItems(
-    items.filter(
-      (item) =>
-        (!isNarrowed || !isListable(item)) &&
-        (!hasTools || matchesSearch(item, query)),
-    ),
+    searched.filter((item) => !isNarrowed || !isListable(item)),
     hasTools ? sort : 'newest',
   );
+
+  // A link to a thing that is gone (deleted, or from another sale) opens nothing, so the address drops it.
+  useEffect(() => {
+    if (openId !== null && openItem === null && status === 'ready')
+      onCloseThing();
+  }, [openId, openItem, status, onCloseThing]);
 
   const addButton = (
     <Button
@@ -152,35 +166,35 @@ function ItemsSection({ saleId, uid }: ItemsSectionProps) {
                 <ThingRow
                   item={item}
                   uploadingCount={uploads[item.id] ?? 0}
-                  onOpen={() => setOpenId(item.id)}
+                  onOpen={() => onOpenThing(item.id)}
                 />
               </LazyMount>
             </li>
           ))}
         </ul>
       )}
-      {openItem && (
+      {openItem && !isModifying && (
         <ThingDrawer
           item={openItem}
           uid={uid}
           isSeller={isSeller}
-          onClose={() => setOpenId(null)}
+          onClose={onCloseThing}
           onFinish={() => {
             setAdding({ resume: openItem });
-            setOpenId(null);
+            onCloseThing();
           }}
           onModify={() => {
-            setModifyId(openItem.id);
-            setOpenId(null);
+            keepEntryFor('thing');
+            setIsModifying(true);
           }}
         />
       )}
-      {modifyItem && (
+      {openItem && isModifying && (
         <ThingForm
-          item={modifyItem}
+          item={openItem}
           uid={uid}
           isSeller={isSeller}
-          onClose={() => setModifyId(null)}
+          onClose={() => setIsModifying(false)}
         />
       )}
       {adding && (

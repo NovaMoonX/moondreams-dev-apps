@@ -53,7 +53,7 @@ function StoreLink({ item }: { item: Item }) {
       href={item.boughtUrl}
       target='_blank'
       rel='noopener noreferrer'
-      className='block'
+      className='[&>div]:border-accent-foreground/20 [&>div]:bg-accent-foreground/5 block'
     >
       <LinkPreviewCard
         preview={{
@@ -88,7 +88,7 @@ const getPrivateRows = (item: Item): Row[] => {
           ? 'None set'
           : formatCentsShort(item.floorPriceCents),
     },
-    ...(item.originalPriceCents === null
+    ...(item.originalPriceCents === null || item.showOriginalPrice
       ? []
       : [
           {

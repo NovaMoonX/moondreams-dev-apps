@@ -232,17 +232,24 @@ export async function removeItemPhoto(
     );
 }
 
-/** Deletes a thing's photo files, then the thing; a file that won't delete is logged and the rest go on. */
-export async function deleteItem(
+/**
+ * Deletes the thing, then its photo files once it is gone (a file that won't delete is logged, and the sale's delete sweeps it).
+ * The write queues offline and never settles there, so the caller isn't held on it: `onFailed` hears a refusal.
+ */
+export function deleteItem(
   saleId: string,
   item: Pick<Item, 'id' | 'photos'>,
-): Promise<void> {
-  await Promise.all(
-    item.photos.map((photo) =>
-      deleteFile(photo.path).catch((error: unknown) =>
-        console.error(`Could not delete ${photo.path}`, error),
+  onFailed: (error: unknown) => void,
+): void {
+  void deleteDoc(getItemRef(saleId, item.id)).then(
+    () =>
+      Promise.all(
+        item.photos.map((photo) =>
+          deleteFile(photo.path).catch((error: unknown) =>
+            console.error(`Could not delete ${photo.path}`, error),
+          ),
+        ),
       ),
-    ),
+    onFailed,
   );
-  await deleteDoc(getItemRef(saleId, item.id));
 }

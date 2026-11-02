@@ -358,10 +358,13 @@ service cloud.firestore {
 
     // A thing is read and written by the sale's members, judged by the sale in its path and never a field of the thing.
     // Who made it and when never change after it is made; the seller may delete any thing, a co-seller only one they
-    // made in the last ten minutes that was never held or sold (`createdAt` is epoch milliseconds).
+    // made in the last ten minutes that was never held or sold (`createdAt` is epoch milliseconds, and a new thing's
+    // may be at most a minute ahead of the server so a wrong phone clock cannot make a thing undeletable).
     match /apps/going-once/sales/{saleId}/items/{itemId} {
       allow read: if isSaleMember(saleId);
-      allow create: if isSaleMember(saleId) && isCreatedByMe();
+      allow create: if isSaleMember(saleId) && isCreatedByMe()
+        && request.resource.data.createdAt is int
+        && request.resource.data.createdAt <= request.time.toMillis() + 60000;
       allow update: if isSaleMember(saleId) && isCreatedByKept()
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'saleId', 'id']);
       allow delete: if isSaleSeller(saleId)

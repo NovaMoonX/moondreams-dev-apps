@@ -33,12 +33,16 @@ export function getItemName(item: Pick<Item, 'title'>): string {
 
 /** The seller can delete any thing; a co-seller only one they added within the last ten minutes. Mirrors `firestore.rules`, which has the last word. */
 export function canDeleteItem(
-  item: Pick<Item, 'createdBy' | 'createdAt'>,
+  item: Pick<Item, 'createdBy' | 'createdAt'> &
+    Partial<Record<'sale' | 'pending', unknown>>,
   { isSeller, uid, now }: { isSeller: boolean; uid: string; now: number },
 ): boolean {
   if (isSeller) return true;
   return (
-    item.createdBy === uid && now - item.createdAt < CO_SELLER_DELETE_WINDOW_MS
+    item.createdBy === uid &&
+    now - item.createdAt < CO_SELLER_DELETE_WINDOW_MS &&
+    (item.sale ?? null) === null &&
+    (item.pending ?? null) === null
   );
 }
 
@@ -65,11 +69,11 @@ export function sortItems(items: Item[], sort: ItemSort): Item[] {
     return [...items].sort((first, second) =>
       getItemName(first).localeCompare(getItemName(second)),
     );
-  return [...items].sort(
-    (first, second) =>
-      (first.askingPriceCents ?? Infinity) -
-      (second.askingPriceCents ?? Infinity),
-  );
+  const priceOf = (item: Item) => item.askingPriceCents ?? Infinity;
+  return [...items].sort((first, second) => {
+    if (priceOf(first) < priceOf(second)) return -1;
+    return priceOf(first) > priceOf(second) ? 1 : 0;
+  });
 }
 
 /** Whether a search matches a thing's name, description or brand or model. */

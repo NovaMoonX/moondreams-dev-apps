@@ -71,7 +71,8 @@ export const toAnswers = (item: Item): ThingAnswers => ({
 
 export const toFields = (answers: ThingAnswers): ThingFields => {
   const boughtUrl = toText(answers.boughtUrl);
-  const originalPriceCents = parseMoneyToCents(answers.original);
+  const originalCents = parseMoneyToCents(answers.original);
+  const originalPriceCents = originalCents === 0 ? null : originalCents;
   return {
     title: answers.title.trim(),
     condition: answers.condition,
@@ -110,12 +111,25 @@ export const EMPTY_FIELDS: ThingFields = {
   notes: null,
 };
 
+const isSameValue = (saved: unknown, next: unknown) => {
+  if (
+    typeof saved === 'object' &&
+    saved !== null &&
+    typeof next === 'object' &&
+    next !== null
+  )
+    return Object.keys({ ...saved, ...next }).every(
+      (key) =>
+        (saved as Record<string, unknown>)[key] ===
+        (next as Record<string, unknown>)[key],
+    );
+  return saved === next;
+};
+
 /** The stored fields that differ from `saved`, so a save writes only what the person changed. */
 export const diffFields = (saved: ThingFields, next: ThingFields): ItemFields =>
   Object.fromEntries(
     Object.entries(next).filter(
-      ([key, value]) =>
-        JSON.stringify(saved[key as keyof ThingFields]) !==
-        JSON.stringify(value),
+      ([key, value]) => !isSameValue(saved[key as keyof ThingFields], value),
     ),
   ) as ItemFields;

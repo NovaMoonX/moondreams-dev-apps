@@ -13,7 +13,6 @@ import {
   NotesQuestion,
   OriginalPriceQuestion,
   PriceQuestion,
-  ShowOriginalQuestion,
   SizeQuestion,
   type QuestionProps,
 } from '@apps/going-once/components/things/ThingQuestions';
@@ -101,14 +100,12 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
   showOriginal: {
     label: 'Show original price',
     icon: '👀',
-    fields: ['showOriginalPrice'],
-    summary: (a) =>
-      parseMoneyToCents(a.original) === null
-        ? ''
-        : a.showOriginalPrice
-          ? 'Buyers see it'
-          : 'Hidden from buyers',
-    Question: ShowOriginalQuestion,
+    fields: ['originalPriceCents', 'showOriginalPrice'],
+    summary: (a) => {
+      if (parseMoneyToCents(a.original) === null) return '';
+      return a.showOriginalPrice ? 'Buyers see it' : 'Hidden from buyers';
+    },
+    Question: OriginalPriceQuestion,
   },
   floor: {
     label: '🔒 Floor price',
@@ -118,7 +115,7 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
       const cents = toFields({ ...a, isFloorShown: true }).floorPriceCents;
       return cents === null ? '' : formatCentsShort(cents);
     },
-    Question: FloorField,
+    Question: (props) => <FloorField {...props} isTitled />,
   },
   original: {
     label: '🔒 Original price',
@@ -139,10 +136,11 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
     fields: ['boughtFrom', 'boughtOn', 'boughtUrl', 'boughtUrlPreview'],
     summary: (a) => {
       const day = fromDateInputValue(a.boughtOn);
+      const store = clip(a.boughtFrom);
       return [
-        clip(a.boughtFrom),
+        store,
         day === undefined ? '' : formatDateUTC(day),
-        a.boughtUrl === ''
+        store !== '' || a.boughtUrl === ''
           ? ''
           : (a.boughtUrlPreview?.siteName ?? 'Store link'),
       ]

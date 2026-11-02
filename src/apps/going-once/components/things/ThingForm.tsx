@@ -9,6 +9,8 @@ import PhotoSetPicker from '@/components/forms/PhotoSetPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
 import SummaryRow from '@/components/SummaryRow';
+import { useSheetHistory } from '@/hooks/useBackHistory';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePhotoSetUploads } from '@/hooks/usePhotoSetUploads';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch } from '@/store';
@@ -44,15 +46,17 @@ const BUYERS_SEE: RowKey[] = [
 ];
 const PRIVATE: RowKey[] = ['floor', 'original', 'bought', 'notes'];
 
-const SAVE_FAILED =
-  "That didn't save. Check your connection, then open it and try again.";
+const SAVE_FAILED = "That didn't save. Check your connection and try again.";
+const SAVE_FAILED_LATER = "A change didn't save. Open that row and try again.";
+/** An offline write never settles, so after this long it counts as kept on the phone and the sheet closes. */
+const QUEUED_AFTER_MS = 2000;
 
 interface RowSheetProps {
   rowKey: RowKey;
   item: Item;
   uid: string;
-  onSaved: () => void;
-  onSaveError: () => void;
+  onWritten: () => void;
+  onSaveFailedLater: () => void;
   onClose: () => void;
 }
 
@@ -61,33 +65,55 @@ function RowSheet({
   rowKey,
   item,
   uid,
-  onSaved,
-  onSaveError,
+  onWritten,
+  onSaveFailedLater,
   onClose,
 }: RowSheetProps) {
   const { label, fields, Question } = THING_ROWS[rowKey];
+  const [base] = useState(() => toFields(toAnswers(item)));
   const [draft, setDraft] = useState(() => ({
     ...toAnswers(item),
     ...(rowKey === 'floor' && { isFloorShown: true }),
   }));
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const done = () => {
-    const changed = diffFields(toFields(toAnswers(item)), toFields(draft));
+  const done = async () => {
+    if (isSaving) return;
+    const changed = diffFields(base, toFields(draft));
     const mine = Object.fromEntries(
       Object.entries(changed).filter(([key]) =>
         fields.some((field) => field === key),
       ),
     );
-    if (Object.keys(mine).length > 0)
-      updateItemFields(item.saleId, item.id, uid, mine).then(
-        onSaved,
-        onSaveError,
-      );
+    if (Object.keys(mine).length === 0) {
+      onClose();
+      return;
+    }
+    setIsSaving(true);
+    setError(null);
+    const write = updateItemFields(item.saleId, item.id, uid, mine);
+    const outcome = await Promise.race([
+      write.then(
+        () => 'saved' as const,
+        () => 'failed' as const,
+      ),
+      new Promise<'queued'>((resolve) =>
+        window.setTimeout(() => resolve('queued'), QUEUED_AFTER_MS),
+      ),
+    ]);
+    if (outcome === 'failed') {
+      setIsSaving(false);
+      setError(SAVE_FAILED);
+      return;
+    }
+    if (outcome === 'queued') write.catch(onSaveFailedLater);
+    onWritten();
     onClose();
   };
 
   return (
-    <FormSheet isOpen onClose={done} title={label}>
+    <FormSheet isOpen onClose={() => void done()} title={label}>
       <div className='space-y-4 pb-4'>
         <Question
           answers={draft}
@@ -97,8 +123,9 @@ function RowSheet({
         />
       </div>
       <ModalFooterActions
+        note={error}
         rightActions={
-          <Button type='button' onClick={done}>
+          <Button type='button' disabled={isSaving} onClick={() => void done()}>
             Done
           </Button>
         }
@@ -158,17 +185,22 @@ interface ThingFormProps {
 /** Modify: every answer about a thing as a summary row that opens its question in a sheet and saves on Done, in the two audiences' sections. */
 function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
   const now = useNow();
+  // Phones draw Modify as a subview that has its own entry; the desktop modal gets one here so Back returns to the drawer.
+  const isPhone = useMediaQuery().isBelow('sm');
+  const { dialogId, onDialogClose } = useSheetHistory(!isPhone, onClose);
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
   const [openKey, setOpenKey] = useState<RowKey | 'photos' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [hasSaved, setHasSaved] = useState(false);
   const deleteThing = useDeleteThing(item.saleId);
   const answers = toAnswers(item);
 
   const renderRow = (key: RowKey) => {
     const { label, summary } = THING_ROWS[key];
     const text = summary(answers);
+    const sheetKey = key === 'showOriginal' ? 'original' : key;
     return (
-      <SummaryRow key={key} label={label} onClick={() => setOpenKey(key)}>
+      <SummaryRow key={key} label={label} onClick={() => setOpenKey(sheetKey)}>
         {text === '' ? (
           <span className='text-muted-foreground'>Not set</span>
         ) : (
@@ -179,8 +211,8 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
   };
 
   return (
-    <FormScreen isOpen onClose={onClose} title={getItemName(item)}>
-      <div className='space-y-5'>
+    <FormScreen isOpen onClose={onDialogClose} title={getItemName(item)}>
+      <div id={dialogId} className='space-y-5'>
         <div className='space-y-2'>
           <SectionDivider label='Buyers see' />
           <SummaryRow label='Photos' onClick={() => setOpenKey('photos')}>
@@ -188,7 +220,9 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
               ? 'Add photos'
               : `${item.photos.length} ${item.photos.length === 1 ? 'photo' : 'photos'}`}
           </SummaryRow>
-          {BUYERS_SEE.map(renderRow)}
+          {BUYERS_SEE.filter(
+            (key) => key !== 'showOriginal' || item.originalPriceCents !== null,
+          ).map(renderRow)}
         </div>
         <div className='space-y-2'>
           <SectionDivider label='🔒 Only you and your co-sellers' />
@@ -197,7 +231,7 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
           ).map(renderRow)}
         </div>
         <ModalFooterActions
-          note={saveError ?? 'Saved'}
+          note={saveError ?? (hasSaved ? 'Saved' : null)}
           leftActions={
             canDelete && (
               <DeleteIconButton
@@ -226,8 +260,14 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
           rowKey={openKey}
           item={item}
           uid={uid}
-          onSaved={() => setSaveError(null)}
-          onSaveError={() => setSaveError(SAVE_FAILED)}
+          onWritten={() => {
+            setHasSaved(true);
+            setSaveError(null);
+          }}
+          onSaveFailedLater={() => {
+            setHasSaved(false);
+            setSaveError(SAVE_FAILED_LATER);
+          }}
           onClose={() => setOpenKey(null)}
         />
       )}

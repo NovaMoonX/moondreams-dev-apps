@@ -41,6 +41,7 @@ import {
 } from '@apps/going-once/store/actions/itemActions';
 import { selectItems } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
+import { formatAskingPrice } from '@apps/going-once/utils/listing';
 import {
   diffFields,
   EMPTY_ANSWERS,
@@ -79,6 +80,32 @@ const toResumeAnswers = (item: Item): Answers => {
 const SAVE_FAILED =
   "That didn't save. Check your connection; what you typed is still here.";
 
+const withDecideLater = (value: string, isDeferred: boolean) => {
+  if (value !== '') return value;
+  return isDeferred ? 'Decide later' : '';
+};
+
+const getPhotosSummary = (count: number, isSkipped: boolean) => {
+  if (count > 0) return `${count} ${count === 1 ? 'photo' : 'photos'}`;
+  return isSkipped ? 'Skipped for now' : '';
+};
+
+const getPriceSummary = (fields: ThingFields) =>
+  [
+    formatAskingPrice(fields.askingPriceCents) ?? '',
+    fields.floorPriceCents === null
+      ? ''
+      : `🔒 floor ${formatCentsShort(fields.floorPriceCents)}`,
+  ]
+    .filter((part) => part !== '')
+    .join(' · ');
+
+const getPriceBlocker = (answers: Answers) => {
+  if (answers.isFree) return null;
+  if (answers.price.trim() === '') return "Enter a price, or tap It's free.";
+  return 'Enter the price as a dollar amount.';
+};
+
 const getListedNote = (photoCount: number, fields: ThingFields) => {
   if (photoCount === 0) return 'Saved · Not listed yet: add a photo';
   if (fields.title === '') return 'Saved · Not listed yet: add a name';
@@ -87,7 +114,7 @@ const getListedNote = (photoCount: number, fields: ThingFields) => {
   return 'Saved · Listed';
 };
 
-interface ThingFormProps {
+interface ThingStepsProps {
   saleId: string;
   uid: string;
   /** A thing that was started and left, picked up where it stopped. */
@@ -96,11 +123,12 @@ interface ThingFormProps {
   /** Filled with a function that saves the open answer, for the screen's Back, close and Escape. */
   saveOnExitRef: MutableRefObject<(() => void) | null>;
   onLeave: () => void;
-  onNext: (added: { id: string; name: string }) => void;
+  /** `null` when nothing was written for this thing, so there is nothing to add or take back. */
+  onNext: (added: { id: string; name: string } | null) => void;
 }
 
 /** One thing's walk-through: it is written from its first answer, and each later answer saves as the person moves on. */
-function ThingForm({
+function ThingSteps({
   saleId,
   uid,
   resume,
@@ -108,7 +136,7 @@ function ThingForm({
   saveOnExitRef,
   onLeave,
   onNext,
-}: ThingFormProps) {
+}: ThingStepsProps) {
   const dispatch = useAppDispatch();
   const [itemId] = useState(() => resume?.id ?? generateUuid());
   const [initialAnswers] = useState(() =>
@@ -202,30 +230,13 @@ function ThingForm({
     fields.floorPriceCents !== null &&
     fields.askingPriceCents !== null &&
     fields.floorPriceCents > fields.askingPriceCents;
-  const priceSummary = [
-    fields.askingPriceCents === null
-      ? ''
-      : fields.askingPriceCents === 0
-        ? 'Free'
-        : formatCentsShort(fields.askingPriceCents),
-    fields.floorPriceCents === null
-      ? ''
-      : `🔒 floor ${formatCentsShort(fields.floorPriceCents)}`,
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
 
   const steps: QuestionStep[] = [
     {
       id: 'photos',
       title: 'Take a few photos',
       summaryLabel: 'Photos',
-      summaryValue:
-        photoCount > 0
-          ? `${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}`
-          : isDeferred('photos')
-            ? 'Skipped for now'
-            : '',
+      summaryValue: getPhotosSummary(photoCount, isDeferred('photos')),
       isAnswered: photoCount > 0 || isDeferred('photos'),
       render: ({ moveOn }) => (
         <div className='space-y-4'>
@@ -261,7 +272,7 @@ function ThingForm({
       id: 'name',
       title: 'What is it?',
       summaryLabel: 'Name',
-      summaryValue: fields.title || (isDeferred('name') ? 'Decide later' : ''),
+      summaryValue: withDecideLater(fields.title, isDeferred('name')),
       isAnswered: fields.title !== '' || isDeferred('name'),
       render: ({ moveOn }) => (
         <div className='space-y-4'>
@@ -278,13 +289,12 @@ function ThingForm({
       id: 'price',
       title: 'What are you asking?',
       summaryLabel: 'Price',
-      summaryValue: priceSummary || (isDeferred('price') ? 'Decide later' : ''),
+      summaryValue: withDecideLater(
+        getPriceSummary(fields),
+        isDeferred('price'),
+      ),
       isAnswered: fields.askingPriceCents !== null || isDeferred('price'),
-      blocker: answers.isFree
-        ? null
-        : answers.price.trim() === ''
-          ? "Enter a price, or tap It's free."
-          : 'Enter the price as a dollar amount.',
+      blocker: getPriceBlocker(answers),
       render: ({ moveOn }) => (
         <div className='space-y-4'>
           <PriceQuestion answers={answers} onChange={set} />
@@ -296,12 +306,10 @@ function ThingForm({
       id: 'condition',
       title: 'What shape is it in?',
       summaryLabel: 'Condition',
-      summaryValue:
-        answers.condition === null
-          ? isDeferred('condition')
-            ? 'Decide later'
-            : ''
-          : CONDITION_LABELS[answers.condition],
+      summaryValue: withDecideLater(
+        answers.condition === null ? '' : CONDITION_LABELS[answers.condition],
+        isDeferred('condition'),
+      ),
       isAnswered: answers.condition !== null || isDeferred('condition'),
       render: ({ moveOn }) => (
         <div className='space-y-4'>
@@ -415,10 +423,14 @@ function ThingForm({
                 type='button'
                 onClick={() => {
                   saveAnswers();
-                  onNext({
-                    id: itemId,
-                    name: fields.title === '' ? 'a thing' : fields.title,
-                  });
+                  onNext(
+                    creation.current === null
+                      ? null
+                      : {
+                          id: itemId,
+                          name: fields.title === '' ? 'a thing' : fields.title,
+                        },
+                  );
                 }}
               >
                 Next thing
@@ -475,7 +487,7 @@ function NewThingFlow({
     setAdded((current) => current.filter((found) => found.id !== thing.id));
     const item = itemsRef.current.find((found) => found.id === thing.id);
     if (item === undefined) return;
-    deleteItem(saleId, item).catch(() =>
+    deleteItem(saleId, item, () =>
       addToast({
         title: `${thing.name} couldn't be taken back`,
         description: 'Delete it from the Things tab instead.',
@@ -486,23 +498,26 @@ function NewThingFlow({
 
   const statusLine =
     added.length === 0 ? null : (
-      <p className='text-muted-foreground -mt-1 mb-3 text-sm' role='status'>
-        {`Added ${added[added.length - 1].name}${added.length > 1 ? ` · ${added.length} things added this sitting` : ''}`}
+      <div className='text-muted-foreground mt-1.5 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm'>
+        <p role='status'>
+          {`Added ${added[added.length - 1].name}${added.length > 1 ? ` · ${added.length} things added this sitting` : ''}`}
+        </p>
         {pending && (
-          <>
-            {' · '}
-            <Button
-              type='button'
-              variant='link'
-              size='sm'
-              className="text-foreground! relative h-auto p-0 font-medium tabular-nums underline before:absolute before:-inset-3 before:content-['']"
-              onClick={undo}
-            >
-              Undo · {pending.secondsLeft}
-            </Button>
-          </>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            onClick={undo}
+          >
+            Undo
+            <span aria-hidden='true' className='tabular-nums'>
+              · {pending.secondsLeft}
+            </span>
+          </Button>
         )}
-      </p>
+      </div>
     );
 
   return (
@@ -513,7 +528,7 @@ function NewThingFlow({
       isTitleWrapped
     >
       {statusLine}
-      <ThingForm
+      <ThingSteps
         key={sittingStep}
         saleId={saleId}
         uid={uid}
@@ -522,9 +537,10 @@ function NewThingFlow({
         saveOnExitRef={saveOnExit}
         onLeave={onClose}
         onNext={(thing) => {
-          setAdded((current) => [...current, thing]);
           setSittingStep((current) => current + 1);
           setTitle('');
+          if (thing === null) return;
+          setAdded((current) => [...current, thing]);
           if (thing.id !== resume?.id)
             showUndo(`Added ${thing.name}`, () => takeBack(thing));
         }}
