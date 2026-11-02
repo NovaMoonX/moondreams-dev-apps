@@ -14,6 +14,7 @@ import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
 import ItemsSection from '@apps/going-once/components/things/ItemsSection';
 import SaleFormSheet from '@apps/going-once/components/sales/SaleFormSheet';
+import SaleTab from '@apps/going-once/components/sales/SaleTab';
 import SalesList from '@apps/going-once/components/sales/SalesList';
 import {
   CREATE_SALES_GATE_ID,
@@ -36,18 +37,9 @@ const TAB_ICONS: Record<GoingOnceTab, ReactNode> = {
   sale: <Store className='h-5 w-5' />,
 };
 
-const TAB_PLACEHOLDERS: Record<
-  Exclude<GoingOnceTab, 'things'>,
-  { icon: string; text: string }
-> = {
-  inbox: {
-    icon: '📬',
-    text: 'When someone is interested in a thing, their message will land here.',
-  },
-  sale: {
-    icon: '🧾',
-    text: 'Where the sale stands, who is helping and its details will live here.',
-  },
+const INBOX_PLACEHOLDER = {
+  icon: '📬',
+  text: 'When someone is interested in a thing, their message will land here.',
 };
 
 /** A floating pill at the bottom of the screen with the sale's three tabs. */
@@ -119,6 +111,9 @@ function GoingOnce() {
     saleId,
     thingId,
     activeTab,
+    statusView,
+    showStatusView,
+    showThingsOn,
     openSale,
     closeSale,
     showTab,
@@ -194,17 +189,31 @@ function GoingOnce() {
                 )}
               </div>
             </header>
-            {activeTab === 'things' ? (
+            {activeTab === 'things' && (
               <ItemsSection
                 saleId={sale.id}
                 uid={user.uid}
                 openId={thingId}
                 onOpenThing={openThing}
                 onCloseThing={closeThing}
+                statusView={statusView}
+                onStatusViewChange={showStatusView}
               />
-            ) : (
-              <EmptyCard icon={TAB_PLACEHOLDERS[activeTab].icon}>
-                {TAB_PLACEHOLDERS[activeTab].text}
+            )}
+            {activeTab === 'sale' && (
+              <SaleTab
+                sale={sale}
+                uid={user.uid}
+                onOpenStatus={showThingsOn}
+                onDeleted={() => {
+                  setIsListChosen(true);
+                  closeSale();
+                }}
+              />
+            )}
+            {activeTab === 'inbox' && (
+              <EmptyCard icon={INBOX_PLACEHOLDER.icon}>
+                {INBOX_PLACEHOLDER.text}
               </EmptyCard>
             )}
           </div>

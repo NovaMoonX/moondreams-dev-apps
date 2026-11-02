@@ -58,6 +58,9 @@ interface ItemsSectionProps {
   openId: string | null;
   onOpenThing: (id: string) => void;
   onCloseThing: () => void;
+  /** The status the list is switched to, kept in the address so the Sale tab's tiles can open it. */
+  statusView: StatusView;
+  onStatusViewChange: (view: StatusView) => void;
 }
 
 /** The Things tab: the sale's things, newest first, with a search and a sort once there are enough to need them, and the way to add one. */
@@ -67,6 +70,8 @@ function ItemsSection({
   openId,
   onOpenThing,
   onCloseThing,
+  statusView,
+  onStatusViewChange,
 }: ItemsSectionProps) {
   const items = useAppSelector((state) => selectItems(state, saleId));
   const status = useAppSelector(selectItemsStatus);
@@ -77,7 +82,6 @@ function ItemsSection({
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
-  const [statusView, setStatusView] = useState<StatusView>('AVAILABLE');
   const openItem = items.find((item) => item.id === openId) ?? null;
   const isModifying = openItem !== null && modifyId === openItem.id;
   const isSeller = sale?.ownerUid === uid;
@@ -107,7 +111,7 @@ function ItemsSection({
   const takenOffRef = useRef<HTMLDivElement | null>(null);
 
   const showTakenOff = () => {
-    setStatusView('SOLD');
+    onStatusViewChange('SOLD');
     window.requestAnimationFrame(() =>
       takenOffRef.current?.scrollIntoView({ block: 'start' }),
     );
@@ -192,7 +196,7 @@ function ItemsSection({
             detail: String(summary[value].count),
           }))}
           value={statusView}
-          onChange={setStatusView}
+          onChange={onStatusViewChange}
         />
       )}
       {unlistedCount > 0 &&

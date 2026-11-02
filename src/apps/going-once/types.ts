@@ -5,6 +5,9 @@ export type GoingOnceTab = (typeof GOING_ONCE_TABS)[number];
 
 export type SaleCurrency = 'USD';
 
+/** The details of a sale its seller can edit. */
+export type SaleDetailField = 'name' | 'pickupArea' | 'buyerNote';
+
 /** A sale, the container its things belong to (`apps/going-once/sales/{saleId}`). */
 export interface Sale {
   id: string;

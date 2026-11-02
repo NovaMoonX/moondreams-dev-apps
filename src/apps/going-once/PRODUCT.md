@@ -194,7 +194,7 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 - [ ] **Co-seller:** Copy listing text (remembered on the thing, with a take-it-down reminder at Sold), Save photos for one thing, and Save all photos as one zip for the whole sale, at listing quality
 - [ ] **Seller:** the public link: live, Available and Pending only, Show original price per thing, get a new address or turn it off; **Co-seller:** copy, open and share it, marked as their sale's page
 - [ ] **Buyer:** the public page and the "I'm interested" form, with no account, refused in words for a thing that just sold
-- [ ] **Seller:** where the sale stands: collected against asked, pending, left
+- [x] **Seller:** where the sale stands: collected against asked, pending, left
 - [ ] **Seller:** Finish the sale, naming what didn't sell and what is pending; pickups still recordable; buyers' details cleared 30 days later; reopen until then
 
 ### Next Steps

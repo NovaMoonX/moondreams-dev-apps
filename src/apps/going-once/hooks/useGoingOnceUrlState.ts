@@ -4,8 +4,21 @@ import { useNavigate } from 'react-router-dom';
 import {
   DEFAULT_GOING_ONCE_TAB,
   GOING_ONCE_TABS,
+  STATUS_VIEW_PARAMS,
 } from '@apps/going-once/constants';
 import type { GoingOnceTab } from '@apps/going-once/types';
+import type { StatusView } from '@apps/going-once/utils/status';
+
+const PARAM_BY_VIEW = {
+  AVAILABLE: null,
+  PENDING: 'pending',
+  SOLD: 'sold',
+} as const satisfies Record<StatusView, keyof typeof STATUS_VIEW_PARAMS | null>;
+
+const VIEW_PARAMS = Object.keys(STATUS_VIEW_PARAMS) as [
+  keyof typeof STATUS_VIEW_PARAMS,
+  ...(keyof typeof STATUS_VIEW_PARAMS)[],
+];
 
 /** The open sale, its tab and the open thing, kept in the URL so a reload, a link and a return from another app land on the same screen. */
 export function useGoingOnceUrlState() {
@@ -17,13 +30,20 @@ export function useGoingOnceUrlState() {
   );
 
   const [thingId, setThingId] = useQueryState('thing', parseAsString);
+  const [requestedView, setRequestedView] = useQueryState(
+    'view',
+    parseAsStringLiteral(VIEW_PARAMS),
+  );
 
   const activeTab: GoingOnceTab = requestedTab ?? DEFAULT_GOING_ONCE_TAB;
+  const statusView: StatusView =
+    requestedView === null ? 'AVAILABLE' : STATUS_VIEW_PARAMS[requestedView];
 
   // nuqs writes the URL without telling the router, so an entry this hook pushes carries its own marker,
   // and closing pops it instead of stacking list → sale → list.
   const openSale = (id: string) => {
     void setRequestedTab(null, { history: 'replace' });
+    void setRequestedView(null, { history: 'replace' });
     void setSaleId(id, { history: 'push' }).then(() =>
       window.history.replaceState(
         { ...window.history.state, goingOnceSaleStep: true },
@@ -40,7 +60,15 @@ export function useGoingOnceUrlState() {
       return;
     }
     void setRequestedTab(null, { history: 'replace' });
+    void setRequestedView(null, { history: 'replace' });
     void setSaleId(null, { history: 'replace' });
+  };
+  const showStatusView = (view: StatusView) =>
+    setRequestedView(PARAM_BY_VIEW[view], { history: 'replace' });
+  const showThingsOn = (view: StatusView) => {
+    void closeThing();
+    void setRequestedTab(null, { history: 'replace' });
+    return showStatusView(view);
   };
   const showTab = (tab: GoingOnceTab) => {
     void closeThing();
@@ -53,6 +81,9 @@ export function useGoingOnceUrlState() {
     saleId,
     thingId,
     activeTab,
+    statusView,
+    showStatusView,
+    showThingsOn,
     openSale,
     closeSale,
     showTab,

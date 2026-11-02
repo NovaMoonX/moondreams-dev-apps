@@ -345,7 +345,8 @@ service cloud.firestore {
     // --- App: going-once ---
 
     // A sale is read by the seller and co-sellers. Anyone signed in may start one while the `create-sales`
-    // switch is open for them, as its seller and only member. Editing and deleting arrive with their issues.
+    // switch is open for them, as its seller and only member. The seller may change its name, pickup area and note for
+    // buyers; deleting is the `deleteSale` function's.
     match /apps/going-once/sales/{saleId} {
       allow read: if request.auth != null && request.auth.uid in resource.data.members;
       allow create: if request.auth != null
@@ -353,7 +354,18 @@ service cloud.firestore {
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.members == [request.auth.uid];
-      allow update, delete: if false;
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.ownerUid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name', 'pickupArea', 'buyerNote', 'lastEditedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 80
+        && (request.resource.data.pickupArea == null
+          || (request.resource.data.pickupArea is string && request.resource.data.pickupArea.size() <= 80))
+        && (request.resource.data.buyerNote == null
+          || (request.resource.data.buyerNote is string && request.resource.data.buyerNote.size() <= 300))
+        && request.resource.data.lastEditedAt is int;
+      allow delete: if false;
     }
 
     // A thing is read and written by the sale's members, judged by the sale in its path and never a field of the thing.

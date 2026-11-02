@@ -1,9 +1,11 @@
 import { FirebaseError } from 'firebase/app';
-import { doc, setDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
 
-import { db } from '@/lib/firebase/config';
+import { db, functions } from '@/lib/firebase/config';
 import { ADMIN_NAME } from '@lib/app/app.constants';
 import { generateUuid } from '@/utils';
+import { getErrorMessage } from '@/utils/errorUtils';
 import {
   MAX_BUYER_NOTE_LENGTH,
   MAX_PICKUP_AREA_LENGTH,
@@ -11,7 +13,7 @@ import {
 } from '@apps/going-once/constants';
 import type { AppDispatch } from '@/store';
 import { removeSale, upsertSale } from '@apps/going-once/store';
-import type { Sale } from '@apps/going-once/types';
+import type { Sale, SaleDetailField } from '@apps/going-once/types';
 
 interface CreateSaleInput {
   uid: string;
@@ -63,4 +65,32 @@ export function startSale(
     },
   );
   return sale;
+}
+
+/** Writes one of the sale's details and when it was edited, and nothing else. */
+export function updateSaleDetail(
+  saleId: string,
+  field: SaleDetailField,
+  value: string | null,
+): Promise<void> {
+  return updateDoc(doc(db, 'apps', 'going-once', 'sales', saleId), {
+    [field]: value,
+    lastEditedAt: Date.now(),
+  });
+}
+
+/** Deletes a sale with its things and photos; resolves to the reason when it didn't, else `null`. */
+export async function deleteSale(saleId: string): Promise<string | null> {
+  try {
+    await httpsCallable<{ saleId: string }, { deleted: boolean }>(
+      functions,
+      'deleteSale',
+    )({ saleId });
+    return null;
+  } catch (error) {
+    return getErrorMessage(
+      error,
+      "We couldn't delete this sale. Check your connection and try again.",
+    );
+  }
 }

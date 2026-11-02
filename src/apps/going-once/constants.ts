@@ -2,6 +2,7 @@ import type {
   ItemCondition,
   ItemStatus,
   PaymentMethod,
+  SaleDetailField,
 } from '@apps/going-once/types';
 
 /** The feature switch for starting new sales (`FEATURE_GATES`). */
@@ -26,6 +27,24 @@ export const SALE_NAME_SUGGESTIONS = [
 export const MAX_SALE_NAME_LENGTH = 80;
 export const MAX_PICKUP_AREA_LENGTH = 80;
 export const MAX_BUYER_NOTE_LENGTH = 300;
+
+/** The sale's editable details on the Sale tab: what each is called, what an empty one invites and what it tells the seller. */
+export const SALE_DETAILS: Record<
+  SaleDetailField,
+  { label: string; empty: string; hint: string | null }
+> = {
+  name: { label: 'Name', empty: 'Name your sale', hint: null },
+  pickupArea: {
+    label: 'Pickup area',
+    empty: 'Add a pickup area',
+    hint: 'An area, never your address. Buyers see this.',
+  },
+  buyerNote: {
+    label: 'Note for buyers',
+    empty: 'Add a note for buyers',
+    hint: 'Buyers see this.',
+  },
+};
 
 export const MAX_ITEM_PHOTOS = 12;
 export const MAX_ITEM_TITLE_LENGTH = 120;
@@ -76,6 +95,13 @@ export const STATUS_LABELS: Record<ItemStatus, string> = {
 
 /** The Things tab's switch; taken-off things sit at the end of Sold. */
 export const STATUS_VIEWS = ['AVAILABLE', 'PENDING', 'SOLD'] as const;
+
+/** The Things tab's status in the address (`?view=sold`); Available is the default and leaves the address clean. */
+export const STATUS_VIEW_PARAMS = {
+  available: 'AVAILABLE',
+  pending: 'PENDING',
+  sold: 'SOLD',
+} as const;
 
 export const PAYMENT_METHOD_OPTIONS = [
   { value: 'CASH', label: 'Cash' },

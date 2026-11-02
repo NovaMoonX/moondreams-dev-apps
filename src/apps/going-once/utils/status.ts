@@ -97,9 +97,13 @@ export function describeMovedOn(
   return 'This is available again.';
 }
 
+/** "of $245 asked": what the sold things were asking beside what was collected. */
+export const formatOfAsked = (askedCents: number) =>
+  `of ${formatCentsShort(askedCents)} asked`;
+
 /** "Collected $225 of $245 asked". */
 export const formatCollected = (collectedCents: number, askedCents: number) =>
-  `Collected ${formatCentsShort(collectedCents)} of ${formatCentsShort(askedCents)} asked`;
+  `Collected ${formatCentsShort(collectedCents)} ${formatOfAsked(askedCents)}`;
 
 /** "Collected goes from $225 to $215". */
 export const formatCollectedChange = (fromCents: number, toCents: number) =>

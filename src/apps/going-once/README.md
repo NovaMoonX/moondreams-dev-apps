@@ -18,13 +18,13 @@ It is for three people: the seller, who adds things once and checks in; the co-s
 
 Built:
 - Available, Pending and Sold, with what was paid, a history per thing, and taking things off the list
+- The Sale tab: where the sale stands (collected, pending, left), editing its name, pickup area and note, and deleting the sale
 
 Next:
 - [ ] Sales, things with photos and private fields, and co-sellers
 - [ ] A live public page and an interest form for buyers without an account
 - [ ] A shared inbox, with a bundled push when someone is interested
 - [ ] Copy listing text, Save photos and Save all photos for relisting
-- [ ] Where the sale stands: collected, pending and left
 - [ ] Finish the sale, with buyers' details cleared after 30 days
 - [ ] Later: who holds the money, and a later sale from what didn't sell
 

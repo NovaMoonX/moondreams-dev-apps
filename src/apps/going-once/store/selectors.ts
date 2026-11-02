@@ -2,6 +2,7 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import type { Item, Sale } from '@apps/going-once/types';
+import { getStatusSummary } from '@apps/going-once/utils/statusSummary';
 
 export const selectSales = (state: RootState) => state.goingOnce.sales.items;
 
@@ -31,6 +32,11 @@ export const selectItems = createSelector(
           (first, second) => second.createdAt - first.createdAt,
         )
       : [],
+);
+
+/** The open sale's counts and sums per status, worked out once per change to its things. */
+export const selectStatusSummary = createSelector([selectItems], (items) =>
+  getStatusSummary(items),
 );
 
 export const selectItemsStatus = (state: RootState) =>

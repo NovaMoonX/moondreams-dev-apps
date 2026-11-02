@@ -164,7 +164,7 @@ Contacts already cleared stay cleared after a reopen.
 
 ### Totals
 
-`createSelector`s over the open sale's things, one pass bucketing by status: collected (sum of `sale.priceCents`), asked for those, pending count and asking, left count and asking, unpriced count. Withdrawn things are excluded everywhere; `floorPriceCents` is never summed. One formatter per figure shown twice (tile and footer line). The Things tab's pills and its totals line come from `getStatusSummary` in `utils/statusSummary.ts`: Available counts and sums only what is listed (a thing not listed yet waits behind its door, and a missing price is counted, "1 has no price yet"); the pills follow the search, the line under the rows never does (while a search is on it says "All pending ·"); "Collected $225 of $245 asked" is `formatCollected`, used by the line and the sold confirmation.
+`selectStatusSummary` (a `createSelector` over the open sale's things, no second totals module) runs `getStatusSummary`, one pass bucketing by status: collected (sum of `sale.priceCents`), asked for those, pending count and asking, left count and asking, unpriced count. Withdrawn things are excluded everywhere; `floorPriceCents` is never summed. One formatter per figure shown twice (tile and footer line). The Things tab's pills and its totals line come from `getStatusSummary` in `utils/statusSummary.ts`: Available counts and sums only what is listed (a thing not listed yet waits behind its door, and a missing price is counted, "1 has no price yet"); the pills follow the search, the line under the rows never does (while a search is on it says "All pending ·"); "Collected $225 of $245 asked" is `formatCollected`, used by the line and the sold confirmation; the Sale tab's Collected tile shows the same two parts as `$225` and `formatOfAsked`, and its Pending and Left tiles use `formatStatusTotal`, so a tile and the line under the rows never disagree.
 
 ## Inquiry push
 
@@ -339,7 +339,7 @@ Available and Pending things only. 60 things × 5 photos × ~1 MB ≈ **300 MB**
 - **A removed co-seller (answers product):** the rules read live `members`, so their next read or write is refused. The client treats it as removal, not an error: when the open sale leaves the my-sales listener, or a listener or write under it answers `permission-denied` while the sale is open, `GoingOnce.tsx` stops the open-sale tier, clears that sale from the slice (keeping only its name, captured before clearing) and shows "You're no longer on Fall clear-out" with a way back to Your sales. A queued offline write that is later refused lands on the same screen.
 - **Actions:** `saleActions` (create, edit details), `memberActions` (invite, cancel, join, remove, leave), `itemActions` (create, field update, photo transactions, status transactions, sold-record correction, delete), `inquiryActions` (Handled, New, delete), `peopleActions` (push switch).
 - **TanStack Query:** `queries/salePageQueries.ts` (`getSalePage`, `staleTime` 30 s, refetched on `useOnTabReturn`, no `persist`), `queries/inquiryQueries.ts` (older Handled, Handled count). Callables for the link, finishing, archive and interest are uncached mutations.
-- **URL state:** `useGoingOnceUrlState` (`sale`, `tab`, `view` (`new` / `handled`), `thing`, `inquiry`), so a push opens the inquiry or the New list.
+- **URL state:** `useGoingOnceUrlState` (`sale`, `tab`, `view` (on Things `available` / `pending` / `sold`, which the Sale tab's tiles set; on the Inbox `new` / `handled`), `thing`, `inquiry`), so a push opens the inquiry or the New list.
 - **Context:** none.
 
 ## Backend Surface
@@ -359,7 +359,7 @@ All `region: 'us-central1'`, callables with the site's `cors` list. Errors are `
 | `clearSaleContacts` | scheduled, daily 04:30 UTC | — | — | counts logged | A sale that fails is left for the next run |
 | `notifySaleInquiry` | Firestore trigger, `apps/going-once/sales/{saleId}/inquiries/{inquiryId}` written | — | before/after of the inquiry | `queueBundledPush` per recipient, and an immediate push where it says "send now" | Logs; a push failure never touches the inquiry |
 | `sendDueBundledPushes` | scheduled, every minute (shared, every app) | — | — | summaries sent | A bundle that fails keeps its items for the next run |
-| `deleteSale` | callable, 540 s | seller | `{ saleId }` | `{ deleted: true }` (also for missing or someone else's) | `unauthenticated` |
+| `deleteSale` | callable, 540 s | seller | `{ saleId }` | `{ deleted: true }` | `unauthenticated`; `not-found` (missing, someone else's or a co-seller's call alike, and a sale a finished run already removed); `internal` "The sale wasn't fully deleted. Delete it again to finish." (the sale stays, so a rerun finishes it) |
 | `findFirstActivityAt` | usage finder for `registerAppUsage` | — | uid | oldest `createdAt` of a sale they are in, or `null` | — |
 
 `PublicThing = { id, title, description, brandModel, size, condition, askingPriceCents, originalPriceCents, status, photos: { s: string, m: string }[] }`, the copy paths only; `originalPriceCents` is `null` unless shown.
@@ -398,7 +398,7 @@ src/apps/going-once/
   hooks/          useGoingOnceSync.ts, useGoingOnceUrlState.ts, useDeleteThing.tsx (the E2 confirm and the delete), useStatusWrite.ts (one write of a status view: no double tap, a kept refusal), useSingleFlight.ts (one drawer act at a time), usePersonNames.ts, useThingInquiries.ts (drawer-only listener)
   store/          index.ts (slice), listeners/, actions/, selectors.ts
   queries/        photoUrlQueries.ts (a photo's download address), salePageQueries.ts, inquiryQueries.ts
-  utils/          listing.ts (isListable, canDeleteItem, sortItems, getDeleteEffects, listingText), status.ts (getThingOffer, getStatusFacts, formatCollected, describeStatusChange, describeMovedOn), statusSummary.ts (getStatusSummary, formatStatusTotal), statusDrafts.ts (what a status view holds while it is open, held by the drawer so closing asks Keep editing / Discard), personName.ts, thingAnswers.ts (answers <-> stored fields), totals.ts
+  utils/          listing.ts (isListable, canDeleteItem, sortItems, getDeleteEffects, listingText), status.ts (getThingOffer, getStatusFacts, formatCollected, describeStatusChange, describeMovedOn), statusSummary.ts (getStatusSummary, formatStatusTotal; the Sale tab reads it through `selectStatusSummary`), statusDrafts.ts (what a status view holds while it is open, held by the drawer so closing asks Keep editing / Discard), personName.ts, thingAnswers.ts (answers <-> stored fields)
 functions/src/apps/going-once/
   salePageView.ts (allowlist, limits, mirrored constants), getSalePage.ts, changeSalePublicLink.ts,
   syncSalePublicPhotos.ts, submitSaleInterest.ts, notifySaleInquiry.ts, buildSalePhotoArchive.ts,
