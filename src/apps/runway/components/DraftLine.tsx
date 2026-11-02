@@ -4,7 +4,7 @@ import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -120,7 +120,7 @@ function DraftLine({
   };
   const pairingShort = getPairingShort();
   const billShareShort = line.bill
-    ? `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatDateShortUTC(line.bill.dueOn)}`
+    ? `${formatCentsShort(line.cents)} of ${formatCentsShort(line.bill.totalCents)} · due ${formatRelativeDayUTC(line.bill.dueOn, today)}`
     : null;
   const getDetail = () => {
     if (isHidden && (state === 'held' || shortText))
