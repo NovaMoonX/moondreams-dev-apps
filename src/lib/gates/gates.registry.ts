@@ -44,6 +44,15 @@ export const FEATURE_GATES: FeatureGateEntry[] = [
     defaultRollout: 'everyone',
     isServerEnforced: true,
   },
+  {
+    id: 'create-sales',
+    appId: 'going-once',
+    label: 'Start sales',
+    description:
+      'Someone kept out sees the Start a sale button locked. Sales they are already in work as normal. Everyone else can start new sales.',
+    defaultRollout: 'everyone',
+    isServerEnforced: true,
+  },
 ];
 
 export function getAppFeatureGates(appId: string) {

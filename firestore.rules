@@ -332,6 +332,20 @@ service cloud.firestore {
       allow delete: if isUser(uid);
     }
 
+    // --- App: going-once ---
+
+    // A sale is read by the seller and co-sellers. Anyone signed in may start one while the `create-sales`
+    // switch is open for them, as its seller and only member. Editing and deleting arrive with their issues.
+    match /apps/going-once/sales/{saleId} {
+      allow read: if request.auth != null && request.auth.uid in resource.data.members;
+      allow create: if request.auth != null
+        && isGateOpen('going-once', 'create-sales', 'everyone')
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.members == [request.auth.uid];
+      allow update, delete: if false;
+    }
+
     // --- App: waypoint ---
 
     match /apps/waypoint/inviteCodes/{inviteCode} {

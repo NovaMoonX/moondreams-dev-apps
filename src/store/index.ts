@@ -2,6 +2,7 @@ import { configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { type AListState, aListReducer } from '@apps/a-list/store';
+import { type GoingOnceState, goingOnceReducer } from '@apps/going-once/store';
 import { type NineLivesState, nineLivesReducer } from '@apps/nine-lives/store';
 import { type PinchState, pinchReducer } from '@apps/pinch/store';
 import {
@@ -25,6 +26,7 @@ export interface RootState {
   aList: AListState;
   pinch: PinchState;
   runway: RunwayState;
+  goingOnce: GoingOnceState;
 }
 
 export const store = configureStore({
@@ -37,6 +39,7 @@ export const store = configureStore({
     aList: aListReducer,
     pinch: pinchReducer,
     runway: runwayReducer,
+    goingOnce: goingOnceReducer,
   },
   devTools: true,
 });

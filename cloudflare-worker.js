@@ -105,6 +105,15 @@ const APP_REGISTRY = [
       'An income-first budget planner for money that does not arrive or leave on a tidy schedule: draft where each income day should go, look ahead to see how far the plan holds, and change it when life changes.',
     image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-runway.png',
   },
+  {
+    id: 'going-once',
+    name: 'Going Once',
+    title: 'Going Once - Moondreams Dev Apps',
+    path: '/going-once',
+    description:
+      'Sell a lot of your things without answering every buyer yourself: add each thing once with photos and a price, bring in a co-seller you trust, and share one link that shows only what is still for sale.',
+    image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-going-once.png',
+  },
 ];
 
 // Tells search engines not to list the page or follow its links, and browsers not to send its address as a referrer, even for those that never run its JS (where the same meta tags are added).

@@ -70,6 +70,15 @@ export const APP_REGISTRY: AppRegistryEntry[] = [
     createdAt: '2026-10-23',
     resumeParams: ['tab', 'section', 'day', 'more'],
   },
+  {
+    id: 'going-once',
+    name: 'Going Once',
+    path: '/going-once',
+    description:
+      'Sell a lot of your things without answering every buyer yourself: add each thing once with photos and a price, bring in a co-seller you trust, and share one link that shows only what is still for sale.',
+    createdAt: '2026-11-02',
+    resumeParams: ['sale', 'tab'],
+  },
 ];
 
 export const APP_REGISTRY_ID_MAP = Object.fromEntries(

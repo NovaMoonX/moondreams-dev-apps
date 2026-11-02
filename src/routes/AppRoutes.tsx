@@ -90,6 +90,15 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'going-once',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: GoingOnce } =
+            await import('@apps/going-once/GoingOnce');
+          return { Component: GoingOnce };
+        },
+      },
+      {
         path: 'a-list/shared/:shareId',
         HydrateFallback: Loading,
         lazy: async () => {

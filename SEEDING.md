@@ -137,6 +137,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run seed:a-list`                            | Upsert core data and A-List Tracker fixtures.                                                    |
 | `npm run seed:pinch`                             | Upsert core data and Pinch kitchen fixtures.                                                     |
 | `npm run seed:runway`                            | Upsert core data, Alex's Runway plan (Plan) and Jamie's (Track), income and wrapped keys.        |
+| `npm run seed:going-once`                        | Upsert core data, Maya's "Fall clear-out" sale for Going Once, and Theo's account with no sale.  |
 | `npm run seed:pinch-scale`                       | Upsert core data and Taylor's oversized "Big Kitchen (scale test)" for Pinch performance checks.   |
 | `npm run seed:runway-scale`                      | Upsert core data and Morgan's "Five-year plan (scale test)" for Runway performance checks.         |
 | `npm run seed:reset`                             | Clear emulator Auth, Firestore, and RTDB, then seed all fixtures.                                |
@@ -144,7 +145,7 @@ When you're finished with a friend, remove the share in the same admin console p
 | `npm run emulators:seed:reset`                   | Start emulators, clear all fixtures, reseed, and exit.                                           |
 | `npm run check:runway-rules`                     | Read and write every Runway collection as the owner, a second user and a signed-out visitor against `firestore.rules` in a throwaway emulator (beta tier: who may do what, not shape). |
 
-Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, `pinch-scale`, `runway`, `runway-scale`, or `all` to select a scope (`pinch-scale` and `runway-scale` are opt-in; `all` and `seed:reset` leave them out).
+Use `npm run seed -- --scope core`, `nine-lives`, `worth-the-wait`, `waypoint`, `a-list`, `pinch`, `pinch-scale`, `runway`, `runway-scale`, `going-once`, or `all` to select a scope (`pinch-scale` and `runway-scale` are opt-in; `all` and `seed:reset` leave them out).
 Normal runs are idempotent upserts and retain records created manually during local
 development. `--reset` is the explicit destructive local reset.
 
@@ -160,6 +161,8 @@ Auth Emulator:
 | Jamie   | `jamie@example.test`  | `seed-worth-the-wait-two`   | Worth the Wait partner                   |
 | Taylor  | `taylor@example.test` | `seed-nine-lives-caretaker` | Nine Lives household creator             |
 | Morgan  | `morgan@example.test` | `seed-runway-scale`         | Runway's five-year plan for scale checks |
+| Maya    | `maya@example.test`   | `seed-going-once-seller`    | Going Once seller, with "Fall clear-out"  |
+| Theo    | `theo@example.test`   | `seed-going-once-coseller`  | Going Once, with no sale yet             |
 
 When Vite uses the emulator configuration, the header provides local account buttons
 for these identities. This uses email/password so the selected account always owns the
@@ -209,6 +212,8 @@ and a Dune IMAX showing entered as an all-in $21.39 total. Two planned showings 
 without an answer (Midnight Matinee four days ago and Hometown Film Fest Shorts yesterday),
 so the Seen prompt opens on load; The Matrix and both Dune viewings carry star ratings.
 
+`going-once` writes Maya's sale at `apps/going-once/sales/seed-going-once-fall-clear-out` ("Fall clear-out", pickup area "Capitol Hill, Seattle", note for buyers "Evenings and weekends. Cash or Venmo.", Maya as seller and only member), 1 Firestore document. Theo (`seed-going-once-coseller`) has no sale, so signing in as him shows Going Once's first run; he is added to Maya's sale by the co-seller issue.
+
 To add a main app or app, create a module in `scripts/seeds/`, seed data under
 its owned collection path, call the module from `scripts/seed.ts`, and document its
 scope here. Keep fixed fixture UIDs in `scripts/seeds/types.ts` so global and
@@ -224,7 +229,7 @@ line in `functions/.secret.local` (git-ignored), for example
 and the emulator use the built-in development keyring. Restart the emulators and run `npm run seed:reset` after
 changing it, or Alex's plan will not open ("Your plan cannot be opened right now").
 
-`runway-scale` (opt-in; `all` and `seed:reset` leave it out) gives Morgan (`seed-runway-scale`, `morgan@example.test`) a plan at `apps/runway/plans/seed-runway-scale` that has been tracked for five years, to judge Runway's performance: 3 income sources with 3 pay lines (a paycheck every other week, a monthly retainer that pays a range, rent received twice a month), 25 envelopes, 60 monthly bills and 12 goals (103 items), 600 versions (each item's first, then later amount changes) with a change entry each, 311 confirmed days with their proposed and confirmed records (622), 1,449 moves (the starting holdings, the move up to Track and 1,440 bills marked paid: 20 bills over all five years and the rest for the last six months) and 25,000 purchases (about 14 a day: 7% split across two envelopes, 3% taken from Free to Spend), all sealed with the key derived as `runway` does and wrapped at `apps/runway/server/seed-runway-scale/keys/data`. It is 28,688 documents on top of the 25 that `core` writes for the five fixture accounts, written with a bulk writer in about a minute; the plan is shaped like one written before closings existed (no `dirtyFrom`, no closings), so Morgan's first open builds the sixty monthly closings (about half a minute on a laptop, once) behind an "Updating your history" card; `RUNWAY_SCALE_CLOSINGS=1 npm run seed:runway-scale` writes them as well (60 more documents, built by the same code from the seeded ledger), so every open is the cold start with closings. `RUNWAY_SCALE_VERSIONS=2000 npm run seed:runway-scale` writes 2,000 versions instead of 600. The seed runs after `core` only and adds to what is there, so run `npm run seed:reset` afterwards to bring the baseline back.
+`runway-scale` (opt-in; `all` and `seed:reset` leave it out) gives Morgan (`seed-runway-scale`, `morgan@example.test`) a plan at `apps/runway/plans/seed-runway-scale` that has been tracked for five years, to judge Runway's performance: 3 income sources with 3 pay lines (a paycheck every other week, a monthly retainer that pays a range, rent received twice a month), 25 envelopes, 60 monthly bills and 12 goals (103 items), 600 versions (each item's first, then later amount changes) with a change entry each, 311 confirmed days with their proposed and confirmed records (622), 1,449 moves (the starting holdings, the move up to Track and 1,440 bills marked paid: 20 bills over all five years and the rest for the last six months) and 25,000 purchases (about 14 a day: 7% split across two envelopes, 3% taken from Free to Spend), all sealed with the key derived as `runway` does and wrapped at `apps/runway/server/seed-runway-scale/keys/data`. It is 28,688 documents on top of the 32 that `core` writes for the seven fixture accounts, written with a bulk writer in about a minute; the plan is shaped like one written before closings existed (no `dirtyFrom`, no closings), so Morgan's first open builds the sixty monthly closings (about half a minute on a laptop, once) behind an "Updating your history" card; `RUNWAY_SCALE_CLOSINGS=1 npm run seed:runway-scale` writes them as well (60 more documents, built by the same code from the seeded ledger), so every open is the cold start with closings. `RUNWAY_SCALE_VERSIONS=2000 npm run seed:runway-scale` writes 2,000 versions instead of 600. The seed runs after `core` only and adds to what is there, so run `npm run seed:reset` afterwards to bring the baseline back.
 
 ## Emulator snapshots
 
