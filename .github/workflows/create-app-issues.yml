@@ -10,7 +10,8 @@ permissions:
   issues: write
   pull-requests: write
 concurrency:
-  group: create-app-issues-${{ github.event.pull_request.number }}
+  # One at a time across PRs: adding an Apps option rewrites the whole list.
+  group: create-app-issues
   cancel-in-progress: false
 jobs:
   issues:

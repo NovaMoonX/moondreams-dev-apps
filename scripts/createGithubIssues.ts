@@ -385,6 +385,13 @@ const backupPath = (fieldId: string) =>
 // Old ids map to new ones by position: the rewrite sends the old list in
 // order with the new option last, so this holds even for duplicate names.
 const restoreAppsValues = (backup: AppsBackup, after: SelectOption[]) => {
+  const isAligned = backup.before.every(
+    (option, index) => after[index]?.name === option.name,
+  );
+  if (!isAligned)
+    fail(
+      `The board's ${APPS_FIELD} options no longer line up with the backup at ${backupPath(backup.fieldId)}, so items' values can't be matched. Put them back from that file by hand.`,
+    );
   const newIdByOld = new Map(
     backup.before.map((option, index) => [option.id, after[index]?.id ?? option.id]),
   );
