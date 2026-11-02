@@ -12,10 +12,11 @@
  * GitHub) becomes the real `#123`. Re-running is safe: an issue found by its
  * prefixed or bare title is reused, keeps its board Status and its edited
  * body, and only gets its label, Apps and links. The app's name comes from
- * APP_REGISTRY, or `--app-name` before the app is registered; a missing Apps
- * option is added to the board, keeping every item's existing Apps value.
- * Needs `gh` signed in with the `project` and `read:project` scopes; the dry
- * run needs nothing.
+ * APP_REGISTRY, `--app-name`, or the first heading of the app's README.md
+ * before the app is registered; a missing Apps option is added to the board,
+ * keeping every item's existing Apps value. Needs `gh` signed in with the
+ * `project` and `read:project` scopes, or PROJECT_TOKEN set for the board
+ * calls (the create-app-issues workflow); the dry run needs nothing.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -76,10 +77,21 @@ const fail = (message: string): never => {
   process.exit(1);
 };
 
+// The workflow's own token can't reach a user-owned board, so board calls use
+// PROJECT_TOKEN when it is set and issue calls keep the workflow's token.
+const isBoardCall = (args: string[]) =>
+  args[0] === 'project' || (args[0] === 'api' && args[1] === 'graphql');
+
+const ghEnv = (args: string[]) =>
+  process.env.PROJECT_TOKEN && isBoardCall(args)
+    ? { ...process.env, GH_TOKEN: process.env.PROJECT_TOKEN }
+    : process.env;
+
 const gh = (args: string[]) => {
   const output = execFileSync('gh', args, {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit'],
+    env: ghEnv(args),
   });
   return output.trim();
 };
@@ -363,13 +375,15 @@ const applyAppsOption = (plan: AppsPlan, appName: string) => {
     { name: appName, color: 'GRAY', description: '' },
   ];
   const mutation = `mutation($field: ID!, $options: [ProjectV2SingleSelectFieldOptionInput!]) { updateProjectV2Field(input: { fieldId: $field, singleSelectOptions: $options }) { projectV2Field { ... on ProjectV2SingleSelectField { id } } } }`;
-  execFileSync('gh', ['api', 'graphql', '--input', '-'], {
+  const mutationArgs = ['api', 'graphql', '--input', '-'];
+  execFileSync('gh', mutationArgs, {
     input: JSON.stringify({
       query: mutation,
       variables: { field: plan.fieldId, options },
     }),
     encoding: 'utf8',
     stdio: ['pipe', 'ignore', 'inherit'],
+    env: ghEnv(mutationArgs),
   });
   const after = readOptions(plan.fieldId);
   restoreAppsValues(backup, after);
@@ -378,6 +392,19 @@ const applyAppsOption = (plan: AppsPlan, appName: string) => {
     after[backup.before.length]?.id ??
     fail(`The new ${APPS_FIELD} option did not come back.`);
   const result = { fieldId: plan.fieldId, optionId };
+  return result;
+};
+
+// "# Going Once 🔨" names the app before it is registered; the emoji is dropped.
+const readNameFromReadme = (appId: string) => {
+  const readme = `src/apps/${appId}/README.md`;
+  if (!existsSync(readme)) return null;
+  const heading = readFileSync(readme, 'utf8').match(/^# (.+)$/m)?.[1] ?? '';
+  const result =
+    heading
+      .replace(/[^\p{L}\p{N}'&.\- ]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim() || null;
   return result;
 };
 
@@ -392,8 +419,9 @@ const run = async () => {
   const appName =
     givenName ??
     app?.name ??
+    readNameFromReadme(appId) ??
     fail(
-      `No app "${appId}" in APP_REGISTRY yet. Pass --app-name "<App name>" (the name people will see).`,
+      `No app "${appId}" in APP_REGISTRY yet and no "# Name" heading in its README.md. Pass --app-name "<App name>" (the name people will see).`,
     );
   const issuesFile = file ?? `src/apps/${appId}/ISSUES.md`;
   if (!existsSync(issuesFile)) fail(`No roadmap at ${issuesFile}.`);

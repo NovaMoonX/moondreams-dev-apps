@@ -83,21 +83,19 @@ Notice what each line is doing: **Read** is where reachability actually gets ver
 
 ### Creating the issues
 
-Once the roadmap is approved and committed as `src/apps/<id>/ISSUES.md`, run the repo's own script from the repo root (it needs `gh` signed in with `project` and `read:project` scopes, so it runs on the owner's machine):
+Once the roadmap is approved and in the docs PR as `src/apps/<id>/ISSUES.md`, add the **`create-issues`** label to that PR. `.github/workflows/create-app-issues.yml` runs `scripts/createGithubIssues.ts <id> --yes` for every `src/apps/*/ISSUES.md` the PR changes, with the workflow's token for issues and the `PROJECT_TOKEN` secret for board 3, and comments the `Issue N → #123` list on the PR. While the label stays on, each later push re-runs it and only creates issues the file gained. Check the parse first, locally or in a session, with no token:
 
 ```bash
-npm run issues:create:dry-run -- <app-id>   # parse and preview; needs no gh
-npm run issues:create -- <app-id> --app-name "<App name>"   # before the app is in APP_REGISTRY
-npm run issues:create -- <app-id> --file <draft>.md   # a planning draft not yet in src/apps
+node scripts/createGithubIssues.ts <app-id> --dry-run
 ```
 
 For each `### Issue N: Title` it:
-- titles the GitHub issue **`<App name> N: Title`** (the app's `name` in `APP_REGISTRY`, or `--app-name "<App name>"` while the app isn't registered yet, which is every new app's first run), e.g. `Runway 3: Income sources`, so the roadmap number stays visible and never clashes across apps;
+- titles the GitHub issue **`<App name> N: Title`** (the app's `name` in `APP_REGISTRY`, else `--app-name`, else the first `# ` heading of the app's `README.md` without its emoji, which is how a new app is named before it is registered), e.g. `Runway 3: Income sources`, so the roadmap number stays visible and never clashes across apps;
 - labels it with its tier (the `## MVP` / `## Next Steps` / `## Beyond` heading it sits under, verbatim), creating the label the first time;
-- adds it to project board 3 with the board's **Apps** field set to the app's name and, for a new issue, **Status = Ready** (an app with no Apps option yet gets one: GitHub's API can only add an option by rewriting the whole list, so the script says so at its confirm prompt, saves every board item's Apps value to a backup file first, puts each back if the option ids changed, and finishes from that backup on the next run if it was cut short);
+- adds it to project board 3 with the board's **Apps** field set to the app's name and, for a new issue, **Status = Ready** (an app with no Apps option yet gets one: GitHub's API can only add an option by rewriting the whole list, so the script saves every board item's Apps value to a backup file first, puts each back if the option ids changed, and finishes from that backup on the next run if it was cut short; the workflow uploads that backup as an artifact when a run fails);
 - once every issue exists, replaces each `Issue N` still in a body (as it stands on GitHub) with the real `#123`, so later docs, PRs and status comments use the real numbers. It leaves alone a mention that names another app first ("Pinch Issue 3") and anything inside a code block.
 
-It is safe to re-run: an issue found by its prefixed title, or by its bare title when exactly one issue has it (issues made before titles carried the prefix), is not created again; it keeps its board Status and any edits to its body, and only gets its tier label, Apps field and links. In a cloud session without `gh`, create the issues with the GitHub MCP `issue_write` using the same title format, then ask the owner to run `npm run issues:create -- <app-id>` (with `--app-name` if the app isn't registered yet) once locally, which attaches them to the board.
+It is safe to re-run: an issue found by its prefixed title, or by its bare title when exactly one issue has it (issues made before titles carried the prefix), is not created again; it keeps its board Status and any edits to its body, and only gets its tier label, Apps field and links. The owner can still run it by hand (`npm run issues:create -- <app-id>`, with `gh` signed in with the `project` scope), but never needs to.
 
 ---
 
