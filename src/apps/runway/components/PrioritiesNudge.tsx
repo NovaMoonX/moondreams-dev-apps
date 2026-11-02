@@ -1,4 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import type { ReactNode } from 'react';
 import { ChevronRight, ListOrdered } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -17,13 +18,33 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 const DISMISSED_KEY_PREFIX = 'runway.prioritiesNudgeDismissed.';
 const MIN_ITEMS = 3;
 
-/** Asks the person to sort priorities while every item is still the default; gone once one changes, or for good on this device once hidden; Home leaves it out while bills are due. */
-function PrioritiesNudge() {
+/** Asks the person to sort priorities while every item is still the default; gone once one changes, or for good on this device once hidden. */
+function PrioritiesNudge({ isHeldBack, otherwise }: PrioritiesNudgeProps) {
   const { user } = useAuth();
-  return user ? <PrioritiesNudgeRow key={user.uid} uid={user.uid} /> : null;
+  return user ? (
+    <PrioritiesNudgeRow
+      key={user.uid}
+      uid={user.uid}
+      isHeldBack={isHeldBack}
+      otherwise={otherwise}
+    />
+  ) : (
+    otherwise
+  );
 }
 
-function PrioritiesNudgeRow({ uid }: { uid: string }) {
+interface PrioritiesNudgeProps {
+  /** True while something more pressing asks on the same screen. */
+  isHeldBack: boolean;
+  /** Drawn in its place when it doesn't show, so a screen asks one thing at a time. */
+  otherwise: ReactNode;
+}
+
+function PrioritiesNudgeRow({
+  uid,
+  isHeldBack,
+  otherwise,
+}: PrioritiesNudgeProps & { uid: string }) {
   const today = todayAsUtcDate(useNow(60_000));
   const { openMoreEntry } = useRunwayUrlState();
   const [isDismissed, setIsDismissed] = useLocalStoragePreference(
@@ -43,7 +64,7 @@ function PrioritiesNudgeRow({ uid }: { uid: string }) {
   const isUnsorted =
     listed.length >= MIN_ITEMS && listed.every((value) => value === 'should');
 
-  if (isDismissed || !isUnsorted) return null;
+  if (isDismissed || !isUnsorted || isHeldBack) return otherwise;
   return (
     <section
       aria-label={PRIORITIES_NUDGE_WORDS.title}

@@ -131,13 +131,15 @@ function HomeScreen() {
       )
     : [];
   const hasRanges = rangeSides.income || rangeSides.expense;
+  const hasWarnings =
+    dueCards.length > 0 ||
+    (lookahead !== null &&
+      lookahead.problems.length + lookahead.undated.length > 0);
 
   return (
     <div className='space-y-6'>
       <div className='space-y-2'>
-        {dueCards.length > 0 ||
-        (lookahead !== null &&
-          lookahead.problems.length + lookahead.undated.length > 0) ? (
+        {hasWarnings ? (
           <LookaheadWarnings lookahead={lookahead} dueCards={dueCards} />
         ) : lookahead ? (
           <HoldsThroughLine lookahead={lookahead} />
@@ -185,8 +187,12 @@ function HomeScreen() {
           onPickUpPurchase={() => setIsAddingPurchase(true)}
         />
       )}
-      {lookahead !== null && lookahead.due.length === 0 && <PrioritiesNudge />}
-      <TrackInviteCard />
+      <PrioritiesNudge
+        isHeldBack={
+          lookahead === null || hasWarnings || lookahead.due.length > 0
+        }
+        otherwise={<TrackInviteCard />}
+      />
       {isSetupOpen && (
         <EmptyCard
           icon={<ListChecks className='h-5 w-5' />}
