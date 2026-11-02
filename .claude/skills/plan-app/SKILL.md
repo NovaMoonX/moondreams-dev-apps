@@ -23,7 +23,7 @@ Product, design and technical are not phases. A data model shapes what a screen 
 
 Each **round**:
 
-1. **Brief.** Write `planning/<id>/BRIEF.md` in the scratchpad (never in the repo until approved): the idea in the owner's words, every owner answer so far, and `decisions.md` (the running log: one line per decision, who made it, why).
+1. **Brief.** Write `planning/<id>/BRIEF.md` in the scratchpad (never in the repo until approved): the idea in the owner's words, the app's people as soon as they are known (each role, who plays it, what they come to do; the owner is often one of them, and the round-1 brief confirms the list with the owner before any journey is drafted, since every track plans for these people), every owner answer so far, and `decisions.md` (the running log: one line per decision, who made it, why).
 2. **Draft in parallel.** Spawn `product-planner`, `design-planner` and `tech-planner` together (one message, three Agent calls, `run_in_background: true`). Each reads the brief, its own reference file and the current drafts of all three tracks, revises its own files, and returns:
    - **Changed**: what it drafted or revised, one line each;
    - **Needs from the others**: a constraint or question for another track ("tech: can a stay's check-in be trip-relative?");
