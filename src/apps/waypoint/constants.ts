@@ -9,6 +9,7 @@ import type {
   EventType,
   ExpenseCategory,
   ExpenseLinkKind,
+  DayTotalKind,
   ExpenseSortBy,
   ExpenseTotalsView,
   IdeaType,
@@ -389,6 +390,12 @@ export const EXPENSE_SORT_OPTIONS: { value: ExpenseSortBy; text: string }[] = [
   { value: 'day', text: 'Day' },
   { value: 'amount-desc', text: 'Amount (high to low)' },
   { value: 'amount-asc', text: 'Amount (low to high)' },
+];
+
+export const DAY_TOTAL_KIND_OPTIONS: { value: DayTotalKind; label: string }[] = [
+  { value: 'paid', label: 'Paid' },
+  { value: 'expected', label: 'Expected' },
+  { value: 'total', label: 'Total' },
 ];
 
 export const EXPENSE_TOTALS_VIEW_OPTIONS: { value: ExpenseTotalsView; label: string }[] = [

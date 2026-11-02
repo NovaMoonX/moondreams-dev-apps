@@ -314,15 +314,40 @@ export const selectEventSuggestionsForEvent =
 
 const selectIdeasState = (state: RootState) => state.waypoint.ideas;
 
+const selectEventsState = (state: RootState) => state.waypoint.events;
+const selectStaysState = (state: RootState) => state.waypoint.stays;
+
+/** Ids of the events and stays that exist, or `null` until both have loaded for the trip. */
+export const selectLiveItineraryIds = createSelector(
+  [selectEventsState, selectStaysState, (_state: RootState, tripId: string) => tripId],
+  (eventsState, staysState, tripId): ReadonlySet<string> | null =>
+    eventsState.loaded &&
+    staysState.loaded &&
+    eventsState.tripId === tripId &&
+    staysState.tripId === tripId
+      ? new Set([...eventsState.items, ...staysState.items].map((item) => item.id))
+      : null,
+);
+
+/** An idea is on the itinerary while what it became still exists; before that is known, it counts. */
+export function isIdeaOnItinerary(idea: TripIdea, liveIds: ReadonlySet<string> | null): boolean {
+  return (
+    idea.convertedToEntityId !== null && (liveIds === null || liveIds.has(idea.convertedToEntityId))
+  );
+}
+
+export const selectIsIdeaOnItinerary = (state: RootState, idea: TripIdea): boolean =>
+  isIdeaOnItinerary(idea, selectLiveItineraryIds(state, idea.tripId));
+
 /** Decided ideas (already on the itinerary) sink; otherwise most votes first, then newest. */
 export const selectSortedIdeas = createSelector(
-  [selectIdeasState, (_state: RootState, tripId: string) => tripId],
-  (ideasState, tripId): TripIdea[] =>
+  [selectIdeasState, selectLiveItineraryIds, (_state: RootState, tripId: string) => tripId],
+  (ideasState, liveIds, tripId): TripIdea[] =>
     ideasState.tripId !== tripId
       ? []
       : [...ideasState.items].sort(
           (a, b) =>
-            Number(a.convertedToEntityId !== null) - Number(b.convertedToEntityId !== null) ||
+            Number(isIdeaOnItinerary(a, liveIds)) - Number(isIdeaOnItinerary(b, liveIds)) ||
             b.voterUids.length - a.voterUids.length ||
             b.createdAt - a.createdAt,
         ),

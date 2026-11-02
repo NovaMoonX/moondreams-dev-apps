@@ -543,7 +543,13 @@ service cloud.firestore {
           && request.resource.data.convertedToEntityId is string
           && !exists(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
           && existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId))
-          && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId)).data.createdBy == request.auth.uid);
+          && getAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(request.resource.data.convertedToEntityId)).data.createdBy == request.auth.uid)
+        // Whoever may delete that event takes its idea back off the itinerary in the same commit.
+        || (canEditTripPlan(tripId)
+          && resource.data.get('convertedToEntityId', null) is string
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['convertedToEntityId'])
+          && request.resource.data.convertedToEntityId == null
+          && !existsAfter(/databases/$(database)/documents/apps/waypoint/trips/$(tripId)/events/$(resource.data.convertedToEntityId)));
       allow delete: if isIdeaPoster() || isTripAdminOf(tripId);
     }
 

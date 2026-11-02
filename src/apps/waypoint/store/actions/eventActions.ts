@@ -2,7 +2,6 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
   arrayUnion,
   collection,
-  deleteDoc,
   doc,
   runTransaction,
   setDoc,
@@ -508,7 +507,17 @@ export const deleteEvent = createAsyncThunk<
     );
 
     const eventRef = doc(db, 'apps', 'waypoint', 'trips', trip.id, 'events', eventId);
-    await deleteDoc(eventRef);
+    const convertedIdeas = (getState() as RootState).waypoint.ideas.items.filter(
+      (idea) => idea.tripId === trip.id && idea.convertedToEntityId === eventId,
+    );
+    const batch = writeBatch(db);
+    batch.delete(eventRef);
+    convertedIdeas.forEach((idea) =>
+      batch.update(doc(db, 'apps', 'waypoint', 'trips', trip.id, 'ideas', idea.id), {
+        convertedToEntityId: null,
+      }),
+    );
+    await batch.commit();
     await cancelEventReminder(current?.reminderId ?? null);
     return eventId;
   },

@@ -7,7 +7,7 @@ import IdeaCard from '@apps/waypoint/components/IdeaCard';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { IDEA_TYPE_PLURAL_LABELS, IDEA_TYPES } from '@apps/waypoint/constants';
-import { filterIdeasByType, selectSortedIdeas } from '@apps/waypoint/store/selectors';
+import { filterIdeasByType, isIdeaOnItinerary, selectLiveItineraryIds, selectSortedIdeas } from '@apps/waypoint/store/selectors';
 import type { IdeaType, TripSpace } from '@apps/waypoint/types';
 
 interface IdeasSectionProps {
@@ -21,11 +21,12 @@ const ALL_IDEAS = 'ALL';
 
 function IdeasSection({ trip, currentUserId, canAdd, onAdd }: IdeasSectionProps) {
   const ideas = useAppSelector((state) => selectSortedIdeas(state, trip.id));
+  const liveIds = useAppSelector((state) => selectLiveItineraryIds(state, trip.id));
   const [filter, setFilter] = useState<string>(ALL_IDEAS);
   const ideaType = IDEA_TYPES.find((type) => type === filter) ?? null;
   const visibleIdeas = filterIdeasByType(ideas, ideaType);
-  const undecided = visibleIdeas.filter((idea) => idea.convertedToEntityId === null);
-  const onItinerary = visibleIdeas.filter((idea) => idea.convertedToEntityId !== null);
+  const undecided = visibleIdeas.filter((idea) => !isIdeaOnItinerary(idea, liveIds));
+  const onItinerary = visibleIdeas.filter((idea) => isIdeaOnItinerary(idea, liveIds));
 
   const renderCards = (items: typeof visibleIdeas) => (
     <div className='space-y-3'>

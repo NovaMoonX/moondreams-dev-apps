@@ -10,6 +10,7 @@ export type ExpenseTargetType =
   | 'SPECIFIC_MEMBERS';
 export type ExpenseStatus = 'PAID' | 'EXPECTED';
 export type ExpenseSortBy = 'day' | 'amount-desc' | 'amount-asc';
+export type DayTotalKind = 'paid' | 'expected' | 'total';
 export type ExpenseTotalsView = 'per-person' | 'group' | 'me';
 export type ExpenseCategory =
   | 'FOOD'

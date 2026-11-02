@@ -16,6 +16,8 @@ import HelpTip from '@/components/HelpTip';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import DetailSheet from '@/components/DetailSheet';
+import SegmentedControl from '@/components/SegmentedControl';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import { useUserInfo } from '@/hooks/useUserInfo';
@@ -23,6 +25,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { getBucketLabel, getDayCount, getDayLabel, groupByIndexBucket } from '@/utils/dateRangeUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
+  DAY_TOTAL_KIND_OPTIONS,
   EXPENSE_SORT_OPTIONS,
   LIST_SEARCH_THRESHOLD,
   EXPENSE_TOTALS_VIEW_HINTS,
@@ -68,6 +71,7 @@ import {
   type TripExpenseTotals,
 } from '@apps/waypoint/store/selectors';
 import type {
+  DayTotalKind,
   ExpenseSortBy,
   ExpenseStatus,
   ExpenseTotalsView,
@@ -165,6 +169,9 @@ const PERSONAL_PREVIEW_COUNT = 3;
 const EAGER_DAYS = 3;
 const ESTIMATED_ROW_HEIGHT = 72;
 
+const parseDayTotalKind = (stored: unknown): DayTotalKind | null =>
+  DAY_TOTAL_KIND_OPTIONS.find((option) => option.value === stored)?.value ?? null;
+
 const currencyFormatters = new Map<string, Intl.NumberFormat>();
 
 // An en dash, not a hyphen: it lets a long range wrap there instead of overflowing its box.
@@ -254,6 +261,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
   const expenses = useAppSelector(selectTripExpenses);
   const personalExpenses = useAppSelector(selectPersonalExpenses);
   const [sortBy, setSortBy] = useState<ExpenseSortBy>('day');
+  const [dayTotalKind, setDayTotalKind] = useLocalStorageState<DayTotalKind>(
+    'waypoint:dayTotalKind',
+    'total',
+    parseDayTotalKind,
+  );
   const [totalsView, setTotalsView] = useState<ExpenseTotalsView>('per-person');
   const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
   const [dayFilter, setDayFilter] = useState<string[]>([]);
@@ -415,6 +427,11 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
   const dayGroups =
     sortBy === 'day' ? groupByIndexBucket(sortedExpenses, (expense) => expense.dayIndex, dayCount) : null;
+
+  const formatDayTotal = (items: TripExpense[]) => {
+    const dayTotal = computeExpenseTotals(items, memberIds)[dayTotalKind];
+    return formatTotal(dayTotal.min, dayTotal.max, currency);
+  };
 
   const handleSubmit = async (values: ExpenseSubmitValues) => {
     setIsSubmitting(true);
@@ -708,7 +725,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
     );
   };
 
-  const renderExpenseDetail = (expense: TripExpense) => {
+  const renderExpenseDetail = (expense: TripExpense, isRow: boolean) => {
     const splitDescription = describeSplit(expense, memberIds, memberLabel);
     const displayRange = getDisplayRange(expense);
     const multiplier = getPerPersonMultiplier(expense, getSplitMemberIds(expense, memberIds));
@@ -744,6 +761,40 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
       );
     };
 
+    const breakdown = splitBreakdown && (
+      <div className='mt-0.5 space-y-1'>
+        {splitBreakdown.perPersonLabel !== null ? (
+          <div className='flex items-baseline justify-end gap-2'>
+            {!expense.isPerPerson && (
+              <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                {splitBreakdown.perPersonLabel}
+              </p>
+            )}
+            {renderRepaidControl(splitBreakdown.shares.find((share) => share.uid === currentUserId))}
+          </div>
+        ) : (
+          splitBreakdown.shares.map((share) => (
+            <div key={share.uid} className='flex items-baseline justify-end gap-2'>
+              <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
+                {memberLabel(share.uid)} {share.amountLabel}
+              </p>
+              {share.uid === currentUserId && renderRepaidControl(share)}
+            </div>
+          ))
+        )}
+        {splitBreakdown.payerShare && (
+          <p className='text-muted-foreground text-xs'>
+            {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
+          </p>
+        )}
+        {expense.payerUid === currentUserId && repaidNames.length > 0 && (
+          <p className='text-muted-foreground text-right text-xs'>
+            Repaid so far: {repaidNames.join(', ')}
+          </p>
+        )}
+      </div>
+    );
+
     return (
       <>
         <div className='flex min-w-0 gap-3'>
@@ -765,7 +816,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           {expense.note && <p className='text-muted-foreground mt-1 text-sm italic'>{expense.note}</p>}
           </div>
         </div>
-        <div className='col-span-2'>
+        <div className={isRow ? 'text-right' : 'col-span-2'}>
           <p className='whitespace-nowrap font-medium'>
             {formatTotal(displayRange.min, displayRange.max, expense.currency)}
             {expense.isPerPerson && (
@@ -782,42 +833,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
               total for {multiplier} {multiplier === 1 ? 'person' : 'people'}
             </p>
           )}
-          {splitBreakdown && (
-            <div className='mt-0.5 space-y-1'>
-              {splitBreakdown.perPersonLabel !== null ? (
-                <div className='flex items-baseline justify-end gap-2'>
-                  {!expense.isPerPerson && (
-                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
-                      {splitBreakdown.perPersonLabel}
-                    </p>
-                  )}
-                  {renderRepaidControl(
-                    splitBreakdown.shares.find((share) => share.uid === currentUserId),
-                  )}
-                </div>
-              ) : (
-                splitBreakdown.shares.map((share) => (
-                  <div key={share.uid} className='flex items-baseline justify-end gap-2'>
-                    <p className='text-muted-foreground mr-auto whitespace-nowrap text-xs'>
-                      {memberLabel(share.uid)} {share.amountLabel}
-                    </p>
-                    {share.uid === currentUserId && renderRepaidControl(share)}
-                  </div>
-                ))
-              )}
-              {splitBreakdown.payerShare && (
-                <p className='text-muted-foreground text-xs'>
-                  {memberLabel(splitBreakdown.payerShare.uid)} {splitBreakdown.payerShare.amountLabel} (paid it, so their own part)
-                </p>
-              )}
-              {expense.payerUid === currentUserId && repaidNames.length > 0 && (
-                <p className='text-muted-foreground text-right text-xs'>
-                  Repaid so far: {repaidNames.join(', ')}
-                </p>
-              )}
-            </div>
-          )}
+          {!isRow && breakdown}
         </div>
+        {isRow && breakdown && <div className='col-span-2'>{breakdown}</div>}
       </>
     );
   };
@@ -864,10 +882,10 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
 
     const actions = getActions(expense);
     return (
-      <li key={expense.id} className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2 py-3'>
-        {renderExpenseDetail(expense)}
+      <li key={expense.id} className='grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 py-3'>
+        {renderExpenseDetail(expense, true)}
         {actions.length > 0 && (
-          <div className='col-start-2 row-start-1 flex items-start gap-2 self-start'>
+          <div className='col-span-2 flex flex-wrap items-start justify-end gap-2'>
             {actions.map((action) => (
               <Button
                 key={action.key}
@@ -906,7 +924,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 {cluster.items.length} {cluster.items.length === 1 ? 'expense' : 'expenses'}
               </p>
             </div>
-            <p className='text-muted-foreground max-w-32 pr-2 text-right text-sm'>
+            <p className='text-muted-foreground max-w-32 pr-2 text-right text-sm sm:pr-0'>
               {formatTotal(groupTotals.total.min, groupTotals.total.max, currency)}
             </p>
           </div>
@@ -1179,6 +1197,15 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           )}
         </Button>
       </div>
+      {sortBy === 'day' && (
+        <SegmentedControl
+          label='Day totals show'
+          options={DAY_TOTAL_KIND_OPTIONS}
+          value={dayTotalKind}
+          onChange={setDayTotalKind}
+          className='sm:w-72'
+        />
+      )}
       <Drawer
         isOpen={isFilterDrawerOpen}
         onClose={() => setIsFilterDrawerOpen(false)}
@@ -1261,7 +1288,12 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
                 className='defer-offscreen space-y-3'
                 style={{ '--defer-size': `${items.length * ESTIMATED_ROW_HEIGHT}px` } as CSSProperties}
               >
-                <SectionDivider label={getBucketLabel(bucket, trip.startDate)} />
+                <SectionDivider
+                  label={getBucketLabel(bucket, trip.startDate)}
+                  trailing={
+                    <span className='text-muted-foreground text-sm'>{formatDayTotal(items)}</span>
+                  }
+                />
                 <LazyMount eager={dayPosition < EAGER_DAYS} estimatedHeight={items.length * ESTIMATED_ROW_HEIGHT}>
                   <ul className='divide-border divide-y'>{renderClusters(items)}</ul>
                 </LazyMount>
@@ -1351,7 +1383,7 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
         <DetailSheet isOpen={detailExpense !== undefined} onClose={() => setDetailExpenseId(null)} title='Expense'>
           {detailExpense && (
             <div className='space-y-4'>
-              <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense)}</div>
+              <div className='grid grid-cols-[1fr_auto] gap-x-3 gap-y-2'>{renderExpenseDetail(detailExpense, false)}</div>
               {getActions(detailExpense).length > 0 && (
                 <div className='border-border divide-border divide-y rounded-xl border'>
                   {getActions(detailExpense).map((action) => (
