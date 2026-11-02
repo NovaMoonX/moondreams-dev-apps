@@ -715,6 +715,31 @@ export const CHECKLIST_WORDS = {
   tickFailed: 'That tick did not save. Try again.',
 } as const;
 
+/** Under an amount that turns a range into a record: what it usually is. */
+export const VARIES_HINT = (range: string) => `It varies, usually ${range}`;
+
+/** A bill whose amount varies is marked paid with what it really came to, never the planned figure. */
+export const PAID_AMOUNT_WORDS = {
+  title: (name: string) => `What did ${name} come to?`,
+  amount: 'Amount paid',
+  markSub: 'It varies, so say what it came to',
+  rowHint: 'Varies · tick to say what it came to',
+  needsAmount: 'Enter what it came to.',
+  allFromFree: 'Nothing was set aside yet, so it comes out of Free to Spend',
+  aboveRange: (range: string) => `Above its usual ${range}`,
+  belowRange: (range: string) => `Below its usual ${range}`,
+  fromFree: (amount: string) =>
+    `${amount} more than was set aside comes out of Free to Spend`,
+  stays: (amount: string, name: string) =>
+    `${amount} of what was set aside stays with ${name}`,
+  failed: 'It was not marked paid. Nothing was changed.',
+  alreadyPaid: (name: string) => `${name} is already marked paid.`,
+  leftForTick: (names: readonly string[]) =>
+    names.length === 1
+      ? `${names[0]} varies, so tick it to say what it came to`
+      : `${names.length} bills vary, so tick each to say what it came to`,
+} as const;
+
 export const BILL_WORDS = {
   paid: 'Paid',
   paidAhead: 'Paid ahead',

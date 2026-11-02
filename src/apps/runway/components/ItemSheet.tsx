@@ -43,6 +43,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
   ActionSection,
   ActionTitle,
@@ -65,6 +66,7 @@ import {
   GOAL_CHART_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
+  PAID_AMOUNT_WORDS,
   FORM_FLOW_WORDS,
   GROUP_WORDS,
   ENVELOPE_SPEND_WORDS,
@@ -331,6 +333,7 @@ function ItemSheet({
     onMarked,
     onUndone,
   });
+  const [isAskingPaid, setIsAskingPaid] = useState(false);
 
   if (!version || version.kind === 'group') return null;
   const payload = version.payload;
@@ -849,20 +852,35 @@ function ItemSheet({
             subtitle={
               paid.isPaid
                 ? undefined
-                : paidWithCard !== null
-                  ? CARD_WORDS.chargedTo(paidWithCard)
-                  : payment.fundedCents >= payment.totalCents
-                    ? ITEM_SHEET_WORDS.paidFromSetAside
-                    : mask(
-                        ITEM_SHEET_R2_WORDS.paidFromFreeText(
-                          formatCentsShort(
-                            payment.totalCents - payment.fundedCents,
+                : paid.needsAmount
+                  ? PAID_AMOUNT_WORDS.markSub
+                  : paidWithCard !== null
+                    ? CARD_WORDS.chargedTo(paidWithCard)
+                    : payment.fundedCents >= payment.totalCents
+                      ? ITEM_SHEET_WORDS.paidFromSetAside
+                      : mask(
+                          ITEM_SHEET_R2_WORDS.paidFromFreeText(
+                            formatCentsShort(
+                              payment.totalCents - payment.fundedCents,
+                            ),
                           ),
-                        ),
-                      )
+                        )
             }
             isDisabled={paid.isBusy}
-            onClick={() => void (paid.isPaid ? paid.undo() : paid.mark())}
+            onClick={() => {
+              if (paid.isPaid) void paid.undo();
+              else if (paid.needsAmount) setIsAskingPaid(true);
+              else void paid.mark();
+            }}
+          />
+        )}
+        {isAskingPaid && payment && (
+          <PaidAmountSheet
+            billId={itemId}
+            billName={payload.name}
+            payment={payment}
+            onMark={paid.mark}
+            onClose={() => setIsAskingPaid(false)}
           />
         )}
         {isFunded && (

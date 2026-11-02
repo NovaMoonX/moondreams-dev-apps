@@ -517,6 +517,8 @@ export interface BillPayment {
   fundedDays: number;
   /** What marking it paid today would use from what the bill holds, money set aside after its due date included; `fundedCents` when no day is given. */
   heldNowCents: Cents;
+  /** The most marking it paid today could use from what the bill holds, for an amount other than the planned one (a bill that varies). */
+  heldMostCents: Cents;
   /** The mark that paid it, or null while it is unpaid; a paid payment asks nothing more. */
   paid: PaidPayment | null;
 }
@@ -542,12 +544,13 @@ export function planBillPayments(
     dueOn: DateOnly,
     fundedCents: Cents,
     paid: PaidPayment | null,
+    forCents: Cents = amountCents,
   ) =>
     options.today === undefined || paid !== null
       ? fundedCents
       : getHeldForPayment(
           progress,
-          { dueOn, amountCents, paidOn: options.today },
+          { dueOn, amountCents: forCents, paidOn: options.today },
           options.startDate ?? null,
         );
   const progress = bill.progress ?? NO_PROGRESS;
@@ -561,6 +564,18 @@ export function planBillPayments(
           stance: billStance,
           isOwnStance: Boolean(bill.stanceOverride),
         };
+  const getHeld = (
+    dueOn: DateOnly,
+    fundedCents: Cents,
+    paid: PaidPayment | null,
+  ) => {
+    const heldNowCents = getHeldNow(dueOn, fundedCents, paid);
+    const heldMostCents =
+      ranged === null
+        ? heldNowCents
+        : getHeldNow(dueOn, fundedCents, paid, Number.MAX_SAFE_INTEGER);
+    return { heldNowCents, heldMostCents };
+  };
   const dues = occurrences(
     bill.schedule,
     bill.ending,
@@ -624,7 +639,7 @@ export function planBillPayments(
             })),
         fundedCents,
         fundedDays: countFundedDays(progress.funded),
-        heldNowCents: getHeldNow(dueOn, fundedCents, paid),
+        ...getHeld(dueOn, fundedCents, paid),
         paid,
       };
     });
@@ -687,7 +702,7 @@ export function planBillPayments(
             })),
       fundedCents,
       fundedDays: countFundedDays(confirmed),
-      heldNowCents: getHeldNow(dueOn, fundedCents, paid),
+      ...getHeld(dueOn, fundedCents, paid),
       paid,
     };
   });
