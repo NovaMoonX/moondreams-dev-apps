@@ -16,6 +16,32 @@ import {
   type SalePageResult,
 } from './salePageView.js';
 
+const LISTING_TTL_MS = 30_000;
+const MAX_CACHED_LINKS = 50;
+
+const listings = new Map<string, { at: number; paths: Set<string> }>();
+
+/** The copies in a link's folder, listed at most once per 30 seconds per instance; an empty folder is never kept, so copies that have just been made show on the next call. */
+async function listCopyPaths(linkId: string) {
+  const kept = listings.get(linkId);
+  if (kept !== undefined && Date.now() - kept.at < LISTING_TTL_MS) {
+    return kept.paths;
+  }
+
+  const [files] = await getStorage()
+    .bucket()
+    .getFiles({ prefix: publicFolder(linkId) });
+  const paths = new Set(files.map((file) => file.name));
+  listings.delete(linkId);
+  if (paths.size > 0) {
+    listings.set(linkId, { at: Date.now(), paths });
+    [...listings.keys()]
+      .slice(0, Math.max(0, listings.size - MAX_CACHED_LINKS))
+      .forEach((key) => listings.delete(key));
+  }
+  return paths;
+}
+
 async function readPage(
   linkId: unknown,
   uid: string | undefined,
@@ -44,9 +70,7 @@ async function readPage(
     .orderBy('createdAt', 'desc')
     .limit(SALE_PAGE_LIMITS.MAX_PAGE_THINGS)
     .get();
-  const [copies] = await getStorage()
-    .bucket()
-    .getFiles({ prefix: publicFolder(linkId) });
+  const paths = await listCopyPaths(linkId);
   const members: unknown = sale.get('members');
   const isMember =
     uid !== undefined && Array.isArray(members) && members.includes(uid);
@@ -54,7 +78,7 @@ async function readPage(
     sale.data(),
     items.docs.map((item) => item.data()),
     isMember,
-    { saleId, linkId, paths: new Set(copies.map((file) => file.name)) },
+    { saleId, linkId, paths },
   );
 }
 
@@ -74,6 +98,9 @@ export const getSalePage = onCall(
   },
   async (request): Promise<SalePageResult> => {
     const linkId = isRecord(request.data) ? request.data.linkId : null;
-    return sealPage(await readPage(linkId, request.auth?.uid));
+    return sealPage(
+      await readPage(linkId, request.auth?.uid),
+      isLinkId(linkId) ? linkId : null,
+    );
   },
 );

@@ -17,7 +17,7 @@ export const syncSalePublicPhotos = onDocumentWritten(
   async (event) => {
     const { saleId, itemId } = event.params;
     const counts = await syncThingCopies(saleId, itemId);
-    if (counts.made + counts.deleted + counts.skipped > 0) {
+    if (counts.made + counts.deleted + counts.skipped + counts.failed > 0) {
       logger.info('goingOnce.copies.synced', counts);
     }
   },

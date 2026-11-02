@@ -18,9 +18,7 @@ interface BuyerThingDrawerProps {
 
 /** A thing's public details in a drawer (a modal from `sm`): only the fields the page is allowed to carry. */
 function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
-  const photos = usePublicPhotoUrls(thing.photos, 'm').flatMap(({ id, url }) =>
-    url === null ? [] : [{ id, url }],
-  );
+  const photos = usePublicPhotoUrls(thing.photos, 'm');
   const facts = [
     thing.condition === null ? null : CONDITION_LABELS[thing.condition],
     thing.brandModel,
@@ -44,7 +42,7 @@ function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
       }
     >
       <div className='space-y-4'>
-        {photos.length > 0 ? (
+        {thing.photos.length > 0 ? (
           <PhotoStrip photos={photos} label={thing.title} />
         ) : (
           <div className='bg-accent/60 text-accent-foreground grid h-48 w-full place-items-center rounded-2xl'>

@@ -87,7 +87,7 @@ const LINK_ID_PATTERN = /^[2-9a-hj-np-z]{26}$/;
 const SAFE_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
 const PHOTO_ID_PATTERN = /^[A-Za-z0-9-]{8,40}$/;
 const COPY_PATH_PATTERN =
-  /^apps\/going-once\/public\/[2-9a-hj-np-z]{26}\/[A-Za-z0-9_-]{1,128}\/[A-Za-z0-9-]{8,40}-(?:s|m)\.webp$/;
+  /^apps\/going-once\/public\/([2-9a-hj-np-z]{26})\/([A-Za-z0-9_-]{1,128})\/([A-Za-z0-9-]{8,40})-(s|m)\.webp$/;
 const MAX_CENTS = 10_000_000_000;
 
 export const isLinkId = (value: unknown): value is string =>
@@ -259,8 +259,42 @@ export const orderThings = (things: PublicThing[]) => [
   ...things.filter((thing) => thing.status === 'PENDING'),
 ];
 
-/** The final pass: every field of the answer is copied by name once more, so nothing a later edit adds to a shaped object can leave. */
-export function sealPage(page: SalePageResult): SalePageResult {
+const readCopyPath = (value: unknown) => {
+  const match =
+    typeof value === 'string' ? COPY_PATH_PATTERN.exec(value) : null;
+  return match === null
+    ? null
+    : { linkId: match[1], itemId: match[2], photoId: match[3], size: match[4] };
+};
+
+/** A photo leaves only when both paths sit in this link's folder, under this thing, are the same photo, and `s` is the small size and `m` the large. */
+const sealPhoto = (photo: unknown, linkId: string, itemId: string) => {
+  const small = isRecord(photo) ? readCopyPath(photo.s) : null;
+  const large = isRecord(photo) ? readCopyPath(photo.m) : null;
+  return small !== null &&
+    large !== null &&
+    isRecord(photo) &&
+    typeof photo.s === 'string' &&
+    typeof photo.m === 'string' &&
+    small.size === 's' &&
+    large.size === 'm' &&
+    small.linkId === linkId &&
+    large.linkId === linkId &&
+    small.itemId === itemId &&
+    large.itemId === itemId &&
+    small.photoId === large.photoId
+    ? [{ s: photo.s, m: photo.m }]
+    : [];
+};
+
+/**
+ * The final pass: every field of the answer is copied by name once more, so nothing a later edit adds to a shaped object can leave.
+ * `linkId` is the link the page was asked for; a photo path from any other link or thing is dropped.
+ */
+export function sealPage(
+  page: SalePageResult,
+  linkId: string | null,
+): SalePageResult {
   if (page.status !== 'ok') {
     return NOT_FOUND_RESULT;
   }
@@ -294,17 +328,12 @@ export function sealPage(page: SalePageResult): SalePageResult {
       askingPriceCents,
       originalPriceCents: toCents(thing.originalPriceCents),
       status,
-      photos: (Array.isArray(thing.photos) ? thing.photos : [])
-        .slice(0, MAX_COPIED_PHOTOS)
-        .flatMap((photo: unknown) =>
-          isRecord(photo) &&
-          typeof photo.s === 'string' &&
-          typeof photo.m === 'string' &&
-          COPY_PATH_PATTERN.test(photo.s) &&
-          COPY_PATH_PATTERN.test(photo.m)
-            ? [{ s: photo.s, m: photo.m }]
-            : [],
-        ),
+      photos:
+        linkId === null || !Array.isArray(thing.photos)
+          ? []
+          : thing.photos
+              .slice(0, MAX_COPIED_PHOTOS)
+              .flatMap((photo: unknown) => sealPhoto(photo, linkId, thing.id)),
     };
     return isSafeId(sealed.id) ? [sealed] : [];
   });
@@ -332,10 +361,13 @@ export function toSalePage(
     const thing = toPublicThing(item, listing);
     return thing === null ? [] : [thing];
   });
-  return sealPage({
-    status: 'ok',
-    sale: publicSale,
-    things: orderThings(things).slice(0, SALE_PAGE_LIMITS.MAX_PAGE_THINGS),
-    isMember,
-  });
+  return sealPage(
+    {
+      status: 'ok',
+      sale: publicSale,
+      things: orderThings(things).slice(0, SALE_PAGE_LIMITS.MAX_PAGE_THINGS),
+      isMember,
+    },
+    listing?.linkId ?? null,
+  );
 }

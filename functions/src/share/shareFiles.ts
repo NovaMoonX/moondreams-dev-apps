@@ -13,6 +13,12 @@ export const describeError = (error: unknown) =>
     ? String(error.code)
     : 'unknown';
 
+const isAlreadyThere = (error: unknown) =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error.code === 412 || error.code === 409);
+
 /** Copies one file under its own download token, so the copy never shares an address with the original; false when there is nothing to copy, and a failed copy throws. */
 export async function copyFileUnderNewToken(fromPath: string, toPath: string) {
   const bucket = getStorage().bucket();
@@ -30,22 +36,30 @@ export async function copyFileUnderNewToken(fromPath: string, toPath: string) {
   return true;
 }
 
-/** Saves bytes as a new file under its own download token, replacing any file at the path. */
+/** Saves bytes as a new file under its own download token, never replacing one: false when a file is already at the path, so an address someone holds keeps working. */
 export async function saveFileUnderNewToken(
   path: string,
   data: Buffer,
   contentType: string,
 ) {
-  await getStorage()
+  return getStorage()
     .bucket()
     .file(path)
     .save(data, {
       contentType,
       resumable: false,
+      preconditionOpts: { ifGenerationMatch: 0 },
       metadata: {
         cacheControl: 'public, max-age=31536000',
         metadata: { firebaseStorageDownloadTokens: randomUUID() },
       },
+    })
+    .then(() => true)
+    .catch((error: unknown) => {
+      if (isAlreadyThere(error)) {
+        return false;
+      }
+      throw error;
     });
 }
 

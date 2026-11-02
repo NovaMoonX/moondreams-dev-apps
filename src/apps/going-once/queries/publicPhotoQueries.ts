@@ -13,17 +13,18 @@ const copyUrlQueryOptions = (path: string) =>
     retry: 1,
   });
 
-/** The addresses of one size of a thing's public copies, in the thing's order; `url` is null until one arrives. */
+/** The addresses of one size of a thing's public copies, in the thing's order; `url` is null until one arrives, and `isMissing` says it could not be found. */
 export function usePublicPhotoUrls(
   photos: PublicPhoto[],
   size: keyof PublicPhoto,
-): { id: string; url: string | null }[] {
+): { id: string; url: string | null; isMissing: boolean }[] {
   return useQueries({
     queries: photos.map((photo) => copyUrlQueryOptions(photo[size])),
     combine: (results) =>
       results.map((result, index) => ({
         id: photos[index][size],
         url: result.data ?? null,
+        isMissing: result.isError,
       })),
   });
 }

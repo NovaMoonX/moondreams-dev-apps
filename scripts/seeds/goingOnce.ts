@@ -398,6 +398,14 @@ const SEED_THINGS: SeedThing[] = [
     }),
   },
   {
+    id: 'wall-mirror',
+    title: 'Wall mirror',
+    photoCount: 1,
+    condition: 'LIKE_NEW',
+    askingPriceCents: 4500,
+    floorPriceCents: null,
+  },
+  {
     id: 'bluetooth-speaker',
     title: 'Bluetooth speaker',
     photoCount: 1,
@@ -424,13 +432,16 @@ const getSeedBucket = () =>
   process.env.VITE_FIREBASE_STORAGE_BUCKET ??
   'moondreams-dev-apps.firebasestorage.app';
 
+const getStorageEmulatorHost = () =>
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+
 /** Makes the seeded sale's public photo copies with the same code the trigger runs, so the seeded page shows photos even when the Functions emulator is down or points at another bucket. Emulators only. */
 async function makeSeedCopies() {
   process.env.FIREBASE_CONFIG ??= JSON.stringify({
     projectId: process.env.GCLOUD_PROJECT ?? 'moondreams-dev-apps',
     storageBucket: getSeedBucket(),
   });
-  process.env.FIREBASE_STORAGE_EMULATOR_HOST ??= '127.0.0.1:9199';
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = getStorageEmulatorHost();
   const { syncSaleCopies } =
     await import('../../functions/src/apps/going-once/salePhotoCopies.ts');
   return syncSaleCopies(SALE_ID);
@@ -439,7 +450,7 @@ async function makeSeedCopies() {
 /** Uploads a seeded photo to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
 export async function uploadSeedPhoto(path: string, colorIndex: number) {
   const bucket = getSeedBucket();
-  const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+  const host = getStorageEmulatorHost();
   const body = Buffer.concat([
     JPEG_START,
     Buffer.from(JPEG_ENDS[colorIndex % JPEG_ENDS.length], 'hex'),
@@ -563,10 +574,15 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     );
   }
 
-  const copies = await makeSeedCopies().catch(() => null);
-  if (copies === null) {
+  const copies = await makeSeedCopies().catch((error: unknown) => {
     console.warn(
-      'Going Once seed: the public page has no photo copies yet; the Functions emulator makes them when it runs.',
+      `Going Once seed: the public page has no photo copies yet; the Functions emulator makes them when it runs. (${error instanceof Error ? error.message : String(error)})`,
+    );
+    return null;
+  });
+  if (copies !== null && copies.failed > 0) {
+    console.warn(
+      `Going Once seed: ${copies.failed} photo copies failed; see the log lines above.`,
     );
   }
 

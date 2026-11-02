@@ -18,6 +18,21 @@ const notFound = () =>
     "We couldn't find this sale. It may already be deleted.",
   );
 
+/** The copy sweep stops starting things this long after the call began, well inside the function's timeout. */
+const SWEEP_BUDGET_MS = 200_000;
+
+async function sweepCopies(saleId: string, action: LinkAction, from: number) {
+  const counts = await syncSaleCopies(saleId, from + SWEEP_BUDGET_MS).catch(
+    (error: unknown) => {
+      logger.error('goingOnce.link.copyFailed', { code: describeError(error) });
+      return null;
+    },
+  );
+  if (counts !== null) {
+    logger.info('goingOnce.link.copied', { action, ...counts });
+  }
+}
+
 const toCurrentId = (value: unknown) =>
   typeof value === 'string' && value !== '' ? value : null;
 
@@ -39,7 +54,7 @@ async function removeOldFiles(linkId: string | null) {
   });
 }
 
-/** On renew the old folder goes only after the new address has its copies; the old record is already gone, so a failure here is logged and never undoes the renewal. */
+/** On renew the old record is already gone, so the old folder is removed on its own, before any copying, and a failure here is logged and never undoes the renewal. */
 async function removeRetiredFolder(linkId: string | null) {
   if (linkId === null) {
     return;
@@ -54,6 +69,7 @@ async function removeRetiredFolder(linkId: string | null) {
 }
 
 async function changeLink(uid: string, saleId: string, action: LinkAction) {
+  const startedAt = Date.now();
   const before = await saleRef(saleId).get();
   if (!before.exists || before.get('ownerUid') !== uid) {
     throw notFound();
@@ -68,6 +84,7 @@ async function changeLink(uid: string, saleId: string, action: LinkAction) {
 
   const oldId = toCurrentId(before.get('publicLinkId'));
   if (action === 'create' && oldId !== null) {
+    await sweepCopies(saleId, action, startedAt);
     return { linkId: oldId };
   }
   if (action === 'stop' && oldId === null) {
@@ -106,12 +123,11 @@ async function changeLink(uid: string, saleId: string, action: LinkAction) {
       publicLinkChangedAt: newId === null ? null : now,
     });
   });
-  if (newId !== null) {
-    const counts = await syncSaleCopies(saleId);
-    logger.info('goingOnce.link.copied', { action, ...counts });
-  }
   if (action === 'renew') {
     await removeRetiredFolder(oldId);
+  }
+  if (newId !== null) {
+    await sweepCopies(saleId, action, startedAt);
   }
   logger.info('goingOnce.link.changed', {
     action,
@@ -122,7 +138,7 @@ async function changeLink(uid: string, saleId: string, action: LinkAction) {
 
 /**
  * Turns the sale's public page on, gives it a new address or turns it off, for the seller only. A missing sale, someone else's and a co-seller's call all answer one `not-found`.
- * On stop, files go before the record they belong to; on create and renew the new address's photo copies are made before the call returns (renew then removes the old folder), and the sale's own fields are written only here: `firestore.rules` refuses every client write to them.
+ * On stop, files go before the record they belong to; on renew the old folder goes right after the swap; on create and renew the new address's photo copies are then made within a time budget before the call returns, and a create on a page that is already on runs that sweep again. The sale's own fields are written only here: `firestore.rules` refuses every client write to them.
  */
 export const changeSalePublicLink = onCall(
   {

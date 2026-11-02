@@ -273,7 +273,7 @@ check(
         { ...page.things[0], status: 'SOLD' },
       ],
     };
-    const sealed = sealPage(tampered as never);
+    const sealed = sealPage(tampered as never, null);
     assert.ok(sealed.status === 'ok');
     assert.deepEqual(Object.keys(sealed).sort(), [
       'isMember',
@@ -298,9 +298,9 @@ check(
       toSalePage(sale({ name: '' }), [thing()], false),
       NOT_FOUND_RESULT,
     );
-    assert.deepEqual(sealPage(NOT_FOUND_RESULT), NOT_FOUND_RESULT);
+    assert.deepEqual(sealPage(NOT_FOUND_RESULT, null), NOT_FOUND_RESULT);
     assert.equal(
-      JSON.stringify(sealPage({ status: 'gone' } as never)),
+      JSON.stringify(sealPage({ status: 'gone' } as never, null)),
       JSON.stringify(NOT_FOUND_RESULT),
     );
   },
@@ -451,7 +451,7 @@ check(
         },
       ],
     };
-    const sealed = sealPage(tampered as never);
+    const sealed = sealPage(tampered as never, LINK);
     assert.ok(sealed.status === 'ok');
     assert.equal(sealed.things[0].photos.length, 2);
     assert.deepEqual(Object.keys(sealed.things[0].photos[1]).sort(), [
@@ -459,6 +459,57 @@ check(
       's',
     ]);
     assert.ok(!JSON.stringify(sealed).includes('secret-extra'));
+  },
+);
+
+check(
+  'the final pass drops a path from another link or thing, a swapped size and two different photos',
+  () => {
+    const own = (id: string, size: 's' | 'm') =>
+      publicCopyPath(LINK, 'gray-sofa', id, size);
+    const OTHER_LINK = 'seedsalefall23456789abcdeh';
+    const page = toSalePage(
+      sale(),
+      [thing({ photos: [listedPhoto(PHOTO_A)] })],
+      false,
+      copyListing([PHOTO_A]),
+    );
+    assert.ok(page.status === 'ok');
+    const seal = (photos: unknown[], linkId: string | null = LINK) => {
+      const sealed = sealPage(
+        { ...page, things: [{ ...page.things[0], photos }] } as never,
+        linkId,
+      );
+      assert.ok(sealed.status === 'ok');
+      return sealed.things[0].photos.length;
+    };
+    const good = { s: own(PHOTO_A, 's'), m: own(PHOTO_A, 'm') };
+    assert.equal(seal([good]), 1);
+    assert.equal(seal([good], OTHER_LINK), 0, 'a path under another link');
+    assert.equal(seal([good], null), 0, 'a page with no link');
+    assert.equal(
+      seal([
+        { s: publicCopyPath(OTHER_LINK, 'gray-sofa', PHOTO_A, 's'), m: good.m },
+      ]),
+      0,
+      'one path under another link',
+    );
+    assert.equal(
+      seal([
+        {
+          s: publicCopyPath(LINK, 'other-thing', PHOTO_A, 's'),
+          m: publicCopyPath(LINK, 'other-thing', PHOTO_A, 'm'),
+        },
+      ]),
+      0,
+      'paths under another thing',
+    );
+    assert.equal(seal([{ s: good.m, m: good.s }]), 0, 'sizes swapped');
+    assert.equal(
+      seal([{ s: own(PHOTO_A, 's'), m: own(PHOTO_B, 'm') }]),
+      0,
+      'two different photos',
+    );
   },
 );
 
