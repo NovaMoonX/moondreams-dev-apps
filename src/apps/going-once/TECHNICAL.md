@@ -72,7 +72,7 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 - `ItemPhoto = { id; path; width; height; sizeBytes; createdAt }`. Array order is display order; index 0 is the cover. **Up to 12 per thing**, enforced in the client, the trigger (copies only the first 12) and the zip.
 - `ItemPendingRecord = { inquiryId: string | null; buyerName: string | null; pickupOn: number | null; markedBy: string; markedAt: number }`. `buyerName` is a typed name for "Someone else" or the inquiry's name copied in; `pickupOn` is date-only. Cleared on Back to Available and on Sold.
 - `ItemSaleRecord = { priceCents: number; method: PaymentMethod | null; soldOn: number; buyerName: string | null; markedBy: string; markedAt: number }`, `PaymentMethod = 'CASH' | 'VENMO' | 'ZELLE' | 'OTHER'`, `soldOn` date-only. Cleared by Not sold after all.
-- `StatusChange = { status: ItemStatus; byUid: string; at: number; priceCents: number | null }`, appended in the status transaction, last 50 kept.
+- `StatusChange = { status: ItemStatus; byUid: string; at: number; priceCents: number | null; fromPriceCents: number | null }`, appended in the status transaction, last 50 kept. `status` is the status after the change; `priceCents` is what was paid on a sale, and `fromPriceCents` is the figure a correction replaced (so Change what was paid reads "$170 → $160"). A thing's history rows are described from these alone (`describeStatusChange`).
 - `buyerName` on these records is a buyer's personal data, so the 30-day purge clears it too.
 - **Not listed yet** is derived, never stored: `isListable(item) = photos.length > 0 && title !== '' && askingPriceCents !== null`. One pure helper in `utils/`, mirrored in the functions (they can't import `src/`); a check script fails on drift, like `scripts/checks/pinchShare.ts`.
 - **Sold under your floor price** is derived at render.
@@ -128,6 +128,8 @@ AVAILABLE | PENDING → SOLD   (writes `sale`, clears `pending`)
 SOLD → AVAILABLE             (Not sold after all: clears `sale`)
 AVAILABLE | PENDING → WITHDRAWN → AVAILABLE   (Take off the list / Put back on the list)
 ```
+
+**Built in `store/actions/statusActions.ts`** (`changeStatus`, one function for the seven transitions: Mark pending, Back to available, Mark sold, Not sold after all, Take off the list, Put back on the list, Change what was paid). It checks `navigator.onLine` first and treats an `unavailable` error the same ("Changing the status needs a connection."); the name in a refusal is the first name from `users/{uid}` of whoever last appears in `statusHistory`, "You" for the person themselves and "Someone" for a profile that holds an email. Take off the list clears `pending`; undoing it passes the hold back (`restorePending`) so a held thing returns held. **No rules change:** members already update every field of a thing (only `createdAt`, `saleId`, `id` are fixed), and the co-seller delete clause already reads `sale` and `pending` by these names. The finished-sale check below joins the same transaction when the sale has a finished state; until then `changeStatus` has the one place to add it.
 
 Each transition is one `runTransaction` that re-reads the thing and aborts with a readable message when the status it expected is gone ("Theo already marked this sold for $120", the name from `users`). It writes the new status, the record or its clearing, `lastEditedBy`/`At`, and appends to `statusHistory` from its own read (capped, so not `arrayUnion`). Correcting a sold price or day is its own transaction that aborts unless the thing is still `SOLD`. A status change fails offline with a clear line, on purpose: the race it guards is two people promising one thing (`state-data.md` "A picker never writes").
 
@@ -387,16 +389,16 @@ src/apps/going-once/
   components/
     sales/        SalesList, SaleFormSheet, SaleTab (StatTiles, LinkCard, People, Details, Finish, Delete)
     things/       ThingRow, StatusDot, PriceTag, ThingDrawer (getThingOffer), ThingForm (Modify), MarkPendingView,
-                  MarkSoldView, HistoryView, NewThingFlow (QuestionFlow), ThingQuestions + thingRows (the questions
+                  MarkSoldView, SoldConfirmation, ChangePaidView, HistoryView, StatusViewFooter, DeleteThingConfirm, NewThingFlow (QuestionFlow), ThingQuestions + thingRows (the questions
                   both share, and each row's label, fields and summary), ItemsSection (search, sort, the door)
     inbox/        InboxTab, InquiryRow, InquiryDrawer, PushCapsule
     people/       PeopleSection, AddCoSellerSheet, CoSellerIntro
     relist/       CopyListingTextRow, SavePhotosRow, SaveAllPhotosSheet
     public/       BuyerCard, BuyerThingDrawer, InterestView
-  hooks/          useGoingOnceSync.ts, useGoingOnceUrlState.ts, useDeleteThing.ts (the confirm and the delete), useThingInquiries.ts (drawer-only listener)
+  hooks/          useGoingOnceSync.ts, useGoingOnceUrlState.ts, useDeleteThing.tsx (the E2 confirm and the delete), usePersonNames.ts, useThingInquiries.ts (drawer-only listener)
   store/          index.ts (slice), listeners/, actions/, selectors.ts
   queries/        photoUrlQueries.ts (a photo's download address), salePageQueries.ts, inquiryQueries.ts
-  utils/          listing.ts (isListable, canDeleteItem, sortItems, listingText), thingAnswers.ts (answers <-> stored fields), totals.ts
+  utils/          listing.ts (isListable, canDeleteItem, sortItems, getDeleteEffects, listingText), status.ts (getThingOffer, getStatusSummary and its formatters, describeStatusChange), personName.ts, thingAnswers.ts (answers <-> stored fields), totals.ts
 functions/src/apps/going-once/
   salePageView.ts (allowlist, limits, mirrored constants), getSalePage.ts, changeSalePublicLink.ts,
   syncSalePublicPhotos.ts, submitSaleInterest.ts, notifySaleInquiry.ts, buildSalePhotoArchive.ts,

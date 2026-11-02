@@ -1,4 +1,10 @@
-import { EMPTY_OPTIONALS, JPEG_SIZE, uploadSeedPhoto } from './goingOnce.ts';
+import {
+  buildSeedStatus,
+  EMPTY_OPTIONALS,
+  JPEG_SIZE,
+  uploadSeedPhoto,
+  type SeedStatus,
+} from './goingOnce.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -35,6 +41,39 @@ const NOUNS = [
 ];
 const MATERIALS = ['oak', 'steel', 'walnut', 'wicker', 'glass', 'linen'];
 
+const BUYERS = ['Nate', 'Dev', 'Priya', 'Marcus', 'Lena'];
+const METHODS = ['CASH', 'VENMO', 'ZELLE', 'OTHER'] as const;
+
+/** Four Pending (one with a long name), eight Sold and three taken off the list; the rest stay Available. */
+const buildStatus = (
+  index: number,
+  people: { maya: string; theo: string },
+): SeedStatus => {
+  if (index % 12 === 3)
+    return {
+      kind: 'PENDING',
+      by: people.theo,
+      buyerName:
+        index === 3
+          ? 'Alexandra Wilhelmina Featherstonehaugh-Smythe'
+          : BUYERS[index % BUYERS.length],
+      pickup: index % 24 === 15 ? null : 'saturday',
+      daysAgo: 1 + (index % 3),
+    };
+  if (index % 6 === 2)
+    return {
+      kind: 'SOLD',
+      by: index % 4 === 2 ? people.maya : people.theo,
+      priceCents: (4 + ((index * 5) % 40)) * 500,
+      method: index % 8 === 2 ? null : METHODS[index % METHODS.length],
+      daysAgo: 1 + (index % 5),
+      heldFor: index % 4 === 0 ? BUYERS[index % BUYERS.length] : undefined,
+    };
+  if ([7, 19, 43].includes(index))
+    return { kind: 'WITHDRAWN', by: people.maya, daysAgo: 1 + (index % 4) };
+  return { kind: 'AVAILABLE' };
+};
+
 const buildThing = (index: number) => {
   const noun = NOUNS[index % NOUNS.length];
   const material = MATERIALS[(index * 3) % MATERIALS.length];
@@ -65,6 +104,7 @@ export async function seedGoingOnceScale(
   context: SeedContext,
 ): Promise<SeedResult> {
   const maya = FIXTURE_USERS.goingOnceSeller;
+  const theo = FIXTURE_USERS.goingOnceCoSeller;
   const sale = context.firestore
     .collection('apps')
     .doc('going-once')
@@ -79,7 +119,7 @@ export async function seedGoingOnceScale(
     currency: 'USD',
     ownerUid: maya.uid,
     createdBy: maya.uid,
-    members: [maya.uid],
+    members: [maya.uid, theo.uid],
     createdAt: context.now - 9 * DAY_MS,
     lastEditedAt: null,
   });
@@ -116,7 +156,10 @@ export async function seedGoingOnceScale(
           ...EMPTY_OPTIONALS,
           ...thing.optionals,
           photos,
-          status: 'AVAILABLE',
+          ...buildSeedStatus(
+            buildStatus(index, { maya: maya.uid, theo: theo.uid }),
+            context.now,
+          ),
           createdBy: maya.uid,
           createdAt,
           lastEditedAt: null,

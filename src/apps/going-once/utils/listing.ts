@@ -4,6 +4,10 @@ import {
   type ITEM_SORT_OPTIONS,
 } from '@apps/going-once/constants';
 import type { Item } from '@apps/going-once/types';
+import {
+  formatCollectedChange,
+  formatPickupWeekday,
+} from '@apps/going-once/utils/status';
 
 export type ItemSort = (typeof ITEM_SORT_OPTIONS)[number]['value'];
 
@@ -53,13 +57,24 @@ export function formatAddedAgo(createdAt: number, now: number): string {
   return `You added it ${minutes} ${minutes === 1 ? 'minute' : 'minutes'} ago`;
 }
 
-/** What goes with a thing when it is deleted, for the confirm. Holds, inquiries and Sold totals join this list with the issues that add them. */
-export function getDeleteEffects(item: Pick<Item, 'photos'>): string[] {
+/** What goes with a thing when it is deleted, for the confirm: its hold, the effect on Collected, its photos. Inquiries join this list with the inbox. */
+export function getDeleteEffects(
+  item: Pick<Item, 'photos' | 'status' | 'pending' | 'sale'>,
+  collectedCents: number,
+): string[] {
   const count = item.photos.length;
-  if (count === 0) return [];
+  const { pending, sale } = item;
   return [
-    `${count === 1 ? 'Its photo goes' : `Its ${count} photos go`} with it.`,
-  ];
+    item.status === 'PENDING' && pending !== null
+      ? `${pending.buyerName ?? 'Someone'} is set to pick this up${pending.pickupOn === null ? '' : ` ${formatPickupWeekday(pending.pickupOn)}`}.`
+      : null,
+    item.status === 'SOLD' && sale !== null
+      ? `${formatCollectedChange(collectedCents, collectedCents - sale.priceCents)}.`
+      : null,
+    count === 0
+      ? null
+      : `${count === 1 ? 'Its photo goes' : `Its ${count} photos go`} with it.`,
+  ].filter((effect) => effect !== null);
 }
 
 /** Things in the order asked for; newest first is the order they arrive in, a thing with no price goes last by price. */

@@ -1,4 +1,8 @@
-import type { ItemCondition } from '@apps/going-once/types';
+import type {
+  ItemCondition,
+  ItemStatus,
+  PaymentMethod,
+} from '@apps/going-once/types';
 
 /** The feature switch for starting new sales (`FEATURE_GATES`). */
 export const CREATE_SALES_GATE_ID = 'create-sales';
@@ -30,6 +34,10 @@ export const MAX_ITEM_BRAND_LENGTH = 80;
 export const MAX_ITEM_SIZE_LENGTH = 80;
 export const MAX_BOUGHT_FROM_LENGTH = 120;
 export const MAX_ITEM_NOTES_LENGTH = 1000;
+export const MAX_BUYER_NAME_LENGTH = 80;
+
+/** How many status changes a thing keeps. */
+export const MAX_STATUS_HISTORY = 50;
 
 /** How long after adding a thing its co-seller can still delete it; `firestore.rules` holds the same ten minutes. */
 export const CO_SELLER_DELETE_WINDOW_MS = 10 * 60_000;
@@ -57,4 +65,28 @@ export const CONDITION_LABELS: Record<ItemCondition, string> = {
   GOOD: 'Good',
   FAIR: 'Fair',
   WELL_USED: 'Well used',
+};
+
+export const STATUS_LABELS: Record<ItemStatus, string> = {
+  AVAILABLE: 'Available',
+  PENDING: 'Pending',
+  SOLD: 'Sold',
+  WITHDRAWN: 'Taken off the list',
+};
+
+/** The Things tab's switch; taken-off things sit at the end of Sold. */
+export const STATUS_VIEWS = ['AVAILABLE', 'PENDING', 'SOLD'] as const;
+
+export const PAYMENT_METHOD_OPTIONS = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'VENMO', label: 'Venmo' },
+  { value: 'ZELLE', label: 'Zelle' },
+  { value: 'OTHER', label: 'Other' },
+] as const satisfies readonly { value: PaymentMethod; label: string }[];
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  CASH: 'Cash',
+  VENMO: 'Venmo',
+  ZELLE: 'Zelle',
+  OTHER: 'Other',
 };

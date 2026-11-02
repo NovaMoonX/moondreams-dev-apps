@@ -17,11 +17,10 @@ It is for three people: the seller, who adds things once and checks in; the co-s
 ## Status
 
 Built:
-- Nothing yet: this is the plan.
+- Available, Pending and Sold, with what was paid, a history per thing, and taking things off the list
 
 Next:
 - [ ] Sales, things with photos and private fields, and co-sellers
-- [ ] Available, Pending and Sold, with what was paid
 - [ ] A live public page and an interest form for buyers without an account
 - [ ] A shared inbox, with a bundled push when someone is interested
 - [ ] Copy listing text, Save photos and Save all photos for relisting

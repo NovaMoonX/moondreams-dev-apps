@@ -24,7 +24,42 @@ export interface Sale {
 
 export type ItemCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WELL_USED';
 
-export type ItemStatus = 'AVAILABLE';
+export type ItemStatus = 'AVAILABLE' | 'PENDING' | 'SOLD' | 'WITHDRAWN';
+
+export type PaymentMethod = 'CASH' | 'VENMO' | 'ZELLE' | 'OTHER';
+
+/** Who is set to pick a thing up (`pending`); cleared on Back to available and on Sold. */
+export interface ItemPendingRecord {
+  /** Set by the inquiry rows that arrive with the inbox. */
+  inquiryId: string | null;
+  /** A typed name; the buyer's personal data. */
+  buyerName: string | null;
+  /** A date-only value (UTC midnight). */
+  pickupOn: number | null;
+  markedBy: string;
+  markedAt: number;
+}
+
+/** What a thing sold for (`sale`); cleared by Not sold after all. */
+export interface ItemSaleRecord {
+  priceCents: number;
+  method: PaymentMethod | null;
+  /** A date-only value (UTC midnight). */
+  soldOn: number;
+  /** Carried over from the hold it was sold from; the buyer's personal data. */
+  buyerName: string | null;
+  markedBy: string;
+  markedAt: number;
+}
+
+/** One entry of a thing's status history; a corrected price carries the figure it replaced. */
+export interface StatusChange {
+  status: ItemStatus;
+  byUid: string;
+  at: number;
+  priceCents: number | null;
+  fromPriceCents: number | null;
+}
 
 /** One stored listing-size photo; array order is display order and the first is the cover. */
 export interface ItemPhoto {
@@ -65,6 +100,10 @@ export interface Item {
   notes: string | null;
   photos: ItemPhoto[];
   status: ItemStatus;
+  pending: ItemPendingRecord | null;
+  sale: ItemSaleRecord | null;
+  /** The last 50 status changes, oldest first. */
+  statusHistory: StatusChange[];
   createdBy: string;
   createdAt: number;
   lastEditedAt: number | null;

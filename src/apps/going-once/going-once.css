@@ -33,6 +33,7 @@ html.going-once-theme {
   --going-once-available: #2e8b57;
   --going-once-pending: #d9952b;
   --going-once-sold: #9a9183;
+  --going-once-withdrawn: #c4bba9;
   --going-once-tag: var(--color-accent);
   --going-once-tag-foreground: var(--color-accent-foreground);
 
@@ -64,6 +65,7 @@ html.going-once-theme.dark {
   --going-once-available: #5dbb86;
   --going-once-pending: #e8b25a;
   --going-once-sold: #8a8273;
+  --going-once-withdrawn: #5f584b;
 
   --subview-backdrop-dark: #0e0c09;
   --subview-border: #3a3327;

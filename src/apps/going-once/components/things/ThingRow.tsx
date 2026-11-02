@@ -4,10 +4,12 @@ import { Camera } from 'lucide-react';
 import FallbackImage from '@/components/FallbackImage';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
+import StatusDot from '@apps/going-once/components/things/StatusDot';
 import { CONDITION_LABELS } from '@apps/going-once/constants';
 import { useItemPhotoUrls } from '@apps/going-once/queries/photoUrlQueries';
 import type { Item } from '@apps/going-once/types';
 import { getItemName, isListable } from '@apps/going-once/utils/listing';
+import { getStatusRowLine } from '@apps/going-once/utils/status';
 
 interface ThingRowProps {
   item: Item;
@@ -19,6 +21,7 @@ interface ThingRowProps {
 const getLine = (item: Item, uploadingCount: number) => {
   if (uploadingCount > 0)
     return `Uploading ${uploadingCount} ${uploadingCount === 1 ? 'photo' : 'photos'}`;
+  if (item.status !== 'AVAILABLE') return getStatusRowLine(item);
   return [
     item.condition === null ? null : CONDITION_LABELS[item.condition],
     item.floorPriceCents === null
@@ -34,6 +37,10 @@ const getLine = (item: Item, uploadingCount: number) => {
 function ThingRow({ item, uploadingCount, onOpen }: ThingRowProps) {
   const [cover] = useItemPhotoUrls(item.photos.slice(0, 1));
   const line = getLine(item, uploadingCount);
+  const tagCents =
+    item.status === 'SOLD' && item.sale !== null
+      ? item.sale.priceCents
+      : item.askingPriceCents;
 
   return (
     <Button
@@ -58,14 +65,13 @@ function ThingRow({ item, uploadingCount, onOpen }: ThingRowProps) {
         <span className='text-foreground line-clamp-2 text-base font-medium break-words'>
           {getItemName(item)}
         </span>
-        {line !== '' && (
-          <span className='text-muted-foreground mt-0.5 block text-sm font-normal'>
-            {line}
-          </span>
-        )}
+        <span className='text-muted-foreground mt-0.5 flex items-baseline gap-1.5 text-sm font-normal'>
+          <StatusDot status={item.status} isWordHidden />
+          {line !== '' && <span className='min-w-0 break-words'>{line}</span>}
+        </span>
       </span>
-      {item.askingPriceCents !== null && (
-        <PriceTag askingPriceCents={item.askingPriceCents} />
+      {tagCents !== null && item.status !== 'WITHDRAWN' && (
+        <PriceTag askingPriceCents={tagCents} />
       )}
     </Button>
   );

@@ -24,6 +24,156 @@ const JPEG_ENDS = [
 ];
 export const JPEG_SIZE = { width: 16, height: 12 };
 
+/** The status fields of a thing; the shapes `src/apps/going-once/types.ts` reads. */
+export interface SeedStatusFields {
+  status: 'AVAILABLE' | 'PENDING' | 'SOLD' | 'WITHDRAWN';
+  pending: {
+    inquiryId: null;
+    buyerName: string | null;
+    pickupOn: number | null;
+    markedBy: string;
+    markedAt: number;
+  } | null;
+  sale: {
+    priceCents: number;
+    method: 'CASH' | 'VENMO' | 'ZELLE' | 'OTHER' | null;
+    soldOn: number;
+    buyerName: string | null;
+    markedBy: string;
+    markedAt: number;
+  } | null;
+  statusHistory: {
+    status: SeedStatusFields['status'];
+    byUid: string;
+    at: number;
+    priceCents: number | null;
+    fromPriceCents: number | null;
+  }[];
+}
+
+export type SeedStatus =
+  | { kind: 'AVAILABLE' }
+  | {
+      kind: 'PENDING';
+      by: string;
+      buyerName: string | null;
+      /** Days from today to the pickup day, or `'saturday'` for the coming one. */
+      pickup: number | 'saturday' | null;
+      daysAgo: number;
+    }
+  | {
+      kind: 'SOLD';
+      by: string;
+      priceCents: number;
+      method: 'CASH' | 'VENMO' | 'ZELLE' | 'OTHER' | null;
+      daysAgo: number;
+      /** Held for someone first. */
+      heldFor?: string;
+    }
+  | { kind: 'WITHDRAWN'; by: string; daysAgo: number };
+
+const HOUR_MS = 3_600_000;
+
+/** Builds a thing's status fields relative to the seed's "now", so the sale reads the same on any day. */
+export function buildSeedStatus(
+  status: SeedStatus,
+  now: number,
+): SeedStatusFields {
+  const today = new Date(now);
+  const dayOnly = (offset: number) =>
+    Date.UTC(
+      today.getUTCFullYear(),
+      today.getUTCMonth(),
+      today.getUTCDate() + offset,
+    );
+  const untilSaturday = (6 - today.getUTCDay() + 7) % 7 || 7;
+  if (status.kind === 'AVAILABLE')
+    return {
+      status: 'AVAILABLE',
+      pending: null,
+      sale: null,
+      statusHistory: [],
+    };
+  if (status.kind === 'PENDING') {
+    const at = now - status.daysAgo * DAY_MS;
+    let pickupOn: number | null = null;
+    if (status.pickup === 'saturday') pickupOn = dayOnly(untilSaturday);
+    else if (status.pickup !== null) pickupOn = dayOnly(status.pickup);
+    return {
+      status: 'PENDING',
+      pending: {
+        inquiryId: null,
+        buyerName: status.buyerName,
+        pickupOn,
+        markedBy: status.by,
+        markedAt: at,
+      },
+      sale: null,
+      statusHistory: [
+        {
+          status: 'PENDING',
+          byUid: status.by,
+          at,
+          priceCents: null,
+          fromPriceCents: null,
+        },
+      ],
+    };
+  }
+  if (status.kind === 'SOLD') {
+    const at = now - status.daysAgo * DAY_MS;
+    const held =
+      status.heldFor === undefined
+        ? []
+        : [
+            {
+              status: 'PENDING' as const,
+              byUid: status.by,
+              at: at - 3 * HOUR_MS,
+              priceCents: null,
+              fromPriceCents: null,
+            },
+          ];
+    return {
+      status: 'SOLD',
+      pending: null,
+      sale: {
+        priceCents: status.priceCents,
+        method: status.method,
+        soldOn: dayOnly(-status.daysAgo),
+        buyerName: status.heldFor ?? null,
+        markedBy: status.by,
+        markedAt: at,
+      },
+      statusHistory: [
+        ...held,
+        {
+          status: 'SOLD',
+          byUid: status.by,
+          at,
+          priceCents: status.priceCents,
+          fromPriceCents: null,
+        },
+      ],
+    };
+  }
+  const at = now - status.daysAgo * DAY_MS;
+  return {
+    status: 'WITHDRAWN',
+    pending: null,
+    sale: null,
+    statusHistory: [
+      {
+        status: 'WITHDRAWN',
+        byUid: status.by,
+        at,
+        priceCents: null,
+        fromPriceCents: null,
+      },
+    ],
+  };
+}
+
 type SeedCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WELL_USED';
 
 /** A thing's optional fields as an older thing has them: every key present, nothing filled in. */
@@ -54,9 +204,10 @@ interface SeedThing {
   askingPriceCents: number | null;
   floorPriceCents: number | null;
   optionals?: Partial<typeof EMPTY_OPTIONALS>;
+  status?: (people: { maya: string; theo: string }) => SeedStatus;
 }
 
-// The table in canvas.md "Example data". Statuses arrive with the issues that read them, so every thing here is Available.
+// The table in canvas.md "Example data"; today there is Mon Nov 2.
 const SEED_THINGS: SeedThing[] = [
   {
     id: 'gray-sofa',
@@ -155,6 +306,13 @@ const SEED_THINGS: SeedThing[] = [
       boughtFrom: 'Craigslist',
       notes: 'Two drawers; the left one sticks in humid weather.',
     },
+    status: ({ theo }) => ({
+      kind: 'PENDING',
+      by: theo,
+      buyerName: 'Nate',
+      pickup: 'saturday',
+      daysAgo: 2,
+    }),
   },
   {
     id: 'monitor',
@@ -169,6 +327,13 @@ const SEED_THINGS: SeedThing[] = [
       showOriginalPrice: true,
       boughtFrom: 'Best Buy',
     },
+    status: ({ theo }) => ({
+      kind: 'PENDING',
+      by: theo,
+      buyerName: 'Dev',
+      pickup: null,
+      daysAgo: 1,
+    }),
   },
   {
     id: 'stand-mixer',
@@ -177,6 +342,13 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'LIKE_NEW',
     askingPriceCents: 18000,
     floorPriceCents: null,
+    status: ({ theo }) => ({
+      kind: 'SOLD',
+      by: theo,
+      priceCents: 17000,
+      method: 'VENMO',
+      daysAgo: 2,
+    }),
   },
   {
     id: 'bookshelf',
@@ -185,6 +357,13 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'FAIR',
     askingPriceCents: 4000,
     floorPriceCents: null,
+    status: ({ maya }) => ({
+      kind: 'SOLD',
+      by: maya,
+      priceCents: 4000,
+      method: 'CASH',
+      daysAgo: 3,
+    }),
   },
   {
     id: 'cast-iron-pan',
@@ -193,6 +372,13 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'GOOD',
     askingPriceCents: 2500,
     floorPriceCents: 2000,
+    status: ({ theo }) => ({
+      kind: 'SOLD',
+      by: theo,
+      priceCents: 1500,
+      method: 'CASH',
+      daysAgo: 1,
+    }),
   },
   {
     id: 'bluetooth-speaker',
@@ -209,6 +395,7 @@ const SEED_THINGS: SeedThing[] = [
     condition: 'FAIR',
     askingPriceCents: 4000,
     floorPriceCents: null,
+    status: ({ maya }) => ({ kind: 'WITHDRAWN', by: maya, daysAgo: 1 }),
   },
 ];
 
@@ -239,6 +426,7 @@ export async function uploadSeedPhoto(path: string, colorIndex: number) {
 
 export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
   const maya = FIXTURE_USERS.goingOnceSeller;
+  const theo = FIXTURE_USERS.goingOnceCoSeller;
   const sale = context.firestore
     .collection('apps')
     .doc('going-once')
@@ -253,7 +441,7 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     currency: 'USD',
     ownerUid: maya.uid,
     createdBy: maya.uid,
-    members: [maya.uid],
+    members: [maya.uid, theo.uid],
     createdAt: context.now - 6 * DAY_MS,
     lastEditedAt: null,
   });
@@ -292,7 +480,12 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
           ...EMPTY_OPTIONALS,
           ...thing.optionals,
           photos: photos.map(({ photo }) => photo),
-          status: 'AVAILABLE',
+          ...buildSeedStatus(
+            thing.status?.({ maya: maya.uid, theo: theo.uid }) ?? {
+              kind: 'AVAILABLE',
+            },
+            context.now,
+          ),
           createdBy: maya.uid,
           createdAt,
           lastEditedAt: null,
