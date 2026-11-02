@@ -12434,6 +12434,16 @@ console.log('runway engine: ok');
     ),
     'the share is spread evenly',
   );
+  const farFirst = planBillPayments(
+    bill(everyMonths(utc(2029, 5, 6), 3), { kind: 'suggested' }),
+    pays,
+    horizon,
+  );
+  assert.equal(
+    farFirst.length > 0 && toDayStamp(farFirst[0].dueOn),
+    '20290506',
+    'a quarterly bill first due 18 months away is still saved for',
+  );
   assert.equal(
     planBillPayments(
       bill(everyMonths(utc(2028, 11, 6), 24), { kind: 'lastBefore' }),

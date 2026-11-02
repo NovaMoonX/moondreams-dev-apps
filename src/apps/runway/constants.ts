@@ -1870,7 +1870,7 @@ export const FORM_FLOW_WORDS = {
   pastDay: 'Pick today or a day to come.',
   dayPassed: 'That day has passed.',
   pickRepeat: 'Pick how often it repeats.',
-  pickEvery: 'Say how many months or years apart.',
+  pickEvery: 'Pick 2 months to 10 years apart.',
   every: 'Every',
   everyCount: 'How many',
   everyUnit: 'Months or years',

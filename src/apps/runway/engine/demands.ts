@@ -540,7 +540,7 @@ const getDueBeyond = (bill: DraftBillInput, horizon: number) => {
     bill.schedule,
     bill.ending,
     horizon + DAY_MS,
-    addUtcMonths(horizon, interval),
+    Math.max(addUtcMonths(horizon, interval), bill.schedule.anchor ?? 0),
   ).slice(0, 1);
 };
 
@@ -787,7 +787,9 @@ function buildBillDemands(
             dueOn: payment.dueOn,
             totalCents: payment.totalCents,
             setAsideCents: payment.fundedCents,
-            isSavingUp: getIntervalMonths(bill.schedule) !== null,
+            isSavingUp:
+              getIntervalMonths(bill.schedule) !== null &&
+              bill.fundedBy.kind !== 'lastBefore',
             ranged: payment.ranged,
           },
           ask: { kind: 'exact' },

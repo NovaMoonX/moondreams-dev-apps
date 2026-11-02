@@ -99,7 +99,7 @@ function BillRow({
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const isUndated = isUndatedBill(bill);
-  const isSavingUp = isSavingUpBill(bill.timing.schedule);
+  const isSavingUp = isSavingUpBill(bill.timing.schedule, bill.fundedBy);
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
   const dueLine = isOutsideTotal
     ? `${getDueLine(payment, isUndated, today, isSavingUp)} · ${GROUP_WORDS.oneTimeNote}`
@@ -138,7 +138,7 @@ export function BillSheet({
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
   const isUndated = schedule.anchor === null;
-  const isSavingUp = isSavingUpBill(schedule);
+  const isSavingUp = isSavingUpBill(schedule, bill.fundedBy);
   const repeat = schedule.kind === 'once' ? null : describeBillRepeat(schedule);
   const getDueFact = () => {
     if (isUndated) return null;

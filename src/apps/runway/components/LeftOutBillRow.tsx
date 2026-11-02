@@ -36,9 +36,9 @@ function LeftOutBillRow({
   const [isOpen, setIsOpen] = useState(false);
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const stance = useAppSelector(selectStance);
-  const payments = useAppSelector((state) =>
-    selectBillPayments(state, today),
-  )[billId];
+  const payments = useAppSelector((state) => selectBillPayments(state, today))[
+    billId
+  ];
   const payment =
     payments?.find(
       (entry, index) =>

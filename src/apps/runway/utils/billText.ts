@@ -106,9 +106,9 @@ export function describeBillRepeat(schedule: Schedule) {
   return result;
 }
 
-/** A bill that comes round less often than monthly is saved up for over the pays before it. */
-export const isSavingUpBill = (schedule: Schedule) =>
-  getIntervalMonths(schedule) !== null;
+/** A bill that comes round less often than monthly is saved up for over the pays before it, unless it is paid all from the pay right before it is due. */
+export const isSavingUpBill = (schedule: Schedule, fundedBy: BillFundedBy) =>
+  getIntervalMonths(schedule) !== null && fundedBy.kind !== 'lastBefore';
 
 /** When a bill falls due, in the words a row and a change entry share: "Due Dec 1", "Monthly from Dec 1" or, with no date yet, "Monthly · due date later". */
 export function describeBillTiming(schedule: Schedule) {

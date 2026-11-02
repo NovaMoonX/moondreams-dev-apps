@@ -876,7 +876,7 @@ function BillFormBody({
                 <Input
                   type='number'
                   inputMode='numeric'
-                  min={1}
+                  min={formData.everyUnit === 'years' ? 1 : 2}
                   max={
                     formData.everyUnit === 'years'
                       ? MAX_EVERY_MONTHS / 12
@@ -901,11 +901,12 @@ function BillFormBody({
               </div>
             </div>
           )}
-          {getEveryMonths(formData) !== null && (
-            <p className='text-muted-foreground text-sm text-pretty'>
-              {FORM_FLOW_WORDS.savingUpNote}
-            </p>
-          )}
+          {getEveryMonths(formData) !== null &&
+            formData.paidFrom !== 'lastBefore' && (
+              <p className='text-muted-foreground text-sm text-pretty'>
+                {FORM_FLOW_WORDS.savingUpNote}
+              </p>
+            )}
           {draft?.repeatNote && (
             <p className='text-muted-foreground text-sm text-pretty'>
               <MaskedText>{draft.repeatNote}</MaskedText>
