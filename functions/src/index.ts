@@ -15,6 +15,8 @@ export { verifyRunwayKeys } from './apps/runway/verifyRunwayKeys.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { deleteTrip } from './apps/waypoint/deleteTrip.js';
 export { deleteSale } from './apps/going-once/deleteSale.js';
+export { getSalePage } from './apps/going-once/getSalePage.js';
+export { changeSalePublicLink } from './apps/going-once/changeSalePublicLink.js';
 export { rescheduleTripReminders } from './apps/waypoint/rescheduleTripReminders.js';
 export { shiftTripDates } from './apps/waypoint/shiftTripDates.js';
 export { notifyTripAnnouncement } from './apps/waypoint/notifyTripAnnouncement.js';

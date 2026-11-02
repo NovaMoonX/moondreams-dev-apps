@@ -27,6 +27,7 @@ const getPageTitle = (pathname: string, appName: string | null) => {
     return 'Movie calendar - A-List Tracker';
   }
   if (pathname.startsWith('/pinch/shared/')) return 'Shared on Pinch';
+  if (pathname.startsWith('/going-once/s/')) return 'Things for sale';
   return appName ? `${appName} - Moondreams Dev Apps` : 'Moondreams Dev Apps';
 };
 
@@ -58,7 +59,7 @@ function LocationSync() {
           ? 'home'
           : locationPathname
               .replace(/^\/+/, '')
-              .replace(/^((?:a-list|pinch)\/shared)\/.*$/, '$1');
+              .replace(/^((?:a-list|pinch)\/shared|going-once\/s)\/.*$/, '$1');
 
       setCurrentLocation(nextLocation);
     }

@@ -104,7 +104,7 @@ The buyer types one "Phone or email" field; the function reads it as an email wh
 ### Function-only documents (no client rule matches them)
 
 - `apps/going-once/sales/{saleId}/limits/interest`: `{ dayKey: string, count: number }`, the sale's interest count for the current UTC day.
-- `apps/going-once/publicLinks/{linkId}`: `{ id, saleId, createdBy, createdAt }`. `linkId` is 26 chars of `[2-9a-hj-np-z]` (130 bits) minted with `crypto.randomInt` (Pinch's `mintShareId`).
+- `apps/going-once/publicLinks/{linkId}`: `{ id, saleId, createdBy, createdAt }`. `linkId` is 26 chars of `[2-9a-hj-np-z]` (130 bits) minted with `crypto.randomInt` (`mintShareId` in `functions/src/share/`, which Pinch's share functions use too, with `copyFileUnderNewToken` and `removeFolderFiles`). A stopped or renewed-away link's document is deleted, so the sale holds at most one.
 
 ### Storage
 
@@ -160,7 +160,7 @@ Contacts already cleared stay cleared after a reopen.
 
 ### Public link
 
-`none → on → renewed → … → none`, seller only, through `changeSalePublicLink`.
+`none → on → renewed → … → none`, seller only, through `changeSalePublicLink`. Turning it off deletes the link, so turning it on again makes a new address. Renew and stop delete the old public folder first (files first), then one transaction writes the new link document, deletes the old one and sets the sale's `publicLinkId` and `publicLinkChangedAt`. Create on a sale that has a link answers that link.
 
 ### Totals
 
@@ -226,7 +226,7 @@ A member may write any `photos[].path` on a thing, so the public function (and t
 | Path | Seller | Co-seller | Other signed in | Signed out |
 |---|---|---|---|---|
 | `sales/{saleId}` read | yes | yes | no | no |
-| create | yes when `ownerUid == createdBy == me`, `members == [me]`, `publicLink*`, `finished*`, `contactsClear*` all `null`, `status == 'OPEN'`, and gate `create-sales` open | (same, as the seller of a new sale) | (same) | no |
+| create | yes when `ownerUid == createdBy == me`, `members == [me]`, `publicLink*` (absent or `null`), `finished*`, `contactsClear*` all `null`, `status == 'OPEN'`, and gate `create-sales` open | (same, as the seller of a new sale) | (same) | no |
 | update: `name`, `pickupArea`, `buyerNote`, `lastEditedAt` | yes | no | no | no |
 | update: remove a member | yes, anyone but themselves; only `members`, `memberJoinedAt`, `lastEditedAt` change, members only shrink and the removed uid's `memberJoinedAt` key is deleted (setting it is refused) | only themselves (leave), same keys | no | no |
 | update: join | — | — | yes when their verified token email has an invite `{saleId}_{email}` made by the seller, they add exactly themselves (and their own `memberJoinedAt` key), and the invite is gone after the commit | no |
@@ -284,7 +284,7 @@ Verified per `firestore-rules.md`: the matrix above as seller, co-seller, other 
 | `title`, `description`, `brandModel`, `size`, `condition`, `askingPriceCents` | include | What a buyer decides on |
 | `originalPriceCents` | only when `showOriginalPrice === true` | The seller's per-thing choice |
 | `status` | `AVAILABLE \| PENDING` only | Sold and withdrawn things are never served |
-| Photo copies (`s`, `m` paths, first 12) | include | Smaller copies only |
+| Photo copies (`s`, `m` paths, first 12) | include once the copies exist | Smaller copies only; until then `getSalePage` sends no photo field at all and the page draws a placeholder |
 | `floorPriceCents`, `boughtFrom`, `boughtOn`, `boughtUrl`, `boughtUrlPreview`, `notes`, `pending`, `sale`, `statusHistory`, `createdBy`, `lastEditedBy`, timestamps | exclude | Private money, notes, people, history |
 | Inquiries and their counts | exclude | Buyer contacts are members-only; a count says how wanted a thing is |
 | `isMember` | computed per caller | Maya or Theo signed in sees "This is your sale's public page", with no id that says whose |
@@ -353,7 +353,7 @@ All `region: 'us-central1'`, callables with the site's `cors` list. Errors are `
 |---|---|---|---|---|---|
 | `getSalePage` | callable, auth optional | anyone with the link | `{ linkId }` | `{ status: 'ok', sale: { name, pickupArea, buyerNote }, things: PublicThing[], isMember }` or `{ status: 'not_found' }` | Only `not_found` (malformed, unknown, stopped, renewed-away, finished, deleted alike) |
 | `submitSaleInterest` | callable, auth optional | anyone with the link | `{ linkId, itemId, name, contact, message, website }` (`website` is the honeypot) | `{ status: 'sent', contact: 'email' \| 'phone' }`, or `not_found`, `not_available`, `busy`, `slow_down`, `invalid` (with `field: 'name' \| 'contact' \| 'message'`) | `invalid` names the field; nothing else says more |
-| `changeSalePublicLink` | callable | seller | `{ saleId, action: 'create' \| 'renew' \| 'stop' }` | `{ linkId: string \| null }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike); `failed-precondition` "This sale is finished. Reopen it to turn the page on." |
+| `changeSalePublicLink` | callable | seller | `{ saleId, action: 'create' \| 'renew' \| 'stop' }` | `{ linkId: string \| null }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike); `failed-precondition` "This sale is finished. Reopen it to turn the page on."; `aborted` "The link just changed. Check it and try again." (two changes at once); `internal` when the old public folder could not be cleared (nothing else was changed, so trying again is safe) |
 | `syncSalePublicPhotos` | Firestore trigger, `apps/going-once/sales/{saleId}/items/{itemId}` written | — | the event's ids (re-reads both docs) | public copies made or deleted | Logs and returns; a failed copy is retried on the thing's next write or by the link callable's full sync |
 | `buildSalePhotoArchive` | callable, 1 GiB, 540 s | members | `{ saleId }` | `{ path, photoCount, sizeBytes }` | `not-found`; `failed-precondition` "Nothing to save yet: no Available or Pending thing has a photo." or "This sale is finished."; `resource-exhausted` "That's more than 1,500 photos. Save fewer at a time." |
 | `finishSale` | callable | seller | `{ saleId, action: 'finish' \| 'reopen' }` | `{ status: 'OPEN' \| 'FINISHED', contactsClearAt }` | `not-found`; `failed-precondition` "Already finished." / "Already open." |

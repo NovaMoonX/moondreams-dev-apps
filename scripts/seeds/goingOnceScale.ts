@@ -121,6 +121,8 @@ export async function seedGoingOnceScale(
     createdBy: maya.uid,
     members: [maya.uid, theo.uid],
     memberJoinedAt: { [theo.uid]: context.now - 8 * DAY_MS },
+    publicLinkId: null,
+    publicLinkChangedAt: null,
     createdAt: context.now - 9 * DAY_MS,
     lastEditedAt: null,
   });

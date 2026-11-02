@@ -23,6 +23,10 @@ export interface Sale {
   members: string[];
   /** When each member joined, by uid; a sale from before co-sellers may lack some. */
   memberJoinedAt: Record<string, number>;
+  /** The address of the sale's public page; written only by `changeSalePublicLink`. */
+  publicLinkId: string | null;
+  /** When the address was made or last renewed. */
+  publicLinkChangedAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -143,3 +147,30 @@ export interface Item {
   lastEditedAt: number | null;
   lastEditedBy: string | null;
 }
+
+/** A thing as the public page shows it: only the fields `getSalePage` allows. */
+export interface PublicThing {
+  id: string;
+  title: string;
+  description: string | null;
+  brandModel: string | null;
+  size: string | null;
+  condition: ItemCondition | null;
+  askingPriceCents: number;
+  /** Set only when the seller chose to show it. */
+  originalPriceCents: number | null;
+  status: Extract<ItemStatus, 'AVAILABLE' | 'PENDING'>;
+}
+
+/** What `getSalePage` answers: the page, or one `not_found` for every link that shows nothing. */
+export type SalePageResult =
+  | { status: 'not_found' }
+  | {
+      status: 'ok';
+      sale: Pick<Sale, 'name' | 'pickupArea' | 'buyerNote'>;
+      things: PublicThing[];
+      /** True when the signed-in visitor is the seller or a co-seller. */
+      isMember: boolean;
+    };
+
+export type SaleLinkAction = 'create' | 'renew' | 'stop';

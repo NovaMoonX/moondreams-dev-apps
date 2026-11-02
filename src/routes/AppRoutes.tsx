@@ -108,6 +108,15 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'going-once/s/:linkId',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: SalePage } =
+            await import('@apps/going-once/SalePage');
+          return { Component: SalePage };
+        },
+      },
+      {
         path: 'pinch/shared/:shareId',
         HydrateFallback: Loading,
         lazy: async () => {

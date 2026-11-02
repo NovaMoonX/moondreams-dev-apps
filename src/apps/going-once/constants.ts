@@ -28,6 +28,12 @@ export const MAX_SALE_NAME_LENGTH = 80;
 export const MAX_PICKUP_AREA_LENGTH = 80;
 export const MAX_BUYER_NOTE_LENGTH = 300;
 
+/** A public page's address in the app, followed by the link's id. */
+export const SALE_PAGE_PATH = '/going-once/s/';
+
+/** A public link id is 26 characters of the 32-letter share alphabet. */
+export const SALE_LINK_ID_PATTERN = /^[2-9a-hj-np-z]{26}$/;
+
 /** Co-sellers and waiting invites together, per sale. */
 export const MAX_CO_SELLERS = 10;
 

@@ -192,8 +192,9 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 - [ ] **Co-seller:** a push when someone is interested, on by default, bundled to one per 15 minutes, quiet 10 PM to 8 AM with one morning push, never dropped; permission asked on first opening the inbox or on joining, up to three times; a per-sale switch to turn it off (the seller gets the same)
 - [ ] **Co-seller:** the shared inbox with Call, Text and Email, New / Handled by hand, resends folded into one inquiry, and each thing's own list of who asked (the seller sees it too)
 - [ ] **Co-seller:** Copy listing text (remembered on the thing, with a take-it-down reminder at Sold), Save photos for one thing, and Save all photos as one zip for the whole sale, at listing quality
-- [ ] **Seller:** the public link: live, Available and Pending only, Show original price per thing, get a new address or turn it off; **Co-seller:** copy, open and share it, marked as their sale's page
-- [ ] **Buyer:** the public page and the "I'm interested" form, with no account, refused in words for a thing that just sold
+- [x] **Seller:** the public link: live, Available and Pending only, Show original price per thing, get a new address or turn it off; **Co-seller:** copy, open and share it, marked as their sale's page
+- [x] **Buyer:** the public page, with no account (photos arrive with the public photo copies)
+- [ ] **Buyer:** the "I'm interested" form, with no account, refused in words for a thing that just sold
 - [x] **Seller:** where the sale stands: collected against asked, pending, left
 - [ ] **Seller:** Finish the sale, naming what didn't sell and what is pending; pickups still recordable; buyers' details cleared 30 days later; reopen until then
 

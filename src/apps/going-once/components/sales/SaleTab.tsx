@@ -11,6 +11,7 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppSelector } from '@/store';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import PeopleSection from '@apps/going-once/components/people/PeopleSection';
+import LinkCard from '@apps/going-once/components/sales/LinkCard';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
 import { SALE_DETAILS } from '@apps/going-once/constants';
 import { deleteSale } from '@apps/going-once/store/actions/saleActions';
@@ -139,6 +140,8 @@ function SaleTab({
           }}
         />
       </div>
+
+      <LinkCard sale={sale} isSeller={isSeller} />
 
       <PeopleSection sale={sale} uid={uid} myEmail={myEmail} onLeft={onLeft} />
 

@@ -6,6 +6,9 @@ import {
 } from './types.ts';
 
 const SALE_ID = 'seed-going-once-fall-clear-out';
+
+// A fixed id from the link alphabet, so the seeded page opens by hand: /going-once/s/<id>.
+export const SEED_SALE_LINK_ID = 'seedsalefall23456789abcdef';
 const DAY_MS = 86_400_000;
 const MINUTE_MS = 60_000;
 
@@ -457,9 +460,23 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     createdBy: maya.uid,
     members: [maya.uid, theo.uid],
     memberJoinedAt: { [theo.uid]: context.now - 5 * DAY_MS },
+    publicLinkId: SEED_SALE_LINK_ID,
+    publicLinkChangedAt: context.now - 4 * DAY_MS,
     createdAt: context.now - 6 * DAY_MS,
     lastEditedAt: null,
   });
+
+  await context.firestore
+    .collection('apps')
+    .doc('going-once')
+    .collection('publicLinks')
+    .doc(SEED_SALE_LINK_ID)
+    .set({
+      id: SEED_SALE_LINK_ID,
+      saleId: SALE_ID,
+      createdBy: maya.uid,
+      createdAt: context.now - 4 * DAY_MS,
+    });
 
   const waitingEmail = 'sam@example.test';
   await context.firestore
@@ -532,5 +549,5 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     );
   }
 
-  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 2 + SEED_THINGS.length };
+  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 3 + SEED_THINGS.length };
 }
