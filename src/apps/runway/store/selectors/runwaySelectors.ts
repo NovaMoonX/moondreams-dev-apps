@@ -831,6 +831,7 @@ export function computeDraftView(
       priority: payload.priority,
       orderIndex: payload.orderIndex,
       funding: payload.funding,
+      extras: payload.extras ?? null,
       maxCents: payload.maxCents,
       heldCents: heldByItem[item.id] ?? 0,
     };
@@ -855,6 +856,7 @@ export function computeDraftView(
       priority: payload.priority,
       orderIndex: payload.orderIndex,
       funding: payload.funding,
+      extras: payload.extras ?? null,
       targetCents: version.payload.targetCents,
       heldCents: heldByItem[item.id] ?? 0,
     };

@@ -10,22 +10,28 @@ import {
   LIFECYCLE_WORDS,
   PACE_STATE_LABELS,
   PACE_WORDS,
+  PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { Pace } from '@apps/runway/engine/pace';
-import type { GoalSealed } from '@apps/runway/types';
+import type { GoalSealed, Priority } from '@apps/runway/types';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
 
 interface GoalRowProps {
   goalId: string;
   goal: GoalSealed;
   pace: Pace;
+  /** The dial its finish date was counted at, when that leaves an extra out. */
+  paceDial?: Priority | null;
   /** What the goal holds now. */
   heldCents: number;
   today: number;
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
   isFaded?: boolean;
+  /** One part of a split goal (its contribution alone), so the row shows that part and never repeats the saved figure. */
+  isPart?: boolean;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -57,26 +63,36 @@ function GoalRow({
   goalId,
   goal,
   pace,
+  paceDial = null,
   heldCents,
   today,
   reorder,
   isHighlighted = false,
   isFaded = false,
+  isPart = false,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const savedCents = Math.min(heldCents, goal.targetCents);
   const progress = `${formatCentsShort(savedCents)} of ${formatCentsShort(goal.targetCents)}`;
-  const paceLine = describePaceShort(goal, pace, savedCents);
-  const funding = describeFundingShort(goal.funding);
+  const paceLine = `${describePaceShort(goal, pace, savedCents)}${
+    paceDial === null || paceDial === 'want' || !pace.reachedOn
+      ? ''
+      : ` ${PRIORITY_DIAL_WORDS.paceSuffix[paceDial]}`
+  }`;
+  const funding = describeFundingShort(goal.funding, getExtras(goal));
 
   return (
     <>
       <ItemRow
         name={goal.name}
         emoji={goal.emoji}
-        detail={paceLine}
-        figure={formatCentsShort(savedCents)}
-        figureWord={`of ${formatCentsShort(goal.targetCents)}`}
+        detail={isPart ? funding : paceLine}
+        figure={
+          isPart && goal.funding.amount.kind === 'exact'
+            ? formatCentsShort(goal.funding.amount.cents)
+            : formatCentsShort(savedCents)
+        }
+        figureWord={isPart ? null : `of ${formatCentsShort(goal.targetCents)}`}
         ariaLabel={`${goal.name}, ${progress} saved. ${paceLine}. Open`}
         onOpen={reorder ? undefined : () => setIsOpen(true)}
         reorder={reorder}

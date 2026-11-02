@@ -6,6 +6,7 @@ import {
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import { describeBillTiming } from '@apps/runway/utils/billText';
+import { getExtras } from '@apps/runway/engine/parts';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
@@ -28,8 +29,16 @@ export type ItemPayload =
 /** The name of a group by its id, from the plan's groups. */
 export type GroupNamer = (groupId: string) => string;
 
+/** Key order never counts: a payload rebuilt with a field in another place is the same payload. */
+const sortKeys = (_key: string, value: unknown) =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? Object.fromEntries(
+        Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)),
+      )
+    : value;
+
 const same = (a: unknown, b: unknown) =>
-  JSON.stringify(a) === JSON.stringify(b);
+  JSON.stringify(a, sortKeys) === JSON.stringify(b, sortKeys);
 
 type Part = [label: string, before: string, after: string] | null;
 
@@ -185,7 +194,12 @@ const getParts = (
         goalAfter.priority,
         (value) => PRIORITY_LABELS[value],
       ),
-      diff('Funding', goalBefore.funding, goalAfter.funding, describeFunding),
+      diff(
+        'Funding',
+        { funding: goalBefore.funding, extras: getExtras(goalBefore) },
+        { funding: goalAfter.funding, extras: getExtras(goalAfter) },
+        (value) => describeFunding(value.funding, value.extras),
+      ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
             diff(

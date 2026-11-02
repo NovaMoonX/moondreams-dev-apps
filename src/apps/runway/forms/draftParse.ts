@@ -7,7 +7,7 @@ import type { FundingFormData } from '@apps/runway/forms/fundingFlow';
 import type { FromWhenValue } from '@apps/runway/utils/fromWhen';
 import type { AmountDraft } from '@apps/runway/utils/rangeInput';
 
-type Check = (value: unknown) => boolean;
+export type Check = (value: unknown) => boolean;
 
 export const isText: Check = (value) => typeof value === 'string';
 export const isNullableText: Check = (value) =>

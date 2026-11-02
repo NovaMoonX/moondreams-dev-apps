@@ -12,12 +12,19 @@ import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import type { EnvelopeSealed } from '@apps/runway/types';
+import type { EnvelopeSealed, Priority } from '@apps/runway/types';
 import {
   describeCadenceLine,
   describeFundingShort,
+  describeExtras,
 } from '@apps/runway/utils/fundingText';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import {
+  fundingAtLevel,
+  getExtras,
+  withExtras,
+} from '@apps/runway/engine/parts';
+import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
 
 interface EnvelopeTileProps {
@@ -33,6 +40,10 @@ interface EnvelopeTileProps {
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
   isFaded?: boolean;
+  /** One part of a split envelope (its amount alone), so the row shows that part's amount and never repeats the balance. */
+  isPart?: boolean;
+  /** How far down the priorities Plan's dial counts: the figure is what the counted parts ask, and the line names the extras it leaves out. */
+  dial?: Priority;
 }
 
 const capitalize = (text: string) =>
@@ -49,24 +60,43 @@ function EnvelopeTile({
   reorder,
   isHighlighted = false,
   isFaded = false,
+  isPart = false,
+  dial = 'want',
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
   const level = useAppSelector(selectLevel);
   const { value, word } = describeEnvelopeFigure(level, cents);
-  const funding = describeFundingShort(envelope.funding);
+  const extras = getExtras(envelope);
+  const atLevel = fundingAtLevel(envelope, dial);
+  const counted = atLevel ?? withExtras(envelope);
+  const leftOut =
+    atLevel === null
+      ? []
+      : extras.filter((extra) => !isCountedAt(extra.tier, dial));
+  const whole = withExtras(envelope);
+  const funding = describeFundingShort(whole);
   const emoji = useItemEmoji(envelope.emoji, envelope.groupId);
-  const { amount } = envelope.funding;
+  const { amount } = counted;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
+  const ownCents =
+    envelope.funding.amount.kind === 'exact'
+      ? envelope.funding.amount.cents
+      : 0;
+  const partsText =
+    extras.length === 0
+      ? null
+      : `${formatCentsShort(ownCents)} ${envelope.priority}${describeExtras(extras, formatCentsShort)}`;
   const isPlan = level === 'plan';
-  const rowFigure = isPlan ? eachTime : value;
-  const rowDetail = isPlan
-    ? eachTime
-      ? describeCadenceLine(envelope.funding.cadence)
-      : funding
-    : isHidden
-      ? funding
-      : `${capitalize(word)} · ${funding}`;
+  const rowFigure = isPlan || isPart ? eachTime : value;
+  const rowDetail =
+    isPlan || isPart
+      ? eachTime
+        ? `${describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
+        : funding
+      : isHidden
+        ? funding
+        : `${capitalize(word)} · ${funding}`;
   const isOver = word === 'over';
   const open = () => setIsOpen(true);
 
@@ -139,10 +169,16 @@ function EnvelopeTile({
                 ? ITEM_SHEET_R2_WORDS.balance
                 : capitalize(word)
           }
-          figure={isPlan ? (eachTime ?? undefined) : value}
+          figure={
+            isPlan
+              ? whole.amount.kind === 'exact'
+                ? formatCents(whole.amount.cents)
+                : undefined
+              : value
+          }
           fact={[
             PRIORITY_LABELS[envelope.priority],
-            isPlan && eachTime ? null : funding,
+            isPlan && eachTime ? partsText : funding,
             envelope.maxCents === null
               ? null
               : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
