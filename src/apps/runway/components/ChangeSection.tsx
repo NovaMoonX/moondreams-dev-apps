@@ -15,8 +15,14 @@ import type { FundingRule } from '@apps/runway/types';
 import { describeReplaced } from '@apps/runway/utils/changeText';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 
-/** What an edit adds under its form: when it starts and what it does to each upcoming income day. */
-function ChangeSection({ isIdleShown = false }: { isIdleShown?: boolean }) {
+/** What an edit adds under its form: when it starts and what it does to each upcoming income day, listed day by day when `isOpen` (a change of which pay covers a bill is about the days). */
+function ChangeSection({
+  isIdleShown = false,
+  isOpen = false,
+}: {
+  isIdleShown?: boolean;
+  isOpen?: boolean;
+}) {
   const value = use(ChangeFlowContext);
   const today = todayAsUtcDate();
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
@@ -51,10 +57,11 @@ function ChangeSection({ isIdleShown = false }: { isIdleShown?: boolean }) {
       )}
       {!flow.isUnchanged && (
         <EffectPreview
-          isCompact
+          isCompact={!isOpen}
           changeJson={flow.changeJson}
           emptyText={pairedText ?? undefined}
           holds={flow.holds}
+          warningActions={value.warningActions}
         />
       )}
     </div>

@@ -14,16 +14,6 @@ import {
 
 export { isSameLookahead, sortProblems };
 
-/** One problem in a sentence: what stops the plan, on which day, never as missing money. */
-export function describeProblem(problem: LookaheadProblem) {
-  const name = problem.name === '' ? 'A bill' : problem.name;
-  if (problem.kind === 'noIncome') {
-    return `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
-  }
-  const result = `On ${formatDateUTC(problem.on)}, the plan leaves ${name} ${formatCents(problem.shortBy)} short.`;
-  return result;
-}
-
 /** The headline: how far the plan holds, or null when there is nothing to hold yet. */
 export function describeHoldsThrough(lookahead: Lookahead) {
   if (lookahead.holdsThrough === null) return null;
@@ -136,7 +126,23 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
   const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {
     const problem = group.problem;
-    const before = `${getName(problem)} on ${on} has no income before it`;
+    if (problem.kind === 'noIncome' && problem.reason === 'short') {
+      return isHidden
+        ? {
+            before: `The plan leaves ${getName(problem)} short on ${on}`,
+            figure: null,
+            after: '',
+          }
+        : {
+            before: `The plan leaves ${getName(problem)} `,
+            figure: formatCentsShort(problem.shortBy),
+            after: ` short on ${on}`,
+          };
+    }
+    const before =
+      problem.kind === 'noIncome' && problem.reason === 'noPick'
+        ? `${getName(problem)} on ${on} comes from a pay that is not before it`
+        : `${getName(problem)} on ${on} has no income before it`;
     return { before, figure: null, after: '' };
   }
   if (group.shorts.length > 1) {
@@ -166,6 +172,8 @@ export interface HoldsBlock {
   text: string;
   /** The amount inside `text`, so it can be drawn in the warning colour. */
   figure: string | null;
+  /** The text says why a one-time pay leaves the bill short. */
+  hasNote?: boolean;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -173,6 +181,7 @@ function describeChangeProblem(
   problem: LookaheadProblem,
   more: number,
   isHidden: boolean,
+  note: string | null,
   grewBy: number | null = null,
 ) {
   const name = problem.name === '' ? 'A bill' : problem.name;
@@ -181,9 +190,9 @@ function describeChangeProblem(
     more > 0
       ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.`
       : '';
-  if (problem.kind === 'noIncome') {
+  if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
-      text: `With this change, ${name} on ${on} has no income before it is due.${tail}`,
+      text: `With this change, ${name} on ${on} ${problem.reason === 'noPick' ? 'is set to come from a pay that is not before it is due' : 'has no income before it is due'}.${tail}`,
       figure: null,
     };
   }
@@ -194,9 +203,11 @@ function describeChangeProblem(
     };
   }
   const figure = formatCents(grewBy ?? problem.shortBy);
+  const why = note === null || problem.kind !== 'short' ? '' : `: ${note}`;
   return {
-    text: `With this change, the plan leaves ${name} ${figure}${grewBy === null ? '' : ' more'} short on ${on}.${tail}`,
+    text: `With this change, the plan leaves ${name} ${figure}${grewBy === null ? '' : ' more'} short on ${on}${why}.${tail}`,
     figure,
+    hasNote: why !== '',
   };
 }
 
@@ -218,8 +229,10 @@ export function getCreatedProblems(
   before: readonly LookaheadProblem[],
   after: readonly LookaheadProblem[],
 ): CreatedProblem[] {
+  const isAmount = (problem: LookaheadProblem) =>
+    problem.kind === 'short' || problem.reason === 'short';
   const shortOf = (problem: LookaheadProblem) =>
-    problem.kind === 'short' ? problem.shortBy : 0;
+    isAmount(problem) && 'shortBy' in problem ? problem.shortBy : 0;
   const biggestFirst = [...after].sort((a, b) => shortOf(b) - shortOf(a));
   const matched = biggestFirst.reduce<{
     used: readonly LookaheadProblem[];
@@ -236,8 +249,7 @@ export function getCreatedProblems(
         )
         .sort((a, b) => shortOf(a) - shortOf(b));
       const covers = open.find(
-        (entry) =>
-          candidate.kind !== 'short' || shortOf(entry) >= shortOf(candidate),
+        (entry) => !isAmount(candidate) || shortOf(entry) >= shortOf(candidate),
       );
       const grown = covers ? undefined : open[open.length - 1];
       const taken = covers ?? grown;
@@ -250,8 +262,8 @@ export function getCreatedProblems(
             : {
                 problem: candidate,
                 grewBy:
-                  grown && candidate.kind === 'short' && grown.kind === 'short'
-                    ? candidate.shortBy - grown.shortBy
+                  grown && isAmount(candidate) && isAmount(grown)
+                    ? shortOf(candidate) - shortOf(grown)
                     : null,
               },
         ),
@@ -267,6 +279,8 @@ export function describeHoldsBlocks(
   before: Lookahead,
   after: Lookahead,
   isHidden = false,
+  /** Why a pay is short, by its day key ("Freelance payment is one-time and brings $120"). */
+  notes: Readonly<Record<string, string>> = {},
 ): HoldsBlock[] {
   const holds = (through: number): HoldsBlock => ({
     tone: 'success',
@@ -296,21 +310,26 @@ export function describeHoldsBlocks(
             first.problem,
             created.length - 1,
             isHidden,
+            first.problem.kind === 'short'
+              ? (notes[first.problem.dayKey] ?? null)
+              : null,
             first.grewBy,
           ),
         },
       ]
     : [];
-  if (after.holdsThrough === null || problem.length > 0) return problem;
-  return [holds(after.holdsThrough)];
+  if (problem.length > 0 || after.problems.length > 0) return problem;
+  return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
 }
 
 /** One problem in a few words, in the plan's terms: "The plan leaves Rent $30 short on Nov 1". */
 export function describeProblemShort(problem: LookaheadProblem) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on).replace(/ /g, '\u00a0');
-  if (problem.kind === 'noIncome')
+  if (problem.kind === 'noIncome' && problem.reason === 'noIncome')
     return `${name} on ${on} has no income before it`;
+  if (problem.kind === 'noIncome' && problem.reason === 'noPick')
+    return `${name} on ${on} comes from a pay that is not before it`;
   const result = `The plan leaves ${name} ${formatCentsShort(problem.shortBy)} short on ${on}`;
   return result;
 }
@@ -319,9 +338,12 @@ export function describeProblemShort(problem: LookaheadProblem) {
 export function describeProblemRow(problem: LookaheadProblem, today: number) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
-  if (problem.kind === 'noIncome') {
+  if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
-      title: FIX_WORDS.noIncome(name),
+      title:
+        problem.reason === 'noPick'
+          ? FIX_WORDS.noPick(name)
+          : FIX_WORDS.noIncome(name),
       detail: FIX_WORDS.dueOn(formatRelativeDayUTC(problem.on, today)),
     };
   }

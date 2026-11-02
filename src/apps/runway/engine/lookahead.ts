@@ -28,7 +28,16 @@ export interface LookaheadDraft {
 }
 
 export type LookaheadProblem =
-  | { kind: 'noIncome'; on: DateOnly; billId: string; name: string }
+  | {
+      kind: 'noIncome';
+      on: DateOnly;
+      billId: string;
+      name: string;
+      /** `noIncome`: no pay comes before it is due; `noPick`: the pay it is set to come from does not; `short`: pays do come but carry less than it needs. */
+      reason: 'noIncome' | 'noPick' | 'short';
+      /** What no pay carries. */
+      shortBy: Cents;
+    }
   | {
       kind: 'short';
       on: DateOnly;
@@ -50,6 +59,8 @@ export interface LookaheadInput {
     id: string;
     name: string;
     since: DateOnly;
+    /** The bill is set to come from one named pay, which may not be there. */
+    isPick?: boolean;
     /** No due date yet: the plan sets nothing aside for it. */
     isUndated: boolean;
   }[];
@@ -192,27 +203,46 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
     })
     .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name));
 
-/** The first payment of each bill with no income day to set it aside before it is due. */
-const findNoIncome = (input: LookaheadInput): LookaheadProblem[] =>
+/** The first payment of each bill that the pays before it are not set to carry in full: none comes before it, the pay it names does not, or what is pinned leaves some of it. */
+const findNoIncome = (
+  input: LookaheadInput,
+  walkedFunded: LookaheadCarry['funded'],
+): LookaheadProblem[] =>
   input.bills.flatMap((bill) => {
     const unfunded = (input.payments[bill.id] ?? []).find(
       (payment) =>
         payment.paid === null &&
         payment.dueOn > input.today &&
         payment.dueOn <= input.horizon &&
-        payment.parts.length === 0 &&
-        payment.fundedCents < payment.totalCents,
+        payment.fundedCents +
+          payment.parts.reduce((sum, part) => sum + part.cents, 0) <
+          payment.totalCents,
     );
-    return unfunded
-      ? [
-          {
-            kind: 'noIncome',
-            on: unfunded.dueOn,
-            billId: bill.id,
-            name: bill.name,
-          },
-        ]
-      : [];
+    if (!unfunded) return [];
+    const partKeys = new Set(unfunded.parts.map((part) => part.day.dayKey));
+    const walked = (walkedFunded[bill.id] ?? [])
+      .filter((entry) => partKeys.has(entry.dayKey))
+      .reduce((sum, entry) => sum + entry.cents, 0);
+    const shortBy = Math.max(
+      0,
+      unfunded.totalCents - unfunded.fundedCents - walked,
+    );
+    const reason =
+      unfunded.parts.length > 0
+        ? 'short'
+        : bill.isPick === true
+          ? 'noPick'
+          : 'noIncome';
+    return [
+      {
+        kind: 'noIncome',
+        on: unfunded.dueOn,
+        billId: bill.id,
+        name: bill.name,
+        reason,
+        shortBy,
+      },
+    ];
   });
 
 const getIncomeEnd = (input: LookaheadInput): DateOnly | null => {
@@ -253,7 +283,10 @@ export function lookahead(input: LookaheadInput): Lookahead {
     },
     { carry: EMPTY_CARRY, shorts: [], firstShortDay: null },
   );
-  const problems = sortProblems([...findNoIncome(input), ...walked.shorts]);
+  const problems = sortProblems([
+    ...findNoIncome(input, walked.carry.funded),
+    ...walked.shorts,
+  ]);
   const incomeEndsOn = getIncomeEnd(input);
   const first = problems[0] ?? null;
   const getThrough = (): DateOnly | null => {
