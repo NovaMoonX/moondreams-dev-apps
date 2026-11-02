@@ -251,7 +251,9 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
     );
     const lineIds = ready
       .filter(
-        (row) => !done.has(row.line.lineId) && !needsPaidAmount(row.payment),
+        (row) =>
+          !done.has(row.line.lineId) &&
+          !(needsPaidAmount(row.payment) && row.payment?.paid === null),
       )
       .map((row) => row.line.lineId);
     const varyingNote =

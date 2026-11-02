@@ -40,6 +40,12 @@ const inTurn = <T>(task: () => Promise<T>): Promise<T> => {
 export const needsPaidAmount = (payment: BillPayment | null) =>
   payment !== null && payment.ranged !== null;
 
+/** What a payment of `amountCents` would use from what the bill holds; the rest comes out of Free to Spend. */
+export const getHeldFor = (payment: BillPayment, amountCents: Cents) =>
+  amountCents === payment.totalCents
+    ? payment.heldNowCents
+    : Math.min(amountCents, payment.heldMostCents);
+
 /** Records a bill's payment paid today, at `amountCents` when given; resolves with what it wrote, or null when the payment was already paid. */
 export async function markPaymentPaid(
   uid: string,
@@ -57,7 +63,7 @@ export async function markPaymentPaid(
       cardId: getMarkCardId(store.getState(), billId, payment.dueOn),
       dueOn: payment.dueOn,
       amountCents,
-      fundedCents: payment.heldNowCents,
+      fundedCents: getHeldFor(payment, amountCents),
       paidOn: todayAsUtcDate(),
       marks: countMarks(moves, billId, payment.dueOn),
     }),

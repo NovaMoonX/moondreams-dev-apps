@@ -718,7 +718,8 @@ export const PAID_AMOUNT_WORDS = {
     `${amount} more than was set aside comes out of Free to Spend`,
   stays: (amount: string, name: string) =>
     `${amount} of what was set aside stays with ${name}`,
-  offline: 'Marking paid needs a connection. Nothing was changed.',
+  failed: 'It was not marked paid. Nothing was changed.',
+  alreadyPaid: (name: string) => `${name} is already marked paid.`,
   leftForTick: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} varies, so tick it to say what it came to`

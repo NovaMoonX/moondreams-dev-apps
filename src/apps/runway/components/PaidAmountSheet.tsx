@@ -18,7 +18,7 @@ import {
   PAID_AMOUNT_WORDS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { getHeldFor } from '@apps/runway/hooks/useBillPaid';
 import type { Cents } from '@apps/runway/types';
 import { formatRange } from '@apps/runway/utils/rangeText';
 
@@ -38,22 +38,24 @@ function PaidAmountSheet({
   onClose,
 }: PaidAmountSheetProps) {
   const { isHidden } = useValuesHidden();
-  const mask = useMaskedText();
   const [amount, setAmount] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const name = billName === '' ? 'this bill' : billName;
   const cents = parseMoneyToCents(amount);
   const paidCents =
     cents !== null && cents > 0 && cents <= MAX_PURCHASE_CENTS ? cents : null;
-  const heldCents = payment.heldNowCents;
+  const heldCents = paidCents === null ? 0 : getHeldFor(payment, paidCents);
+  const leftCents = Math.max(0, payment.heldMostCents - heldCents);
+  const isPaidElsewhere = payment.paid !== null && !isSaving;
   const requestClose = useDiscardGuard({
-    isDirty: amount !== '',
+    isDirty: amount !== '' && !isPaidElsewhere,
     onClose,
     isBusy: isSaving,
   });
 
   const getNotice = () => {
-    if (paidCents === null || paidCents === heldCents) return null;
+    if (paidCents === null) return null;
     if (paidCents > heldCents) {
       return isHidden ? (
         <NeedsALookRow />
@@ -63,15 +65,16 @@ function PaidAmountSheet({
         </InlineNotice>
       );
     }
-    return isHidden ? null : (
+    return isHidden || leftCents === 0 ? null : (
       <InlineNotice tone='info'>
-        {PAID_AMOUNT_WORDS.stays(formatCents(heldCents - paidCents), name)}
+        {PAID_AMOUNT_WORDS.stays(formatCents(leftCents), name)}
       </InlineNotice>
     );
   };
 
   const handleMark = async () => {
     if (paidCents === null) return;
+    setError(null);
     setIsSaving(true);
     const isDone = await onMark(paidCents);
     if (isDone) {
@@ -79,6 +82,13 @@ function PaidAmountSheet({
       return;
     }
     setIsSaving(false);
+    setError(PAID_AMOUNT_WORDS.failed);
+  };
+
+  const getFooterNote = () => {
+    if (isPaidElsewhere) return null;
+    if (error) return error;
+    return paidCents === null ? PAID_AMOUNT_WORDS.needsAmount : null;
   };
 
   return (
@@ -104,10 +114,16 @@ function PaidAmountSheet({
               )
             }
           />
-          {getNotice()}
+          {isPaidElsewhere ? (
+            <InlineNotice tone='info'>
+              {PAID_AMOUNT_WORDS.alreadyPaid(name)}
+            </InlineNotice>
+          ) : (
+            getNotice()
+          )}
         </div>
         <ModalFooterActions
-          note={paidCents === null ? mask(PAID_AMOUNT_WORDS.needsAmount) : null}
+          note={getFooterNote()}
           cancelAction={
             <Button
               type='button'
@@ -122,10 +138,10 @@ function PaidAmountSheet({
             <Button
               type='button'
               loading={isSaving}
-              disabled={isSaving || paidCents === null}
-              onClick={() => void handleMark()}
+              disabled={isSaving || (!isPaidElsewhere && paidCents === null)}
+              onClick={() => (isPaidElsewhere ? onClose() : void handleMark())}
             >
-              {CHECKLIST_WORDS.markPaid}
+              {isPaidElsewhere ? 'Close' : CHECKLIST_WORDS.markPaid}
             </Button>
           }
         />

@@ -2979,6 +2979,23 @@ const version = (
     'a bill set aside in full asks nothing more',
   );
 
+  const varying = planBillPayments(
+    rent({
+      amount: { lowCents: 100_000, highCents: 120_000 },
+      stanceOverride: 'optimistic',
+      progress: { funded: [funded(nov10, 120_000)], paid: [] },
+    }),
+    [],
+    horizon,
+    'conservative',
+    { today: nov10 },
+  )[0];
+  assert.deepEqual(
+    [varying.totalCents, varying.heldNowCents, varying.heldMostCents],
+    [100_000, 100_000, 120_000],
+    'a bill that varies, planned low but holding more, can put all it holds toward what it came to',
+  );
+
   const lateDay = planBillPayments(
     rent({
       progress: { funded: [funded(utc(2026, 12, 3), 50_000)], paid: [] },
