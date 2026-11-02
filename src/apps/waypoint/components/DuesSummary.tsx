@@ -53,8 +53,9 @@ function DuesSummary({
   const [selectedPairKey, setSelectedPairKey] = useState<string | null>(null);
   const [showAllNotices, setShowAllNotices] = useState(false);
   const [visiblePairs, setVisiblePairs] = useState(MAX_VISIBLE_PAIRS);
-  const [hasMarkedBefore, setHasMarkedBefore] = useLocalStoragePreference(
-    `waypoint:${currentUserId}:repaidHintSeen`,
+  const [hasPaidBefore, setHasPaidBefore] = useLocalStoragePreference(`waypoint:${currentUserId}:repaidHintSeen`, false);
+  const [hasReceivedBefore, setHasReceivedBefore] = useLocalStoragePreference(
+    `waypoint:${currentUserId}:receivedHintSeen`,
     false,
   );
   const selectedSettlement = settlements.find((settlement) => getPairKey(settlement) === selectedPairKey);
@@ -82,11 +83,11 @@ function DuesSummary({
 
   const getDirectionHint = (fromUid: string, toUid: string, isReceiving: boolean) => {
     if (isReceiving) {
-      return hasMarkedBefore
+      return hasReceivedBefore
         ? `Tap an item once ${memberLabel(fromUid)} has paid you.`
         : `Did ${memberLabel(fromUid)} send you money? Tap what they paid to mark it received. It comes off what they owe you.`;
     }
-    return hasMarkedBefore
+    return hasPaidBefore
       ? "Tap an item once you've paid it back."
       : `Already sent ${memberLabel(toUid)} money? Tap what you paid to mark it paid back. It comes off what you owe.`;
   };
@@ -121,7 +122,9 @@ function DuesSummary({
             aria-label={getToggleLabel(isRepaid, isReceiving, expense.title)}
             onClick={() => {
               onToggleRepaid(expense.id, debtorUid);
-              setHasMarkedBefore(true);
+              if (!isRepaid) {
+                (isReceiving ? setHasReceivedBefore : setHasPaidBefore)(true);
+              }
             }}
             className={join(
               'h-auto w-full justify-start gap-3 rounded-md px-2! py-1.5! focus:outline-transparent!',
@@ -170,7 +173,7 @@ function DuesSummary({
           {owed.items.map((item) => renderItem(item, fromUid, isReceiving, canToggle))}
         </ul>
         {canToggle && (
-          <p className={join('text-xs', hasMarkedBefore ? 'text-muted-foreground' : 'text-foreground font-medium')}>
+          <p className={join('text-xs', (isReceiving ? hasReceivedBefore : hasPaidBefore) ? 'text-muted-foreground' : 'text-foreground font-medium')}>
             {getDirectionHint(fromUid, toUid, isReceiving)}
           </p>
         )}
@@ -271,6 +274,8 @@ function DuesSummary({
   const settledMine = myPairs.filter(isPairSettled);
   const others = settlements.filter((settlement) => !involvesMe(settlement));
   const groups = [toSend, toCollect, settledMine, others];
+  const needsSendNote = !hasPaidBefore && toSend.length > 0;
+  const needsCollectNote = !hasReceivedBefore && toCollect.length > 0;
   const hiddenPairCount = groups.reduce((total, group) => total + Math.max(0, group.length - visiblePairs), 0);
   const capGroup = (items: PairSettlement[]) => items.slice(0, visiblePairs);
 
@@ -460,11 +465,19 @@ function DuesSummary({
             )}
           </div>
         ))}
-      {!hasMarkedBefore && (toSend.length > 0 || toCollect.length > 0) && (
-        <InlineNotice tone='info' title='Settled up outside the app?' className='mt-3'>
+      {(needsSendNote || needsCollectNote) && (
+        <InlineNotice
+          tone='info'
+          title='Settled up outside the app?'
+          className='mt-3'
+          onDismiss={() => {
+            setHasPaidBefore(true);
+            setHasReceivedBefore(true);
+          }}
+        >
           Open a row and tap what was paid.{' '}
-          {toSend.length > 0 && 'If you sent money, mark it paid back. '}
-          {toCollect.length > 0 && 'If someone sent you money, mark it received. '}
+          {needsSendNote && 'If you sent money, mark it paid back. '}
+          {needsCollectNote && 'If someone sent you money, mark it received. '}
           That&apos;s what updates what&apos;s owed.
         </InlineNotice>
       )}

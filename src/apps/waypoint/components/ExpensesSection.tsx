@@ -804,7 +804,9 @@ function ExpensesSection({ trip, currentUserId }: ExpensesSectionProps) {
           <div className='space-y-1'>
             {splitBreakdown.shares.map((share) => (
               <div key={share.uid} className='flex items-baseline justify-end gap-2'>
-                <p className='text-muted-foreground mr-auto text-xs'>{memberLabel(share.uid)}</p>
+                <p className='text-muted-foreground mr-auto text-xs'>
+                  {memberLabel(share.uid)} {share.amountLabel}
+                </p>
                 {renderRepaidControl(share)}
               </div>
             ))}
