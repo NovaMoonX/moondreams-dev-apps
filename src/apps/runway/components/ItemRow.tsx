@@ -65,7 +65,6 @@ interface ItemRowProps {
   reorder?: ItemRowReorder;
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
   isHighlighted?: boolean;
-  /** Left out of the total the view shows: its badge dims and its figure turns muted, the text stays readable. */
   isFaded?: boolean;
 }
 

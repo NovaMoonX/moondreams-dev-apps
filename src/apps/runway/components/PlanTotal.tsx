@@ -12,7 +12,6 @@ interface PlanTotalProps {
   help?: ReactNode;
   /** The info icon's title when it is not about how a month is worked out. */
   helpTitle?: string;
-  /** The priority dial the figure was trimmed to; a figure that never follows it leaves this out. */
   dial?: Priority;
 }
 

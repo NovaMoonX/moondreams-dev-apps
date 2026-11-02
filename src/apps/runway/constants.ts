@@ -274,6 +274,7 @@ export const PRIORITY_DIAL_WORDS = {
     `Counting ${counted} only. Move the dial to Want to count everything; it goes back there the next time you open Runway.`,
   counted: { must: 'Musts', should: 'Musts and Shoulds' },
   notCounted: 'Not in this total',
+  sheetSuffix: { must: 'Musts only', should: 'without Wants' },
 } as const;
 
 export const PRIORITIES_NUDGE_WORDS = {

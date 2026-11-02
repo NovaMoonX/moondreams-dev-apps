@@ -18,7 +18,7 @@ const subscribe = (listener: () => void) => {
 export const isCountedAt = (priority: Priority, dial: Priority) =>
   PRIORITIES.indexOf(priority) <= PRIORITIES.indexOf(dial);
 
-/** How far down the priorities a total counts; in memory only and cleared by `useClearPriorityDialOnLeave`, so a trimmed total never outlives the visit. */
+/** How far down the priorities a total counts; in memory only and cleared when the app is left, so a trimmed total never outlives the visit. */
 export function usePriorityDial() {
   const { user } = useAuth();
   const key = user?.uid ?? '';

@@ -188,6 +188,7 @@ function EnvelopesScreen() {
         <GroupSheet
           groupId={openGroupId}
           today={today}
+          dial={dial}
           onClose={() => setOpenGroupId(null)}
         />
       )}
