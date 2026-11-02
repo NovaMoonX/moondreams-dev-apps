@@ -34,7 +34,6 @@ const NOTHING: CopyCounts = { made: 0, deleted: 0, skipped: 0 };
 type WantedPhoto = ReturnType<typeof readCopyablePhotos>[number];
 
 async function makeCopies(
-  saleId: string,
   itemId: string,
   linkId: string,
   photo: WantedPhoto,
@@ -104,7 +103,7 @@ async function runPass(saleId: string, itemId: string): Promise<CopyCounts> {
       );
       return missing.length === 0
         ? total
-        : add(total, await makeCopies(saleId, itemId, linkId, photo, missing));
+        : add(total, await makeCopies(itemId, linkId, photo, missing));
     },
     Promise.resolve(NOTHING),
   );
