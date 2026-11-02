@@ -1,4 +1,8 @@
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import {
+  formatDateShortUTC,
+  formatDateUTC,
+  formatRelativeDayUTC,
+} from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { FIX_WORDS } from '@apps/runway/constants';
 import {
@@ -13,9 +17,6 @@ export { isSameLookahead, sortProblems };
 /** One problem in a sentence: what stops the plan, on which day, never as missing money. */
 export function describeProblem(problem: LookaheadProblem) {
   const name = problem.name === '' ? 'A bill' : problem.name;
-  if (problem.kind === 'overdue') {
-    return `${name} was due ${formatDateUTC(problem.on)} and is not marked paid.`;
-  }
   if (problem.kind === 'noIncome') {
     return `${name} on ${formatDateUTC(problem.on)} has no income before it is due.`;
   }
@@ -104,14 +105,18 @@ function listShorts(shorts: readonly ShortProblem[], isHidden: boolean) {
 }
 
 /** A group as a list row: the day, and what runs short on it. */
-export function describeGroupRow(group: ProblemGroup, isHidden = false) {
+export function describeGroupRow(
+  group: ProblemGroup,
+  today: number,
+  isHidden = false,
+) {
   if (group.kind === 'undated') {
     return {
       title: FIX_WORDS.needsDate(group.bills.map(({ name }) => name)),
       detail: FIX_WORDS.nothingSetAside(group.bills.length),
     };
   }
-  if (group.kind === 'single') return describeProblemRow(group.problem);
+  if (group.kind === 'single') return describeProblemRow(group.problem, today);
   const result = {
     title: formatDateShortUTC(group.on),
     detail: listShorts(group.shorts, isHidden),
@@ -131,10 +136,7 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
   const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {
     const problem = group.problem;
-    const before =
-      problem.kind === 'overdue'
-        ? `${getName(problem)} was due ${on}, not marked paid`
-        : `${getName(problem)} on ${on} has no income before it`;
+    const before = `${getName(problem)} on ${on} has no income before it`;
     return { before, figure: null, after: '' };
   }
   if (group.shorts.length > 1) {
@@ -178,12 +180,6 @@ function describeChangeProblem(
     more > 0
       ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.`
       : '';
-  if (problem.kind === 'overdue') {
-    return {
-      text: `With this change, ${name} was due ${on} and is not marked paid.${tail}`,
-      figure: null,
-    };
-  }
   if (problem.kind === 'noIncome') {
     return {
       text: `With this change, ${name} on ${on} has no income before it is due.${tail}`,
@@ -241,8 +237,6 @@ export function describeHoldsBlocks(
 export function describeProblemShort(problem: LookaheadProblem) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on).replace(/ /g, '\u00a0');
-  if (problem.kind === 'overdue')
-    return `${name} was due ${on}, not marked paid`;
   if (problem.kind === 'noIncome')
     return `${name} on ${on} has no income before it`;
   const result = `The plan leaves ${name} ${formatCentsShort(problem.shortBy)} short on ${on}`;
@@ -250,14 +244,14 @@ export function describeProblemShort(problem: LookaheadProblem) {
 }
 
 /** One problem as a list row: what is short or missing, and on which day. */
-export function describeProblemRow(problem: LookaheadProblem) {
+export function describeProblemRow(problem: LookaheadProblem, today: number) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateShortUTC(problem.on);
-  if (problem.kind === 'overdue') {
-    return { title: FIX_WORDS.notPaid(name), detail: FIX_WORDS.dueOn(on) };
-  }
   if (problem.kind === 'noIncome') {
-    return { title: FIX_WORDS.noIncome(name), detail: FIX_WORDS.dueOn(on) };
+    return {
+      title: FIX_WORDS.noIncome(name),
+      detail: FIX_WORDS.dueOn(formatRelativeDayUTC(problem.on, today)),
+    };
   }
   return {
     title: FIX_WORDS.short(name, formatCentsShort(problem.shortBy)),

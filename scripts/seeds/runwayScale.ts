@@ -50,6 +50,9 @@ const PURCHASE_COUNT = 25_000;
 const BILL_COUNT = 60;
 const ENVELOPE_COUNT = 25;
 const GOAL_COUNT = 12;
+/** Bills left unpaid for their last 40 days, so the to-pay card is crowded. */
+const LATE_FROM = 40;
+const LATE_COUNT = 8;
 /** Versions beyond each item's first; the total is this plus the items. `RUNWAY_SCALE_VERSIONS` raises it to the TDD's 2,000. */
 const TARGET_VERSIONS = Number(process.env.RUNWAY_SCALE_VERSIONS ?? 600);
 const HOUR_MS = 3_600_000;
@@ -424,6 +427,33 @@ export async function seedRunwayScale(
       };
     },
   );
+  const undatedBills: PlanItem[] = ['Gym', 'Health insurance'].map(
+    (name, index) => {
+      const payload: BillSealed = {
+        name,
+        emoji: null,
+        priority: 'should',
+        orderIndex: BILL_COUNT + index + 1,
+        amount: exact(2_500 + index * 15_000),
+        timing: {
+          kind: 'date',
+          schedule: { kind: 'monthly', anchor: null, monthDays: [] },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' },
+        stanceOverride: null,
+        groupId: null,
+      };
+      return {
+        id: `scale-bill-undated-${index}`,
+        kind: 'bill',
+        parentId: null,
+        createdAt: planCreatedAt + 45_000 + index * 1000,
+        payload,
+        priority: 'should',
+      };
+    },
+  );
   const goalItems: PlanItem[] = Array.from(
     { length: GOAL_COUNT },
     (_, index) => {
@@ -458,6 +488,7 @@ export async function seedRunwayScale(
     ...payLines,
     ...envelopeItems,
     ...billItems,
+    ...undatedBills,
     ...goalItems,
   ];
 
@@ -764,11 +795,12 @@ export async function seedRunwayScale(
   const paidDays = billItems.flatMap((item, index) => {
     const body = item.payload as BillSealed;
     const from = index < 20 ? item.createdAt : today - 183 * DAY_MS;
+    const isBehind = index >= LATE_FROM && index < LATE_FROM + LATE_COUNT;
     return occurrences(
       body.timing.schedule,
       never,
       startOfUtcDay(from),
-      today - DAY_MS,
+      isBehind ? today - 40 * DAY_MS : today - DAY_MS,
     ).map((dueOn) => ({ item, body, dueOn }));
   });
   await inChunks(paidDays, 500, async (slice) => {

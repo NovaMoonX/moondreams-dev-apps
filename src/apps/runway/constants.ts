@@ -107,6 +107,7 @@ export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
     purchaseChange: 'Purchase',
     cardChange: 'Card',
     moveChange: 'Move',
+    paymentChange: 'Payment',
   };
 
 export const RANGE_END_WORDS = {
@@ -197,6 +198,7 @@ export const CHANGE_KINDS = [
   'purchaseChange',
   'cardChange',
   'moveChange',
+  'paymentChange',
 ] as const;
 
 export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
@@ -280,7 +282,7 @@ export const PRIORITY_DIAL_WORDS = {
 export const PRIORITIES_NUDGE_WORDS = {
   title: 'Mark what you must pay',
   subtitle: 'Everything starts as Should. Move yours into Must and Want.',
-  dismiss: "Don't show this again",
+  dismiss: "Don't ask again",
 } as const;
 
 /** Every income day, or every Nth: the cadences the envelope form offers. */
@@ -698,8 +700,65 @@ export const BILL_WORDS = {
   waiting: 'Waiting for the rest',
   readyToPay: 'Set aside in full',
   needsDueDate: 'Needs a due date',
+  allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
+  offPlanTitle: (names: readonly string[]) =>
+    names.length === 1
+      ? `${names[0]} has no due date`
+      : names.length === 2
+        ? `${names[0]} and ${names[1]} have no due date`
+        : `${names.length} bills have no due date`,
+  offPlanDetail: (count: number) =>
+    `This pay sets nothing aside for ${count === 1 ? 'it' : 'them'}, so it has less to spare than it looks.`,
+} as const;
+
+export const DUE_WORDS = {
+  title: 'To pay today',
+  titleLate: 'To pay now',
+  today: 'Due today',
+  wasDue: (when: string) => `Was due ${when}`,
+  missed: (
+    when: string,
+    later: readonly string[],
+    isDueAgainToday: boolean,
+  ) => {
+    const dates = [when, ...later];
+    const list =
+      dates.length === 2
+        ? `${dates[0]} and ${dates[1]}`
+        : dates.length === 3
+          ? `${dates[0]}, ${dates[1]} and ${dates[2]}`
+          : dates.length > 3
+            ? `${when} and ${later.length} more`
+            : when;
+    return `Missed ${list}${isDueAgainToday ? ' · due again today' : ''}`;
+  },
+  count: (count: number, isAnyLate: boolean) =>
+    isAnyLate ? `${count} bills, oldest first` : `${count} bills`,
+  more: (count: number) => `Show ${count} more`,
+  fewer: 'Show fewer',
+  seeAll: 'See all',
+  markPaid: 'Mark paid',
+  alreadyPaid: (name: string) => `${name} was already marked paid`,
+  paidMissed: (
+    name: string,
+    due: string,
+    later: readonly string[],
+    isDueAgainToday: boolean,
+  ) =>
+    `Paid ${name}'s ${due} payment · ${
+      later.length + (isDueAgainToday ? 1 : 0) > 1
+        ? `${later.length + (isDueAgainToday ? 1 : 0)} more still due`
+        : isDueAgainToday
+          ? "today's is still due"
+          : `the ${later[0]} payment is still due`
+    }`,
+  openBills: (name: string) => `Open ${name}`,
+  undoOffline: (name: string) =>
+    `${name} is still marked paid. Undoing needs a connection`,
+  undoFailed: (name: string) =>
+    `${name} is still marked paid. Open the bill to take it back`,
 } as const;
 
 /** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
@@ -1350,6 +1409,20 @@ export const ITEM_SHEET_WORDS = {
   notArrivedSub: 'Takes this day off your plan until you put it back',
 } as const;
 
+export const PAID_HISTORY_WORDS = {
+  summary: (name: string, due: string, amount: string) =>
+    `Marked ${name} paid: ${amount} due ${due}.`,
+  undoText: (name: string, due: string) =>
+    `Took back the ${due} payment of ${name}`,
+  confirm: (name: string, due: string, freeCents: string | null) =>
+    `${name}'s ${due} payment goes back to unpaid${freeCents === null ? '' : `, and ${freeCents} returns to Free to Spend`}.`,
+  alreadyTakenBack: (name: string) => `${name} was already taken back`,
+  title: 'Payment',
+  openMove: 'Open this payment',
+  undoThis: 'Take back this payment',
+  undoTitle: 'Take back this payment?',
+} as const;
+
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
@@ -1686,7 +1759,6 @@ export const HOW_OFTEN_WORDS = {
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
 export const FIX_WORDS = {
-  notPaid: (name: string) => `${name} is not marked paid`,
   noIncome: (name: string) => `${name} has no income before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,
   dueOn: (date: string) => `Due ${date}`,

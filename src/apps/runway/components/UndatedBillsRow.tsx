@@ -6,15 +6,25 @@ import { BILL_WORDS } from '@apps/runway/constants';
 
 interface UndatedBillsRowProps {
   names: string[];
+  /** Replaces the Bills screen's wording when the row sits somewhere else. */
+  label?: string;
+  /** Why the row matters where it sits, under the label. */
+  detail?: string;
   onOpen: () => void;
 }
 
 /** The bills with no due date, as one warning row that opens the bill or narrows the list to them. */
-function UndatedBillsRow({ names, onOpen }: UndatedBillsRowProps) {
+function UndatedBillsRow({
+  names,
+  label: given,
+  detail,
+  onOpen,
+}: UndatedBillsRowProps) {
   const label =
-    names.length === 1
+    given ??
+    (names.length === 1
       ? BILL_WORDS.undatedOne(names[0])
-      : BILL_WORDS.undatedMany(names.length);
+      : BILL_WORDS.undatedMany(names.length));
 
   return (
     <Button
@@ -29,8 +39,11 @@ function UndatedBillsRow({ names, onOpen }: UndatedBillsRowProps) {
       >
         <TriangleAlert className='h-4 w-4' />
       </span>
-      <span className='min-w-0 flex-1 text-sm font-medium break-words'>
-        {label}
+      <span className='min-w-0 flex-1 text-sm break-words'>
+        <span className='block font-medium'>{label}</span>
+        {detail && (
+          <span className='text-muted-foreground block'>{detail}</span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground h-4 w-4 shrink-0'
