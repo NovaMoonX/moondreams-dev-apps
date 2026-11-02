@@ -50,8 +50,11 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { clearBillPins } from '@apps/runway/store/actions/dayActions';
-import { getBillPins } from '@apps/runway/engine/billShare';
-import { withFundedBy } from '@apps/runway/engine/billShare';
+import {
+  clipStretches,
+  getBillPins,
+  withFundedBy,
+} from '@apps/runway/engine/billShare';
 import { getVersionStretches } from '@apps/runway/engine/resolve';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
@@ -1124,41 +1127,47 @@ function BillFormBody({
         paidByCardId: editing.payload.paidByCardId ?? null,
         fundedBy: null,
       });
-  const buildFundingStretches = (from: number) =>
+  const buildFundingStretches = (from: number, until: number | null) =>
     isOnlyFundingChanged
       ? withFundedBy(
-          getVersionStretches<BillVersion, BillSealed>(
-            store
-              .getState()
-              .runway.versions.filter(
-                (version): version is BillVersion => version.kind === 'bill',
-              ),
-            editing.itemId,
-            from,
+          clipStretches(
+            getVersionStretches<BillVersion, BillSealed>(
+              store
+                .getState()
+                .runway.versions.filter(
+                  (version): version is BillVersion => version.kind === 'bill',
+                ),
+              editing.itemId,
+              from,
+            ),
+            until,
           ),
           candidate.fundedBy,
         )
       : undefined;
-  const clearStalePins = async (from: number) => {
+  const clearStalePins = async (from: number, until: number | null) => {
     if (!user || !editing) return;
     const pins = getBillPins(
       store.getState().runway.days,
       editing.itemId,
       from,
+      until,
     );
     if (pins.length === 0) return;
     const encryption = await getRunwayEncryption(user.uid);
-    await clearBillPins(
+    const cleared = await clearBillPins(
       user.uid,
       encryption,
       editing.itemId,
       editing.payload.name,
       pins,
     );
+    return {
+      cleared,
+      billId: editing.itemId,
+      billName: editing.payload.name,
+    };
   };
-  const hasPins =
-    editing !== undefined &&
-    getBillPins(openDays, editing.itemId, today).length > 0;
   const flow = useChangeFlow({
     itemId: editing?.itemId ?? '',
     kind: 'bill',
@@ -1172,9 +1181,9 @@ function BillFormBody({
     presetDayKey,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
-    afterSave: isFundingChanged && hasPins ? clearStalePins : undefined,
+    afterSave: isFundingChanged ? clearStalePins : undefined,
     buildStretches: buildFundingStretches,
-    clearsPins: isFundingChanged && hasPins,
+    clearsPins: isFundingChanged,
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from,
   });
@@ -1256,22 +1265,26 @@ function BillFormBody({
     candidate,
     warningActions: (
       <div className='flex flex-wrap gap-2'>
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          onClick={() => set({ paidFrom: 'spread', payValue: '' })}
-        >
-          {PAID_FROM_WORDS.keepSpread}
-        </Button>
-        <Button
-          type='button'
-          variant='secondary'
-          size='sm'
-          onClick={() => set({ paidFrom: 'pay' })}
-        >
-          {PAID_FROM_WORDS.pickAnother}
-        </Button>
+        {formData.paidFrom !== 'spread' && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => set({ paidFrom: 'spread', payValue: '' })}
+          >
+            {PAID_FROM_WORDS.keepSpread}
+          </Button>
+        )}
+        {payOptions.length > 0 && (
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            onClick={() => set({ paidFrom: 'pay', payValue: '' })}
+          >
+            {PAID_FROM_WORDS.pickAnother}
+          </Button>
+        )}
       </div>
     ),
   };

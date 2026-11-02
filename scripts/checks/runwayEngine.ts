@@ -76,6 +76,7 @@ import {
   monthlyTotal,
 } from '../../src/apps/runway/engine/groups.ts';
 import {
+  clipStretches,
   withFundedBy,
   findPayRule,
   getFixedByBill,
@@ -1573,6 +1574,77 @@ const version = (
       'Paid from spread across your pays to the pay on the 30th',
       'a Paid from change reads as plain words',
     );
+    // A pay that puts in less pushes the rest onto the next repeating pay, never onto one-time pays or all the others.
+    const oneTimeIds = new Set(['free', 'bonus']);
+    const mixed = [
+      payDay('free', utc(2026, 11, 7)),
+      workPays[0],
+      payDay('bonus', utc(2026, 11, 21)),
+      workPays[1],
+    ];
+    const rentOneTime = (fixed: Record<string, number>) => ({
+      ...rent({ kind: 'suggested' }, fixed),
+      oneTimePayLineIds: oneTimeIds,
+    });
+    assert.deepEqual(
+      partsOf(rentOneTime({ [workPays[0].dayKey]: 0 }), mixed),
+      [
+        ['20261107', 0],
+        ['20261115', 0],
+        ['20261121', 0],
+        ['20261130', 150_000],
+      ],
+      'the next repeating pay carries all of it when the 15th puts in nothing',
+    );
+    assert.deepEqual(
+      partsOf(rentOneTime({ [workPays[0].dayKey]: 50_000 }), mixed),
+      [
+        ['20261107', 0],
+        ['20261115', 50_000],
+        ['20261121', 0],
+        ['20261130', 100_000],
+      ],
+      'a pay that puts in less pushes exactly the rest onto the next repeating pay',
+    );
+    assert.deepEqual(
+      partsOf(rentOneTime({ [workPays[1].dayKey]: 0 }), mixed).map(
+        (part) => part[1],
+      ),
+      [0, 150_000, 0, 0],
+      'with no repeating pay after the pinned one, the first repeating pay in the window carries it',
+    );
+    assert.deepEqual(
+      partsOf(
+        rentOneTime({ [workPays[0].dayKey]: 0, [workPays[1].dayKey]: 0 }),
+        mixed,
+      ).map((part) => part[1]),
+      [0, 0, 0, 0],
+      'with every repeating pay pinned the rest is unfunded, not given to a one-time pay',
+    );
+
+    // A temporary change is cut off where it ends.
+    const clipFrom = utc(2026, 10, 24);
+    const clipped = clipStretches(
+      [
+        { effectiveFrom: clipFrom, effectiveUntil: clipFrom + 10 * DAY_MS },
+        { effectiveFrom: clipFrom + 10 * DAY_MS, effectiveUntil: null },
+      ],
+      clipFrom + 5 * DAY_MS,
+    );
+    assert.deepEqual(
+      clipped.map((stretch) => [stretch.effectiveFrom, stretch.effectiveUntil]),
+      [[clipFrom, clipFrom + 5 * DAY_MS]],
+      'stretches that start after the end go and the last one ends there',
+    );
+    assert.deepEqual(
+      clipStretches(
+        [{ effectiveFrom: clipFrom, effectiveUntil: null }],
+        clipFrom + 5 * DAY_MS,
+      ).map((stretch) => stretch.effectiveUntil),
+      [clipFrom + 5 * DAY_MS],
+      'an open stretch ends where the change ends',
+    );
+
     // A pay's own share of a bill: the other pays, the shortfall and the rule it could become.
     const never = () => false;
     const monthDayOf = (_payLineId: string, on: number) =>

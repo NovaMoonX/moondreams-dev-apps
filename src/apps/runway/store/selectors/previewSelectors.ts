@@ -61,8 +61,8 @@ export type PreviewVersion = Parameters<typeof layerVersion<OpenVersion>>[1];
 
 /** What is layered over the real plan to see its effect: a version, an item that ends or is archived, or one income day's own payload. */
 export type PreviewChange =
-  | { kind: 'version'; version: PreviewVersion; unpinBillId?: string }
-  | { kind: 'versions'; versions: PreviewVersion[]; unpinBillId?: string }
+  | { kind: 'version'; version: PreviewVersion; unpin?: PreviewUnpin }
+  | { kind: 'versions'; versions: PreviewVersion[]; unpin?: PreviewUnpin }
   | { kind: 'end'; itemId: string; endedAt: number }
   | { kind: 'archive'; itemId: string; archivedAt: number }
   | {
@@ -123,18 +123,27 @@ const layerDay = (
 };
 
 /** The open days without the figures set for one bill, as a change that replaces them would leave them. */
-const unpin = (openDays: Slice['days'], billId: string | undefined) =>
-  billId === undefined
+/** Which days' figures for one bill a change replaces: from the day it starts, up to where a temporary one ends. */
+export interface PreviewUnpin {
+  billId: string;
+  from: number;
+  until: number | null;
+}
+
+const unpin = (openDays: Slice['days'], scope: PreviewUnpin | undefined) =>
+  scope === undefined
     ? openDays
     : openDays.map((entry) =>
-        Object.hasOwn(entry.override.billCents ?? {}, billId)
+        Object.hasOwn(entry.override.billCents ?? {}, scope.billId) &&
+        entry.expectedOn >= scope.from &&
+        (scope.until === null || entry.expectedOn < scope.until)
           ? {
               ...entry,
               override: {
                 ...entry.override,
                 billCents: Object.fromEntries(
                   Object.entries(entry.override.billCents).filter(
-                    ([id]) => id !== billId,
+                    ([id]) => id !== scope.billId,
                   ),
                 ),
               },
@@ -151,7 +160,7 @@ const layerPlan = (
     return {
       items,
       versions: layerVersion<OpenVersion>(versions, change.version),
-      openDays: unpin(openDays, change.unpinBillId),
+      openDays: unpin(openDays, change.unpin),
     };
   }
   if (change.kind === 'versions') {
@@ -164,7 +173,7 @@ const layerPlan = (
           id: `${WHAT_IF_VERSION_ID}-${index}`,
         })),
       ],
-      openDays: unpin(openDays, change.unpinBillId),
+      openDays: unpin(openDays, change.unpin),
     };
   }
   if (change.kind === 'end') {
@@ -384,9 +393,11 @@ export interface BillShareView {
     afterCents: number;
     isPinned: boolean;
   }[];
-  /** Other items whose lines move on those pays, summed over them. */
+  /** Other items whose lines move, one entry per pay. */
   others: {
     itemId: string;
+    dayKey: string;
+    on: number;
     name: string;
     beforeCents: number;
     afterCents: number;
@@ -396,9 +407,44 @@ export interface BillShareView {
   leftAfterCents: number;
   /** What the pay brings in all. */
   dayMoneyCents: number;
+  /** What the pay has left for this bill after the lines drawn before it. */
+  availableCents: number;
   /** Whether a Paid from rule would give every payment to the horizon exactly one pay to come from. */
   isRuleClean: (rule: Extract<BillFundedBy, { kind: 'pay' }>) => boolean;
 }
+
+const beforeCache = new WeakMap<
+  object,
+  { deps: unknown[]; drafts: Map<string, DraftView | null> }
+>();
+
+/** The day drafts as they are now, kept while the plan they were drawn from is the same, so typing a figure redraws only the layered ones. */
+const getBeforeDrafts = (
+  inputs: PreviewInputs,
+  draftOf: (source: Slice['days'], dayKey: string) => DraftView | null,
+) => {
+  const deps = [
+    inputs.items,
+    inputs.versions,
+    inputs.stance,
+    inputs.today,
+    inputs.heldByItem,
+    inputs.settledKey,
+    inputs.billProgress,
+  ];
+  const known = beforeCache.get(inputs.openDays);
+  const entry =
+    known && known.deps.every((value, index) => value === deps[index])
+      ? known
+      : { deps, drafts: new Map<string, DraftView | null>() };
+  beforeCache.set(inputs.openDays, entry);
+  return (dayKey: string) => {
+    if (!entry.drafts.has(dayKey)) {
+      entry.drafts.set(dayKey, draftOf(inputs.openDays, dayKey));
+    }
+    return entry.drafts.get(dayKey) ?? null;
+  };
+};
 
 /** What setting one pay's share of a bill to `cents` does: each pay of the payment's window as its day screen draws it (the same drafts, before and after), the other items that move and the pay's own leftover. Null when the pay is not in a payment's window. */
 export function previewBillShareView(
@@ -461,13 +507,15 @@ export function previewBillShareView(
       inputs.billProgress,
       { isCached: false, coming },
     );
+  const beforeOf = getBeforeDrafts(inputs, draftOf);
   const pairs = share.window.map((entry) => ({
     entry,
-    before: draftOf(openDays, entry.dayKey),
+    before: beforeOf(entry.dayKey),
     after: draftOf(layered, entry.dayKey),
   }));
-  const billCents = (view: DraftView | null) =>
-    view?.draft.lines.find((line) => line.itemId === billId)?.cents ?? 0;
+  const billLine = (view: DraftView | null) =>
+    view?.draft.lines.find((line) => line.itemId === billId) ?? null;
+  const billCents = (view: DraftView | null) => billLine(view)?.cents ?? 0;
   const rows = pairs
     .map(({ entry, before, after }) => ({
       dayKey: entry.dayKey,
@@ -481,41 +529,35 @@ export function previewBillShareView(
     .filter(
       (row) => row.dayKey === day.dayKey || row.beforeCents !== row.afterCents,
     );
-  const others = [
-    ...pairs
-      .flatMap(({ before, after }) =>
-        before && after
-          ? (compareDrafts(before.draft, after.draft)?.lines ?? [])
-          : [],
-      )
-      .filter((line) => line.itemId !== billId)
-      .reduce((acc, line) => {
-        const known = acc.get(line.itemId);
-        return acc.set(line.itemId, {
-          itemId: line.itemId,
-          name: '',
-          beforeCents: (known?.beforeCents ?? 0) + line.beforeCents,
-          afterCents: (known?.afterCents ?? 0) + line.afterCents,
-        });
-      }, new Map<string, BillShareView['others'][number]>())
-      .values(),
-  ]
-    .map((entry) => ({
-      ...entry,
-      name:
-        pairs.find(({ after }) => after?.items[entry.itemId])?.after?.items[
-          entry.itemId
-        ].name ?? '',
-    }))
-    .filter(
-      (entry) => entry.name !== '' && entry.beforeCents !== entry.afterCents,
-    );
+  const others = pairs
+    .flatMap(({ entry, before, after }) =>
+      before && after
+        ? (compareDrafts(before.draft, after.draft)?.lines ?? [])
+            .filter((line) => line.itemId !== billId)
+            .map((line) => ({
+              itemId: line.itemId,
+              dayKey: entry.dayKey,
+              on: entry.on,
+              name: after.items[line.itemId]?.name ?? '',
+              beforeCents: line.beforeCents,
+              afterCents: line.afterCents,
+            }))
+        : [],
+    )
+    .filter((entry) => entry.name !== '');
   const own = pairs.find(({ entry }) => entry.dayKey === day.dayKey);
+  const afterSum = pairs.reduce((sum, { after }) => sum + billCents(after), 0);
+  const ownLines = own?.before?.draft.lines ?? [];
+  const ownIndex = ownLines.findIndex((line) => line.itemId === billId);
+  const earlier = (
+    ownIndex === -1 ? ownLines : ownLines.slice(0, ownIndex)
+  ).reduce((sum, line) => sum + line.cents, 0);
   const result: BillShareView = {
-    share,
+    share: { ...share, shortCents: Math.max(0, share.maxCents - afterSum) },
     rows,
     others,
     dayMoneyCents: own?.before?.draft.moneyCents ?? 0,
+    availableCents: Math.max(0, (own?.before?.draft.moneyCents ?? 0) - earlier),
     leftBeforeCents: own?.before?.draft.freeToSpend.cents ?? 0,
     leftAfterCents: own?.after?.draft.freeToSpend.cents ?? 0,
     isRuleClean: (rule) => {
@@ -529,14 +571,19 @@ export function previewBillShareView(
         );
       const spread = plan({ kind: 'suggested' });
       const oneTime = billInput.oneTimePayLineIds;
-      return plan(rule).every(
-        (payment, index) =>
-          payment.paid !== null ||
-          payment.dueOn < today ||
-          payment.parts.length === 1 ||
-          (spread[index]?.parts ?? []).every((part) =>
-            oneTime?.has(payLineIdOfDayKey(part.day.dayKey)),
-          ),
+      const applicable = plan(rule)
+        .map((payment, index) => ({ payment, index }))
+        .filter(
+          ({ payment, index }) =>
+            payment.paid === null &&
+            payment.dueOn >= today &&
+            (spread[index]?.parts ?? []).some(
+              (part) => !oneTime?.has(payLineIdOfDayKey(part.day.dayKey)),
+            ),
+        );
+      return (
+        applicable.length > 0 &&
+        applicable.every(({ payment }) => payment.parts.length === 1)
       );
     },
   };

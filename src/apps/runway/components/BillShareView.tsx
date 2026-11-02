@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
+import EffectPreview from '@apps/runway/components/EffectPreview';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
@@ -30,17 +31,27 @@ import {
   PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
 import {
-  getBillPins,
   findPayRule,
+  getBillPins,
+  withFundedBy,
   type BillPin,
 } from '@apps/runway/engine/billShare';
-import { payLineIdOfDayKey, todayAsUtcDate } from '@apps/runway/engine/dates';
-import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
+import {
+  payLineIdOfDayKey,
+  toDayKey,
+  todayAsUtcDate,
+} from '@apps/runway/engine/dates';
+import {
+  getVersionStretches,
+  resolveCurrentOrNext,
+} from '@apps/runway/engine/resolve';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
+  getFundedByBefore,
   revertFundedBy,
   writeFundedBy,
+  type FundedByBefore,
 } from '@apps/runway/store/actions/billPaidFromActions';
 import {
   clearBillPins,
@@ -52,6 +63,7 @@ import {
 import {
   previewBillShareView,
   type PreviewChange,
+  type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectAllCards,
@@ -86,6 +98,10 @@ interface BillShareViewProps {
   onClose: () => void;
   /** Opens the bill's form at its Paid from question. */
   onOpenPaidFrom: () => void;
+  /** `pairing`: the pay pays the bill first; `leftOut`: the bill comes from another pay. Both only explain. */
+  mode?: 'edit' | 'pairing' | 'leftOut';
+  /** Where the bill comes from, in words, for the explanation. */
+  paidFromText?: string;
 }
 
 type PayRule = Extract<BillFundedBy, { kind: 'pay' }>;
@@ -103,7 +119,7 @@ interface Pending {
   before: Cents | undefined;
   /** The Paid from this action wrote and the one it replaced; null when it wrote none. */
   ruleWrote: BillFundedBy | null;
-  ruleBack: BillFundedBy;
+  ruleBack: FundedByBefore;
   backText: string;
   /** Per-pay figures this action cleared. */
   cleared: BillPin[];
@@ -141,11 +157,27 @@ async function undoPending(pending: Pending, addToast: AddToast, store: Store) {
       return;
     }
   }
+  const thisKey = toDayKey(day.payLineId, day.expectedOn);
+  const otherPins = pending.cleared.filter((pin) => pin.dayKey !== thisKey);
   try {
-    if (pending.cleared.length > 0) {
-      await restoreBillPins(uid, encryption, billId, billName, pending.cleared);
-      return;
+    if (otherPins.length > 0) {
+      const { skipped } = await restoreBillPins(
+        uid,
+        encryption,
+        billId,
+        billName,
+        otherPins,
+      );
+      if (skipped.length > 0) {
+        tell(
+          PAY_SHARE_WORDS.pinsNotBack(billName, skipped.length),
+          new Error(''),
+        );
+      }
     }
+    const wasCleared = pending.cleared.some((pin) => pin.dayKey === thisKey);
+    const expected = wasCleared ? undefined : wrote;
+    if (before === expected) return;
     const date = formatDateUTC(day.expectedOn);
     await saveBillShare(
       uid,
@@ -165,7 +197,7 @@ async function undoPending(pending: Pending, addToast: AddToast, store: Store) {
               ),
         note: null,
       },
-      { was: wrote },
+      { was: expected },
     );
   } catch (error) {
     tell(
@@ -190,7 +222,7 @@ function KeepChoice({ title, body, isDisabled, onPick }: KeepChoiceProps) {
       type='button'
       variant='tertiary'
       disabled={isDisabled}
-      className='text-foreground! border-border h-auto min-h-20 w-full flex-col items-start justify-start gap-0.5 rounded-2xl border px-3! py-2! text-left font-normal whitespace-normal'
+      className='text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0.5 rounded-2xl border px-3! py-2! text-left font-normal whitespace-normal'
       onClick={onPick}
     >
       <span className='text-[15px] leading-[1.125rem] font-medium'>
@@ -216,6 +248,8 @@ function BillShareView({
   onBack,
   onClose,
   onOpenPaidFrom,
+  mode = 'edit',
+  paidFromText = '',
 }: BillShareViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -334,12 +368,36 @@ function BillShareView({
   }, [rowCount, settledTarget]);
 
   if (bill === null) return null;
+  if (mode !== 'edit') {
+    return (
+      <div className='flex flex-col gap-3'>
+        <BackLink onBack={onBack} />
+        <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
+        <p className='text-sm'>
+          {mode === 'pairing'
+            ? PAY_SHARE_WORDS.pairingNote(bill.name)
+            : PAY_SHARE_WORDS.leftOutNote(bill.name, paidFromText)}
+        </p>
+        {mode === 'leftOut' && (
+          <div>
+            <Button type='button' variant='secondary' onClick={onOpenPaidFrom}>
+              {PAY_SHARE_WORDS.setPaidFrom}
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+  const thisPayId = payLineIdOfDayKey(dayKey);
+  const oneTimePays = getOneTimePayIds(plan);
   const blocker =
     target === null
       ? PAY_SHARE_WORDS.needsAmount
-      : !isChanged
-        ? PAY_SHARE_WORDS.unchanged
-        : null;
+      : oneTimePays.has(thisPayId)
+        ? PAY_SHARE_WORDS.oneTimePay(day?.payLineName ?? '', bill.name)
+        : !isChanged
+          ? PAY_SHARE_WORDS.unchanged
+          : null;
   const billRows = changedView
     ? changedView.rows.map((row) => {
         const date = formatDateShortUTC(row.on);
@@ -355,8 +413,8 @@ function BillShareView({
     : [];
   const otherRows = changedView
     ? changedView.others.map((entry) => ({
-        key: entry.itemId,
-        name: entry.name,
+        key: `${entry.itemId}:${entry.dayKey}`,
+        name: `${entry.name}, ${formatDateShortUTC(entry.on)}`,
         text: `${formatCents(entry.beforeCents)} → ${formatCents(entry.afterCents)}`,
       }))
     : [];
@@ -436,7 +494,7 @@ function BillShareView({
         wrote: share.cents,
         before: previous,
         ruleWrote: null,
-        ruleBack: bill.fundedBy,
+        ruleBack: [],
         backText: describePaidFrom(bill.fundedBy, plan),
         cleared: [],
       };
@@ -474,7 +532,7 @@ function BillShareView({
 
   const keepForEvery = () =>
     run(async () => {
-      if (!saved || !saved.rule || !user) return;
+      if (!saved || !saved.rule || !user || !day) return;
       const { rule } = saved;
       const encryption = await getRunwayEncryption(user.uid);
       const liveVersions = store
@@ -482,10 +540,20 @@ function BillShareView({
         .runway.versions.filter(
           (version): version is BillVersion => version.kind === 'bill',
         );
-      const next: BillSealed = { ...bill, fundedBy: rule };
-      const wasWritten = isSameRule(bill.fundedBy, rule)
-        ? false
-        : await writeFundedBy(user.uid, encryption, {
+      const isWriting = !isSameRule(bill.fundedBy, rule);
+      const withRule: Pending = {
+        ...saved.pending,
+        ruleWrote: isWriting ? rule : saved.pending.ruleWrote,
+        ruleBack: isWriting
+          ? getFundedByBefore(liveVersions, billId, today)
+          : saved.pending.ruleBack,
+      };
+      pendingRef.current = withRule;
+      isFinishingRef.current = true;
+      try {
+        if (isWriting) {
+          const next: BillSealed = { ...bill, fundedBy: rule };
+          await writeFundedBy(user.uid, encryption, {
             billId,
             versions: liveVersions,
             today,
@@ -498,13 +566,30 @@ function BillShareView({
               (picked) => describePayChoice(picked, plan, true),
             )}, from ${formatDateUTC(today)}.`,
           });
-      const withRule: Pending = {
-        ...saved.pending,
-        ruleWrote: wasWritten ? rule : saved.pending.ruleWrote,
+        }
+      } catch (writeError) {
+        isFinishingRef.current = false;
+        pendingRef.current = saved.pending;
+        throw writeError;
+      }
+      const thisPin: BillPin = {
+        dayKey,
+        payLineId: day.payLineId,
+        sourceId: day.sourceId,
+        expectedOn: day.on,
+        cents: saved.pending.wrote,
       };
-      pendingRef.current = withRule;
-      isFinishingRef.current = true;
-      const pins = getBillPins(store.getState().runway.days, billId, today);
+      const stored = getBillPins(store.getState().runway.days, billId, today);
+      const pins = stored.some((pin) => pin.dayKey === dayKey)
+        ? stored
+        : [...stored, thisPin];
+      const alreadyCleared = saved.pending.cleared;
+      const keep = (cleared: BillPin[]) => {
+        const all = [...alreadyCleared, ...cleared];
+        return all.some((pin) => pin.dayKey === dayKey)
+          ? all
+          : [...all, thisPin];
+      };
       try {
         const cleared = await clearBillPins(
           user.uid,
@@ -514,7 +599,7 @@ function BillShareView({
           pins,
         );
         finish(
-          { ...withRule, cleared },
+          { ...withRule, cleared: keep(cleared) },
           PAY_SHARE_WORDS.ruleToast(
             bill.name,
             describePayChoice(rule, plan, true),
@@ -524,8 +609,8 @@ function BillShareView({
         const cleared =
           partial instanceof PinsPartlyCleared ? partial.cleared : [];
         isFinishingRef.current = false;
-        const reached = { ...withRule, cleared };
-        pendingRef.current = reached;
+        const reached = { ...withRule, cleared: keep(cleared) };
+        pendingRef.current = null;
         setSaved({ ...saved, pending: reached, isPartial: true });
         addToast({
           title: PAY_SHARE_WORDS.keepPartial(
@@ -558,6 +643,32 @@ function BillShareView({
     onBack();
   };
 
+  const getRuleChangeJson = (rule: PayRule) => {
+    const live = store
+      .getState()
+      .runway.versions.filter(
+        (version): version is BillVersion => version.kind === 'bill',
+      );
+    const change: PreviewChange = {
+      kind: 'versions',
+      versions: withFundedBy(
+        getVersionStretches<BillVersion, BillSealed>(live, billId, today),
+        rule,
+      ).map(
+        (stretch) =>
+          ({
+            itemId: billId,
+            kind: 'bill',
+            effectiveFrom: stretch.effectiveFrom,
+            effectiveUntil: stretch.effectiveUntil,
+            changeId: 'what-if',
+            payload: stretch.payload,
+          }) as PreviewVersion,
+      ),
+      unpin: { billId, from: today, until: null },
+    };
+    return JSON.stringify(change);
+  };
   if (saved) {
     const { rule } = saved;
     const dayLabel = formatDateShortUTC(day?.on ?? today);
@@ -570,6 +681,9 @@ function BillShareView({
         {rule ? (
           <>
             <ActionTitle>{PAY_SHARE_WORDS.keepTitle}</ActionTitle>
+            {!saved.isPartial && (
+              <EffectPreview isCompact changeJson={getRuleChangeJson(rule)} />
+            )}
             <div className='flex flex-col gap-2'>
               {saved.isPartial ? (
                 <>
@@ -648,7 +762,12 @@ function BillShareView({
   }
 
   const snapToCap = () => {
-    if (target !== null && share !== null && target > share.maxCents) {
+    if (
+      !isHidden &&
+      target !== null &&
+      share !== null &&
+      target > share.maxCents
+    ) {
       setAmount(centsToInputValue(share.maxCents));
     }
   };
@@ -667,11 +786,11 @@ function BillShareView({
         </MaskedText>
       );
     }
-    return target > shown.dayMoneyCents ? (
+    return target > shown.availableCents ? (
       <MaskedText>
         {PAY_SHARE_WORDS.overPay(
-          formatCents(shown.dayMoneyCents),
-          formatCents(target - shown.dayMoneyCents),
+          formatCents(shown.availableCents),
+          formatCents(target - shown.availableCents),
         )}
       </MaskedText>
     ) : undefined;
@@ -748,7 +867,7 @@ function BillShareView({
           <InlineNotice tone='warning'>{shortLine}</InlineNotice>
         ))}
       <ModalFooterActions
-        note={error ?? blocker}
+        note={error ?? blocker ?? (isHidden ? null : shortLine)}
         cancelAction={
           <Button
             type='button'

@@ -1,4 +1,4 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { doc, runTransaction, setDoc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
@@ -193,7 +193,56 @@ export class PinsPartlyCleared extends Error {
   }
 }
 
-/** Takes every per-pay figure of one bill off the given days, with one history line for all of them; the cleared pins come back for an Undo, or in the error when it stops part way. */
+/** One history line for a bill, written after the days it names were written. */
+const writeHistoryLine = async (
+  uid: string,
+  encryption: RunwayEncryption,
+  billId: string,
+  summary: string,
+  effectiveFrom: number,
+) => {
+  const changeId = generateUuid();
+  const entry: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: Date.now(),
+    effectiveFrom,
+    itemIds: [billId],
+    sealed: await sealJson<ChangeSealed>({ summary, note: null }, encryption),
+  };
+  await setDoc(
+    doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+    entry,
+  );
+};
+
+/** Runs a write over each pin in turn, going on past one that fails; returns the days it did and the first error. */
+const forEachPin = async (
+  pins: readonly BillPin[],
+  write: (pin: BillPin) => Promise<void>,
+) => {
+  const result = await pins.reduce<
+    Promise<{ done: BillPin[]; failed: BillPin[]; error: unknown }>
+  >(
+    async (previous, pin) => {
+      const acc = await previous;
+      try {
+        await write(pin);
+        return { ...acc, done: [...acc.done, pin] };
+      } catch (error) {
+        return {
+          ...acc,
+          failed: [...acc.failed, pin],
+          error: acc.error ?? error,
+        };
+      }
+    },
+    Promise.resolve({ done: [], failed: [], error: null }),
+  );
+  return result;
+};
+
+/** Takes every per-pay figure of one bill off the given days. A day that fails is skipped; one history line names only the days it did clear, and a stop part way throws what was cleared so an Undo can put it back. */
 export async function clearBillPins(
   uid: string,
   encryption: RunwayEncryption,
@@ -201,61 +250,53 @@ export async function clearBillPins(
   billName: string,
   pins: readonly BillPin[],
 ): Promise<BillPin[]> {
-  const done = await pins.reduce<Promise<BillPin[]>>(async (previous, pin) => {
-    const acc = await previous;
-    try {
-      await saveBillShare(
-        uid,
-        encryption,
-        toDayRef(pin),
-        billId,
-        null,
-        acc.length === 0
-          ? {
-              itemId: billId,
-              summary: PAY_SHARE_WORDS.pinsCleared(
-                billName,
-                describePinDays(pins),
-              ),
-              note: null,
-            }
-          : undefined,
-      );
-    } catch (error) {
-      throw new PinsPartlyCleared(acc, error);
-    }
-    return [...acc, pin];
-  }, Promise.resolve([]));
+  const { done, failed, error } = await forEachPin(pins, (pin) =>
+    saveBillShare(uid, encryption, toDayRef(pin), billId, null),
+  );
+  if (done.length > 0) {
+    await writeHistoryLine(
+      uid,
+      encryption,
+      billId,
+      PAY_SHARE_WORDS.pinsCleared(billName, describePinDays(done)),
+      done[0].expectedOn,
+    ).catch(() => undefined);
+  }
+  if (failed.length > 0) throw new PinsPartlyCleared(done, error);
   return done;
 }
 
-/** Puts back per-pay figures a clear took off, one history line for all; a day changed again since is left as it is. */
+/** Puts back per-pay figures a clear took off. A day changed again since (or one that fails) is left as it is and skipped; one history line names only the days it did put back. */
 export async function restoreBillPins(
   uid: string,
   encryption: RunwayEncryption,
   billId: string,
   billName: string,
   pins: readonly BillPin[],
-): Promise<void> {
-  await pins.reduce<Promise<number>>(async (previous, pin) => {
-    const count = await previous;
-    await saveBillShare(
+): Promise<{ restored: BillPin[]; skipped: BillPin[] }> {
+  const { done, failed } = await forEachPin(pins, (pin) =>
+    saveBillShare(
       uid,
       encryption,
       toDayRef(pin),
       billId,
       pin.cents,
-      count === 0
-        ? {
-            itemId: billId,
-            summary: PAY_SHARE_WORDS.pinsBack(billName, describePinDays(pins)),
-            note: null,
-          }
-        : undefined,
-      { was: undefined },
-    );
-    return count + 1;
-  }, Promise.resolve(0));
+      undefined,
+      {
+        was: undefined,
+      },
+    ),
+  );
+  if (done.length > 0) {
+    await writeHistoryLine(
+      uid,
+      encryption,
+      billId,
+      PAY_SHARE_WORDS.pinsBack(billName, describePinDays(done)),
+      done[0].expectedOn,
+    ).catch(() => undefined);
+  }
+  return { restored: done, skipped: failed };
 }
 
 /** A day another device settled or changed first; the screen may already have moved on, so it is also said in a toast. */

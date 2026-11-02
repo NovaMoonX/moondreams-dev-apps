@@ -6,7 +6,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useStore } from 'react-redux';
 
 import { useAppSelector, type RootState } from '@/store';
-import { CARRY_WORDS, CHANGE_WORDS } from '@apps/runway/constants';
+import {
+  CARRY_WORDS,
+  CHANGE_WORDS,
+  PAY_SHARE_WORDS,
+} from '@apps/runway/constants';
+import type { BillPin } from '@apps/runway/engine/billShare';
+import { restoreBillPins } from '@apps/runway/store/actions/dayActions';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { VersionStretch } from '@apps/runway/engine/resolve';
@@ -19,6 +25,7 @@ import { changeItem } from '@apps/runway/store/actions/itemActions';
 import {
   previewOverrideCarry,
   type PreviewChange,
+  type PreviewUnpin,
   type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
@@ -49,6 +56,13 @@ import type {
   ItemKind,
 } from '@apps/runway/types';
 
+/** What an afterSave step cleared, so the toast can offer an Undo. */
+export interface PinsCleared {
+  cleared: BillPin[];
+  billId: string;
+  billName: string;
+}
+
 interface UseChangeFlowArgs {
   itemId: string;
   kind: ItemKind;
@@ -61,10 +75,14 @@ interface UseChangeFlowArgs {
   newGroup?: GroupSealed | null;
   onDone: () => void;
   /** Runs once the change is written, for what the change makes stale; a failure is told, never hidden. */
-  afterSave?: (effectiveFrom: number) => Promise<void>;
+  afterSave?: (
+    effectiveFrom: number,
+    effectiveUntil: number | null,
+  ) => Promise<PinsCleared | void>;
   /** For a change to one field only: the item's stretches from the day the change starts, each written as its own version so later versions and their ends are kept. */
   buildStretches?: (
     effectiveFrom: number,
+    effectiveUntil: number | null,
   ) => VersionStretch<ItemPayload>[] | undefined;
   /** The change replaces this bill's per-pay figures, so its preview is drawn without them. */
   clearsPins?: boolean;
@@ -98,7 +116,7 @@ const getChangeJson = (
   candidate: ItemPayload | null,
   span: ChangeSpan | null,
   stretches: VersionStretch<ItemPayload>[] | undefined,
-  unpinBillId: string | undefined,
+  unpin: PreviewUnpin | undefined,
 ) => {
   if (candidate === null || span === null) return null;
   if (span.kind === 'day') {
@@ -124,7 +142,7 @@ const getChangeJson = (
               payload: stretch.payload,
             }) as PreviewVersion,
         ),
-        unpinBillId,
+        unpin,
       }
     : {
         kind: 'version',
@@ -136,7 +154,7 @@ const getChangeJson = (
           changeId: 'what-if',
           payload: candidate,
         } as PreviewVersion,
-        unpinBillId,
+        unpin,
       };
   return JSON.stringify(change);
 };
@@ -195,12 +213,12 @@ export function useChangeFlow({
               .name ??
             newGroup?.name ??
             'a group',
-          (fundedBy) => describePayChoice(fundedBy, plan),
+          (fundedBy) => describePayChoice(fundedBy, plan, true),
         );
 
   const stretches =
     span?.kind === 'version' && candidate !== null
-      ? buildStretches?.(span.effectiveFrom)
+      ? buildStretches?.(span.effectiveFrom, span.effectiveUntil)
       : undefined;
   const changeJson = isUnchanged
     ? null
@@ -210,7 +228,13 @@ export function useChangeFlow({
         candidate,
         span,
         stretches,
-        clearsPins ? itemId : undefined,
+        clearsPins && span?.kind === 'version'
+          ? {
+              billId: itemId,
+              from: span.effectiveFrom,
+              until: span.effectiveUntil,
+            }
+          : undefined,
       );
 
   const getSummary = (name: string) => {
@@ -310,7 +334,34 @@ export function useChangeFlow({
       }
       if (afterSave) {
         try {
-          await afterSave(span.kind === 'version' ? span.effectiveFrom : today);
+          const done = await afterSave(
+            span.kind === 'version' ? span.effectiveFrom : today,
+            span.kind === 'version' ? span.effectiveUntil : null,
+          );
+          if (done && done.cleared.length > 0) {
+            const { cleared, billId, billName } = done;
+            addToast({
+              title: PAY_SHARE_WORDS.pinsClearedToast(billName, cleared.length),
+              type: 'success',
+              action: {
+                label: PAY_SHARE_WORDS.undo,
+                onClick: () =>
+                  void restoreBillPins(
+                    user.uid,
+                    encryption,
+                    billId,
+                    billName,
+                    cleared,
+                  ).catch((undoError: unknown) =>
+                    addToast({
+                      title: PAY_SHARE_WORDS.undoFailed,
+                      description: getErrorMessage(undoError, ''),
+                      type: 'error',
+                    }),
+                  ),
+              },
+            });
+          }
         } catch (afterError) {
           addToast({
             title: CHANGE_WORDS.savedButStale,

@@ -34,12 +34,14 @@ export function getBillPins(
   }[],
   billId: string,
   from: number,
+  until: number | null = null,
 ): BillPin[] {
   const result = days
     .filter(
       (day) =>
         day.status === 'draft' &&
         day.expectedOn >= from &&
+        (until === null || day.expectedOn < until) &&
         Object.hasOwn(day.override.billCents ?? {}, billId),
     )
     .map((day) => ({
@@ -66,6 +68,23 @@ export function withFundedBy<P extends { fundedBy: BillFundedBy }>(
     ...stretch,
     payload: { ...stretch.payload, fundedBy },
   }));
+  return result;
+}
+
+/** Stretches cut off at `until` (the first day a temporary change no longer covers): later ones go, the last kept one ends there. */
+export function clipStretches<
+  T extends { effectiveFrom: number; effectiveUntil: number | null },
+>(stretches: readonly T[], until: number | null): T[] {
+  if (until === null) return [...stretches];
+  const result = stretches
+    .filter((stretch) => stretch.effectiveFrom < until)
+    .map((stretch) => ({
+      ...stretch,
+      effectiveUntil:
+        stretch.effectiveUntil === null
+          ? until
+          : Math.min(stretch.effectiveUntil, until),
+    }));
   return result;
 }
 

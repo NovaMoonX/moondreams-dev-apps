@@ -1,9 +1,13 @@
 import { useState } from 'react';
 
 import { useAppSelector } from '@/store';
-import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
+import { formatDateShortUTC } from '@/utils/formatUtils';
+import BillShareView from '@apps/runway/components/BillShareView';
+import { BillSheet } from '@apps/runway/components/BillRow';
+import ItemRow from '@apps/runway/components/ItemRow';
 import { PAY_SHARE_WORDS } from '@apps/runway/constants';
 import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import {
   selectBillPayments,
   selectResolvedPlan,
@@ -16,16 +20,25 @@ interface LeftOutBillRowProps {
   billId: string;
   fundedBy: BillFundedBy;
   today: number;
+  /** The income day the row is drawn on. */
+  dayKey: string;
+  dayOn: number;
 }
 
-/** A bill this pay puts nothing toward because the bill is set to come from another pay: it says which, and opens the bill. */
-function LeftOutBillRow({ billId, fundedBy, today }: LeftOutBillRowProps) {
+/** A bill this pay puts nothing toward because the bill is set to come from another pay: it names that pay, and opens the bill with this pay's own explanation first. */
+function LeftOutBillRow({
+  billId,
+  fundedBy,
+  today,
+  dayKey,
+  dayOn,
+}: LeftOutBillRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const stance = useAppSelector(selectStance);
   const payment =
     useAppSelector((state) => selectBillPayments(state, today)[billId])?.find(
-      (entry) => entry.dueOn >= today,
+      (entry) => entry.paid === null && entry.dueOn >= dayOn,
     ) ?? null;
   const bill = useAppSelector((state) =>
     resolveCurrentOrNext(
@@ -36,15 +49,20 @@ function LeftOutBillRow({ billId, fundedBy, today }: LeftOutBillRowProps) {
       today,
     ),
   )?.payload;
+  const emoji = useItemEmoji(bill?.emoji ?? null, bill?.groupId ?? null);
   if (!bill) return null;
   const paidFrom = describePaidFrom(fundedBy, plan, true);
+  const carrier = payment?.parts.find((part) => part.cents > 0);
+  const detail = carrier
+    ? PAY_SHARE_WORDS.leftOutCarrier(formatDateShortUTC(carrier.day.on))
+    : PAY_SHARE_WORDS.leftOutDetail(paidFrom);
   return (
     <>
-      <BillRow
-        bill={bill}
-        payment={payment}
-        planStance={stance}
-        detailOverride={PAY_SHARE_WORDS.leftOutDetail(paidFrom)}
+      <ItemRow
+        name={bill.name}
+        emoji={emoji}
+        detail={detail}
+        ariaLabel={`${bill.name}. ${detail}. Open`}
         onOpen={() => setIsOpen(true)}
       />
       {isOpen && (
@@ -54,6 +72,21 @@ function LeftOutBillRow({ billId, fundedBy, today }: LeftOutBillRowProps) {
           payment={payment}
           planStance={stance}
           today={today}
+          dayAction={{
+            label: PAY_SHARE_WORDS.action,
+            renderView: ({ onBack, onClose, openChange }) => (
+              <BillShareView
+                billId={billId}
+                dayKey={dayKey}
+                currentCents={0}
+                mode='leftOut'
+                paidFromText={paidFrom}
+                onBack={onBack}
+                onClose={onClose}
+                onOpenPaidFrom={() => openChange('funding')}
+              />
+            ),
+          }}
           onClose={() => setIsOpen(false)}
         />
       )}

@@ -132,7 +132,7 @@ function BillPaidFromNotice({
             (version): version is BillVersion => version.kind === 'bill',
           );
       const next: BillSealed = { ...bill, fundedBy: { kind: 'suggested' } };
-      const wasWritten = await writeFundedBy(user.uid, encryption, {
+      const before = await writeFundedBy(user.uid, encryption, {
         billId,
         versions: liveBills(),
         today,
@@ -158,13 +158,13 @@ function BillPaidFromNotice({
       });
       const undo = async () => {
         try {
-          if (wasWritten) {
+          if (before) {
             await revertFundedBy(user.uid, encryption, {
               billId,
               versions: liveBills(),
               today,
               wrote: next.fundedBy,
-              back: bill.fundedBy,
+              back: before,
               summary: PAID_FROM_WORDS.paidFromBack(
                 bill.name,
                 describePaidFrom(bill.fundedBy, plan),
@@ -172,7 +172,7 @@ function BillPaidFromNotice({
             });
           }
         } catch (undoError) {
-          tell(PAID_FROM_WORDS.saveFailed, undoError);
+          tell(PAID_FROM_WORDS.undoFailed, undoError);
           return;
         }
         if (cleared.length === 0) return;

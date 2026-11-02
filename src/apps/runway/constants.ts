@@ -719,6 +719,7 @@ export const PAID_FROM_WORDS = {
   changed: (name: string) => `${name} is now spread across your pays`,
   paidFromBack: (name: string, was: string) =>
     `${name}: Paid from is back to ${was}.`,
+  undoFailed: 'That could not be undone.',
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
   undoPartial: (name: string) =>
@@ -767,6 +768,7 @@ export const PAY_SHARE_WORDS = {
   actionSub: (name: string, total: string) =>
     `${name} stays ${total}; only this pay changes`,
   leftOutDetail: (pay: string) => `Paid from ${pay}`,
+  leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
   leftOutHeading: 'Paid from another pay',
   summary: (name: string, cents: string, date: string) =>
     `${name}: this pay puts in ${cents}, for ${date} only.`,
@@ -775,14 +777,26 @@ export const PAY_SHARE_WORDS = {
   undo: 'Undo',
   undoFailed: 'That could not be undone. Nothing was changed.',
   overPay: (money: string, over: string) =>
-    `This pay brings ${money}, so ${over} would stay short.`,
+    `This pay has ${money} left for it, so ${over} would stay short.`,
   savedTitle: 'Saved for this pay',
   withheld: (pay: string, name: string) =>
     `Only this pay changed. To always leave ${pay} out, set ${name}'s Paid from.`,
   done: 'Done',
   setPaidFrom: 'Set Paid from',
+  pinsClearedToast: (name: string, count: number) =>
+    count === 1
+      ? `${name}: 1 per-pay change was cleared`
+      : `${name}: ${count} per-pay changes were cleared`,
   pinsCleared: (name: string, dates: string) =>
     `${name}: per-pay changes on ${dates} cleared.`,
+  pinsNotBack: (name: string, count: number) =>
+    `${name}: ${count} per-pay ${count === 1 ? 'change was' : 'changes were'} changed again since, so ${count === 1 ? 'it was' : 'they were'} left as is`,
+  oneTimePay: (pay: string, name: string) =>
+    `${pay} is one-time and ${name} isn't paid from it. Pick a repeating pay, or change Paid from.`,
+  pairingNote: (name: string) =>
+    `This pay pays ${name} first, so its figure comes from that. To change it, change what the income day pays first.`,
+  leftOutNote: (name: string, pay: string) =>
+    `${name} comes from ${pay}, so this pay puts nothing toward it. To change that, change Paid from.`,
   pinsBack: (name: string, dates: string) =>
     `${name}: per-pay changes on ${dates} put back.`,
   pinnedRow: (date: string) => `${date} pay, set by you`,
@@ -795,7 +809,7 @@ export const PAY_SHARE_WORDS = {
   paidFromBack: (name: string, was: string) =>
     `${name}: Paid from is back to ${was}.`,
   keepPartial: (name: string, pay: string) =>
-    `${name} now comes from ${pay}, but this pay's own figure is still saved. Tap Yes again to clear it.`,
+    `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
     `${name} is back to its old Paid from, but this pay's figure could not be restored.`,
 } as const;

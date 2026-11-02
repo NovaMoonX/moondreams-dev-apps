@@ -311,7 +311,7 @@ function BillLineSheet({ line, name, dayKey, sheetProps }: BillLineSheetProps) {
       {...sheetProps}
       maxAction={paidFromAction}
       dayAction={
-        line.bill && line.pairing === null
+        line.bill
           ? {
               label: PAY_SHARE_WORDS.action,
               subtitle: mask(
@@ -325,6 +325,7 @@ function BillLineSheet({ line, name, dayKey, sheetProps }: BillLineSheetProps) {
                   billId={line.itemId}
                   dayKey={dayKey}
                   currentCents={line.demandCents}
+                  mode={line.pairing === null ? 'edit' : 'pairing'}
                   onBack={onBack}
                   onClose={onClose}
                   onOpenPaidFrom={() => openChange('funding')}

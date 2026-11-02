@@ -375,11 +375,12 @@ export const getEligibleDays = (
   return window;
 };
 
-/** Shares of a payment by eligible day: a fixed day gets its fixed amount (never more than what remains) and the others split the rest, so with no other day the rest stays unfunded. */
+/** Shares of a payment by eligible day. With nothing pinned it is spread. A pinned day gives its figure (never more than what remains) and the rest goes to the next repeating pay after the first pinned day (else the first one in the window), never re-spread; the other days give nothing, and with no such pay the rest stays unfunded. */
 const getDayShares = (
   eligible: readonly IncomeDayRef[],
   totalCents: Cents,
   fixed: Readonly<Record<string, Cents>> | undefined,
+  oneTime: ReadonlySet<string> | undefined = undefined,
 ) => {
   if (!fixed || Object.keys(fixed).length === 0)
     return spreadShares(totalCents, eligible.length);
@@ -395,10 +396,20 @@ const getDayShares = (
     },
     { left: totalCents, cents: new Map() },
   );
-  const others = eligible.filter((day) => !given.cents.has(day.dayKey));
-  const spread = spreadShares(given.left, others.length);
+  const firstPinned = eligible.findIndex((day) => given.cents.has(day.dayKey));
+  const candidates = eligible
+    .map((day, index) => ({ day, index }))
+    .filter(
+      ({ day }) =>
+        !given.cents.has(day.dayKey) &&
+        !oneTime?.has(payLineIdOfDayKey(day.dayKey)),
+    );
+  const carrier =
+    candidates.find(({ index }) => index > firstPinned) ?? candidates[0];
   const result = eligible.map(
-    (day) => given.cents.get(day.dayKey) ?? spread[others.indexOf(day)],
+    (day) =>
+      given.cents.get(day.dayKey) ??
+      (carrier && carrier.day === day ? given.left : 0),
   );
   return result;
 };
@@ -486,7 +497,7 @@ export function planBillPayments(
       const left = paid ? 0 : Math.max(0, amountCents - fundedCents);
       const shares =
         bill.fixed && Object.keys(bill.fixed).length > 0
-          ? getDayShares(days, left, bill.fixed)
+          ? getDayShares(days, left, bill.fixed, undefined)
           : allocate(
               left,
               days.map(() => 1),
@@ -529,6 +540,7 @@ export function planBillPayments(
       eligible,
       paid ? 0 : Math.max(0, amountCents - fundedCents),
       bill.fixed,
+      bill.oneTimePayLineIds,
     );
     return {
       dueOn,

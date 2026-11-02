@@ -348,6 +348,8 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
                       billId={entry.itemId}
                       fundedBy={entry.fundedBy}
                       today={today}
+                      dayKey={dayKey}
+                      dayOn={day.on}
                     />
                   ))}
                 </ul>
