@@ -73,6 +73,7 @@ function PhotoStrip({ photos, label }: PhotoStripProps) {
       {viewerStart !== null && (
         <ImageViewer
           startIndex={viewerStart}
+          label={`Photos of ${label}`}
           slides={photos.map((photo, index) => ({
             caption: `${label}, photo ${index + 1}`,
             pictures: [{ src: photo.url, label: null }],

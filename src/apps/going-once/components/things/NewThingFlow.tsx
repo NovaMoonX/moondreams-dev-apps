@@ -103,6 +103,7 @@ function ThingForm({
   const dispatch = useAppDispatch();
   const [itemId] = useState(generateUuid);
   const [answers, setAnswers] = useState<Answers>(INITIAL_ANSWERS);
+  const latestAnswers = useRef<Answers>(INITIAL_ANSWERS);
   const [saveError, setSaveError] = useState<string | null>(null);
   const creation = useRef<Promise<void> | null>(null);
   const saved = useRef<Required<ItemFields>>(EMPTY_FIELDS);
@@ -113,7 +114,8 @@ function ThingForm({
   const photoUrls = useItemPhotoUrls(item?.photos ?? []);
 
   const set = (patch: Partial<Answers>) => {
-    const next = { ...answers, ...patch };
+    const next = { ...latestAnswers.current, ...patch };
+    latestAnswers.current = next;
     setAnswers(next);
     if ('title' in patch) onTitleChange(next.title.trim());
   };
@@ -141,8 +143,9 @@ function ThingForm({
     );
   };
 
+  // A choice that saves and moves on in one tap runs before React re-renders, so saves read the latest answers.
   const saveAnswers = (overrides: Partial<Answers> = {}) =>
-    save(toFields({ ...answers, ...overrides }));
+    save(toFields({ ...latestAnswers.current, ...overrides }));
 
   const uploads = usePhotoSetUploads(async (file) => {
     await ensureCreated({});
