@@ -327,6 +327,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
               }
               planStance={stance}
               today={today}
+              figureKind='payment'
               onOpen={() => setOpenBillId(item.id)}
               detailOverride={
                 dueFirst.isFirst

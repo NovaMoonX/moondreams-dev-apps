@@ -22,6 +22,7 @@ import {
   describeBillRepeat,
   isSavingUpBill,
   isUndatedBill,
+  joinPaymentAndState,
 } from '@apps/runway/utils/billText';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
@@ -119,10 +120,15 @@ function BillRow({
     today,
     isSavingUp && monthly === null,
   );
+  const figureWord = monthly
+    ? BILL_WORDS.aMonth
+    : figureKind === 'monthly' && bill.timing.schedule.kind === 'once'
+      ? BILL_WORDS.once
+      : null;
   const dueLine = isOutsideTotal
     ? `${stateLine} · ${GROUP_WORDS.oneTimeNote}`
     : monthly
-      ? `${stateLine}\u00a0· ${monthly.payment}`
+      ? joinPaymentAndState(monthly.payment, stateLine)
       : stateLine;
 
   return (
@@ -132,8 +138,8 @@ function BillRow({
       detail={detailOverride ?? dueLine}
       isDetailWarning={isUndated && detailOverride === null}
       figure={amount}
-      figureWord={monthly ? BILL_WORDS.aMonth : null}
-      ariaLabel={`${bill.name}, ${amount}${monthly ? ` ${BILL_WORDS.aMonth}` : ''}. ${dueLine}. Open`}
+      figureWord={figureWord}
+      ariaLabel={`${bill.name}, ${amount}${figureWord ? ` ${figureWord}` : ''}. ${dueLine}. Open`}
       onOpen={reorder ? undefined : onOpen}
       reorder={reorder}
       isHighlighted={isHighlighted}

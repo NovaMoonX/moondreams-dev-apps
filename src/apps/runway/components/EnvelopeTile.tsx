@@ -10,7 +10,12 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
+import {
+  BILL_WORDS,
+  ITEM_SHEET_R2_WORDS,
+  PRIORITY_LABELS,
+} from '@apps/runway/constants';
+import { describeEnvelopeMonthly } from '@apps/runway/utils/billText';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
 import {
@@ -79,6 +84,7 @@ function EnvelopeTile({
   const emoji = useItemEmoji(envelope.emoji, envelope.groupId);
   const { amount } = counted;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
+  const monthly = describeEnvelopeMonthly(counted);
   const ownCents =
     envelope.funding.amount.kind === 'exact'
       ? envelope.funding.amount.cents
@@ -88,11 +94,11 @@ function EnvelopeTile({
       ? null
       : `${formatCentsShort(ownCents)} ${envelope.priority}${describeExtras(extras, formatCentsShort)}`;
   const isPlan = level === 'plan';
-  const rowFigure = isPlan || isPart ? eachTime : value;
+  const rowFigure = isPlan || isPart ? (monthly?.figure ?? eachTime) : value;
   const rowDetail =
     isPlan || isPart
       ? eachTime
-        ? `${describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
+        ? `${monthly?.payment ?? describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
         : funding
       : isHidden
         ? funding
@@ -148,6 +154,7 @@ function EnvelopeTile({
           emoji={emoji}
           detail={rowDetail}
           figure={rowFigure}
+          figureWord={(isPlan || isPart) && monthly ? BILL_WORDS.aMonth : null}
           ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}

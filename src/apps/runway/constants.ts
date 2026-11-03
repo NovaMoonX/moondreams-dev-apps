@@ -787,6 +787,7 @@ export const BILL_WORDS = {
   savingUp: 'Saving up',
   savingUpFor: 'Saving up for',
   aMonth: 'a month',
+  once: 'once',
   nothingSaved: 'Nothing saved yet',
   saved: (cents: string, total: string) => `${cents} of ${total} saved`,
   needsDueDate: 'Needs a due date',

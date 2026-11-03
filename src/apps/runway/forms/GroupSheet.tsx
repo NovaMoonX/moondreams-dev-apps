@@ -84,6 +84,8 @@ import type {
 } from '@apps/runway/types';
 import {
   describeBillMonthly,
+  describeEnvelopeMonthly,
+  joinPaymentAndState,
   describeBillRepeat,
   describeGroupLead,
   describeGroupTotal,
@@ -362,8 +364,12 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     payment: string | null,
   ) =>
     due === null
-      ? BILL_WORDS.needsDueDate
-      : `Due ${formatDateShortUTC(due)}\u00a0· ${payment ?? describeBillRepeat(schedule)}`;
+      ? payment
+        ? joinPaymentAndState(payment, BILL_WORDS.needsDueDate)
+        : BILL_WORDS.needsDueDate
+      : payment
+        ? joinPaymentAndState(payment, `Due ${formatDateShortUTC(due)}`)
+        : `Due ${formatDateShortUTC(due)}\u00a0· ${describeBillRepeat(schedule)}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;
@@ -811,7 +817,13 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                           monthly?.payment ?? null,
                         )}
                         figure={monthly?.figure ?? describeGroupTotal(amount)}
-                        figureWord={monthly ? BILL_WORDS.aMonth : null}
+                        figureWord={
+                          monthly
+                            ? BILL_WORDS.aMonth
+                            : schedule.kind === 'once'
+                              ? BILL_WORDS.once
+                              : null
+                        }
                       />
                     );
                   })}
@@ -839,6 +851,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         : getExtras(version.payload).filter(
                             (extra) => !isCountedAt(extra.tier, dial),
                           );
+                    const monthly = describeEnvelopeMonthly(funding);
+                    const eachTime = `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`;
                     return (
                       <ItemRow
                         key={item.id}
@@ -849,15 +863,19 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                           purposeEmojis,
                         )}
                         detail={
-                          funding.amount.kind === 'exact'
-                            ? `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
-                            : describeFundingShort(funding)
+                          funding.amount.kind !== 'exact'
+                            ? describeFundingShort(funding)
+                            : monthly
+                              ? `${monthly.payment}${describeExtras(leftOut, formatCentsShort)}`
+                              : eachTime
                         }
                         figure={
-                          funding.amount.kind === 'exact'
+                          monthly?.figure ??
+                          (funding.amount.kind === 'exact'
                             ? formatCents(funding.amount.cents)
-                            : null
+                            : null)
                         }
+                        figureWord={monthly ? BILL_WORDS.aMonth : null}
                       />
                     );
                   })}

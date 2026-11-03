@@ -74,9 +74,14 @@ import {
 import {
   getIncomeDaysPerMonth,
   monthlyTotal,
+  toMonthlyEnvelopeCents,
   toMonthlyRange,
 } from '../../src/apps/runway/engine/groups.ts';
-import { describeBillMonthly } from '../../src/apps/runway/utils/billText.ts';
+import {
+  describeBillMonthly,
+  describeEnvelopeMonthly,
+  joinPaymentAndState,
+} from '../../src/apps/runway/utils/billText.ts';
 import {
   clipStretches,
   withFundedBy,
@@ -12059,6 +12064,52 @@ console.log('runway engine: ok');
     describeBillMonthly(exact(9_000), every('once', utc(2026, 11, 30))),
     null,
     'G11: a bill paid once keeps its payment as the figure',
+  );
+  assert.equal(
+    joinPaymentAndState('$150 yearly', 'Due Mar 1, 2027'),
+    '$150 yearly\u00a0· due Mar 1, 2027',
+    'G11: a converted row names the payment first and keeps the dot with it',
+  );
+  const calendarFunding = (
+    cents: number,
+    period: 'yearly' | 'every2Weeks' | 'monthly',
+  ): FundingRule => ({
+    amount: { kind: 'exact', cents },
+    cadence: { kind: 'calendar', period, startsOn: null },
+  });
+  assert.equal(
+    toMonthlyEnvelopeCents(calendarFunding(60_000, 'yearly')),
+    5_000,
+    'G11: a yearly envelope is a twelfth of itself a month',
+  );
+  assert.equal(
+    toMonthlyEnvelopeCents(calendarFunding(10_000, 'every2Weeks')),
+    monthlyTotal([], nov, [
+      {
+        funding: calendarFunding(10_000, 'every2Weeks'),
+        startsOn: 0,
+        incomeDaysPerMonth: 0,
+      },
+    ]).total.highCents,
+    'G11: an envelope row and its group total convert a calendar beat the same way',
+  );
+  assert.deepEqual(
+    describeEnvelopeMonthly(calendarFunding(60_000, 'yearly')),
+    { figure: '$50.00', payment: '$600 yearly' },
+    'G11: a yearly envelope leads with its month and names the amount',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(calendarFunding(60_000, 'monthly')),
+    null,
+    'G11: a monthly envelope keeps its amount as the figure',
+  );
+  assert.equal(
+    describeEnvelopeMonthly({
+      amount: { kind: 'exact', cents: 10_000 },
+      cadence: { kind: 'everyIncomeDay' },
+    } as FundingRule),
+    null,
+    'G11: an envelope funded on income days stays per pay',
   );
   assert.deepEqual(
     monthlyTotal(

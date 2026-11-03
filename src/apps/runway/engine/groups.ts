@@ -67,6 +67,14 @@ const CALENDAR_FACTORS: Record<string, [number, number]> = {
   yearly: [1, 12],
 };
 
+/** An envelope's exact amount for a usual month when its beat is a calendar period; null when the amount is not fixed or it follows income days. */
+export function toMonthlyEnvelopeCents(funding: FundingRule): Cents | null {
+  const { amount, cadence } = funding;
+  if (amount.kind !== 'exact' || cadence.kind !== 'calendar') return null;
+  const factor = CALENDAR_FACTORS[cadence.period];
+  return factor ? Math.round((amount.cents * factor[0]) / factor[1]) : null;
+}
+
 /** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none; only one source's lines when `sourceId` is given. */
 export function getIncomeDaysPerMonth(
   lines: readonly (Pick<GroupMember, 'schedule' | 'startsOn' | 'ending'> & {
