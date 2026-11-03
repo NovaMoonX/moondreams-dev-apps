@@ -32,6 +32,8 @@ interface GoalRowProps {
   isFaded?: boolean;
   /** One part of a split goal (its contribution alone), so the row shows that part and never repeats the saved figure. */
   isPart?: boolean;
+  /** Words put before the pace on the row's line, such as why it is listed on a day. */
+  detailLead?: string | null;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -70,11 +72,12 @@ function GoalRow({
   isHighlighted = false,
   isFaded = false,
   isPart = false,
+  detailLead = null,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const savedCents = Math.min(heldCents, goal.targetCents);
   const progress = `${formatCentsShort(savedCents)} of ${formatCentsShort(goal.targetCents)}`;
-  const paceLine = `${describePaceShort(goal, pace, savedCents)}${
+  const paceLine = `${detailLead === null ? '' : `${detailLead} · `}${describePaceShort(goal, pace, savedCents)}${
     paceDial === null || paceDial === 'want' || !pace.reachedOn
       ? ''
       : ` ${PRIORITY_DIAL_WORDS.paceSuffix[paceDial]}`

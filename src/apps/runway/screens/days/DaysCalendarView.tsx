@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { Button, Calendar } from '@moondreamsdev/dreamer-ui/components';
@@ -112,6 +112,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
     setMonthIndexState(index);
   };
   const [openCard, setOpenCard] = useState<OpenedCard | null>(null);
+  const agendaRef = useRef<HTMLDivElement>(null);
 
   const days = useMemo(() => [...open, ...confirmed], [open, confirmed]);
   const sources = useMemo(
@@ -146,7 +147,12 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
     if (pickedOn !== null && pickedOn >= monthStart && pickedOn <= monthEnd) {
       return pickedOn;
     }
-    if (monthIndex === thisIndex) return today;
+    if (monthIndex === thisIndex) {
+      return (
+        [...byDay.keys()].sort((a, b) => a - b).find((on) => on >= today) ??
+        today
+      );
+    }
     return [...byDay.keys()].sort((a, b) => a - b)[0] ?? monthStart;
   };
   const selectedOn = getSelectedOn();
@@ -252,6 +258,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
         paceDial={goal.paceDial}
         heldCents={heldByItem[goal.item.id] ?? 0}
         today={today}
+        detailLead={DAYS_CALENDAR_WORDS.goalDate}
       />
     ) : null;
   };
@@ -300,7 +307,14 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
         }
         onDateSelect={(date) => {
           const on = toUtcDay(date);
-          if (on >= monthStart && on <= monthEnd) setPickedOn(on);
+          if (on < monthStart || on > monthEnd) return;
+          setPickedOn(on);
+          requestAnimationFrame(() =>
+            agendaRef.current?.scrollIntoView({
+              block: 'nearest',
+              behavior: 'smooth',
+            }),
+          );
         }}
         customStyles={CALENDAR_STYLES}
         renderCell={(date, _isSelected, _isDisabled, isToday) => {
@@ -331,16 +345,18 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           <MaskedText>{monthLine}</MaskedText>
         </p>
       )}
-      <SectionDivider label={formatDayTitle(selectedOn)} />
-      {selectedEntries.length === 0 ? (
-        <p className='text-muted-foreground text-sm'>
-          {DAYS_CALENDAR_WORDS.nothingOnDay}
-        </p>
-      ) : (
-        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-          {selectedEntries.map(getRow)}
-        </ul>
-      )}
+      <div ref={agendaRef} className='scroll-mb-36 space-y-3'>
+        <SectionDivider label={formatDayTitle(selectedOn)} />
+        {selectedEntries.length === 0 ? (
+          <p className='text-muted-foreground text-sm'>
+            {DAYS_CALENDAR_WORDS.nothingOnDay}
+          </p>
+        ) : (
+          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+            {selectedEntries.map(getRow)}
+          </ul>
+        )}
+      </div>
       <CardSheets cards={cards} open={openCard} onChange={setOpenCard} />
       {openBill && (
         <BillSheet

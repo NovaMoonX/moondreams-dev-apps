@@ -2091,6 +2091,7 @@ export const DAYS_CALENDAR_WORDS = {
   monthIncomeOnly: (income: string) => `In ${income}`,
   monthBillsOnly: (bills: string) => `Bills ${bills}`,
   nothingOnDay: 'Nothing due or coming in on this day.',
+  goalDate: 'Goal date',
   more: (count: number) => `+${count}`,
   dayLabel: (date: string, count: number) =>
     count === 0
