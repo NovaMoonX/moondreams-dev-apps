@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { BellRing } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
@@ -65,12 +66,17 @@ function PushSwitch({ saleId, uid }: PushSwitchProps) {
   return (
     <section
       aria-label='Notifications'
-      className='border-border bg-card space-y-1 rounded-2xl border p-4'
+      className='border-border bg-card space-y-2 rounded-2xl border px-4 py-3'
     >
       <div className='flex min-h-10 items-center justify-between gap-3'>
-        <h3 className='min-w-0 font-medium text-pretty'>
-          Push me when someone&apos;s interested
-        </h3>
+        <div className='flex min-w-0 items-center gap-3'>
+          <span className='bg-accent text-accent-foreground flex size-9 shrink-0 items-center justify-center rounded-full'>
+            <BellRing className='size-[18px]' aria-hidden='true' />
+          </span>
+          <h3 className='min-w-0 font-medium text-pretty'>
+            Push me when someone&apos;s interested
+          </h3>
+        </div>
         <AppToggle
           aria-label="Push me when someone's interested"
           checked={isOff === false}
@@ -81,11 +87,7 @@ function PushSwitch({ saleId, uid }: PushSwitchProps) {
       <p className='text-muted-foreground text-sm text-pretty'>
         {getHelperText(isOff)}
       </p>
-      {note && (
-        <InlineNotice tone='warning' className='mt-2'>
-          {note}
-        </InlineNotice>
-      )}
+      {note && <InlineNotice tone='warning'>{note}</InlineNotice>}
       {error && (
         <p role='alert' className='text-destructive text-sm'>
           {error}

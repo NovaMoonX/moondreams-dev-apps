@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { ExternalLink, Globe, RefreshCw } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
 import CopyTextButton from '@/components/CopyTextButton';
@@ -79,10 +79,15 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
   return (
     <section
       aria-label='Public page'
-      className='border-border bg-card space-y-3 rounded-2xl border p-4'
+      className='border-border bg-card space-y-2 rounded-2xl border px-4 py-3'
     >
       <div className='flex min-h-10 items-center justify-between gap-3'>
-        <h3 className='font-medium'>Public page</h3>
+        <div className='flex min-w-0 items-center gap-3'>
+          <span className='bg-accent text-accent-foreground flex size-9 shrink-0 items-center justify-center rounded-full'>
+            <Globe className='size-[18px]' aria-hidden='true' />
+          </span>
+          <h3 className='font-medium'>Public page</h3>
+        </div>
         <div className='flex items-center gap-2'>
           <span className='text-muted-foreground text-sm'>
             {isOn ? 'On' : 'Off'}
