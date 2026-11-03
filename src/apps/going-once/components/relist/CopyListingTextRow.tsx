@@ -48,7 +48,7 @@ function CopyListingTextRow({ item, uid }: CopyListingTextRowProps) {
       subtitle={
         state === 'failed'
           ? "Your browser wouldn't copy it."
-          : 'Name, condition, price and description, ready to paste'
+          : 'Name, price, condition, description'
       }
       onClick={() => void copy()}
     />
