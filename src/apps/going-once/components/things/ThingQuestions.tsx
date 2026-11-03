@@ -49,6 +49,19 @@ const HIDE_FIELD_CAPTION = '[&_label>span:first-child]:sr-only';
 
 const hiddenLabel = (text: string) => <span className='sr-only'>{text}</span>;
 
+/** Said on the floor itself, where it is typed, when it is more than the asking price. */
+function FloorAboveNote({ answers }: Pick<QuestionProps, 'answers'>) {
+  const floor = parseMoneyToCents(answers.floor);
+  const price = parseMoneyToCents(answers.price);
+  if (answers.isFree || floor === null || price === null || floor <= price)
+    return null;
+  return (
+    <p role='status' className='text-xs font-medium text-(--going-once-hint)'>
+      That&apos;s more than your asking price.
+    </p>
+  );
+}
+
 /** The floor price; `isTitled` is for a sheet whose title already says it. */
 export function FloorField({
   answers,
@@ -65,6 +78,7 @@ export function FloorField({
         autoFocus
         wrapperClassName={isTitled ? undefined : 'max-w-48'}
       />
+      <FloorAboveNote answers={answers} />
       <p className='text-muted-foreground text-xs'>
         Only you and your co-sellers see this. Buyers never do.
       </p>
@@ -123,6 +137,7 @@ export function PriceQuestion({
             onChange={(floor) => onChange({ floor, isFloorShown: true })}
             wrapperClassName='max-w-48'
           />
+          <FloorAboveNote answers={answers} />
           <p className='text-muted-foreground text-xs'>
             Only you and your co-sellers see this. Buyers never do.
           </p>

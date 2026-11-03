@@ -195,10 +195,6 @@ function ThingSteps({
   const isDeferred = (id: string) => answers.deferred.includes(id);
   const defer = (id: string) =>
     set({ deferred: [...latestAnswers.current.deferred, id] });
-  const isFloorAbove =
-    fields.floorPriceCents !== null &&
-    fields.askingPriceCents !== null &&
-    fields.floorPriceCents > fields.askingPriceCents;
 
   const steps: QuestionStep[] = [
     {
@@ -273,14 +269,10 @@ function ThingSteps({
     onAdvance: () => saveAnswers(),
   });
   const isReview = flow.hasReviewed;
-  const floorNote = isFloorAbove ? 'Floor is above the asking price' : null;
   const getNote = () => {
     if (saveError !== null) return saveError;
-    if (isReview)
-      return [getListedNote(photoCount, fields), floorNote]
-        .filter((part) => part !== null)
-        .join(' · ');
-    return floorNote ?? flow.blocker ?? (item === null ? null : 'Saved');
+    if (isReview) return getListedNote(photoCount, fields);
+    return flow.blocker ?? (item === null ? null : 'Saved');
   };
 
   const extraDetails = answers.extras.map((key) => {
@@ -345,15 +337,20 @@ function ThingSteps({
         >
           <Plus className='size-4' aria-hidden='true' />
           <span>
-            Save &amp; add<span className='max-[359px]:hidden'> another</span>
+            <span className='max-[359px]:hidden'>Save &amp; add another</span>
+            <span className='min-[360px]:hidden'>Add another</span>
           </span>
         </Button>
       );
-    if (!canSkip || openId === null) return undefined;
+    if (openId === null) return undefined;
+    // Held in place while it can't be used, so Next never jumps when the first answer is typed.
     return (
       <Button
         type='button'
         variant='tertiary'
+        className={canSkip ? undefined : 'invisible'}
+        aria-hidden={!canSkip}
+        tabIndex={canSkip ? undefined : -1}
         onClick={() => {
           defer(openId);
           flow.moveOnFrom(openId);

@@ -62,7 +62,7 @@ function ThingTagCard({
 
   const getNameText = () => {
     if (title !== '') return title;
-    return deferred.includes('name') ? 'Name later' : 'What is it?';
+    return deferred.includes('name') ? 'Name later' : 'No name yet';
   };
 
   const placeholder = (

@@ -156,7 +156,7 @@ const getPrivateRows = (item: Item): Row[] => {
     .filter((part) => part !== null)
     .join(' · ');
   return [
-    ...(item.askingPriceCents === 0
+    ...(item.askingPriceCents === 0 || item.askingPriceCents === null
       ? []
       : [
           {
