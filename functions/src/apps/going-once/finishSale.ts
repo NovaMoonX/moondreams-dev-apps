@@ -9,13 +9,9 @@ import {
   type FinishAction,
 } from './finishPlan.js';
 import { linkRef, publicFolder, saleRef } from './saleLinkStore.js';
-import { syncSaleCopies } from './salePhotoCopies.js';
 import { isRecord, isSafeId } from './salePageView.js';
 
 const ACTIONS: readonly FinishAction[] = ['finish', 'reopen'];
-
-/** The copy sweep stops starting things this long after the call began, well inside the function's timeout. */
-const SWEEP_BUDGET_MS = 200_000;
 
 const notFound = () =>
   new HttpsError(
@@ -84,16 +80,16 @@ async function finish(uid: string, saleId: string) {
     });
   });
 
-  const counts = await syncSaleCopies(
-    saleId,
-    startedAt + SWEEP_BUDGET_MS,
-  ).catch((error: unknown) => {
-    logger.error('goingOnce.finish.copyFailed', {
-      code: describeError(error),
+  if (oldId !== null) {
+    await removeFolderFiles(publicFolder(oldId)).catch((error: unknown) => {
+      logger.error('goingOnce.finish.sweepFailed', {
+        link: oldId.slice(0, 4),
+        code: describeError(error),
+      });
     });
-    return null;
-  });
-  logger.info('goingOnce.finish.finished', { ...counts });
+  }
+
+  logger.info('goingOnce.finish.finished');
   return {
     status: 'FINISHED' as const,
     contactsClearAt: now + CONTACT_CLEAR_DELAY_MS,
@@ -120,7 +116,7 @@ async function reopen(uid: string, saleId: string) {
 
 /**
  * Finishes the seller's sale or reopens it, for the seller only. A missing sale, someone else's and a co-seller's call all answer one `not-found`; a sale already in the asked state answers `failed-precondition` in words.
- * Finishing stops the public page first (its files, then the link, then the sale's fields), then sweeps the copies once more so nothing an in-flight copy wrote back stays. Reopening cancels the pending clearing of buyers' details and leaves the page off. The sale's finish fields are written only here and by `clearSaleContacts`: `firestore.rules` refuses every client write to them.
+ * Finishing stops the public page first (its files, then the link, then the sale's fields), then deletes the old folder once more so nothing an in-flight copy wrote back stays. Reopening cancels the pending clearing of buyers' details and leaves the page off. The sale's finish fields are written only here and by `clearSaleContacts`: `firestore.rules` refuses every client write to them.
  */
 export const finishSale = onCall(
   {

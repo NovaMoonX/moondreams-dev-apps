@@ -9,6 +9,7 @@ import {
   scrubInquiry,
   scrubItem,
 } from '../../functions/src/apps/going-once/finishPlan.ts';
+import { withoutBuyerName } from '../../src/apps/going-once/utils/finish.ts';
 import { buildSeedInquiry } from '../seeds/goingOnce.ts';
 
 let passed = 0;
@@ -271,5 +272,13 @@ check(
     assert.equal(isDueForClearing(world.sale, START + 99 * DAY), false);
   },
 );
+
+check('after the clear no written record carries a buyer name', () => {
+  const sale = { priceCents: 1, buyerName: 'Jo' };
+  assert.equal(withoutBuyerName(sale, true)?.buyerName, null);
+  assert.equal(withoutBuyerName(sale, true)?.priceCents, 1);
+  assert.equal(withoutBuyerName(sale, false), sale);
+  assert.equal(withoutBuyerName(null, true), null);
+});
 
 console.log(`going once finish checks passed (${passed})`);

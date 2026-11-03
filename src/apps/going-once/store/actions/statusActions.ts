@@ -15,6 +15,7 @@ import type {
   StatusChange,
   StatusChangeKind,
 } from '@apps/going-once/types';
+import { withoutBuyerName } from '@apps/going-once/utils/finish';
 import { toFirstName } from '@apps/going-once/utils/personName';
 
 export type StatusTransition =
@@ -67,6 +68,7 @@ export const OFFLINE_MESSAGE = 'Changing the status needs a connection.';
 const GENERIC_MESSAGE = "The status didn't change. Try again.";
 const FINISHED_MESSAGE =
   'This sale is finished. Reopen it to hold things for buyers.';
+const HOLDS = ['MARK_PENDING', 'CHANGE_HOLD'];
 const GONE_MESSAGE = 'This thing is no longer here.';
 const INVALID_MESSAGE = "That amount or day doesn't look right.";
 const NO_SALE_MESSAGE = 'There is no sale to change.';
@@ -262,13 +264,12 @@ export async function changeStatus(
     const outcome = await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists()) return { kind: 'GONE' } as const;
-      if (transition.kind === 'MARK_PENDING') {
-        const sale = await transaction.get(
-          doc(db, 'apps', 'going-once', 'sales', saleId),
-        );
-        if (sale.data()?.status === FINISHED_SALE_STATUS)
-          return { kind: 'REFUSED', message: FINISHED_MESSAGE } as const;
-      }
+      const saleData = (
+        await transaction.get(doc(db, 'apps', 'going-once', 'sales', saleId))
+      ).data();
+      const isFinished = saleData?.status === FINISHED_SALE_STATUS;
+      if (isFinished && HOLDS.includes(transition.kind))
+        return { kind: 'REFUSED', message: FINISHED_MESSAGE } as const;
       const data = snapshot.data();
       const current: Stored = {
         status: data.status ?? 'AVAILABLE',
@@ -286,9 +287,15 @@ export async function changeStatus(
       )
         return { kind: 'CONFLICT', current } as const;
       const now = Date.now();
-      const next = getNext(current, transition, uid, now);
-      if (typeof next === 'string')
-        return { kind: 'REFUSED', message: next } as const;
+      const planned = getNext(current, transition, uid, now);
+      if (typeof planned === 'string')
+        return { kind: 'REFUSED', message: planned } as const;
+      const isCleared = isFinished && saleData?.contactsClearedAt != null;
+      const next: Next = {
+        ...planned,
+        pending: withoutBuyerName(planned.pending, isCleared),
+        sale: withoutBuyerName(planned.sale, isCleared),
+      };
       const hold =
         next.kind === 'MARK_PENDING' || next.kind === 'CHANGE_HOLD'
           ? next.pending

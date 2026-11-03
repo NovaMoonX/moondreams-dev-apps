@@ -23,11 +23,12 @@ if (getApps().length === 0) {
 /** Documents read and written together; well under the 500 writes a transaction takes. */
 const CHUNK = 400;
 
-/** Clears one collection a chunk at a time. Each chunk is read again inside its own transaction and only what still holds a buyer's details is written, so a rerun after a crash finishes the job and a resend that landed meanwhile is never half-overwritten. */
+/** Clears one collection a chunk at a time. Each chunk is read again inside its own transaction together with the sale, and a sale that is no longer finished and due stops the run; only what still holds a buyer's details is written, so a rerun after a crash finishes the job and a resend that landed meanwhile is never half-overwritten. */
 async function scrubCollection(
   collection: CollectionReference,
   scrub: (data: unknown, now: number) => Patch | null,
   now: number,
+  saleId: string,
 ): Promise<number> {
   const run = async (
     after: string | null,
@@ -36,7 +37,14 @@ async function scrubCollection(
     const ordered = collection.orderBy(FieldPath.documentId()).limit(CHUNK);
     const query = after === null ? ordered : ordered.startAfter(after);
     const chunk = await getFirestore().runTransaction(async (transaction) => {
-      const snapshot = await transaction.get(query);
+      const [sale, snapshot] = await Promise.all([
+        transaction.get(saleRef(saleId)),
+        transaction.get(query),
+      ]);
+      if (!isDueForClearing(sale.data(), now)) {
+        return { size: 0, last: null, written: 0 };
+      }
+
       const written = snapshot.docs.flatMap((doc) => {
         const patch = scrub(doc.data(), now);
         if (patch === null) {
@@ -63,8 +71,8 @@ async function scrubCollection(
 async function clearSale(saleId: string, now: number) {
   const sale = saleRef(saleId);
   const [inquiries, things] = await Promise.all([
-    scrubCollection(sale.collection('inquiries'), scrubInquiry, now),
-    scrubCollection(sale.collection('items'), scrubItem, now),
+    scrubCollection(sale.collection('inquiries'), scrubInquiry, now, saleId),
+    scrubCollection(sale.collection('items'), scrubItem, now, saleId),
   ]);
   const isMarked = await getFirestore().runTransaction(async (transaction) => {
     const current = await transaction.get(sale);

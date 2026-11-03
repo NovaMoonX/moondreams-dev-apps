@@ -33,3 +33,10 @@ export function describeLeftover(unsold: number, pending: number): string {
 /** The day buyers' details would clear if the sale were finished at `now`. */
 export const getClearDay = (now: number) =>
   formatDateShort(now + CONTACT_CLEAR_DAYS * DAY_MS);
+
+/** A record as it may be written: once a sale's details are cleared nothing writes a buyer's name back, since no job clears it again. */
+export const withoutBuyerName = <T extends { buyerName: string | null }>(
+  record: T | null,
+  isCleared: boolean,
+): T | null =>
+  record === null || !isCleared ? record : { ...record, buyerName: null };

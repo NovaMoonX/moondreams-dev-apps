@@ -40,7 +40,7 @@ function FinishSection({ sale, isSeller, summary }: FinishSectionProps) {
     const unsold = summary.AVAILABLE.count + summary.AVAILABLE.notListedCount;
     const isConfirmed = await confirm({
       title: `Finish ${sale.name}?`,
-      message: `${describeLeftover(unsold, summary.PENDING.count)} The public page closes and pushes stop. Pickups can still be recorded. Buyers' details are cleared ${getClearDay(Date.now())}.`,
+      message: `${describeLeftover(unsold, summary.PENDING.count)} The public page closes and pushes stop. Pickups can still be recorded. Buyers' details are cleared about 30 days from now (${getClearDay(Date.now())}).`,
       confirmText: 'Finish the sale',
     });
     if (isConfirmed) await run('finish');

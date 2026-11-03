@@ -21,6 +21,7 @@ import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import FactsLine from '@/components/FactsLine';
 import LinkPreviewCard from '@/components/LinkPreviewCard';
+import LockedButton from '@/components/LockedButton';
 import PhotoStrip from '@/components/PhotoStrip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
@@ -223,8 +224,9 @@ function ThingDrawer({
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
   const isOnTheList =
     item.status === 'PENDING' || (item.status === 'AVAILABLE' && !isNotListed);
-  const isLockedByFinish =
-    isSaleFinished && item.status === 'AVAILABLE' && isOnTheList;
+  const isHoldLockedByFinish =
+    isSaleFinished &&
+    (item.status === 'PENDING' || (item.status === 'AVAILABLE' && isOnTheList));
 
   const getIsDirty = () => {
     if (view === 'markPending')
@@ -320,7 +322,7 @@ function ThingDrawer({
     () => void takeOffTheList(),
   );
   const moreActions: MoreAction[] = [
-    isOnTheList && !isLockedByFinish
+    isOnTheList
       ? {
           key: 'markSold',
           icon: <BadgeDollarSign />,
@@ -333,7 +335,7 @@ function ThingDrawer({
           onClick: () => open('markSold'),
         }
       : null,
-    item.status === 'PENDING'
+    item.status === 'PENDING' && !isSaleFinished
       ? {
           key: 'changeHold',
           icon: <CalendarClock />,
@@ -668,11 +670,18 @@ function ThingDrawer({
             price.
           </p>
         )}
-        {isLockedByFinish && (
-          <p className='text-muted-foreground text-sm text-pretty'>
-            This sale is finished, so nothing new can be held. The seller can
-            reopen it.
-          </p>
+        {isHoldLockedByFinish && (
+          <LockedButton
+            label={
+              item.status === 'PENDING' ? 'Change who or when' : 'Mark pending'
+            }
+            title='This sale is finished'
+          >
+            <p>
+              This sale is finished, so nothing new can be held. The seller can
+              reopen it.
+            </p>
+          </LockedButton>
         )}
       </div>
       {deleteDialog}

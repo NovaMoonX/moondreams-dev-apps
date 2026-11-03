@@ -8,6 +8,7 @@ import { ExternalLink, RefreshCw } from 'lucide-react';
 import AppToggle from '@/components/AppToggle';
 import CopyTextButton from '@/components/CopyTextButton';
 import InlineNotice from '@/components/InlineNotice';
+import LockedButton from '@/components/LockedButton';
 import {
   FINISHED_SALE_STATUS,
   SALE_PAGE_PATH,
@@ -86,13 +87,25 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
           <span className='text-muted-foreground text-sm'>
             {isOn ? 'On' : 'Off'}
           </span>
-          {isSeller && (
+          {isSeller && !isFinished && (
             <AppToggle
               aria-label='Public page'
               checked={isOn}
-              disabled={pending !== null || isFinished}
+              disabled={pending !== null}
               onCheckedChange={(isChecked) => void handleToggle(isChecked)}
             />
+          )}
+          {isSeller && isFinished && (
+            <LockedButton
+              size='sm'
+              label='Turn on'
+              title='This sale is finished'
+            >
+              <p>
+                The public page stays off while the sale is finished. Reopen the
+                sale to turn it on again.
+              </p>
+            </LockedButton>
           )}
         </div>
       </div>
