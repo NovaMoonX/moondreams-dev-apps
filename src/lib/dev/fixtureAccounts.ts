@@ -37,6 +37,20 @@ export const FIXTURE_USERS = {
     label: 'Taylor',
     apps: ['Nine Lives', 'Waypoint'],
   },
+  goingOnceSeller: {
+    uid: 'seed-going-once-seller',
+    email: 'maya@example.test',
+    displayName: 'Maya Okafor',
+    label: 'Maya',
+    apps: ['Going Once'],
+  },
+  goingOnceCoSeller: {
+    uid: 'seed-going-once-coseller',
+    email: 'theo@example.test',
+    displayName: 'Theo Marsh',
+    label: 'Theo',
+    apps: ['Going Once'],
+  },
   runwayScale: {
     uid: 'seed-runway-scale',
     email: 'morgan@example.test',

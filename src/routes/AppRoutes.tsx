@@ -90,12 +90,30 @@ export const router = createBrowserRouter([
         },
       },
       {
+        path: 'going-once',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: GoingOnce } =
+            await import('@apps/going-once/GoingOnce');
+          return { Component: GoingOnce };
+        },
+      },
+      {
         path: 'a-list/shared/:shareId',
         HydrateFallback: Loading,
         lazy: async () => {
           const { default: SharedCalendar } =
             await import('@apps/a-list/SharedCalendar');
           return { Component: SharedCalendar };
+        },
+      },
+      {
+        path: 'going-once/s/:linkId',
+        HydrateFallback: Loading,
+        lazy: async () => {
+          const { default: SalePage } =
+            await import('@apps/going-once/SalePage');
+          return { Component: SalePage };
         },
       },
       {

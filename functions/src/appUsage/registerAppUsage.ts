@@ -3,6 +3,7 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { findFirstActivityAt as findAListStart } from '../apps/a-list/findFirstActivityAt.js';
+import { findFirstActivityAt as findGoingOnceStart } from '../apps/going-once/findFirstActivityAt.js';
 import { findFirstActivityAt as findNineLivesStart } from '../apps/nine-lives/findFirstActivityAt.js';
 import { findFirstActivityAt as findPinchStart } from '../apps/pinch/findFirstActivityAt.js';
 import { findFirstActivityAt as findRunwayStart } from '../apps/runway/findFirstActivityAt.js';
@@ -17,6 +18,7 @@ const ADMIN_EMAIL = 'nova@moondreams.dev';
 
 const FIRST_ACTIVITY_FINDERS: Record<string, (firestore: Firestore, uid: string) => Promise<number | null>> = {
   'a-list': findAListStart,
+  'going-once': findGoingOnceStart,
   'nine-lives': findNineLivesStart,
   pinch: findPinchStart,
   runway: findRunwayStart,

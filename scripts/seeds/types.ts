@@ -20,6 +20,8 @@ export type SeedScope =
   | 'pinch'
   | 'pinch-scale'
   | 'runway'
+  | 'going-once'
+  | 'going-once-scale'
   | 'runway-scale';
 
 export interface SeedContext {

@@ -11,7 +11,7 @@ import {
   type ProblemGroup,
 } from '@apps/runway/utils/lookaheadText';
 import { FIX_WORDS } from '@apps/runway/constants';
-import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
+import { keepEntryFor } from '@/hooks/useBackHistory';
 
 interface ProblemRowProps {
   group: ProblemGroup;

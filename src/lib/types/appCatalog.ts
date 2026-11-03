@@ -5,6 +5,7 @@ export type AppId =
   | 'a-list'
   | 'pinch'
   | 'runway'
+  | 'going-once'
   | (string & {});
 
 export type AppStatus = 'draft' | 'public' | 'removed';

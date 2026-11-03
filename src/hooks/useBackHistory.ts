@@ -232,6 +232,15 @@ const useHistoryLayer = (
   }, [isOpen, kind, dialogId]);
 };
 
+/** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL carries `param`. */
+export function keepEntryFor(param: string) {
+  if (!new URLSearchParams(window.location.search).has(param)) return;
+  const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
+  void backLayerKey;
+  void backLayerSeq;
+  window.history.pushState({ ...entry, keptFor: param }, '');
+}
+
 const MAX_BACK_STEPS = 6;
 const BACK_STEP_TIMEOUT_MS = 1500;
 let isSteppingBack = false;
