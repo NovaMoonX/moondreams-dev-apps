@@ -93,7 +93,17 @@ function RowSheet({
     }
     setIsSaving(true);
     setError(null);
-    const write = updateItemFields(item.saleId, item.id, uid, mine, true);
+    const write = updateItemFields(
+      item.saleId,
+      item.id,
+      uid,
+      mine,
+      // Finishing a draft that lacked a photo, name or price lists it once the last one lands; a complete draft kept on purpose stays one.
+      item.isDraft &&
+        (item.photos.length === 0 ||
+          item.title.trim() === '' ||
+          item.askingPriceCents === null),
+    );
     const outcome = await Promise.race([
       write.then(
         () => 'saved' as const,
