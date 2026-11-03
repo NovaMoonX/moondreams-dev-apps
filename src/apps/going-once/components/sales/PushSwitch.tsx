@@ -3,8 +3,8 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import AppToggle from '@/components/AppToggle';
+import InlineNotice from '@/components/InlineNotice';
 import { turnOnDevicePush } from '@/lib/notifications/devicePush';
-import { getDeviceNotificationsText } from '@/lib/notifications/deviceText';
 import {
   devicePushQueryOptions,
   notificationsQueryKeys,
@@ -19,6 +19,11 @@ const getHelperText = (isOff: boolean | null) => {
     ? "Off for you on this sale. You'll still see everything in the Inbox."
     : 'Just the thing, never who asked. Several close together come as one.';
 };
+
+const getDeviceNote = (device: 'blocked' | 'unsupported') =>
+  device === 'blocked'
+    ? "This phone won't get them: allow notifications for this site in your browser's settings."
+    : "This browser can't show notifications.";
 
 interface PushSwitchProps {
   saleId: string;
@@ -54,7 +59,7 @@ function PushSwitch({ saleId, uid }: PushSwitchProps) {
 
   const note =
     device === 'blocked' || device === 'unsupported'
-      ? getDeviceNotificationsText(device)
+      ? getDeviceNote(device)
       : null;
 
   return (
@@ -76,8 +81,10 @@ function PushSwitch({ saleId, uid }: PushSwitchProps) {
       <p className='text-muted-foreground text-sm text-pretty'>
         {getHelperText(isOff)}
       </p>
-      {isOff === false && note && (
-        <p className='text-muted-foreground text-xs text-pretty'>{note}</p>
+      {note && (
+        <InlineNotice tone='warning' className='mt-2'>
+          {note}
+        </InlineNotice>
       )}
       {error && (
         <p role='alert' className='text-destructive text-sm'>
