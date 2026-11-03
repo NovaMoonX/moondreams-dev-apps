@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# UserPromptSubmit hook: when the conversation's context is large, tells the model once per 100k
-# tokens to suggest a fresh start at the next natural break (stdout reaches it as context).
+# UserPromptSubmit hook: when the context nears the auto-compact window, tells the model once per 50k
+# tokens to make its state durable so the next compaction loses nothing (stdout reaches it as context).
 # Reads the transcript only: no network, silent on any error.
 
 command -v jq >/dev/null 2>&1 || exit 0
@@ -22,13 +22,13 @@ context=$(tail -n 400 "$transcript" | jq -R -s -r '
 
 marker="${TMPDIR:-/tmp}/fresh-start-nudge-${session//[^A-Za-z0-9_-]/}"
 # After /compact the context starts small again, so the steps start over.
-(( context > 250000 )) || { rm -f "$marker" 2>/dev/null; exit 0; }
+(( context > 200000 )) || { rm -f "$marker" 2>/dev/null; exit 0; }
 
-step=$(( context / 100000 ))
+step=$(( context / 50000 ))
 last=$(cat "$marker" 2>/dev/null)
 [[ "$last" =~ ^[0-9]+$ ]] || last=0
 (( step > last )) || exit 0
 
 echo "$step" >"$marker" 2>/dev/null
-echo "Context is about $(( context / 1000 ))k tokens; every call re-reads it. At the next natural break (a pushed PR, a finished round), suggest the owner run /compact or start a fresh session, once."
+echo "Context is about $(( context / 1000 ))k tokens; it compacts on its own once the session goes idle or reaches 300k, so never ask the owner to run /compact. Before this turn ends, put anything a later turn needs where a summary keeps it (commit and push, the PR's status comment, the plan), and hand file-heavy reading to an agent. Suggest a fresh session only when the next ask is unrelated work."
 exit 0
