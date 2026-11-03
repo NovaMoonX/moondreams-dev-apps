@@ -363,7 +363,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   ) =>
     due === null
       ? BILL_WORDS.needsDueDate
-      : `Due ${formatDateShortUTC(due)} · ${payment ?? describeBillRepeat(schedule)}`;
+      : `Due ${formatDateShortUTC(due)}\u00a0· ${payment ?? describeBillRepeat(schedule)}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;

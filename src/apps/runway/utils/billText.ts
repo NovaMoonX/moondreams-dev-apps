@@ -21,7 +21,7 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 
 /** What a group's bills and envelopes come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
 export const describeGroupTotal = (range: MoneyRange) =>
@@ -122,7 +122,11 @@ export function describeBillMonthly(amount: MoneyRange, schedule: Schedule) {
   }
   return {
     figure: describeGroupTotal(monthly),
-    payment: `${describeGroupTotal(amount)} ${describeBillRepeat(schedule).toLowerCase()}`,
+    payment: `${
+      amount.lowCents === amount.highCents
+        ? formatCentsShort(amount.lowCents)
+        : `${formatCentsShort(amount.lowCents)} to ${formatCentsShort(amount.highCents)}`
+    } ${describeBillRepeat(schedule).toLowerCase()}`,
   };
 }
 

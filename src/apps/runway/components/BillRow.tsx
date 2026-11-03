@@ -122,7 +122,7 @@ function BillRow({
   const dueLine = isOutsideTotal
     ? `${stateLine} · ${GROUP_WORDS.oneTimeNote}`
     : monthly
-      ? `${stateLine} · ${monthly.payment}`
+      ? `${stateLine}\u00a0· ${monthly.payment}`
       : stateLine;
 
   return (

@@ -12034,7 +12034,7 @@ console.log('runway engine: ok');
   );
   assert.deepEqual(
     describeBillMonthly(exact(15_000), yearly),
-    { figure: '$12.50', payment: '$150.00 yearly' },
+    { figure: '$12.50', payment: '$150 yearly' },
     'G11: a yearly bill leads with its month and names the payment',
   );
   assert.deepEqual(
@@ -12042,7 +12042,7 @@ console.log('runway engine: ok');
       exact(10_000),
       every('everyOtherWeek', utc(2026, 11, 3)),
     ),
-    { figure: '$216.67', payment: '$100.00 every other week' },
+    { figure: '$216.67', payment: '$100 every other week' },
     'G11: a fortnightly bill leads with its month and names the payment',
   );
   assert.equal(
