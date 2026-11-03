@@ -142,7 +142,7 @@ function HomeScreen() {
         {hasWarnings ? (
           <LookaheadWarnings lookahead={lookahead} dueCards={dueCards} />
         ) : lookahead ? (
-          <HoldsThroughLine lookahead={lookahead} />
+          <HoldsThroughLine lookahead={lookahead} today={today} />
         ) : (
           <div className='min-h-10' aria-hidden='true' />
         )}

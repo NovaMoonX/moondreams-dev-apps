@@ -90,6 +90,7 @@ import {
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
+  describeCoverage,
   describeHoldsBlocks,
   describeHoldsChange,
   describeProblemShort,
@@ -7919,10 +7920,32 @@ const version = (
     'a change that leaves the same last day but a new first problem says only the problem, never that the plan holds through a day',
   );
   assert.ok(
-    describeHoldsChange(look(day), look(utc(2026, 11, 12)))?.includes(
-      'would hold through',
+    describeHoldsChange(look(day), look(utc(2026, 11, 12)))?.startsWith(
+      'Your plan still covers every bill',
     ),
-    'a later last day reads as a move',
+    'a plan clear before and after says it still covers every bill, never a date that needs its year',
+  );
+  assert.ok(
+    describeHoldsChange(look(day, [rentShort]), look(day))?.startsWith(
+      'With this change your plan covers every bill',
+    ),
+    'a change that clears the last problem says the plan now covers every bill',
+  );
+  assert.equal(
+    describeHoldsBlocks(look(day, [rentShort]), look(day, [rentShort]))[0]
+      ?.tone,
+    'info',
+    'a change that leaves a problem as it was says so without the success colour',
+  );
+  assert.equal(
+    describeCoverage(look(day, [rentShort]), rentShort.on - 86_400_000).text,
+    'Your plan comes up short tomorrow',
+    'the headline counts the first problem from today',
+  );
+  assert.equal(
+    describeCoverage(look(day), day).text,
+    'Your plan covers every bill for the next 12 months',
+    'a clear plan reads as a span from today',
   );
 }
 
