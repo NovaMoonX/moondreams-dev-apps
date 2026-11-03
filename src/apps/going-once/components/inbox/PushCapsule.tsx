@@ -5,10 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { turnOnDevicePush } from '@/lib/notifications/devicePush';
-import {
-  getDeviceNotificationsText,
-  getTurnOnFailureText,
-} from '@/lib/notifications/deviceText';
+import { getTurnOnFailureText } from '@/lib/notifications/deviceText';
 import {
   devicePushQueryOptions,
   notificationsQueryKeys,
@@ -54,7 +51,6 @@ function PushCapsule({ saleId, uid }: PushCapsuleProps) {
     return null;
 
   const isStuck = device === 'blocked' || device === 'unsupported';
-  const note = isStuck ? getDeviceNotificationsText(device) : failure;
 
   const dismiss = () => {
     dismissedThisVisit.add(uid);
@@ -84,7 +80,9 @@ function PushCapsule({ saleId, uid }: PushCapsuleProps) {
           🔔
         </span>
         <p className='text-foreground min-w-0 flex-1 text-sm font-medium text-pretty'>
-          Get a push when someone&apos;s interested
+          {isStuck
+            ? 'Pushes are blocked in this browser.'
+            : "Get a push when someone's interested"}
         </p>
         {!isStuck && (
           <Button
@@ -107,11 +105,11 @@ function PushCapsule({ saleId, uid }: PushCapsuleProps) {
           className="relative h-8 shrink-0 px-3 after:absolute after:inset-x-0 after:-inset-y-1 after:content-['']"
           onClick={dismiss}
         >
-          {isStuck ? 'Close' : 'Not now'}
+          Not now
         </Button>
       </div>
-      {note && (
-        <p className='text-muted-foreground text-xs text-pretty'>{note}</p>
+      {failure && (
+        <p className='text-muted-foreground text-xs text-pretty'>{failure}</p>
       )}
     </div>
   );
