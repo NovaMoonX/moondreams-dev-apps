@@ -141,6 +141,15 @@ service firebase.storage {
       allow delete: if isSaleMember();
     }
 
+    // The sale's photo zip, written only by a function (the Admin SDK skips these rules); a member reads it, nobody lists the folder or writes.
+    match /apps/going-once/sales/{saleId}/exports/photos.zip {
+      allow get: if request.auth != null
+        && request.auth.uid in firestore.get(
+          /databases/(default)/documents/apps/going-once/sales/$(saleId)
+        ).data.members;
+      allow list, write: if false;
+    }
+
     match /waypoint/trips/{tripId}/cover/{fileName} {
       function isTripMember() {
         return request.auth != null
