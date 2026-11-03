@@ -1,3 +1,4 @@
+import { toInquiryId } from '../../functions/src/apps/going-once/inquiryView.ts';
 import {
   FIXTURE_USERS,
   type SeedContext,
@@ -79,6 +80,42 @@ export type SeedStatus =
   | { kind: 'WITHDRAWN'; by: string; daysAgo: number };
 
 const HOUR_MS = 3_600_000;
+
+export interface SeedInquiry {
+  itemId: string;
+  itemTitle: string;
+  name: string;
+  contact: string;
+  message: string;
+  sentAt: number;
+  sendCount?: number;
+  handled?: { by: string; at: number };
+}
+
+/** An inquiry exactly as the server files it (same id, same fields), so the seeded Inbox matches a live one. */
+export function buildSeedInquiry(saleId: string, seed: SeedInquiry) {
+  const isEmail = seed.contact.includes('@');
+  return {
+    id: toInquiryId(
+      seed.itemId,
+      isEmail ? seed.contact : seed.contact.replace('+', ''),
+    ),
+    saleId,
+    itemId: seed.itemId,
+    itemTitleAtSend: seed.itemTitle,
+    name: seed.name,
+    email: isEmail ? seed.contact : null,
+    phone: isEmail ? null : seed.contact,
+    message: seed.message,
+    status: seed.handled === undefined ? 'NEW' : 'HANDLED',
+    handledBy: seed.handled?.by ?? null,
+    handledAt: seed.handled?.at ?? null,
+    sendCount: seed.sendCount ?? 1,
+    createdAt: seed.sentAt,
+    lastSentAt: seed.sentAt,
+    contactClearedAt: null,
+  };
+}
 
 /** Builds a thing's status fields relative to the seed's "now", so the sale reads the same on any day. */
 export function buildSeedStatus(
@@ -398,6 +435,14 @@ const SEED_THINGS: SeedThing[] = [
     }),
   },
   {
+    id: 'wall-mirror',
+    title: 'Wall mirror',
+    photoCount: 1,
+    condition: 'LIKE_NEW',
+    askingPriceCents: 4500,
+    floorPriceCents: null,
+  },
+  {
     id: 'bluetooth-speaker',
     title: 'Bluetooth speaker',
     photoCount: 1,
@@ -419,13 +464,30 @@ const SEED_THINGS: SeedThing[] = [
 const getPhotoPath = (thingId: string, photoId: string) =>
   `apps/going-once/sales/${SALE_ID}/items/seed-go-${thingId}/${photoId}.jpg`;
 
+const getSeedBucket = () =>
+  process.env.STORAGE_BUCKET ??
+  process.env.VITE_FIREBASE_STORAGE_BUCKET ??
+  'moondreams-dev-apps.firebasestorage.app';
+
+const getStorageEmulatorHost = () =>
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+
+/** Makes the seeded sale's public photo copies with the same code the trigger runs, so the seeded page shows photos even when the Functions emulator is down or points at another bucket. Emulators only. */
+async function makeSeedCopies() {
+  process.env.FIREBASE_CONFIG ??= JSON.stringify({
+    projectId: process.env.GCLOUD_PROJECT ?? 'moondreams-dev-apps',
+    storageBucket: getSeedBucket(),
+  });
+  process.env.FIREBASE_STORAGE_EMULATOR_HOST = getStorageEmulatorHost();
+  const { syncSaleCopies } =
+    await import('../../functions/src/apps/going-once/salePhotoCopies.ts');
+  return syncSaleCopies(SALE_ID);
+}
+
 /** Uploads a seeded photo to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
 export async function uploadSeedPhoto(path: string, colorIndex: number) {
-  const bucket =
-    process.env.STORAGE_BUCKET ??
-    process.env.VITE_FIREBASE_STORAGE_BUCKET ??
-    'moondreams-dev-apps.firebasestorage.app';
-  const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+  const bucket = getSeedBucket();
+  const host = getStorageEmulatorHost();
   const body = Buffer.concat([
     JPEG_START,
     Buffer.from(JPEG_ENDS[colorIndex % JPEG_ENDS.length], 'hex'),
@@ -542,6 +604,75 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     }),
   );
 
+  const sofa = { itemId: 'seed-go-gray-sofa', itemTitle: 'Gray sofa' };
+  const inquiries: SeedInquiry[] = [
+    {
+      ...sofa,
+      name: 'Priya',
+      contact: '2065550142',
+      message: 'Could I come see it Thursday after 6?',
+      sentAt: context.now - 2 * HOUR_MS,
+    },
+    {
+      itemId: 'seed-go-road-bike',
+      itemTitle: 'Road bike',
+      name: 'Marcus',
+      contact: 'marcus.l@example.com',
+      message: 'What size is the frame?',
+      sentAt: context.now - 4 * HOUR_MS,
+    },
+    {
+      itemId: 'seed-go-oak-desk',
+      itemTitle: 'Oak desk',
+      name: 'Lena',
+      contact: '2065550177',
+      message: "If the pickup falls through I'd take it",
+      sentAt: context.now - DAY_MS,
+    },
+    {
+      itemId: 'seed-go-oak-desk',
+      itemTitle: 'Oak desk',
+      name: 'Nate',
+      contact: '2065550123',
+      message: 'I can pick it up Saturday morning.',
+      sentAt: context.now - 2 * DAY_MS,
+      handled: { by: theo.uid, at: context.now - 2 * DAY_MS + HOUR_MS },
+    },
+    {
+      itemId: 'seed-go-monitor',
+      itemTitle: '27" monitor',
+      name: 'Dev',
+      contact: 'dev.r@example.com',
+      message: 'Does it come with the stand and cable?',
+      sentAt: context.now - 2 * DAY_MS - 3 * HOUR_MS,
+      handled: { by: theo.uid, at: context.now - DAY_MS - 20 * HOUR_MS },
+    },
+    {
+      itemId: 'seed-go-stand-mixer',
+      itemTitle: 'Stand mixer',
+      name: 'Jo',
+      contact: '2065550188',
+      message: 'Would you take $150 for the mixer?',
+      sentAt: context.now - 4 * DAY_MS,
+      handled: { by: maya.uid, at: context.now - 3 * DAY_MS - 20 * HOUR_MS },
+    },
+    {
+      itemId: 'seed-go-bookshelf',
+      itemTitle: 'Bookshelf',
+      name: 'Kim',
+      contact: 'kim.o@example.com',
+      message: 'Is the bookshelf still around? I can come tonight.',
+      sentAt: context.now - 5 * DAY_MS,
+      handled: { by: theo.uid, at: context.now - 4 * DAY_MS - 18 * HOUR_MS },
+    },
+  ];
+  await Promise.all(
+    inquiries.map((inquiry) => {
+      const stored = buildSeedInquiry(SALE_ID, inquiry);
+      return sale.collection('inquiries').doc(stored.id).set(stored);
+    }),
+  );
+
   const uploads = things.flat();
   if (uploads.some(({ isUploaded }) => !isUploaded)) {
     console.warn(
@@ -549,5 +680,20 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     );
   }
 
-  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 3 + SEED_THINGS.length };
+  const copies = await makeSeedCopies().catch((error: unknown) => {
+    console.warn(
+      `Going Once seed: the public page has no photo copies yet; the Functions emulator makes them when it runs. (${error instanceof Error ? error.message : String(error)})`,
+    );
+    return null;
+  });
+  if (copies !== null && copies.failed > 0) {
+    console.warn(
+      `Going Once seed: ${copies.failed} photo copies failed; see the log lines above.`,
+    );
+  }
+
+  return {
+    ...EMPTY_SEED_RESULT,
+    firestoreDocuments: 3 + SEED_THINGS.length + 7,
+  };
 }

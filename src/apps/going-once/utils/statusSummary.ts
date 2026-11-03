@@ -9,8 +9,8 @@ export interface StatusFigures {
   count: number;
   askedCents: number;
   collectedCents: number;
-  /** Available things that have no price yet. */
-  unpricedCount: number;
+  /** Available things buyers can't be shown yet; they are in no figure above. */
+  notListedCount: number;
 }
 
 export type StatusSummary = Record<StatusView, StatusFigures>;
@@ -21,7 +21,7 @@ export function getStatusSummary(items: Item[]): StatusSummary {
     count: 0,
     askedCents: 0,
     collectedCents: 0,
-    unpricedCount: 0,
+    notListedCount: 0,
   });
   const summary: StatusSummary = {
     AVAILABLE: empty(),
@@ -31,9 +31,10 @@ export function getStatusSummary(items: Item[]): StatusSummary {
   items.forEach((item) => {
     if (item.status === 'WITHDRAWN') return;
     const figures = summary[item.status];
-    if (item.status === 'AVAILABLE' && item.askingPriceCents === null)
-      figures.unpricedCount += 1;
-    if (item.status === 'AVAILABLE' && !isListable(item)) return;
+    if (item.status === 'AVAILABLE' && !isListable(item)) {
+      figures.notListedCount += 1;
+      return;
+    }
     figures.count += 1;
     figures.askedCents += item.askingPriceCents ?? 0;
     figures.collectedCents += item.sale?.priceCents ?? 0;
@@ -41,14 +42,14 @@ export function getStatusSummary(items: Item[]): StatusSummary {
   return summary;
 }
 
-/** The line under a view's rows: "$800 asked · 1 has no price yet", "Collected $225 of $245 asked". */
+/** The line under a view's rows: "$800 asked · plus 1 not listed yet", "Collected $225 of $245 asked". */
 export function formatStatusTotal(
   view: StatusView,
   summary: StatusSummary,
 ): string {
-  const { askedCents, collectedCents, unpricedCount } = summary[view];
+  const { askedCents, collectedCents, notListedCount } = summary[view];
   if (view === 'SOLD') return formatCollected(collectedCents, askedCents);
   const asked = `${formatCentsShort(askedCents)} asked`;
-  if (unpricedCount === 0) return asked;
-  return `${asked} · ${unpricedCount} ${unpricedCount === 1 ? 'has' : 'have'} no price yet`;
+  if (notListedCount === 0) return asked;
+  return `${asked} · plus ${notListedCount} not listed yet`;
 }

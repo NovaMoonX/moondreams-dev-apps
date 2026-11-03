@@ -63,7 +63,7 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
 
   const getOffNotice = () => {
     if (isSeller)
-      return "Turning it on makes a link that shows names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling.";
+      return "Turning it on makes a link that shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling.";
     return 'Only the seller can turn it on.';
   };
 

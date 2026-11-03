@@ -58,15 +58,15 @@ interface AmountHeroProps {
   emptyText?: string;
 }
 
-/** The figure's type size: as large as fits, stepping down as the amount grows so the widest real value stays on one line at 320px. */
+/** The figure's type size: as large as fits, stepping down as the amount grows so the widest real value stays on one line at 320px, and smaller on a landscape phone so what sits under it stays in reach. */
 const getSizeClass = (length: number, isRange: boolean) => {
   if (isRange) {
-    if (length <= 5) return 'text-4xl';
-    if (length <= 8) return 'text-3xl';
+    if (length <= 5) return 'text-4xl [@media(max-height:499px)]:text-3xl';
+    if (length <= 8) return 'text-3xl [@media(max-height:499px)]:text-2xl';
     return 'text-2xl';
   }
-  if (length <= 8) return 'text-5xl';
-  if (length <= 10) return 'text-4xl';
+  if (length <= 8) return 'text-5xl [@media(max-height:499px)]:text-3xl';
+  if (length <= 10) return 'text-4xl [@media(max-height:499px)]:text-3xl';
   return 'text-3xl';
 };
 

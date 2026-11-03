@@ -14,6 +14,7 @@ import { MAX_BUYER_NAME_LENGTH } from '@apps/going-once/constants';
 import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
 import type { Item } from '@apps/going-once/types';
+import { getItemName } from '@apps/going-once/utils/listing';
 import { describeMovedOn } from '@apps/going-once/utils/status';
 import {
   getDayOptions,
@@ -114,7 +115,7 @@ function MarkPendingView({
       <div className='space-y-2'>
         <BackLink
           onBack={onBack}
-          label={isChange ? 'Change the hold' : 'Mark pending'}
+          label={isChange ? 'Change the hold' : getItemName(item)}
         />
         <p className='text-lg font-semibold'>Who&apos;s picking it up?</p>
       </div>

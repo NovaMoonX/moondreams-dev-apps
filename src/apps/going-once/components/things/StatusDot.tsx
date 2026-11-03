@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { STATUS_LABELS } from '@apps/going-once/constants';
+import { NOT_LISTED_LABEL, STATUS_LABELS } from '@apps/going-once/constants';
 import type { ItemStatus } from '@apps/going-once/types';
 
 const DOT_COLORS: Record<ItemStatus, string> = {
@@ -31,6 +31,7 @@ function StatusDot({
   isInline = false,
   className,
 }: StatusDotProps) {
+  const dotStatus = label === NOT_LISTED_LABEL ? 'WITHDRAWN' : status;
   const dot = (
     <span
       className={join(
@@ -38,7 +39,7 @@ function StatusDot({
         isInline
           ? 'mr-1.5 inline-block align-middle'
           : 'translate-y-px self-center',
-        DOT_COLORS[status],
+        DOT_COLORS[dotStatus],
       )}
       aria-hidden='true'
     />

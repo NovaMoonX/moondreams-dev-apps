@@ -12,13 +12,22 @@ import {
   PUBLIC_STATUSES,
   SALE_PAGE_LIMITS,
   isLinkId,
+  COPY_SIZES,
   isListable as isListableOnServer,
+  publicCopyPath,
+  readCopyablePhotos,
   sealPage,
   toPublicSale,
   toPublicThing,
   toSalePage,
 } from '../../functions/src/apps/going-once/salePageView.ts';
+import {
+  INQUIRY_LIMITS,
+  readContact as readContactOnServer,
+  toInquiryId,
+} from '../../functions/src/apps/going-once/inquiryView.ts';
 import * as clientConstants from '../../src/apps/going-once/constants.ts';
+import { readContact as readContactOnClient } from '../../src/apps/going-once/utils/contact.ts';
 import { isListable as isListableOnClient } from '../../src/apps/going-once/utils/listing.ts';
 import { SEED_SALE_LINK_ID } from '../seeds/goingOnce.ts';
 
@@ -97,6 +106,7 @@ const THING_KEYS = [
   'description',
   'id',
   'originalPriceCents',
+  'photos',
   'size',
   'status',
   'title',
@@ -269,7 +279,7 @@ check(
         { ...page.things[0], status: 'SOLD' },
       ],
     };
-    const sealed = sealPage(tampered as never);
+    const sealed = sealPage(tampered as never, null);
     assert.ok(sealed.status === 'ok');
     assert.deepEqual(Object.keys(sealed).sort(), [
       'isMember',
@@ -294,9 +304,9 @@ check(
       toSalePage(sale({ name: '' }), [thing()], false),
       NOT_FOUND_RESULT,
     );
-    assert.deepEqual(sealPage(NOT_FOUND_RESULT), NOT_FOUND_RESULT);
+    assert.deepEqual(sealPage(NOT_FOUND_RESULT, null), NOT_FOUND_RESULT);
     assert.equal(
-      JSON.stringify(sealPage({ status: 'gone' } as never)),
+      JSON.stringify(sealPage({ status: 'gone' } as never, null)),
       JSON.stringify(NOT_FOUND_RESULT),
     );
   },
@@ -332,6 +342,183 @@ check('link ids are the minted 26-character shape and nothing looser', () => {
   ].forEach((value) => assert.equal(isLinkId(value), false, String(value)));
 });
 
+const LINK = 'seedsalefall23456789abcdef';
+const PHOTO_A = 'photo-aaaa-1';
+const PHOTO_B = 'photo-bbbb-2';
+const listedPhoto = (id: string, itemId = 'gray-sofa') => ({
+  ...photo,
+  id,
+  path: `apps/going-once/sales/sale-id-secret/items/${itemId}/${id}.jpg`,
+});
+const copyListing = (ids: string[], itemId = 'gray-sofa') => ({
+  saleId: 'sale-id-secret',
+  linkId: LINK,
+  paths: new Set(
+    ids.flatMap((id) => [
+      publicCopyPath(LINK, itemId, id, 's'),
+      publicCopyPath(LINK, itemId, id, 'm'),
+    ]),
+  ),
+});
+
+check(
+  'photos are the public copies only, cover first, in the thing order, and only once both sizes exist',
+  () => {
+    const item = thing({
+      photos: [listedPhoto(PHOTO_A), listedPhoto(PHOTO_B)],
+    });
+    const result = toPublicThing(item, copyListing([PHOTO_A, PHOTO_B]));
+    assert.ok(result);
+    assert.deepEqual(
+      result.photos.map((entry) => entry.s),
+      [
+        publicCopyPath(LINK, 'gray-sofa', PHOTO_A, 's'),
+        publicCopyPath(LINK, 'gray-sofa', PHOTO_B, 's'),
+      ],
+    );
+    assert.deepEqual(
+      toPublicThing(
+        { ...item, photos: [...item.photos].reverse() },
+        copyListing([PHOTO_A, PHOTO_B]),
+      )?.photos[0].m,
+      publicCopyPath(LINK, 'gray-sofa', PHOTO_B, 'm'),
+    );
+    assert.equal(toPublicThing(item, copyListing([PHOTO_B]))?.photos.length, 1);
+    assert.equal(toPublicThing(item, null)?.photos.length, 0);
+    const half = copyListing([PHOTO_A]);
+    half.paths = new Set([publicCopyPath(LINK, 'gray-sofa', PHOTO_A, 's')]);
+    assert.equal(toPublicThing(item, half)?.photos.length, 0);
+    const body = JSON.stringify(
+      toSalePage(sale(), [item], false, copyListing([PHOTO_A, PHOTO_B])),
+    );
+    assert.ok(
+      !body.includes('/sales/'),
+      'a listing-size path reached the page',
+    );
+    assert.ok(!body.includes('.jpg'));
+    assert.ok(body.includes('/public/'));
+  },
+);
+
+check(
+  'at most 12 photos get copies and a path outside the thing is refused',
+  () => {
+    const ids = Array.from(
+      { length: 14 },
+      (_, index) => `photo-id-${index + 10}`,
+    );
+    const many = thing({ photos: ids.map((id) => listedPhoto(id)) });
+    assert.equal(
+      readCopyablePhotos('sale-id-secret', 'gray-sofa', many).length,
+      12,
+    );
+    const odd = thing({
+      photos: [
+        listedPhoto(PHOTO_A, 'other-thing'),
+        { ...listedPhoto(PHOTO_B), id: '../x' },
+        {
+          ...listedPhoto('photo-cccc-3'),
+          path: 'apps/going-once/sales/sale-id-secret/items/gray-sofa/../x.jpg',
+        },
+        listedPhoto('photo-dddd-4'),
+      ],
+    });
+    assert.deepEqual(
+      readCopyablePhotos('sale-id-secret', 'gray-sofa', odd).map(
+        (entry) => entry.id,
+      ),
+      ['photo-dddd-4'],
+    );
+    assert.deepEqual(COPY_SIZES, { s: 480, m: 1280 });
+  },
+);
+
+check(
+  'the final pass keeps a well-formed copy path and drops any other string',
+  () => {
+    const page = toSalePage(
+      sale(),
+      [thing({ photos: [listedPhoto(PHOTO_A)] })],
+      false,
+      copyListing([PHOTO_A]),
+    );
+    assert.ok(page.status === 'ok');
+    const tampered = {
+      ...page,
+      things: [
+        {
+          ...page.things[0],
+          photos: [
+            ...page.things[0].photos,
+            { s: 'apps/going-once/sales/x/items/y/z.jpg', m: 'x' },
+            { s: 5, m: null },
+            { ...page.things[0].photos[0], extra: 'secret-extra' },
+          ],
+        },
+      ],
+    };
+    const sealed = sealPage(tampered as never, LINK);
+    assert.ok(sealed.status === 'ok');
+    assert.equal(sealed.things[0].photos.length, 2);
+    assert.deepEqual(Object.keys(sealed.things[0].photos[1]).sort(), [
+      'm',
+      's',
+    ]);
+    assert.ok(!JSON.stringify(sealed).includes('secret-extra'));
+  },
+);
+
+check(
+  'the final pass drops a path from another link or thing, a swapped size and two different photos',
+  () => {
+    const own = (id: string, size: 's' | 'm') =>
+      publicCopyPath(LINK, 'gray-sofa', id, size);
+    const OTHER_LINK = 'seedsalefall23456789abcdeh';
+    const page = toSalePage(
+      sale(),
+      [thing({ photos: [listedPhoto(PHOTO_A)] })],
+      false,
+      copyListing([PHOTO_A]),
+    );
+    assert.ok(page.status === 'ok');
+    const seal = (photos: unknown[], linkId: string | null = LINK) => {
+      const sealed = sealPage(
+        { ...page, things: [{ ...page.things[0], photos }] } as never,
+        linkId,
+      );
+      assert.ok(sealed.status === 'ok');
+      return sealed.things[0].photos.length;
+    };
+    const good = { s: own(PHOTO_A, 's'), m: own(PHOTO_A, 'm') };
+    assert.equal(seal([good]), 1);
+    assert.equal(seal([good], OTHER_LINK), 0, 'a path under another link');
+    assert.equal(seal([good], null), 0, 'a page with no link');
+    assert.equal(
+      seal([
+        { s: publicCopyPath(OTHER_LINK, 'gray-sofa', PHOTO_A, 's'), m: good.m },
+      ]),
+      0,
+      'one path under another link',
+    );
+    assert.equal(
+      seal([
+        {
+          s: publicCopyPath(LINK, 'other-thing', PHOTO_A, 's'),
+          m: publicCopyPath(LINK, 'other-thing', PHOTO_A, 'm'),
+        },
+      ]),
+      0,
+      'paths under another thing',
+    );
+    assert.equal(seal([{ s: good.m, m: good.s }]), 0, 'sizes swapped');
+    assert.equal(
+      seal([{ s: own(PHOTO_A, 's'), m: own(PHOTO_B, 'm') }]),
+      0,
+      'two different photos',
+    );
+  },
+);
+
 const firestoreRules = readFileSync('firestore.rules', 'utf8');
 const saleBlock = firestoreRules.slice(
   firestoreRules.indexOf('match /apps/going-once/sales/{saleId} {'),
@@ -358,6 +545,7 @@ check(
     [
       'functions/src/share/shareIds.ts',
       'functions/src/share/shareFiles.ts',
+      'functions/src/share/imageCopies.ts',
     ].forEach((path) =>
       assert.ok(
         !/recipe|pinch|sale|trip/i.test(readFileSync(path, 'utf8')),
@@ -380,6 +568,60 @@ check(
     ].forEach((field) =>
       assert.ok(!view.includes(field), `${field} is named in salePageView.ts`),
     );
+  },
+);
+
+check('the interest form caps equal those of the app', () => {
+  assert.equal(
+    INQUIRY_LIMITS.MAX_NAME_LENGTH,
+    clientConstants.MAX_INQUIRY_NAME_LENGTH,
+  );
+  assert.equal(
+    INQUIRY_LIMITS.MAX_CONTACT_LENGTH,
+    clientConstants.MAX_INQUIRY_CONTACT_LENGTH,
+  );
+  assert.equal(
+    INQUIRY_LIMITS.MAX_MESSAGE_LENGTH,
+    clientConstants.MAX_INQUIRY_MESSAGE_LENGTH,
+  );
+});
+
+check(
+  'the phone-or-email field is read the same on the phone and in the function',
+  () => {
+    [
+      '206-555-0142',
+      '(206) 555.0142',
+      '+1 206 555 0142',
+      ' Priya@Example.COM ',
+      'priya@example',
+      'priya@',
+      '12345',
+      '12345678901234567890123',
+      'call me',
+      '',
+    ].forEach((text) => {
+      const server = readContactOnServer(text);
+      const client = readContactOnClient(text);
+      assert.equal(client?.kind ?? null, server?.kind ?? null, text);
+      assert.equal(
+        client?.value ?? null,
+        (server?.kind === 'email' ? server.email : server?.phone) ?? null,
+        text,
+      );
+    });
+  },
+);
+
+check(
+  'an inquiry id is 26 base32 characters, the same for the same contact and thing, different otherwise',
+  () => {
+    const id = toInquiryId('sofa', '2065550142');
+    assert.match(id, /^[a-z2-7]{26}$/);
+    assert.equal(id, toInquiryId('sofa', '2065550142'));
+    assert.notEqual(id, toInquiryId('desk', '2065550142'));
+    assert.notEqual(id, toInquiryId('sofa', '2065550143'));
+    assert.equal(readContactOnServer('(206) 555-0142')?.key, '2065550142');
   },
 );
 

@@ -127,7 +127,7 @@ function OwnPageBand() {
   );
 }
 
-function SaleView({ page }: { page: OkPage }) {
+function SaleView({ page, linkId }: { page: OkPage; linkId: string }) {
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const { sale, things } = page;
@@ -138,8 +138,11 @@ function SaleView({ page }: { page: OkPage }) {
   const available = shown.filter((thing) => thing.status === 'AVAILABLE');
   const pending = shown.filter((thing) => thing.status === 'PENDING');
   const openThing = things.find((thing) => thing.id === openId) ?? null;
+  const allAvailable = things.filter((thing) => thing.status === 'AVAILABLE');
+  const allPending = things.filter((thing) => thing.status === 'PENDING');
   const summary = [
-    things.length === 0 ? null : `${things.length} for sale`,
+    allAvailable.length === 0 ? null : `${allAvailable.length} for sale`,
+    allPending.length === 0 ? null : `${allPending.length} pending`,
     sale.pickupArea,
   ]
     .filter((part) => part !== null)
@@ -184,7 +187,11 @@ function SaleView({ page }: { page: OkPage }) {
         </>
       )}
       {openThing && (
-        <BuyerThingDrawer thing={openThing} onClose={() => setOpenId(null)} />
+        <BuyerThingDrawer
+          thing={openThing}
+          linkId={linkId}
+          onClose={() => setOpenId(null)}
+        />
       )}
     </div>
   );
@@ -210,7 +217,7 @@ function SalePage() {
       return <PageFailed onRetry={() => void query.refetch()} />;
     if (query.data === undefined) return <PageSkeleton />;
     if (query.data.status === 'not_found') return <NotHere />;
-    return <SaleView key={linkId} page={query.data} />;
+    return <SaleView key={linkId} page={query.data} linkId={linkId} />;
   };
 
   return (

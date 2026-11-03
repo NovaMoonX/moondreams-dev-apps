@@ -2,13 +2,20 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import type { Item } from '@apps/going-once/types';
-import { getDeleteEffects, getItemName } from '@apps/going-once/utils/listing';
+import type { AskedCount } from '@apps/going-once/utils/listing';
+import {
+  getDeleteEffects,
+  getItemName,
+  isListable,
+} from '@apps/going-once/utils/listing';
 
 export type DeleteChoice = 'DELETE' | 'TAKE_OFF' | null;
 
 export interface DeleteQuestion {
   item: Item;
   collectedCents: number;
+  /** People who have asked about the thing. */
+  asked: AskedCount;
   settle: (choice: DeleteChoice) => void;
 }
 
@@ -22,20 +29,23 @@ function DeleteThingConfirm({ question }: DeleteThingConfirmProps) {
     question?.settle(null),
   );
   if (question === null) return null;
-  const { item, collectedCents, settle } = question;
+  const { item, collectedCents, asked, settle } = question;
   const name = getItemName(item);
-  const canTakeOff = item.status === 'AVAILABLE' || item.status === 'PENDING';
+  const canTakeOff =
+    item.status === 'PENDING' ||
+    (item.status === 'AVAILABLE' && isListable(item));
 
   return (
     <Modal
       id={dialogId}
       isOpen
       onClose={onDialogClose}
+      hideCloseButton
       title={`Delete ${name}?`}
     >
       <p className='text-muted-foreground'>
         {[
-          ...getDeleteEffects(item, collectedCents),
+          ...getDeleteEffects(item, collectedCents, asked),
           "This can't be undone.",
         ].join(' ')}
       </p>

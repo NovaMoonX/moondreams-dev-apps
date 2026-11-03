@@ -148,6 +148,12 @@ export interface Item {
   lastEditedBy: string | null;
 }
 
+/** One photo's two public copies (480px and 1,280px WebP), as Storage paths. */
+export interface PublicPhoto {
+  s: string;
+  m: string;
+}
+
 /** A thing as the public page shows it: only the fields `getSalePage` allows. */
 export interface PublicThing {
   id: string;
@@ -160,6 +166,8 @@ export interface PublicThing {
   /** Set only when the seller chose to show it. */
   originalPriceCents: number | null;
   status: Extract<ItemStatus, 'AVAILABLE' | 'PENDING'>;
+  /** Cover first, in the thing's order; only photos whose copies exist. */
+  photos: PublicPhoto[];
 }
 
 /** What `getSalePage` answers: the page, or one `not_found` for every link that shows nothing. */
@@ -174,3 +182,44 @@ export type SalePageResult =
     };
 
 export type SaleLinkAction = 'create' | 'renew' | 'stop';
+
+export type InquiryStatus = 'NEW' | 'HANDLED';
+
+/** A buyer's message about a thing; made and resent only by the server. */
+export interface Inquiry {
+  id: string;
+  saleId: string;
+  itemId: string;
+  itemTitleAtSend: string;
+  /** `null` once the sale's contacts are cleared. */
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  status: InquiryStatus;
+  handledBy: string | null;
+  handledAt: number | null;
+  sendCount: number;
+  createdAt: number;
+  lastSentAt: number;
+  contactClearedAt: number | null;
+}
+
+export type InterestResult =
+  | { status: 'sent'; contact: 'email' | 'phone' }
+  | {
+      status: 'not_found' | 'not_available' | 'busy' | 'full' | 'slow_down';
+    }
+  | { status: 'invalid'; field: 'name' | 'contact' | 'message' };
+
+export interface InterestRequest {
+  linkId: string;
+  itemId: string;
+  name: string;
+  contact: string;
+  message: string;
+  /** Left empty by a person; anything in it is a bot. */
+  website: string;
+}
+
+export type InboxView = 'new' | 'handled';
