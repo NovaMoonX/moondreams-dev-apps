@@ -33,6 +33,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PROJECT_TOKEN: ${{ secrets.PROJECT_TOKEN }}
           PR: ${{ github.event.pull_request.number }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
           TMPDIR: ${{ runner.temp }}
         run: |
           if [ -z "$PROJECT_TOKEN" ]; then
@@ -44,10 +45,15 @@ jobs:
             echo "This PR changes no src/apps/<id>/ISSUES.md; nothing to create."
             exit 0
           fi
+          # Only issues this PR adds to a roadmap are created; one the base already
+          # had is linked when found and otherwise reported, never made twice.
+          git fetch --depth=1 origin "$BASE_REF"
           : > "$RUNNER_TEMP/issues.log"
           for app in $apps; do
             echo "## $app" >> "$RUNNER_TEMP/issues.log"
-            node scripts/createGithubIssues.ts "$app" --yes | tee -a "$RUNNER_TEMP/issues.log"
+            base="$RUNNER_TEMP/base-$app-ISSUES.md"
+            git show "FETCH_HEAD:src/apps/$app/ISSUES.md" > "$base" 2>/dev/null || rm -f "$base"
+            node scripts/createGithubIssues.ts "$app" --base-file "$base" --yes | tee -a "$RUNNER_TEMP/issues.log"
           done
       - name: Say what was created on the PR
         env:
@@ -58,11 +64,12 @@ jobs:
           log="$RUNNER_TEMP/issues.log"
           [ -f "$log" ] || exit 0
           created=$(sed -nE 's/^Done: ([0-9]+) created.*/\1/p' "$log" | paste -sd+ | bc)
-          if [ "$ACTION" != "labeled" ] && [ "${created:-0}" -eq 0 ]; then exit 0; fi
+          held=$(grep -c '^Not created:' "$log" || true)
+          if [ "$ACTION" != "labeled" ] && [ "${created:-0}" -eq 0 ] && [ "${held:-0}" -eq 0 ]; then exit 0; fi
           {
             echo "### Issues on the board"
             echo
-            grep -E '^(## |Done:|  Issue [0-9]+ → #)' "$log" | sed -E 's/^  (Issue [0-9]+ → #[0-9]+)/- \1/'
+            grep -E '^(## |Done:|  Issue [0-9]+ → #|Not created:|  Issue [0-9]+: )' "$log" | sed -E 's/^  (Issue [0-9]+( → #[0-9]+|: .*))$/- \1/'
             echo
             echo "Made by the \`create-issues\` label. Re-running is safe: existing issues are kept as they are."
           } > "$RUNNER_TEMP/comment.md"
