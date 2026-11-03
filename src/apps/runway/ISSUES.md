@@ -1102,6 +1102,8 @@ Cold start reads a month of entries, no matter how old the plan is. A closing st
 
 ## Next Steps
 
+**The owner's order for accounts and linking (Nov 2026).** The owner asked for these first, in this order, ahead of the rest of Next Steps: Issue 43 (spill-over, useful before linking), Issue 52 (accounts), Issue 53 (money to move), Issue 56 (the Plaid spike), Issue 57 and Issue 59 (link and bring transactions in), Issue 51 (Needs a home; its CSV import may follow later), Issue 55 (deposits, card payments and transfers between their own accounts), Issue 78 (rules) and Issue 62 (goals in linked accounts).
+
 ### Issue 29: Start from gross pay, with each deduction
 
 **Prerequisites:** Issue 18
@@ -1545,11 +1547,12 @@ An envelope can name an ordered list of envelopes that pay when it goes over, an
 3. Each money move appears in the change log of the purchase.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Update:** the overflow list on an envelope.
+- [ ] **Create / Update:** the overflow list on an envelope, from a "When it runs out" row on the envelope's own sheet (the owner looked for it there).
 - [ ] **Read:** the resolved lines on a purchase and in Check an amount.
 
 ### Success Criteria
 - [ ] A $30 overspend with a two-step chain splits exactly as the chain says and the lines add to the purchase (check case).
+- [ ] `resolveSpill` is the one path every purchase takes, so a purchase placed later by a rule (Issue 78) follows the same chain.
 - [ ] Editing a different purchase later does not change an earlier resolved split (emulator).
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
@@ -1752,7 +1755,7 @@ A card is named by its issuer and an optional name ("Capital One Venture X"). A 
 - [ ] The PR carries one `minor` label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; driven at 390×844 in light and dark.
 - [ ] `PRODUCT.md`, `UX.md` and `TECHNICAL.md` match what shipped.
 
-### Issue 51: Import purchases from a CSV, with Needs a home and merchant rules
+### Issue 51: Import purchases from a CSV, with Needs a home
 
 **Prerequisites:** Issue 24
 **Target PR Size:** ~550 lines (split the matching pass from the import if it runs over)
@@ -1761,19 +1764,19 @@ A card is named by its issuer and an optional name ("Capital One Venture X"). A 
 - `src/apps/runway/hooks/useReconcile.ts`
 - `src/apps/runway/screens/spend/ImportScreen.tsx`, `NeedsHomeScreen.tsx`
 - `src/apps/runway/types.ts` (`MerchantRuleDoc`, `importBatchId`, `dedupeKey`)
-- `firestore.rules` (`rules`)
+- `firestore.rules` (`purchases` import fields)
 
 **Context:** Read the TDD's "Matching", Open question 4 (parser), `dedupeKey` and `UX.md`'s Needs a home row.
 
 ### Description
-A bank CSV becomes purchases that wait in Needs a home. Merchant rules assign repeats; "varies" merchants always ask.
+A bank CSV becomes purchases that wait in Needs a home, where each is sent to an envelope (or split) in a tap. Rules moved to Issue 78; the Needs a home screen built here is also where linked purchases land, so the owner's Link path needs it before the import itself.
 
 ### Possible Approach
 1. Pick the parser per Open question 4. The device dedupe key is an HMAC under the plan key.
-2. The pass assigns by rule after the listeners settle; a rule is offered only after three identical assignments.
+2. Needs a home can ship before the import if the Link issues reach it first.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read / Update / Delete:** imports, Needs a home, rules.
+- [ ] **Create / Read / Update / Delete:** imports, Needs a home.
 
 ### Success Criteria
 - [ ] Importing the same file twice makes no duplicates (emulator).
@@ -1797,12 +1800,13 @@ A bank CSV becomes purchases that wait in Needs a home. Merchant rules assign re
 **Context:** Read the TDD's `AccountDoc`, `UX.md`'s Where is your money now row and Accounts (later) entry.
 
 ### Description
-A person names their accounts, says where each goal and envelope is held, sees the line-up against each balance and can check a balance. Over-assigned money is shown.
+A person names their accounts, says where each goal and envelope is held, marks the account cards and bills pull from, says which account pays each card and bill, sees the line-up against each balance and can check a balance. Over-assigned money is shown. Each account opens a view of what it holds with its goals inside it ("Wealthfront Cash · $8,400: Emergency, Japan trip, Car, not yet given a job"), so the owner can collapse Wealthfront's own buckets into one cash account.
 
 **Built so far:** the check of a balance against all the money on hand (`CheckBalanceBody`, no data, nothing saved). Accounts, where each pot is held, the line-up and a stored correction remain.
 
 ### Possible Approach
 1. Accounts are counted toward the total or left out (a brokerage), and `balanceCorrection` moves record a corrected balance.
+2. `AccountSealed.isPullAccount`, `BillSealed.accountId` and `CardSealed.payFromAccountId` (TDD "Accounts, what pays what, and money to move").
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** accounts (archive when used).
@@ -1817,8 +1821,8 @@ A person names their accounts, says where each goal and envelope is held, sees t
 
 ### Issue 53: After confirming: money to move between accounts
 
-**Prerequisites:** Issue 15, Issue 52
-**Target PR Size:** ~350 lines
+**Prerequisites:** Issue 15, Issue 50, Issue 52
+**Target PR Size:** ~450 lines
 **Files:**
 - `src/apps/runway/screens/days/ChecklistScreen.tsx` ("Move to accounts" group)
 - `src/apps/runway/engine/` (`moves.ts`)
@@ -1826,16 +1830,18 @@ A person names their accounts, says where each goal and envelope is held, sees t
 **Context:** Read `UX.md`'s Checklist row.
 
 ### Description
-Once accounts are named, the checklist lists the moves between accounts a confirmed day needs, as ticks.
+Once accounts are named, the checklist lists the moves between accounts a confirmed day needs, as ticks. For the account cards and bills pull from, the amount is worked out ("Move $1,240 from Capital One A to B by Nov 12: Discover, Citi and the phone bill") and cannot be missed: it sits on Home's warning row until ticked, and a pull account still short of what is about to pull from it says so on Home. Runway never moves the money.
 
 ### Possible Approach
 1. The group appears only once accounts exist; ticks use `doneLineIds`.
+2. `getPullAccountNeed` in `engine/moves.ts` (TDD "Accounts, what pays what, and money to move"); Home's warning row merges it with card warnings by date. With linked accounts, Issue 55's paired transfer ticks it.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Read / Update:** the group and its ticks.
 
 ### Success Criteria
 - [ ] The group is absent without accounts (hidden, not disabled).
+- [ ] The move to a pull account equals what pulls from it before the next income day less what it holds, stays on Home until ticked, and is checked at 320px (check cases for a card due after the next income day, which is left out, and for a balance that already covers it, which asks nothing).
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
@@ -1867,7 +1873,7 @@ A goal can earn interest from the account holding it; the interest is shared acr
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
-### Issue 55: Match deposits to income days, and card payments to the reserve
+### Issue 55: Match deposits to income days, card payments to the reserve, and transfers between your own accounts
 
 **Prerequisites:** Issue 51, Issue 50, Issue 13
 **Target PR Size:** ~450 lines
@@ -1881,7 +1887,7 @@ A goal can earn interest from the account holding it; the interest is shared acr
 **Context:** Read the TDD's "Matching (Track and Link)" steps 3 and 4, the properties paragraph, Decision 21 and `UX.md`'s Income day row.
 
 ### Description
-A posted deposit that fits a coming income day is linked to it and the day is ready to confirm. A deposit that arrives after its day was confirmed links to that day and changes nothing else. A purchase that settles a card payment becomes a `cardPayment` move.
+A posted deposit that fits a coming income day is linked to it and the day is ready to confirm. A deposit that arrives after its day was confirmed links to that day and changes nothing else. A purchase that settles a card payment becomes a `cardPayment` move. A move between two of the person's own linked accounts (A to B) is paired as a transfer, never spending or income, and ticks the day's "Move to" item (TDD Matching step 3a).
 
 ### Possible Approach
 1. Implement the candidate, amount and choice rules exactly as written; ties and no candidates leave the deposit in Needs a home. Pending deposits are skipped.
@@ -1894,9 +1900,46 @@ A posted deposit that fits a coming income day is linked to it and the day is re
 
 ### Success Criteria
 - [ ] The five matching properties in the TDD are asserted in the check, including order independence.
+- [ ] An A-to-B transfer leaves money on hand and Free to Spend unchanged and lands in no envelope (check case).
 - [ ] Matching the same imported file twice changes nothing (emulator).
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
+- [ ] Every sealed field this issue adds is read by this issue's own screens; a field for a later tier is not added early.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
+- [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 78: Rules: always send a kind of purchase to an envelope
+
+**Prerequisites:** Issue 51 (Needs a home), Issue 43, Issue 50
+**Target PR Size:** ~600 lines (split the Rules screen from the matching pass if it runs over)
+**Files:**
+- `src/apps/runway/types.ts` (`RuleSealed`, purchase `ruleId`)
+- `src/apps/runway/engine/rules.ts` (`findRule`, precedence, `isBroadMerchant`), `engine/matching.ts` (step 2)
+- `src/apps/runway/screens/spend/NeedsHomeScreen.tsx` ("Always do this"), `screens/spend/RulesScreen.tsx`, `forms/RuleSheet.tsx`
+- `firestore.rules` (`rules`), `scripts/checks/runwayEngine.ts`, `scripts/seeds/runway.ts`
+
+**Context:** Read the TDD's `RuleSealed`, "Matching" step 2, and `UX.md`'s Needs a home and Rules rows.
+
+### Description
+A rule sends purchases to an envelope by this merchant, this kind of place, everything on this card, or a kind of place on one card. Nothing is applied until the person makes a rule, from a purchase in Needs a home ("Always do this", its conditions filled in from that purchase) or from the suggestion after three identical assignments. The most specific rule wins; a store that sells everything and a "varies" merchant always ask. A purchase a rule placed follows its envelope's spill-over chain and says which rule placed it. The Rules screen lists every rule as a sentence, grouped by card.
+
+### Possible Approach
+1. `findRule(purchase, rules)` is pure and returns the most specific fit (merchant, then category with card, then category, then card); an old `{ merchantKey, target }` rule reads as a merchant rule.
+2. The pass resolves through `resolveSpill` and writes `ruleId`; it never touches a purchase the person already placed.
+3. Changing or removing a rule changes nothing already placed.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** "Always do this" on each Needs a home card, and the three-in-a-row suggestion.
+- [ ] **Read:** Spend > Rules, and "Went to Dining: your restaurant rule" on a placed purchase.
+- [ ] **Update / Delete:** each rule's sheet.
+
+### Success Criteria
+- [ ] Precedence, the broad-merchant exception and an old-shaped rule are check cases.
+- [ ] A rule-placed purchase that overspends its envelope splits by the chain exactly as one added by hand (check case).
+- [ ] No purchase is placed before a rule exists (emulator).
+- [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
+- [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
+- [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
 - [ ] Every sealed field this issue adds is read by this issue's own screens; a field for a later tier is not added early.
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
@@ -1929,6 +1972,8 @@ Settle, before any Link code is written, what Plaid access will be: production a
 - [ ] The README's bank sign-in wording matches the finding.
 - [ ] Both secrets exist in production, and the first Link issue's prerequisites say so.
 - [ ] If the answer is that Plaid cannot cover the UX, the PR says what changes in the README before any Link issue is filed.
+- [ ] The owner's seven accounts are tried in the sandbox or a trial link: Capital One checking (two), the Capital One, Discover and Citi cards, the Walmart card from OnePay (issued by Synchrony; whether it appears as Synchrony or OnePay) and Wealthfront Cash, and the finding says which link and which stay by hand.
+- [ ] The Trial plan's connected-account cap and the per-account Transactions rate shown in the production application are recorded beside the estimate in Open question 3.
 
 ### Issue 57: Choose Link and connect a bank
 
