@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   CHANGE_LOG_SPANS,
+  DAYS_VIEWS,
   ADD_REQUEST_KINDS,
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
@@ -184,6 +185,16 @@ export function useRunwayUrlState() {
   const daysMonth = isMonthKey(requestedDaysMonth) ? requestedDaysMonth : null;
   const showDaysMonth = (month: string | null) =>
     setRequestedDaysMonth(month, { history: 'replace' });
+
+  const [requestedDaysView, setRequestedDaysView] = useQueryState(
+    'daysView',
+    parseAsStringLiteral(DAYS_VIEWS),
+  );
+  const daysView = requestedDaysView ?? 'list';
+  const showDaysView = (view: (typeof DAYS_VIEWS)[number]) =>
+    setRequestedDaysView(view === 'list' ? null : view, {
+      history: 'replace',
+    });
 
   const logSpan = requestedSpan ?? DEFAULT_CHANGE_LOG_SPAN;
   const logPage = Math.min(
@@ -367,6 +378,8 @@ export function useRunwayUrlState() {
     showSpendPeriod,
     daysMonth,
     showDaysMonth,
+    daysView,
+    showDaysView,
     logSpan,
     logPage,
     logItem: requestedItem,

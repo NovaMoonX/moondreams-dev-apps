@@ -4,7 +4,7 @@ import {
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import { FIX_WORDS } from '@apps/runway/constants';
+import { COVERAGE_WORDS, FIX_WORDS } from '@apps/runway/constants';
 import {
   isSameLookahead,
   sortProblems,
@@ -14,11 +14,31 @@ import {
 
 export { isSameLookahead, sortProblems };
 
-/** The headline: how far the plan holds, or null when there is nothing to hold yet. */
-export function describeHoldsThrough(lookahead: Lookahead) {
-  if (lookahead.holdsThrough === null) return null;
-  const result = `Your plan holds through ${formatDateUTC(lookahead.holdsThrough)}`;
-  return result;
+/** "today", "tomorrow" or "on Nov 18": the day a problem falls on, counted from `today`. */
+const onDay = (on: number, today: number) => {
+  if (on <= today) return 'today';
+  const relative = formatRelativeDayUTC(on, today);
+  return relative === 'tomorrow' ? relative : `on ${relative}`;
+};
+
+/** How far the plan covers every bill, counted from today in words that need no year to read: "Your plan covers every bill for the next 12 months", "Your plan comes up short tomorrow". */
+export function describeCoverage(lookahead: Lookahead, today: number) {
+  const [first] = sortProblems(lookahead.problems);
+  if (first) {
+    return {
+      isClear: false,
+      text: `${COVERAGE_WORDS.shortLead} ${onDay(first.on, today)}`,
+    };
+  }
+  if (lookahead.incomeEndsOn !== null) {
+    return {
+      isClear: true,
+      text: COVERAGE_WORDS.untilIncomeEnds(
+        formatDateShortUTC(lookahead.incomeEndsOn),
+      ),
+    };
+  }
+  return { isClear: true, text: COVERAGE_WORDS.clear };
 }
 
 /** What a change does to how far the plan holds, as one sentence; null when there is nothing to say. */
@@ -168,7 +188,7 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
 }
 
 export interface HoldsBlock {
-  tone: 'success' | 'warning';
+  tone: 'success' | 'warning' | 'info';
   text: string;
   /** The amount inside `text`, so it can be drawn in the warning colour. */
   figure: string | null;
@@ -282,20 +302,42 @@ export function describeHoldsBlocks(
   /** Why a pay is short, by its day key ("Freelance payment is one-time and brings $120"). */
   notes: Readonly<Record<string, string>> = {},
 ): HoldsBlock[] {
-  const holds = (through: number): HoldsBlock => ({
-    tone: 'success',
-    text:
-      isSameLookahead(before, after) || before.holdsThrough === through
-        ? `Your plan still holds through ${formatDateUTC(through)}.`
-        : `Your plan would hold through ${formatDateUTC(through)}${
-            before.holdsThrough === null
-              ? ''
-              : ` instead of ${formatDateUTC(before.holdsThrough)}`
-          }.`,
-    figure: null,
-  });
+  const holds = (): HoldsBlock => {
+    const [first] = sortProblems(after.problems);
+    if (first) {
+      return {
+        tone: 'info',
+        text: COVERAGE_WORDS.stillShort(formatDateUTC(first.on)),
+        figure: null,
+      };
+    }
+    const ends = after.incomeEndsOn;
+    const isSame =
+      isSameLookahead(before, after) ||
+      (before.problems.length === 0 && before.incomeEndsOn === ends);
+    const coverage =
+      ends === null
+        ? COVERAGE_WORDS.clearTail
+        : COVERAGE_WORDS.untilIncomeEndsTail(formatDateUTC(ends));
+    const movedFrom =
+      ends !== null &&
+      before.problems.length === 0 &&
+      before.incomeEndsOn !== null &&
+      before.incomeEndsOn !== ends
+        ? ` instead of ${formatDateUTC(before.incomeEndsOn)}`
+        : '';
+    return {
+      tone: 'success',
+      text: isSame
+        ? `Your plan still ${coverage}.`
+        : `With this change your plan ${coverage}${movedFrom}.`,
+      figure: null,
+    };
+  };
   if (isSameLookahead(before, after)) {
-    return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
+    return after.holdsThrough === null && after.problems.length === 0
+      ? []
+      : [holds()];
   }
   const found = getCreatedProblems(before.problems, after.problems);
   const created = sortProblems(found.map((entry) => entry.problem)).flatMap(
@@ -319,7 +361,9 @@ export function describeHoldsBlocks(
       ]
     : [];
   if (problem.length > 0 || after.problems.length > 0) return problem;
-  return after.holdsThrough === null ? [] : [holds(after.holdsThrough)];
+  return after.holdsThrough === null && after.problems.length === 0
+    ? []
+    : [holds()];
 }
 
 /** One problem in a few words, in the plan's terms: "The plan leaves Rent $30 short on Nov 1". */

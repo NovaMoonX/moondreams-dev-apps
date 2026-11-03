@@ -1915,7 +1915,7 @@ async function writeSeedBills(
   return (bills.length + groups.length) * 3 + 2;
 }
 
-/** Three goals: one with a date that lands exactly on pace, one with no date, and one the plan fills on the first income day. */
+/** Goals with and without a date: one lands exactly on pace, one the plan fills on the first income day, and one whose income days can't reach it by its date. */
 async function writeSeedGoals(
   context: SeedContext,
   uid: string,
@@ -2000,6 +2000,19 @@ async function writeSeedGoals(
         targetDate: null,
         funding: { amount: exact(0), cadence: { kind: 'none' } },
         state: 'active',
+      },
+    },
+    {
+      id: 'seed-goal-concert',
+      payload: {
+        name: 'Concert tickets',
+        emoji: '🎟️',
+        priority: 'want',
+        orderIndex: 3,
+        targetCents: 60_000,
+        targetDate: today + 20 * DAY_MS,
+        state: 'active',
+        funding: { amount: exact(10_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
   ];

@@ -3,7 +3,6 @@ import { CircleCheck } from 'lucide-react';
 
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CONFIRM_FLOW_WORDS,
@@ -12,6 +11,7 @@ import {
   ITEM_SHEET_R2_WORDS,
 } from '@apps/runway/constants';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
+import { describeCoverage } from '@apps/runway/utils/lookaheadText';
 
 interface CoverageHeadlineProps {
   freeCents: number;
@@ -39,23 +39,24 @@ function CoverageHeadline({ freeCents }: CoverageHeadlineProps) {
 
 interface HoldsThroughLineProps {
   lookahead: Lookahead;
+  today: number;
   /** A help icon at the end of the line, for what the figure leaves out. */
   help?: ReactNode;
 }
 
-/** How far the plan holds, in one line. A gap is said as a gap in the plan, never as missing money. */
-export function HoldsThroughLine({ lookahead, help }: HoldsThroughLineProps) {
+/** Whether the plan covers every bill and for how long, in one line. A gap is said as a gap in the plan, never as missing money. */
+export function HoldsThroughLine({
+  lookahead,
+  today,
+  help,
+}: HoldsThroughLineProps) {
   if (!lookahead.hasBills) {
     return (
       <p className='text-muted-foreground text-sm'>{HOME_WORDS.noBills}</p>
     );
   }
-  if (lookahead.holdsThrough === null) return null;
-  const date = formatDateShortUTC(lookahead.holdsThrough).replace(
-    / /g,
-    '\u00a0',
-  );
-  const isClear = lookahead.problems.length === 0;
+  const { isClear, text } = describeCoverage(lookahead, today);
+  const lastSpace = text.lastIndexOf(' ');
   return (
     <div className='flex min-h-10 items-center gap-1'>
       {isClear && (
@@ -65,9 +66,9 @@ export function HoldsThroughLine({ lookahead, help }: HoldsThroughLineProps) {
         />
       )}
       <p className='text-sm font-medium text-balance'>
-        {ITEM_SHEET_R2_WORDS.holdsThrough}{' '}
+        {text.slice(0, lastSpace + 1)}
         <span className='whitespace-nowrap'>
-          {date}
+          {text.slice(lastSpace + 1)}
           {help && (
             <span className='ml-1 inline-flex align-middle'>{help}</span>
           )}

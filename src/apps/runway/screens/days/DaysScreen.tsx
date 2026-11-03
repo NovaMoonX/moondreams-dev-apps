@@ -16,6 +16,8 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   COMING_DAYS_CAP,
   COMING_DAYS_PREVIEW,
+  DAYS_CALENDAR_WORDS,
+  DAYS_VIEWS,
   DAYS_WORDS,
   PROBLEM_WORDS,
   SETTLED_DAYS_PREVIEW,
@@ -26,6 +28,7 @@ import { getMonthStart } from '@apps/runway/engine/closings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import { listHistoryMonths } from '@apps/runway/utils/historyWindow';
+import DaysCalendarView from '@apps/runway/screens/days/DaysCalendarView';
 import EarlierDaysView from '@apps/runway/screens/days/EarlierDaysView';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -42,6 +45,7 @@ import {
   selectIsRecordsReady,
   selectListedDays,
   selectStance,
+  type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeRangeBasis } from '@apps/runway/utils/rangeText';
 
@@ -51,11 +55,24 @@ const monthFormat = new Intl.DateTimeFormat('en-US', {
   timeZone: 'UTC',
 });
 
+/** Runs of days in one calendar year, in order; a run outside `thisYear` is headed by its year, since a row's badge shows only the month and day. */
+const groupByYear = (days: ListedDay[], thisYear: number) =>
+  days.reduce<{ year: number | null; days: ListedDay[] }[]>((groups, day) => {
+    const dayYear = new Date(day.on).getUTCFullYear();
+    const year = dayYear === thisYear ? null : dayYear;
+    const last = groups.at(-1);
+    if (last && last.year === year) {
+      return [...groups.slice(0, -1), { year, days: [...last.days, day] }];
+    }
+    return [...groups, { year, days: [day] }];
+  }, []);
+
 const plural = (count: number, word: string) =>
   `${count} ${word}${count === 1 ? '' : 's'}`;
 
 function DaysScreen() {
   const today = todayAsUtcDate(useNow(60_000));
+  const thisYear = new Date(today).getUTCFullYear();
   const isPlanLoaded = useAppSelector(selectIsPlanItemsLoaded);
   const isDaysLoaded = useAppSelector(selectIsDaysLoaded);
   const isLoaded = isPlanLoaded && isDaysLoaded;
@@ -80,8 +97,22 @@ function DaysScreen() {
         cushion.billCount > 0 && plural(cushion.billCount, 'bill'),
       ].filter(Boolean)
     : [];
-  const { openDay, daysMonth, showDaysMonth, addRequest, clearAdd } =
-    useRunwayUrlState();
+  const {
+    openDay,
+    daysMonth,
+    showDaysMonth,
+    daysView,
+    showDaysView,
+    addRequest,
+    clearAdd,
+  } = useRunwayUrlState();
+  const isCalendar = daysView === 'calendar';
+  const getShorts = (dayKey: string) =>
+    (lookahead?.problems ?? []).flatMap((problem) =>
+      problem.kind === 'short' && problem.dayKey === dayKey
+        ? [{ name: problem.name, shortBy: problem.shortBy }]
+        : [],
+    );
   const recentFrom = useAppSelector(selectRecentFrom);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
@@ -96,7 +127,9 @@ function DaysScreen() {
             label: monthFormat.format(getMonthStart(month)),
           }));
   const earlierMonth =
-    daysMonth !== null && monthOptions.some((o) => o.value === daysMonth)
+    !isCalendar &&
+    daysMonth !== null &&
+    monthOptions.some((o) => o.value === daysMonth)
       ? daysMonth
       : null;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -114,7 +147,7 @@ function DaysScreen() {
       : confirmed;
 
   const monthChip =
-    isLoaded && monthOptions.length > 0 ? (
+    isLoaded && !isCalendar && monthOptions.length > 0 ? (
       <ScopeChip
         label={
           earlierMonth === null
@@ -156,6 +189,9 @@ function DaysScreen() {
         </EmptyCard>
       );
     }
+    if (isCalendar) {
+      return <DaysCalendarView today={today} getShorts={getShorts} />;
+    }
     return (
       <div className='space-y-4'>
         {days.length === 0 ? (
@@ -164,20 +200,23 @@ function DaysScreen() {
           </p>
         ) : (
           <div className='space-y-2'>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {visibleDays.map((day) => (
-                <IncomeDayCard
-                  key={day.dayKey}
-                  day={day}
-                  shorts={(lookahead?.problems ?? []).flatMap((problem) =>
-                    problem.kind === 'short' && problem.dayKey === day.dayKey
-                      ? [{ name: problem.name, shortBy: problem.shortBy }]
-                      : [],
-                  )}
-                  onOpen={() => openDay(day.dayKey)}
-                />
-              ))}
-            </ul>
+            {groupByYear(visibleDays, thisYear).map((group) => (
+              <div key={group.days[0].dayKey} className='space-y-2'>
+                {group.year !== null && (
+                  <SectionDivider label={String(group.year)} />
+                )}
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {group.days.map((day) => (
+                    <IncomeDayCard
+                      key={day.dayKey}
+                      day={day}
+                      shorts={getShorts(day.dayKey)}
+                      onOpen={() => openDay(day.dayKey)}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
             {hasFold && (
               <ShowMoreButton
                 isOpen={isExpanded}
@@ -198,17 +237,28 @@ function DaysScreen() {
         )}
         {confirmed.length > 0 && (
           <div className='space-y-2'>
-            <SectionDivider label='Confirmed' />
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {visibleSettled.map((day) => (
-                <IncomeDayCard
-                  key={day.dayKey}
-                  day={day}
-                  isConfirmedShown={false}
-                  onOpen={() => openDay(day.dayKey)}
+            {groupByYear(visibleSettled, thisYear).map((group, index) => (
+              <div key={group.days[0].dayKey} className='space-y-2'>
+                <SectionDivider
+                  label={[
+                    index === 0 && DAYS_WORDS.confirmed,
+                    group.year !== null && String(group.year),
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 />
-              ))}
-            </ul>
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {group.days.map((day) => (
+                    <IncomeDayCard
+                      key={day.dayKey}
+                      day={day}
+                      isConfirmedShown={false}
+                      onOpen={() => openDay(day.dayKey)}
+                    />
+                  ))}
+                </ul>
+              </div>
+            ))}
             {hasSettledFold && (
               <ShowMoreButton
                 isOpen={isSettledExpanded}
@@ -225,8 +275,22 @@ function DaysScreen() {
     );
   };
 
+  const hasDays = isLoaded && (days.length > 0 || confirmed.length > 0);
+
   return (
     <div className='space-y-4'>
+      {hasDays && earlierMonth === null && (
+        <PillGroup
+          label={DAYS_CALENDAR_WORDS.viewLabel}
+          options={DAYS_VIEWS.map((value) => ({
+            value,
+            label: DAYS_CALENDAR_WORDS[value],
+          }))}
+          value={daysView}
+          isThin
+          onChange={showDaysView}
+        />
+      )}
       <div className='flex min-h-10 items-center justify-between gap-2'>
         <div className='min-w-0 flex-1'>
           {earlierMonth !== null && (
@@ -238,6 +302,7 @@ function DaysScreen() {
           {earlierMonth === null && lookahead && days.length > 0 && (
             <HoldsThroughLine
               lookahead={lookahead}
+              today={today}
               help={
                 (cushion || rangeSides.income || rangeSides.expense) && (
                   <HelpTip title={PROBLEM_WORDS.stanceTitle}>

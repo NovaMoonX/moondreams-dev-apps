@@ -90,6 +90,7 @@ import {
 } from '../../src/apps/runway/utils/purchaseText.ts';
 import { describeAmountCheck } from '../../src/apps/runway/utils/checkText.ts';
 import {
+  describeCoverage,
   describeHoldsBlocks,
   describeHoldsChange,
   describeProblemShort,
@@ -236,6 +237,7 @@ import {
   getPace,
   planGoalContributions,
 } from '../../src/apps/runway/engine/pace.ts';
+import { buildCalendarEntries } from '../../src/apps/runway/engine/dayCalendar.ts';
 import {
   describeAmount,
   normalizeFunding,
@@ -7919,10 +7921,32 @@ const version = (
     'a change that leaves the same last day but a new first problem says only the problem, never that the plan holds through a day',
   );
   assert.ok(
-    describeHoldsChange(look(day), look(utc(2026, 11, 12)))?.includes(
-      'would hold through',
+    describeHoldsChange(look(day), look(utc(2026, 11, 12)))?.startsWith(
+      'Your plan still covers every bill',
     ),
-    'a later last day reads as a move',
+    'a plan clear before and after says it still covers every bill, never a date that needs its year',
+  );
+  assert.ok(
+    describeHoldsChange(look(day, [rentShort]), look(day))?.startsWith(
+      'With this change your plan covers every bill',
+    ),
+    'a change that clears the last problem says the plan now covers every bill',
+  );
+  assert.equal(
+    describeHoldsBlocks(look(day, [rentShort]), look(day, [rentShort]))[0]
+      ?.tone,
+    'info',
+    'a change that leaves a problem as it was says so without the success colour',
+  );
+  assert.equal(
+    describeCoverage(look(day, [rentShort]), rentShort.on - 86_400_000).text,
+    'Your plan comes up short tomorrow',
+    'the headline counts the first problem from today',
+  );
+  assert.equal(
+    describeCoverage(look(day), day).text,
+    'Your plan covers every bill for the next 12 months',
+    'a clear plan reads as a span from today',
   );
 }
 
@@ -10490,6 +10514,47 @@ const version = (
     created([water], [{ ...water, on: 500 }]).length,
     1,
     "a no-income problem on an earlier day is the change's",
+  );
+}
+
+{
+  const from = utc(2026, 11, 1);
+  const to = utc(2026, 11, 30);
+  const byDay = buildCalendarEntries(
+    {
+      incomeDays: [
+        { dayKey: 'p_20261106', on: utc(2026, 11, 6) },
+        { dayKey: 'p_20261201', on: utc(2026, 12, 1) },
+      ],
+      billPayments: [
+        { billId: 'rent', dueOn: utc(2026, 11, 6), totalCents: 150000 },
+      ],
+      cards: [
+        { cardId: 'c1', dueDay: 31, since: utc(2026, 1, 1) },
+        { cardId: 'c2', dueDay: 12, since: utc(2026, 11, 20) },
+      ],
+      goals: [
+        { goalId: 'g1', targetDate: utc(2026, 11, 6), track: 'behind' },
+        { goalId: 'g2', targetDate: null, track: null },
+      ],
+    },
+    from,
+    to,
+  );
+  assert.deepEqual(
+    (byDay.get(utc(2026, 11, 6)) ?? []).map((entry) => entry.kind),
+    ['income', 'bill', 'goal'],
+    'a day lists income, then bills, then goal dates, and only what is in the month',
+  );
+  assert.deepEqual(
+    (byDay.get(utc(2026, 11, 30)) ?? []).map((entry) => entry.kind),
+    ['card'],
+    'a card due on the 31st lands on the last day of a shorter month, and a card not yet added has no due day',
+  );
+  assert.equal(
+    byDay.has(utc(2026, 12, 1)),
+    false,
+    'a day outside the range is left out',
   );
 }
 
