@@ -6,9 +6,9 @@
 
 - **Co-sellers join by email, Waypoint's way.** The seller adds an email; when that person opens Going Once signed in with that verified email, the app joins them by writing themselves into `members` and deleting the invite in one commit (Waypoint's `emailInvites` + `isTripEmailInviteJoinValid` shape). No accept step and no pending-request collection: the seller's Add is the consent. No email is sent.
 - **The app route is open to any signed-in person (Waypoint's shape, not a `ProtectedRoute appId`)**, so a co-seller never needs an access grant; who may *start* a sale is a server-enforced feature switch, `create-sales` (see "For the owner" in the hand-off).
-- **The public page is live, not a snapshot** (the documented exception to `security-privacy.md` "A share is a snapshot unless it says otherwise"; product asks for it). A function reads the sale and its things with the admin SDK on every call and runs each through an allowlist. Only photos are copied out.
+- **The public page is live, not a snapshot** (the documented exception to `security-privacy.md` "A share is a snapshot unless it says otherwise"; product asks for it). A function reads the sale and its things with the admin SDK on every call and runs each through an allowlist. Only photos are copied out. Cost: every open is one call that reads the sale and up to 300 things (the cap is applied before the listable filter, so a sale with many unlisted things reads them all for fewer cards), with `maxInstances` 10.
 - **One stored file per photo; public copies made by a trigger.** Each photo is uploaded once at the shared `listing` size. A trigger keeps a folder named by the public link equal to what the page shows (480px and 1,280px WebP copies) and deletes copies of anything that stops showing. Visitors never receive the listing-size file.
-- **Signed-out interest is written by a callable** with field caps, 100 a day per sale, 40 per thing, a per-instance IP throttle, a honeypot and a deterministic id. No CAPTCHA.
+- **Signed-out interest is written by a callable** with field caps, 100 a day per sale, 40 per thing, a per-instance throttle on a hashed sender (never the address; keyed by the link when the request carries no address), a honeypot and a deterministic id. A resend of one inquiry doesn't count toward the 100 a day; it is limited per inquiry instead: within 10 minutes of its `lastSentAt` it only replaces the name and message (no reopen, no new count), and once `sendCount` reaches 20 the callable answers `sent` and writes nothing. No CAPTCHA.
 - **Save all photos is a zip built by a function** from Available and Pending things, streamed into Storage.
 - **Inquiry pushes are bundled, never capped or dropped** (owner, round 2): at most one push per person per 15 minutes, summarising what came in since the last; nothing 22:00–08:00 in the sale's zone, and what came in overnight arrives as one push at 08:00. On by default for the seller and every co-seller, off per person per sale. The lock screen names the thing only, never a buyer's name, message or contact. The window is a new shared, app-agnostic piece (`functions/src/notifications/bundledPush.ts` with a central `pushBundles` collection), because "a person is waiting on you" pushes in other apps want the same rule.
 - **Finishing a sale** turns its public link off and schedules buyer contact details to be cleared 30 days later by a daily function.
@@ -82,12 +82,12 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 
 | Field | Type |
 |---|---|
-| `id` | `string`: 26 chars of base32 SHA-256(`itemId` + normalized contact) |
+| `id` | `string`: 26 chars of base32 SHA-256(`itemId`, a newline, the normalized contact) |
 | `saleId`, `itemId` | `string` |
 | `itemTitleAtSend` | `string` (still reads if the thing is renamed) |
 | `name` | `string \| null` (≤ 80; `null` once cleared) |
 | `email` | `string \| null` (≤ 254) |
-| `phone` | `string \| null` (7–20 digits after stripping `+ ( ) - .` and spaces) |
+| `phone` | `string \| null` (7–20 digits after stripping `( ) - .` and spaces, a leading `+` kept) |
 | `message` | `string \| null` (≤ 1,000; `null` once cleared) |
 | `status` | `InquiryStatus = 'NEW' \| 'HANDLED'` |
 | `handledBy`, `handledAt` | `string \| null`, `number \| null` |
@@ -95,7 +95,7 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 | `createdAt`, `lastSentAt` | `number` |
 | `contactClearedAt` | `number \| null` |
 
-The buyer types one "Phone or email" field; the function reads it as an email when it has `@` and a dot after it, else as a phone, and stores the other as `null`. Created and resent only by `submitSaleInterest`: a resend from the same contact about the same thing replaces `message`, bumps `lastSentAt` and `sendCount`, and moves it back to `NEW`. Members update only `status`, `handledBy`, `handledAt`, and may delete. Deleting a thing never deletes its inquiries: they keep `itemTitleAtSend`, and the inbox shows "(No longer listed)" for an `itemId` no longer among the sale's things.
+The buyer types one "Phone or email" field; the function reads it as an email when it has `@` and a dot after it, else as a phone, and stores the other as `null`. Created and resent only by `submitSaleInterest`: a resend from the same contact about the same thing replaces `message`, bumps `lastSentAt` and `sendCount`, moves it back to `NEW` and writes `contactClearedAt: null` (a resend after the 30-day clearing brings contact details back). A resend within 10 minutes of `lastSentAt` replaces only `name` and `message`; past 20 sends it answers `sent` and changes nothing. Members update only `status`, `handledBy`, `handledAt`, and may delete. Deleting a thing never deletes its inquiries: they keep `itemTitleAtSend`, and the inbox shows "(No longer listed)" for an `itemId` no longer among the sale's things.
 
 ### `apps/going-once/people/{uid}` (per-person settings)
 
@@ -104,7 +104,7 @@ The buyer types one "Phone or email" field; the function reads it as an email wh
 ### Function-only documents (no client rule matches them)
 
 - `apps/going-once/sales/{saleId}/limits/interest`: `{ dayKey: string, count: number }`, the sale's interest count for the current UTC day.
-- `apps/going-once/publicLinks/{linkId}`: `{ id, saleId, createdBy, createdAt }`. `linkId` is 26 chars of `[2-9a-hj-np-z]` (130 bits) minted with `crypto.randomInt` (Pinch's `mintShareId`).
+- `apps/going-once/publicLinks/{linkId}`: `{ id, saleId, createdBy, createdAt }`. `linkId` is 26 chars of `[2-9a-hj-np-z]` (130 bits) minted with `crypto.randomInt` (`mintShareId` in `functions/src/share/`, which Pinch's share functions use too, with `copyFileUnderNewToken` and `removeFolderFiles`). A stopped or renewed-away link's document is deleted, so the sale holds at most one.
 
 ### Storage
 
@@ -112,7 +112,7 @@ The buyer types one "Phone or email" field; the function reads it as an email wh
 |---|---|---|
 | `apps/going-once/sales/{saleId}/items/{itemId}/{photoId}.jpg` | members read, create, delete; < 5 MB, `image/*`, name `^[A-Za-z0-9-]{8,40}[.]jpg$` | The one stored listing-size file |
 | `apps/going-once/sales/{saleId}/exports/photos.zip` | members `get`; no client writes | Save all photos; replaced on each build |
-| `apps/going-once/public/{linkId}/{itemId}/{photoId}-{s\|m}.webp` | anyone `get` on a path matching the id patterns; nobody `list` or writes | Public copies, each under its own download token |
+| `apps/going-once/public/{linkId}/{itemId}/{photoId}-{s\|m}.webp` | anyone `get` on a path matching the id patterns (`linkId` `^[2-9a-hj-np-z]{26}$`, `itemId` `^[A-Za-z0-9_-]{1,128}$`, file `^[A-Za-z0-9-]{8,40}-(s\|m)[.]webp$`); nobody `list` or writes | Public copies, each under its own download token |
 
 ### Shared image size
 
@@ -156,15 +156,17 @@ OPEN → FINISHED   (seller; callable `finishSale`: turns the public link off, s
 FINISHED → OPEN   (seller; same callable: clears contactsClearAt if contacts are not yet cleared; the link stays off until turned on)
 ```
 
+The functions name the finished status once (`FINISHED_SALE_STATUS` in `salePageView.ts`); `check:going-once-share` should assert it against the client's sale status type once the finish issue adds one (the type is not in `types.ts` yet).
+
 Contacts already cleared stay cleared after a reopen.
 
 ### Public link
 
-`none → on → renewed → … → none`, seller only, through `changeSalePublicLink`.
+`none → on → renewed → … → none`, seller only, through `changeSalePublicLink`. Turning it off deletes the link, so turning it on again makes a new address. Stop deletes the public folder first (files first), then one transaction removes the link. Renew writes the new link first, in one transaction that deletes the old link document and sets the sale's `publicLinkId` and `publicLinkChangedAt`; the old folder is deleted right after the swap, on its own and before any copying (a failure there is logged and never undoes the renewal, and a timeout later can't orphan it), and then the new address's copies are made within a 200 s budget before the call returns. Create runs the same sweep for the new address. Create on a sale that has a link answers that link after running the sweep again, which skips every copy that exists: that is the way to finish a big sale the first sweep left partial.
 
 ### Totals
 
-`selectStatusSummary` (a `createSelector` over the open sale's things, no second totals module) runs `getStatusSummary`, one pass bucketing by status: collected (sum of `sale.priceCents`), asked for those, pending count and asking, left count and asking, unpriced count. Withdrawn things are excluded everywhere; `floorPriceCents` is never summed. One formatter per figure shown twice (tile and footer line). The Things tab's pills and its totals line come from `getStatusSummary` in `utils/statusSummary.ts`: Available counts and sums only what is listed (a thing not listed yet waits behind its door, and a missing price is counted, "1 has no price yet"); the pills follow the search, the line under the rows never does (while a search is on it says "All pending ·"); "Collected $225 of $245 asked" is `formatCollected`, used by the line and the sold confirmation; the Sale tab's Collected tile shows the same two parts as `$225` and `formatOfAsked`, and its Pending and Left tiles use `formatStatusTotal`, so a tile and the line under the rows never disagree.
+`selectStatusSummary` (a `createSelector` over the open sale's things, no second totals module) runs `getStatusSummary`, one pass bucketing by status: collected (sum of `sale.priceCents`), asked for those, pending count and asking, left count and asking, and the count of Available things not listed yet. Withdrawn things are excluded everywhere; `floorPriceCents` is never summed. One formatter per figure shown twice (tile and footer line). The Things tab's pills and its totals line come from `getStatusSummary` in `utils/statusSummary.ts`: Available counts and sums only what is listed (a thing not listed yet waits behind its door and is counted apart: "$845 asked · plus 1 not listed yet", so the caption is worked out from the same set as the figure); the pills follow the search, the line under the rows never does (while a search is on it says "All pending ·"); "Collected $225 of $245 asked" is `formatCollected`, used by the line and the sold confirmation; the Sale tab's Collected tile shows the same two parts as `$225` and `formatOfAsked`, and its Pending and Left tiles use `formatStatusTotal`, so a tile and the line under the rows never disagree.
 
 ## Inquiry push
 
@@ -210,10 +212,10 @@ Flow, all in `functions/src/notifications/bundledPush.ts` (no app words; the app
 
 ## Finishing a sale and clearing buyer contact
 
-- `finishSale({ saleId, action: 'finish' | 'reopen' })`, seller only. Finish stops the public link (public folder deleted first, then `publicLinks/{id}`, then the sale fields, the same order as `changeSalePublicLink` stop) and sets `status`, `finishedAt`, `finishedBy` and `contactsClearAt = finishedAt + 30 × 86,400,000`. It is a callable because the public folder is function-only.
-- `clearSaleContacts`: scheduled daily (04:30 UTC). Query `sales where contactsClearAt <= now` (one range field, no composite index). Per sale, inquiries in chunks of 400: set `name`, `email`, `phone`, `message` to `null` and `contactClearedAt`; then things whose `pending.buyerName` or `sale.buyerName` is set: clear that field. Then the sale: `contactsClearAt: null`, `contactsClearedAt: now`. Re-reading per chunk and skipping inquiries already cleared makes a rerun after a crash finish the job. A late run clears late rather than skipping (the opposite of a sender's rule, on purpose: clearing late is still clearing). Logs counts and the first four characters of the sale id only.
+- `finishSale({ saleId, action: 'finish' | 'reopen' })`, seller only. Finish stops the public link (public folder deleted first, then `publicLinks/{id}`, then the sale fields, the same order as `changeSalePublicLink` stop) and sets `status`, `finishedAt`, `finishedBy` and `contactsClearAt = finishedAt + 30 × 86,400,000`. It is a callable because the public folder is function-only. **Finish must run the copy sweep (`syncSaleCopies`) after the sale becomes FINISHED**: it stops the link, which deletes the folder, and the sweep (a finished sale wants no copies) clears anything an in-flight copy run wrote back. No code until `finishSale` exists.
+- `clearSaleContacts`: scheduled daily (04:30 UTC). Query `sales where contactsClearAt <= now` (one range field, no composite index). Per sale, inquiries in chunks of 400: set `name`, `email`, `phone`, `message` to `null` and `contactClearedAt`; then things whose `pending.buyerName` or `sale.buyerName` is set: clear that field. Then the sale: `contactsClearAt: null`, `contactsClearedAt: now`. Re-reading per chunk and skipping inquiries already cleared (decided on the contact fields, `name`, `email`, `phone` and `message` all `null`, never on `contactClearedAt` alone, because a resend writes it back to `null` with new details) makes a rerun after a crash finish the job. A late run clears late rather than skipping (the opposite of a sender's rule, on purpose: clearing late is still clearing). Logs counts and the first four characters of the sale id only.
 - **What stays:** the inquiry's thing, dates, status and who handled it, and the thing's sale record without a buyer name, so the totals and history still read.
-- **What a finished sale can't do:** show the public page (the link is off), take new inquiries (`submitSaleInterest` also checks `status == 'OPEN'`), take a new Pending hold, build Save all photos (`buildSalePhotoArchive` answers `failed-precondition` "This sale is finished."), or push (`notifySaleInquiry` skips it and `confirmItems` drops anything still waiting). Members still read and edit it, and can finish what was promised (see "Thing status").
+- **What a finished sale can't do:** show the public page (the link is off), take new inquiries (`submitSaleInterest` also refuses a sale whose status is `FINISHED`), take a new Pending hold, build Save all photos (`buildSalePhotoArchive` answers `failed-precondition` "This sale is finished."), or push (`notifySaleInquiry` skips it and `confirmItems` drops anything still waiting). Members still read and edit it, and can finish what was promised (see "Thing status").
 
 ## Security & Privacy Requirements
 
@@ -226,7 +228,7 @@ A member may write any `photos[].path` on a thing, so the public function (and t
 | Path | Seller | Co-seller | Other signed in | Signed out |
 |---|---|---|---|---|
 | `sales/{saleId}` read | yes | yes | no | no |
-| create | yes when `ownerUid == createdBy == me`, `members == [me]`, `publicLink*`, `finished*`, `contactsClear*` all `null`, `status == 'OPEN'`, and gate `create-sales` open | (same, as the seller of a new sale) | (same) | no |
+| create | yes when `ownerUid == createdBy == me`, `members == [me]`, `publicLink*` (absent or `null`), `finished*`, `contactsClear*` all `null`, `status == 'OPEN'`, and gate `create-sales` open | (same, as the seller of a new sale) | (same) | no |
 | update: `name`, `pickupArea`, `buyerNote`, `lastEditedAt` | yes | no | no | no |
 | update: remove a member | yes, anyone but themselves; only `members`, `memberJoinedAt`, `lastEditedAt` change, members only shrink and the removed uid's `memberJoinedAt` key is deleted (setting it is refused) | only themselves (leave), same keys | no | no |
 | update: join | — | — | yes when their verified token email has an invite `{saleId}_{email}` made by the seller, they add exactly themselves (and their own `memberJoinedAt` key), and the invite is gone after the commit | no |
@@ -259,7 +261,7 @@ The item create/update and the sale create checks above use the item's own `sale
 | update, list | no | no | no | no |
 | `…/sales/{saleId}/exports/photos.zip` get | yes | yes | no | no |
 | write, list | no (function) | no | no | no |
-| `apps/going-once/public/{linkId}/{itemId}/{file}` get | anyone, when `linkId` matches `^[2-9a-hj-np-z]{26}$` and `file` matches `^[A-Za-z0-9-]{8,40}-(s\|m)[.]webp$` | same | same | same |
+| `apps/going-once/public/{linkId}/{itemId}/{file}` get | anyone, when `linkId` matches `^[2-9a-hj-np-z]{26}$`, `itemId` matches `^[A-Za-z0-9_-]{1,128}$` and `file` matches `^[A-Za-z0-9-]{8,40}-(s\|m)[.]webp$` | same | same | same |
 | list, write | no | no | no | no |
 
 ### What each rule widens
@@ -284,14 +286,14 @@ Verified per `firestore-rules.md`: the matrix above as seller, co-seller, other 
 | `title`, `description`, `brandModel`, `size`, `condition`, `askingPriceCents` | include | What a buyer decides on |
 | `originalPriceCents` | only when `showOriginalPrice === true` | The seller's per-thing choice |
 | `status` | `AVAILABLE \| PENDING` only | Sold and withdrawn things are never served |
-| Photo copies (`s`, `m` paths, first 12) | include | Smaller copies only |
+| Photo copies (`s`, `m` paths, first 12) | include | Smaller copies only, listed from the link's public folder, so a photo appears once both its sizes exist; never the listing-size path. Until then the thing's `photos` is shorter or empty and the page draws a placeholder |
 | `floorPriceCents`, `boughtFrom`, `boughtOn`, `boughtUrl`, `boughtUrlPreview`, `notes`, `pending`, `sale`, `statusHistory`, `createdBy`, `lastEditedBy`, timestamps | exclude | Private money, notes, people, history |
 | Inquiries and their counts | exclude | Buyer contacts are members-only; a count says how wanted a thing is |
 | `isMember` | computed per caller | Maya or Theo signed in sees "This is your sale's public page", with no id that says whose |
 
 - Fields are copied by name into a new object when shaping and again before returning; a thing failing the allowlist is dropped whole.
 - A malformed, unknown, stopped or renewed-away id, a finished sale and a deleted sale all answer `{ status: 'not_found' }` through one path.
-- The page calls `useNoIndex`; `cloudflare-worker.js` gets a `pages` entry for `/going-once/s/` with a generic preview ("Things for sale"), `noindex, nofollow`, `no-referrer`. `Layout` shortens the route before writing presence. Functions log at most four characters of a link id and only a Storage error's code.
+- The page calls `useNoIndex`; `cloudflare-worker.js` gets a `pages` entry for `/going-once/s/` with a generic preview ("Things for sale"), `noindex, nofollow`, `no-referrer`. `Layout` shortens the route before writing presence and leaves its header (menu, theme, account button) off the route, since a visitor with a link has no use for it. Functions log at most four characters of a link id and only a Storage error's code.
 - Nothing third-party loads on the public page.
 
 ### The interest form's limits (in `submitSaleInterest`, not the UI)
@@ -299,9 +301,9 @@ Verified per `firestore-rules.md`: the matrix above as seller, co-seller, other 
 - Field caps (name 80, contact 254, message 1,000); payload under 4 KB; the one contact field must read as an email or a phone.
 - The thing must be showing now (listable, AVAILABLE or PENDING, sale OPEN, link current), else `not_available`.
 - **Per sale:** 100 new inquiries per UTC day (`limits/interest`, in the write's transaction), else `busy`.
-- **Per thing:** 40 inquiries; a resend of an existing one always passes.
-- **Per instance:** 5 sends per IP per 10 minutes, in memory only, never stored or logged; resets on a cold start, per instance (`maxInstances: 5`), else `slow_down`.
-- **Honeypot:** a hidden field; filled, it gets `sent` and writes nothing.
+- **Per thing:** 40 inquiries, else `full`; a resend of an existing one always passes (checked before the write, so two sends at the same moment can overshoot by one).
+- **Per instance:** 5 sends per sender per 10 minutes, else `slow_down`. A send counts once its fields are valid (a honeypot hit or a typo doesn't). The address is held only as a salted SHA-256 (a salt made at cold start) in the instance's memory, never stored or logged; resets on a cold start, per instance (`maxInstances: 5`).
+- **Honeypot:** a hidden field; filled, it gets `sent` and writes nothing, before any other check.
 - **Deterministic id:** a double tap or retry is one inquiry.
 - **What this doesn't stop:** someone with the link can send up to 100 a day from many addresses and type any name or contact (nothing is verified). Buyer contact is plain text, readable by Maya and her co-sellers, until 30 days after the sale is finished (or the sale is deleted). A removed co-seller who saved a buyer's number elsewhere keeps it; the app can't take it back.
 
@@ -325,7 +327,8 @@ Available and Pending things only. 60 things × 5 photos × ~1 MB ≈ **300 MB**
 
 ### Public copies
 
-`syncSalePublicPhotos` (trigger on thing writes) re-reads the thing and the sale fresh (never the event payload, so out-of-order runs converge), lists `public/{linkId}/{itemId}/`, makes the missing `s`/`m` WebP copies of the first 12 photos with `sharp` (auto-rotated, metadata stripped) and deletes copies no longer wanted (not showing, photo removed, link off or renewed). A rerun finds nothing to do. Until a copy exists the card shows the photo placeholder for a few seconds. Turning the link on or renewing it runs the same sync for every thing from the callable.
+`syncSalePublicPhotos` (trigger on thing writes) re-reads the thing and the sale fresh (never the event payload, so out-of-order runs converge), lists `public/{linkId}/{itemId}/`, makes the missing `s`/`m` WebP copies of the first 12 photos with `sharp` (auto-rotated, metadata stripped) and deletes copies no longer wanted (not showing, photo removed, link off or renewed). A copy is named `{photoId}-{s|m}.webp` (480 and 1,280 px on the longest side, never enlarged, quality 80) and saved under its own download token, so the wanted set is computable from the thing alone. A photo counts only when its file sits in the thing's own folder and its id matches the file-name pattern. Each photo is copied in its own try: one that can't be decoded (corrupt, or over 50 million pixels, which `sharp` refuses before decoding) is counted as `failed` and logged with the thing's id and the photo's id, and the thing's other photos still get their copies. A copy is written only if no file is at the path (`ifGenerationMatch: 0`), and "already exists" counts as done, so two runs at once never replace a file whose address someone already holds (the Storage emulator ignores the precondition; production enforces it). Each pass deletes first, then makes what is missing, and a pass that changed anything is followed by another (up to three), so a thing that sold while a slower run was copying loses what that run just made; a rerun on unchanged state finds nothing to do. The Admin SDK writes these files, so the Storage rules refuse every client write. Until a copy exists the card shows the photo placeholder for a few seconds. When the run ends it re-reads the sale's `publicLinkId`: if the link changed while it worked (a renew or stop raced it), it deletes what it made under the old link and syncs the thing once more under the new one, so no files outlive their link. Turning the link on or renewing it runs the same sync for every thing from the callable (four things at a time) with a deadline: it stops starting things 200 s in (the callable's timeout is 300 s), logs `partial`, and answers; things it didn't reach are caught by their next write or by another `create` on the on link. The callable can't keep working after it answers, which is why the re-run is a call and not a background job. A finished sale's copies are not touched by the trigger; the link is stopped by Finish, which deletes the folder. `getSalePage` lists the link's folder (cached in memory for 30 s per link, never an empty listing, so a fresh page picks up new copies at once; chosen over per-thing existence checks because a page can hold 300 things with 24 copies each) and returns a thing's photos in its stored order, each only once both sizes exist; the client reads each path with `getDownloadURL` (`queries/publicPhotoQueries.ts`), `s` for the card's cover and `m` for the drawer's `PhotoStrip`.
+The emulator: the trigger makes copies when the Functions emulator runs with the project's real bucket; the seed also runs the same sync itself (`makeSeedCopies`), so a seeded page shows photos either way.
 
 ## Client State Management (Redux Toolkit)
 
@@ -334,7 +337,7 @@ Available and Pending things only. 60 things × 5 photos × ~1 MB ≈ **300 MB**
   - User tier: my sales (`where('members', 'array-contains', uid)`), my invites (`where('email', '==', verifiedEmailLower)`, only when the token's email is verified), my `people/{uid}` doc.
   - Open-sale tier (keyed on `saleId`): the sale, its things, New inquiries (`where('status', '==', 'NEW').orderBy('lastSentAt', 'desc')`), the 30 newest Handled (`where('status', '==', 'HANDLED').orderBy('handledAt', 'desc').limit(30)`), the sale's invites (`where('saleId', '==', id)`).
 - **How a co-seller's sale appears (answers design):** the invites listener sees an invite for this verified email; `useJoinFromInvites` (mounted by `GoingOnce.tsx`) joins for each in one batched commit (their uid is added with `arrayUnion` and their `memberJoinedAt` key and the invite delete ride in the same commit, since they cannot read the sale to run a read-then-write transaction), once per invite id at a time (an id is forgotten when the join fails or the invite leaves, so a re-invite in the same session joins), and the sale arrives through the my-sales listener. An invite for a sale the person is already on is deleted instead of joined (the rules let the invitee delete their own), once the my-sales listener has answered, so a leftover can never bring back a removed co-seller. The co-seller lands on it when it is their only sale (S15 rules), with the intro card and the push capsule. A join the rules refuse (the seller cancelled a second ago) is dropped quietly. It happens only inside Going Once, so the seller's "Copy app link" is what brings them there. An unverified email never matches (Google sign-in is always verified).
-- **Older Handled inquiries (answers design):** the Handled view shows the 30 from the listener; "Show older" loads pages of 30 as a one-shot TanStack infinite query (`queries/inquiryQueries.ts`, cursor `startAfter(lastHandledAt, lastId)`, `staleTime` 1 minute, invalidated when the sale changes). The switch's count is `getCountFromServer` on the same filter, refreshed when the Inbox opens, and reads "Handled" without a number until it knows. New is never paged: it is the work queue, bounded by the daily cap.
+- **Older Handled inquiries (answers design; not built yet, the Inbox shows the 30 and says so):** the Handled view shows the 30 from the listener; "Show older" loads pages of 30 as a one-shot TanStack infinite query (`queries/inquiryQueries.ts`, cursor `startAfter(lastHandledAt, lastId)`, `staleTime` 1 minute, invalidated when the sale changes). The switch's count is `getCountFromServer` on the same filter, refreshed when the Inbox opens, and reads "Handled" without a number until it knows. New is never paged: it is the work queue, bounded by the daily cap.
 - **A thing's inquiries in its drawer** come from a small keyed listener mounted only while that drawer is open (`where('itemId', '==', id)`, sorted in memory; at most 40 by the cap), the one modal-local listener `state-data.md` allows. A row's "Priya asked" line reads New inquiries already loaded.
 - **Remove and leave** are one `removeMember` write (`arrayRemove` on `members`, the person's `memberJoinedAt` key deleted, `lastEditedAt`): one atomic update that touches only those three fields, so it needs no read. Leaving sets `leavingSaleId` first so the person's own departure goes back to Your sales instead of the removal screen.
 - **A removed co-seller (answers product):** the rules read live `members`, so their next read or write is refused. The client treats it as removal, not an error: when the open sale leaves the my-sales listener, or a listener or write under it answers `permission-denied` while the sale is open, `GoingOnce.tsx` stops the open-sale tier, clears that sale from the slice (keeping only its name, captured before clearing) and shows "You're no longer on Fall clear-out" with a way back to Your sales. A refusal on the things listener alone is confirmed with a one-shot read of the sale document before it counts (the sale listener's own refusal counts at once); a deleted sale is refused like a removal, so the card's words cover both ("Maya removed you, or the sale was deleted"). A `?sale=` link naming a sale that is not in my sales (and has no invite waiting for me) shows the same card without a name. A queued offline write that is later refused lands on the same screen. The invitation listeners keep their last list on an error, and the person's own re-subscribes whenever the ID token is renewed, so an email verified a moment ago is picked up.
@@ -352,18 +355,18 @@ All `region: 'us-central1'`, callables with the site's `cors` list. Errors are `
 | Function | Kind | Who | Input | Output | Errors / statuses |
 |---|---|---|---|---|---|
 | `getSalePage` | callable, auth optional | anyone with the link | `{ linkId }` | `{ status: 'ok', sale: { name, pickupArea, buyerNote }, things: PublicThing[], isMember }` or `{ status: 'not_found' }` | Only `not_found` (malformed, unknown, stopped, renewed-away, finished, deleted alike) |
-| `submitSaleInterest` | callable, auth optional | anyone with the link | `{ linkId, itemId, name, contact, message, website }` (`website` is the honeypot) | `{ status: 'sent', contact: 'email' \| 'phone' }`, or `not_found`, `not_available`, `busy`, `slow_down`, `invalid` (with `field: 'name' \| 'contact' \| 'message'`) | `invalid` names the field; nothing else says more |
-| `changeSalePublicLink` | callable | seller | `{ saleId, action: 'create' \| 'renew' \| 'stop' }` | `{ linkId: string \| null }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike); `failed-precondition` "This sale is finished. Reopen it to turn the page on." |
-| `syncSalePublicPhotos` | Firestore trigger, `apps/going-once/sales/{saleId}/items/{itemId}` written | — | the event's ids (re-reads both docs) | public copies made or deleted | Logs and returns; a failed copy is retried on the thing's next write or by the link callable's full sync |
+| `submitSaleInterest` | callable, auth optional | anyone with the link | `{ linkId, itemId, name, contact, message, website }` (`website` is the honeypot) | `{ status: 'sent', contact: 'email' \| 'phone' }`, or `not_found`, `not_available`, `busy` (the sale's day is full), `full` (the thing already has 40), `slow_down`, `invalid` (with `field: 'name' \| 'contact' \| 'message'`) | `invalid` names the field; nothing else says more |
+| `changeSalePublicLink` | callable | seller | `{ saleId, action: 'create' \| 'renew' \| 'stop' }` | `{ linkId: string \| null }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike); `failed-precondition` "This sale is finished. Reopen it to turn the page on."; `aborted` "The link just changed. Check it and try again." (two changes at once); `internal` when a stopped link's public folder could not be cleared (nothing else was changed, so trying again is safe); create and renew also make the new address's copies before answering (512 MiB-1 GiB, 300 s) |
+| `syncSalePublicPhotos` | Firestore trigger, `apps/going-once/sales/{saleId}/items/{itemId}` written | — | the event's ids (re-reads both docs) | public copies made or deleted | Logs and returns; a photo that fails is logged (item and photo id) and the rest still copy; a failed copy is retried on the thing's next write or by a `create` on the on link |
 | `buildSalePhotoArchive` | callable, 1 GiB, 540 s | members | `{ saleId }` | `{ path, photoCount, sizeBytes }` | `not-found`; `failed-precondition` "Nothing to save yet: no Available or Pending thing has a photo." or "This sale is finished."; `resource-exhausted` "That's more than 1,500 photos. Save fewer at a time." |
 | `finishSale` | callable | seller | `{ saleId, action: 'finish' \| 'reopen' }` | `{ status: 'OPEN' \| 'FINISHED', contactsClearAt }` | `not-found`; `failed-precondition` "Already finished." / "Already open." |
 | `clearSaleContacts` | scheduled, daily 04:30 UTC | — | — | counts logged | A sale that fails is left for the next run |
 | `notifySaleInquiry` | Firestore trigger, `apps/going-once/sales/{saleId}/inquiries/{inquiryId}` written | — | before/after of the inquiry | `queueBundledPush` per recipient, and an immediate push where it says "send now" | Logs; a push failure never touches the inquiry |
 | `sendDueBundledPushes` | scheduled, every minute (shared, every app) | — | — | summaries sent | A bundle that fails keeps its items for the next run |
-| `deleteSale` | callable, 540 s | seller | `{ saleId }` | `{ deleted: true }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike, and a sale a finished run already removed); `internal` "The sale wasn't fully deleted. Delete it again to finish." (the sale stays, so a rerun finishes it). Order: its Storage files, then `recursiveDelete` of the sale, which takes the things and any other subcollection (inquiries, invites) with it. The client calls it with a 540 s timeout, counts `not-found` as deleted, and reads `deadline-exceeded` as "Still deleting. Check again in a moment." |
+| `deleteSale` | callable, 540 s | seller | `{ saleId }` | `{ deleted: true }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike, and a sale a finished run already removed); `internal` "The sale wasn't fully deleted. Delete it again to finish." (the sale stays, so a rerun finishes it). Order: its Storage files, the public links (photo copies, then record), the waiting invitations, `recursiveDelete` of the sale (things and any other subcollection), then the links again: a link minted by `changeSalePublicLink` between the first query and the sale's removal would otherwise outlive it. The client calls it with a 540 s timeout, counts `not-found` as deleted, and reads `deadline-exceeded` as "Still deleting. Check again in a moment." |
 | `findFirstActivityAt` | usage finder for `registerAppUsage` | — | uid | oldest `createdAt` of a sale they are in, or `null` | — |
 
-`PublicThing = { id, title, description, brandModel, size, condition, askingPriceCents, originalPriceCents, status, photos: { s: string, m: string }[] }`, the copy paths only; `originalPriceCents` is `null` unless shown.
+`PublicThing = { id, title, description, brandModel, size, condition, askingPriceCents, originalPriceCents, status, photos: { s: string, m: string }[] }`, the copy Storage paths only (cover first); `originalPriceCents` is `null` unless shown.
 
 ### Everything else
 
@@ -389,10 +392,10 @@ src/apps/going-once/
   types.ts  constants.ts  going-once.css
   components/
     sales/        SalesList, SaleFormSheet, SaleTab (StatTiles, LinkCard, People, Details, Finish, Delete)
-    things/       ThingRow, StatusDot, PriceTag, ThingDrawer (getThingOffer), ThingForm (Modify), MarkPendingView,
+    things/       ThingRow, ThingThumb (a cover), StatusDot, PriceTag, OpenThing (a thing's drawer and its Modify, from the Things tab or over an inquiry), ThingDrawer (getThingOffer), ThingForm (Modify), MarkPendingView,
                   MarkSoldView, SoldConfirmation, ChangePaidView, HistoryView, StatusViewFooter, DeleteThingConfirm, NewThingFlow (QuestionFlow), ThingQuestions + thingRows (the questions
                   both share, and each row's label, fields and summary), ItemsSection (search, sort, the door)
-    inbox/        InboxTab, InquiryRow, InquiryDrawer, PushCapsule
+    inbox/        InboxTab (also draws the open thing over an inquiry: `?inquiry=` and `?thing=` together), InquiryRow, InquiryDrawer, PushCapsule
     people/       PeopleSection, PersonSheet, AddCoSellerSheet, CoSellerIntro (once per sale per person, remembered on the device), RemovedFromSale
     relist/       CopyListingTextRow, SavePhotosRow, SaveAllPhotosSheet
     public/       BuyerCard, BuyerThingDrawer, InterestView
@@ -402,7 +405,7 @@ src/apps/going-once/
   utils/          listing.ts (isListable, canDeleteItem, sortItems, getDeleteEffects, listingText), status.ts (getThingOffer, getStatusFacts, formatCollected, describeStatusChange, describeMovedOn), statusSummary.ts (getStatusSummary, formatStatusTotal; the Sale tab reads it through `selectStatusSummary`), statusDrafts.ts (what a status view holds while it is open, held by the drawer so closing asks Keep editing / Discard), personName.ts, thingAnswers.ts (answers <-> stored fields)
 functions/src/apps/going-once/
   salePageView.ts (allowlist, limits, mirrored constants), getSalePage.ts, changeSalePublicLink.ts,
-  syncSalePublicPhotos.ts, submitSaleInterest.ts, notifySaleInquiry.ts, buildSalePhotoArchive.ts,
+  syncSalePublicPhotos.ts, submitSaleInterest.ts, inquiryView.ts (reading the contact, the inquiry id and the caps; mirrored by `utils/contact.ts` and `constants.ts`, kept equal by `check:going-once-share`), notifySaleInquiry.ts, buildSalePhotoArchive.ts,
   finishSale.ts, clearSaleContacts.ts, deleteSale.ts, findFirstActivityAt.ts
 src/utils/imageCompression.ts   + 'listing' use and a per-use output type (shared)
 src/utils/fileUtils.ts          + shareOrDownloadFiles: share sheet with download fallback (shared)

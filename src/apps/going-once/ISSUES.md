@@ -87,7 +87,7 @@ Maya walks a room: Take a photo four times, a name, a price (or Free) with a flo
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** the header's "New thing" opens `NewThingFlow`; Next thing starts another.
-- [ ] **Read:** new rows at the top of the Things tab (cover, name, condition and floor price line, asking price), and a tap opens `ThingDrawer` with the photos, facts line and floor price.
+- [ ] **Read:** new rows at the top of the Things tab (cover, name, condition line, asking price; the floor price lives in the drawer), and a tap opens `ThingDrawer` with the photos, facts line and floor price.
 - [ ] **Update:** the four answers can be changed in the flow; the full form is Issue 3.
 - [ ] **Delete:** deferred to Issue 3 (seller delete and the co-seller's 10-minute undo).
 
@@ -185,7 +185,7 @@ Theo (or Maya) marks the Gray sofa Pending for someone with a pickup day, then S
 **Context:** `TECHNICAL.md` "Totals", "Backend Surface" (`deleteSale`), the `sales/{saleId}` update rows; `UX.md` S11; PRODUCT.md "Where the Sale Stands, In Detail".
 
 ### Description
-Maya opens the Sale tab: Collected $225 of $245 asked, Pending 2, Left 7 with "1 has no price yet"; each tile opens Things on that status. She edits the name, pickup area and note, and can delete the sale.
+Maya opens the Sale tab: Collected $225 of $245 asked, Pending 2, Left 7 with "plus 1 not listed yet"; each tile opens Things on that status. She edits the name, pickup area and note, and can delete the sale.
 
 ### Possible Approach
 1. One-pass `createSelector` totals in `utils/totals.ts`; one formatter per figure shared by the tile and the Things footer line.

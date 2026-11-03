@@ -349,6 +349,8 @@ service cloud.firestore {
     // buyers; deleting is the `deleteSale` function's. People come and go by two narrow updates that touch only
     // `members`, `memberJoinedAt` and `lastEditedAt`: the seller removes a co-seller or a co-seller leaves, and someone
     // with a verified email the seller added joins as themselves, using up their invitation in the same commit.
+    // The public link's two fields on the sale are written only by `changeSalePublicLink`: a new sale starts without
+    // them and no update names them. `publicLinks` has no rule, so no client reads or writes it.
     match /apps/going-once/sales/{saleId} {
       function changedKeys() {
         return request.resource.data.diff(resource.data).affectedKeys();
@@ -400,7 +402,9 @@ service cloud.firestore {
         && isGateOpen('going-once', 'create-sales', 'everyone')
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.members == [request.auth.uid];
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.get('publicLinkId', null) == null
+        && request.resource.data.get('publicLinkChangedAt', null) == null;
       allow update: if (request.auth != null
           && request.auth.uid == resource.data.ownerUid
           && changedKeys().hasOnly(['name', 'pickupArea', 'buyerNote', 'lastEditedAt'])
@@ -453,6 +457,26 @@ service cloud.firestore {
           && request.time.toMillis() < resource.data.createdAt + 600000
           && resource.data.get('sale', null) == null
           && resource.data.get('pending', null) == null);
+    }
+
+    // An inquiry is written only by the server, so no client creates one. The sale's members read it, delete it,
+    // and change only whether it has been handled and by whom: Handled carries the caller and a time, New carries neither.
+    // `limits` (the day's interest count) has no rule, so no client reads or writes it.
+    match /apps/going-once/sales/{saleId}/inquiries/{inquiryId} {
+      function isHandledChange() {
+        let next = request.resource.data;
+        return next.status in ['NEW', 'HANDLED']
+          && (next.status == 'HANDLED'
+            ? next.handledBy == request.auth.uid && next.handledAt is int
+            : next.handledBy == null && next.handledAt == null);
+      }
+
+      allow read: if isSaleMember(saleId);
+      allow create: if false;
+      allow update: if isSaleMember(saleId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy', 'handledAt'])
+        && isHandledChange();
+      allow delete: if isSaleMember(saleId);
     }
 
     // --- App: waypoint ---

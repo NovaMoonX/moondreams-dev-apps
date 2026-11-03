@@ -175,7 +175,7 @@ function PhotosSheet({ item, uid, onClose }: PhotosSheetProps) {
       </div>
       <ModalFooterActions
         rightActions={
-          <Button type='button' onClick={onClose}>
+          <Button type='button' variant='secondary' onClick={onClose}>
             Done
           </Button>
         }
@@ -257,7 +257,7 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
             )
           }
           rightActions={
-            <Button type='button' variant='secondary' onClick={onClose}>
+            <Button type='button' onClick={onClose}>
               Done
             </Button>
           }

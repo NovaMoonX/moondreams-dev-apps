@@ -1,13 +1,13 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { isShareId } from '../../share/shareIds.js';
 import { copyCoverFile, shareSnapshotRef } from './pinchShareStore.js';
 import {
   SHARE_LIMITS,
   getCopyRecipes,
   isRecord,
   isRecipeId,
-  isShareId,
   kitchenCoverPath,
   readStoredCopy,
   shareCoverPath,
