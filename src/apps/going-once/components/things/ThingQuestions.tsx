@@ -128,14 +128,14 @@ export function PriceQuestion({
         />
       )}
       {hasFloor && !answers.isFree && (
-        <div className='bg-muted border-border space-y-2 rounded-2xl border p-3'>
-          <p className='text-sm font-semibold'>Lowest you'd take</p>
+        <div className='bg-muted border-border flex flex-col items-center space-y-2 rounded-2xl border p-3 text-center'>
+          <p className='text-sm font-semibold'>🔒 Lowest you&apos;d take</p>
           <MoneyInput
             ariaLabel='Lowest you would take'
             value={answers.floor}
             onChange={(floor) => onChange({ floor, isFloorShown: true })}
             variant='outline'
-            wrapperClassName='max-w-48'
+            wrapperClassName='w-full max-w-48'
           />
           <FloorAboveNote answers={answers} />
           <p className='text-muted-foreground text-xs'>

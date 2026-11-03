@@ -98,10 +98,10 @@ function ThingTagCard({
     );
 
   return (
-    <div className='bg-card text-card-foreground border-border rounded-2xl border p-3 shadow-sm'>
+    <div className='bg-card text-card-foreground border-border relative rounded-2xl border px-3 pt-2 pb-2.5 shadow-sm'>
       <p
         role='status'
-        className='text-muted-foreground mb-1 flex h-4 items-center justify-end gap-1 px-2 text-xs'
+        className='text-muted-foreground absolute top-2 right-3 flex h-4 items-center gap-1 text-xs'
       >
         {isSaved && (
           <>
@@ -121,7 +121,8 @@ function ThingTagCard({
           {part(
             'name',
             `Name, ${title === '' ? 'not named yet' : title}, change`,
-            'w-full',
+            // Keeps a long name clear of the save status in the corner.
+            'w-full pr-20',
             <span
               className={join(
                 'line-clamp-2 min-w-0 font-semibold break-words',

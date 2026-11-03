@@ -70,7 +70,7 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
         ? 'This sale is finished. Reopen it to turn the page on.'
         : 'This sale is finished, so the page is off.';
     if (isSeller)
-      return "Turning it on makes a link that shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling.";
+      return "It shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling.";
     return 'Only the seller can turn it on.';
   };
 
@@ -110,6 +110,10 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
           )}
         </div>
       </div>
+      <p className='text-muted-foreground text-sm text-pretty'>
+        Anyone with the link can see what&apos;s for sale and tell you
+        they&apos;re interested, with no account.
+      </p>
       {path === null || !isOn ? (
         <InlineNotice tone='info'>{getOffNotice()}</InlineNotice>
       ) : (
