@@ -30,6 +30,17 @@ Items marked *Confirmed* changed something the README says or had a real alterna
 19. **A short pairing is never covered silently.** A pairing that cannot be met from its own paycheck either tops up from the pool at the target's own tier (when the pairing allows it) or is held and needs a choice before the day can be confirmed (Draft algorithm, step 2).
 20. **The master secret is a keyring.** One secret holds every master key ever used; ids are only added. Recovery safeguards are part of this design, not a later task.
 21. **Server-side reconcile and notifications come after Link.** The same pure matching code runs in a Function when new posted purchases arrive, and pushes carry fixed text only (see "Server-side Reconcile and Notifications").
+22. **A Horizon item is a new plan item kind, `horizon`, and its costs live inside its version.** A header in `items/`, append-only whole-payload versions in `versions/` and `planChange` entries in `changes/`, exactly like an envelope. The costs are a list in the sealed payload (`HorizonSealed.costs`), so adding, pricing or removing a cost is one new version, and "the plan as it was known on a date" covers them for free. No new collection.
+23. **A cost is not a bill and not its own item; it is a part of the item's demand.** The item is the one bucket. Each cost's payments ask income days for money with the bill spread's helpers (eligible days, chosen day, stance pick), but every line credits the item's id, as an envelope's extras do. Not a bill with a parent: each bill holds its own set-aside, so the $200 left after the movers would sit on Movers instead of covering Storage, every cost would be a row on Bills and in Priorities, and moving leftovers between bills is the duplicate engine the brief rules out.
+24. **The pot pays first, in due order; the rest is asked only where the person said.** `planHorizon` walks the unpaid payments by due date against what the item holds, then hands each payment's uncovered part to whichever answer "What it doesn't cover comes from" holds. One pure result drives the covers sentence, the draft's lines, Set the price's before and after, Make it a bill's offer and the lookahead's warning, so they never disagree.
+25. **How it is paid is two questions, stored as two different things.** "Put money toward it now?" is a `transfer` move (Issue 48's), never a field: it can be repeated ("Put more toward it") and undone like any transfer. "What it doesn't cover comes from" is one sealed field, `rest`, with four answers: `pays`, `onePay`, `outside`, `later` ("I'll decide later"). `later` asks nothing and warns; `outside` asks nothing and never warns.
+26. **Paying a cost is one move kind, `costPaid`, at both levels, and the deterministic id stops a second mark.** Plan's Mark paid and Track's plain Mark paid carry the money (out of the item, any excess out of Free to Spend). Track's Add what you paid carries the money in a purchase and the move only marks the payment (`purchaseId` set). A cost paid outside the plan is marked the same way and moves nothing (`mark: 'outside'`): it is done only when the person marks it, never because its date passed (owner). An exact cost is marked in one tap with no sheet; only a range asks what it came to (starts empty, the range as hint), the rule bills already follow (`needsPaidAmount`). A one-tap mark that needs more than the item holds opens one confirm naming the part from Free to Spend.
+27. **Track's plain Mark paid is cash from the item; a card charge is a purchase.** The pays before a cost set money aside inside the item, and the checklist's tick records paying from that money. A cost has no card setting and never asks one (a bill does), so a cost charged to a card is "Add what you paid" with Paid by set, which is where the card's reserve already learns of it. This keeps `costPaid` free of `cardId` and keeps cards' engine untouched.
+28. **Bills' mark-paid is untouched.** `markBillPaid`, `useBillPaid` and the bill's behaviour do not change. `PaidAmountSheet` is reused by taking its payment as a small neutral shape (name, range hint, what is held, already paid, card name) that the bill's three call sites build exactly as today; before/after screenshots of each bill call site prove nothing moved.
+29. **"Make it a bill" creates a new bill and ends the cost; it never converts in place.** The cost gets `becameBillId` in a new item version, the bill is an ordinary `bill` item, and the money the person brings moves with a `transfer` to the bill, which bill progress counts as set aside. The bill's history starts that day; the item keeps the cost's earlier payments.
+30. **Finishing, calling off and bringing back are a sealed `state` in a new version, not `endItem` or `archiveItem`.** The header's `endedAt` and `archivedAt` are write-once, and the owner wants a called-off event brought back any time and a done one reopened when a paid mark is taken back, so an item's state lives in `HorizonSealed.state` and changes with a whole-payload version from that day, as a goal's pause does (`setGoalState`). The money left moves with `transfer`s in the same `runTransaction`: to Free to Spend, to an envelope or goal, or nothing for "Keep it held" (a later Release is a transfer to Free to Spend). Each step can be undone by a version and the reversing transfers. Bringing a called-off item back asks about the money when it left the item (owner): a `transfer` back from where it went ("Bring the $800 back to Moving?"), or nothing ("Start Moving at $0"); an item that kept its money held asks nothing. "Ready to finish" is derived, never stored, and nothing ends an item without the person's tap.
+31. **A cost due before the pay picked for it is fronted by Free to Spend and repaid by that pay** (owner, "like an early bill payment"). Its mark takes what the item lacks from Free to Spend (`fromFreeCents`), and the picked pay carries one line that gives that amount back to Free to Spend. The lookahead warns only when Free to Spend cannot cover it that day.
+32. **No rule, index or listener is added.** Everything is under the plan's owner-only wildcard, in collections that exist (`items`, `versions`, `changes`, `moves`, `purchases`); `moves` stays create-only.
 
 ---
 
@@ -100,7 +111,7 @@ Receipt images are a subcollection of purchases (`receiptImages`), so a purchase
 ### Constants
 
 ```ts
-export const ITEM_KINDS = ['source', 'payLine', 'bill', 'envelope', 'goal', 'group'] as const;
+export const ITEM_KINDS = ['source', 'payLine', 'bill', 'envelope', 'goal', 'group', 'horizon'] as const;
 export const PRIORITIES = ['must', 'should', 'want'] as const;         // sealed; ordered must < should < want
 export const STANCES = ['conservative', 'middle', 'optimistic'] as const;
 export const SCHEDULE_KINDS = ['weekly', 'everyOtherWeek', 'twiceMonthly', 'monthly', 'everyMonths', 'once', 'irregular'] as const;
@@ -108,7 +119,7 @@ export const DAY_STATUSES = ['draft', 'confirmed', 'notArrived'] as const;
 export const DAY_RECORD_KINDS = ['proposed', 'confirmed', 'correction'] as const;
 export const MOVE_KINDS = [
   'start', 'billPaid', 'cardPayment', 'transfer', 'withdrawal',
-  'balanceCorrection', 'trackingChange',
+  'balanceCorrection', 'trackingChange', 'costPaid',
 ] as const;
 export const CHANGE_KINDS = ['planChange', 'start', 'levelMove', 'whatIfApplied', 'ended', 'correction', 'purchaseChange', 'cardChange', 'moveChange', 'paymentChange'] as const;
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
@@ -122,9 +133,13 @@ export const RECEIPT_MAX_BYTES = 10 * 1024 * 1024;          // after the photo i
 export const MAX_RECEIPTS_PER_PURCHASE = 10;
 export const RECEIPT_MAX_DIMENSION = 2400;                    // longer edge, px
 export const LOOKAHEAD_MONTHS = 12;
+export const HORIZON_REST = ['pays', 'onePay', 'outside', 'later'] as const;   // sealed; the four answers
+export const MAX_HORIZON_COSTS = 20;
 ```
 
 Priority, schedule kind and ending are sealed (they describe a person's finances); the constants are used on the device only. *As built:* the `correction` change kind is reserved and unused: a correction is a day record (`kind: 'correction'`) and `correctDay` writes no change-log entry, so it shows on the day's record and not in the change log. `MOVE_KINDS` is `['billPaid', 'start', 'trackingChange']`; the other move kinds below are not built yet.
+
+**Horizon.** `PLAN_SECTIONS` becomes `['income', 'bills', 'envelopes', 'goals', 'horizon', 'cards', 'more']`. `HORIZON_REST_OPTIONS` (value, label, one-line meaning) sits beside it in `constants.ts`, and `PLAN_SECTION_LABELS.horizon` is "Horizon" with the 🗓️ mark. `START_HOLDINGS` does not gain `horizon`: money reaches an item only through a `transfer`. `CHANGE_KINDS` is unchanged.
 
 ### Sealed payloads
 
@@ -268,6 +283,78 @@ interface GroupSealed {
 `EnvelopeSealed` as built carries `name`, `emoji`, `priority`, `orderIndex` and `funding`; `spillTo` and `accountId` arrive with the issues that read them. `FundingAmount` is `exact`, `percent` (whole or half percents as `bps`, `of: 'dayMoney'`) or `rest`; a document whose `amount` has no `kind` reads as exact (`normalizeFunding`, applied when the listener opens a version). `FundingRule.cadence` offers `calendar` (round 4: an amount per weekly, every-2-weeks, twice-a-month, monthly or yearly period, spread over the income days that fall in it, below), the per-income-day ways `everyIncomeDay`, `everyNth` and `chosen`, and `none` (a goal with only a target; its amount is `exact` 0, the draft asks nothing and `getPace` has no state). The forms ask "How often?" first (Weekly, Every 2 weeks, Twice a month, Monthly, Yearly, From a paycheck, and for a goal Not adding to it); "From a paycheck" offers which pay (`sourceId`: "Each Northwind Studio pay" or "Each pay, all sources"), which pays (every, every other, every third, chosen) and the amount modes "Exact amount", "% of each pay" and "Whatever is left of each pay" (with a HelpTip saying what is left: after the bills and the envelopes above it in priority). A calendar rule is an exact amount only. The new fields live in the sealed version (a rule that says what it asks is as sensitive as the amount); no readable field, collection, index or rule changed, and a version without them reads as before (`everyIncomeDay`, every source). The goal form also asks "How much is in it now?" (new goals only): with a starting day it writes a `start` move for the goal on that day through `recordHolding` (the starting day and every other holding stay as they are), without one it keeps the figure as `startingCents` for the Where things stand step to prefill. A new envelope's `orderIndex` is the tier's highest plus one. The Plan tab's pill is the `section` URL param (`income`, `envelopes`).
 
 **The Priorities view.** `orderIndex` is one fractional scale across bills, envelopes and goals: the draft's sort compares all three kinds on it (tier, `rest` last, `dueBeforeNext` first, `orderIndex`, `createdAt`, `itemId`), so the Priorities screen orders its list with the same keys (`engine/priorities.ts`, `comparePriorityItems`; a bill is first when its next unpaid payment falls before the pay after the next one). `orderPriorities(items, draft)` returns the three tiers in order and the cut index: the position of the first item whose own line (`pairing === null`) is short in the draft of the soonest short coming day, which `lookahead()` now carries as `firstShortDay` (any priority, with the draft walked after the days before it). `orderIndex` is one scale across the three kinds, so a new bill, envelope or goal takes the tier's highest rank across all of them plus `ENVELOPE_ORDER_STEP` (`getNextTierRank`; the start draft's `topRanks` is the same single scale). A bill is first when its own ordinary line on the soonest short day is due before the next income day after that day (`isDueBeforeNext`), so the list order of items with lines is that day's line order and the cut sits above the first short one; a bill with no line that day, or any bill when no day is short, keeps the next-pay rule. An item that asks for what is left is fixed last in its tier like a due-first bill is fixed first: neither is movable, and neither is ever a place target. `placeBetween(prev, next)` is the midpoint (prev only: prev + 1; next only: next - 1; neither: 1). `reconcileWorking` derives the reorder working copy on every render from the person's snapshot against the live plan (a gone or no-longer-movable id drops out, a new movable item goes unmoved at the end of its tier), and `planReorder` turns it into `{ itemId, tier, orderIndex }` for each placed item that changes. When a placed item's neighbours share a rank it keeps that rank if the sort's tie-breaks already put it between them (nothing else is written); otherwise only the smaller side of the tied run gets new ranks, the placed item beside it, and a midpoint that is not strictly between its neighbours takes the same path. `buildMoves` turns the assignments into one move per item with one segment per stretch its resolved version covers from today (`getVersionStretches`: a stretch in force keeps its amount and end, a change ahead keeps its date), and both the confirm preview and `reorderItems` (`itemActions.ts`) are fed from it. `reorderItems` writes one whole-payload version per segment (the payload of that stretch, new `priority` and `orderIndex`, the stretch's own `effectiveFrom` and `effectiveUntil`) and one `planChange` entry for the save in a single batch of at most 450 versions ("Moved Dining out above Groceries", "Moved Phone to Want", "Moved 3 items"). After a save the screen keeps the assignments that restore each assignment's previous `tier` and `orderIndex` (read from the `PriorityItem` list that built the save); Undo runs `buildMoves` on them against the current versions and calls `reorderItems` with "Undid: <the saved summary>", once per save, and the confirm step's primary ignores clicks for its first 500ms. The confirm view previews every changed item at once through a `versions` `PreviewChange` that layers them all over the plan. No rule, index or readable field changed.
+
+**Horizon (new payload).**
+
+```ts
+/** One event's costs. Every line an income day gives it, and every move into it, credits this item's id. */
+interface HorizonSealed {
+  name: string;
+  emoji: string | null;
+  happensOn: DateOnly;                     // "Around Jan 15th"; date-only, display only
+  happensUntil: DateOnly | null;           // "It's a few days"; null for one day
+  priority: Priority;                      // shared by every cost's demand; one row in Priorities
+  orderIndex: number;                      // the one fractional scale across bills, envelopes, goals and these
+  rest:                                    // "What it doesn't cover comes from"
+    | { kind: 'pays' }                     // spread over the income days before each payment
+    | { kind: 'onePay'; dayKey: string }   // one income day carries it
+    | { kind: 'outside' }                  // never funded, never warned
+    | { kind: 'later' };                   // never funded; a shortfall warns
+  groupId: string | null;                  // a purpose, as bills and envelopes have
+  note: string | null;
+  costs: HorizonCost[];                    // at most MAX_HORIZON_COSTS
+  state: 'open' | 'finished' | 'calledOff'; // decision 30; a version from `stateOn` changes it
+  stateOn: DateOnly | null;                // the day it was finished or called off; null while open
+}
+
+interface HorizonCost {
+  id: string;                              // generateUuid; stable across versions, part of the line id
+  name: string;
+  amount: MoneyRange;                      // equal ends when exact
+  schedule: Schedule;                      // 'once' for a one-time cost; the bill schedule kinds otherwise
+  ending: Ending;                          // a bill's ending; 'none' for once
+  isOutside: boolean;                      // "Paid outside the plan": listed, never funded, never warned
+  pricedOn: DateOnly | null;               // the day Set the price last ran; null while the first estimate stands
+  endsAfter: DateOnly | null;              // set when a cost with paid payments is removed: it stops after this day
+  becameBillId: string | null;             // set by Make it a bill; the cost then plans nothing
+  note: string | null;
+}
+```
+
+`OpenVersion` gains `{ kind: 'horizon'; payload: HorizonSealed }`. Each field lands in the issue that uses it (Issues 79 to 88 in ISSUES.md); a version sealed before a field existed reads it as its empty value (`?? null`, `rest ?? { kind: 'later' }`, `isOutside ?? false`, `state ?? 'open'`), and nothing re-seals old versions. `rest.onePay.dayKey` follows Invariant 2: a pay line change that drops that day says so in its effect preview, as for a bill's chosen days.
+
+**Additions to existing payloads.**
+
+```ts
+/** `costPaid` move: `refId` is the item id, `date` the payment's due date. */
+interface CostPaidSealed {
+  costId: string;
+  dueOn: DateOnly;
+  amountCents: Cents;                      // what it actually came to: the exact amount, or what the person typed for a range
+  paidOn: DateOnly;
+  fromFreeCents: Cents;                    // the part beyond what the item held, out of Free to Spend
+  mark: 'item' | 'purchase' | 'outside';   // from the item's money, by a purchase, or paid outside the plan (moves nothing)
+  purchaseId: string | null;               // Track's Add what you paid: the purchase moved the money, this only marks it
+}
+
+interface PurchaseSealed {   // ...as now, plus
+  /** The Horizon cost this purchase paid; null (or missing on an older purchase) otherwise. */
+  costRef: { itemId: string; costId: string; dueOn: DateOnly } | null;
+}
+
+interface RecordLine {       // ...as now, plus
+  /** The Horizon cost this line saves toward; null (or missing on an older record) elsewhere. */
+  costId: string | null;
+  /** True when the line gives back to Free to Spend what a fronted payment took (decision 31); missing reads false. */
+  repaysFree: boolean;
+}
+
+interface ChangeMove {       // ...as now, plus (read as null on older entries)
+  cost: { itemId: string; costId: string; name: string; dueOn: DateOnly; paidOn: DateOnly; amountCents: Cents; fromFreeCents: Cents } | null;
+}
+```
+
+A cost paid outside the plan asks no pay and raises no warning, but stays open until the person marks it: a `costPaid` with `mark: 'outside'`, `fromFreeCents` 0, which moves nothing and does not count in Spent. It reads "Jan 14th · outside the plan", then "Paid Jan 14th · outside the plan". A Track payment's purchase line names the item in `PurchaseLine.envelopeId` (the field keeps its name; renaming rewrites every purchase), and `resolveSpill`'s `via: 'free'` line takes what the item does not hold.
 
 ### PlanDoc
 
@@ -521,8 +608,11 @@ interface KeyCheckDoc {                     // lets verifyRunwayKeys prove a mas
 | status and flags: `status`, `needsHome`, `source`, `archivedAt`, `endedAt` | priority, order, schedule, ending, pairings, funding rule |
 | opaque id lists: `itemIds`, `doneLineIds` | lines, differences, matches, receipt text |
 | `stance`, `trackingPeriods`, `dirtyFrom` | account kind and whether an account counts |
+| a header of kind `horizon`; `costPaid` moves' `date` (a due date) and `refId` | the event's name, dates, costs, amounts, ranges, schedules, how the rest is paid, what each payment came to |
 
 What a reader of the database can still learn without the key: how often each pay line pays, when bills fall, how many purchases happened on which days, how many envelopes there are, and when money moved. Not what anything is called or how much it is. This is the "alone or in combination" decision the README deferred, and it is stated in the app's privacy copy.
+
+A reader of the database learns that the person has Horizon items and on which dates their costs fell due and were marked. Not what they are or cost.
 
 ### Derived values (never stored, except closings)
 
@@ -690,6 +780,44 @@ The checklist (`ChecklistScreen`, in a confirmed day) lists the day's bill lines
 
 **Lookahead as shipped (Issue 21).** `engine/lookahead.ts` is pure and takes the coming days, each bill's payments and a `draftOf(day, carry)` callback, so nothing in `engine/` imports the store. `store/selectors/lookaheadSelectors.ts` supplies the callback: it calls `computeDraftView` (the same function the day screen uses, with `isCached: false` and the coming days built once) after adding to `heldByItem` and to each bill's `funded` list what the days before it gave, which is the carry. Free to Spend and loan balances are not carried because nothing reads them yet. Problems, in date order: `noIncome` (a payment after today and up to the horizon that no coming income day can set aside and that is not set aside in full; holds through the day before it, as the first-shipped Home line did), `short` (a Must line with `shortBy > 0`, or a bill line whose payment falls due before the next income day, on a day; holds through the last income day before it; the last day's next income day is the day after the horizon). Each bill reports only its first payment of each kind. A payment due today or earlier and not marked paid (on or after the latest of the plan's start date, the day the bill was created and the start of the recent window) is not a problem: it is in `due`, a to-do Home and Bills draw as "To pay today" with Mark paid, and it leaves `holdsThrough` alone. `incomeEndsOn` is the last income day when the horizon is more than `INCOME_END_GAP_DAYS` (45) beyond it. With no problem the plan holds through `incomeEndsOn ?? horizon`. The headline never prints `holdsThrough` itself: `describeCoverage` says it from today ("covers every bill for the next 12 months", "until your last income day, Mar 3, 2027", or "comes up short tomorrow" from the first problem's day), since a bare "Nov 4" a year out read as this year's. `getStanceCushion` adds, over the next `CUSHION_DAYS` (30), each ranged pay day's middle less its planned figure and each unpaid ranged bill payment's planned figure less its middle, and counts distinct sources and bills; it is null unless positive. A change that starts in the future needs no special case: `computeDraftView` resolves every item on the day's own date, so a version from Mar 1 first shows on the day it starts and the lookahead shows it now. `previewLookahead` runs `selectLookahead` over the real state and over a copy with the change layered in (the same `layerPlan` the day preview uses) and `EffectPreview` words the difference ("Your plan would hold through Nov 3 instead of Dec 14."). The Days list draws at most `COMING_DAYS_CAP` (50) days while the lookahead walks all of them. A day's own screen drafts without the carry, so a later day can read short in the lookahead only because an earlier one left a bill short. `scripts/checks/runwayEngine.ts` times the walk over 53 days with 50 envelopes (about 20 ms). No documents, rules, indexes or seed data changed: the lookahead is derived.
 
+**Horizon.**
+
+- `draftOf` carries each item's `held` the way it carries a goal's: what a simulated day gave the item is added before the next day's walk.
+- `pays` and `onePay` lines are ordinary lines, so a short one is the existing `short` problem.
+- A `later` item's `shortfall` is a new list, `horizonShort: { itemId, name, dueOn, shortCents }[]`, beside `undated`, outside `problems`, so it never moves `holdsThrough` or Home's headline date (logged decision). Its row reads "The plan leaves Sam's wedding $230 short on Dec 19th" and opens the item.
+- A fronted payment takes its uncovered part out of the simulated Free to Spend on its due date; only when that leaves Free to Spend below zero that day is it a `horizonShort` row of its own ("Free to Spend can't cover Movers on Jan 14th before the Jan 15th pay").
+- A cost payment due today or earlier and unpaid joins `dueBills` as a `dueCosts` entry (item, cost, due date), so `DueBillsCard` lists "Movers · Moving" with Mark paid (Plan) or Add what you paid and Mark paid (Track). An `isOutside` cost is never a `dueCosts` entry: it is marked from its own sheet or the item's footer.
+- Home's warning row counts `horizonShort` within 30 days.
+
+### Horizon
+
+All pure, in `engine/horizon.ts`; `npm run check:runway-engine` gains the cases under "Properties".
+
+**Payments.** `listCostPayments(cost, horizon)` is `occurrences(cost.schedule, cost.ending, …)` up to the lookahead's end, each with `totalCents = pick(stance, cost.amount, 'expense')`. None after `endsAfter`, none after the bill's first due date once `becameBillId` is set, none from `stateOn` while `state` is not `open`; bringing an item back lists them again, and one whose date passed while it was off is due now. A payment with a live `costPaid` (not reversed) is paid, asks nothing, and its `amountCents` replaces the planned total everywhere.
+
+**The walk (`planHorizon(item, held, payments, incomeDays, stance)`).** `held` is the item's balance now (`deriveBalances`' figure for its id, which already includes what confirmed days gave it).
+
+1. Take the unpaid payments of costs that are not `isOutside`, in due-date order (ties by cost id).
+2. Walk them with `left = held`: each is covered by `min(total, left)`. `coveredUntil` is the due date of the first payment not covered in full; the covers sentence is built from this list ("Covers Movers, then Storage on Feb 1st and Mar 1st").
+3. Each payment's `needCents` goes where `rest` says:
+   - `pays`: spread over the payment's eligible income days (`getEligibleDays`, the window a bill's payment uses), `ceil(need / days left)`. A repeating cost's first payment takes the pays in the period before it (Jan 15th and Jan 31st for Feb 1st).
+   - `onePay`: the chosen day carries every one-time payment and a repeating cost's first payment; later payments of a repeating cost spread as `pays` (logged decision). A payment due before the chosen day is `fronted` (decision 31): no earlier pay is asked, its mark takes what the item lacks from Free to Spend, and the chosen day carries a `repaysFree` demand of that amount. If the payment is still unmarked when the chosen day is drafted, the demand is an ordinary one to the item.
+   - `outside`: nothing asked, nothing warned.
+   - `later`: nothing asked; the item's `shortfall` is the first payment with need and the total need through the lookahead ("$230 short on Dec 19th").
+4. Each income day's share is a `Demand` with `itemId` = the item, `costId`, a `BillShare` naming the payment (so the draft says "Storage unit · due Feb 1st"), `dueBeforeNext` from its due date, `tier` and `orderIndex` from the item.
+
+A confirmed day's line raises `held`, so the next walk covers more from the pot and the remaining days share only what is left: the same answer as a bill's `total − funded so far` without per-payment progress. Like goals, it assumes earlier drafted days are funded in full.
+
+**Line ids.** `getCostLineId(dayKey, itemId, costId)` is `${dayKey}:${itemId}:cost:${costId}`, beside `getLineId`, so ticks, overrides, notes and corrections attach as for any line; a record line keeps `costId` and the name "Storage unit · Moving" (cost · event, the one name on every surface).
+
+**Draft.** `buildDemands` takes `horizon: DraftHorizonInput[]` and adds their demands after bills; they sort in step 4 with every other demand. A day's override sets a cost's share for that day only (`DayOverrideSealed.billCents` keyed `itemId:costId`), the path a bill's per-pay figure uses, through `BillShareView`. A pairing may target the item and funds its demands in due order.
+
+**Paying.** `settleCostPaid(amountCents, held)` → `{ fromItemCents: min(amount, max(0, held)), fromFreeCents: rest }` (`{ 0, 0 }` for `mark: 'outside'`). When `fromFreeCents` is above zero the range sheet says so, and an exact cost's one tap opens a confirm naming it instead of writing at once ("Moving has $200.00 left. The other $50.00 comes out of Free to Spend."; for a fronted payment, "…made up by the Jan 15th pay"). Less than planned leaves the difference in the item for the next walk. `needsCostAmount(cost)` is true only when `amount.lowCents !== amount.highCents`.
+
+**Status.** `getHorizonStatus`: `finished` and `calledOff` from `state`; otherwise `readyToFinish` (derived) when every payment is marked through its ending (an `isOutside` one with `mark: 'outside'`), ended by `endsAfter`, or a bill (a cost with no ending is ready only once it is a bill or removed); else `open`. The footer primary follows it: "Add a cost" while planning, "Mark Truck rental paid" when only an outside cost past its date is unmarked, "Make Storage unit a bill" when only repeating costs are left, "Finish Moving" when ready. A live paid mark undone on a `finished` item writes `state: 'open'` in the same transaction (the item reopens).
+
+**Properties the check script asserts.** Shuffling costs or payments changes nothing. The walk never covers more than `held`. For `pays`, covered plus the days' demands equals each unpaid payment's total. Pricing a range lower never moves `coveredUntil` earlier. A paid payment asks nothing. A cost with `becameBillId` asks nothing after the bill's first payment. `outside` and `later` emit no demands; only `later` has a `shortfall`; an `isOutside` cost never appears in one and is never `readyToFinish` until marked. A fronted payment asks no day before the chosen one, and the chosen day's `repaysFree` equals its `fromFreeCents`. A `calledOff` item emits nothing from `stateOn`, and bringing it back gives the same demands as an item never called off with the same `held`.
+
 ### Proposals
 
 `proposeCover(shortfall, plan, days)` returns temporary versions that lower funding: lowest tier first (want, then should), then highest `orderIndex` first, then id; a Must only if the person picks it. `proposePutToWork(newIncome, plan)` returns versions that add funding to the highest-priority gaps first. `proposeOverspend(envelope, amount)` lists where an overspend could come from by priority when no spill-over chain is set. All three return `ProposedChange[]` that go through the same "from when" and effect preview as any change. Nothing is applied until the person confirms.
@@ -712,6 +840,14 @@ The checklist (`ChecklistScreen`, in a confirmed day) lists the day's bill lines
 | `transfer` | *as built (Issue 48):* moves what is left in an envelope to another envelope, a goal or Free to Spend; money on hand never changes, and the total of envelopes, goals and Free to Spend only changes through an overspend (an over envelope counts as zero, so covering it raises Free to Spend by exactly that overspend). Sealed `TransferSealed { fromId \| null, toId \| null, cents, note, isOutside }` (`toId` or `fromId` null is Free to Spend; with `isOutside` the null end is outside the plan instead, so `sumOutsideTransfers` moves money on hand by the same amount and Free to Spend does not change; a legacy move reads `isOutside` false); readable `refId` is `fromId` and `date` is the day of the move. `deriveBalances` subtracts each live transfer from `assignedByItem[fromId]` and adds it to `assignedByItem[toId]` (`collectTransferEntries`, which skips a reversed one and one dated before the start); with no `toId` the amount is Free to Spend by construction. `deriveHeldByItem` counts it too, so a goal holds what was moved in. `deriveBalancesBefore(day)` drops transfers dated on or after `day`. A closing keeps each transfer not undone with its day (`ClosingState.transfers`, sealed as `[day, fromId, toId, cents, moveId, isOutside]`, `CLOSING_VERSION` 5), so `closingBefore(day)` drops those dated on or after `day` like the live ones and the equivalence check in `check:runway-engine` includes transfers and their undos. `moveLeftover` (`store/actions/transferActions.ts`) runs in one transaction that reads the plan and both items, refuses an archived item, a start in the future, and more than the envelope has left as the device reads it (the rules cannot check sealed amounts), then writes the move and a `moveChange` entry (`effectiveFrom` null, `itemIds` the two items); its move id is made when the view opens so a retry writes once. `undoTransfer` appends a `transfer` with `reversesMoveId` set (id `untransfer_<id>`). The `moveChange` entry's sealed payload carries `move` (`ChangeMove`: the move id, its ends, amount and the `undoText` sentence), so the item's History and the change log offer "Undo this move" on it (`ChangeRow`, `useUndoTransfer`); an entry written by an undo carries the same `move` with `isUndo`, which marks the original as undone and offers nothing itself. The check against what is left is this device's: a second device spending at the same moment can leave the envelope over, which shows as "over" like any overspend. No rule changed: moves are already create-only for the owner |
 | `withdrawal`, `balanceCorrection` | *not built yet;* as named; a move with `reversesMoveId` set cancels the move it names (`billPaid`, `cardPayment` and `transfer` undos use it) |
 | archived or ended item | *as built:* from its `heldReleasedOn` day the item's figure leaves the sums, so what it held is Free to Spend (`releasedFrom`); a kept item (null) keeps it until "Release what it holds" |
+| confirmed day line with `costId` | adds to the item (balances sum by item id); with `repaysFree`, adds to Free to Spend instead |
+| `transfer` to or from an item | as for an envelope: from Free to Spend, an envelope or a goal, or `isOutside` (a gift toward the move) |
+| `costPaid`, `purchaseId` null | the item falls by `amountCents − fromFreeCents`, Free to Spend by `fromFreeCents`, money on hand by `amountCents` |
+| `costPaid` with `purchaseId` | marks the payment; moves nothing (the purchase did) |
+| `costPaid` with `mark: 'outside'` | marks the payment; moves nothing and is not in Spent |
+| `transfer` out of a finished or called-off item | the money left goes to Free to Spend, an envelope or a goal (decision 30) |
+| purchase with `costRef` | as any purchase: its lines draw the item and, `via: 'free'`, Free to Spend |
+| `transfer` into a bill | *new:* bill progress counts it as set aside from the move's date, so the money Make it a bill brings covers the bill's next payments before any pay is asked |
 
 Free to Spend is derived last: money on hand plus leftovers, minus draws, minus what the cards wait for (`assignedToCardsCents`, each card's reserve at no less than zero). If it is below zero the Over-assigned line shows. *Cards as built (Issue 50):* money on hand is the real cash, so it gains back every card charge (`chargedByCard` from purchases, the `cardId` payments from bills) and loses every card payment. `reserveByCard` is each card's start plus its charges less its payments. Cards count only at Track (`isCountingCards`, from `selectBalanceInputs`): at Plan the engine leaves out every charge, payment and card start, so a card-paid bill reads as cash and nothing waits on a card. "Where is your money now?" reads each card's owed amount from `selectTrackBalanceInputs` (the same sums at Track, whatever the level) and lists it as an editable `card` holding. `isCardsLoaded` joins `selectIsMovesLoaded`, so a card's start is never read as a non-card before the cards arrive. *Round 2:* `CardSealed.dueDay` (1–31 or null, a missing key read as null). `engine/cards.ts` is pure: `getNextDueOn` (the month's last day when shorter), `getDueCards` (money waiting and due within `CARD_DUE_WARN_DAYS`, 7, soonest first) and `collectCardHistory` (a card's purchases, bills charged and payments, a payment marked taken back when a later move reverses it), each with cases in `check:runway-engine`. Home's `HomeCards` and Plan's `CardsScreen` share `CardRow` and `CardSheets`; `LookaheadWarnings` takes `dueCards` and merges them with the plan's problem groups by date, so its count and its list cover both. History reads the recent window (`purchases`, `moves`) from the plan's start, and says when earlier ones are counted but not listed. Card-due pushes are Issue 64 (#460) and need Issue 63's server balances. *Round 3:* `CardPaymentSealed.covers` (`full`, `minimum` or `part`; missing reads `full`). `getCardDueState` opens only the last due day and the next one, and lets each `full` or `minimum` payment (not taken back) pay for one of them, earliest first, if it was made after the due day before it; the last one unpaid keeps its warning until the next is within 7 days, which then carries `rolledFrom`. `withOwedAfter` works each history row's balance back from today's `reserveByCard`. Card actions write a `cardChange` entry in the same commit. A closing (version 3) keeps purchase charges by card (left out at Plan with the rest of the spending), each bill payment's `cardId`, and each card's payments as `[day, cents, moveId]`. `check:runway-engine` proves that a card purchase or a card-paid bill leaves Free to Spend as cash would, that a payoff does not move it, that an overpayment draws it by the extra, that an undo restores it exactly, and that a closing equals the replay.
 
@@ -745,6 +881,8 @@ Free to Spend is derived last: money on hand plus leftovers, minus draws, minus 
 - *Reading.* The Spend list rows open `PurchaseScreen` (`?purchase=<id>`, a `Subview`, the trash icon with `useActionModal().confirm`, destructive) with "Change this purchase" opening `PurchaseForm` in edit mode. A purchase from before the newest closing is listed once its month is picked from Spend's period chip, and opens and edits the same way.
 - *Mark all paid.* `markBillsPaid` writes the group's unpaid bills in transactions of 5 (each re-reads its bills' paid marks, keeping a transaction under the rules' 20-document read limit) and reports the marks it really wrote; `undoBillsPaid` reverses only those. The batches are not one transaction: if a later batch fails, the earlier ones stay paid, and the toast says "Marked N of M bills paid" with an Undo for the N (`PartlyMarkedError`). A tick or Mark all paid needs a connection (a transaction), and fails fast with that sentence when the browser reports offline.
 - *Check an amount.* `checkAmount(envelopeId, cents, envelopes, freeCents)` (`engine/checkAmount.ts`, pure) says "fits, $X left" or "over by $X" with what could cover it: Free to Spend first when it holds money (`envelopeId: null` in a source), then the other envelopes holding money, lowest priority first (Want, Should, Must), list order within a priority, each taking only what is still needed; whatever neither Free to Spend nor an envelope holds is said to leave Free to Spend over-assigned. Goals are not sources (the README names envelopes only), and spill-over chains arrive with Issue 43. It reads the same balances as Home, moves nothing and is drawn only at Track (`LevelGate`, and the `checkAmount` view falls back to Home at Plan). It opens from the Spending group of an envelope's sheet and from the Free to Spend detail (`?view=checkAmount&checkEnvelope=<id>`, plus `checkFrom=true` from the Free to Spend detail so Back returns to it). `firestore.indexes.json` is unchanged.
+
+**Horizon.** Set aside = transfers in plus confirmed lines; Spent (Track) or Paid (Plan) = live `costPaid` amounts plus purchase lines naming the item; Left = their difference. Free to Spend's sum gains `heldForHorizonCents` (each item's left while open or kept held, below zero counted as zero), shown as "Held for Horizon". `ClosingSealed` gains `costPaid: Record<itemId, [costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId][]>` for payments not undone; a closing written before it reads `{}`, which is correct because no `costPaid` exists before this ships, so no `version` bump.
 
 ### Spill-over and check an amount
 
@@ -794,8 +932,12 @@ Each step is one `runTransaction` that re-reads the purchase and aborts if anoth
 | What-if | in memory → saved (`WhatIfDoc`) → applied (`appliedAt`, versions written) or dropped (document deleted if saved, nothing otherwise) |
 | Receipt image | added (shrunk, sealed, uploaded, then its document written) → kept until the person removes it (document, then Storage object, deleted; the purchase remains) or removes the purchase (its receipts are listed and removed after it) or deletes the plan (`deleteRunwayPlan` removes the receipts prefix) |
 | Closing | valid → stale (`dirtyFrom`, or counted from another starting day) → rebuilt; or missing → built |
+| Horizon item | open → ready to finish (derived) → finished (`finishHorizon`: a version with `state: 'finished'` plus the money's move) → open again when a paid mark is taken back · open → called off (`callOffHorizon`: a version with `state: 'calledOff'` plus the money's move); unpaid payments stop asking from that day; paid payments and the bills it made stay · called off → open (`bringBackHorizon`, any time: a version with `state: 'open'` from today, effect on the pays shown first) |
+| Horizon cost | estimate → priced (a version with the new amount and `pricedOn`) · each payment unpaid → paid (`costPaid`, outside ones included) → undone (a move with `reversesMoveId`) · repeating → a bill (`becameBillId`) · removed: with no paid payment, a version without it; with one, `endsAfter = today` (its paid payments stay in Spent); the item's last cost is never removed (`removeCost` refuses, the sheet offers Call it off) |
 
 Moving to Track requires a start date and starting amounts; moving to Link requires a start date and the confirmed line-up, and neither happens without them.
+
+"Where the money left goes" (asked only when left is above zero, nothing preselected): Free to Spend (a `transfer` to Free to Spend), an envelope or a goal (a `transfer` to it), both in the same transaction, or keep it held (nothing moves; Release later is the transfer). Calling off names the bills it made in the confirm and leaves them as bills. Bringing back restores the costs, not the money: what was kept held is still in the item, and what went to Free to Spend, an envelope or a goal stays there, so the effect preview shows what the pays now carry.
 
 ### What if
 
@@ -830,6 +972,17 @@ Three things hold for every row. **Nothing derived is stored:** a draft (`select
 | Move the starting day, or start tracking (`recordStart`, `moveToTrack`) | `startDate` (and for Track a tracking period and a `trackingChange` move) and fresh `start` moves | everything counted since the start; a closing counted from another starting day no longer applies | the old and new day | purchases before the new start stay stored and are never counted |
 | Stance (`setStance`) | the plan's `stance` | every ranged figure, every draft, the lookahead | none | confirmed days keep the stance they were confirmed under |
 | Checklist ticks (`setLinesDone`) | `doneLineIds` (`arrayUnion`/`arrayRemove`, at most 200 on the device) | the day's "done" state | none | |
+| Add an item (`addHorizon`) | one `runTransaction`: header, first version, `planChange` ("Added Moving"), and when an amount was given the `transfer` and its `moveChange`; the effect preview first | the walk, drafts, lookahead, Priorities, Free to Spend | `markLedgerWrite([today])` when money moved | confirmed days |
+| Put more toward it | a `transfer` and `moveChange`, as Issue 48 | the walk, drafts, Free to Spend | `markLedgerWrite([date])` | |
+| Change an item or a cost, add or remove a cost | one version and one `planChange` through `changeItem` and `useChangeFlow` ("from when", the preview); removing the last cost is refused | as above | none | confirmed days, paid payments |
+| Set the price | a version from today with the amount and `pricedOn`, a change line "Moving: Movers $600 to $800 to $600, from Nov 3rd." and the reason | as above | none | paid payments |
+| Mark paid, or undo (Plan, Track's plain mark, an outside cost) | one `runTransaction` through `useBillPaid`'s `inTurn` queue: `costPaid` `paid_<itemId>_<costId>_<due yyyymmdd>` (`_<n>` after an undo) and a `moveChange` with `cost`; undo (the toast's Undo, or Take it back) is `unpaid_<id>` with `reversesMoveId`, plus a version with `state: 'open'` when the item was finished | the walk, drafts, balances | `markLedgerWrite([dueOn])` | the moves |
+| Add what you paid (Track) | `addPurchase`'s transaction plus the `costPaid` with `purchaseId` (the id refuses a second mark); editing the purchase's amount changes only the purchase; removing it, from Spend or by the paid row's Take it back, writes the undo in the same transaction | as above | the purchase's date and the due date | |
+| Make it a bill | one `runTransaction`: bill header, first version and change (the existing add path, prefilled), the item's version with `becameBillId`, and when "Bring it" the `transfer` to the bill; one `planChange` naming both ids | the walk, the bill's payments, drafts, lookahead | `markLedgerWrite([today])` when money moved | |
+| Finish or call off | one `runTransaction`: a version with `state` and `stateOn`, its `planChange` ("Called off Moving"), and the `transfer` when the money goes to Free to Spend, an envelope or a goal; the toast's Undo writes a version with `state: 'open'` and the reversing transfer | the walk stops, drafts drop its lines, Free to Spend | `markLedgerWrite([today])` when money moved | paid payments, bills it made |
+| Bring it back | one `runTransaction`: a version with `state: 'open'` from today and its `planChange` ("Brought Moving back"), and, when the person picked "Bring the $800 back to Moving?", a `transfer` into the item from where the call-off sent it; "Start Moving at $0" writes no transfer, and an item that kept its money held asks nothing; the effect preview for the chosen answer first; Undo writes `calledOff` again and the reversing transfer | the walk, drafts, lookahead, Free to Spend | none | paid payments, the money's earlier moves |
+
+An amount moved by Make it a bill or Finish is the device's figure just before the write, as a cover from Free to Spend is; a purchase saved elsewhere in between can leave the item a few cents over, which reads as over and counts as zero.
 
 What the device refuses for being old: a change dated before today (`utils/fromWhen.ts` `getChangeSpan`), an end date before today (the `ItemSheet` date field's `min`), a purchase before the open tracking stretch (`purchaseActions.ts` `checkDayAndEnvelopes`), confirming a day more than `OVERDUE_DAYS` (14) past its date (it is not listed), correcting a day before the recent window (it is not listed), and "Change what you started with" after its window (`canChangeStart`, shown or hidden only; nothing refuses the write). Nothing is refused for falling in a closed month: the write marks `dirtyFrom` and the closings are rebuilt.
 
@@ -860,6 +1013,8 @@ The block lives in `firestore.rules` under `apps/runway/…`. Runway is a beta a
 | `changes` | `itemIds` ARRAY_CONTAINS, `createdAt` DESC | change log filtered by one item |
 
 Everything else is a single-field query. Where the obvious query would need an index (confirmed days in a date window needs `status` plus a range on `expectedOn`; Needs a home needs `needsHome` plus an order by `date`), the query uses the one field and the device filters or sorts the rest. `npm run check:indexes` covers both entries.
+
+**Horizon.** No rule changes. Items, versions, changes, moves and purchases are already owner-only under `isUser(uid)`; `moves` and `changes` stay create-only, so `costPaid` and its undo use deterministic ids like `billPaid`. A Horizon item's header never takes `endedAt` or `archivedAt` (decision 30), so the header update clause is not exercised. `npm run check:runway-rules` gains a `costPaid` create, a second create on the same id (refused) and an update (refused), as the owner, another user and signed out, against the base rules too. No index: nothing queries by cost.
 
 ---
 
@@ -967,6 +1122,13 @@ Side effects that talk to a function (attach an account, unlink, delete the plan
 **As first shipped (Issue 22).** `PlanDoc.trackingPeriods` is the one stored fact: `{ from, to }` date-only periods, oldest first, a plan without the field reading as Plan. `engine/level.ts` is pure (`getLevel`, `startTrackingPeriod`, `stopTrackingPeriod`, `getEarliestTrackingStart`): a period opens only while none is open and no earlier than the day after the last one ended, and closes no earlier than it began, so periods never overlap; every failure is a readable sentence that says another device probably changed it. `moveToTrack` and `moveToPlan` (`planActions.ts`) are one `runTransaction` each that reads the plan fresh, so a device still showing the old level is refused, not applied twice. Moving up writes the new periods list and `startDate` on the plan, one `start` move per holding as of that day (the moves of Issue 17, now also `holding: 'envelope'`, and the plan's start moves count from the plan's `startDate`, so tracking begins a fresh base, and an earlier base stays in the ledger), one `trackingChange` move (`SealedTrackingChange { direction: 'up' | 'down' }`, id `tracking_<yyyymmdd>_<createdAt>`, `refId` null) and a `levelMove` change ("Started tracking from …"); moving down closes the period (the last day it counted is today), writes a `trackingChange` move and a `levelMove` change, and deletes nothing. The starting amounts are prefilled from the plan's own figures as they stood at the start of the chosen day (`deriveBalancesBefore` over `selectBalanceInputs`), because a start dated that day adds the days that arrive and the bills paid from it on top, and prefilling today's current figures would count them twice; the day cannot be earlier than the plan's own `startDate`, whose base is where the ledger begins. Leaving with typed amounts or a changed day asks Keep editing / Discard. "Where is your money now?" (`LineUpScreen`, an overlay `Subview`) shows what is assigned beside the one money-on-hand total, "Over-assigned $X" when assigned passes it, reusing `AmountList` from the starting-amounts sheet. Named accounts and the gap offer ("add what you spent since") arrive with accounts (Issue 52) and purchases (Issue 24); until then moving up again starts fresh from the chosen day. `selectLevel` (`levelSelectors.ts`) derives the level from `trackingPeriods`; `getLevelWords(level)` is the one function that words an envelope's figure (*assigned* at Plan, *left* at Track, and Free to Spend's "Assigned to envelopes" row as "Left in envelopes"). Until purchases exist an envelope's left figure is its assigned figure. `LevelGate level='track'` draws its children only at Track; the Spend tab and Add purchase (Issue 24) sit behind it, and editing and removing a purchase arrive with Issue 25. The moves rules gain `trackingChange` (create-only; the id names the day and `createdAt`; its date must be the first or last day of the plan's newest period, read with `getAfter`, so it is written in the same commit as the periods), and a `start` move no longer looks its item up: a commit may make only 20 rules lookups, and a plan can start with more holdings than that. `firestore.indexes.json` is unchanged.
 
 `selectLevel` derives Plan, Track or Link (*as built:* `LEVELS` is `['plan', 'track']`, so it derives Plan or Track; Link is not built yet). `LevelGate` is a wrapper that renders nothing for a feature above the current level, so nothing greyed out ever reaches the screen. Data for a hidden level is still listened to; only its UI is absent.
+
+### Horizon
+
+- **Listeners.** None new. `startVersionsListener` opens kind `horizon`; the moves listener opens `costPaid` (`openLedger.ts`); an unreadable one is kept as `{ id, unreadable: true }`.
+- **Selectors.** `selectHorizonItems` (newest version of each live item, by next payment), `selectHorizonPlans` (the walk per item, memoized on the plan fingerprint and the balances key) feeding `computeDraftView`, the lookahead callback, the item sheet, Set the price and Make it a bill from one place. `selectBills` and the Bills screen are unchanged. Priorities gains the item as one row (`comparePriorityItems` takes kind `horizon`).
+- **Actions.** `horizonActions.ts`: `addHorizon`, `changeHorizon`, `setCostPrice`, `removeCost`, `markCostPaid` (all three marks), `undoCostPaid`, `makeCostABill`, `finishHorizon`, `callOffHorizon`, `bringBackHorizon`, `releaseHorizonHeld`. `useCostPaid` mirrors `useBillPaid`'s shape (ready, busy, `needsAmount`, `markWritten`) and shares its `inTurn` queue, which moves out of `useBillPaid.ts` into a small module both import; `useBillPaid`'s exports and behaviour are unchanged. Each Undo re-reads current state and reverts only its own fields.
+- **Level gating.** Plan: Mark paid, "Paid" in the caption, no purchase or card anywhere. Track: Add what you paid first, Mark paid beside it; an outside cost has only Mark paid at both levels. A plan that moves from Track to Plan keeps its purchases' marks.
 
 ---
 
@@ -1234,6 +1396,30 @@ scripts/runway/publishKeyring.ts     maintainer-only: validate and publish the k
 scripts/runway/retireMasterKey.ts   maintainer-only, Admin SDK; see Retiring a master key
 ```
 
+### Horizon files
+
+```text
+src/apps/runway/
+├── engine/horizon.ts                 listCostPayments, planHorizon, settleCostPaid, needsCostAmount, getHorizonStatus
+├── engine/demands.ts                 buildDemands takes DraftHorizonInput[]
+├── engine/parts.ts                   getCostLineId
+├── engine/progress.ts                transfers into a bill count as set aside
+├── engine/balances.ts, closings.ts   kind horizon, costPaid
+├── engine/lookahead.ts               horizonShort, dueCosts
+├── hooks/useCostPaid.ts              the cost's mark, one tap when exact
+├── hooks/paidQueue.ts                inTurn, moved from useBillPaid.ts unchanged
+├── components/HorizonRow.tsx, CostRow.tsx, CoversLine.tsx   (UX "Reusable components"; describeCost lives in CostRow)
+├── components/PaidAmountSheet.tsx    takes a neutral payment shape; bill call sites unchanged in behaviour
+├── screens/plan/HorizonScreen.tsx    Plan > Horizon (list, Done folded)
+├── screens/plan/HorizonSheet.tsx     one item (and the done or called-off view, Bring it back)
+├── screens/plan/CostSheet.tsx        one cost: Set the price, pay, Make it a bill, Change, Remove
+├── forms/HorizonForm.tsx             QuestionFlow: Add to your horizon
+├── forms/CostForm.tsx                Add a cost; Set the price
+└── store/actions/horizonActions.ts
+```
+
+`PLAN_SECTIONS` gains `horizon` (the Plan tab's `section` URL param). Days' Expected screen renames "An expense coming up" to "A bill or one-time cost" and adds "Something with several costs", which opens `HorizonForm`. The seed (`scripts/seeds/runway.ts`) gains Moving and Miso's surgery, sealed the way the app seals them. Nothing here is general enough for `src/`.
+
 ### Functions and secrets
 
 | Function | Trigger | Purpose |
@@ -1313,6 +1499,37 @@ Each becomes a spike or a decision in the Issue Roadmap rather than blocking it.
 8. **Testing home.** Confirm `scripts/checks/` plus the emulator for rules is the right place; if the repo has a unit-test runner, move the engine tests there.
 9. **Gross-to-net and loans in the schema.** The fields exist in the sealed payloads now so Next Steps needs no migration; their engine code ships with those issues.
 10. **Succession.** Who the second Owner and escrow holder is, and whether the optional keyring split is wanted. Decided before the "Succession" issue, which is not in the MVP.
+
+### 11. A Waypoint link (Beyond, Issue 89)
+
+**What it does.** A Waypoint trip's expected expense can become a Horizon cost, or feed an existing envelope, and each side follows the other: paid or deleted on either side updates the other, and either side can unlink. Only the person's own share leaves Waypoint (their entry in the split), never the total, the other members or their shares.
+
+**One-to-one.** One Waypoint expense maps to at most one Runway target (a cost, or an envelope) and one target to at most one expense. The link has its own id; neither side's record carries the other's ids beyond an opaque link id.
+
+**A versioned contract, not each other's collections.** Neither app reads the other's Firestore paths or imports its code (never across `src/apps/*`; Runway's data is sealed with a key Waypoint never sees).
+
+```ts
+interface MoneyLink {                       // contract v1
+  linkId: string;                           // generateUuid
+  uid: string;                              // the one person it belongs to
+  source: { app: 'waypoint'; recordId: string };     // opaque to Runway
+  target: { app: 'runway'; recordId: string };       // opaque to Waypoint
+  share: { lowCents: Cents; highCents: Cents; currency: string } | null;
+  dueOn: DateOnly | null;
+  title: string | null;
+  state: 'expected' | 'paid' | 'deleted' | 'unlinked';
+  stateBy: 'waypoint' | 'runway';
+  revision: number;                         // a writer sends the revision it read
+  contractVersion: 1;
+  updatedAt: number;
+}
+```
+
+- *While both apps share this repo and project:* `moneyLinks/{linkId}`, a cross-app infrastructure collection (not app-scoped, like `reminders/{id}`), owner-only by `uid`, each app writing only its half through a callable that checks `revision` in a transaction. The record holds only what Waypoint already shows the person in clear; Runway keeps its own copy inside the sealed cost.
+- *Once they live in separate repos (or projects):* the same record becomes an API. Each app exposes "here is a change to link X at revision N" and "every link for this person changed since T", keeps its own copy, pushes on change and pulls on open, so a missed push heals; a stale revision is refused and re-read. Identity is the shared Firebase Auth today, an OAuth-style grant the person approves once if projects split. The schema is versioned and pinned by both repos: a field is added in a new version, never a changed meaning.
+- *Money units.* Waypoint's amounts become integer cents on Waypoint's side before they leave. Another currency is shown "in EUR", not converted.
+- *Ownership is left open.* Who decides the amount, date and title once linked, and whether a delete on one side deletes or only unlinks on the other, is asked of the owner by the building agent. `stateBy` and `revision` support any answer.
+- *What Runway does with it.* A link changes a cost only through the ordinary actions (a version and a change, "Updated from Waypoint: Hotel"); a paid mark from Waypoint asks once whether it came out of Runway, so a link never moves money silently.
 
 ## Round 4, package C: screens
 

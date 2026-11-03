@@ -6,10 +6,11 @@ Runway is an income-first budget planner for money that does not arrive or leave
 
 1. Add your income sources, each with its own schedule, amount and ending.
 2. Add bills, envelopes and savings goals, each with a priority of Must, Should or Want.
-3. Say where things stand now: money on hand and what is already set aside.
-4. For each coming income day, review the draft, adjust it, and confirm when the money arrives.
-5. Look ahead to see how far the plan holds, and change it whenever life changes.
-6. Choose how much to track: plan only, or add purchases as you spend.
+3. Put what is on your horizon: name the event (Moving), list its one-time and repeating costs, put money toward it, and say where the rest comes from.
+4. Say where things stand now: money on hand and what is already set aside.
+5. For each coming income day, review the draft, adjust it, and confirm when the money arrives.
+6. Look ahead to see how far the plan holds, and change it whenever life changes.
+7. Choose how much to track: plan only, or add purchases as you spend.
 
 ## Status
 
@@ -32,6 +33,8 @@ Built:
 
 - [x] Check your balance: type what your bank holds and see how it compares with Runway
 Next:
+- [ ] Horizon: plan an event's costs, set money aside for it, see how far it goes, set each price, then pay it, make it a bill, finish it, or call the event off and bring it back later
+- [ ] Dates that read with an ordinal ("Feb 1st") everywhere in Runway
 - [ ] Start from gross pay with taxes and deductions
 - [ ] Loans and interest on savings
 - [ ] What if: a scratch copy of the plan

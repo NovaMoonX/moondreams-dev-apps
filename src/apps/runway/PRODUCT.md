@@ -4,7 +4,7 @@
 
 ## The Short
 
-Runway is an income-first budget planner for money that does not arrive or leave on a tidy schedule. Every source of income, every bill and every goal has its own timing, its own end, and its own priority, and each time money arrives Runway drafts where it should go. You adjust the draft and confirm it. Look ahead to see how far your plan holds, try a what-if before committing to it, and change the plan whenever life changes, with a record of how it used to look and how each income day differed from what was planned. It works with nothing connected: just your income, bills and goals. Track what you spend by hand, import a CSV, or link your accounts when you want the numbers to be exact. Sensitive details are encrypted.
+Runway is an income-first budget planner for money that does not arrive or leave on a tidy schedule. Every source of income, every bill and every goal has its own timing, its own end, and its own priority, and each time money arrives Runway drafts where it should go. You adjust the draft and confirm it. Look ahead to see how far your plan holds, try a what-if before committing to it, and change the plan whenever life changes, with a record of how it used to look and how each income day differed from what was planned. It works with nothing connected: just your income, bills and goals. Track what you spend by hand, import a CSV, or link your accounts when you want the numbers to be exact. Sensitive details are encrypted. When something big is coming (a move, a surgery), list what it will cost, one-time and repeating, and Runway shows how it will be paid and how long the money you set aside for it lasts.
 
 ## The Story
 
@@ -18,14 +18,14 @@ Every change names the person it serves and is walked as that person. Each perso
 
 - **Situation.** Spending goes on several credit cards (Capital One, Discover, Citi and a Walmart card from OnePay, issued by Synchrony), each paid in full every month, so a card's balance is money already spoken for, not a debt carried. Pay lands in one Capital One checking account (A). Cards and bills pull from a second one (B), kept lean on purpose, so a pull nobody expected fails instead of reaching the money. Goals sit in one Wealthfront cash account, with no buckets inside it: Runway's goals are the buckets. Moving money from A to B is a chore Runway names (how much, by when), never a step the budget needs to stay true.
 - **The problem it solves.** A separate account per envelope and per card meant a transfer for every purchase; when the transfers lagged, nobody knew what was really free to spend, owed on a card or set aside.
-- **Journey they repeat.** See a purchase arrive from a linked card (or type it by hand), send it home once or let a rule do it, see what its envelope has left and what is free to spend; after a payday, move what B needs from A when Home says so; pay a card in full from B.
+- **Journey they repeat.** See a purchase arrive from a linked card (or type it by hand), send it home once or let a rule do it, see what its envelope has left and what is free to spend; after a payday, move what B needs from A when Home says so; pay a card in full from B. When something big is a couple of months out (a move in January), list what it will cost, put money aside for it, and see how far that money goes before the plan has to pay for it some other way.
 - **Level.** Track, moving to Link: Capital One A and B, the four cards and Wealthfront, seven accounts. Adding a purchase, a card charge or a card payment by hand stays quick, for any card that cannot be linked.
-- **Never wants to see.** A transfer between accounts to keep the budget true, or the move from A to B counted as spending or income.
+- **Never wants to see.** A transfer between accounts to keep the budget true, or the move from A to B counted as spending or income. A coming cost that quietly becomes a bill, or money set aside for it that is counted twice.
 
 ### The owner's brother, who plans paycheck to paycheck
 
 - **Situation.** He keeps a sheet of what each paycheck covers over the next two months or so, with amounts that change from paycheck to paycheck.
-- **Journey they repeat.** Open the next paychecks, see what each one covers, and when a surprise cost lands (his cat's vet bill) see what the following paychecks give up to absorb it.
+- **Journey they repeat.** Open the next paychecks, see what each one covers, and when a surprise cost lands (his cat's vet bill) see what the following paychecks give up to absorb it. When he knows a cost is coming (the same cat's surgery in December), see which paychecks carry it before it lands, so it is not a surprise. Horizon works for him with no purchase or card anywhere on screen.
 - **Level.** Plan only. He never logs a purchase.
 - **Never wants to see.** Purchases, cards, receipts, or a figure that depends on a purchase being logged.
 
@@ -43,15 +43,16 @@ Every change names the person it serves and is walked as that person. Each perso
 1. **Add your income.** Each source of money has one or more kinds of pay under it, each with its own schedule, amount and ending.
 2. **Add what goes out.** Bills that repeat, bills that happen once, bills that end, and spending with no date.
 3. **Make envelopes and goals.** Spending categories and savings targets, each with an amount or percentage, a timing rule and a priority: Must, Should or Want.
-4. **Say where things stand.** The money you have now and what is already set aside, all optional and in any order. You can start before signing in; your answers stay on this device for 7 days until you do.
-5. **Draft and confirm each income day.** Every coming income day has a draft with a reason on each line. When the money is in, you enter what arrived, adjust, and confirm.
-6. **Look ahead.** Plan upcoming income days now and see how far the plan holds.
-7. **Try a what-if.** Change a scratch copy of the plan and see every upcoming income day before deciding.
-8. **Choose how much to track.** Plan only, track purchases, or link accounts. Move either way whenever you like.
-9. **See what each envelope can spend.** Every envelope has its own number, and Free to Spend is the money nobody has claimed.
-10. **Add what you spend.** Amount, envelope, date, with a note, link or receipt when it helps. Import a CSV or link accounts and purchases arrive on their own.
-11. **Change the plan when life changes.** Every change says from when and shows its effect first, and the history keeps what was planned and what happened.
-12. **Keep it your own.** One person per plan, with sensitive details encrypted.
+4. **Put what's coming on your horizon.** Name the event ("Moving"), list what it will cost and when, put money toward it if you have some, say where the rest comes from, and set each price once you know it.
+5. **Say where things stand.** The money you have now and what is already set aside, all optional and in any order. You can start before signing in; your answers stay on this device for 7 days until you do.
+6. **Draft and confirm each income day.** Every coming income day has a draft with a reason on each line. When the money is in, you enter what arrived, adjust, and confirm.
+7. **Look ahead.** Plan upcoming income days now and see how far the plan holds.
+8. **Try a what-if.** Change a scratch copy of the plan and see every upcoming income day before deciding.
+9. **Choose how much to track.** Plan only, track purchases, or link accounts. Move either way whenever you like.
+10. **See what each envelope can spend.** Every envelope has its own number, and Free to Spend is the money nobody has claimed.
+11. **Add what you spend.** Amount, envelope, date, with a note, link or receipt when it helps. Import a CSV or link accounts and purchases arrive on their own.
+12. **Change the plan when life changes.** Every change says from when and shows its effect first, and the history keeps what was planned and what happened.
+13. **Keep it your own.** One person per plan, with sensitive details encrypted.
 
 ### Levels, In Detail
 
@@ -59,11 +60,11 @@ Runway is one app with three levels. Nothing from a level shows until you use it
 
 | Level | What you do | What it needs | What you get |
 |---|---|---|---|
-| **Plan** | Income, bills, envelopes, goals, lookahead, changes and history, the priorities view (what-ifs come later) | Nothing | A draft for every income day, what each envelope is assigned, Free to Spend, how far ahead the plan holds |
+| **Plan** | Income, bills, envelopes, goals, lookahead, changes and history, the priorities view, Horizon (what-ifs come later) | Nothing | A draft for every income day, what each envelope is assigned, Free to Spend, how far ahead the plan holds |
 | **Track** | Add purchases by hand, import a CSV, attach notes, links and receipts, group purchases, check a balance | What you type or import | Envelopes that go down as you spend ("left"), check an amount, card reserves, a record of what each purchase was for |
 | **Link** *(not built yet)* | Link accounts | A link to your accounts | Purchases that arrive on their own, "safe to spend" backed by real cash |
 
-A person who only plans never sees a purchase, a bank screen or an import button. Notes, receipts and groups never change a balance. Anything that moves money, such as assigning a purchase to an envelope or splitting it, belongs to Track and Link.
+A person who only plans never sees a purchase, a bank screen or an import button. Notes, receipts and groups never change a balance. Horizon is fully usable on Plan: costs are marked paid, never logged as purchases. Anything that moves money, such as assigning a purchase to an envelope or splitting it, belongs to Track and Link.
 
 ### Moving Between Levels, In Detail
 
@@ -128,6 +129,7 @@ An income day has a draft while it is coming, and is confirmed when the money is
 - **Proposals follow priority too.** When Runway proposes a shift (Cover it, Put it to work, an overspent envelope with no spill-over chain), it takes from the lowest tier with room and sends extra money to the highest-priority thing that is behind. A Must is touched only if you pick it. Confirming less than planned is the one place a proposal reaches Musts, and only once the Wants and Shoulds have nothing left to give (see Confirming Money).
 - **Proposals wait for a tap.** The one exception is a spill-over chain you set up yourself, which applies on its own when a purchase goes over.
 - **The Priorities view.** One list of everything money goes to, grouped by tier. Move an item to another tier or reorder it within its tier. A line marks where the soonest short income day's money runs out ("Items above the line get all they ask; the first item below may get part"). *As built:* Plan > More > Priorities; reorder by picking an item and placing it.
+- **A Horizon item has one priority for all its costs** and appears in the Priorities view as one row.
 - **Ties are said, not hidden.** If two items rank the same and money covers only one, the draft says which one it chose and why.
 
 ### Endings, In Detail
@@ -158,7 +160,7 @@ This applies to pay lines, bills, envelope and goal funding, and deductions. An 
 - **A percentage says of what.** Either of the income day's money, or of what is left when its turn comes in priority order. "Put 40% of what is left after bills into Savings" is a goal ranked after the bills, set to 40% of what is left.
 - **Where ranges apply.** Income and money out can be exact or a range. Envelope and goal amounts are your decisions, so they are never ranges.
 - **The planning stance decides which end counts.** One setting for the whole plan, with three positions: **Conservative** (the low end of income and the high end of expenses), **Middle**, and **Optimistic** (the high end of income and the low end of expenses). Conservative is the default. Any single source or bill can use a different stance than the plan.
-- **Actuals replace estimates.** When income arrives, the real amount replaces the range and the difference is shown, and extra income joins Free to Spend. *Not built yet:* a bill's actual amount. Marking a bill paid records the payment's planned amount, paid today, so a bill that cost less does not return the difference, and one that cost more is not flagged ("Cover it" is in Next Steps).
+- **Actuals replace estimates.** When income arrives, the real amount replaces the range and the difference is shown, and extra income joins Free to Spend. A Horizon cost records what it actually cost, and the difference stays with the item. *Not built yet:* a bill's actual amount. Marking a bill paid records the payment's planned amount, paid today, so a bill that cost less does not return the difference, and one that cost more is not flagged ("Cover it" is in Next Steps).
 - **A range is always labeled.** A figure built on one says so ("Planned at the low end: $620 of $620 to $780").
 - **The cushion is visible.** Because the stance applies to every range at once, a conservative plan holds money back on purpose. Lookahead says how much ("Conservative planning is holding back $240 across 3 sources and 2 bills").
 
@@ -172,6 +174,8 @@ Money going out comes in three shapes, by how well you know the date:
 
 A bill is funded by the income days you choose, or by the ones Runway suggests (the days before it is due, divided evenly). A bill is marked paid by you, or automatically when a matching purchase arrives.
 
+Several costs that belong to one event, some once and some repeating, paid from money set aside for that event, are a Horizon item (see Horizon, In Detail). A repeating cost becomes a bill only when the person makes it one. Days' "An expense coming up" is now "A bill or one-time cost".
+
 - **Paid ahead of time.** A card, a car note or any bill can be marked paid before its due date. It stops asking for money, and the payment is recorded with the day you made it. If the bill was not yet funded, the payment comes out of Free to Spend and the next draft makes it up.
 - **What it's for.** A bill or an envelope can say what it is for: Pets, Home, Car. Pets can hold the pet insurance bill and the Food, Litter and Pet misc envelopes. The Bills and Envelopes lists show each name with what is for it under it, and what they come to in a usual month, bills and envelopes together (a range when an amount varies; an envelope with no fixed amount or beat is named as left out). What is for something can set the priority a new bill or envelope starts with. "Stop using Pets" leaves its bills and envelopes in the plan with nothing set. It is a label for organizing and totaling; it does not change when anything is funded. Goals and income get nothing. (Code and data keep the name group.)
 
@@ -184,6 +188,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 
   Any single income day can override the rule: add to an envelope, skip it, or change the amount, in the draft or in lookahead.
 - **Money stays where you put it.** What is left in an envelope stays in it. Moving leftover money to another envelope, a goal or Free to Spend is one tap on the envelope's sheet ("Move what's left"), with an Undo, also offered later on the move's History entry; money on hand never changes, since Runway only changes which bucket holds the money and never moves real money. Covering an overspent envelope or moving to Free to Spend does change Free to Spend, and the view says so before the move. "Set what it holds now" asks where the difference came from or went: Free to Spend, or outside the plan (another account, a gift, a correction), which changes money on hand by the same amount and leaves Free to Spend as it was.
+- **Move what's left** can send money to a Horizon item as well as to another envelope, a goal or Free to Spend.
 - **Bills and envelopes are different.** Something with a due date and an amount is a bill. Spending with no due date is an envelope.
 - **Draft and confirm.** A draft is a suggestion. It funds in priority order, with bills due before the next income day first within their tier. You can move any amount, fund a reserve, or send cash somewhere else before you confirm. Confirming an income day is what fills its envelopes. See Income Days.
 - **Lookahead.** Every coming income day has its own draft. You can adjust one weeks out and Runway shows what that does to the bills in between.
@@ -200,6 +205,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - **Split a purchase.** A mixed cart can go to more than one envelope, each with its own amount.
 - **Mark a refund.** The money returns to the envelope it came from, and a split purchase returns to each envelope in the original proportions. If that envelope has been archived, or the refund matches no purchase you have (one from before tracking started), you pick the envelope and it defaults to Free to Spend. Free to Spend is always worked out from the current balances, so a refund after an overspend restores it with no extra step.
 - **Change it later.** Edit the amount, move it to another envelope, or remove it, and the envelopes recalculate. Each of these is kept in history.
+- **A purchase can point at a Horizon item.** It names the item and one of its costs, or the item and "None of these".
 - **Imported and linked purchases land in the same list** and behave the same way.
 
 ### What You Can Spend, In Detail
@@ -221,6 +227,102 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 - **Interest.** A goal in an account that earns interest grows by it on its own (see Rates and Scheduled Increases).
 - **Taking money out.** Withdrawing from a goal records it and lowers the balance.
 
+### Horizon, In Detail
+
+*Plan and Track.*
+
+**The owner's move, step by step**
+
+1. **Nov 3rd, plan it.** Plan > 🗓️ Horizon > "Add to your horizon": 📦 Moving, around Jan 15th. Three costs: **Truck rental** $120 on Jan 14th, paid outside the plan (work covers it); **Movers** $600 to $800 on Jan 15th; **Storage unit** $100 a month from Feb 1st, no end yet.
+2. **Put money toward it now?** $800 from Free to Spend. **What it doesn't cover comes from:** "My pays before each cost is due". Before adding, the review shows the effect: the pays from Jan 15th on each put $50 toward Storage.
+3. **See how far it goes.** Moving reads **$800 left · $800 set aside, $0 spent** and "Covers Movers on Jan 15th. From Feb 1st, Storage comes from your pays." The truck asks nothing of anyone.
+4. **Dec 2nd, the quote is $600.** Movers > "Set the price" > "An exact amount" > $600, why "Got a quote". What changes, shown first: four pays (Jan 15th to Feb 28th) put $50 less. Now "Covers Movers, then Storage on Feb 1st and Mar 1st. From Apr 1st, Storage comes from your pays."
+5. **Jan 14th, the truck.** Work pays for it, so Truck rental > "Mark paid" ("Paid outside the plan. Nothing comes from Moving.") marks it at once. Moving's money doesn't move.
+6. **Jan 15th, pay the movers.** Home's "To pay today" > Movers · Moving > "Add what you paid": the purchase form, pointed at Movers · Moving, with $600 filled in (the price is exact). Paid by Venture X > Add. **$200 left · $800 set aside, $600 spent.**
+7. **Jan 16th, Storage becomes a real bill.** Moving's footer offers "Make Storage unit a bill". The bill form opens filled in ($100 monthly from Feb 1st, Moving's priority) and asks "Bring Moving's $200 with it?" Yes: Bills lists Storage unit holding $200, which covers Feb 1st and Mar 1st before any pay is asked.
+8. **Moving is done.** The truck is marked paid, the movers are paid and Storage is a bill. Nothing is left, so Finish asks nothing, and Moving folds into Done: "Spent $600 · Storage unit is now a bill".
+
+**The brother's surgery, step by step**
+
+1. **Nov 3rd.** Plan > 🗓️ Horizon > "Add to your horizon": 🐱 Miso's surgery. **Surgery** $450 to $600 once on Dec 18th; **Medication** $40 a month from Jan 1st, 3 times.
+2. **How it's paid.** Put money toward it now? "Not now". What it doesn't cover comes from: "My pays before each cost is due". His pays before Dec 18th (Nov 13th, Nov 27th, Dec 11th) each put $200 toward Surgery, planned at $600, and each draft says so ("Surgery · Miso's surgery · due Dec 18th"). The pays after set aside $40 before each Medication date.
+3. **A short pay.** If the Nov 27th pay can only give $120, the draft says Surgery is $80 short and Cover it offers what gives, lowest priority first, as for any bill.
+4. **Dec 18th, the bill is $520.** On the Dec 11th pay's checklist, or on the item, he ticks or taps "Mark paid": "What did Surgery come to?" starts empty with "It varies, usually $450 to $600" as the hint; he types $520. **$80 left · $600 set aside, $520 paid.** The $80 stays with Miso's surgery and covers Medication on Jan 1st and Feb 1st, so his December and January pays drop their Medication lines; the pays before Mar 1st put in the last $40.
+5. **Medication pays in one tap.** Each $40 is exact, so "Mark paid" marks it at once, with Undo on the toast ("Marked Medication paid · $40.00 from Miso's surgery").
+6. **Done after the third Medication.** Every cost is paid, nothing is left, and the item folds into Done: "Paid $640".
+
+**What an item is**
+
+- **A Horizon item is an event with its own money.** A name and emoji (📦 Moving), when it happens (one date, shown as "around Jan 15th"; an end date when it takes a few days), a priority (Should to start, shared by its costs) and a list of costs. It is not a goal (a goal saves toward one number and keeps it) and not a bill (one amount on a schedule): it is several costs, some once and some repeating, paid from one pot that runs down in date order.
+- **A cost is an amount, a name and a timing.**
+  - **Once, on a date:** Movers, Jan 15th. *(Once Issue 37 lands, also "sometime in a window".)*
+  - **Repeating from a date:** Storage unit, $100 a month from Feb 1st, on a bill's schedules and endings (Money Out, Endings).
+  - **Exact or a range:** $600 to $800. A range is planned at the stance's end and always labeled ("Planned at the high end, $800"), as everywhere in Runway.
+  - **Paid outside the plan**, for one cost (work pays for the truck): it is listed with its date and amount, asks for no money anywhere and never warns. It is done only when the person marks it paid, never just because its date passed.
+
+**How it's paid: two questions, asked once for the item**
+
+- **"Put money toward it now?"** An amount, from Free to Spend or from an envelope or goal, or "Not now". Money moved in is the item's from that moment and is spent first.
+- **"What it doesn't cover comes from"**, four answers, nothing preselected:
+  - **My pays before each cost is due:** each payment the item's money doesn't reach is spread across the pays before it, like a bill's "Spread across my pays" (Storage's first payment on Feb 1st over the Jan 15th and Jan 31st pays). The money they set aside sits inside the item.
+  - **One pay I pick** ("The pay on Dec 31st"): that pay carries the one-time costs and a repeating cost's first payment; later payments spread over the pays before them. A cost due before the pay picked for it is paid from Free to Spend on its day and that pay puts the money back when it lands, like a bill paid early. It warns only if Free to Spend can't cover it that day.
+  - **Outside the plan:** the rest comes from somewhere Runway doesn't plan (a gift, another account). The costs are listed with their dates; nothing warns.
+  - **I'll decide later:** nothing is drafted, and where the money stops is a warning (below) until the person answers.
+
+**Where it stands**
+
+- **Three words: set aside, spent (Plan: paid), left.** *Set aside* is everything the item received (moves in plus confirmed pays). *Spent* is what its costs used. *Left*, the large figure, is the difference, and is never Free to Spend or a bank balance.
+- **How far it goes is a sentence.** "Covers Movers, then Storage on Feb 1st and Mar 1st. From Apr 1st, Storage comes from your pays." The end of the sentence names the answer to the second question: "comes from your pays", "from the pay on Dec 31st", "is paid outside the plan", or "has no money yet". A range counts at the stance's end; the help says what the other end would cover.
+- **A gap is a warning only when the person left it open.** Under "I'll decide later", the first payment the item can't cover is a warning on the item, in lookahead and on Home's warning row within 30 days ("Sam's wedding is $230 short on Dec 19th"), with two doors: "Put more toward it" and "Take it from my pays" (the pays before it, effect shown first). It never moves Home's headline date. Under "My pays" or "One pay" there is no gap (a short pay is the pay's problem, with Cover it); under "Outside the plan" there is nothing to warn about.
+
+**Setting the price**
+
+- **"Set the price" asks: an exact amount, or still a range?** Nothing preselected. Exact starts empty with the range as the hint; a range opens its two halves filled in, to narrow or move. Before saving it shows what changes (the covers sentence before and after, and each pay that moves), asks why (Got a quote, Price went up, Price went down, a note) and records it in history. It changes the plan from today; paid payments keep what they cost.
+- Paying a range sets its price to what was paid, so a separate Set the price is never needed first.
+
+**Paying a cost**
+
+- **An exact cost is paid in one tap.** "Mark paid" marks it at the planned amount, its subtitle having said what it takes, with Undo on the toast, and asks nothing. If the item's left can't cover it, the tap opens one confirm instead that names the part coming from Free to Spend.
+- **A range asks the real amount.** "What did Movers come to?" starts empty with the range as the hint (Runway's rule), "Paid on · Today".
+- **Ticking it on a pay's checklist is the same mark**, paid from the item's money. A cost never asks which card paid it: a card charge is "Add what you paid" on Track.
+- **Track has two ways, as bills do.** "Add what you paid" opens the purchase form pointed at the item and that cost (amount filled for an exact cost, empty with the hint for a range; the card is never assumed); the purchase lands in Spend and comes out of the item's left. Plain "Mark paid" is there too, for a payment that isn't a purchase worth logging (a transfer, a cheque): it comes out of left and adds nothing to Spend. Plan shows only "Mark paid" and never names a purchase or card.
+- **Less than planned stays with the item; more comes from what's left.** If left would go below zero, the form says before saving how much comes from Free to Spend.
+- **A purchase added from Spend can point at the item.** Runway asks which cost it pays, or "None of these" (it lowers left and pays no cost).
+- **Where paying shows.** A cost due before the next pay sits on that pay's checklist under "Bills to pay" as "Movers · Moving"; due today or late, it joins "To pay today" on Home. Paying it from either place is the same action. An outside cost is marked from its own sheet (or the item's footer once its date passes), never from a checklist or Home.
+- **Taking a payment back.** The paid row on the cost ("Paid Jan 15th · $600.00") opens a small sheet with "Take it back", which shows what it does to left first. On Track, when a purchase paid it, Take it back removes the purchase too and says so; removing the purchase in Spend does the same. Bills' own Mark paid is not changed by any of this.
+
+**Make it a bill**
+
+- **Only a repeating cost, and only by that tap.** "Make it a bill" opens the bill form filled in from the cost (name, amount or range, schedule, ending, the item's priority) with one question first: "Bring Moving's $200 with it?" — "Yes, it covers Feb 1st and Mar 1st" or "No, leave it with Moving" ("No, make it Free to Spend" when no other cost is open), nothing preselected. The footer primary is the next step once every one-time cost is paid and a repeating cost remains.
+- **From that day it is an ordinary bill.** The money brought along covers its next payments before any pay is asked. The item keeps the cost's earlier payments in its history and shows the cost as "Now a bill · Storage unit", a door to the bill. Undoing it is the bill's own Remove; the item does not take the cost back.
+
+**Changing and removing costs**
+
+- **A cost's Change** edits its name, date or repeat, ending, and whether it is paid outside the plan; its amount changes only through Set the price, so the cost has one place for each. Any change that moves a pay shows its effect first and applies from today.
+- **The item's Change** edits its name, emoji, date, priority and the answer to "What it doesn't cover comes from", with the effect on the pays first. "Put more toward it" adds money from Free to Spend, an envelope or a goal, or from outside the plan (a gift toward the move, which counts in set aside and takes nothing from Free to Spend).
+- **Remove this cost** confirms with its name and date ("Remove Movers, Jan 15th?") and drops its lines from every coming pay. A cost with a paid payment can't be removed: a one-time cost is taken back first, and a repeating one is ended instead (its paid payments stay). The last cost can't be removed; the item offers "Call it off" in its place.
+
+**Finishing or calling it off**
+
+- **Done.** An item is done when every cost is paid (an outside one marked paid), ended, or a bill; it says "Everything is paid or a bill" and offers "Finish". If money is left, Finish asks where it goes, nothing chosen: Free to Spend, an envelope or a goal. If nothing is left, it finishes without a question.
+- **Calling it off** ("Call off Moving") is for an event that won't happen. The confirm names what changes: unpaid costs leave every coming pay, paid ones stay in history, and any bill it made stays a bill. Then the same "where does what's left go" question. The toast carries an Undo.
+- **Bring it back.** A called-off item can be brought back any time from Done. "Bring it back" shows first which costs plan again, then asks about the money when it left the item: "Bring the $800 back to Moving?" (it comes back from where it went, Free to Spend or the envelope or goal) or "Start Moving at $0", nothing chosen for you. Money it kept held is still its own and asks nothing. The pays now carry are shown for the answer chosen, then it reopens from today.
+- **Done and called-off items are for looking up**, folded behind "Done · N": what each cost was planned at and cost, the bill it became, and where its money went. A finished item gets no new costs; taking back a paid mark on it reopens it, open again until that cost is paid.
+
+**At Plan level, the words**
+
+- "Paid", never "spent"; "Mark paid", never "Add what you paid"; no purchase, card, Spend or receipt anywhere in Horizon. Everything else (set the price, put more toward it, make it a bill, finish, call off) reads the same at both levels.
+
+**Where it shows**
+
+- **Plan > 🗓️ Horizon**, after Goals: open items, soonest next date first, each with one line (a gap, else the next cost due, else "Nothing due yet") and its left. Done folds below.
+- **Days > Add expected money:** "A bill or one-time cost" (the old "An expense coming up") and "Something with several costs", which opens Add to your horizon.
+- **Income days:** each cost a pay funds is a draft line named "Movers · Moving" with its reason ("Moving's $800 goes to the movers at the high end, so this pay starts on Storage."), steerable like a bill's line. A cost the item's own money covers never appears on a pay.
+- **Lookahead:** each payment on its date and, under "I'll decide later", where the money stops.
+- **Home:** due and late costs in "To pay today"; a gap within 30 days on the warning row, on its own line.
+- **Priorities:** one row per item, carrying its priority for all its costs.
+- **Free to Spend's detail:** one row, "Held for Horizon", each open or kept-held item's left.
+
 ### Changing the Plan, In Detail
 
 - **Anything can change:** an income source, a bill, an envelope's amount or timing, a goal's contribution, a priority.
@@ -230,7 +332,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
   - for a stretch, either the next N income days or until a date, after which the earlier amount returns on its own
   - end it
 - **A foreseeable change shows up early.** A change that starts in the future ("from Mar 1, rent goes up $75") appears in lookahead now, so the days it affects show it before it arrives.
-- **A change shows its effect first.** Before you confirm, each upcoming income day shows what it would assign before and after.
+- **A change shows its effect first.** Before you confirm, each upcoming income day shows what it would assign before and after. A new Horizon item, a set price, a changed cost and a changed "comes from" show theirs the same way, and Cover it applies when a pay comes up short.
 - **A new bill shows who pays for it.** Add a $200 bill that runs six months and lookahead shows which income days it leaves short, and by how much. "Cover it" lists the envelopes and goals with room to give, lowest priority first, and lets you pick: "Vacation fund, $150 less for the next 12 income days". The picks are ordinary temporary changes and nothing applies until you confirm.
 - **New income shows where it would go.** Add an income that starts on a date, or a raise, and "Put it to work" proposes where it would go, highest-priority gaps first, as ordinary changes you can edit.
 - **Later, in plain words.** Describing a coming expense or income in a sentence will produce the same proposals. Until then, forms produce them.
@@ -289,6 +391,7 @@ A bill is funded by the income days you choose, or by the ones Runway suggests (
 *Track level.*
 
 - **Group purchases into an expense.** A $40 flight, a $12 bag fee and a $200 hotel can be one "Chicago trip". Grouping adds a label, not a balance change. Open any purchase in it to see the group: what it comes to, from when to when, and each purchase. Removing a group keeps its purchases. Every group is listed on Spend, so one can be found without opening a purchase, and an emptied one can be removed.
+- **A Horizon item is not an expense group.** A group only labels purchases; an item holds money. A purchase can be in both.
 - **Add context.** A link to an order page, a long note, photos or screenshots, on a purchase you added by hand, imported or linked.
 - **Details are kept as text.** An order number, a date and an itemized breakdown read from a receipt or order page are saved as text with the purchase. Reading a receipt runs only when the person taps "Read a receipt" on a new purchase and chooses a photo; the screen says what is sent first, and a photo added as an attachment is never read.
 - **Receipt images are kept until you remove them.** A photo or screenshot stays sealed on your purchase until you remove it, or remove the purchase or the plan. You can download one at any time.
@@ -345,6 +448,7 @@ Free to Spend is the money nobody has claimed. Home shows it, and tapping it sho
 |---|---|---|
 | | **Money on hand** | what you started with, plus the money from every income day you confirmed since, less every bill payment you marked paid, less (Track only) what you spent |
 | − | **Held for bills** | for each bill, what it started with plus what confirmed days set aside for it, less what its paid payments used |
+| − | **Held for Horizon** | each open or kept-held Horizon item's left |
 | − | **Held for goals** | for each goal, what it started with plus what confirmed days gave it |
 | − | **Set aside in envelopes** (Plan) or **Left in envelopes** (Track) | each envelope's figure, with an overspent envelope counted as $0 |
 | = | **Free to Spend** | |
@@ -469,6 +573,12 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Match new purchases and deposits on Runway's servers as they arrive, by the same rules as on the device
 - [ ] Notifications with no amounts or names: money arrived and ready to confirm, a bill was paid
 - [ ] Reminders for income days and bills coming due, which need no linked account
+- [ ] Every date Runway shows reads with an ordinal and a short month ("Feb 1st", "Mar 31st")
+- [ ] Horizon: an event with one-time and repeating costs, exact or a range, money put toward it now, and the rest from your pays, one pay, outside the plan or decided later, with set aside, spent and left
+- [ ] How far an item's money goes, in a sentence, and a warning where it stops when the rest is undecided
+- [ ] Set a cost's price; pay it in one tap when exact, with its real amount when a range, as a purchase or a paid mark on Track and a paid mark on Plan; mark an outside cost paid
+- [ ] Turn a repeating cost into a bill, bringing what is left with it
+- [ ] Change or remove costs, finish or call off an item, choosing where its money goes, and bring a called-off item back
 
 ### Beyond
 
@@ -480,6 +590,8 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Net worth, investments and long-range projections (large enough to be its own app)
 - [ ] View-only access to a plan for someone else
 - [ ] A second trusted person who can keep the service running and recover everyone's data if its owner cannot, before anyone else's plan is held
+- [ ] Waypoint's expected trip expenses (your own share only) offered as a Horizon item or tied to an envelope, kept in step both ways and unlinkable (an issue; who owns the record is asked when it is built)
+- [ ] Describe a coming event in plain words and get a Horizon item to check
 
 ## Under the Hood
 

@@ -2338,6 +2338,379 @@ A person can open any older month in Days and Spend, find a purchase or an incom
 - [ ] The PR carries one `minor` label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
 - [ ] `UX.md` and `TECHNICAL.md` match what shipped.
 
+### Issue 90: Dates read with an ordinal across Runway
+
+**Prerequisites:** None
+**Target PR Size:** ~500 lines
+**Files:**
+- `src/utils/formatUtils.ts` (a general `formatDateOrdinalUTC` for a date-only value and `formatDateOrdinal` for an instant, beside `formatDateShortUTC` and `formatDateShort`; `formatRelativeDayUTC` is left as it is)
+- `src/apps/runway/utils/` (`billText.ts`, `changeText.ts`, `draftText.ts`, `lookaheadText.ts`, `paceText.ts`, `priorityText.ts`, `purchaseText.ts`, `cardText.ts`: their date words)
+- `src/apps/runway/components/`, `screens/` and `store/actions/` wherever a date is shown or sealed into a change-log line (`DueBillsCard`, `IncomeDayCard`, `ChangeRow`, `EffectPreview`, `LookaheadWarnings`, `BillRow`, `GoalRow`, `PurchaseRow`, the plan, days and spend screens)
+- `scripts/checks/runwayEngine.ts`
+
+**Context:** Read `src/utils/formatUtils.ts` and the CLAUDE.md rule on date-only versus instant values; the owner's decision is in `.claude/rules/runway.md` and `UX.md` section 1.
+
+### Description
+Every date Runway shows reads with an ordinal and a short month: "Feb 1st", "Mar 31st", "Dec 2nd", "Jan 15th" (with the year when it is not this one, "Feb 1st, 2027"). A person sees it the same on Home, Days, Plan, Spend, in warnings and in the change log. Other apps can adopt the formatter later; this issue moves only Runway.
+
+### Possible Approach
+1. Add one formatter pair to `src/utils/formatUtils.ts` with no app words: the day's number with its suffix (1st, 2nd, 3rd, 4th to 20th, 21st, 22nd, 23rd, 24th to 30th, 31st), the short month, and the year only when it is not this one. A date-only value keeps going through the UTC formatter and an instant through the local one.
+2. Move Runway's date words onto it screen by screen, replacing each `formatDateShortUTC` and `formatDateUTC` call in its text helpers, rows and sheets; a summary sealed into a change-log line is formatted when it is written, as today.
+3. Dates in older change-log lines stay as they were written; only new lines read with an ordinal.
+4. Check every changed screen at 320px: a longer date ("Sept 30th" or "Dec 22nd, 2027") must not push a figure or a chevron off the row.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Read:** every date in Runway's screens, warnings, drafts, previews and new change-log lines. No create, update or delete: this changes how dates read, not what is stored.
+
+### Success Criteria
+- [ ] A check asserts the suffix for 1 to 31 (11th, 12th and 13th included) and the year rule, and that a date-only value shows the same day for a viewer behind UTC.
+- [ ] No Runway file formats a date for a person with `formatDateShortUTC`, `formatDateUTC`, `formatDateShort` or a hand-written `toLocaleDateString`; a grep proves it.
+- [ ] The formatter has no app words in its name, parameters or docs, and sits beside the existing date formatters.
+- [ ] Rows with a date, figure and chevron (bill, goal, purchase, income day, change, warning) were measured at 320px with the longest date and do not clip or wrap badly.
+- [ ] (No rule change.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 79: Horizon: list an event and its one-time costs
+
+**Prerequisites:** Issue 48, Issue 90 (dates read with an ordinal)
+**Target PR Size:** ~400 lines
+**Files:**
+- `src/apps/runway/types.ts`, `src/apps/runway/constants.ts` (`'horizon'` in `ITEM_KINDS` and `PLAN_SECTIONS`, its label and 🗓️ mark, `MAX_HORIZON_COSTS`, the words)
+- `src/apps/runway/engine/horizon.ts` (new: `listCostPayments` for `once`)
+- `src/apps/runway/screens/plan/HorizonScreen.tsx`, `HorizonSheet.tsx` (new), `src/apps/runway/screens/plan/PlanScreen.tsx` (the pill)
+- `src/apps/runway/forms/HorizonForm.tsx`, `CostForm.tsx` (new)
+- `src/apps/runway/components/HorizonRow.tsx`, `CostRow.tsx` (new)
+- `src/apps/runway/store/actions/horizonActions.ts` (new: `addHorizon`), `store/listeners/` (open kind `horizon`)
+- `src/apps/runway/screens/days/ExpectedScreen.tsx` ("A bill or one-time cost", "Something with several costs")
+- `scripts/seeds/runway.ts`
+
+**Context:** Read TECHNICAL.md "Horizon" (decisions 22, 23 and the `HorizonSealed` payload), PRODUCT.md "Horizon, In Detail" and UX.md's "Horizon: plan it" rows.
+
+### Description
+A person can open Plan > 🗓️ Horizon, tap "Add to your horizon", name an event (Moving, 📦, around Jan 15th), list its one-time costs (Movers $600 to $800 on Jan 15th, Truck rental $120 on Jan 14th) and see it in the list and on its own sheet. Money and pays come in the next issues; this item plans nothing yet.
+
+### Possible Approach
+1. Add the kind and `HorizonSealed` with only `name`, `emoji`, `happensOn`, `happensUntil`, `priority`, `orderIndex`, `note` and `costs` (`id`, `name`, `amount`, `schedule` as `once` only, `note`).
+2. `HorizonForm` is a `QuestionFlow` in a `FormSheet`: name with an emoji chip, when ("It's a few days" reveals an end), costs (Add a cost opens `CostForm` over it: amount with "It varies", the name with `SuggestionChips`, the date), then the review. Priority pre-answered Should and folded.
+3. `addHorizon` writes header, version and change in one batch, as `addItem` does.
+4. `HorizonScreen`: open items soonest first, `HorizonRow` (badge, name, "Movers · due Jan 15th", the item's figure as "••••" while hidden), search from 5 rows, empty state, floating add. `HorizonSheet` (`ItemSheet`): head, costs as `CostRow` by date with one `describeCost` line.
+5. Days' Expected renames its row to "A bill or one-time cost" and adds "Something with several costs", opening `HorizonForm`.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** an item with at least one one-time cost, from Plan > Horizon and from Days > Expected.
+- [ ] **Read:** the item in Plan > Horizon and its sheet, its costs by date.
+- [ ] **Update:** deferred to Issue 84. **Delete:** deferred to Issue 88 (Call it off).
+
+### Success Criteria
+- [ ] The Horizon pill sits after Goals and before Cards, wraps at 320 to 389px, and the selected pill scrolls into view.
+- [ ] The seed's Moving shows three costs on the sheet in date order; a range reads "$600 to $800".
+- [ ] (No rule change: items, versions and changes are already owner-only.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; none is added for a later issue.
+- [ ] `scripts/seeds/runway.ts` gained Moving (and Miso's surgery), sealed the way the app seals them.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 80: Put money toward it, and see how long it lasts
+
+**Prerequisites:** Issue 79
+**Target PR Size:** ~400 lines
+**Files:**
+- `src/apps/runway/engine/horizon.ts` (`planHorizon` for `held`, the covers list, `rest` `outside` and `later`, `shortfall`)
+- `src/apps/runway/engine/balances.ts` (kind `horizon`, Held for Horizon)
+- `src/apps/runway/components/CoversLine.tsx` (new)
+- `src/apps/runway/forms/HorizonForm.tsx` ("Put money toward it now?", "What it doesn't cover comes from")
+- `src/apps/runway/screens/plan/HorizonSheet.tsx` (Set aside · Spent · Left, the shortfall notice, Put more toward it)
+- `src/apps/runway/screens/home/FreeToSpendScreen.tsx`
+- `src/apps/runway/store/actions/horizonActions.ts` (the transfer inside `addHorizon`'s transaction)
+- `src/apps/runway/types.ts`, `constants.ts` (`rest`, `HORIZON_REST` with `outside` and `later`; `isOutside` on a cost)
+
+**Context:** Read TECHNICAL.md decisions 24 and 25, "The walk" and "Balances and closings"; PRODUCT.md on "Set aside · Spent · Left" and "How long what's left lasts".
+
+### Description
+While adding Moving the person puts $800 toward it from Free to Spend and says what it doesn't cover comes from outside the plan or "I'll decide later". The sheet shows **Left $800 · $800 set aside, $0 spent** and "Covers Movers on Jan 15th at the high end." A cost can be "Paid outside the plan": it asks no pay and never warns, and it stays open until it is marked paid (Issue 85). A `later` item that runs out says so ("$230 short on Dec 19th").
+
+### Possible Approach
+1. "Put money toward it now?" is `AmountHero` with From Free to Spend or From an envelope or goal, or Not now; `addHorizon` writes the `transfer` and its `moveChange` in the same transaction and marks the ledger.
+2. `planHorizon` walks `held` over the unpaid, not-outside payments; `CoversLine` renders its list with a `HelpTip` for the range's other end.
+3. "Put more toward it" reuses Issue 48's transfer flow with the item as target, including from outside the plan.
+4. Free to Spend's detail adds "Held for Horizon".
+5. The shortfall notice offers "Put more toward it"; "Take it from my pays" arrives with Issue 82.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a transfer into an item, at creation and from its sheet. **Read:** the item's three figures and covers line. **Delete:** a reversing transfer, as Issue 48.
+
+### Success Criteria
+- [ ] Check cases: the walk never covers more than `held`; shuffling costs changes nothing; `outside` has no shortfall; an `isOutside` cost is never covered or short.
+- [ ] Free to Spend falls by $800 when Moving is added with $800 and the sum still reconciles.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; versions sealed by Issue 79 read `rest` as `later` and `isOutside` as false.
+- [ ] (No rule change: moves are already create-only for the owner.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `scripts/seeds/runway.ts` gained the transfer and Sam's wedding's shortfall.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 81: Repeating costs
+
+**Prerequisites:** Issue 80
+**Target PR Size:** ~250 lines
+**Files:**
+- `src/apps/runway/engine/horizon.ts` (`listCostPayments` over every bill schedule and ending)
+- `src/apps/runway/forms/CostForm.tsx` (the bill's repeats and Ends)
+- `src/apps/runway/components/CostRow.tsx` ("$100 a month", "Monthly from Feb 1st")
+- `src/apps/runway/types.ts` (`schedule` and `ending` beyond `once`)
+
+**Context:** Read TECHNICAL.md "Payments" and the bill's Schedules and Endings.
+
+### Description
+A cost can repeat: Storage unit, $100 a month from Feb 1st, no end yet. Its payments join the walk, so Moving reads "Covers Movers. From Feb 1st, Storage needs money from somewhere else."
+
+### Possible Approach
+1. `CostForm`'s When reuses the bill form's repeat choices and Ends fields.
+2. `listCostPayments` calls `occurrences` up to the lookahead's end; the walk takes them in date order.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read:** a repeating cost on an item, shown on its sheet and in the covers line.
+
+### Success Criteria
+- [ ] Check cases: payments match a bill with the same schedule and ending; the walk covers Movers then Storage in order.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; earlier costs read `ending` as none.
+- [ ] (No rule change.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `scripts/seeds/runway.ts` gained Storage unit and Miso's Medication.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 82: The pays carry what it doesn't cover
+
+**Prerequisites:** Issue 81
+**Target PR Size:** ~400 lines
+**Files:**
+- `src/apps/runway/engine/horizon.ts` (`pays`, `onePay`, the demands), `engine/demands.ts`, `engine/parts.ts` (`getCostLineId`)
+- `src/apps/runway/engine/lookahead.ts` (`draftOf` carries `held`)
+- `src/apps/runway/screens/days/IncomeDayScreen.tsx`, `RecordScreen.tsx` (the line and its sheet), `components/BillShareView.tsx` (keyed `itemId:costId`)
+- `src/apps/runway/forms/HorizonForm.tsx` (the two answers and the effect preview)
+- `src/apps/runway/screens/plan/PrioritiesScreen.tsx` (one row per item)
+- `src/apps/runway/types.ts`, `constants.ts` (`pays`, `onePay`; `RecordLine.costId`, `RecordLine.repaysFree`)
+
+**Context:** Read TECHNICAL.md "The walk" step 3, "Line ids", "Draft" and "Lookahead"; UX.md "Horizon: payday".
+
+### Description
+"My pays before each cost is due" and "One pay I pick" make the income days set aside what the item's own money doesn't cover. The Jan 15th and Jan 31st pays each show "Storage unit · Moving · due Feb 1st, $50", whose sheet says why, can change what this pay puts in, and opens Moving. The brother's three pays before Dec 18th each set aside $200 toward Surgery. The shortfall's "Take it from my pays" switches a `later` item to `pays` with its effect shown first. Under "One pay I pick", a cost due before the picked pay is fronted by Free to Spend on its day and the picked pay carries one line, "Movers · Moving · Back to Free to Spend", that puts it back.
+
+### Possible Approach
+1. `planHorizon` turns each payment's need into `Demand`s through the bill spread helpers; `buildDemands` adds them after bills.
+2. Line ids are `getCostLineId`; a confirmed record keeps `costId` and "Storage unit · Moving".
+3. `BillShareView` edits a cost's share for one day through the existing override path.
+4. The effect preview runs on the review before Add when any pay changes.
+5. Priorities lists the item once; `comparePriorityItems` takes kind `horizon`.
+6. A fronted payment (TECHNICAL.md decision 31) emits no demand before the picked day; the picked day's demand carries `repaysFree`, and a confirmed `repaysFree` line adds to Free to Spend, not the item. Until Issue 85 nothing is marked, so the picked day's demand is the ordinary one and the check cases build the mark by hand.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Read:** the draft line, its sheet and the confirmed record line. **Update:** a day's share for one cost.
+
+### Success Criteria
+- [ ] Check cases: for `pays`, covered plus the days' demands equals each payment's total, and a repeating cost's first payment spreads over the pays in the period before it (Jan 15th and Jan 31st for Feb 1st); a confirmed day raises `held` and lowers the later days' shares; `onePay` spreads later payments of a repeating cost as `pays`; a payment due before the picked day asks no earlier day, and the picked day's `repaysFree` equals its `fromFreeCents`.
+- [ ] The lookahead's figures match the item sheet's covers line for the seed's Moving.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; records confirmed before it read `costId` as null and `repaysFree` as false.
+- [ ] (No rule change.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `scripts/seeds/runway.ts` gained Miso's surgery on `pays` and a confirmed day with a cost line.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 83: Horizon in the lookahead and on Home
+
+**Prerequisites:** Issue 82
+**Target PR Size:** ~200 lines
+**Files:**
+- `src/apps/runway/engine/lookahead.ts` (`horizonShort`)
+- `src/apps/runway/components/LookaheadWarnings.tsx`, `ProblemRow.tsx`, `screens/home/HomeCards.tsx`
+
+**Context:** Read TECHNICAL.md "Lookahead (additions)".
+
+### Description
+A `later` item's shortfall shows in the lookahead in the plan's words ("The plan leaves Sam's wedding $230 short on Dec 19th"), opening the item, and Home's warning row counts it within 30 days. It never moves Home's headline date. Outside-the-plan costs raise nothing. A cost fronted by Free to Spend (Issue 82) warns only when Free to Spend can't cover it that day ("Free to Spend can't cover Movers on Jan 14th before the Jan 15th pay").
+
+### Possible Approach
+1. `horizonShort` is listed beside `undated`, outside `problems` and `holdsThrough`.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Read:** the warning row in the lookahead and on Home, each opening the item.
+
+### Success Criteria
+- [ ] Check cases: `holdsThrough` is the same with and without a `later` shortfall; `outside` and `isOutside` add nothing; a fronted payment warns only when the simulated Free to Spend falls below zero on its due date.
+- [ ] (No rule change.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 84: Set the price, change and remove costs
+
+**Prerequisites:** Issue 82
+**Target PR Size:** ~400 lines
+**Files:**
+- `src/apps/runway/screens/plan/CostSheet.tsx` (new), `HorizonSheet.tsx` (Change, History, Add a cost row)
+- `src/apps/runway/forms/CostForm.tsx` (Set the price, Change), `HorizonForm.tsx` (the item's Change)
+- `src/apps/runway/store/actions/horizonActions.ts` (`changeHorizon`, `setCostPrice`, `removeCost`)
+- `src/apps/runway/utils/changeText.ts` (the change-log lines)
+- `src/apps/runway/types.ts` (`pricedOn`, `endsAfter`)
+
+**Context:** Read TECHNICAL.md "Cascades" (Change, Set the price) and "Lifecycles"; UX.md "Set the price".
+
+### Description
+On Dec 2nd the movers quote $600: Movers > Set the price > An exact amount > $600 shows what changes (the covers line before and after, the pays that move), asks why, and writes "Moving: Movers $600 to $800 to $600, from Nov 3rd." The item's name, date, how the rest is paid and priority can be changed; a cost's name, date and how it's paid can be changed (its amount only through Set the price), and a cost can be removed, except the item's last.
+
+### Possible Approach
+1. `CostSheet` swaps in place under "‹ Moving" with Set the price, Make it a bill (Issue 87), Change and Remove.
+2. Set the price and every Change go through `changeItem` and `useChangeFlow`, with `EffectPreview` and `ChangeReason`.
+3. Remove: no paid payment → a version without the cost; otherwise `endsAfter = today` (Issue 85 makes payments paid; until then every remove is the first case). The confirm names the cost and its date. `removeCost` refuses the last cost and the sheet hides Remove on it; Issue 88 puts "Call off Moving" in its place.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Update:** an item and a cost, from their sheets. **Delete:** a cost, from its sheet, with a confirm.
+
+### Success Criteria
+- [ ] Check case: pricing a range lower never moves `coveredUntil` earlier; removing an item's last cost is refused.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; older costs read them as null.
+- [ ] (No rule change.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `scripts/seeds/runway.ts` gained a priced cost.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 85: Mark a cost paid
+
+**Prerequisites:** Issue 84
+**Target PR Size:** ~400 lines
+**Files:**
+- `src/apps/runway/types.ts`, `constants.ts` (`costPaid` in `MOVE_KINDS`, `CostPaidSealed` with `mark`, `ChangeMove.cost`)
+- `src/apps/runway/engine/horizon.ts` (`settleCostPaid`, `needsCostAmount`), `engine/balances.ts`, `engine/closings.ts`, `engine/lookahead.ts` (`dueCosts`)
+- `src/apps/runway/hooks/useCostPaid.ts` (new), `hooks/paidQueue.ts` (new: `inTurn` moved from `useBillPaid.ts` unchanged)
+- `src/apps/runway/components/PaidAmountSheet.tsx` (a neutral payment shape), `DueBillsCard.tsx`, `screens/days/ChecklistScreen.tsx`, `screens/plan/CostSheet.tsx`
+- `src/apps/runway/store/actions/horizonActions.ts` (`markCostPaid`, `undoCostPaid`), `store/listeners/openLedger.ts`
+- `scripts/checks/runwayRules.ts`
+
+**Context:** Read TECHNICAL.md decisions 26 to 28, "Paying" and the Mark paid cascade row.
+
+### Description
+At both levels "Mark paid" on a cost (from its sheet, the pay's checklist under "Bills to pay" as "Movers · Moving", or Home's to-pay card) marks it paid out of the item's money. An exact cost is one tap with an Undo and its effect in the row's subtitle; when part would come out of Free to Spend, the tap opens one confirm naming that part. A range asks "What did Movers come to?" starting empty with the range as its hint. Less than planned stays with the item. On Track it is cash; a cost never asks for a card, and a card charge is Add what you paid (Issue 86). An outside cost (Truck rental) is marked the same way from its sheet or the item's footer ("Mark Truck rental paid") and moves nothing; until marked it keeps the item from finishing. The paid row ("Paid Jan 15th · $600.00") opens a small sheet with "Take it back". A fronted payment (Issue 82) takes what the item lacks from Free to Spend. Bills' own Mark paid behaves exactly as before.
+
+### Possible Approach
+1. `markCostPaid` writes the deterministic `costPaid` (`mark` `item` or `outside`) and its `moveChange` in one `runTransaction`, queued through `inTurn`; the undo names it.
+2. `PaidAmountSheet` takes `{ name, rangeHint, heldMostCents, isPaid, cardName }`; the bill's three call sites build it from `BillPayment` as today.
+3. Balances, Spent/Paid and closings read `costPaid`; the lookahead lists due costs.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** a paid mark, from the cost's sheet, the checklist and Home. **Read:** "Paid Jan 15th" on the cost, Paid in the caption, the record. **Delete:** Undo, and Take back from the cost's history row.
+
+### Success Criteria
+- [ ] An exact cost marks in one tap with no sheet unless part comes from Free to Spend, which opens one confirm naming it; only a range opens the amount sheet, empty, with its range as the hint.
+- [ ] An outside cost is never on a checklist, Home's to-pay card or a warning; the item is not ready to finish until it is marked, whatever the date.
+- [ ] Before/after screenshots of the bill's Mark paid at each call site (checklist, Home, the bill's sheet) at both levels show no change.
+- [ ] Check cases: a paid payment asks nothing; less than planned stays in the item; `fromFreeCents` is the excess over `held`; an `outside` mark moves nothing and is not in Spent.
+- [ ] `firestore.rules` is unchanged and `npm run check:runway-rules` gained a `costPaid` create, a second create on the same id (refused) and an update (refused) as the owner, another user and signed out, against the base rules too; the PR says `firestore.indexes.json` did not change.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; closings written before it read `costPaid` as `{}`.
+- [ ] `scripts/seeds/runway.ts` gained Miso's Surgery marked paid at $520 and Moving's truck marked paid outside the plan.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 86: Add what you paid (Track)
+
+**Prerequisites:** Issue 85
+**Target PR Size:** ~300 lines
+**Files:**
+- `src/apps/runway/forms/PurchaseForm.tsx` (opened pointed at an item and cost; "which cost" from Spend)
+- `src/apps/runway/store/actions/purchaseActions.ts` (`costRef`, the mark and its undo in the same transaction)
+- `src/apps/runway/screens/plan/CostSheet.tsx`, `components/DueBillsCard.tsx`
+- `src/apps/runway/types.ts` (`PurchaseSealed.costRef`)
+
+**Context:** Read TECHNICAL.md "Add what you paid" cascade row and UX.md "Add what you paid (Track)".
+
+### Description
+On Track, "Add what you paid" opens the purchase form with "Movers · Moving" folded and, for an exact cost, the amount filled and folded, the card unanswered, and the effect "Moving $800.00 → $200.00 left". Saving marks the cost paid. A purchase added from Spend can pick Moving and is asked which cost it pays, or "None of these". Removing the purchase takes the mark back, and the paid row's "Take it back" removes the purchase (its confirm says so).
+
+### Possible Approach
+1. `addPurchase` writes the `costPaid` with `purchaseId` in its transaction; a second settle of the same payment is refused by the id.
+2. Edit changes only the purchase; delete, from Spend or from the paid row's Take it back, writes the undo move with it.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create / Read:** the purchase and the mark, from the cost and from Spend. **Update / Delete:** from the purchase's sheet in Spend; Delete also from the cost's paid row (Take it back).
+
+### Success Criteria
+- [ ] No purchase or card appears anywhere at Plan level.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; older purchases read `costRef` as null.
+- [ ] (No rule change: purchases and moves are already owner-only.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `scripts/seeds/runway.ts` gained the movers' $600 purchase.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 87: Make a repeating cost a bill, bringing the money left
+
+**Prerequisites:** Issue 85
+**Target PR Size:** ~350 lines
+**Files:**
+- `src/apps/runway/store/actions/horizonActions.ts` (`makeCostABill`)
+- `src/apps/runway/forms/BillForm.tsx` (prefilled, "Bring Moving's $200 with it?")
+- `src/apps/runway/engine/progress.ts` (a transfer into a bill counts as set aside), `engine/horizon.ts` (`becameBillId`)
+- `src/apps/runway/screens/plan/CostSheet.tsx`, `HorizonSheet.tsx` (the footer primary)
+- `src/apps/runway/types.ts` (`becameBillId`)
+
+**Context:** Read TECHNICAL.md decision 29 and the Make it a bill cascade row.
+
+### Description
+"Make Storage unit a bill" opens the bill form filled from the cost and asks "Bring Moving's $200 with it?" (Yes covers Feb 1st and Mar 1st, or leave it with Moving). The bill starts holding $200, the cost reads "Now a bill" and opens it.
+
+### Possible Approach
+1. One `runTransaction`: the bill's header, version and change, the item's version with `becameBillId`, and the transfer when brought.
+2. `getBillProgress` reads transfers to a bill id from the move's date.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Create:** the bill, from the cost's sheet and the item's footer. **Read:** it on Bills and as "Now a bill" on the item.
+
+### Success Criteria
+- [ ] Check cases: the cost asks nothing after the bill's first payment; the bill's first pays ask $200 less; a bill with no transfer is unchanged.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens.
+- [ ] (No rule change.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `scripts/seeds/runway.ts` gained the Storage bill made from Moving.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 88: Finish, call off or bring back an event, and where its money goes
+
+**Prerequisites:** Issue 87
+**Target PR Size:** ~300 lines
+**Files:**
+- `src/apps/runway/store/actions/horizonActions.ts` (`finishHorizon`, `callOffHorizon`, `bringBackHorizon`, `releaseHorizonHeld`; `undoCostPaid` reopens a finished item)
+- `src/apps/runway/engine/horizon.ts` (`getHorizonStatus`), `src/apps/runway/types.ts` (`HorizonSealed.state`, `stateOn`)
+- `src/apps/runway/screens/plan/CostSheet.tsx` ("Call off Moving" in place of the last cost's Remove)
+- `src/apps/runway/screens/plan/HorizonSheet.tsx` (Finish or call it off, the done view), `HorizonScreen.tsx` ("Done · N")
+
+**Context:** Read TECHNICAL.md decision 30, "Lifecycles" and the Finish and Bring it back cascade rows; UX.md "Bring it back".
+
+### Description
+When every cost is paid, ended or a bill, Moving says "Everything is paid or a bill" and its primary is "Finish Moving". Finishing or calling it off asks where any money left goes (Free to Spend, an envelope or goal, or keep it held), with nothing chosen. Calling off names the bills it made, which stay; the last cost's sheet offers "Call off Moving" where Remove would be. Done items fold behind "Done · 1" and open read-only. A called-off item can be brought back any time: "Bring it back" shows which costs plan again and what the pays now carry, asks about the money when it left the item ("Bring the $800 back to Moving?" or "Start Moving at $0", nothing chosen for the person) and shows the effect on the pays for that answer, then reopens it from today (money it kept held is still its own and asks nothing). Taking back a paid mark on a finished item reopens it.
+
+### Possible Approach
+1. One `runTransaction`: a version with `state` and `stateOn` (not `endItem` or `archiveItem`, whose header fields are write-once), its change, and the transfer when the money goes to Free to Spend, an envelope or a goal. Each toast's Undo writes the opposite version and the reversing transfer.
+2. With nothing left, Finish asks no question.
+3. `bringBackHorizon` writes a version with `state: 'open'` from today after the effect preview for the chosen answer; "Bring the $800 back" adds a `transfer` into the item from where the call-off sent the money, "Start Moving at $0" adds none; a payment whose date passed while it was off is due now.
+
+### CRUD & Entry-Point Requirements
+- [ ] **Delete (finish / call off):** from the item's sheet, with the money's question. **Update:** Bring it back on a called-off item; reopening a finished one by taking back a paid mark. **Read:** the done item from "Done · N".
+
+### Success Criteria
+- [ ] Check cases: called off, its unpaid payments ask nothing from that day; paid payments and the bills it made are unchanged; Free to Spend reconciles for each money choice; brought back with its money, the demands equal those of an item never called off with the same `held`; brought back at $0, they equal those of the same item with `held` 0; the preview's pays match what is then drafted; an undone paid mark on a finished item makes it open again.
+- [ ] Every sealed field this issue adds is sealed, opened and shown by this issue's own screens; versions sealed before it read `state` as open.
+- [ ] (No rule change.) The PR says so and that `firestore.indexes.json` did not change.
+- [ ] `scripts/seeds/runway.ts` gained New couch, done, and a called-off item to bring back.
+- [ ] `npm run check:runway-engine` passes and gained this issue's cases.
+- [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark.
+- [ ] The PRODUCT.md Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
 ## Beyond
 
@@ -2555,3 +2928,30 @@ Someone who already keeps a budget in a spreadsheet, a CSV, a notes file or a me
 - [ ] The reader logs no document content (only the error), returns no account or bank identifiers (the documents themselves are sent as they are), and `check:runway-engine` covers overlap across files, a conflicting amount and a missing amount staying empty.
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
+
+### Issue 89: Link a Waypoint trip's expected expense to Horizon or an envelope
+
+**Prerequisites:** Issue 88; the owner's answer on who owns a linked record
+**Target PR Size:** To be sized when scoped
+**Files:**
+- `src/apps/runway/` (the link's actions and the "From Waypoint" offer), `src/apps/waypoint/` (the offer on an expected expense), a cross-app `moneyLinks` collection and its callable, `firestore.rules`
+
+**Context:** Read Runway's TECHNICAL.md "Open questions for the roadmap > A Waypoint link" and Waypoint's TECHNICAL.md on expected expenses and splits.
+
+### Description
+A Waypoint trip's expected expense can become a Horizon cost, or attach to an existing envelope. Only the person's own share leaves Waypoint, never the total or anyone else's share. The link is one-to-one, kept in sync both ways (paid or deleted on either side updates the other) and either side can unlink.
+
+### Possible Approach
+1. **Ask the owner first, before building:** who decides the amount, date and title once linked (Waypoint, Runway, or whoever changed it last), and whether a delete on one side deletes or only unlinks the other. The contract supports any answer; do not choose one.
+2. A versioned `MoneyLink` contract (v1), owner-only by `uid`, each app writing only its half through a callable that checks `revision`. Neither app reads the other's collections or imports its code; Runway keeps its copy sealed.
+3. **Separate repos:** once the apps graduate to their own repos or projects, the contract becomes an authenticated API (push a change at revision N, pull changes since T), both repos pin the schema version, and a field is added only in a new version.
+4. A link changes Runway only through its ordinary actions; a paid mark from Waypoint asks once whether it came out of Runway.
+
+### CRUD & Entry-Point Requirements
+- [ ] To be scoped: link (from Waypoint and from Runway), read on both sides, sync paid and deleted, unlink from either side.
+
+### Success Criteria
+- [ ] The owner's answer on ownership is recorded in both apps' TECHNICAL.md before any code.
+- [ ] Only the person's own share is ever written to the link; a check proves another member's share never leaves Waypoint.
+- [ ] One expense links to at most one target and back, refused otherwise.
+- [ ] Rules for `moneyLinks` proven on the emulator as the owner, another user and signed out.
