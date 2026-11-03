@@ -2,7 +2,8 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
-import type { Inquiry } from '@apps/going-once/types';
+import ThingThumb from '@apps/going-once/components/things/ThingThumb';
+import type { Inquiry, Item } from '@apps/going-once/types';
 import {
   formatSentAt,
   getInquirerName,
@@ -11,15 +12,18 @@ import {
 
 interface InquiryRowProps {
   inquiry: Inquiry;
+  /** The thing it is about, for its cover; `null` once it is gone. */
+  item: Item | null;
   thing: string;
   handledBy: string | null;
   now: number;
   onOpen: () => void;
 }
 
-/** An inquiry in the Inbox: the person's name (bold while New), a quiet line of the thing and the time, then the message when the buyer wrote one of their own. */
+/** An inquiry in the Inbox: the thing's cover, the person's name (bold while New), a quiet line of the thing and the time, then the message when the buyer wrote one of their own. */
 function InquiryRow({
   inquiry,
+  item,
   thing,
   handledBy,
   now,
@@ -43,9 +47,10 @@ function InquiryRow({
     <Button
       type='button'
       variant='tertiary'
-      className='border-border bg-card h-auto min-h-16 w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left'
+      className='border-border bg-card h-auto min-h-16 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left'
       onClick={onOpen}
     >
+      <ThingThumb item={item} className='size-10 self-start' />
       <span className='min-w-0 flex-1'>
         <span
           className={join(
@@ -55,7 +60,7 @@ function InquiryRow({
         >
           {getInquirerName(inquiry)}
         </span>
-        <span className='text-muted-foreground mt-0.5 line-clamp-2 text-sm font-normal break-words'>
+        <span className='text-muted-foreground mt-0.5 line-clamp-2 text-sm font-normal text-pretty break-words'>
           {line}
         </span>
         {message !== null && message !== '' && (

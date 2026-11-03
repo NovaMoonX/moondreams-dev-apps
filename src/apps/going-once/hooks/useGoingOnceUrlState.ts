@@ -104,7 +104,10 @@ export function useGoingOnceUrlState() {
       history: 'replace',
     });
   const openInquiry = (id: string) => setInquiryId(id, { history: 'replace' });
-  const closeInquiry = () => setInquiryId(null, { history: 'replace' });
+  const closeInquiry = () => {
+    void closeThing();
+    return setInquiryId(null, { history: 'replace' });
+  };
 
   return {
     saleId,

@@ -9,17 +9,21 @@ It is for three people: the seller, who adds things once and checks in; the co-s
 1. Start a sale and add your things: photos, a name, a price and its condition.
 2. Add a co-seller by email; they see everything, floor prices and notes included.
 3. Turn on the public link and share it. It shows Available and Pending things, live.
-4. Buyers tap "I'm interested"; you and your co-sellers get a push (several close together come as one) and the message lands in a shared inbox.
+4. Buyers tap "I'm interested" and the message lands in a shared inbox. A push to you and your co-sellers, with several close together bundled as one, is coming.
 5. Mark things Pending when a pickup is set and Sold with what was paid.
-6. Copy a thing's listing text and save its photos, or save every thing's photos at once, to relist on Marketplace.
-7. See what has sold against what was asked, and finish the sale when it's over; buyers' names, contact details and messages are cleared 30 days later.
+6. Coming: copy a thing's listing text and save its photos, or save every thing's photos at once, to relist on Marketplace.
+7. See what has sold against what was asked. Coming: finish the sale when it's over; buyers' names, contact details and messages are cleared 30 days later.
 
 ## Status
 
 Built:
+- Your sales, and starting a sale with a name, pickup area and note
+- Things added photo-first in a short walk-through, with a floor price and private notes only you and your co-sellers see; Modify, delete (with a confirm that names what goes with it) and a "Not listed yet" door for things missing a photo, a name or a price
 - Available, Pending and Sold, with what was paid, a history per thing, and taking things off the list
-- The Sale tab: where the sale stands (collected, pending, left), editing its name, pickup area and note, and deleting the sale
+- The Sale tab: where the sale stands (collected, pending, left), the public page's switch and link, editing its name, pickup area and note, and deleting the sale
 - Co-sellers: the seller adds an email, the person opens Going Once signed in with it and the sale is waiting; the seller can remove them and they can leave
+- The public page: Available and Pending things with photos, and an "I'm interested" form that is refused in words for a thing that just sold
+- The Inbox: New and Handled, an inquiry with Text, Call and Email, and the thing it is about one tap away
 
 Next:
 - [x] Sales, things with photos and private fields, and co-sellers
@@ -27,7 +31,7 @@ Next:
 - [x] Photos on the public page, smaller copies that go when a thing sells
 - [x] An interest form on the public page, refused in words for a thing that just sold
 - [x] A shared inbox: New and Handled, with Text, Call and Email
-- [ ] A bundled push when someone is interested
+- [ ] A bundled push when someone is interested, and each thing's own list of who asked with Hold for
 - [ ] Copy listing text, Save photos and Save all photos for relisting
 - [ ] Finish the sale, with buyers' details cleared after 30 days
 - [ ] Later: who holds the money, and a later sale from what didn't sell

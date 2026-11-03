@@ -3,13 +3,18 @@ import { useState, type ReactNode } from 'react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { store } from '@/store';
+import { HANDLED_INBOX_LIMIT } from '@apps/going-once/constants';
 import DeleteThingConfirm, {
   type DeleteChoice,
   type DeleteQuestion,
 } from '@apps/going-once/components/things/DeleteThingConfirm';
 import { deleteItem } from '@apps/going-once/store/actions/itemActions';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
-import { selectItems } from '@apps/going-once/store/selectors';
+import {
+  selectHandledInquiries,
+  selectItems,
+  selectNewInquiries,
+} from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
 import { getItemName } from '@apps/going-once/utils/listing';
 import { getStatusSummary } from '@apps/going-once/utils/statusSummary';
@@ -35,9 +40,18 @@ export function useDeleteThing(
       const collectedCents = getStatusSummary(
         selectItems(store.getState(), saleId),
       ).SOLD.collectedCents;
+      const state = store.getState();
+      const handled = selectHandledInquiries(state, saleId);
+      const asked = {
+        count: [...selectNewInquiries(state, saleId), ...handled].filter(
+          (inquiry) => inquiry.itemId === item.id,
+        ).length,
+        isAtLeast: handled.length >= HANDLED_INBOX_LIMIT,
+      };
       setAsking({
         item,
         collectedCents,
+        asked,
         settle: (choice) => {
           setAsking(null);
           resolve(choice);

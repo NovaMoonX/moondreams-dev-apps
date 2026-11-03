@@ -94,7 +94,7 @@ function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
           photos={photos}
           label={thing.title}
           fallback={
-            <div className='bg-accent/60 text-accent-foreground grid aspect-4/3 w-full place-items-center rounded-2xl'>
+            <div className='bg-accent/60 text-accent-foreground grid aspect-4/3 max-h-[40dvh] w-full place-items-center rounded-2xl [@media(max-height:499px)]:max-h-[26dvh]'>
               <Camera className='size-8 opacity-60' aria-hidden='true' />
             </div>
           }

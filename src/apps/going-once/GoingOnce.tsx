@@ -154,6 +154,11 @@ function GoingOnce() {
   const salesStatus = useAppSelector(selectSalesStatus);
   const [isStartOpen, setIsStartOpen] = useState(false);
   const [isListChosen, setIsListChosen] = useState(false);
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  const changeTab = (tab: GoingOnceTab) => {
+    setResumeId(null);
+    return showTab(tab);
+  };
 
   const openSaleId = pickOpenSaleId(
     sales,
@@ -254,6 +259,8 @@ function GoingOnce() {
                 onCloseThing={closeThing}
                 statusView={statusView}
                 onStatusViewChange={showStatusView}
+                resumeId={resumeId}
+                onResumeTaken={() => setResumeId(null)}
               />
             )}
             {activeTab === 'sale' && (
@@ -282,13 +289,21 @@ function GoingOnce() {
                 openId={inquiryId}
                 onOpen={openInquiry}
                 onClose={closeInquiry}
+                openThingId={thingId}
+                onOpenThing={openThing}
+                onCloseThing={closeThing}
+                onFinishThing={(id) => {
+                  setResumeId(id);
+                  void showTab('things');
+                }}
+                onOpenSale={() => changeTab('sale')}
               />
             )}
           </div>
           <SaleTabs
             value={activeTab}
             newCount={newInquiryCount}
-            onChange={showTab}
+            onChange={changeTab}
           />
         </div>
       ) : (
