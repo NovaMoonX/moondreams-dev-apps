@@ -13,7 +13,7 @@ import StatusViewFooter from '@apps/going-once/components/things/StatusViewFoote
 import { MAX_BUYER_NAME_LENGTH } from '@apps/going-once/constants';
 import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
-import type { Item } from '@apps/going-once/types';
+import type { Inquiry, Item } from '@apps/going-once/types';
 import { getItemName } from '@apps/going-once/utils/listing';
 import { describeMovedOn } from '@apps/going-once/utils/status';
 import {
@@ -26,6 +26,8 @@ import {
 
 interface MarkPendingViewProps {
   item: Item;
+  /** This thing's inquiries, offered as who it is for. */
+  inquiries: Inquiry[];
   uid: string;
   now: number;
   /** Marking a thing pending, or changing who or when on a hold it already has. */
@@ -43,6 +45,7 @@ interface MarkPendingViewProps {
 /** Who is picking it up, and when; both are optional, so Mark pending is on from the start. */
 function MarkPendingView({
   item,
+  inquiries,
   uid,
   now,
   mode,
@@ -66,6 +69,13 @@ function MarkPendingView({
     (isBusy
       ? null
       : describeMovedOn(item, [isChange ? 'PENDING' : 'AVAILABLE']));
+  const askers = isChange
+    ? []
+    : inquiries.flatMap((inquiry) =>
+        inquiry.name === null
+          ? []
+          : [{ value: inquiry.id, label: inquiry.name }],
+      );
   const isUnchanged =
     isChange && !isDraftChanged(draft, getHoldDraft(item.pending, now));
 
@@ -89,11 +99,23 @@ function MarkPendingView({
                 pickupOn: item.pending?.pickupOn ?? null,
               },
             }
-          : { kind: 'MARK_PENDING', buyerName, pickupOn },
+          : {
+              kind: 'MARK_PENDING',
+              inquiryId: draft.inquiryId,
+              buyerName,
+              pickupOn,
+            },
       ),
     );
     if (isSaved) onDone();
   };
+
+  const pickAsker = (id: string) =>
+    onDraft({
+      ...draft,
+      inquiryId: id,
+      name: inquiries.find((inquiry) => inquiry.id === id)?.name ?? draft.name,
+    });
 
   const pickDay = (value: string) => {
     if (value === OTHER_DAY) {
@@ -119,6 +141,17 @@ function MarkPendingView({
         />
         <p className='text-lg font-semibold'>Who&apos;s picking it up?</p>
       </div>
+      {askers.length > 0 && (
+        <div className='space-y-3'>
+          <p className='text-muted-foreground text-sm'>Someone who asked</p>
+          <PillGroup
+            label='Someone who asked'
+            options={askers}
+            value={draft.inquiryId}
+            onChange={pickAsker}
+          />
+        </div>
+      )}
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Their name (optional)</p>
         <Input
@@ -128,7 +161,9 @@ function MarkPendingView({
           maxLength={MAX_BUYER_NAME_LENGTH}
           autoComplete='off'
           disabled={lockedNote !== null}
-          onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+          onChange={(event) =>
+            onDraft({ ...draft, inquiryId: null, name: event.target.value })
+          }
         />
       </div>
       {draft.isDayShown ? (
