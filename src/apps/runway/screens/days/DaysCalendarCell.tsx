@@ -60,7 +60,7 @@ function DaysCalendarCell({
             </span>
           )}
         </span>
-        {isSelected && (
+        {isSelected && !isToday && (
           <span className='ring-primary pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset' />
         )}
       </span>

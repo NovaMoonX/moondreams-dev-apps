@@ -112,7 +112,7 @@ function GoalsScreen() {
           (behindGoals.length === 0 ? (
             <div className='flex min-h-10 items-center gap-1'>
               <CircleCheck
-                className='text-primary h-4 w-4 shrink-0'
+                className='text-success h-4 w-4 shrink-0'
                 aria-hidden='true'
               />
               <p className='text-sm font-medium'>

@@ -7,7 +7,7 @@ const DOT_CLASSES: Record<DotKind, string> = {
   bill: 'bg-muted-foreground',
   card: 'bg-primary',
   goal: 'border-2 border-foreground/70',
-  goalBehind: 'border-2 border-warning',
+  goalBehind: 'border-2 border-(--runway-warning-ink)',
 };
 
 /** A small dot for one kind of thing on a calendar day; the goal kinds are rings so they differ by shape as well as colour. */
