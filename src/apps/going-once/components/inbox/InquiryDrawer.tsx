@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -21,6 +21,7 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import {
   backToNew,
   deleteInquiry,
@@ -81,6 +82,54 @@ const getStatusLine = (
     .filter((part) => part !== null)
     .join(' · ');
 };
+
+/** The buyer's words as a message from them: a small caption, then a bubble squared toward it, clamped to eight lines with Show all once it overflows. */
+function MessageBubble({
+  caption,
+  message,
+}: {
+  caption: string;
+  message: string;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [isClamped, setIsClamped] = useState(false);
+  const observerRef = useRef<ResizeObserver | null>(null);
+
+  const measure = useCallback((element: HTMLElement | null) => {
+    observerRef.current?.disconnect();
+    if (!element) return;
+    const observer = new ResizeObserver(() =>
+      setIsClamped(element.scrollHeight > element.clientHeight + 1),
+    );
+    observer.observe(element);
+    observerRef.current = observer;
+  }, []);
+
+  return (
+    <div className='max-w-[85%] space-y-1'>
+      <p className='text-muted-foreground px-1 text-xs'>{caption}</p>
+      <div className='bg-muted rounded-2xl rounded-tl-sm px-4 py-3'>
+        <p
+          ref={measure}
+          className={join(
+            'wrap-break-word whitespace-pre-wrap',
+            !isOpen && 'line-clamp-8',
+          )}
+        >
+          {message}
+        </p>
+        {(isClamped || isOpen) && (
+          <ShowMoreButton
+            isOpen={isOpen}
+            onClick={() => setIsOpen((open) => !open)}
+          >
+            {isOpen ? 'Show less' : 'Show all'}
+          </ShowMoreButton>
+        )}
+      </div>
+    </div>
+  );
+}
 
 /** One inquiry in full: the message, the ways to reach the person as native links, and Mark handled; Back to New and Delete sit behind More. */
 function InquiryDrawer({
@@ -262,15 +311,14 @@ function InquiryDrawer({
               {getStatusLine(inquiry, handledBy, now)}
             </span>
           </p>
-          <div className='bg-card border-border rounded-2xl rounded-tl-md border px-4 py-3'>
-            {inquiry.message === null ? (
-              <p className='text-muted-foreground'>No message.</p>
-            ) : (
-              <p className='break-words whitespace-pre-wrap'>
-                {inquiry.message}
-              </p>
-            )}
-          </div>
+          {inquiry.message === null ? (
+            <p className='text-muted-foreground'>No message.</p>
+          ) : (
+            <MessageBubble
+              caption={`${name} wrote · ${formatSentAt(inquiry.lastSentAt, now)}`}
+              message={inquiry.message}
+            />
+          )}
           <div className='space-y-2'>
             <p className='text-muted-foreground text-xs font-medium'>About</p>
             {item === null ? (

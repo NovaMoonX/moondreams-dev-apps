@@ -829,6 +829,14 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       sentAt: context.now - 6 * DAY_MS,
       handled: { by: maya.uid, at: context.now - 5 * DAY_MS },
     },
+    {
+      ...sofa,
+      name: 'Alex',
+      contact: 'alex.m@example.com',
+      message:
+        "Hi! I saw the sofa on your page and I'm really interested. I'm moving into a third-floor walk-up on Saturday, so before I make the trip I wanted to ask a few things. First, how deep is the seat? My doorway is narrow and I'd like to be sure it fits through, and the stairwell turns twice. Second, does it come apart at all, like legs that unscrew or a back that lifts off?\n\nI have a friend with a pickup truck who can help me carry it, so I can come any evening this week after 6, or Sunday afternoon if that suits you better. I'd bring cash, or send it with Venmo ahead of time if you would rather hold it for me until then.\n\nOne more thing: are there any pets or smoke in the home? I'm allergic to cat hair, so a quick honest answer would help me a lot. Thanks so much, and sorry for all the questions!",
+      sentAt: context.now - 5 * HOUR_MS,
+    },
   ];
   await Promise.all(
     inquiries.map((inquiry) => {

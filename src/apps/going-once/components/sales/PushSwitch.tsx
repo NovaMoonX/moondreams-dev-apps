@@ -23,7 +23,7 @@ const getHelperText = (isOff: boolean | null) => {
 
 const getDeviceNote = (device: 'blocked' | 'unsupported') =>
   device === 'blocked'
-    ? "This phone won't get them: allow notifications for this site in your browser's settings."
+    ? "This device won't get them: allow notifications for this site in your browser's settings."
     : "This browser can't show notifications.";
 
 interface PushSwitchProps {

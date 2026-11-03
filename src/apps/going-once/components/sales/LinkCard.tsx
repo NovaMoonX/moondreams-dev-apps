@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
@@ -23,7 +22,6 @@ interface LinkCardProps {
 
 /** The Sale tab's public page: the seller turns it on and off or gets a new address; the seller and co-sellers copy and open it. */
 function LinkCard({ sale, isSeller }: LinkCardProps) {
-  const navigate = useNavigate();
   const { confirm } = useActionModal();
   const [pending, setPending] = useState<SaleLinkAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -132,7 +130,13 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
               type='button'
               variant='secondary'
               className='h-10 min-w-0 flex-1 gap-1.5 px-2! [&_svg]:shrink-0'
-              onClick={() => navigate(`${path}?sale=${sale.id}&tab=sale`)}
+              onClick={() =>
+                window.open(
+                  `${path}?sale=${sale.id}&tab=sale`,
+                  '_blank',
+                  'noopener,noreferrer',
+                )
+              }
             >
               <ExternalLink className='size-4' aria-hidden='true' />
               Open

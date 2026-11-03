@@ -10,7 +10,7 @@ import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SortControl from '@/components/SortControl';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import SaveAllPhotosSheet from '@apps/going-once/components/relist/SaveAllPhotosSheet';
 import NewThingFlow from '@apps/going-once/components/things/NewThingFlow';
 import OpenThing from '@apps/going-once/components/things/OpenThing';
@@ -22,6 +22,7 @@ import {
   STATUS_LABELS,
   STATUS_VIEWS,
 } from '@apps/going-once/constants';
+import { retryLoading } from '@apps/going-once/store';
 import {
   selectItems,
   selectIsSaleFinished,
@@ -80,6 +81,7 @@ function ItemsSection({
   resumeId,
   onResumeTaken,
 }: ItemsSectionProps) {
+  const dispatch = useAppDispatch();
   const items = useAppSelector((state) => selectItems(state, saleId));
   const status = useAppSelector(selectItemsStatus);
   const uploads = useAppSelector(selectPhotoUploads);
@@ -198,9 +200,23 @@ function ItemsSection({
 
   if (status === 'error') {
     return (
-      <EmptyCard icon='⚠️'>
+      <EmptyCard
+        icon='⚠️'
+        action={
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className='h-10'
+            onClick={() => dispatch(retryLoading())}
+          >
+            Try again
+          </Button>
+        }
+      >
         We couldn&apos;t load this sale&apos;s things. Check your connection and
-        refresh the page.
+        try again.
       </EmptyCard>
     );
   }

@@ -478,7 +478,7 @@ Title note: **"Interest arrives once, for everyone selling. Relisting elsewhere 
 **R3 · Post it somewhere else** · `Seller · Co-seller` · T4 scrolled to its end
 - Caption "Post it somewhere else". A muted block of two rows:
   - Copy listing text: "Name, condition, price and description".
-  - Save photos: "5 photos to your phone".
+  - Save photos: "5 photos to your device".
 
 **R3b · Getting the photos** · `Seller · Co-seller`
 - The Save photos row's sub-line reads "Getting 5 photos ready… 3 of 5", with a small spinner.
