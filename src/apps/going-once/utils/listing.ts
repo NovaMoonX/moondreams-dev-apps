@@ -1,6 +1,7 @@
 import { formatCentsShort } from '@/utils/moneyUtils';
 import {
   CO_SELLER_DELETE_WINDOW_MS,
+  CONDITION_LABELS,
   type ITEM_SORT_OPTIONS,
 } from '@apps/going-once/constants';
 import type { Item } from '@apps/going-once/types';
@@ -28,6 +29,39 @@ export function formatAskingPrice(
 ): string | null {
   if (askingPriceCents === null) return null;
   return askingPriceCents === 0 ? 'Free' : formatCentsShort(askingPriceCents);
+}
+
+/** The text a seller pastes into another listing: only what buyers already see on the public page. Never the floor price, notes, where it was bought, the store's link or a hidden original price. */
+export function listingText(
+  item: Pick<
+    Item,
+    | 'title'
+    | 'condition'
+    | 'askingPriceCents'
+    | 'description'
+    | 'brandModel'
+    | 'size'
+    | 'originalPriceCents'
+    | 'showOriginalPrice'
+  >,
+): string {
+  const price = formatAskingPrice(item.askingPriceCents);
+  const was =
+    item.showOriginalPrice && item.originalPriceCents !== null
+      ? `Was ${formatCentsShort(item.originalPriceCents)}`
+      : null;
+  const lines = [
+    getItemName(item),
+    [price, was].filter((part) => part !== null).join(' · '),
+    item.condition === null
+      ? ''
+      : `Condition: ${CONDITION_LABELS[item.condition]}`,
+    item.brandModel === null ? '' : `Brand or model: ${item.brandModel}`,
+    item.size === null ? '' : `Size: ${item.size}`,
+  ].filter((line) => line !== '');
+  return [lines.join('\n'), item.description?.trim() ?? '']
+    .filter((block) => block !== '')
+    .join('\n\n');
 }
 
 /** What a thing is called on screen before it has a name. */

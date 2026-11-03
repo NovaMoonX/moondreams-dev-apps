@@ -28,7 +28,10 @@ import {
 } from '../../functions/src/apps/going-once/inquiryView.ts';
 import * as clientConstants from '../../src/apps/going-once/constants.ts';
 import { readContact as readContactOnClient } from '../../src/apps/going-once/utils/contact.ts';
-import { isListable as isListableOnClient } from '../../src/apps/going-once/utils/listing.ts';
+import {
+  isListable as isListableOnClient,
+  listingText,
+} from '../../src/apps/going-once/utils/listing.ts';
 import { SEED_SALE_LINK_ID } from '../seeds/goingOnce.ts';
 
 let passed = 0;
@@ -622,6 +625,34 @@ check(
     assert.notEqual(id, toInquiryId('desk', '2065550142'));
     assert.notEqual(id, toInquiryId('sofa', '2065550143'));
     assert.equal(readContactOnServer('(206) 555-0142')?.key, '2065550142');
+  },
+);
+
+check(
+  'the copied listing text holds only what buyers already see',
+  () => {
+    const base = {
+      title: 'Gray sofa',
+      condition: 'LIKE_NEW' as const,
+      askingPriceCents: 35_000,
+      description: 'No stains.',
+      brandModel: 'Haven',
+      size: '84 in wide',
+      originalPriceCents: 129_900,
+      floorPriceCents: 30_000,
+      boughtFrom: 'SECRET-STORE',
+      boughtUrl: 'https://secret.example/sofa',
+      notes: 'SECRET-NOTE',
+      pending: { buyerName: 'SECRET-BUYER' },
+    };
+    const hidden = listingText({ ...base, showOriginalPrice: false });
+    ['$300', '$1,299', 'SECRET'].forEach((value) =>
+      assert.ok(!hidden.includes(value), `leaked ${value}`),
+    );
+    assert.ok(hidden.includes('$350') && hidden.includes('No stains.'));
+    assert.ok(
+      listingText({ ...base, showOriginalPrice: true }).includes('Was $1,299'),
+    );
   },
 );
 

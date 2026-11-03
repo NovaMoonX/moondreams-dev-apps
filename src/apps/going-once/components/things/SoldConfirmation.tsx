@@ -2,12 +2,13 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import InlineNotice from '@/components/InlineNotice';
 import { useBackStep } from '@/hooks/useBackHistory';
 import {
   fromDateInputValue,
   toLocalDateInputValue,
 } from '@/utils/dateInputUtils';
-import { formatRelativeDayUTC } from '@/utils/formatUtils';
+import { formatDateShort, formatRelativeDayUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import StatusViewFooter from '@apps/going-once/components/things/StatusViewFooter';
@@ -22,6 +23,8 @@ interface SoldConfirmationProps {
   now: number;
   /** Who marked it, as a name for a sentence. */
   markedBy: string;
+  /** Who last copied the listing text, as a name for a sentence; `null` when nobody has. */
+  copiedBy: string | null;
   sold: StatusFigures;
   footerNode: HTMLElement | null;
   onDone: () => void;
@@ -34,6 +37,7 @@ function SoldConfirmation({
   item,
   now,
   markedBy,
+  copiedBy,
   sold,
   footerNode,
   onDone,
@@ -74,6 +78,13 @@ function SoldConfirmation({
       <p className='text-sm'>
         {formatCollected(sold.collectedCents, sold.askedCents)}
       </p>
+      {copiedBy !== null && item.listingCopiedAt !== null && (
+        <InlineNotice tone='warning'>
+          {copiedBy} copied this listing on{' '}
+          {formatDateShort(item.listingCopiedAt)}. If it went up somewhere else,
+          take that listing down too.
+        </InlineNotice>
+      )}
       {sale !== null && (
         <Button
           type='button'

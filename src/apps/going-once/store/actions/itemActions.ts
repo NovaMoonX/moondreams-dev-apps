@@ -84,6 +84,8 @@ export function createItem(
     pending: null,
     sale: null,
     statusHistory: [],
+    listingCopiedAt: null,
+    listingCopiedBy: null,
     createdBy: uid,
     createdAt: Date.now(),
     lastEditedAt: null,
@@ -104,6 +106,18 @@ export function updateItemFields(
     ...fields,
     lastEditedAt: Date.now(),
     lastEditedBy: uid,
+  });
+}
+
+/** Remembers who copied the listing text last; touches only those two fields, so it never counts as an edit. */
+export function markListingCopied(
+  saleId: string,
+  itemId: string,
+  uid: string,
+): Promise<void> {
+  return updateDoc(getItemRef(saleId, itemId), {
+    listingCopiedAt: Date.now(),
+    listingCopiedBy: uid,
   });
 }
 

@@ -33,6 +33,8 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
 import { parseHttpUrl } from '@/utils/urlUtils';
 import ChangePaidView from '@apps/going-once/components/things/ChangePaidView';
+import CopyListingTextRow from '@apps/going-once/components/relist/CopyListingTextRow';
+import SavePhotosRow from '@apps/going-once/components/relist/SavePhotosRow';
 import HistoryView from '@apps/going-once/components/things/HistoryView';
 import MarkPendingView from '@apps/going-once/components/things/MarkPendingView';
 import MarkSoldView from '@apps/going-once/components/things/MarkSoldView';
@@ -213,7 +215,9 @@ function ThingDrawer({
   const { pending: undoable, showUndo, undo } = useUndoRemoval();
   const [undoLabel, setUndoLabel] = useState('Undo');
   const getName = usePersonNames(
-    item.sale === null ? [] : [item.sale.markedBy],
+    [item.sale?.markedBy, item.listingCopiedBy].filter(
+      (person) => person != null,
+    ),
     uid,
   );
   const name = getItemName(item);
@@ -553,6 +557,12 @@ function ThingDrawer({
               />
             ))}
           </ActionGroup>
+          {isOnTheList && (
+            <ActionGroup isRoomy>
+              <CopyListingTextRow item={item} uid={uid} />
+              <SavePhotosRow item={item} />
+            </ActionGroup>
+          )}
           {canDelete && (
             <ActionGroup isRoomy>
               <ActionRow
@@ -608,6 +618,9 @@ function ThingDrawer({
           item={item}
           now={now}
           markedBy={getMarkedBy()}
+          copiedBy={
+            item.listingCopiedBy === null ? null : getName(item.listingCopiedBy)
+          }
           sold={sold}
           footerNode={footerNode}
           onDone={toFront}
