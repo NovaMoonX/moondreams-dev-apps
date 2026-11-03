@@ -102,7 +102,7 @@ function ItemRow({
   // A range ("$33.33 to $66.67") breaks at "to", never inside a number.
   const figureNode = figure
     ? figure.split(' to ').map((part, index) => (
-        <Fragment key={part}>
+        <Fragment key={index}>
           {index > 0 && ' to '}
           <span className='whitespace-nowrap'>{part}</span>
         </Fragment>

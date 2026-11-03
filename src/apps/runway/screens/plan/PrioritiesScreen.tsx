@@ -352,6 +352,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         version.payload,
         (rowId, envelope, reorder, isHighlighted) => (
           <EnvelopeTile
+            figureKind='payment'
             reorder={reorder}
             isHighlighted={isHighlighted}
             key={rowId}

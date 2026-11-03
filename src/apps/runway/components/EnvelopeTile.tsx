@@ -49,6 +49,8 @@ interface EnvelopeTileProps {
   isPart?: boolean;
   /** How far down the priorities Plan's dial counts: the figure is what the counted parts ask, and the line names the extras it leaves out. */
   dial?: Priority;
+  /** A list beside a monthly total reads a calendar-period envelope per month ("monthly"); one mixed with bills and goals shows what each time sets aside ("payment"). */
+  figureKind?: 'monthly' | 'payment';
 }
 
 const capitalize = (text: string) =>
@@ -67,6 +69,7 @@ function EnvelopeTile({
   isFaded = false,
   isPart = false,
   dial = 'want',
+  figureKind = 'monthly',
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -84,7 +87,6 @@ function EnvelopeTile({
   const emoji = useItemEmoji(envelope.emoji, envelope.groupId);
   const { amount } = counted;
   const eachTime = amount.kind === 'exact' ? formatCents(amount.cents) : null;
-  const monthly = describeEnvelopeMonthly(counted);
   const ownCents =
     envelope.funding.amount.kind === 'exact'
       ? envelope.funding.amount.cents
@@ -94,6 +96,10 @@ function EnvelopeTile({
       ? null
       : `${formatCentsShort(ownCents)} ${envelope.priority}${describeExtras(extras, formatCentsShort)}`;
   const isPlan = level === 'plan';
+  const monthly =
+    figureKind === 'monthly' && (isPlan || isPart)
+      ? describeEnvelopeMonthly(counted)
+      : null;
   const rowFigure = isPlan || isPart ? (monthly?.figure ?? eachTime) : value;
   const rowDetail =
     isPlan || isPart
@@ -154,8 +160,8 @@ function EnvelopeTile({
           emoji={emoji}
           detail={rowDetail}
           figure={rowFigure}
-          figureWord={(isPlan || isPart) && monthly ? BILL_WORDS.aMonth : null}
-          ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
+          figureWord={monthly ? BILL_WORDS.aMonth : null}
+          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${funding}` : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}
