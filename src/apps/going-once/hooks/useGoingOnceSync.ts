@@ -103,6 +103,14 @@ function listenWithRetry(
   };
 }
 
+/** True while the open sale is this person's own, the one case where a refused read is the background write still landing. */
+function isOwnSale(uid: string, saleId: string) {
+  const { openSale, sales } = store.getState().goingOnce;
+  const sale =
+    openSale.sale ?? sales.items.find((found) => found.id === saleId);
+  return sale?.ownerUid === uid;
+}
+
 /** Starts the listeners: the person's sales and invitations, and the open sale, its things and its invitations once one is chosen. */
 export function useGoingOnceSync(
   uid: string | null,
@@ -153,9 +161,14 @@ export function useGoingOnceSync(
 
   useEffect(() => {
     if (!uid || !saleId) return;
-    const unsubscribeSale = startOpenSaleListener(
-      saleId,
-      (sale) => dispatch(setOpenSale(sale)),
+    const unsubscribeSale = listenWithRetry(
+      (onError) =>
+        startOpenSaleListener(
+          saleId,
+          (sale) => dispatch(setOpenSale(sale)),
+          onError,
+        ),
+      () => isOwnSale(uid, saleId),
       (error) => {
         if (isPermissionDenied(error)) noteRemoval(uid, dispatch, () => false);
         dispatch(setOpenSaleError());
@@ -174,12 +187,7 @@ export function useGoingOnceSync(
 
   useEffect(() => {
     if (!uid || !saleId) return;
-    const isOwnSale = () => {
-      const { openSale, sales } = store.getState().goingOnce;
-      const sale =
-        openSale.sale ?? sales.items.find((found) => found.id === saleId);
-      return sale?.ownerUid === uid;
-    };
+    const canRetry = () => isOwnSale(uid, saleId);
     const unsubscribeItems = listenWithRetry(
       (onError) =>
         startOpenSaleItemsListener(
@@ -187,7 +195,7 @@ export function useGoingOnceSync(
           (items) => dispatch(setItems({ saleId, items })),
           onError,
         ),
-      isOwnSale,
+      canRetry,
       (error) => {
         if (isPermissionDenied(error))
           noteRemovalIfSaleRefused(uid, saleId, dispatch);
@@ -201,7 +209,7 @@ export function useGoingOnceSync(
           (items) => dispatch(setInquiries({ saleId, list: 'new', items })),
           onError,
         ),
-      isOwnSale,
+      canRetry,
       () => dispatch(setInquiriesError({ saleId, list: 'new' })),
     );
     const unsubscribeHandled = listenWithRetry(
@@ -211,7 +219,7 @@ export function useGoingOnceSync(
           (items) => dispatch(setInquiries({ saleId, list: 'handled', items })),
           onError,
         ),
-      isOwnSale,
+      canRetry,
       () => dispatch(setInquiriesError({ saleId, list: 'handled' })),
     );
     return () => {

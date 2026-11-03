@@ -98,15 +98,17 @@ export function createItem(
   return setDoc(getItemRef(saleId, itemId), item);
 }
 
-/** Saves only the fields given, never `status` or `photos`; the write is queued offline. */
+/** Saves only the fields given, never `status` or `photos`; `isFinishing` also takes the thing out of draft. The write is queued offline. */
 export function updateItemFields(
   saleId: string,
   itemId: string,
   uid: string,
   fields: ItemFields,
+  isFinishing = false,
 ): Promise<void> {
   return updateDoc(getItemRef(saleId, itemId), {
     ...fields,
+    ...(isFinishing ? { isDraft: false } : {}),
     lastEditedAt: Date.now(),
     lastEditedBy: uid,
   });

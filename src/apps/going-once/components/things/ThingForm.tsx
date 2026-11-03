@@ -93,7 +93,7 @@ function RowSheet({
     }
     setIsSaving(true);
     setError(null);
-    const write = updateItemFields(item.saleId, item.id, uid, mine);
+    const write = updateItemFields(item.saleId, item.id, uid, mine, true);
     const outcome = await Promise.race([
       write.then(
         () => 'saved' as const,

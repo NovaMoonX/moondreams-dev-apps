@@ -383,9 +383,8 @@ function ThingSteps({
     formatAskingPrice(fields.askingPriceCents) ??
     (isDeferred('price') ? 'Price later' : '');
 
-  // A thing still missing a photo, name or price stays a draft, so finishing it later is a choice to list it.
+  // Save always ends the draft: a thing still missing a photo, name or price stays off the page until it has them, wherever they are added.
   const markSaved = () => {
-    if (getDraftNote(photoCount, fields) !== null) return;
     if (creation.current === null && uploads.uploads.length === 0) return;
     ensureCreated({})
       .then(() => markItemSaved(saleId, itemId, uid))
