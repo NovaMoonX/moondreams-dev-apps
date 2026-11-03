@@ -12301,4 +12301,158 @@ console.log('runway engine: ok');
   );
 }
 
+// A bill every few months: its dates, its monthly share, and saving for one due after the horizon.
+{
+  const everyMonths = (on: number, intervalMonths: number): Schedule => ({
+    kind: 'everyMonths',
+    anchor: on,
+    monthDays: [],
+    intervalMonths,
+  });
+  assert.deepEqual(
+    stamps(
+      occurrences(
+        everyMonths(utc(2026, 11, 30), 3),
+        NEVER,
+        utc(2026, 11, 1),
+        utc(2027, 12, 31),
+      ),
+    ),
+    ['20261130', '20270228', '20270530', '20270830', '20271130'],
+    'every 3 months keeps its day and clamps a short month',
+  );
+  assert.deepEqual(
+    stamps(
+      occurrences(
+        everyMonths(utc(2028, 2, 29), 12),
+        NEVER,
+        utc(2028, 1, 1),
+        utc(2030, 12, 31),
+      ),
+    ),
+    ['20280229', '20290228', '20300228'],
+    'yearly from a leap day lands on February 28 after it',
+  );
+  assert.deepEqual(
+    stamps(
+      occurrences(
+        everyMonths(utc(2026, 6, 1), 24),
+        { onDate: null, afterCount: 2 },
+        utc(2026, 1, 1),
+        utc(2032, 1, 1),
+      ),
+    ),
+    ['20260601', '20280601'],
+    'every 2 years stops after its count',
+  );
+  assert.deepEqual(
+    stamps(
+      occurrences(
+        { kind: 'everyMonths', anchor: utc(2026, 1, 15), monthDays: [] },
+        NEVER,
+        utc(2026, 1, 1),
+        utc(2027, 2, 1),
+      ),
+    ),
+    ['20260115', '20270115'],
+    'a schedule every few months with no gap written reads as yearly',
+  );
+  assert.equal(
+    monthlyTotal(
+      [
+        {
+          amount: { lowCents: 60_000, highCents: 60_000 },
+          schedule: everyMonths(utc(2026, 12, 1), 6),
+          startsOn: utc(2026, 1, 1),
+          ending: NEVER,
+        },
+      ],
+      utc(2026, 11, 14),
+    ).total.highCents,
+    10_000,
+    'a bill every 6 months counts a sixth of itself in a usual month',
+  );
+
+  const pays = Array.from({ length: 27 }, (_, index) => ({
+    dayKey: `pay_${index}`,
+    on: utc(2026, 11, 6) + index * 14 * DAY_MS,
+    amount: { lowCents: 200_000, highCents: 200_000 },
+    sourceId: null,
+  }));
+  const horizon = utc(2027, 11, 6);
+  const bill = (schedule: Schedule, fundedBy: DraftBillInput['fundedBy']) => ({
+    itemId: 'insurance',
+    createdAt: 1,
+    priority: 'must' as const,
+    orderIndex: 1,
+    amount: { lowCents: 120_000, highCents: 120_000 },
+    ending: NEVER,
+    fundedBy,
+    schedule,
+  });
+  const quarterly = planBillPayments(
+    bill(everyMonths(utc(2027, 2, 1), 3), { kind: 'suggested' }),
+    pays,
+    horizon,
+  );
+  assert.equal(
+    quarterly[0].parts.length,
+    7,
+    'a quarterly bill is saved for over every pay before its first due date',
+  );
+  assert.equal(
+    quarterly[1].parts.length,
+    6,
+    'the next payment is saved for over the pays after the one before it',
+  );
+  const beyond = planBillPayments(
+    bill(everyMonths(utc(2028, 11, 6), 24), { kind: 'suggested' }),
+    pays,
+    horizon,
+  );
+  const beyondCents = beyond[0].parts.reduce(
+    (sum, part) => sum + part.cents,
+    0,
+  );
+  assert.equal(
+    toDayStamp(beyond[0].dueOn),
+    '20281106',
+    'a bill due after the horizon is still listed when it repeats every few months',
+  );
+  assert.equal(
+    beyond[0].parts.length,
+    27,
+    'every pay to the horizon saves for it',
+  );
+  assert.ok(
+    Math.abs(beyondCents - 60_000) <= 1_000,
+    `the pays to the horizon carry about their share of the time (${beyondCents})`,
+  );
+  assert.ok(
+    beyond[0].parts.every(
+      (part) => Math.abs(part.cents - beyond[0].parts[0].cents) <= 1,
+    ),
+    'the share is spread evenly',
+  );
+  const farFirst = planBillPayments(
+    bill(everyMonths(utc(2029, 5, 6), 3), { kind: 'suggested' }),
+    pays,
+    horizon,
+  );
+  assert.equal(
+    farFirst.length > 0 && toDayStamp(farFirst[0].dueOn),
+    '20290506',
+    'a quarterly bill first due 18 months away is still saved for',
+  );
+  assert.equal(
+    planBillPayments(
+      bill(everyMonths(utc(2028, 11, 6), 24), { kind: 'lastBefore' }),
+      pays,
+      horizon,
+    ).length,
+    0,
+    'a bill paid from the last pay before it waits until that pay is in the plan',
+  );
+}
+
 console.log('runway engine: ok');

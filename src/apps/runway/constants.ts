@@ -184,6 +184,7 @@ export const SCHEDULE_KINDS = [
   'everyOtherWeek',
   'twiceMonthly',
   'monthly',
+  'everyMonths',
   'once',
   'irregular',
 ] as const;
@@ -207,6 +208,7 @@ export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
     everyOtherWeek: 'Every other week',
     twiceMonthly: 'Twice a month',
     monthly: 'Monthly',
+    everyMonths: 'Every few months',
     once: 'Once',
     irregular: 'Irregular',
   };
@@ -311,12 +313,20 @@ export const ENVELOPE_ORDER_STEP = 1;
 export const EXPECTED_KINDS = ['income', 'expense'] as const;
 
 /** The ways a bill can repeat that the bill form offers. */
-export const BILL_FREQUENCIES = [
+/** The repeats a budget document's bill can be read as. */
+export const BILL_REPEAT_KINDS = [
   'once',
   'weekly',
   'everyOtherWeek',
   'monthly',
 ] as const satisfies readonly (typeof SCHEDULE_KINDS)[number][];
+
+/** The bill form's repeat choices: Yearly and Custom are both a schedule every few months. */
+export const BILL_FREQUENCIES = [
+  ...BILL_REPEAT_KINDS,
+  'yearly',
+  'custom',
+] as const;
 
 export const BILL_FREQUENCY_LABELS: Record<
   (typeof BILL_FREQUENCIES)[number],
@@ -326,7 +336,22 @@ export const BILL_FREQUENCY_LABELS: Record<
   weekly: 'Weekly',
   everyOtherWeek: 'Every other week',
   monthly: 'Monthly',
+  yearly: 'Yearly',
+  custom: 'Custom',
 };
+
+export const BILL_EVERY_UNITS = ['months', 'years'] as const;
+
+export const BILL_EVERY_UNIT_LABELS: Record<
+  (typeof BILL_EVERY_UNITS)[number],
+  string
+> = {
+  months: 'Months',
+  years: 'Years',
+};
+
+/** The longest gap a bill's repeat can have, in months. */
+export const MAX_EVERY_MONTHS = 120;
 
 export const BILL_FUNDINGS = ['suggested', 'chosen'] as const;
 
@@ -745,6 +770,10 @@ export const BILL_WORDS = {
   paidAhead: 'Paid ahead',
   waiting: 'Waiting for the rest',
   readyToPay: 'Set aside in full',
+  savingUp: 'Saving up',
+  savingUpFor: 'Saving up for',
+  nothingSaved: 'Nothing saved yet',
+  saved: (cents: string, total: string) => `${cents} of ${total} saved`,
   needsDueDate: 'Needs a due date',
   allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
@@ -863,6 +892,8 @@ export const PAID_FROM_WORDS = {
 /** A bill's share of one paycheck: changing what this pay puts toward it, and keeping that for every pay. */
 export const PAY_SHARE_WORDS = {
   action: 'Change what this pay puts in',
+  savingToward: (cents: string, total: string, due: string) =>
+    `Saving up · ${cents} of ${total} · due ${due}`,
   title: (name: string) => `How much should this pay put toward ${name}?`,
   amount: 'Amount',
   changes: 'What changes',
@@ -1839,6 +1870,18 @@ export const FORM_FLOW_WORDS = {
   pastDay: 'Pick today or a day to come.',
   dayPassed: 'That day has passed.',
   pickRepeat: 'Pick how often it repeats.',
+  pickEvery: (unit: 'months' | 'years') =>
+    unit === 'years'
+      ? 'Pick 1 to 10 years apart.'
+      : 'Pick 2 to 120 months apart.',
+  savedUpSummary: 'saved up each pay',
+  every: 'Every',
+  everyCount: 'How many',
+  everyUnit: 'Months or years',
+  savingUpNote: (amount: string | null, dueOn: string | null) =>
+    amount && dueOn
+      ? `Runway sets aside a little of each pay toward the ${amount}, so it's ready by ${dueOn}.`
+      : "Runway sets aside a little of each pay toward it, so it's ready when it's due.",
   badAmount: 'Enter an amount above $0, like 45.00.',
   overLimit: 'That is more than an amount can be here.',
   badRange: 'Make the top of the range higher than the low end.',

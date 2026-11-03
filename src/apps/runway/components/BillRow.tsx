@@ -17,7 +17,11 @@ import {
 import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
-import { describeBillRepeat, isUndatedBill } from '@apps/runway/utils/billText';
+import {
+  describeBillRepeat,
+  isSavingUpBill,
+  isUndatedBill,
+} from '@apps/runway/utils/billText';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
@@ -53,23 +57,30 @@ const getDueLine = (
   payment: BillPayment | null,
   isUndated: boolean,
   today: number,
+  isSavingUp: boolean,
 ) => {
   if (isUndated) return BILL_WORDS.needsDueDate;
   if (!payment) return 'No payment left';
   const date = formatRelativeDayUTC(payment.dueOn, today);
-  return payment.paid ? `Paid · due ${date}` : `Due ${date}`;
+  if (payment.paid) return `Paid · due ${date}`;
+  return isSavingUp ? `${BILL_WORDS.savingUp} · due ${date}` : `Due ${date}`;
 };
 
-/** Where the next payment stands, short: "$1,075 of $1,250 set aside". */
-const getProgress = (payment: BillPayment | null) => {
+/** Where the next payment stands, short: "$1,075 of $1,250 set aside", or "saved" for a bill saved up for. */
+const getProgress = (payment: BillPayment | null, isSavingUp: boolean) => {
   if (!payment) return null;
   const { paid, fundedCents, totalCents } = payment;
   if (paid) {
     return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateShortUTC(paid.paidOn)}`;
   }
-  if (fundedCents <= 0) return 'Nothing set aside yet';
+  if (fundedCents <= 0)
+    return isSavingUp ? BILL_WORDS.nothingSaved : 'Nothing set aside yet';
   if (fundedCents >= totalCents) return 'Set aside in full';
-  return `${formatCentsShort(fundedCents)} of ${formatCentsShort(totalCents)} set aside`;
+  const cents = formatCentsShort(fundedCents);
+  const total = formatCentsShort(totalCents);
+  return isSavingUp
+    ? BILL_WORDS.saved(cents, total)
+    : `${cents} of ${total} set aside`;
 };
 
 /** A bill in the plan: its name, when it is next due and its amount; it opens the bill's sheet. */
@@ -88,10 +99,11 @@ function BillRow({
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const isUndated = isUndatedBill(bill);
+  const isSavingUp = isSavingUpBill(bill.timing.schedule, bill.fundedBy);
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
   const dueLine = isOutsideTotal
-    ? `${getDueLine(payment, isUndated, today)} · ${GROUP_WORDS.oneTimeNote}`
-    : getDueLine(payment, isUndated, today);
+    ? `${getDueLine(payment, isUndated, today, isSavingUp)} · ${GROUP_WORDS.oneTimeNote}`
+    : getDueLine(payment, isUndated, today, isSavingUp);
 
   return (
     <ItemRow
@@ -126,8 +138,8 @@ export function BillSheet({
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
   const isUndated = schedule.anchor === null;
-  const repeat =
-    schedule.kind === 'once' ? null : describeBillRepeat(schedule.kind);
+  const isSavingUp = isSavingUpBill(schedule, bill.fundedBy);
+  const repeat = schedule.kind === 'once' ? null : describeBillRepeat(schedule);
   const getDueFact = () => {
     if (isUndated) return null;
     if (payment) return `due ${formatRelativeDayUTC(payment.dueOn, today)}`;
@@ -137,7 +149,7 @@ export function BillSheet({
     PRIORITY_LABELS[bill.priority],
     repeat,
     getDueFact(),
-    getProgress(payment),
+    getProgress(payment, isSavingUp),
   ]
     .filter(Boolean)
     .join(' · ');
@@ -153,7 +165,13 @@ export function BillSheet({
       itemId={billId}
       kind='bill'
       today={today}
-      figureLabel={payment ? 'Next payment' : 'Each payment'}
+      figureLabel={
+        payment && !payment.paid && isSavingUp
+          ? BILL_WORDS.savingUpFor
+          : payment
+            ? 'Next payment'
+            : 'Each payment'
+      }
       figure={amount}
       fact={fact}
       help={rangeText}

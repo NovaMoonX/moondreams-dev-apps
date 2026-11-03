@@ -1,7 +1,7 @@
 import { formatDateUTC } from '@/utils/formatUtils';
 import { createOptionMatcher, toDisplayCase } from '@/utils/optionMatchUtils';
 import {
-  BILL_FREQUENCIES,
+  BILL_REPEAT_KINDS,
   BUDGET_LIMITS,
   BUDGET_WORDS,
   CALENDAR_PERIODS,
@@ -12,7 +12,7 @@ import {
 import { addUtcMonths } from '@apps/runway/engine/dates';
 
 export type BudgetIncomeKind = (typeof INCOME_FREQUENCIES)[number];
-export type BudgetBillRepeat = (typeof BILL_FREQUENCIES)[number];
+export type BudgetBillRepeat = (typeof BILL_REPEAT_KINDS)[number];
 export type BudgetEnvelopePeriod = (typeof CALENDAR_PERIODS)[number] | 'perPay';
 
 /** What one document said about an item, kept when another document said something different. */
@@ -384,11 +384,11 @@ const toRepeat = (raw: Raw) => {
     getOtherCadence(raw) !== null ||
     (written !== '' &&
       !/month/i.test(written) &&
-      toOneOf(raw.repeats, BILL_FREQUENCIES) === null);
+      toOneOf(raw.repeats, BILL_REPEAT_KINDS) === null);
   return isOdd
     ? { repeats: null, dayOfMonth: null }
     : {
-        repeats: toOneOf(raw.repeats, BILL_FREQUENCIES),
+        repeats: toOneOf(raw.repeats, BILL_REPEAT_KINDS),
         dayOfMonth: toDayOfMonth(raw.dayOfMonth),
       };
 };

@@ -166,7 +166,7 @@ This applies to pay lines, bills, envelope and goal funding, and deductions. An 
 
 Money going out comes in three shapes, by how well you know the date:
 
-- **On a date.** One time (a deposit, a flight), repeating (rent, a subscription: weekly, every other week or monthly; every N weeks and yearly come later), or repeating until it ends (a loan with six payments left, a bill that runs six months). The amount is fixed, or a range you narrow when the real amount is known (an electric bill).
+- **On a date.** One time (a deposit, a flight), repeating (rent, a subscription: weekly, every other week, monthly, yearly or a custom number of months or years, such as car insurance every 6 months or a passport every 10 years; a bill that comes round less often than monthly is saved up for a little from each pay before it is due, and says so), or repeating until it ends (a loan with six payments left, a bill that runs six months). The amount is fixed, or a range you narrow when the real amount is known (an electric bill).
 - **Within a window.** You know roughly when: car registration in March, a dentist visit this fall. Runway spreads the funding across the income days before the window closes, and you can reshape it. Setting the date or marking it paid completes it.
 - **No date.** Car repairs, vet visits, gifts. Give it an envelope. The envelope keeps its balance until the money is needed.
 

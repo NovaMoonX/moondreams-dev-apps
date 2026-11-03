@@ -139,6 +139,12 @@ function DraftLine({
       return PAY_SHARE_WORDS.restSetAside(formatCentsShort(line.cents), due);
     if (setAsideCents > 0 && line.cents + setAsideCents >= totalCents)
       return PAY_SHARE_WORDS.completesIt(formatCentsShort(line.cents), due);
+    if (line.bill.isSavingUp)
+      return PAY_SHARE_WORDS.savingToward(
+        formatCentsShort(line.cents),
+        formatCentsShort(totalCents),
+        due,
+      );
     return `${formatCentsShort(line.cents)} of ${formatCentsShort(totalCents)} · due ${due}`;
   };
   const billShareShort = getBillShareShort();

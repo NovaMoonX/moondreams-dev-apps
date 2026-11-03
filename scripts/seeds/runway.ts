@@ -1697,6 +1697,52 @@ async function writeSeedBills(
         groupId: null,
       },
     },
+    {
+      id: 'seed-bill-car-insurance',
+      payload: {
+        name: 'Car insurance',
+        emoji: '🚗',
+        priority: 'must',
+        orderIndex: 5,
+        amount: exact(72_000),
+        timing: {
+          kind: 'date',
+          schedule: {
+            kind: 'everyMonths',
+            anchor: today + 75 * DAY_MS,
+            monthDays: [],
+            intervalMonths: 6,
+          },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' },
+        stanceOverride: null,
+        groupId: null,
+      },
+    },
+    {
+      id: 'seed-bill-passport',
+      payload: {
+        name: 'Passport renewal',
+        emoji: null,
+        priority: 'should',
+        orderIndex: 3,
+        amount: exact(16_500),
+        timing: {
+          kind: 'date',
+          schedule: {
+            kind: 'everyMonths',
+            anchor: today + 500 * DAY_MS,
+            monthDays: [],
+            intervalMonths: 24,
+          },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' },
+        stanceOverride: null,
+        groupId: null,
+      },
+    },
     monthly(
       'seed-bill-water',
       'Water',

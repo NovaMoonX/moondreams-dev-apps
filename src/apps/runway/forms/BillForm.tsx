@@ -26,7 +26,10 @@ import { useAppSelector, type RootState } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import {
+  BILL_EVERY_UNIT_LABELS,
+  BILL_EVERY_UNITS,
   BILL_FREQUENCIES,
   BILL_FREQUENCY_LABELS,
   BILL_FUNDING_LABELS,
@@ -43,6 +46,7 @@ import {
   MAX_CHOSEN_DAYS,
   MAX_EMOJI_LENGTH,
   MAX_ENDING_COUNT,
+  MAX_EVERY_MONTHS,
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
@@ -117,7 +121,10 @@ import type {
   BillSealed,
   Ending,
   Priority,
+  Schedule,
 } from '@apps/runway/types';
+import { getIntervalMonths } from '@apps/runway/engine/schedule';
+import { describeEveryMonths } from '@apps/runway/utils/billText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import {
   NEW_GROUP_ID,
@@ -135,6 +142,7 @@ type Frequency = (typeof BILL_FREQUENCIES)[number];
 type Funding = (typeof BILL_FUNDINGS)[number];
 type PaidFrom = (typeof BILL_PAID_FROMS)[number];
 type EndKind = (typeof INCOME_ENDINGS)[number];
+type EveryUnit = (typeof BILL_EVERY_UNITS)[number];
 
 interface BillFormData {
   name: string;
@@ -145,6 +153,9 @@ interface BillFormData {
   isLater: boolean;
   /** Null until a due date is picked on a new bill. */
   frequency: Frequency | null;
+  /** A custom repeat: how many months or years apart. */
+  everyCount: string;
+  everyUnit: EveryUnit;
   endKind: EndKind;
   endDate: string;
   endCount: string;
@@ -179,6 +190,8 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
         priority: isOneOf(PRIORITIES),
         startDate: isText,
         frequency: isNullableOneOf(BILL_FREQUENCIES),
+        everyCount: isText,
+        everyUnit: isOneOf(BILL_EVERY_UNITS),
         endKind: isOneOf(INCOME_ENDINGS),
         endDate: isText,
         endCount: isText,
@@ -252,6 +265,88 @@ const frequencyOptions = BILL_FREQUENCIES.map((value) => ({
   value,
   label: BILL_FREQUENCY_LABELS[value],
 }));
+const everyUnitOptions = BILL_EVERY_UNITS.map((value) => ({
+  value,
+  label: BILL_EVERY_UNIT_LABELS[value],
+}));
+
+/** The months between a bill's dates when it repeats yearly or on a custom period, else null; a custom period that is not a whole count in range is null too. */
+const getEveryMonths = (data: BillFormData): number | null => {
+  if (data.frequency === 'yearly') return 12;
+  if (data.frequency !== 'custom') return null;
+  const count = Number(data.everyCount);
+  const months = count * (data.everyUnit === 'years' ? 12 : 1);
+  return Number.isInteger(count) && months >= 2 && months <= MAX_EVERY_MONTHS
+    ? months
+    : null;
+};
+
+const isRepeatAnswered = (data: BillFormData) =>
+  data.frequency !== null &&
+  (data.frequency !== 'custom' || getEveryMonths(data) !== null);
+
+/** The schedule a bill's answers make from its due date. */
+const toSchedule = (
+  data: BillFormData,
+  frequency: Frequency,
+  anchor: number | null,
+): Schedule => {
+  if (frequency === 'yearly' || frequency === 'custom') {
+    return {
+      kind: 'everyMonths',
+      anchor,
+      monthDays: [],
+      intervalMonths: getEveryMonths(data),
+    };
+  }
+  return {
+    kind: frequency,
+    anchor,
+    monthDays:
+      frequency === 'monthly' && anchor !== null
+        ? [new Date(anchor).getUTCDate()]
+        : [],
+  };
+};
+
+/** A saved schedule as the form's repeat answers. */
+const toRepeatAnswers = (
+  schedule: Schedule,
+): Pick<BillFormData, 'frequency' | 'everyCount' | 'everyUnit'> | null => {
+  const interval = getIntervalMonths(schedule);
+  if (interval === 12) {
+    return { frequency: 'yearly', everyCount: '', everyUnit: 'months' };
+  }
+  if (interval !== null) {
+    const isYears = interval % 12 === 0;
+    return {
+      frequency: 'custom',
+      everyCount: String(isYears ? interval / 12 : interval),
+      everyUnit: isYears ? 'years' : 'months',
+    };
+  }
+  const frequency = BILL_FREQUENCIES.find((kind) => kind === schedule.kind);
+  return frequency ? { frequency, everyCount: '', everyUnit: 'months' } : null;
+};
+
+const getSavingAmount = (data: BillFormData) => {
+  const amount = parseAmountDraft(data.amount);
+  return amount === null || amount.highCents <= 0
+    ? null
+    : formatCents(amount.highCents);
+};
+
+const describeRepeatAnswer = (data: BillFormData) => {
+  if (data.frequency === null) return '';
+  const interval = getEveryMonths(data);
+  if (data.frequency === 'custom' && interval === null) return '';
+  if (interval === null) return BILL_FREQUENCY_LABELS[data.frequency];
+  const label = describeEveryMonths(interval);
+  return data.paidFrom === 'lastBefore'
+    ? label
+    : `${label}, ${FORM_FLOW_WORDS.savedUpSummary}`;
+};
+
 const endingOptions = INCOME_ENDINGS.map((value) => ({
   value,
   label: INCOME_ENDING_LABELS[value],
@@ -360,6 +455,7 @@ const getBlocker = (
   const start = fromDateInputValue(data.startDate);
   if (start === undefined && !data.isLater) return 'Pick when it is due.';
   if (data.frequency === null) return 'Pick how often it repeats.';
+  if (!isRepeatAnswered(data)) return FORM_FLOW_WORDS.pickEvery(data.everyUnit);
   if (!isEditing && start !== undefined && start < today)
     return 'Pick today or a day to come.';
   if (buildEnding(data) === null) return 'Finish when it ends.';
@@ -373,7 +469,7 @@ const getEditingData = (
   isDraft: boolean,
 ): BillFormData => {
   const { schedule } = payload.timing;
-  const frequency = BILL_FREQUENCIES.find((kind) => kind === schedule.kind);
+  const repeat = toRepeatAnswers(schedule);
   return {
     name: payload.name,
     amount: toAmountDraft(payload.amount, payload.stanceOverride),
@@ -381,7 +477,9 @@ const getEditingData = (
     startDate:
       schedule.anchor === null ? '' : toDateInputValue(schedule.anchor),
     isLater: schedule.anchor === null,
-    frequency: frequency ?? (isDraft ? null : 'once'),
+    frequency: repeat?.frequency ?? (isDraft ? null : 'once'),
+    everyCount: repeat?.everyCount ?? '',
+    everyUnit: repeat?.everyUnit ?? 'months',
     endKind:
       payload.ending.onDate !== null
         ? 'date'
@@ -467,6 +565,8 @@ function BillFormBody({
           startDate: '',
           isLater: false,
           frequency: null,
+          everyCount: '',
+          everyUnit: 'months',
           endKind: 'never',
           endDate: '',
           endCount: '',
@@ -557,14 +657,7 @@ function BillFormBody({
         formData.frequency !== null &&
         hasPaysToChoose(
           comingDays,
-          {
-            kind: formData.frequency,
-            anchor: dueDate,
-            monthDays:
-              formData.frequency === 'monthly'
-                ? [new Date(dueDate).getUTCDate()]
-                : [],
-          },
+          toSchedule(formData, formData.frequency, dueDate),
           today,
           getOneTimePayIds(plan),
         )));
@@ -583,6 +676,7 @@ function BillFormBody({
     formData.funding === startData.funding &&
     formData.startDate === startData.startDate &&
     formData.frequency === startData.frequency &&
+    getEveryMonths(formData) === getEveryMonths(startData) &&
     formData.isLater === startData.isLater &&
     JSON.stringify(formData.dayKeys) === JSON.stringify(startData.dayKeys);
   const blocker = getBlocker(
@@ -768,12 +862,12 @@ function BillFormBody({
       id: 'repeats',
       title: FORM_FLOW_WORDS.repeatsTitle,
       summaryLabel: FORM_FLOW_WORDS.repeats,
-      summaryValue:
-        formData.frequency === null
-          ? ''
-          : BILL_FREQUENCY_LABELS[formData.frequency],
-      isAnswered: formData.frequency !== null,
-      blocker: FORM_FLOW_WORDS.pickRepeat,
+      summaryValue: describeRepeatAnswer(formData),
+      isAnswered: isRepeatAnswered(formData),
+      blocker:
+        formData.frequency === 'custom'
+          ? FORM_FLOW_WORDS.pickEvery(formData.everyUnit)
+          : FORM_FLOW_WORDS.pickRepeat,
       render: ({ moveOn }) => (
         <div className='space-y-2'>
           <PillGroup
@@ -782,9 +876,52 @@ function BillFormBody({
             value={formData.frequency}
             onChange={(frequency) => {
               set({ frequency });
-              moveOn();
+              if (frequency !== 'custom') moveOn();
             }}
           />
+          {formData.frequency === 'custom' && (
+            <div className='flex items-center gap-2'>
+              <span className='text-sm'>{FORM_FLOW_WORDS.every}</span>
+              <div className='w-20 shrink-0'>
+                <Input
+                  type='number'
+                  inputMode='numeric'
+                  min={formData.everyUnit === 'years' ? 1 : 2}
+                  max={
+                    formData.everyUnit === 'years'
+                      ? MAX_EVERY_MONTHS / 12
+                      : MAX_EVERY_MONTHS
+                  }
+                  variant='outline'
+                  aria-label={FORM_FLOW_WORDS.everyCount}
+                  placeholder={formData.everyUnit === 'years' ? '2' : '3'}
+                  autoFocus
+                  value={formData.everyCount}
+                  onChange={(event) => set({ everyCount: event.target.value })}
+                />
+              </div>
+              <div className='shrink-0'>
+                <PillGroup
+                  label={FORM_FLOW_WORDS.everyUnit}
+                  options={everyUnitOptions}
+                  value={formData.everyUnit}
+                  isThin
+                  onChange={(everyUnit) => set({ everyUnit })}
+                />
+              </div>
+            </div>
+          )}
+          {getEveryMonths(formData) !== null &&
+            formData.paidFrom !== 'lastBefore' && (
+              <p className='text-muted-foreground text-sm text-pretty'>
+                <MaskedText>
+                  {FORM_FLOW_WORDS.savingUpNote(
+                    getSavingAmount(formData),
+                    dueDate === undefined ? null : formatDateShortUTC(dueDate),
+                  )}
+                </MaskedText>
+              </p>
+            )}
           {draft?.repeatNote && (
             <p className='text-muted-foreground text-sm text-pretty'>
               <MaskedText>{draft.repeatNote}</MaskedText>
@@ -1100,7 +1237,8 @@ function BillFormBody({
       amount === null ||
       anchor === undefined ||
       !ending ||
-      data.frequency === null
+      data.frequency === null ||
+      !isRepeatAnswered(data)
     )
       return null;
 
@@ -1119,14 +1257,7 @@ function BillFormBody({
       amount,
       timing: {
         kind: 'date',
-        schedule: {
-          kind: data.frequency,
-          anchor,
-          monthDays:
-            data.frequency === 'monthly' && anchor !== null
-              ? [new Date(anchor).getUTCDate()]
-              : [],
-        },
+        schedule: toSchedule(data, data.frequency, anchor),
       },
       ending,
       fundedBy,
