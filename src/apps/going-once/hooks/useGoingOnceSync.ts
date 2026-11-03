@@ -14,6 +14,7 @@ import {
   setOpenSale,
   setLeavingSaleId,
   setOpenSaleError,
+  setPushOffSaleIds,
   setRemovedFrom,
   setSaleInvites,
   setSales,
@@ -33,6 +34,7 @@ import {
   startOpenSaleItemsListener,
   startOpenSaleListener,
 } from '@apps/going-once/store/listeners/openSaleListener';
+import { startPushOffListener } from '@apps/going-once/store/listeners/peopleListener';
 import { startSalesListener } from '@apps/going-once/store/listeners/salesListener';
 
 /** Keeps the name of the sale on screen when it stops being the person's, before its data is cleared. */
@@ -89,6 +91,17 @@ export function useGoingOnceSync(
       },
       () => dispatch(setSalesError()),
     );
+  }, [uid, dispatch]);
+
+  useEffect(() => {
+    if (!uid) return;
+    const stop = startPushOffListener(uid, (saleIds) =>
+      dispatch(setPushOffSaleIds(saleIds)),
+    );
+    return () => {
+      stop();
+      dispatch(setPushOffSaleIds(null));
+    };
   }, [uid, dispatch]);
 
   useEffect(() => {

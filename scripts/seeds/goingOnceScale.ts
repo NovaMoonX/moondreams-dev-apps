@@ -121,6 +121,7 @@ export async function seedGoingOnceScale(
     pickupArea: 'Ballard, Seattle',
     buyerNote: 'Cash or Venmo. Bring a friend for the big pieces.',
     currency: 'USD',
+    timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
     createdBy: maya.uid,
     members: [maya.uid, theo.uid],
@@ -130,6 +131,14 @@ export async function seedGoingOnceScale(
     createdAt: context.now - 9 * DAY_MS,
     lastEditedAt: null,
   });
+
+  // Theo has turned the interest push off for this sale, so the switch shows off for him and Maya's stays on.
+  await context.firestore
+    .collection('apps')
+    .doc('going-once')
+    .collection('people')
+    .doc(theo.uid)
+    .set({ inquiryPushOffSaleIds: [SALE_ID] });
 
   // Eight waiting emails, one of them very long, so People still reads at the cap of ten with Theo.
   const waitingEmails = [
@@ -235,7 +244,7 @@ export async function seedGoingOnceScale(
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
-      1 +
+      2 +
       waitingEmails.length +
       THING_COUNT +
       NEW_INQUIRY_COUNT +

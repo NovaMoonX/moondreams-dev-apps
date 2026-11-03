@@ -397,6 +397,17 @@ service cloud.firestore {
           && !existsAfter(invitePath);
       }
 
+      // A sale made before the time zone was kept gets the seller's once, and it is never changed after that.
+      function isTimeZoneBackfill() {
+        return request.auth != null
+          && request.auth.uid == resource.data.ownerUid
+          && resource.data.get('timeZone', null) == null
+          && changedKeys().hasOnly(['timeZone'])
+          && request.resource.data.timeZone is string
+          && request.resource.data.timeZone.size() > 0
+          && request.resource.data.timeZone.size() <= 64;
+      }
+
       allow read: if request.auth != null && request.auth.uid in resource.data.members;
       allow create: if request.auth != null
         && isGateOpen('going-once', 'create-sales', 'everyone')
@@ -416,6 +427,7 @@ service cloud.firestore {
           && (request.resource.data.buyerNote == null
             || (request.resource.data.buyerNote is string && request.resource.data.buyerNote.size() <= 300))
           && request.resource.data.lastEditedAt is int)
+        || isTimeZoneBackfill()
         || isMemberRemoval()
         || (request.auth != null && isSaleEmailInviteJoinValid());
       allow delete: if false;
@@ -457,6 +469,18 @@ service cloud.firestore {
           && request.time.toMillis() < resource.data.createdAt + 600000
           && resource.data.get('sale', null) == null
           && resource.data.get('pending', null) == null);
+    }
+
+    // A person's own settings (which sales' interest push they turned off) are read and written by them alone, and
+    // hold only that list. The push function reads them with the admin SDK. `pushBundles` (the push window's state)
+    // has no rule, so no client reads or writes it.
+    match /apps/going-once/people/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['inquiryPushOffSaleIds'])
+        && request.resource.data.inquiryPushOffSaleIds is list
+        && request.resource.data.inquiryPushOffSaleIds.size() <= 200;
     }
 
     // An inquiry is written only by the server, so no client creates one. The sale's members read it, delete it,

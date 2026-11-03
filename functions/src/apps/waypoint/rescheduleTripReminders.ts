@@ -2,7 +2,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore, type DocumentData } from 'firebase-admin/firestore';
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 
-import { zonedDateTimeToEpoch } from './zonedTime.js';
+import { zonedDateTimeToEpoch } from '../../notifications/zonedTime.js';
 
 if (getApps().length === 0) {
   initializeApp();

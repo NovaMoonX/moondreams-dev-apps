@@ -100,3 +100,12 @@ export const selectInquiriesStatus = (
   if (statuses.includes('error')) return 'error';
   return statuses.every((status) => status === 'ready') ? 'ready' : 'loading';
 };
+
+/** Whether this person's interest push is off for the sale; `null` until their settings are read. */
+export const selectIsInquiryPushOff = (
+  state: RootState,
+  saleId: string,
+): boolean | null => {
+  const { pushOffSaleIds } = state.goingOnce;
+  return pushOffSaleIds === null ? null : pushOffSaleIds.includes(saleId);
+};

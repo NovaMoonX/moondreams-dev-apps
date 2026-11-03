@@ -11,6 +11,7 @@ export function toSale(id: string, data: DocumentData): Sale {
     pickupArea: sale.pickupArea ?? null,
     buyerNote: sale.buyerNote ?? null,
     currency: sale.currency ?? 'USD',
+    timeZone: sale.timeZone ?? null,
     ownerUid: sale.ownerUid ?? '',
     createdBy: sale.createdBy ?? '',
     members: sale.members ?? [],

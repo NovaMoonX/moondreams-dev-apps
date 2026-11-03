@@ -16,6 +16,8 @@ export interface Sale {
   pickupArea: string | null;
   buyerNote: string | null;
   currency: SaleCurrency;
+  /** The seller's IANA zone, which the push's quiet hours follow; `null` on a sale from before it was kept, until the seller opens it. */
+  timeZone: string | null;
   /** The seller; never changes. */
   ownerUid: string;
   createdBy: string;
@@ -226,3 +228,9 @@ export interface InterestRequest {
 }
 
 export type InboxView = 'new' | 'handled';
+
+/** A person's own settings (`apps/going-once/people/{uid}`). */
+export interface PersonSettings {
+  /** Sales whose "someone's interested" push this person turned off; a sale not listed is on. */
+  inquiryPushOffSaleIds: string[];
+}

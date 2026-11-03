@@ -11,6 +11,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import InquiryDrawer from '@apps/going-once/components/inbox/InquiryDrawer';
 import InquiryRow from '@apps/going-once/components/inbox/InquiryRow';
+import PushCapsule from '@apps/going-once/components/inbox/PushCapsule';
 import OpenThing from '@apps/going-once/components/things/OpenThing';
 import {
   HANDLED_INBOX_LIMIT,
@@ -174,6 +175,7 @@ function InboxTab({
 
   return (
     <div className='space-y-4'>
+      <PushCapsule saleId={saleId} uid={uid} />
       {openId !== null && open === undefined && status === 'ready' && (
         <p className='text-muted-foreground text-sm'>
           That message isn&apos;t here anymore.

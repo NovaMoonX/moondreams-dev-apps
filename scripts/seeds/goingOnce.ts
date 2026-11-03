@@ -518,6 +518,7 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     pickupArea: 'Capitol Hill, Seattle',
     buyerNote: 'Evenings and weekends. Cash or Venmo.',
     currency: 'USD',
+    timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
     createdBy: maya.uid,
     members: [maya.uid, theo.uid],

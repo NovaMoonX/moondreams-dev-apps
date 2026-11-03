@@ -28,6 +28,7 @@ import {
 import { useGoingOnceSync } from '@apps/going-once/hooks/useGoingOnceSync';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
 import { useJoinFromInvites } from '@apps/going-once/hooks/useJoinFromInvites';
+import { useSaleTimeZoneBackfill } from '@apps/going-once/hooks/useSaleTimeZoneBackfill';
 import { useGoingOnceUrlState } from '@apps/going-once/hooks/useGoingOnceUrlState';
 import { setRemovedFrom, type RemovedFrom } from '@apps/going-once/store';
 import {
@@ -173,6 +174,7 @@ function GoingOnce() {
   const storedRemoval = useAppSelector(selectRemovedFrom);
   const myInvites = useAppSelector(selectMyInvites);
   const sale = useAppSelector((state) => selectSaleById(state, openSaleId));
+  useSaleTimeZoneBackfill(sale, uid);
   const newInquiryCount = useAppSelector(
     (state) => selectNewInquiries(state, openSaleId).length,
   );

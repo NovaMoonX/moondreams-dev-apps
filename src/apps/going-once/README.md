@@ -9,7 +9,7 @@ It is for three people: the seller, who adds things once and checks in; the co-s
 1. Start a sale and add your things: photos, a name, a price and its condition.
 2. Add a co-seller by email; they see everything, floor prices and notes included.
 3. Turn on the public link and share it. It shows Available and Pending things, live.
-4. Buyers tap "I'm interested" and the message lands in a shared inbox. A push to you and your co-sellers, with several close together bundled as one, is coming.
+4. Buyers tap "I'm interested" and the message lands in a shared inbox. You and your co-sellers get a push naming the thing, with several close together bundled as one and nothing overnight.
 5. Mark things Pending when a pickup is set and Sold with what was paid.
 6. Coming: copy a thing's listing text and save its photos, or save every thing's photos at once, to relist on Marketplace.
 7. See what has sold against what was asked. Coming: finish the sale when it's over; buyers' names, contact details and messages are cleared 30 days later.
@@ -33,7 +33,7 @@ Next:
 - [x] An interest form on the public page, refused in words for a thing that just sold
 - [x] A shared inbox: New and Handled, with Text, Call and Email
 - [x] Each thing's own list of who asked with Hold for someone, and older Handled messages in pages
-- [ ] A bundled push when someone is interested
+- [x] A bundled push when someone is interested
 - [x] Copy listing text, Save photos for one thing, and Save all photos as one zip for relisting
 - [ ] Finish the sale, with buyers' details cleared after 30 days
 - [ ] Later: who holds the money, and a later sale from what didn't sell

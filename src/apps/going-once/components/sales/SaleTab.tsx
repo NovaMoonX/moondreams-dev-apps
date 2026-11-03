@@ -12,6 +12,7 @@ import { useAppSelector } from '@/store';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import PeopleSection from '@apps/going-once/components/people/PeopleSection';
 import LinkCard from '@apps/going-once/components/sales/LinkCard';
+import PushSwitch from '@apps/going-once/components/sales/PushSwitch';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
 import { SALE_DETAILS, SALE_DETAIL_NOTES } from '@apps/going-once/constants';
 import { deleteSale } from '@apps/going-once/store/actions/saleActions';
@@ -153,6 +154,8 @@ function SaleTab({
       )}
 
       <LinkCard sale={sale} isSeller={isSeller} />
+
+      <PushSwitch saleId={sale.id} uid={uid} />
 
       <PeopleSection sale={sale} uid={uid} myEmail={myEmail} onLeft={onLeft} />
 
