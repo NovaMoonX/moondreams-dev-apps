@@ -25,6 +25,7 @@ import PhotoStrip from '@/components/PhotoStrip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
+import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
 import { parseHttpUrl } from '@/utils/urlUtils';
@@ -37,7 +38,11 @@ import MarkSoldView from '@apps/going-once/components/things/MarkSoldView';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import SoldConfirmation from '@apps/going-once/components/things/SoldConfirmation';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
-import { CONDITION_LABELS, NOT_LISTED_LABEL } from '@apps/going-once/constants';
+import {
+  CONDITION_LABELS,
+  FINISHED_SALE_STATUS,
+  NOT_LISTED_LABEL,
+} from '@apps/going-once/constants';
 import { useDeleteThing } from '@apps/going-once/hooks/useDeleteThing';
 import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
@@ -47,6 +52,7 @@ import {
   type StatusResult,
   type StatusTransition,
 } from '@apps/going-once/store/actions/statusActions';
+import { selectSaleById } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
 import {
   canDeleteItem,
@@ -209,10 +215,16 @@ function ThingDrawer({
       : null,
   ].filter((fact) => fact !== null);
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
-  const offer = getThingOffer(item.status, isListable(item));
+  const isSaleFinished = useAppSelector(
+    (state) =>
+      selectSaleById(state, item.saleId)?.status === FINISHED_SALE_STATUS,
+  );
+  const offer = getThingOffer(item.status, isListable(item), isSaleFinished);
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
   const isOnTheList =
     item.status === 'PENDING' || (item.status === 'AVAILABLE' && !isNotListed);
+  const isLockedByFinish =
+    isSaleFinished && item.status === 'AVAILABLE' && isOnTheList;
 
   const getIsDirty = () => {
     if (view === 'markPending')
@@ -308,7 +320,7 @@ function ThingDrawer({
     () => void takeOffTheList(),
   );
   const moreActions: MoreAction[] = [
-    isOnTheList
+    isOnTheList && !isLockedByFinish
       ? {
           key: 'markSold',
           icon: <BadgeDollarSign />,
@@ -650,7 +662,13 @@ function ThingDrawer({
             price.
           </p>
         )}
-        {isOnTheList && (
+        {isLockedByFinish && (
+          <p className='text-muted-foreground text-sm text-pretty'>
+            This sale is finished, so nothing new can be held. The seller can
+            reopen it.
+          </p>
+        )}
+        {isOnTheList && !isSaleFinished && (
           <div className='space-y-2'>
             <h3 className='text-muted-foreground text-sm font-semibold'>
               Post it somewhere else

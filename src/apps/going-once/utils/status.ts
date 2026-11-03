@@ -19,15 +19,17 @@ export type StatusView = (typeof STATUS_VIEWS)[number];
 
 export type ThingOffer = 'FINISH' | 'MARK_PENDING' | 'MARK_SOLD' | 'PUT_BACK';
 
-/** The drawer's one primary for a thing: the next step in its life, or finishing it first while buyers can't see it. */
+/** The drawer's one primary for a thing: the next step in its life, or finishing it first while buyers can't see it. A finished sale offers nothing that finds a new buyer, so a listed Available thing has none. */
 export function getThingOffer(
   status: ItemStatus,
   isListed: boolean,
+  isSaleFinished = false,
 ): ThingOffer | null {
   if (status === 'WITHDRAWN') return 'PUT_BACK';
   if (status === 'SOLD') return null;
   if (status === 'PENDING') return 'MARK_SOLD';
-  return isListed ? 'MARK_PENDING' : 'FINISH';
+  if (!isListed) return 'FINISH';
+  return isSaleFinished ? null : 'MARK_PENDING';
 }
 
 const pickupDayFormatter = new Intl.DateTimeFormat(undefined, {

@@ -3,6 +3,7 @@ import {
   buildSeedStatus,
   EMPTY_OPTIONALS,
   JPEG_SIZE,
+  OPEN_SALE_FIELDS,
   uploadSeedPhoto,
   type SeedStatus,
 } from './goingOnce.ts';
@@ -128,6 +129,7 @@ export async function seedGoingOnceScale(
     memberJoinedAt: { [theo.uid]: context.now - 8 * DAY_MS },
     publicLinkId: null,
     publicLinkChangedAt: null,
+    ...OPEN_SALE_FIELDS,
     createdAt: context.now - 9 * DAY_MS,
     lastEditedAt: null,
   });

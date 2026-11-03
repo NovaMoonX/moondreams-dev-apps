@@ -8,6 +8,8 @@ export type SaleCurrency = 'USD';
 /** The details of a sale its seller can edit. */
 export type SaleDetailField = 'name' | 'pickupArea' | 'buyerNote';
 
+export type SaleStatus = 'OPEN' | 'FINISHED';
+
 /** A sale, the container its things belong to (`apps/going-once/sales/{saleId}`). */
 export interface Sale {
   id: string;
@@ -29,6 +31,15 @@ export interface Sale {
   publicLinkId: string | null;
   /** When the address was made or last renewed. */
   publicLinkChangedAt: number | null;
+  /** A sale from before finishing existed reads as open. */
+  status: SaleStatus;
+  /** An instant; written only by `finishSale`. */
+  finishedAt: number | null;
+  finishedBy: string | null;
+  /** When the buyers' details are due to clear (`finishedAt` + 30 days); `null` while open and once cleared. */
+  contactsClearAt: number | null;
+  /** When the clearing ran. */
+  contactsClearedAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -187,6 +198,8 @@ export type SalePageResult =
     };
 
 export type SaleLinkAction = 'create' | 'renew' | 'stop';
+
+export type FinishAction = 'finish' | 'reopen';
 
 export type InquiryStatus = 'NEW' | 'HANDLED';
 

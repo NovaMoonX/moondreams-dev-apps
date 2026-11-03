@@ -5,6 +5,7 @@ import type {
   ItemStatus,
   PaymentMethod,
   SaleDetailField,
+  SaleStatus,
 } from '@apps/going-once/types';
 
 /** The feature switch for starting new sales (`FEATURE_GATES`). */
@@ -66,6 +67,14 @@ export const SALE_DETAIL_NOTES: Record<SaleDetailField, string> = {
   name: 'Buyers see this. Leave out your name and address.',
   pickupArea: 'Buyers see this',
   buyerNote: 'Buyers see this',
+};
+
+/** `check:going-once-share` fails when this drifts from the functions' `FINISHED_SALE_STATUS`. */
+export const FINISHED_SALE_STATUS = 'FINISHED' satisfies SaleStatus;
+
+export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
+  OPEN: 'Open',
+  FINISHED: 'Finished',
 };
 
 export const MAX_ITEM_PHOTOS = 12;

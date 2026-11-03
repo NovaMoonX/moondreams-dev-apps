@@ -349,8 +349,9 @@ service cloud.firestore {
     // buyers; deleting is the `deleteSale` function's. People come and go by two narrow updates that touch only
     // `members`, `memberJoinedAt` and `lastEditedAt`: the seller removes a co-seller or a co-seller leaves, and someone
     // with a verified email the seller added joins as themselves, using up their invitation in the same commit.
-    // The public link's two fields on the sale are written only by `changeSalePublicLink`: a new sale starts without
-    // them and no update names them. `publicLinks` has no rule, so no client reads or writes it.
+    // The public link's two fields on the sale are written only by `changeSalePublicLink`, and `status`, `finishedAt`,
+    // `finishedBy`, `contactsClearAt` and `contactsClearedAt` only by `finishSale` and `clearSaleContacts`: a new sale
+    // starts open and without them, and no update names them. `publicLinks` has no rule, so no client reads or writes it.
     match /apps/going-once/sales/{saleId} {
       function changedKeys() {
         return request.resource.data.diff(resource.data).affectedKeys();
@@ -415,7 +416,12 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.members == [request.auth.uid]
         && request.resource.data.get('publicLinkId', null) == null
-        && request.resource.data.get('publicLinkChangedAt', null) == null;
+        && request.resource.data.get('publicLinkChangedAt', null) == null
+        && request.resource.data.get('status', 'OPEN') == 'OPEN'
+        && request.resource.data.get('finishedAt', null) == null
+        && request.resource.data.get('finishedBy', null) == null
+        && request.resource.data.get('contactsClearAt', null) == null
+        && request.resource.data.get('contactsClearedAt', null) == null;
       allow update: if (request.auth != null
           && request.auth.uid == resource.data.ownerUid
           && changedKeys().hasOnly(['name', 'pickupArea', 'buyerNote', 'lastEditedAt'])

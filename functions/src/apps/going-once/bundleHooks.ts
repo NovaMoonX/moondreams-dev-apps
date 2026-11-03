@@ -5,9 +5,9 @@ import type {
   BundleItem,
 } from '../../notifications/bundledPush.js';
 import { APP_ORIGIN, toAppUrl } from '../../notifications/sendPush.js';
+import { FINISHED_SALE_STATUS } from './salePageView.js';
 
 const MAX_NAME_LENGTH = 40;
-const OPEN_STATUS = 'OPEN';
 
 /** Thing and sale names on a lock screen are clipped; both are already on the public page. */
 export const clipName = (text: unknown, fallback: string) => {
@@ -43,9 +43,8 @@ export function isSaleListening(
     return false;
   }
 
-  const status = typeof sale.status === 'string' ? sale.status : OPEN_STATUS;
   return (
-    status === OPEN_STATUS &&
+    sale.status !== FINISHED_SALE_STATUS &&
     Array.isArray(sale.members) &&
     sale.members.includes(uid)
   );

@@ -13,6 +13,7 @@ import {
 import type { AppDispatch } from '@/store';
 import { removeSale, upsertSale } from '@apps/going-once/store';
 import type {
+  FinishAction,
   Sale,
   SaleDetailField,
   SaleLinkAction,
@@ -54,6 +55,11 @@ export function startSale(
     memberJoinedAt: {},
     publicLinkId: null,
     publicLinkChangedAt: null,
+    status: 'OPEN',
+    finishedAt: null,
+    finishedBy: null,
+    contactsClearAt: null,
+    contactsClearedAt: null,
     createdAt: Date.now(),
     lastEditedAt: null,
   };
@@ -139,6 +145,7 @@ export async function deleteSale(saleId: string): Promise<DeleteSaleResult> {
   }
 }
 
+const FINISH_TIMEOUT_MS = 300_000;
 const LINK_FAILED =
   "We couldn't change the public page. Check your connection and try again.";
 const LINK_SERVER_SENTENCES = [
@@ -178,5 +185,47 @@ export async function changeSaleLink(
   } catch (error) {
     const code = error instanceof FirebaseError ? error.code : '';
     return { outcome: 'failed', reason: toLinkReason(code, error) };
+  }
+}
+
+const FINISH_FAILED =
+  "We couldn't change the sale. Check your connection and try again.";
+const FINISH_SERVER_SENTENCES = [
+  'Already finished.',
+  'Already open.',
+  'The link just changed. Check it and try again.',
+  "We couldn't finish that. Try again in a moment.",
+];
+
+const toFinishReason = (code: string, error: unknown) => {
+  if (code === 'functions/unauthenticated')
+    return 'Sign in again to change this sale.';
+  if (code === 'functions/not-found')
+    return "We couldn't find this sale. It may have been deleted.";
+  if (error instanceof Error && FINISH_SERVER_SENTENCES.includes(error.message))
+    return error.message;
+  return FINISH_FAILED;
+};
+
+export type FinishSaleResult =
+  { outcome: 'done' } | { outcome: 'failed'; reason: string };
+
+/** Finishes the sale or reopens it; only the seller's call is taken. The sale document follows through its listener. */
+export async function finishSale(
+  saleId: string,
+  action: FinishAction,
+): Promise<FinishSaleResult> {
+  try {
+    await httpsCallable<
+      { saleId: string; action: FinishAction },
+      { status: 'OPEN' | 'FINISHED'; contactsClearAt: number | null }
+    >(functions, 'finishSale', { timeout: FINISH_TIMEOUT_MS })({
+      saleId,
+      action,
+    });
+    return { outcome: 'done' };
+  } catch (error) {
+    const code = error instanceof FirebaseError ? error.code : '';
+    return { outcome: 'failed', reason: toFinishReason(code, error) };
   }
 }

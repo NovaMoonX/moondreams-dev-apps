@@ -18,6 +18,8 @@ export { deleteSale } from './apps/going-once/deleteSale.js';
 export { buildSalePhotoArchive } from './apps/going-once/buildSalePhotoArchive.js';
 export { getSalePage } from './apps/going-once/getSalePage.js';
 export { submitSaleInterest } from './apps/going-once/submitSaleInterest.js';
+export { finishSale } from './apps/going-once/finishSale.js';
+export { clearSaleContacts } from './apps/going-once/clearSaleContacts.js';
 export { changeSalePublicLink } from './apps/going-once/changeSalePublicLink.js';
 export { syncSalePublicPhotos } from './apps/going-once/syncSalePublicPhotos.js';
 export { notifySaleInquiry } from './apps/going-once/notifySaleInquiry.js';

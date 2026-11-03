@@ -197,7 +197,7 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 - [x] **Buyer:** the public page, with no account, with each thing's photos
 - [x] **Buyer:** the "I'm interested" form, with no account, refused in words for a thing that just sold
 - [x] **Seller:** where the sale stands: collected against asked, pending, left
-- [ ] **Seller:** Finish the sale, naming what didn't sell and what is pending; pickups still recordable; buyers' details cleared 30 days later; reopen until then
+- [x] **Seller:** Finish the sale, naming what didn't sell and what is pending; pickups still recordable; buyers' details cleared 30 days later; reopen until then
 
 ### Next Steps
 

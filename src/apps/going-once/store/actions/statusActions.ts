@@ -2,7 +2,10 @@ import { doc, getDoc, runTransaction } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
 import { formatCentsShort } from '@/utils/moneyUtils';
-import { MAX_STATUS_HISTORY } from '@apps/going-once/constants';
+import {
+  FINISHED_SALE_STATUS,
+  MAX_STATUS_HISTORY,
+} from '@apps/going-once/constants';
 import type {
   Item,
   ItemPendingRecord,
@@ -62,6 +65,8 @@ const EXPECTED: Record<StatusTransition['kind'], ItemStatus[]> = {
 
 export const OFFLINE_MESSAGE = 'Changing the status needs a connection.';
 const GENERIC_MESSAGE = "The status didn't change. Try again.";
+const FINISHED_MESSAGE =
+  'This sale is finished. Reopen it to hold things for buyers.';
 const GONE_MESSAGE = 'This thing is no longer here.';
 const INVALID_MESSAGE = "That amount or day doesn't look right.";
 const NO_SALE_MESSAGE = 'There is no sale to change.';
@@ -257,6 +262,13 @@ export async function changeStatus(
     const outcome = await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(ref);
       if (!snapshot.exists()) return { kind: 'GONE' } as const;
+      if (transition.kind === 'MARK_PENDING') {
+        const sale = await transaction.get(
+          doc(db, 'apps', 'going-once', 'sales', saleId),
+        );
+        if (sale.data()?.status === FINISHED_SALE_STATUS)
+          return { kind: 'REFUSED', message: FINISHED_MESSAGE } as const;
+      }
       const data = snapshot.data();
       const current: Stored = {
         status: data.status ?? 'AVAILABLE',
