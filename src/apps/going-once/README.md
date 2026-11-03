@@ -33,7 +33,7 @@ Next:
 - [x] A shared inbox: New and Handled, with Text, Call and Email
 - [x] A bundled push when someone is interested
 - [ ] Each thing's own list of who asked, with Hold for
-- [ ] Copy listing text, Save photos and Save all photos for relisting
+- [x] Copy listing text, Save photos for one thing, and Save all photos as one zip for relisting
 - [ ] Finish the sale, with buyers' details cleared after 30 days
 - [ ] Later: who holds the money, and a later sale from what didn't sell
 
