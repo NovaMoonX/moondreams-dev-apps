@@ -53,8 +53,9 @@ export const formatPickupWeekday = (pickupOn: number) =>
 
 /** Sold for less than the floor price; derived, never stored. */
 export const isUnderFloor = (
-  item: Pick<Item, 'floorPriceCents' | 'sale'>,
+  item: Pick<Item, 'floorPriceCents' | 'sale' | 'askingPriceCents'>,
 ): boolean =>
+  item.askingPriceCents !== 0 &&
   item.sale !== null &&
   item.floorPriceCents !== null &&
   item.sale.priceCents < item.floorPriceCents;

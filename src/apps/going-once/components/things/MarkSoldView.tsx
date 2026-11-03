@@ -53,6 +53,7 @@ function MarkSoldView({
   const priceCents = parseMoneyToCents(draft.amount);
   const { floorPriceCents } = item;
   const isUnderFloor =
+    item.askingPriceCents !== 0 &&
     priceCents !== null &&
     floorPriceCents !== null &&
     priceCents < floorPriceCents;

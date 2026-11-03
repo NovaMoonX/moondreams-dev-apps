@@ -38,6 +38,7 @@ const DEFAULT_MAX = 12;
 // A little after the undo bar's own six seconds, so Undo is never offered for a removal that has already gone through.
 const REMOVE_DELAY_MS = 6500;
 const FOCUS_AFTER_REMOVAL_MS = 350;
+const PENDING_ORDER_HOLD_MS = 3000;
 const TOUCH_QUERY = '(pointer: coarse)';
 const MOUSE_DRAG_PX = 5;
 const TOUCH_HOLD_MS = 300;
@@ -243,6 +244,7 @@ function PhotoSetPicker({
   const didDrag = useRef(false);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [pendingIds, setPendingIds] = useState<string[] | null>(null);
+  const moveToken = useRef(0);
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -278,8 +280,11 @@ function PhotoSetPicker({
   useEffect(() => commitRemoval, [commitRemoval]);
 
   const visible = photos.filter((photo) => !hiddenIds.has(photo.id));
+  const isCaughtUp =
+    pendingIds !== null &&
+    visible.map((photo) => photo.id).join() === pendingIds.join();
   const shown =
-    pendingIds === null
+    pendingIds === null || isCaughtUp
       ? visible
       : [
           ...pendingIds.flatMap((id) =>
@@ -312,15 +317,22 @@ function PhotoSetPicker({
     const next = [...without.slice(0, to), id, ...without.slice(to)];
     setNotice(null);
     setPendingIds(next);
-    void onReorder(next)
-      .catch(() =>
+    const token = (moveToken.current += 1);
+    const clearIfLatest = () => {
+      if (moveToken.current === token) setPendingIds(null);
+    };
+    // A saved order shows from the record once its listener catches up; this only lets go if it never does.
+    void onReorder(next).then(
+      () => window.setTimeout(clearIfLatest, PENDING_ORDER_HOLD_MS),
+      () => {
+        clearIfLatest();
         setNotice({
           message:
             "The order didn't save. Changing it needs a connection; try again when you're back online.",
           isError: true,
-        }),
-      )
-      .finally(() => setPendingIds(null));
+        });
+      },
+    );
   };
 
   const latest = useRef({ move, count: shown.length });
@@ -337,7 +349,8 @@ function PhotoSetPicker({
     from: number,
   ) => {
     const row = listRef.current;
-    if (!event.isPrimary || !row || shown.length < 2) return;
+    if (!event.isPrimary || event.button !== 0 || !row || shown.length < 2)
+      return;
     endPress.current?.();
     didDrag.current = false;
     const isMouse = event.pointerType === 'mouse';

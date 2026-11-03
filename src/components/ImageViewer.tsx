@@ -215,9 +215,14 @@ function ImageViewer({
           const isFar =
             Math.abs(moved) >=
             event.currentTarget.clientWidth * COMMIT_FRACTION;
-          if (isFar || isFlick) step(moved < 0 ? 1 : -1);
-          setIsDragging(false);
           setDragX(0);
+          if (!isFar && !isFlick) {
+            setIsDragging(false);
+            return;
+          }
+          // The new slide takes the old one's place at once; easing it back from the drag offset would slide it in against the finger.
+          step(moved < 0 ? 1 : -1);
+          window.requestAnimationFrame(() => setIsDragging(false));
         }}
         onPointerCancel={(event) => {
           if (drag.current?.pointerId !== event.pointerId) return;

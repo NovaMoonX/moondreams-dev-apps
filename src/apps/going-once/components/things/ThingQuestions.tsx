@@ -93,7 +93,7 @@ export function PriceQuestion({
           onChange(
             way === 'free'
               ? { isFree: true, isFloorShown: false }
-              : { isFree: false },
+              : { isFree: false, isFloorShown: answers.floor.trim() !== '' },
           )
         }
       />

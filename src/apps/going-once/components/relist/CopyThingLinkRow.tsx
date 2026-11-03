@@ -31,11 +31,7 @@ function CopyThingLinkRow({ item, linkId }: CopyThingLinkRowProps) {
       `${window.location.origin}${getThingPagePath(linkId, item.id)}`,
     );
     if (timer.current !== null) window.clearTimeout(timer.current);
-    if (!didCopy) {
-      setState('failed');
-      return;
-    }
-    setState('copied');
+    setState(didCopy ? 'copied' : 'failed');
     timer.current = window.setTimeout(() => setState('idle'), COPIED_MS);
   };
 
