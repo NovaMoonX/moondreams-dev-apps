@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, ImageDown, Plus, X } from 'lucide-react';
+import { ChevronRight, FolderDown, Plus, X } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import LazyMount from '@/components/LazyMount';
@@ -173,10 +173,10 @@ function ItemsSection({
           size='sm'
           rounded='full'
           aria-label='Save all photos'
-          className='size-7 min-w-7 p-0'
+          className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:content-['']"
           onClick={() => setIsSavingPhotos(true)}
         >
-          <ImageDown className='size-4' aria-hidden='true' />
+          <FolderDown className='size-4' aria-hidden='true' />
         </Button>
       )}
       {addButton}
