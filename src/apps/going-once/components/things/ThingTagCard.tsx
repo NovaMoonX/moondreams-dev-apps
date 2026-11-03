@@ -24,6 +24,8 @@ interface ThingTagCardProps {
   answered: string[];
   /** True once anything was written for the thing; nothing is said before that. */
   isSaved: boolean;
+  /** A thing already saved once (opened again to finish it) says Saved, not Draft saved. */
+  isDraft: boolean;
   onReopen: (id: string) => void;
 }
 
@@ -42,6 +44,7 @@ function ThingTagCard({
   deferred,
   answered,
   isSaved,
+  isDraft,
   onReopen,
 }: ThingTagCardProps) {
   const part = (
@@ -103,7 +106,7 @@ function ThingTagCard({
         {isSaved && (
           <>
             <Check className='size-3' aria-hidden='true' />
-            Draft saved
+            {isDraft ? 'Draft saved' : 'Saved'}
           </>
         )}
       </p>

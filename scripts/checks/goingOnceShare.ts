@@ -249,6 +249,11 @@ check(
     ].forEach((boughtUrl) =>
       assert.equal(shown({ boughtUrl }), null, String(boughtUrl)),
     );
+    assert.equal(
+      shown({ boughtUrl: 'https://me:secret@store.example/sofa?id=4#reviews' }),
+      'https://store.example/sofa?id=4',
+      'credentials and the fragment never leave',
+    );
     ['true', 1, null, undefined].forEach((showBoughtUrl) =>
       assert.equal(
         toPublicThing(thing({ showBoughtUrl }))?.storeUrl,

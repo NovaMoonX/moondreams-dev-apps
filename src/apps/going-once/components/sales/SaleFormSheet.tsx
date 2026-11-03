@@ -228,7 +228,7 @@ function SaleFormSheet({
               variant='outline'
               aria-label='Note for buyers'
               rows={3}
-              placeholder='Evenings and weekends. Cash or Venmo.'
+              placeholder='Evenings and weekends.'
               maxLength={MAX_BUYER_NOTE_LENGTH}
               value={buyerNote}
               onChange={(event) => setBuyerNote(event.target.value)}

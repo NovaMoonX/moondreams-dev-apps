@@ -382,16 +382,20 @@ function ThingSteps({
     formatAskingPrice(fields.askingPriceCents) ??
     (isDeferred('price') ? 'Price later' : '');
 
+  // A thing still missing a photo, name or price stays a draft, so finishing it later is a choice to list it.
   const markSaved = () => {
-    if (creation.current === null) return;
-    markItemSaved(saleId, itemId, uid).catch(() =>
-      addToast({
-        title: "That didn't save",
-        description:
-          'It stays a draft. Open it from the Things tab to save it again.',
-        type: 'error',
-      }),
-    );
+    if (getDraftNote(photoCount, fields) !== null) return;
+    if (creation.current === null && uploads.uploads.length === 0) return;
+    ensureCreated({})
+      .then(() => markItemSaved(saleId, itemId, uid))
+      .catch(() =>
+        addToast({
+          title: "That didn't save",
+          description:
+            'It stays a draft. Open it from the Things tab to save it again.',
+          type: 'error',
+        }),
+      );
   };
 
   const addAnother = () => {
@@ -415,7 +419,11 @@ function ThingSteps({
 
   const requestLeave = () => {
     saveAnswers();
-    if (creation.current === null || resume !== null) {
+    const hasWork =
+      creation.current !== null ||
+      uploads.uploads.length > 0 ||
+      saveError !== null;
+    if (!hasWork || resume !== null) {
       onLeave();
       return;
     }
@@ -432,7 +440,8 @@ function ThingSteps({
       deleteItem(saleId, item ?? { id: itemId, photos: [] }, () =>
         addToast({
           title: "That draft couldn't be discarded",
-          description: 'Delete it from the Things tab instead.',
+          description:
+            'Delete it from the Things tab, or ask the seller to if it has been a while.',
           type: 'error',
         }),
       );
@@ -517,6 +526,7 @@ function ThingSteps({
               deferred={answers.deferred}
               answered={answered.map((step) => step.id)}
               isSaved={item !== null && saveError === null}
+              isDraft={item?.isDraft ?? true}
               onReopen={reopen}
             />
           )}
@@ -631,7 +641,8 @@ function NewThingFlow({
     deleteItem(saleId, item, () =>
       addToast({
         title: `${thing.name} couldn't be taken back`,
-        description: 'Delete it from the Things tab instead.',
+        description:
+          'Delete it from the Things tab, or ask the seller to if it has been a while.',
         type: 'error',
       }),
     );

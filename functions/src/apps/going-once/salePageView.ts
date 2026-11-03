@@ -203,8 +203,15 @@ const toStoreUrl = (value: unknown) => {
   }
 
   try {
-    const { protocol } = new URL(value);
-    return protocol === 'http:' || protocol === 'https:' ? value : null;
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+
+    url.username = '';
+    url.password = '';
+    url.hash = '';
+    return url.toString();
   } catch {
     return null;
   }

@@ -195,11 +195,11 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
         {summary !== '' && (
           <p className='text-muted-foreground text-sm'>{summary}</p>
         )}
-        {sale.paymentMethods.length > 0 && (
+        {(sale.paymentMethods ?? []).length > 0 && (
           <p className='text-muted-foreground flex items-start gap-1.5 text-sm'>
             <Wallet className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
             <span className='min-w-0 text-pretty break-words'>
-              Pays with {formatPaymentMethods(sale.paymentMethods)}
+              Pay with {formatPaymentMethods(sale.paymentMethods)}
             </span>
           </p>
         )}
@@ -243,7 +243,7 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
         <BuyerThingDrawer
           thing={openThing}
           linkId={linkId}
-          paymentMethods={sale.paymentMethods}
+          paymentMethods={sale.paymentMethods ?? []}
           onClose={closeThing}
         />
       )}

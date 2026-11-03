@@ -116,7 +116,7 @@ function InterestView({
           <div className='space-y-2'>
             {sent === null && paymentMethods.length > 0 && (
               <p className='text-muted-foreground text-center text-xs text-pretty'>
-                They take {formatPaymentMethods(paymentMethods)}.
+                Pay with {formatPaymentMethods(paymentMethods)} when you pick it up.
               </p>
             )}
             {footerNote && (

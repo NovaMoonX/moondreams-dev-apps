@@ -150,6 +150,8 @@ export const goingOnceSlice = createSlice({
     retryLoading(state) {
       state.loadAttempt += 1;
       if (state.sales.status === 'error') state.sales.status = 'loading';
+      if (state.openSale.status === 'error')
+        state.openSale.status = 'loading';
       if (state.items.status === 'error') state.items.status = 'loading';
       if (state.inquiries.new.status === 'error')
         state.inquiries.new.status = 'loading';

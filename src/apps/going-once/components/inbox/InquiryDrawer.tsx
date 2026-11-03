@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -21,7 +21,7 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
-import ShowMoreButton from '@/components/ShowMoreButton';
+import ClampedText from '@/components/ClampedText';
 import {
   backToNew,
   deleteInquiry,
@@ -83,7 +83,7 @@ const getStatusLine = (
     .join(' · ');
 };
 
-/** The buyer's words as a message from them: a small caption, then a bubble squared toward it, clamped to eight lines with Show all once it overflows. */
+/** The buyer's words as a message from them: a small caption, then a bubble squared toward it. */
 function MessageBubble({
   caption,
   message,
@@ -91,41 +91,11 @@ function MessageBubble({
   caption: string;
   message: string;
 }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isClamped, setIsClamped] = useState(false);
-  const observerRef = useRef<ResizeObserver | null>(null);
-
-  const measure = useCallback((element: HTMLElement | null) => {
-    observerRef.current?.disconnect();
-    if (!element) return;
-    const observer = new ResizeObserver(() =>
-      setIsClamped(element.scrollHeight > element.clientHeight + 1),
-    );
-    observer.observe(element);
-    observerRef.current = observer;
-  }, []);
-
   return (
     <div className='max-w-[85%] space-y-1'>
       <p className='text-muted-foreground px-1 text-xs'>{caption}</p>
       <div className='bg-muted rounded-2xl rounded-tl-sm px-4 py-3'>
-        <p
-          ref={measure}
-          className={join(
-            'wrap-break-word whitespace-pre-wrap',
-            !isOpen && 'line-clamp-8',
-          )}
-        >
-          {message}
-        </p>
-        {(isClamped || isOpen) && (
-          <ShowMoreButton
-            isOpen={isOpen}
-            onClick={() => setIsOpen((open) => !open)}
-          >
-            {isOpen ? 'Show less' : 'Show all'}
-          </ShowMoreButton>
-        )}
+        <ClampedText text={message} maxLines={8} isBodySize />
       </div>
     </div>
   );

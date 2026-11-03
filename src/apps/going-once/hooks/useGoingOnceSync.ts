@@ -75,7 +75,7 @@ function noteRemovalIfSaleRefused(
   });
 }
 
-const RETRY_DELAYS_MS = [500, 1000, 2000, 4000];
+const RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
 
 /** A sale this person just started is written in the background, so the server can refuse its things for a moment; restarts the listener with a growing wait before reporting that refusal. */
 function listenWithRetry(
@@ -170,12 +170,16 @@ export function useGoingOnceSync(
       dispatch(clearOpenSale());
       dispatch(clearSaleInvites());
     };
-  }, [uid, saleId, dispatch]);
+  }, [uid, saleId, dispatch, loadAttempt]);
 
   useEffect(() => {
     if (!uid || !saleId) return;
-    const isOwnSale = () =>
-      store.getState().goingOnce.openSale.sale?.ownerUid === uid;
+    const isOwnSale = () => {
+      const { openSale, sales } = store.getState().goingOnce;
+      const sale =
+        openSale.sale ?? sales.items.find((found) => found.id === saleId);
+      return sale?.ownerUid === uid;
+    };
     const unsubscribeItems = listenWithRetry(
       (onError) =>
         startOpenSaleItemsListener(
