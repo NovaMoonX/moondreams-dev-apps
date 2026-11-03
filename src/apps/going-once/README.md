@@ -18,7 +18,7 @@ It is for three people: the seller, who adds things once and checks in; the co-s
 
 Built:
 - Your sales, and starting a sale with a name, pickup area and note
-- Things added photo-first in a short walk-through, with a floor price and private notes only you and your co-sellers see; Modify, delete (with a confirm that names what goes with it) and a "Not listed yet" door for things missing a photo, a name or a price
+- Things added photo-first in a short walk-through, with a floor price and private notes only you and your co-sellers see; Modify, delete (with a confirm that names what goes with it) and a Drafts door for things not saved yet or missing a photo, a name or a price
 - Available, Pending and Sold, with what was paid, a history per thing, and taking things off the list
 - The Sale tab: where the sale stands (collected, pending, left), the public page's switch and link, editing its name, pickup area and note, and deleting the sale
 - Co-sellers: the seller adds an email, the person opens Going Once signed in with it and the sale is waiting; the seller can remove them and they can leave

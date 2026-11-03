@@ -21,6 +21,7 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
+import ClampedText from '@/components/ClampedText';
 import {
   backToNew,
   deleteInquiry,
@@ -81,6 +82,23 @@ const getStatusLine = (
     .filter((part) => part !== null)
     .join(' · ');
 };
+
+/** The buyer's words as a message from them: their initial beside a bubble whose corner points at it. */
+function MessageBubble({ name, message }: { name: string; message: string }) {
+  return (
+    <div className='flex items-end gap-2'>
+      <span
+        aria-hidden='true'
+        className='bg-accent text-accent-foreground flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-semibold'
+      >
+        {name.trim().charAt(0).toUpperCase() || '?'}
+      </span>
+      <div className='bg-secondary text-secondary-foreground border-border max-w-[85%] min-w-0 rounded-2xl rounded-bl-sm border px-4 py-3'>
+        <ClampedText text={message} maxLines={8} isBodySize />
+      </div>
+    </div>
+  );
+}
 
 /** One inquiry in full: the message, the ways to reach the person as native links, and Mark handled; Back to New and Delete sit behind More. */
 function InquiryDrawer({
@@ -262,15 +280,11 @@ function InquiryDrawer({
               {getStatusLine(inquiry, handledBy, now)}
             </span>
           </p>
-          <div className='bg-card border-border rounded-2xl rounded-tl-md border px-4 py-3'>
-            {inquiry.message === null ? (
-              <p className='text-muted-foreground'>No message.</p>
-            ) : (
-              <p className='break-words whitespace-pre-wrap'>
-                {inquiry.message}
-              </p>
-            )}
-          </div>
+          {inquiry.message === null ? (
+            <p className='text-muted-foreground'>No message.</p>
+          ) : (
+            <MessageBubble name={name} message={inquiry.message} />
+          )}
           <div className='space-y-2'>
             <p className='text-muted-foreground text-xs font-medium'>About</p>
             {item === null ? (

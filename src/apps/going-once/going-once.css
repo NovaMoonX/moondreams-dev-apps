@@ -96,3 +96,69 @@ html.going-once-theme
 html.going-once-theme input[type='search']::-webkit-search-cancel-button {
   filter: grayscale(1);
 }
+
+/*
+ * One look for every text and money field: the same height (44px on a phone, 48px from `sm`), 16px text (17px from `sm`),
+ * radius and outline, whether it is a plain input, a dollar amount (`MoneyInput`'s own border box), a date or a note.
+ * The big asking price, the search pill and the pickers draw their own and are left out.
+ */
+html.going-once-theme {
+  --going-once-field-height: 2.75rem;
+  --going-once-field-text: 1rem;
+  --going-once-field-border: color-mix(
+    in oklab,
+    var(--color-foreground) 45%,
+    transparent
+  );
+}
+
+@media (min-width: 640px) {
+  html.going-once-theme {
+    --going-once-field-height: 3rem;
+    --going-once-field-text: 1.0625rem;
+  }
+}
+
+html.going-once-theme
+  :is(input, textarea):not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='file'],
+    [type='color'],
+    [type='search'],
+    [inputmode='decimal']
+  ),
+html.going-once-theme
+  div[class~='rounded-full'][class~='border']:has(
+    > input[inputmode='decimal']
+  ) {
+  border: 1px solid var(--going-once-field-border);
+  border-radius: var(--radius-md);
+  font-size: var(--going-once-field-text);
+  background-color: transparent;
+}
+
+html.going-once-theme
+  :is(input, textarea):not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='file'],
+    [type='color'],
+    [type='search'],
+    [inputmode='decimal']
+  ):not(textarea),
+html.going-once-theme
+  div[class~='rounded-full'][class~='border']:has(
+    > input[inputmode='decimal']
+  ) {
+  height: var(--going-once-field-height);
+}
+
+html.going-once-theme
+  div[class~='rounded-full'][class~='border']:has(> input[inputmode='decimal'])
+  > input {
+  height: 100%;
+  font-size: inherit;
+}

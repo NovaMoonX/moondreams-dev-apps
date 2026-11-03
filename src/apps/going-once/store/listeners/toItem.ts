@@ -51,7 +51,9 @@ export function toItem(id: string, saleId: string, data: DocumentData): Item {
     boughtOn: item.boughtOn ?? null,
     boughtUrl: item.boughtUrl ?? null,
     boughtUrlPreview: item.boughtUrlPreview ?? null,
+    showBoughtUrl: item.showBoughtUrl ?? false,
     notes: item.notes ?? null,
+    isDraft: item.isDraft ?? false,
     photos: Array.isArray(item.photos) ? item.photos : [],
     status: item.status ?? 'AVAILABLE',
     pending: item.pending

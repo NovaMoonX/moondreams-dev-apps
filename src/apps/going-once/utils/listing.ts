@@ -15,18 +15,27 @@ import {
 
 export type ItemSort = (typeof ITEM_SORT_OPTIONS)[number]['value'];
 
-type Listable = Pick<Item, 'photos' | 'title' | 'askingPriceCents'>;
+type Listable = Pick<Item, 'photos' | 'title' | 'askingPriceCents' | 'isDraft'>;
 
-/** A thing buyers can be shown needs a photo, a name and a price; Free counts as a price. */
+/** A thing buyers can be shown is saved (not a draft) and has a photo, a name and a price; Free counts as a price. */
 export function isListable(item: Listable): boolean {
   return (
+    !item.isDraft &&
     item.photos.length > 0 &&
     item.title.trim() !== '' &&
     item.askingPriceCents !== null
   );
 }
 
-/** The word an Available thing carries instead of "Available", or `undefined` while that word is right: "Not listed yet" while buyers can't be shown it, "Didn't sell" once the sale is finished. */
+/** What a draft still needs before buyers can be shown it, as a short phrase: "add a price". */
+export function getDraftHint(item: Listable): string {
+  if (item.photos.length === 0) return 'add a photo';
+  if (item.title.trim() === '') return 'add a name';
+  if (item.askingPriceCents === null) return 'add a price';
+  return 'save it to list it';
+}
+
+/** The word an Available thing carries instead of "Available", or `undefined` while that word is right: "Draft" while buyers can't be shown it, "Didn't sell" once the sale is finished. */
 export function getAvailableLabel(
   item: Listable,
   isSaleFinished: boolean,

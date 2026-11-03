@@ -104,7 +104,7 @@ const buildThing = (index: number) => {
   };
 };
 
-/** Seeds Maya's second sale with 50 things (about 100 photos in the Storage emulator, 6 of them not listed yet) for checking that the Things tab stays fast; returns the documents written. Emulators only. */
+/** Seeds Maya's second sale with 50 things (about 100 photos in the Storage emulator, 6 of them drafts) for checking that the Things tab stays fast; returns the documents written. Emulators only. */
 export async function seedGoingOnceScale(
   context: SeedContext,
 ): Promise<SeedResult> {
@@ -120,7 +120,17 @@ export async function seedGoingOnceScale(
     id: SALE_ID,
     name: 'Big garage sale (scale test)',
     pickupArea: 'Ballard, Seattle',
-    buyerNote: 'Cash or Venmo. Bring a friend for the big pieces.',
+    buyerNote: 'Bring a friend for the big pieces.',
+    paymentMethods: [
+      'Cash',
+      'Venmo',
+      'Zelle',
+      'PayPal',
+      'Cash App',
+      'Card',
+      'Apple Cash',
+      'Check or money order in person',
+    ],
     currency: 'USD',
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,

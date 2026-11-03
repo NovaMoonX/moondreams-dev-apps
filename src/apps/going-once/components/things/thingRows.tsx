@@ -147,16 +147,16 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
     Question: BoughtQuestion,
   },
   link: {
-    label: '🔒 Store link',
+    label: 'Store link',
     icon: '🔗',
-    fields: ['boughtUrl', 'boughtUrlPreview'],
+    fields: ['boughtUrl', 'boughtUrlPreview', 'showBoughtUrl'],
     summary: (a) => {
       if (a.boughtUrl === '') return '';
-      return (
+      const site =
         a.boughtUrlPreview?.siteName ||
         getWebLinkHost(a.boughtUrl) ||
-        'Store link'
-      );
+        'Store link';
+      return a.showBoughtUrl ? `${site} · shown to buyers` : site;
     },
     Question: StoreLinkQuestion,
   },
@@ -179,6 +179,15 @@ export const EXTRA_KEYS: ExtraKey[] = [
   'notes',
 ];
 
+/** The extras buyers can see, and the ones only the seller and co-sellers see; the walk-through's review draws them as two sections. */
+export const BUYER_EXTRA_KEYS: ExtraKey[] = ['description', 'brand', 'size'];
+export const PRIVATE_EXTRA_KEYS: ExtraKey[] = [
+  'original',
+  'bought',
+  'link',
+  'notes',
+];
+
 /** The label without its lock, for places that draw the lock themselves. */
 export const getRowTitle = (key: RowKey) =>
   THING_ROWS[key].label.replace('🔒 ', '');
@@ -190,6 +199,6 @@ export const EXTRA_ANSWER_KEYS: Record<ExtraKey, (keyof ThingAnswers)[]> = {
   size: ['size'],
   original: ['original', 'showOriginalPrice'],
   bought: ['boughtFrom', 'boughtOn'],
-  link: ['boughtUrl', 'boughtUrlPreview'],
+  link: ['boughtUrl', 'boughtUrlPreview', 'showBoughtUrl'],
   notes: ['notes'],
 };

@@ -247,7 +247,9 @@ export const EMPTY_OPTIONALS = {
     siteName: string | null;
     fetchedAt: number;
   } | null,
+  showBoughtUrl: false,
   notes: null as string | null,
+  isDraft: false,
 };
 
 interface SeedThing {
@@ -280,6 +282,7 @@ const SEED_THINGS: SeedThing[] = [
       boughtFrom: 'West Elm',
       boughtOn: Date.UTC(2023, 2, 14),
       boughtUrl: 'https://www.westelm.com/products/haven-sofa/',
+      showBoughtUrl: true,
       boughtUrlPreview: {
         title: 'Haven Sofa',
         description: 'A deep, comfortable sofa with a clean, modern shape.',
@@ -529,6 +532,7 @@ async function seedFinishedSale(context: SeedContext) {
     name: 'Spring garage sale',
     pickupArea: 'Ballard, Seattle',
     buyerNote: null,
+    paymentMethods: [],
     currency: 'USD',
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
@@ -662,7 +666,8 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     id: SALE_ID,
     name: 'Fall clear-out',
     pickupArea: 'Capitol Hill, Seattle',
-    buyerNote: 'Evenings and weekends. Cash or Venmo.',
+    buyerNote: 'Evenings and weekends.',
+    paymentMethods: ['Cash', 'Venmo', 'Zelle'],
     currency: 'USD',
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
@@ -828,6 +833,14 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       message: 'Is the side table still around?',
       sentAt: context.now - 6 * DAY_MS,
       handled: { by: maya.uid, at: context.now - 5 * DAY_MS },
+    },
+    {
+      ...sofa,
+      name: 'Alex',
+      contact: 'alex.m@example.com',
+      message:
+        "Hi! I saw the sofa on your page and I'm really interested. I'm moving into a third-floor walk-up on Saturday, so before I make the trip I wanted to ask a few things. First, how deep is the seat? My doorway is narrow and I'd like to be sure it fits through, and the stairwell turns twice. Second, does it come apart at all, like legs that unscrew or a back that lifts off?\n\nI have a friend with a pickup truck who can help me carry it, so I can come any evening this week after 6, or Sunday afternoon if that suits you better. I'd bring cash, or send it with Venmo ahead of time if you would rather hold it for me until then.\n\nOne more thing: are there any pets or smoke in the home? I'm allergic to cat hair, so a quick honest answer would help me a lot. Thanks so much, and sorry for all the questions!",
+      sentAt: context.now - 5 * HOUR_MS,
     },
   ];
   await Promise.all(

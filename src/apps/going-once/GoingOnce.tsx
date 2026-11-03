@@ -30,7 +30,11 @@ import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
 import { useJoinFromInvites } from '@apps/going-once/hooks/useJoinFromInvites';
 import { useSaleTimeZoneBackfill } from '@apps/going-once/hooks/useSaleTimeZoneBackfill';
 import { useGoingOnceUrlState } from '@apps/going-once/hooks/useGoingOnceUrlState';
-import { setRemovedFrom, type RemovedFrom } from '@apps/going-once/store';
+import {
+  retryLoading,
+  setRemovedFrom,
+  type RemovedFrom,
+} from '@apps/going-once/store';
 import {
   selectMyInvites,
   selectNewInquiries,
@@ -195,9 +199,23 @@ function GoingOnce() {
     return (
       <div className='page'>
         <div className='mx-auto max-w-2xl'>
-          <EmptyCard icon='⚠️'>
-            We couldn&apos;t load your sales. Check your connection and refresh
-            the page.
+          <EmptyCard
+            icon='⚠️'
+            action={
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                rounded='full'
+                className='h-10'
+                onClick={() => dispatch(retryLoading())}
+              >
+                Try again
+              </Button>
+            }
+          >
+            We couldn&apos;t load your sales. Check your connection and try
+            again.
           </EmptyCard>
         </div>
       </div>

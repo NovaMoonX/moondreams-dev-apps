@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import EmptyCard from '@/components/EmptyCard';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
@@ -24,6 +24,7 @@ import {
   handledCountQueryOptions,
   olderHandledQueryOptions,
 } from '@apps/going-once/queries/inquiryQueries';
+import { retryLoading } from '@apps/going-once/store';
 import {
   selectHandledInquiries,
   selectInquiriesStatus,
@@ -111,6 +112,7 @@ function InboxTab({
   onOpenSale,
 }: InboxTabProps) {
   const now = useNow();
+  const dispatch = useAppDispatch();
   const fresh = useAppSelector((state) => selectNewInquiries(state, saleId));
   const newestHandled = useAppSelector((state) =>
     selectHandledInquiries(state, saleId),
@@ -180,9 +182,23 @@ function InboxTab({
 
   if (status === 'error') {
     return (
-      <EmptyCard icon='⚠️'>
+      <EmptyCard
+        icon='⚠️'
+        action={
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className='h-10'
+            onClick={() => dispatch(retryLoading())}
+          >
+            Try again
+          </Button>
+        }
+      >
         We couldn&apos;t load this sale&apos;s messages. Check your connection
-        and refresh the page.
+        and try again.
       </EmptyCard>
     );
   }

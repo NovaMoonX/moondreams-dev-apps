@@ -5,7 +5,7 @@ import { isListable } from '@apps/going-once/utils/listing';
 import type { Item } from '@apps/going-once/types';
 
 export interface StatusFigures {
-  /** Available counts only what buyers can be shown; the rest wait behind "not listed yet". */
+  /** Available counts only what buyers can be shown; the rest wait as drafts. */
   count: number;
   askedCents: number;
   collectedCents: number;
@@ -42,7 +42,7 @@ export function getStatusSummary(items: Item[]): StatusSummary {
   return summary;
 }
 
-/** The line under a view's rows: "$800 asked · plus 1 not listed yet", "Collected $225 of $245 asked". */
+/** The line under a view's rows: "$800 asked · plus 1 draft", "Collected $225 of $245 asked". */
 export function formatStatusTotal(
   view: StatusView,
   summary: StatusSummary,
@@ -51,5 +51,5 @@ export function formatStatusTotal(
   if (view === 'SOLD') return formatCollected(collectedCents, askedCents);
   const asked = `${formatCentsShort(askedCents)} asked`;
   if (notListedCount === 0) return asked;
-  return `${asked} · plus ${notListedCount} not listed yet`;
+  return `${asked} · plus ${notListedCount} ${notListedCount === 1 ? 'draft' : 'drafts'}`;
 }

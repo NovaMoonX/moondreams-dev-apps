@@ -11,6 +11,7 @@ import {
   MAX_SALE_NAME_LENGTH,
 } from '@apps/going-once/constants';
 import type { AppDispatch } from '@/store';
+import { normalizePaymentMethods } from '@apps/going-once/utils/paymentMethods';
 import { removeSale, upsertSale } from '@apps/going-once/store';
 import type {
   FinishAction,
@@ -24,6 +25,7 @@ interface CreateSaleInput {
   name: string;
   pickupArea: string | null;
   buyerNote: string | null;
+  paymentMethods: string[];
 }
 
 const toTrimmedOrNull = (value: string | null) => {
@@ -37,7 +39,7 @@ const toTrimmedOrNull = (value: string | null) => {
  */
 export function startSale(
   dispatch: AppDispatch,
-  { uid, name, pickupArea, buyerNote }: CreateSaleInput,
+  { uid, name, pickupArea, buyerNote, paymentMethods }: CreateSaleInput,
   onSaveFailed: (message: string) => void,
 ): Sale {
   const sale: Sale = {
@@ -47,6 +49,7 @@ export function startSale(
       toTrimmedOrNull(pickupArea)?.slice(0, MAX_PICKUP_AREA_LENGTH) ?? null,
     buyerNote:
       toTrimmedOrNull(buyerNote)?.slice(0, MAX_BUYER_NOTE_LENGTH) ?? null,
+    paymentMethods: normalizePaymentMethods(paymentMethods),
     currency: 'USD',
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     ownerUid: uid,
@@ -88,6 +91,17 @@ export function updateSaleDetail(
 ): Promise<void> {
   return updateDoc(doc(db, 'apps', 'going-once', 'sales', saleId), {
     [field]: value,
+    lastEditedAt: Date.now(),
+  });
+}
+
+/** Writes the sale's ways to pay and when they were edited, and nothing else. */
+export function updateSalePaymentMethods(
+  saleId: string,
+  paymentMethods: string[],
+): Promise<void> {
+  return updateDoc(doc(db, 'apps', 'going-once', 'sales', saleId), {
+    paymentMethods: normalizePaymentMethods(paymentMethods),
     lastEditedAt: Date.now(),
   });
 }
