@@ -35,7 +35,7 @@ import {
   RECEIPT_TEXT_MIN_HIDDEN,
   SPEND_WORDS,
 } from '@apps/runway/constants';
-import { keepEntryFor } from '@apps/runway/utils/leaveAfterClose';
+import { keepEntryFor } from '@/hooks/useBackHistory';
 import type { OpenPurchase } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import ExpenseView from '@apps/runway/components/ExpenseView';

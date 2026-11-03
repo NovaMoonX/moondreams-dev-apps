@@ -1,5 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
+  deleteDoc,
   doc,
   getDoc,
   runTransaction,
@@ -18,7 +19,23 @@ import type { Item, ItemPhoto } from '@apps/going-once/types';
 
 /** The answers a person gives about a thing in this flow. */
 export type ItemFields = Partial<
-  Pick<Item, 'title' | 'condition' | 'askingPriceCents' | 'floorPriceCents'>
+  Pick<
+    Item,
+    | 'title'
+    | 'condition'
+    | 'askingPriceCents'
+    | 'floorPriceCents'
+    | 'description'
+    | 'brandModel'
+    | 'size'
+    | 'originalPriceCents'
+    | 'showOriginalPrice'
+    | 'boughtFrom'
+    | 'boughtOn'
+    | 'boughtUrl'
+    | 'boughtUrlPreview'
+    | 'notes'
+  >
 >;
 
 const getItemRef = (saleId: string, itemId: string): DocumentReference =>
@@ -52,8 +69,21 @@ export function createItem(
     condition: null,
     askingPriceCents: null,
     floorPriceCents: null,
+    description: null,
+    brandModel: null,
+    size: null,
+    originalPriceCents: null,
+    showOriginalPrice: false,
+    boughtFrom: null,
+    boughtOn: null,
+    boughtUrl: null,
+    boughtUrlPreview: null,
+    notes: null,
     photos: [],
     status: 'AVAILABLE',
+    pending: null,
+    sale: null,
+    statusHistory: [],
     createdBy: uid,
     createdAt: Date.now(),
     lastEditedAt: null,
@@ -203,4 +233,26 @@ export async function removeItemPhoto(
     await deleteFile(removed.path).catch((error: unknown) =>
       console.error(`Could not delete ${removed.path}`, error),
     );
+}
+
+/**
+ * Deletes the thing, then its photo files once it is gone (a file that won't delete is logged, and the sale's delete sweeps it).
+ * The write queues offline and never settles there, so the caller isn't held on it: `onFailed` hears a refusal.
+ */
+export function deleteItem(
+  saleId: string,
+  item: Pick<Item, 'id' | 'photos'>,
+  onFailed: (error: unknown) => void,
+): void {
+  void deleteDoc(getItemRef(saleId, item.id)).then(
+    () =>
+      Promise.all(
+        item.photos.map((photo) =>
+          deleteFile(photo.path).catch((error: unknown) =>
+            console.error(`Could not delete ${photo.path}`, error),
+          ),
+        ),
+      ),
+    onFailed,
+  );
 }

@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAppDispatch } from '@/store';
+import { isValidEmail, normalizeEmail } from '@/utils/emailUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   ASSIGNABLE_MEMBER_ROLES,
@@ -13,11 +14,7 @@ import {
   MEMBER_ROLE_EMOJIS,
   MEMBER_ROLE_LABELS,
 } from '@apps/waypoint/constants';
-import {
-  addMemberByEmail,
-  isValidEmail,
-  normalizeEmail,
-} from '@apps/waypoint/store/actions/emailInviteActions';
+import { addMemberByEmail } from '@apps/waypoint/store/actions/emailInviteActions';
 import type { TripEmailInvite, TripSpace } from '@apps/waypoint/types';
 
 interface AddMemberByEmailModalProps {

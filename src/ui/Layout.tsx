@@ -21,12 +21,16 @@ import AppNavPanel from '@ui/AppNavPanel';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
 
+/** Pages a visitor opens from a link: the site's menu and account button have no use there, so the header is left off. */
+const PUBLIC_SHARE_PREFIXES = ['/pinch/shared/', '/going-once/s/'];
+
 /** A link's page never names what it shows: its title is the same for every link. */
 const getPageTitle = (pathname: string, appName: string | null) => {
   if (pathname.startsWith('/a-list/shared/')) {
     return 'Movie calendar - A-List Tracker';
   }
   if (pathname.startsWith('/pinch/shared/')) return 'Shared on Pinch';
+  if (pathname.startsWith('/going-once/s/')) return 'Things for sale';
   return appName ? `${appName} - Moondreams Dev Apps` : 'Moondreams Dev Apps';
 };
 
@@ -58,7 +62,7 @@ function LocationSync() {
           ? 'home'
           : locationPathname
               .replace(/^\/+/, '')
-              .replace(/^((?:a-list|pinch)\/shared)\/.*$/, '$1');
+              .replace(/^((?:a-list|pinch)\/shared|going-once\/s)\/.*$/, '$1');
 
       setCurrentLocation(nextLocation);
     }
@@ -103,6 +107,9 @@ function Layout() {
     pathname === '/account' ||
     pathname === '/admin' ||
     pathname.startsWith('/admin/');
+  const isPublicShare = PUBLIC_SHARE_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix),
+  );
   const [navOpenKey, setNavOpenKey] = useState<string | null>(null);
   // Tied to the location it was opened on, so Back or any navigation closes it.
   const isNavOpen = navOpenKey === locationKey;
@@ -133,36 +140,38 @@ function Layout() {
       <EmulatorStatus />
 
       {/* header — shifted down while the offline banner occupies the top of the screen; pinned on mobile only, where it slides away while scrolling down and returns on the way up */}
-      <div
-        data-site-chrome=''
-        className={join(
-          'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 ease-out max-[380px]:gap-2 max-md:pointer-events-auto max-md:h-16 max-md:py-2 max-md:backdrop-blur md:absolute md:px-6',
-          isSiteCanvas
-            ? 'max-md:bg-muted/80 dark:max-md:bg-background/80'
-            : 'max-md:bg-background/80',
-          isBannerVisible ? 'top-9' : 'top-0',
-          isHeaderHidden &&
-            (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
-        )}
-        {...swipeToOpen}
-      >
-        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
-          <AppNavPanel
-            isOpen={isNavOpen}
-            onOpenChange={(isOpen) =>
-              setNavOpenKey(isOpen ? locationKey : null)
-            }
-          />
-        </div>
+      {!isPublicShare && (
+        <div
+          data-site-chrome=''
+          className={join(
+            'pointer-events-none fixed inset-x-0 z-30 flex h-20 items-center gap-3 px-4 py-4 transition-[top] duration-300 ease-out max-[380px]:gap-2 max-md:pointer-events-auto max-md:h-16 max-md:py-2 max-md:backdrop-blur md:absolute md:px-6',
+            isSiteCanvas
+              ? 'max-md:bg-muted/80 dark:max-md:bg-background/80'
+              : 'max-md:bg-background/80',
+            isBannerVisible ? 'top-9' : 'top-0',
+            isHeaderHidden &&
+              (isBannerVisible ? 'max-md:-top-7' : 'max-md:-top-16'),
+          )}
+          {...swipeToOpen}
+        >
+          <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-start'>
+            <AppNavPanel
+              isOpen={isNavOpen}
+              onOpenChange={(isOpen) =>
+                setNavOpenKey(isOpen ? locationKey : null)
+              }
+            />
+          </div>
 
-        <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
-          <DevAccountSwitcher />
-        </div>
+          <div className='pointer-events-auto flex min-w-0 items-center justify-center gap-2'>
+            <DevAccountSwitcher />
+          </div>
 
-        <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-end'>
-          <AuthAvatar />
+          <div className='pointer-events-auto flex min-w-20 flex-1 basis-0 items-center justify-end'>
+            <AuthAvatar />
+          </div>
         </div>
-      </div>
+      )}
 
       <Outlet />
     </div>

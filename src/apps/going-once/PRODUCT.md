@@ -81,9 +81,9 @@ One noun, three states. The same words are used on every screen, in the inbox, i
 | **Pending** | A buyer is set to pick it up | Shown as "Pending · someone's picking this up", with "I'm interested" kept as a backup ask |
 | **Sold** | Gone, with what was paid | Not shown |
 
-- **Pending can name who is picking it up** (one of its inquiries, or a typed name) and a pickup day, both optional, so a co-seller sees who is coming and when. Back to Available is one tap if the pickup falls through.
+- **Pending can name who is picking it up** (one of its inquiries, or a typed name) and a pickup day, both optional, so a co-seller sees who is coming and when, and Mark pending is one tap with neither. The hold can be corrected ("Change who or when"), and Back to Available is one tap if the pickup falls through. Taking a held thing off the list ends the hold; History remembers who held it.
 - **Sold asks for what was paid**, filled with the asking price so the usual case is one tap, and optionally how they paid (Cash, Venmo, Zelle, Other) and the day (today by default). It records who marked it.
-- **Change it, or look it up.** A sold thing's price and day can be corrected (a typo), and the sheet says what the change does to the sale's total before it saves ("Collected goes from $225 to $215"). "Not sold after all" puts it back to Available and takes it out of the total, with an Undo. Each thing keeps a short history of its status changes (who and when), which is looked up, never edited.
+- **Change it, or look it up.** A sold thing's price and day can be corrected (a typo), and the sheet says what the change does to the sale's total before it saves ("Collected goes from $225 to $215"). "Not sold after all" puts it back to Available and takes it out of the total, with a six-second Undo that restores the sale exactly, unless someone changed the thing in between. A thing sold for $0 offers "Take it off the list instead", for something given away. Each thing keeps a short history of its status changes (who and when), which is looked up, never edited.
 - **Two people at once.** If Theo marks a thing Sold while Maya has it open, her screen follows the live status; a status change made from a stale screen is refused in words ("Theo already marked this sold for $170").
 
 ### Interest and the Inbox, In Detail
@@ -138,7 +138,7 @@ This is Theo's loop, and every tool in it is one tap from where he is.
 
 - **Collected:** the sum of what was paid for Sold things. **Asked for those:** their asking prices beside it, so "$225 of $245 asked" reads at a glance.
 - **Pending:** a count and what they are asking.
-- **Left:** Available things and what they are asking. Things with no price yet are counted, not priced ("1 has no price yet"), and taken-off things are left out of every figure.
+- **Left:** Available things and what they are asking. Things not listed yet (no photo, name or price) are counted apart, not priced ("plus 1 not listed yet"), and taken-off things are left out of every figure.
 - The floor price is never summed; it is a per-thing guide, not a target.
 
 ### Finishing a Sale, In Detail
@@ -183,18 +183,20 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 
 ### Core MVP
 
-- [ ] **Seller:** start a sale with a name, pickup area and note (behind the `create-sales` switch, open to everyone); keep several, open or finished
-- [ ] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, "Not listed yet" until it has a photo, a name and a price; no categories, found by status and search
-- [ ] **Seller:** add co-sellers by email and remove them, with a confirm that says what they marked stays; **Co-seller:** join, leave, and be told plainly when removed
-- [ ] **Co-seller:** Available, Pending (optionally who and a pickup day) and Sold with what was paid, how and when; Not sold after all; take off the list and put back; a short history per thing; refused in words from a stale screen (the seller has the same controls)
-- [ ] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating
-- [ ] **Seller:** delete a thing, with a confirm that names its pickup, its inquiries and any change to Collected, and offers Take it off the list instead
+- [x] **Seller:** start a sale with a name, pickup area and note (behind the `create-sales` switch, open to everyone); keep several, open or finished
+- [x] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, "Not listed yet" until it has a photo, a name and a price; no categories, found by status and search
+- [x] **Seller:** add co-sellers by email and remove them, with a confirm that says what they marked stays; **Co-seller:** join, leave, and be told plainly when removed
+- [x] **Co-seller:** Available, Pending (optionally who and a pickup day) and Sold with what was paid, how and when; Not sold after all; take off the list and put back; a short history per thing; refused in words from a stale screen (the seller has the same controls)
+- [x] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating
+- [x] **Seller:** delete a thing, with a confirm that names its pickup, its inquiries and any change to Collected, and offers Take it off the list instead
 - [ ] **Co-seller:** a push when someone is interested, on by default, bundled to one per 15 minutes, quiet 10 PM to 8 AM with one morning push, never dropped; permission asked on first opening the inbox or on joining, up to three times; a per-sale switch to turn it off (the seller gets the same)
-- [ ] **Co-seller:** the shared inbox with Call, Text and Email, New / Handled by hand, resends folded into one inquiry, and each thing's own list of who asked (the seller sees it too)
+- [x] **Co-seller:** the shared inbox with Call, Text and Email, New / Handled by hand and resends folded into one inquiry (the seller sees it too)
+- [ ] **Co-seller:** each thing's own list of who asked, and Hold for someone from their inquiry
 - [ ] **Co-seller:** Copy listing text (remembered on the thing, with a take-it-down reminder at Sold), Save photos for one thing, and Save all photos as one zip for the whole sale, at listing quality
-- [ ] **Seller:** the public link: live, Available and Pending only, Show original price per thing, get a new address or turn it off; **Co-seller:** copy, open and share it, marked as their sale's page
-- [ ] **Buyer:** the public page and the "I'm interested" form, with no account, refused in words for a thing that just sold
-- [ ] **Seller:** where the sale stands: collected against asked, pending, left
+- [x] **Seller:** the public link: live, Available and Pending only, Show original price per thing, get a new address or turn it off; **Co-seller:** copy, open and share it, marked as their sale's page
+- [x] **Buyer:** the public page, with no account, with each thing's photos
+- [x] **Buyer:** the "I'm interested" form, with no account, refused in words for a thing that just sold
+- [x] **Seller:** where the sale stands: collected against asked, pending, left
 - [ ] **Seller:** Finish the sale, naming what didn't sell and what is pending; pickups still recordable; buyers' details cleared 30 days later; reopen until then
 
 ### Next Steps
