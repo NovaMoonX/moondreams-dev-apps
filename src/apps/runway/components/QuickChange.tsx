@@ -46,9 +46,10 @@ function QuickChange({
   const isShort = useIsShortScreen(599);
   const isLandscape = useIsShortScreen(419);
   const rowLimit = isShort && !isLandscape ? SHORT_SCREEN_ROWS : rowIds.length;
-  // The soft keyboard shrinks the viewport into "short", and a row that owns an open sheet must outlive that or the sheet unmounts under the finger.
+  const limitedIds = rowIds.slice(0, rowLimit);
+  // The soft keyboard shrinks the viewport into "short", and a row that owns an open sheet must outlive that or the sheet unmounts under the finger. Only the front view draws it: "More details" lists it by `limitedIds`.
   const shownIds = rowIds.filter(
-    (id, index) => index < rowLimit || id === flow.reopenedId,
+    (id) => limitedIds.includes(id) || id === flow.reopenedId,
   );
   const rows = shownIds
     .map((id) => flow.steps.find((other) => other.id === id))
@@ -62,7 +63,7 @@ function QuickChange({
     hasReviewed: true,
   });
   const rest = flow.steps.filter(
-    (other) => other.id !== step.id && !shownIds.includes(other.id),
+    (other) => other.id !== step.id && !limitedIds.includes(other.id),
   );
   if (isAll) {
     return (

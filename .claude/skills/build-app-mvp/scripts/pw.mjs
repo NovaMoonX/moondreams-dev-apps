@@ -39,11 +39,12 @@ export async function signIn(page, label = 'Alex') {
 }
 // An Android keyboard shrinks the viewport when a field takes focus (`interactive-widget=resizes-content`), flipping every height rule; call after tapping the field.
 export async function raiseKeyboard(page, height = 460) {
-  const { width } = page.viewportSize();
+  const { width, height: before } = page.viewportSize();
   await page.setViewportSize({ width, height });
   await page.waitForTimeout(600);
+  return before;
 }
-export async function lowerKeyboard(page, height = 844) {
+export async function lowerKeyboard(page, height) {
   const { width } = page.viewportSize();
   await page.setViewportSize({ width, height });
   await page.waitForTimeout(600);
