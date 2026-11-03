@@ -417,10 +417,22 @@ interface MoveDoc {
 ```ts
 interface ExpenseDoc { id: string; createdAt: number; updatedAt: number; sealed: Sealed /* { name, note } */ }
 
-interface MerchantRuleDoc {
+interface MerchantRuleDoc {               // a rule; the name stays for the collection's history
   id: string; createdAt: number;
-  sealed: Sealed;                           // { merchantKey, target: envelopeId | 'varies' }
+  sealed: Sealed;                           // RuleSealed
 }
+
+interface RuleSealed {
+  merchantKey: string | null;               // this merchant
+  category: string | null;                  // this kind of place (the provider's primary category, normalized)
+  cardId: string | null;                    // everything on this card
+  target: string | 'varies';                // envelopeId; 'varies' needs merchantKey and always asks
+}
+```
+
+A rule has at least one condition. Allowed shapes are merchant alone, category alone, card alone, and category with card. Precedence is fixed, with no ordering by hand: merchant, then category with card, then category, then card. `isBroadMerchant` (a short list of stores that sell everything, plus any merchant marked `varies`) is never caught by a category rule. A rule written before conditions existed (`{ merchantKey, target }`) reads as a merchant rule.
+
+```ts
 
 interface ChangeDoc {
   id: string;
@@ -736,6 +748,8 @@ Free to Spend is derived last: money on hand plus leftovers, minus draws, minus 
 
 ### Spill-over and check an amount
 
+- *Entry point:* the chain is set from a "When it runs out" row on the envelope's sheet, which opens the Overflow screen.
+
 - Spill-over at purchase time: `resolveSpill(envelopeId, cents, balances, chains)` returns lines `[{ envelopeId, cents, via }]`. The envelope's own balance goes first, then each name in `spillTo` in order, then the remainder as `via: 'free'`. The lines are stored on the purchase. Editing or removing a purchase resolves again against balances without it.
 - Check an amount: `checkAmount(envelopeId, cents, balances, chains, plan)` returns what is left after, or by how much it falls short and the ordered list of sources it would use (the chain, then a by-priority list). It reads nothing it cannot show.
 
@@ -744,8 +758,9 @@ Free to Spend is derived last: money on hand plus leftovers, minus draws, minus 
 All of this runs on the device in the reconcile pass, after the listeners settle:
 
 1. A `needsHome` purchase that matches a bill by merchant text, amount (within the bill's range) and date (within three days of the due date) marks the bill paid with a `billPaid` move and takes no envelope lines.
-2. A purchase whose merchant key matches a `MerchantRuleDoc` goes to that envelope; `varies` never auto-assigns.
+2. A purchase that some rule fits goes to the envelope of the most specific one (see `RuleSealed`), through `resolveSpill`, so an overspend follows that envelope's chain; `varies` never auto-assigns. The purchase stores `ruleId` so its sheet can say which rule placed it.
 3. A purchase that settles a card payment becomes a `cardPayment` move.
+3a. *Transfers between your own accounts.* An outflow on one linked account and an inflow of the same amount on another, within three days, are paired as a `transfer` between accounts: neither is a purchase or a deposit, money on hand and Free to Spend do not move, and when the inflow lands in a pull account the day's "Move to" item is ticked. A transfer one side of which is not linked stays in Needs a home and asks.
 4. A deposit (money in on a linked account, `needsHome`) matches an income day:
    1. *Candidates:* days that are `draft` or `confirmed`, not `notArrived`, that no purchase is already linked to (`incomeDayId`), and whose `arrivedOn ?? expectedOn` is within three days either side of the deposit's date.
    2. *Amount:* a draft day matches when the amount is inside its range, or within 15% of the expected amount when exact. A confirmed day is compared the same way against its confirmed `arrivedCents`.
@@ -1067,7 +1082,7 @@ Invariant 13 stops a key id being dropped casually. When one must go (a suspecte
 ### Bank data
 
 - One provider, Plaid, behind `BankDataProvider` in `functions/src/apps/runway/link/provider.ts` (the Plaid code lives in `providerPlaid.ts` and nowhere else):
-  `createLinkSession(uid)`, `exchange(uid, publicToken)`, `listAccounts(grant)`, `getBalances(grant)`, `syncTransactions(grant, cursor)`, `revoke(grant)`. Normalized outputs are `NormalizedAccount`, `NormalizedBalance` and `NormalizedTransaction` (provider-neutral id, signed cents, posted date, pending flag, merchant text, account id). Provider names do not appear outside `provider*.ts`.
+  `createLinkSession(uid)`, `exchange(uid, publicToken)`, `listAccounts(grant)`, `getBalances(grant)`, `syncTransactions(grant, cursor)`, `revoke(grant)`. Normalized outputs are `NormalizedAccount`, `NormalizedBalance` and `NormalizedTransaction` (provider-neutral id, signed cents, posted date, pending flag, merchant text, account id, and a provider-neutral `category` that the rules' "kind of place" reads). Provider names do not appear outside `provider*.ts`.
 - Runway never receives or stores bank credentials. Where the bank supports OAuth, the person signs in on the bank's own site; Plaid's documentation says OAuth is used by "a number of" US institutions, not all, so for others the credentials are entered in Plaid's Link window and go to Plaid, not to Runway. The README's wording is corrected to say so.
 - Plaid mapping: `createLinkSession` creates a link token; `exchange` swaps the public token for an access token (the sealed grant); `syncTransactions` uses the cursor-based sync endpoint, triggered by Plaid's "updates available" webhook; the webhook is verified with Plaid's signed header, so no separate webhook secret is expected. To confirm in the Link spike, along with whether Plaid covers cash-management accounts such as Wealthfront and whether its investments product makes a second provider unnecessary for the Beyond item.
 - The grant is sealed under `HKDF(current master key, 'runway-provider-grant')`, a different key from the data key's wrapper, with the `masterKeyId` stored beside it, and stored in `server/{uid}/grants/{linkId}`. It is never returned to a client.
@@ -1075,6 +1090,13 @@ Invariant 13 stops a key id being dropped casually. When one must go (a suspecte
 - `attachRunwayAccount({ linkId, providerAccountId, accountId })` binds a provider account to a Runway account the person already named.
 - `unlinkRunwayAccount` revokes at the provider, deletes the grant, sets the link to `revoked`, keeps what already came in.
 - A person who never links has no `links`, no `server/…/grants` and no bank data anywhere.
+
+### Accounts, what pays what, and money to move (planned)
+
+- `AccountSealed` gains `isPullAccount: boolean` (cards and bills pull from it). `BillSealed.accountId` and a new `CardSealed.payFromAccountId` say which account pays each; a missing key reads `null`, which means the plan's single pull account when there is exactly one.
+- `engine/moves.ts` (pure): `getPullAccountNeed(account, plan, today)` sums the card reserves and funded bills that pull from the account and fall due before the next income day, less its known balance (typed or linked), and returns `{ moveCents, byDay, items }`. The checklist's "Move to accounts" item and Home's warning row read it; the item is ticked by `doneLineIds` or by a paired `transfer` (Matching step 3a).
+- Home's warning row merges it with the card and plan warnings by date; it never sends money and never changes a balance.
+- An account's view lists the goals and envelopes whose `accountId` is that account, and "Not yet given a job" for the rest of its balance.
 
 ### Receipts
 
@@ -1283,7 +1305,7 @@ Each becomes a spike or a decision in the Issue Roadmap rather than blocking it.
 
 2. **Closings (Decision 7). SETTLED by Issue 27, BUILT by Issue 28.** Issue 27 showed both reasons: without closings the figures are wrong past 180 days (Free to Spend $13,753.59 against $69,400.65; every envelope's "left" differs), and the window cannot be widened to fix it. Issue 28 built them as "Closings as built" (under "Balances and closings"): a closing carries every figure the first screen reads (balances, what each item was given, spending, and each bill's funded days and paid payments), the three recent listeners and the lookahead's late-bill check follow the newest closing, building them is one resumable pass shown as "Updating your history", and the Spend list and its note follow the window. Measured on the scale plan: the cold start went from 7.2 to 7.3 s to 2.9 to 3.1 s at 4× on the dev build ("Performance", below); the first build of sixty months took 25 s unthrottled and 50 s at 4×, once, so it is slower than the 7 s (unthrottled) Issue 27 estimated: it reads 28,000 documents from the server at about a millisecond each; it was not tuned further.
 
-3. **Plaid access.** Plaid is the provider. Confirm production access (it may need an application and lead time), pricing per linked account, coverage of the accounts in the UX (checking, savings, cash management such as Wealthfront) and whether its investments product covers retirement and brokerage accounts.
+3. **Plaid access.** Plaid is the provider. Confirm production access (it may need an application and lead time), pricing per linked account, coverage of the accounts in the UX (checking, savings, cash management such as Wealthfront) and whether its investments product covers retirement and brokerage accounts. *Owner round, accounts and linking (Nov 2026):* the owner starts on Plaid's free Trial plan, reported to cover 10 connected accounts in total across all users; the owner's accounts alone are 7 (Capital One A and B, the Capital One, Discover, Citi and Walmart OnePay cards, Wealthfront Cash). Third-party figures put Transactions at about $0.30–0.60 per connected account per month (about $15–30 a month for 10 people at 5 accounts each, $150–300 for 100); the real rate is the one shown when applying for production. The Walmart card is issued by Synchrony and managed in the OnePay app; whether it links (as Synchrony or as OnePay) is the open coverage question, and a card that cannot be linked stays a card added by hand.
 4. **CSV parsing.** Pick a parser already in the repo's dependencies if one exists; otherwise a small streaming one; handle the common bank layouts and a manual column map.
 5. **Engine in a worker. SETTLED by Issue 27: not built.** A draft is 8 ms and the lookahead 480 ms at 4× on the five-year plan, and the lookahead is drawn after the first paint. Revisit only if a screen has to wait for a figure of this size.
 6. **Version volume. SETTLED by Issue 27: no plan snapshot yet.** Versions cost about 1.2 ms each at 4× on the first screen: 0.6 s at the 600 of the scale seed, 2.2 s at 2,000. It is built when a real plan reaches about 1,500 versions (a sealed resolved plan on a date replaces the versions before it).
