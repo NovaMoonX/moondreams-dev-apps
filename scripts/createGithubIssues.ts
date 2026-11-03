@@ -10,7 +10,8 @@
  * labelled with its tier and added to the board with Apps set and, when new,
  * Status set; once all exist, every `Issue N` left in a body (as it stands on
  * GitHub) becomes the real `#123`. Re-running is safe: an issue found by its
- * prefixed or bare title is reused, keeps its board Status and its edited
+ * prefixed (`<App> N: Title` or the older `<App>: Title`) or bare title,
+ * compared without case, is reused, keeps its board Status and its edited
  * body, and only gets its label, Apps and links. The app's name comes from
  * APP_REGISTRY, `--app-name`, or the first heading of the app's README.md
  * before the app is registered; a missing Apps option is added to the board,
@@ -626,17 +627,23 @@ const run = async () => {
       `The repo has ${ISSUE_LIST_LIMIT}+ issues, so existing ones may be missed and duplicated. Raise ISSUE_LIST_LIMIT first.`,
     );
   const issuesByTitle = existingIssues.reduce(
-    (map, issue) =>
-      map.set(issue.title, [...(map.get(issue.title) ?? []), issue]),
+    (map, issue) => {
+      const key = issue.title.toLowerCase();
+      return map.set(key, [...(map.get(key) ?? []), issue]);
+    },
     new Map<string, typeof existingIssues>(),
   );
-  // An issue made before titles carried the app prefix is adopted by its bare
-  // title only when that title is unique, so a common title is never taken
-  // from another app.
+  // Older roadmaps were titled "<App>: Title" with no number, so that form is
+  // adopted too. An issue made before titles carried the app prefix is adopted
+  // by its bare title only when that title is unique, so a common title is
+  // never taken from another app.
   const findExisting = (title: string, bareTitle: string) => {
-    const prefixed = issuesByTitle.get(title) ?? [];
+    const prefixed = [
+      ...(issuesByTitle.get(title.toLowerCase()) ?? []),
+      ...(issuesByTitle.get(`${appName}: ${bareTitle}`.toLowerCase()) ?? []),
+    ];
     if (prefixed.length > 0) return prefixed[0];
-    const bare = issuesByTitle.get(bareTitle) ?? [];
+    const bare = issuesByTitle.get(bareTitle.toLowerCase()) ?? [];
     if (bare.length > 1)
       console.log(
         `  ${bare.length} issues are titled "${bareTitle}"; adopting none, so a new one is created.`,
