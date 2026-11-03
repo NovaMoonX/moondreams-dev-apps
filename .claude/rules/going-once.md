@@ -6,7 +6,7 @@ paths:
 
 # Going Once rules
 
-Applies on top of `CLAUDE.md` and `docs/conventions/` to everything under `src/apps/going-once/` and its functions. This file is the one copy of these rules; `.github/instructions/going-once.instructions.md` only points here.
+Applies on top of `CLAUDE.md` and `docs/conventions/` to everything under `src/apps/going-once/` and its functions. This file is the one copy of these rules.
 
 - **Built for its three people.** `PRODUCT.md` "Who It Is For" names them: the seller (Maya) adds things once and checks in; the co-seller (Theo) talks to buyers, records what sold and relists on Marketplace; the buyer (Priya) opens a link with no account. Every change names who it serves and is walked as that person, and never breaks another's journey. The app is about selling things in general; its name and copy never say moving or apartment.
 - **Two audiences on every thing.** Private values (floor price, original price unless shown, where bought and the store's link, notes, buyers' details) sit in one kraft band captioned "🔒 Only you and your co-sellers" (in the drawer right under the sticker and price line, so its top is in the first view at 320x568; the asking price is never repeated in it), and anything private shown elsewhere carries the 🔒. A heading that says who sees a group stays true in every state its fields reach: a field with a Show-to-buyers switch moves to the buyers' group once it is shown (round 6: Store link sat under "Just for you" with its switch on), and a form's groups are split by heading, with no lock on each row. The public page is served by a function that copies allowed fields by name; a new field is private until `TECHNICAL.md`'s allowlist says otherwise, and it never reaches the copied listing text.
