@@ -147,7 +147,7 @@ function AuthAvatar({ className }: AuthAvatarProps) {
           placement='bottom'
           alignment='end'
           offset={4}
-          className='w-96 max-w-[calc(100vw-1.5rem)] rounded-[28px]! border-0! bg-transparent! p-0! shadow-xl'
+          className='w-96 max-w-[calc(100vw-1.5rem)] rounded-3xl! border-0! bg-transparent! p-0! shadow-xl'
         >
           {isOpen && <AccountPanel {...panelProps} onClose={close} />}
         </Popover>

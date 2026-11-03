@@ -97,7 +97,11 @@ function AccountPanel({
     <div
       className={join(
         'space-y-3',
-        onClose && join(CANVAS_CLASS, 'rounded-3xl p-3'),
+        onClose &&
+          join(
+            CANVAS_CLASS,
+            'rounded-3xl p-3 dark:border dark:border-white/15 dark:shadow-[0_12px_40px_rgb(0_0_0/0.7)]',
+          ),
       )}
     >
       {onClose ? (
