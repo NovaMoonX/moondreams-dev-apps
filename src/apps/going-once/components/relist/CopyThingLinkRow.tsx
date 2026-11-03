@@ -40,7 +40,7 @@ function CopyThingLinkRow({ item, linkId }: CopyThingLinkRowProps) {
       isGrouped
       isRoomy
       icon={state === 'copied' ? <Check /> : <Link2 />}
-      label={state === 'copied' ? 'Copied' : 'Copy link to it'}
+      label={state === 'copied' ? 'Copied' : "Copy this thing's link"}
       subtitle={
         state === 'failed'
           ? "Your browser wouldn't copy it."
