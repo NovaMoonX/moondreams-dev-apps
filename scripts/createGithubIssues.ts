@@ -15,9 +15,8 @@
  * body, and only gets its label, Apps and links. With `--base-file` (the
  * roadmap as it stands on the base branch), only issues new since it are ever
  * created: one the base had that matches nothing is listed, not made again.
- * The app's name comes from
- * APP_REGISTRY, `--app-name`, or the first heading of the app's README.md
- * before the app is registered; a missing Apps option is added to the board,
+ * The app's name comes from APP_REGISTRY, `--app-name`, or the first heading
+ * of the app's README.md before the app is registered; a missing Apps option is added to the board,
  * keeping every item's existing Apps value. Needs `gh` signed in with the
  * `project` and `read:project` scopes, or PROJECT_TOKEN set for the board
  * calls (the create-app-issues workflow); the dry run needs nothing.
@@ -193,7 +192,9 @@ const VALUE_SELECTION = `... on ProjectV2ItemFieldSingleSelectValue { optionId }
 const toOptionIds = (
   value: { optionId?: string; options?: { id: string }[] } | null,
 ) => {
-  const result = value?.options?.map((option) => option.id) ?? (value?.optionId ? [value.optionId] : []);
+  const result =
+    value?.options?.map((option) => option.id) ??
+    (value?.optionId ? [value.optionId] : []);
   return result;
 };
 
@@ -398,7 +399,10 @@ const restoreAppsValues = (backup: AppsBackup, after: SelectOption[]) => {
       `The board's ${APPS_FIELD} options no longer line up with the backup at ${backupPath(backup.fieldId)}, so items' values can't be matched. Put them back from that file by hand.`,
     );
   const newIdByOld = new Map(
-    backup.before.map((option, index) => [option.id, after[index]?.id ?? option.id]),
+    backup.before.map((option, index) => [
+      option.id,
+      after[index]?.id ?? option.id,
+    ]),
   );
   const moved = backup.values.filter(({ optionIds }) =>
     optionIds.some((id) => newIdByOld.get(id) !== id),
@@ -662,13 +666,10 @@ const run = async () => {
   // An issue closed as a duplicate is never adopted, so its original is.
   const issuesByTitle = existingIssues
     .filter((issue) => issue.stateReason !== 'DUPLICATE')
-    .reduce(
-      (map, issue) => {
-        const key = issue.title.toLowerCase();
-        return map.set(key, [...(map.get(key) ?? []), issue]);
-      },
-      new Map<string, typeof existingIssues>(),
-    );
+    .reduce((map, issue) => {
+      const key = issue.title.toLowerCase();
+      return map.set(key, [...(map.get(key) ?? []), issue]);
+    }, new Map<string, typeof existingIssues>());
   // Older roadmaps were titled "<App>: Title" with no number, so that form is
   // adopted too. An issue made before titles carried the app prefix is adopted
   // by its bare title only when that title is unique, so a common title is
