@@ -24,7 +24,7 @@ interface PhotoStripProps {
 }
 
 const TILE_BOX =
-  'bg-muted aspect-4/3 h-auto max-h-[60dvh] w-full overflow-hidden rounded-2xl';
+  'bg-muted aspect-4/3 h-auto max-h-[40dvh] w-full overflow-hidden rounded-2xl [@media(max-height:499px)]:max-h-[26dvh]';
 
 /** A sideways row of photos that snaps one at a time and lets the next peek in, with "1 / 5" under it, arrows from `sm`, and a tap that opens the pictures full screen. A photo that is loading holds its box, and one that fails shows a camera tile; the strip hides when none can be shown. */
 function PhotoStrip({ photos, label, fallback = null }: PhotoStripProps) {

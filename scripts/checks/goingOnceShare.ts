@@ -21,7 +21,13 @@ import {
   toPublicThing,
   toSalePage,
 } from '../../functions/src/apps/going-once/salePageView.ts';
+import {
+  INQUIRY_LIMITS,
+  readContact as readContactOnServer,
+  toInquiryId,
+} from '../../functions/src/apps/going-once/inquiryView.ts';
 import * as clientConstants from '../../src/apps/going-once/constants.ts';
+import { readContact as readContactOnClient } from '../../src/apps/going-once/utils/contact.ts';
 import { isListable as isListableOnClient } from '../../src/apps/going-once/utils/listing.ts';
 import { SEED_SALE_LINK_ID } from '../seeds/goingOnce.ts';
 
@@ -562,6 +568,60 @@ check(
     ].forEach((field) =>
       assert.ok(!view.includes(field), `${field} is named in salePageView.ts`),
     );
+  },
+);
+
+check('the interest form caps equal those of the app', () => {
+  assert.equal(
+    INQUIRY_LIMITS.MAX_NAME_LENGTH,
+    clientConstants.MAX_INQUIRY_NAME_LENGTH,
+  );
+  assert.equal(
+    INQUIRY_LIMITS.MAX_CONTACT_LENGTH,
+    clientConstants.MAX_INQUIRY_CONTACT_LENGTH,
+  );
+  assert.equal(
+    INQUIRY_LIMITS.MAX_MESSAGE_LENGTH,
+    clientConstants.MAX_INQUIRY_MESSAGE_LENGTH,
+  );
+});
+
+check(
+  'the phone-or-email field is read the same on the phone and in the function',
+  () => {
+    [
+      '206-555-0142',
+      '(206) 555.0142',
+      '+1 206 555 0142',
+      ' Priya@Example.COM ',
+      'priya@example',
+      'priya@',
+      '12345',
+      '12345678901234567890123',
+      'call me',
+      '',
+    ].forEach((text) => {
+      const server = readContactOnServer(text);
+      const client = readContactOnClient(text);
+      assert.equal(client?.kind ?? null, server?.kind ?? null, text);
+      assert.equal(
+        client?.value ?? null,
+        (server?.kind === 'email' ? server.email : server?.phone) ?? null,
+        text,
+      );
+    });
+  },
+);
+
+check(
+  'an inquiry id is 26 base32 characters, the same for the same contact and thing, different otherwise',
+  () => {
+    const id = toInquiryId('sofa', '2065550142');
+    assert.match(id, /^[a-z2-7]{26}$/);
+    assert.equal(id, toInquiryId('sofa', '2065550142'));
+    assert.notEqual(id, toInquiryId('desk', '2065550142'));
+    assert.notEqual(id, toInquiryId('sofa', '2065550143'));
+    assert.equal(readContactOnServer('(206) 555-0142')?.key, '2065550142');
   },
 );
 

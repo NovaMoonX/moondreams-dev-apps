@@ -27,26 +27,26 @@ function CoSellerIntro({ sale, uid }: CoSellerIntroProps) {
   if (isSaleSeller(sale, uid) || isSeen) return null;
 
   return (
-    <div className='space-y-2'>
-      <IntroCard
-        icon='👋'
-        lead={`${toFirstName(seller?.displayName)} added you to ${sale.name}.`}
-      >
-        You see everything, floor prices and notes included, and can do
-        everything but delete other people&apos;s things, manage co-sellers or
-        change the sale&apos;s details. You can leave from People.
-      </IntroCard>
-      <div className='flex justify-end'>
+    <IntroCard
+      icon='👋'
+      lead={`${toFirstName(seller?.displayName)} added you to ${sale.name}.`}
+      action={
         <Button
           type='button'
-          variant='tertiary'
+          variant='secondary'
           size='sm'
+          rounded='full'
+          className="relative h-7 px-3 text-xs after:absolute after:-inset-x-2 after:-inset-y-1.5 after:content-['']"
           onClick={() => setIsSeen(true)}
         >
           Got it
         </Button>
-      </div>
-    </div>
+      }
+    >
+      You see everything, floor prices and notes included, and can do all but
+      delete other people&apos;s things, manage co-sellers or change the
+      sale&apos;s details; you can leave from People.
+    </IntroCard>
   );
 }
 

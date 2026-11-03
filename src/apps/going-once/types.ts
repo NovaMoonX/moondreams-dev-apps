@@ -182,3 +182,44 @@ export type SalePageResult =
     };
 
 export type SaleLinkAction = 'create' | 'renew' | 'stop';
+
+export type InquiryStatus = 'NEW' | 'HANDLED';
+
+/** A buyer's message about a thing; made and resent only by the server. */
+export interface Inquiry {
+  id: string;
+  saleId: string;
+  itemId: string;
+  itemTitleAtSend: string;
+  /** `null` once the sale's contacts are cleared. */
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  status: InquiryStatus;
+  handledBy: string | null;
+  handledAt: number | null;
+  sendCount: number;
+  createdAt: number;
+  lastSentAt: number;
+  contactClearedAt: number | null;
+}
+
+export type InterestResult =
+  | { status: 'sent'; contact: 'email' | 'phone' }
+  | {
+      status: 'not_found' | 'not_available' | 'busy' | 'full' | 'slow_down';
+    }
+  | { status: 'invalid'; field: 'name' | 'contact' | 'message' };
+
+export interface InterestRequest {
+  linkId: string;
+  itemId: string;
+  name: string;
+  contact: string;
+  message: string;
+  /** Left empty by a person; anything in it is a bot. */
+  website: string;
+}
+
+export type InboxView = 'new' | 'handled';

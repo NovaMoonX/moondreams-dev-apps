@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Camera } from 'lucide-react';
 
@@ -5,6 +7,7 @@ import DetailSheet from '@/components/DetailSheet';
 import PhotoStrip from '@/components/PhotoStrip';
 import InlineNotice from '@/components/InlineNotice';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import InterestView from '@apps/going-once/components/public/InterestView';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import { CONDITION_LABELS } from '@apps/going-once/constants';
@@ -13,11 +16,17 @@ import type { PublicThing } from '@apps/going-once/types';
 
 interface BuyerThingDrawerProps {
   thing: PublicThing;
+  linkId: string;
   onClose: () => void;
 }
 
 /** A thing's public details in a drawer (a modal from `sm`): only the fields the page is allowed to carry. */
-function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
+function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
+  const [isAsking, setIsAsking] = useState(false);
+  const [footerNode, setFooterNode] = useState<HTMLElement | null>(null);
+  const [refusal, setRefusal] = useState<'not_found' | 'not_available' | null>(
+    null,
+  );
   const photos = usePublicPhotoUrls(thing.photos, 'm');
   const facts = [
     thing.condition === null ? null : CONDITION_LABELS[thing.condition],
@@ -30,23 +39,62 @@ function BuyerThingDrawer({ thing, onClose }: BuyerThingDrawerProps) {
       isOpen
       onClose={onClose}
       title={thing.title}
+      viewKey={isAsking ? 'interest' : 'thing'}
       footer={
-        <div className='space-y-3'>
-          <p className='text-muted-foreground text-center text-sm'>
-            Want it? Ask whoever sent you this link.
-          </p>
-          <Button type='button' className='h-11 w-full' onClick={onClose}>
-            Done
-          </Button>
-        </div>
+        isAsking ? (
+          <div ref={setFooterNode} />
+        ) : (
+          <div className='space-y-3'>
+            {refusal !== null && (
+              <p className='text-muted-foreground text-center text-sm'>
+                {refusal === 'not_available'
+                  ? 'This one just sold, sorry.'
+                  : 'Want it? Ask whoever sent you this link.'}
+              </p>
+            )}
+            <div className='flex items-center gap-2'>
+              <Button
+                type='button'
+                variant='secondary'
+                size='lg'
+                rounded='full'
+                className={refusal === null ? '' : 'w-full'}
+                onClick={onClose}
+              >
+                Done
+              </Button>
+              {refusal === null && (
+                <Button
+                  type='button'
+                  size='lg'
+                  rounded='full'
+                  className='min-w-0 flex-1'
+                  onClick={() => setIsAsking(true)}
+                >
+                  I&apos;m interested
+                </Button>
+              )}
+            </div>
+          </div>
+        )
       }
     >
-      <div className='space-y-4'>
+      {isAsking && (
+        <InterestView
+          thing={thing}
+          linkId={linkId}
+          footerNode={footerNode}
+          onBack={() => setIsAsking(false)}
+          onDone={onClose}
+          onRefused={setRefusal}
+        />
+      )}
+      <div className={isAsking ? 'hidden' : 'space-y-4'}>
         <PhotoStrip
           photos={photos}
           label={thing.title}
           fallback={
-            <div className='bg-accent/60 text-accent-foreground grid aspect-4/3 w-full place-items-center rounded-2xl'>
+            <div className='bg-accent/60 text-accent-foreground grid aspect-4/3 max-h-[40dvh] w-full place-items-center rounded-2xl [@media(max-height:499px)]:max-h-[26dvh]'>
               <Camera className='size-8 opacity-60' aria-hidden='true' />
             </div>
           }

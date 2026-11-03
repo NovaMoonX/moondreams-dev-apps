@@ -2,9 +2,12 @@ import { useEffect } from 'react';
 
 import { store, useAppDispatch, type AppDispatch } from '@/store';
 import {
+  clearInquiries,
   clearItems,
   clearOpenSale,
   clearSaleInvites,
+  setInquiries,
+  setInquiriesError,
   setItems,
   setItemsError,
   setMyInvites,
@@ -16,6 +19,10 @@ import {
   setSales,
   setSalesError,
 } from '@apps/going-once/store';
+import {
+  startHandledInquiriesListener,
+  startNewInquiriesListener,
+} from '@apps/going-once/store/listeners/inquiriesListener';
 import {
   startMyInvitesListener,
   startSaleInvitesListener,
@@ -117,7 +124,20 @@ export function useGoingOnceSync(
     const unsubscribeInvites = startSaleInvitesListener(saleId, (invites) =>
       dispatch(setSaleInvites({ saleId, invites })),
     );
+    const unsubscribeNew = startNewInquiriesListener(
+      saleId,
+      (items) => dispatch(setInquiries({ saleId, list: 'new', items })),
+      () => dispatch(setInquiriesError({ saleId, list: 'new' })),
+    );
+    const unsubscribeHandled = startHandledInquiriesListener(
+      saleId,
+      (items) => dispatch(setInquiries({ saleId, list: 'handled', items })),
+      () => dispatch(setInquiriesError({ saleId, list: 'handled' })),
+    );
     return () => {
+      unsubscribeNew();
+      unsubscribeHandled();
+      dispatch(clearInquiries());
       unsubscribeSale();
       unsubscribeItems();
       unsubscribeInvites();

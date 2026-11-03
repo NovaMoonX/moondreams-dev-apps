@@ -13,7 +13,7 @@ import { formatCentsShort } from '@/utils/moneyUtils';
 import PeopleSection from '@apps/going-once/components/people/PeopleSection';
 import LinkCard from '@apps/going-once/components/sales/LinkCard';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
-import { SALE_DETAILS } from '@apps/going-once/constants';
+import { SALE_DETAILS, SALE_DETAIL_NOTES } from '@apps/going-once/constants';
 import { deleteSale } from '@apps/going-once/store/actions/saleActions';
 import {
   selectItems,
@@ -108,38 +108,49 @@ function SaleTab({
 
   return (
     <div className='space-y-6'>
-      <div className='grid grid-cols-2 gap-2'>
-        <StatTile
-          label='Collected'
-          value={formatCentsShort(summary.SOLD.collectedCents)}
-          detail={formatOfAsked(summary.SOLD.askedCents)}
-          isLabelWrapped
-          onOpen={{
-            label: 'Collected: open the sold things',
-            onClick: () => onOpenStatus('SOLD'),
-          }}
-        />
-        <StatTile
-          label='Pending'
-          value={summary.PENDING.count}
-          detail={formatStatusTotal('PENDING', summary)}
-          isLabelWrapped
-          onOpen={{
-            label: 'Pending: open the pending things',
-            onClick: () => onOpenStatus('PENDING'),
-          }}
-        />
-        <StatTile
-          className='col-span-2'
-          label='Left'
-          value={summary.AVAILABLE.count}
-          detail={formatStatusTotal('AVAILABLE', summary)}
-          onOpen={{
-            label: 'Left: open the available things',
-            onClick: () => onOpenStatus('AVAILABLE'),
-          }}
-        />
-      </div>
+      {items.length > 0 && (
+        <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
+          <StatTile
+            label='Collected'
+            value={formatCentsShort(summary.SOLD.collectedCents)}
+            detail={formatOfAsked(summary.SOLD.askedCents)}
+            isLabelWrapped
+            hasChevron
+            onOpen={{
+              label: 'Collected: open the sold things',
+              onClick: () => onOpenStatus('SOLD'),
+            }}
+          />
+          <StatTile
+            label='Pending'
+            value={summary.PENDING.count}
+            detail={formatStatusTotal('PENDING', summary)}
+            isLabelWrapped
+            hasChevron
+            onOpen={{
+              label: 'Pending: open the pending things',
+              onClick: () => onOpenStatus('PENDING'),
+            }}
+          />
+          <StatTile
+            className='col-span-2 sm:col-span-1'
+            label='Left'
+            value={summary.AVAILABLE.count}
+            detail={formatStatusTotal('AVAILABLE', summary)}
+            isLabelWrapped
+            hasChevron
+            onOpen={{
+              label: 'Left: open the available things',
+              onClick: () => onOpenStatus('AVAILABLE'),
+            }}
+          />
+        </div>
+      )}
+      {items.length === 0 && areItemsReady && (
+        <p className='text-muted-foreground text-sm text-pretty'>
+          Add your first thing and what you&apos;ve sold shows up here.
+        </p>
+      )}
 
       <LinkCard sale={sale} isSeller={isSeller} />
 
@@ -150,12 +161,11 @@ function SaleTab({
         {DETAIL_FIELDS.map((field) => {
           const { label, empty } = SALE_DETAILS[field];
           const value = sale[field];
-          const isPublic = field !== 'name';
           return (
             <SummaryRow
               key={field}
               label={label}
-              detail={isPublic ? 'Buyers see this' : undefined}
+              detail={SALE_DETAIL_NOTES[field]}
               onClick={isSeller ? () => setEditing(field) : undefined}
             >
               {value === null || value === '' ? (
