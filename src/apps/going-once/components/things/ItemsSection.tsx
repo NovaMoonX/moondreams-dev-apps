@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Plus, X } from 'lucide-react';
+import { ChevronRight, FolderDown, Plus, X } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import LazyMount from '@/components/LazyMount';
@@ -11,6 +11,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SortControl from '@/components/SortControl';
 import { useAppSelector } from '@/store';
+import SaveAllPhotosSheet from '@apps/going-once/components/relist/SaveAllPhotosSheet';
 import NewThingFlow from '@apps/going-once/components/things/NewThingFlow';
 import OpenThing from '@apps/going-once/components/things/OpenThing';
 import ThingRow from '@apps/going-once/components/things/ThingRow';
@@ -88,6 +89,7 @@ function ItemsSection({
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
+  const [isSavingPhotos, setIsSavingPhotos] = useState(false);
   const openItem = items.find((item) => item.id === openId) ?? null;
   const isSeller = isSaleSeller(sale, uid);
 
@@ -156,6 +158,31 @@ function ItemsSection({
     </Button>
   );
 
+  const hasSavablePhotos = items.some(
+    (item) =>
+      (item.status === 'AVAILABLE' || item.status === 'PENDING') &&
+      item.photos.length > 0,
+  );
+
+  const headerActions = (
+    <div className='flex items-center gap-2'>
+      {hasSavablePhotos && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          rounded='full'
+          aria-label='Save all photos'
+          className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:-inset-x-1.5! before:content-['']"
+          onClick={() => setIsSavingPhotos(true)}
+        >
+          <FolderDown className='size-4' aria-hidden='true' />
+        </Button>
+      )}
+      {addButton}
+    </div>
+  );
+
   if (status === 'error') {
     return (
       <EmptyCard icon='⚠️'>
@@ -167,7 +194,7 @@ function ItemsSection({
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title='Things' action={addButton} />
+      <SectionHeader title='Things' action={headerActions} />
       {items.length === 0 && status === 'ready' && (
         <EmptyCard icon='🏷️'>
           Add your first thing: photos first, then a name and a price.
@@ -286,6 +313,12 @@ function ItemsSection({
             setAdding({ resume: openItem });
             onCloseThing();
           }}
+        />
+      )}
+      {isSavingPhotos && (
+        <SaveAllPhotosSheet
+          saleId={saleId}
+          onClose={() => setIsSavingPhotos(false)}
         />
       )}
       {adding && (
