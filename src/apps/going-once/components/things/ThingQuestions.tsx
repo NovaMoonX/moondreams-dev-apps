@@ -76,6 +76,7 @@ export function FloorField({
         value={answers.floor}
         onChange={(floor) => onChange({ floor })}
         autoFocus
+        variant='outline'
         wrapperClassName={isTitled ? undefined : 'max-w-48'}
       />
       <FloorAboveNote answers={answers} />
@@ -127,15 +128,14 @@ export function PriceQuestion({
         />
       )}
       {hasFloor && !answers.isFree && (
-        <div className='bg-accent/60 border-border space-y-2 rounded-2xl border p-3'>
-          <p className='text-accent-foreground text-sm font-semibold'>
-            🔒 Lowest you'd take
-          </p>
+        <div className='bg-muted border-border flex flex-col items-center space-y-2 rounded-2xl border p-3 text-center'>
+          <p className='text-sm font-semibold'>🔒 Lowest you&apos;d take</p>
           <MoneyInput
             ariaLabel='Lowest you would take'
             value={answers.floor}
             onChange={(floor) => onChange({ floor, isFloorShown: true })}
-            wrapperClassName='max-w-48'
+            variant='outline'
+            wrapperClassName='w-full max-w-48'
           />
           <FloorAboveNote answers={answers} />
           <p className='text-muted-foreground text-xs'>
@@ -235,6 +235,7 @@ export function OriginalPriceQuestion({ answers, onChange }: QuestionProps) {
     <div className='space-y-4'>
       <MoneyInput
         ariaLabel='Original price'
+        variant='outline'
         value={answers.original}
         onChange={(original) => onChange({ original })}
       />
@@ -272,16 +273,41 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
 
 export function StoreLinkQuestion({ answers, onChange }: QuestionProps) {
   return (
-    <LinkAttachField
-      label="Store's page"
-      addLabel="+ Add the store's link"
-      url={answers.boughtUrl}
-      preview={answers.boughtUrlPreview}
-      startRevealed
-      onChange={(boughtUrl, boughtUrlPreview) =>
-        onChange({ boughtUrl, boughtUrlPreview })
-      }
-    />
+    <div className='space-y-4'>
+      <LinkAttachField
+        label="Store's page"
+        addLabel="+ Add the store's link"
+        url={answers.boughtUrl}
+        preview={answers.boughtUrlPreview}
+        startRevealed
+        onChange={(boughtUrl, boughtUrlPreview) =>
+          onChange({ boughtUrl, boughtUrlPreview })
+        }
+      />
+      {answers.boughtUrl.trim() === '' && (
+        <p className='text-muted-foreground text-sm'>
+          Only you and your co-sellers see it unless you choose to show it to
+          buyers.
+        </p>
+      )}
+      {answers.boughtUrl.trim() !== '' && (
+        <label className='flex items-start gap-3'>
+          <AppToggle
+            checked={answers.showBoughtUrl}
+            onCheckedChange={(showBoughtUrl) => onChange({ showBoughtUrl })}
+            aria-label='Show store link to buyers'
+          />
+          <span className='text-sm'>
+            <span className='font-medium'>Show to buyers</span>
+            <span className='text-muted-foreground block'>
+              {answers.showBoughtUrl
+                ? "Buyers can open it from the thing's page."
+                : 'Only you and your co-sellers see it.'}
+            </span>
+          </span>
+        </label>
+      )}
+    </div>
   );
 }
 

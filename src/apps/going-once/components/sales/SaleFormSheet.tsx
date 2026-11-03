@@ -2,7 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
-import { MapPin, StickyNote } from 'lucide-react';
+import { MapPin, StickyNote, Wallet } from 'lucide-react';
 
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import AddFieldChips, {
@@ -22,6 +22,7 @@ import {
   SALE_DETAIL_NOTES,
   SALE_NAME_SUGGESTIONS,
 } from '@apps/going-once/constants';
+import PaymentMethodsField from '@apps/going-once/components/sales/PaymentMethodsField';
 import { startSale } from '@apps/going-once/store/actions/saleActions';
 
 interface SaleFormSheetProps {
@@ -42,6 +43,11 @@ const EXTRA_CHIPS = [
     label: 'Note for buyers',
     icon: <StickyNote className='h-4 w-4' />,
   },
+  {
+    key: 'paymentMethods',
+    label: 'Payment methods',
+    icon: <Wallet className='h-4 w-4' />,
+  },
 ];
 
 const START_SALE_DRAFT_KEY = 'going-once:start-sale:new';
@@ -50,6 +56,7 @@ interface SaleDraft {
   name: string;
   pickupArea: string | null;
   buyerNote: string | null;
+  paymentMethods: string[] | null;
 }
 
 const isTextOrNull = (value: unknown) =>
@@ -57,13 +64,21 @@ const isTextOrNull = (value: unknown) =>
 
 const parseSaleDraft = (stored: unknown): SaleDraft | null => {
   if (typeof stored !== 'object' || stored === null) return null;
-  const { name, pickupArea, buyerNote } = stored as Record<string, unknown>;
+  const { name, pickupArea, buyerNote, paymentMethods } = stored as Record<
+    string,
+    unknown
+  >;
   if (typeof name !== 'string') return null;
   if (!isTextOrNull(pickupArea) || !isTextOrNull(buyerNote)) return null;
   return {
     name,
     pickupArea: pickupArea as string | null,
     buyerNote: buyerNote as string | null,
+    paymentMethods:
+      Array.isArray(paymentMethods) &&
+      paymentMethods.every((method) => typeof method === 'string')
+        ? paymentMethods
+        : null,
   };
 };
 
@@ -89,13 +104,18 @@ function SaleFormSheet({
     kept.restored?.buyerNote ?? null,
   );
 
+  const [paymentMethods, setPaymentMethods] = useState<string[] | null>(
+    kept.restored?.paymentMethods ?? null,
+  );
+
   const isDirty =
     name.trim() !== '' ||
+    (paymentMethods?.length ?? 0) > 0 ||
     (pickupArea?.trim() ?? '') !== '' ||
     (buyerNote?.trim() ?? '') !== '';
   const keptValue = useMemo<SaleDraft>(
-    () => ({ name, pickupArea, buyerNote }),
-    [name, pickupArea, buyerNote],
+    () => ({ name, pickupArea, buyerNote, paymentMethods }),
+    [name, pickupArea, buyerNote, paymentMethods],
   );
   useKeepFormDraft({
     isRestored: kept.restored !== null,
@@ -108,6 +128,7 @@ function SaleFormSheet({
     setName('');
     setPickupArea(null);
     setBuyerNote(null);
+    setPaymentMethods(null);
     kept.hideNotice();
   };
   const requestClose = useDiscardGuard({
@@ -116,15 +137,29 @@ function SaleFormSheet({
   });
   const canStart = name.trim() !== '';
 
-  const revealExtra = (key: string) =>
-    key === 'pickupArea' ? setPickupArea('') : setBuyerNote('');
+  const revealExtra = (key: string) => {
+    if (key === 'pickupArea') setPickupArea('');
+    else if (key === 'paymentMethods') setPaymentMethods([]);
+    else setBuyerNote('');
+  };
+  const isExtraHidden = (key: string) => {
+    if (key === 'pickupArea') return pickupArea === null;
+    if (key === 'paymentMethods') return paymentMethods === null;
+    return buyerNote === null;
+  };
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!canStart) return;
     const sale = startSale(
       dispatch,
-      { uid, name, pickupArea, buyerNote },
+      {
+        uid,
+        name,
+        pickupArea,
+        buyerNote,
+        paymentMethods: paymentMethods ?? [],
+      },
       (message) => addToast({ title: message, type: 'error' }),
     );
     onClose();
@@ -193,7 +228,7 @@ function SaleFormSheet({
               variant='outline'
               aria-label='Note for buyers'
               rows={3}
-              placeholder='Evenings and weekends. Cash or Venmo.'
+              placeholder='Evenings and weekends.'
               maxLength={MAX_BUYER_NOTE_LENGTH}
               value={buyerNote}
               onChange={(event) => setBuyerNote(event.target.value)}
@@ -202,12 +237,21 @@ function SaleFormSheet({
           </RemovableField>
         )}
 
+        {paymentMethods !== null && (
+          <RemovableField
+            label='Payment methods'
+            removeLabel='Remove payment methods'
+            onRemove={() => setPaymentMethods(null)}
+          >
+            <PaymentMethodsField
+              values={paymentMethods}
+              onChange={setPaymentMethods}
+            />
+          </RemovableField>
+        )}
+
         <AddFieldChips
-          chips={EXTRA_CHIPS.filter((chip) =>
-            chip.key === 'pickupArea'
-              ? pickupArea === null
-              : buyerNote === null,
-          )}
+          chips={EXTRA_CHIPS.filter((chip) => isExtraHidden(chip.key))}
           onAdd={revealExtra}
         />
 

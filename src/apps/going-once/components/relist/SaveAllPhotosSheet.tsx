@@ -152,8 +152,8 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
     if (phase.name === 'ready')
       return (
         <p className='text-muted-foreground text-sm'>
-          Your zip is ready. On an iPhone it lands in Files; on Android and
-          computers, in Downloads. This download stays here for 10 minutes.
+          Your zip is ready. On an iPhone or iPad it lands in Files; on Android
+          and computers, in Downloads. This download stays here for 10 minutes.
         </p>
       );
     if (phase.name === 'failed')

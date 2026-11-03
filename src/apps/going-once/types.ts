@@ -17,6 +17,8 @@ export interface Sale {
   /** An area, never an address. */
   pickupArea: string | null;
   buyerNote: string | null;
+  /** The ways buyers can pay, as the seller words them ("Cash", "Venmo"); empty when none are named. Public. */
+  paymentMethods: string[];
   currency: SaleCurrency;
   /** The seller's IANA zone, which the push's quiet hours follow; `null` on a sale from before it was kept, until the seller opens it. */
   timeZone: string | null;
@@ -147,8 +149,12 @@ export interface Item {
   /** Private: the store's page. */
   boughtUrl: string | null;
   boughtUrlPreview: LinkPreview | null;
+  /** The store's link reaches buyers only when this is true. */
+  showBoughtUrl: boolean;
   /** Private. */
   notes: string | null;
+  /** Started in the walk-through and not saved yet; buyers never see a draft. A thing from before drafts reads false. */
+  isDraft: boolean;
   photos: ItemPhoto[];
   status: ItemStatus;
   pending: ItemPendingRecord | null;
@@ -181,6 +187,8 @@ export interface PublicThing {
   askingPriceCents: number;
   /** Set only when the seller chose to show it. */
   originalPriceCents: number | null;
+  /** The store's page, an http(s) link, set only when the seller chose to show it. */
+  storeUrl: string | null;
   status: Extract<ItemStatus, 'AVAILABLE' | 'PENDING'>;
   /** Cover first, in the thing's order; only photos whose copies exist. */
   photos: PublicPhoto[];
@@ -191,7 +199,7 @@ export type SalePageResult =
   | { status: 'not_found' }
   | {
       status: 'ok';
-      sale: Pick<Sale, 'name' | 'pickupArea' | 'buyerNote'>;
+      sale: Pick<Sale, 'name' | 'pickupArea' | 'buyerNote' | 'paymentMethods'>;
       things: PublicThing[];
       /** True when the signed-in visitor is the seller or a co-seller. */
       isMember: boolean;

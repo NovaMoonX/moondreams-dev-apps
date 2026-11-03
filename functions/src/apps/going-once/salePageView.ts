@@ -7,6 +7,9 @@ export const SALE_PAGE_LIMITS = {
   MAX_ITEM_DESCRIPTION_LENGTH: 2000,
   MAX_ITEM_BRAND_LENGTH: 80,
   MAX_ITEM_SIZE_LENGTH: 80,
+  MAX_PAYMENT_METHODS: 8,
+  MAX_PAYMENT_METHOD_LENGTH: 30,
+  MAX_STORE_URL_LENGTH: 2000,
   MAX_PAGE_THINGS: 300,
 } as const;
 
@@ -51,6 +54,7 @@ export interface PublicSale {
   name: string;
   pickupArea: string | null;
   buyerNote: string | null;
+  paymentMethods: string[];
 }
 
 /** One photo's two copies, as Storage paths. */
@@ -68,6 +72,7 @@ export interface PublicThing {
   condition: PublicCondition | null;
   askingPriceCents: number;
   originalPriceCents: number | null;
+  storeUrl: string | null;
   status: PublicStatus;
   photos: PublicPhoto[];
 }
@@ -100,13 +105,14 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** A thing buyers can be shown needs a photo, a name and a price; Free counts as a price. */
+/** A thing buyers can be shown is not a draft (a thing from before drafts has no field and is not one) and has a photo, a name and a price; Free counts as a price. */
 export function isListable(item: unknown): boolean {
   if (!isRecord(item)) {
     return false;
   }
 
   return (
+    item.isDraft !== true &&
     Array.isArray(item.photos) &&
     item.photos.length > 0 &&
     typeof item.title === 'string' &&
@@ -174,6 +180,43 @@ const toText = (value: unknown, max: number) => {
   return trimmed === '' ? null : trimmed;
 };
 
+const toPaymentMethods = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value
+        .flatMap((method: unknown) => {
+          const text = toText(
+            method,
+            SALE_PAGE_LIMITS.MAX_PAYMENT_METHOD_LENGTH,
+          );
+          return text === null ? [] : [text];
+        })
+        .slice(0, SALE_PAGE_LIMITS.MAX_PAYMENT_METHODS)
+    : [];
+
+/** The store's link as an http(s) address, or null; only a link the seller chose to show is passed in. */
+const toStoreUrl = (value: unknown) => {
+  if (
+    typeof value !== 'string' ||
+    value.length > SALE_PAGE_LIMITS.MAX_STORE_URL_LENGTH
+  ) {
+    return null;
+  }
+
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+
+    url.username = '';
+    url.password = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return null;
+  }
+};
+
 const toCents = (value: unknown) =>
   typeof value === 'number' &&
   Number.isSafeInteger(value) &&
@@ -207,12 +250,13 @@ export function toPublicSale(raw: unknown): PublicSale | null {
           raw.buyerNote,
           SALE_PAGE_LIMITS.MAX_BUYER_NOTE_LENGTH,
         ),
+        paymentMethods: toPaymentMethods(raw.paymentMethods),
       };
 }
 
 /**
  * Copies a stored thing's public fields by name into a new object; null when it is not showing (not Available or Pending, not listable) or its id is not a plain key.
- * The original price leaves only when the seller chose to show it.
+ * The original price and the store's link leave only when the seller chose to show them; the store's name, preview and date never do.
  */
 export function toPublicThing(
   raw: unknown,
@@ -248,6 +292,7 @@ export function toPublicThing(
     askingPriceCents,
     originalPriceCents:
       raw.showOriginalPrice === true ? toCents(raw.originalPriceCents) : null,
+    storeUrl: raw.showBoughtUrl === true ? toStoreUrl(raw.boughtUrl) : null,
     status,
     photos: toPublicPhotos(raw, listing),
   };
@@ -327,6 +372,7 @@ export function sealPage(
       condition: toCondition(thing.condition),
       askingPriceCents,
       originalPriceCents: toCents(thing.originalPriceCents),
+      storeUrl: toStoreUrl(thing.storeUrl),
       status,
       photos:
         linkId === null || !Array.isArray(thing.photos)

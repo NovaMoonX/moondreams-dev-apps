@@ -35,7 +35,7 @@ Shapes: cards and drawers are `rounded-2xl`. Inputs, pills and buttons are fully
 
 ## Example data (every board reconciles to this)
 
-Sale **Fall clear-out**. Pickup area "Capitol Hill, Seattle". Note for buyers: "Evenings and weekends. Cash or Venmo." Seller **Maya**, co-seller **Theo**. Today is **Mon Nov 2**.
+Sale **Fall clear-out**. Pickup area "Capitol Hill, Seattle". Note for buyers: "Evenings and weekends." Seller **Maya**, co-seller **Theo**. Today is **Mon Nov 2**.
 
 | Thing | Photos | Condition | Asking | Floor 🔒 | Original | Status | Paid |
 |---|---|---|---|---|---|---|---|
@@ -231,7 +231,7 @@ Title note: **"Where the sale stands, who is helping, the public link, and finis
 
 **S13 · Public page off** · `Seller`
 - The Public page card with the switch off.
-- InlineNotice (info): "Turning it on makes a link that shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling."
+- InlineNotice (info): under the line "Anyone with the link can see what's for sale and tell you they're interested, with no account." (off: "When it's on, anyone with the link…"): "The page shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling."
 
 **S14 · Get a new address** · `Seller` · confirm dialog
 - Title: "Get a new address?"
@@ -478,7 +478,7 @@ Title note: **"Interest arrives once, for everyone selling. Relisting elsewhere 
 **R3 · Post it somewhere else** · `Seller · Co-seller` · T4 scrolled to its end
 - Caption "Post it somewhere else". A muted block of two rows:
   - Copy listing text: "Name, condition, price and description".
-  - Save photos: "5 photos to your phone".
+  - Save photos: "5 photos to your device".
 
 **R3b · Getting the photos** · `Seller · Co-seller`
 - The Save photos row's sub-line reads "Getting 5 photos ready… 3 of 5", with a small spinner.
@@ -557,7 +557,7 @@ Title note: **"Signed out, on a phone: what's still for sale, and one way to ask
 - Signed-out site header: logo, Sign in.
 - "Fall clear-out" (26px).
 - Line: "9 for sale · Capitol Hill, Seattle".
-- Note: "Evenings and weekends. Cash or Venmo."
+- Note: "Evenings and weekends."
 - Cards, two across, 4:3 photo, 2-line name, price tag:
   - Gray sofa $350
   - Dining chairs (set of 4) $120

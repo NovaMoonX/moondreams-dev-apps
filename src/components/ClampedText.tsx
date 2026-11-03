@@ -8,15 +8,22 @@ const CLAMP_CLASSES = {
   1: 'line-clamp-1',
   2: 'line-clamp-2',
   4: 'line-clamp-4',
+  8: 'line-clamp-8',
 };
 
 interface ClampedTextProps {
   text: string;
   /** How many lines show before "Show more". */
-  maxLines?: 1 | 2 | 4;
+  maxLines?: 1 | 2 | 4 | 8;
+  /** Body-size text, for a message read on its own rather than a note beside other content. */
+  isBodySize?: boolean;
 }
 
-function ClampedText({ text, maxLines = 4 }: ClampedTextProps) {
+function ClampedText({
+  text,
+  maxLines = 4,
+  isBodySize = false,
+}: ClampedTextProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isClamped, setIsClamped] = useState(false);
   const observerRef = useRef<ResizeObserver | null>(null);
@@ -38,7 +45,8 @@ function ClampedText({ text, maxLines = 4 }: ClampedTextProps) {
       <p
         ref={measure}
         className={join(
-          'text-sm wrap-break-word whitespace-pre-wrap',
+          'wrap-break-word whitespace-pre-wrap',
+          !isBodySize && 'text-sm',
           !isOpen && CLAMP_CLASSES[maxLines],
         )}
       >

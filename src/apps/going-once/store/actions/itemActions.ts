@@ -34,6 +34,7 @@ export type ItemFields = Partial<
     | 'boughtOn'
     | 'boughtUrl'
     | 'boughtUrlPreview'
+    | 'showBoughtUrl'
     | 'notes'
   >
 >;
@@ -55,7 +56,7 @@ const readImageSize = async (file: File) => {
   }
 };
 
-/** Writes a new thing from its first answer, so it starts Not listed yet; the write is queued offline. */
+/** Writes a new thing from its first answer as a draft, which buyers never see until it is saved; the write is queued offline. */
 export function createItem(
   saleId: string,
   itemId: string,
@@ -78,7 +79,9 @@ export function createItem(
     boughtOn: null,
     boughtUrl: null,
     boughtUrlPreview: null,
+    showBoughtUrl: false,
     notes: null,
+    isDraft: true,
     photos: [],
     status: 'AVAILABLE',
     pending: null,
@@ -95,15 +98,30 @@ export function createItem(
   return setDoc(getItemRef(saleId, itemId), item);
 }
 
-/** Saves only the fields given, never `status` or `photos`; the write is queued offline. */
+/** Saves only the fields given, never `status` or `photos`; `isFinishing` also takes the thing out of draft. The write is queued offline. */
 export function updateItemFields(
   saleId: string,
   itemId: string,
   uid: string,
   fields: ItemFields,
+  isFinishing = false,
 ): Promise<void> {
   return updateDoc(getItemRef(saleId, itemId), {
     ...fields,
+    ...(isFinishing ? { isDraft: false } : {}),
+    lastEditedAt: Date.now(),
+    lastEditedBy: uid,
+  });
+}
+
+/** Takes a thing out of draft so buyers can be shown it (once it has a photo, a name and a price); the write is queued offline. */
+export function markItemSaved(
+  saleId: string,
+  itemId: string,
+  uid: string,
+): Promise<void> {
+  return updateDoc(getItemRef(saleId, itemId), {
+    isDraft: false,
     lastEditedAt: Date.now(),
     lastEditedBy: uid,
   });

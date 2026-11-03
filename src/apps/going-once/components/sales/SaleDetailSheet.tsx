@@ -93,7 +93,7 @@ function SaleDetailSheet({
             variant='outline'
             aria-label={label}
             rows={4}
-            placeholder='Evenings and weekends. Cash or Venmo.'
+            placeholder='Evenings and weekends.'
             maxLength={MAX_BUYER_NOTE_LENGTH}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}

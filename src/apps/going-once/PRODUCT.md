@@ -50,7 +50,7 @@ It started with a home to clear out and a seller who hates selling. A friend was
 
 ### Things and What Each Field Shows, In Detail
 
-The real input is a person walking through a home with a phone: twenty to a hundred things, often over several sittings, three to six photos each, most from the camera, some already in the photo library. So adding a thing starts from its photos (several picked at once, or taken one after another, up to 12), the thing is saved from its first photo or its name, and the walk goes on to the next thing without a Save button. A thing goes on the public page only once it has a photo, a name and a price ("Free" counts as a price); until then it is "Not listed yet".
+The real input is a person walking through a home with a phone: twenty to a hundred things, often over several sittings, three to six photos each, most from the camera, some already in the photo library. So adding a thing starts from its photos (several picked at once, or taken one after another, up to 12), the thing is saved from its first photo or its name, and the walk goes on to the next thing without a Save button. A thing goes on the public page only once it has a photo, a name and a price ("Free" counts as a price) and is saved; until then it is a draft that buyers never see.
 
 **No categories.** Things are found by status (Available, Pending, Sold) and search; nobody sorts them into kinds, so adding a thing stays four answers.
 
@@ -95,7 +95,7 @@ One noun, three states. The same words are used on every screen, in the inbox, i
   - **Private on a lock screen.** It names the thing and the sale, never the buyer's name, phone, email, message or a price.
   - **Opens what it is about.** One inquiry opens that inquiry; a bundle opens the inbox on New.
 - **The phone's permission is asked at the moment it matters**: the first time the person opens the inbox, or right after joining as a co-seller, through the site's own push flow, never on load. After "Not now" it comes back on the inbox, at most three times. A switch in the sale's settings ("Push me when someone's interested") turns it off for that person and that sale.
-- **The inbox** is shared by the seller and every co-seller: newest first, each inquiry with the thing's photo and name, the buyer's name and message, and buttons to call, text or email them (the reply happens in the phone's own app, never in Going Once). An inquiry is New until someone marks it Handled by hand, which records who; nothing marks it for them, so an unreached buyer never drops out of New.
+- **The inbox** is shared by the seller and every co-seller: newest first, each inquiry with the thing's photo and name, the buyer's name and message, and buttons to call, text or email them (the reply happens in the device's own app, never in Going Once). An inquiry is New until someone marks it Handled by hand, which records who; nothing marks it for them, so an unreached buyer never drops out of New.
 - **A thing's sheet lists its inquiries**, so a co-seller choosing who gets it sees everyone who asked, in order.
 - **Buyer contact details are private** to the seller and co-sellers, never on the public page, in a push or in copied listing text.
 - **A thing that is Sold** keeps its inquiries for the record, each marked "(Sold)" in the inbox; the form on the public page is gone with it.
@@ -129,7 +129,7 @@ This is Theo's loop, and every tool in it is one tap from where he is.
 6. **Relist the whole sale.** Save all photos once, then copy each thing's text as it is listed.
 
 - **Copy listing text** (seller and co-sellers) copies the thing's name, condition, price and description in a plain form ready to paste into Marketplace, with "Was $400" only when Show original price is on. It never includes the floor price, notes, where it was bought or any buyer's details, and the button says what it copies.
-- **Save photos (one thing)** sends that thing's photos at listing quality to the phone's share sheet, to save to the camera roll, and downloads them where the browser has no share sheet. This is the way into the camera roll.
+- **Save photos (one thing)** sends that thing's photos at listing quality to the device's share sheet, to save to the camera roll, and downloads them where the browser has no share sheet. This is the way into the camera roll.
 - **Save all photos (the whole sale)** makes one zip of every Available and Pending thing's photos at listing quality, one folder per thing named after it, so each set matches its listing. Before starting it says how many things and photos it holds and about how large it is, and that it is best on Wi-Fi. It lands in the phone's Files or a computer's downloads, not the camera roll; Sold, taken-off and not-yet-listed things are left out.
 - **The app remembers what was relisted.** Copying a thing's listing text records who copied it and when, keeping only the most recent copy ("Theo copied this listing on Oct 28"; if Maya copies it later, the line names Maya and her day instead), shown on the thing, so whoever marks it Sold is reminded to take the other listing down (below).
 - Going Once doesn't post to Marketplace or track listings there.
@@ -138,7 +138,7 @@ This is Theo's loop, and every tool in it is one tap from where he is.
 
 - **Collected:** the sum of what was paid for Sold things. **Asked for those:** their asking prices beside it, so "$225 of $245 asked" reads at a glance.
 - **Pending:** a count and what they are asking.
-- **Left:** Available things and what they are asking. Things not listed yet (no photo, name or price) are counted apart, not priced ("plus 1 not listed yet"), and taken-off things are left out of every figure.
+- **Left:** Available things and what they are asking. Drafts (no photo, name or price yet, or not saved) are counted apart, not priced ("plus 1 draft"), and taken-off things are left out of every figure.
 - The floor price is never summed; it is a per-thing guide, not a target.
 
 ### Finishing a Sale, In Detail
@@ -184,7 +184,7 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 ### Core MVP
 
 - [x] **Seller:** start a sale with a name, pickup area and note (behind the `create-sales` switch, open to everyone); keep several, open or finished
-- [x] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, "Not listed yet" until it has a photo, a name and a price; no categories, found by status and search
+- [x] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, a draft until it is saved with a photo, a name and a price; no categories, found by status and search
 - [x] **Seller:** add co-sellers by email and remove them, with a confirm that says what they marked stays; **Co-seller:** join, leave, and be told plainly when removed
 - [x] **Co-seller:** Available, Pending (optionally who and a pickup day) and Sold with what was paid, how and when; Not sold after all; take off the list and put back; a short history per thing; refused in words from a stale screen (the seller has the same controls)
 - [x] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating

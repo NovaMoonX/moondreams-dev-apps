@@ -124,29 +124,47 @@ function StoreLink({ item }: { item: Item }) {
   if (item.boughtUrl === null || page === null) return null;
   const { boughtUrlPreview: preview } = item;
   return (
-    <a
-      href={item.boughtUrl}
-      target='_blank'
-      rel='noopener noreferrer'
-      className='[&>div]:border-accent-foreground/20 [&>div]:bg-accent-foreground/5 block'
-    >
-      <LinkPreviewCard
-        preview={{
-          url: item.boughtUrl,
-          host: page.hostname.replace(/^www\./i, ''),
-          title: preview?.title ?? null,
-          siteName: preview?.siteName ?? null,
-          description: preview?.description ?? null,
-          imageUrl: preview?.imageUrl?.startsWith('https://')
-            ? preview.imageUrl
-            : null,
-        }}
-      />
-    </a>
+    <div className='space-y-1'>
+      <a
+        href={item.boughtUrl}
+        target='_blank'
+        rel='noopener noreferrer'
+        className='[&>div]:border-accent-foreground/20 [&>div]:bg-accent-foreground/5 block'
+      >
+        <LinkPreviewCard
+          preview={{
+            url: item.boughtUrl,
+            host: page.hostname.replace(/^www\./i, ''),
+            title: preview?.title ?? null,
+            siteName: preview?.siteName ?? null,
+            description: preview?.description ?? null,
+            imageUrl: preview?.imageUrl?.startsWith('https://')
+              ? preview.imageUrl
+              : null,
+          }}
+        />
+      </a>
+      {item.showBoughtUrl && (
+        <p className='text-muted-foreground text-xs'>
+          Store link · shown to buyers
+        </p>
+      )}
+    </div>
   );
 }
 
 const INTEREST_SHOWN = 3;
+
+/** What a draft still lacks, all of it: "add a photo and a price", or "save it" once nothing is missing. */
+const getDraftNeeds = (item: Item) => {
+  const missing = [
+    item.photos.length === 0 && 'a photo',
+    item.title.trim() === '' && 'a name',
+    item.askingPriceCents === null && 'a price',
+  ].filter((part) => part !== false);
+  if (missing.length === 0) return 'save it';
+  return `add ${missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`}`;
+};
 
 const getPrivateRows = (item: Item): Row[] => {
   const bought = [
@@ -775,8 +793,8 @@ function ThingDrawer({
         />
         {isNotListed && (
           <p className='text-muted-foreground text-sm text-pretty'>
-            Buyers can&apos;t see this yet. It needs a photo, a name and a
-            price.
+            This is a draft. Buyers can&apos;t see it until you{' '}
+            {getDraftNeeds(item)}.
           </p>
         )}
         {isHoldLockedByFinish && (

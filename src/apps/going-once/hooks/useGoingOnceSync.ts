@@ -1,6 +1,13 @@
 import { useEffect } from 'react';
 
-import { store, useAppDispatch, type AppDispatch } from '@/store';
+import type { Unsubscribe } from 'firebase/firestore';
+
+import {
+  store,
+  useAppDispatch,
+  useAppSelector,
+  type AppDispatch,
+} from '@/store';
 import {
   clearInquiries,
   clearItems,
@@ -68,6 +75,42 @@ function noteRemovalIfSaleRefused(
   });
 }
 
+const RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
+
+/** A sale this person just started is written in the background, so the server can refuse its things for a moment; restarts the listener with a growing wait before reporting that refusal. */
+function listenWithRetry(
+  start: (onError: (error: unknown) => void) => Unsubscribe,
+  canRetry: (error: unknown) => boolean,
+  onFailed: (error: unknown) => void,
+): Unsubscribe {
+  let stop: Unsubscribe = () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let isStopped = false;
+  const run = (attempt: number) => {
+    stop = start((error) => {
+      const delay = RETRY_DELAYS_MS[attempt];
+      if (isStopped) return;
+      if (delay === undefined || !isPermissionDenied(error) || !canRetry(error))
+        return onFailed(error);
+      timer = setTimeout(() => run(attempt + 1), delay);
+    });
+  };
+  run(0);
+  return () => {
+    isStopped = true;
+    clearTimeout(timer);
+    stop();
+  };
+}
+
+/** True while the open sale is this person's own, the one case where a refused read is the background write still landing. */
+function isOwnSale(uid: string, saleId: string) {
+  const { openSale, sales } = store.getState().goingOnce;
+  const sale =
+    openSale.sale ?? sales.items.find((found) => found.id === saleId);
+  return sale?.ownerUid === uid;
+}
+
 /** Starts the listeners: the person's sales and invitations, and the open sale, its things and its invitations once one is chosen. */
 export function useGoingOnceSync(
   uid: string | null,
@@ -75,6 +118,7 @@ export function useGoingOnceSync(
   saleId: string | null,
 ) {
   const dispatch = useAppDispatch();
+  const loadAttempt = useAppSelector((state) => state.goingOnce.loadAttempt);
 
   useEffect(() => {
     if (!uid) return;
@@ -91,7 +135,7 @@ export function useGoingOnceSync(
       },
       () => dispatch(setSalesError()),
     );
-  }, [uid, dispatch]);
+  }, [uid, dispatch, loadAttempt]);
 
   useEffect(() => {
     if (!uid) return;
@@ -117,46 +161,73 @@ export function useGoingOnceSync(
 
   useEffect(() => {
     if (!uid || !saleId) return;
-    const unsubscribeSale = startOpenSaleListener(
-      saleId,
-      (sale) => dispatch(setOpenSale(sale)),
+    const unsubscribeSale = listenWithRetry(
+      (onError) =>
+        startOpenSaleListener(
+          saleId,
+          (sale) => dispatch(setOpenSale(sale)),
+          onError,
+        ),
+      () => isOwnSale(uid, saleId),
       (error) => {
         if (isPermissionDenied(error)) noteRemoval(uid, dispatch, () => false);
         dispatch(setOpenSaleError());
       },
     );
-    const unsubscribeItems = startOpenSaleItemsListener(
-      saleId,
-      (items) => dispatch(setItems({ saleId, items })),
+    const unsubscribeInvites = startSaleInvitesListener(saleId, (invites) =>
+      dispatch(setSaleInvites({ saleId, invites })),
+    );
+    return () => {
+      unsubscribeSale();
+      unsubscribeInvites();
+      dispatch(clearOpenSale());
+      dispatch(clearSaleInvites());
+    };
+  }, [uid, saleId, dispatch, loadAttempt]);
+
+  useEffect(() => {
+    if (!uid || !saleId) return;
+    const canRetry = () => isOwnSale(uid, saleId);
+    const unsubscribeItems = listenWithRetry(
+      (onError) =>
+        startOpenSaleItemsListener(
+          saleId,
+          (items) => dispatch(setItems({ saleId, items })),
+          onError,
+        ),
+      canRetry,
       (error) => {
         if (isPermissionDenied(error))
           noteRemovalIfSaleRefused(uid, saleId, dispatch);
         dispatch(setItemsError());
       },
     );
-    const unsubscribeInvites = startSaleInvitesListener(saleId, (invites) =>
-      dispatch(setSaleInvites({ saleId, invites })),
-    );
-    const unsubscribeNew = startNewInquiriesListener(
-      saleId,
-      (items) => dispatch(setInquiries({ saleId, list: 'new', items })),
+    const unsubscribeNew = listenWithRetry(
+      (onError) =>
+        startNewInquiriesListener(
+          saleId,
+          (items) => dispatch(setInquiries({ saleId, list: 'new', items })),
+          onError,
+        ),
+      canRetry,
       () => dispatch(setInquiriesError({ saleId, list: 'new' })),
     );
-    const unsubscribeHandled = startHandledInquiriesListener(
-      saleId,
-      (items) => dispatch(setInquiries({ saleId, list: 'handled', items })),
+    const unsubscribeHandled = listenWithRetry(
+      (onError) =>
+        startHandledInquiriesListener(
+          saleId,
+          (items) => dispatch(setInquiries({ saleId, list: 'handled', items })),
+          onError,
+        ),
+      canRetry,
       () => dispatch(setInquiriesError({ saleId, list: 'handled' })),
     );
     return () => {
       unsubscribeNew();
       unsubscribeHandled();
-      dispatch(clearInquiries());
-      unsubscribeSale();
       unsubscribeItems();
-      unsubscribeInvites();
-      dispatch(clearOpenSale());
+      dispatch(clearInquiries());
       dispatch(clearItems());
-      dispatch(clearSaleInvites());
     };
-  }, [uid, saleId, dispatch]);
+  }, [uid, saleId, dispatch, loadAttempt]);
 }

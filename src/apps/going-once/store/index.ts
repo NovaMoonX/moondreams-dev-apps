@@ -40,6 +40,8 @@ export interface GoingOnceState {
   leavingSaleId: string | null;
   /** Photos being saved right now, by thing, so its row can say so. */
   photoUploads: Record<string, number>;
+  /** Raised by Try again; the listeners restart when it changes. */
+  loadAttempt: number;
 }
 
 const initialState: GoingOnceState = {
@@ -57,6 +59,7 @@ const initialState: GoingOnceState = {
   pushOffSaleIds: null,
   leavingSaleId: null,
   photoUploads: {},
+  loadAttempt: 0,
 };
 
 export const goingOnceSlice = createSlice({
@@ -144,6 +147,17 @@ export const goingOnceSlice = createSlice({
     setLeavingSaleId(state, action: PayloadAction<string | null>) {
       state.leavingSaleId = action.payload;
     },
+    retryLoading(state) {
+      state.loadAttempt += 1;
+      if (state.sales.status === 'error') state.sales.status = 'loading';
+      if (state.openSale.status === 'error')
+        state.openSale.status = 'loading';
+      if (state.items.status === 'error') state.items.status = 'loading';
+      if (state.inquiries.new.status === 'error')
+        state.inquiries.new.status = 'loading';
+      if (state.inquiries.handled.status === 'error')
+        state.inquiries.handled.status = 'loading';
+    },
     photoUploadStarted(state, action: PayloadAction<string>) {
       state.photoUploads[action.payload] =
         (state.photoUploads[action.payload] ?? 0) + 1;
@@ -179,6 +193,7 @@ export const {
   setRemovedFrom,
   setPushOffSaleIds,
   setLeavingSaleId,
+  retryLoading,
   photoUploadStarted,
   photoUploadEnded,
 } = goingOnceSlice.actions;

@@ -63,7 +63,7 @@ function useFetchedPhotos(paths: string[], attempt: number) {
   };
 }
 
-/** Sends the thing's photos to the phone's share sheet (camera roll), or downloads them where there is none. */
+/** Sends the thing's photos to the device's share sheet, or downloads them where there is none. */
 function SavePhotosRow({ item }: SavePhotosRowProps) {
   const [attempt, setAttempt] = useState(0);
   const [outcome, setOutcome] = useState<string | null>(null);
@@ -89,7 +89,7 @@ function SavePhotosRow({ item }: SavePhotosRowProps) {
     if (result === null)
       return `Getting ${plural(count)} ready… ${loadedCount} of ${count}`;
     if (result.isFailed) return "Some photos didn't load. Tap to try again.";
-    return canShare ? `${plural(count)} to your phone` : plural(count);
+    return canShare ? `${plural(count)} to your device` : plural(count);
   };
 
   const save = async () => {

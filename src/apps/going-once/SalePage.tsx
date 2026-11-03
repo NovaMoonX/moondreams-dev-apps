@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button, Skeleton } from '@moondreamsdev/dreamer-ui/components';
+import { Wallet } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import ClampedText from '@/components/ClampedText';
@@ -24,6 +25,7 @@ import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
 import { salePageQueryOptions } from '@apps/going-once/queries/salePageQueries';
 import type { PublicThing, SalePageResult } from '@apps/going-once/types';
 import { getThingPagePath } from '@apps/going-once/utils/listing';
+import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
 
 const CARD_HEIGHT = 220;
 const EAGER_CARDS = 8;
@@ -193,6 +195,14 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
         {summary !== '' && (
           <p className='text-muted-foreground text-sm'>{summary}</p>
         )}
+        {(sale.paymentMethods ?? []).length > 0 && (
+          <p className='text-muted-foreground flex items-start gap-1.5 text-sm'>
+            <Wallet className='mt-0.5 h-4 w-4 shrink-0' aria-hidden='true' />
+            <span className='min-w-0 text-pretty break-words'>
+              Pay with {formatPaymentMethods(sale.paymentMethods)}
+            </span>
+          </p>
+        )}
       </header>
       {isLinkedGone && (
         <InlineNotice tone='info'>
@@ -233,6 +243,7 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
         <BuyerThingDrawer
           thing={openThing}
           linkId={linkId}
+          paymentMethods={sale.paymentMethods ?? []}
           onClose={closeThing}
         />
       )}
