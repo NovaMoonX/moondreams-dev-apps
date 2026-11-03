@@ -295,6 +295,7 @@ function InquiryDrawer({
             </p>
           )}
           {!isSaleFinished &&
+            clearedAt === null &&
             item !== null &&
             item.status === 'AVAILABLE' &&
             isListable(item) && (

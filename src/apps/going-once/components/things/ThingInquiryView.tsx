@@ -15,20 +15,27 @@ interface ThingInquiryViewProps {
   item: Item;
   inquiry: Inquiry;
   now: number;
-  /** Whether the thing can be held now: Available and ready for buyers. */
+  /** Whether the thing can be held for this person now: Available, ready for buyers, and their name still kept. */
   canHold: boolean;
+  isSaleFinished: boolean;
   footerNode: HTMLElement | null;
   onBack: () => void;
   onHold: () => void;
 }
 
-const getNote = (item: Item, inquiry: Inquiry, canHold: boolean) => {
+const getNote = (
+  item: Item,
+  inquiry: Inquiry,
+  canHold: boolean,
+  isSaleFinished: boolean,
+) => {
   if (isHolder(item.pending, inquiry))
     return `Held for ${getInquirerName(inquiry)}`;
   if (canHold) return null;
-  return item.status === 'PENDING'
-    ? 'Someone is already picking this up'
-    : 'This thing is not up for a hold right now';
+  if (item.status === 'PENDING') return 'Someone is already picking this up';
+  if (isSaleFinished)
+    return 'This sale is finished, so nothing new can be held';
+  return 'This thing is not up for a hold right now';
 };
 
 /** One person's message about this thing, with the way to hold it for them. */
@@ -37,6 +44,7 @@ function ThingInquiryView({
   inquiry,
   now,
   canHold,
+  isSaleFinished,
   footerNode,
   onBack,
   onHold,
@@ -67,7 +75,7 @@ function ThingInquiryView({
       )}
       <StatusViewFooter
         footerNode={footerNode}
-        note={getNote(item, inquiry, canHold)}
+        note={getNote(item, inquiry, canHold, isSaleFinished)}
         onDone={onBack}
       >
         {canHold && (

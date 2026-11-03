@@ -668,7 +668,8 @@ function ThingDrawer({
           item={item}
           inquiry={asker}
           now={now}
-          canHold={offer === 'MARK_PENDING'}
+          canHold={offer === 'MARK_PENDING' && asker.contactClearedAt === null}
+          isSaleFinished={isSaleFinished}
           footerNode={footerNode}
           onBack={back}
           onHold={() => {
