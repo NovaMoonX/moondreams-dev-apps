@@ -565,32 +565,39 @@ function ThingSteps({
         )}
         <ModalFooterActions
           note={getNote()}
-          cancelAction={getPrevious()}
+          cancelAction={
+            isReview ? (
+              <span className='max-sm:hidden'>{getPrevious()}</span>
+            ) : (
+              getPrevious()
+            )
+          }
           rightActions={
             isReview ? (
-              <>
+              // On a phone three whole labels don't fit one row, so Save takes the first row.
+              <div className='grid w-full grid-cols-[auto_1fr] gap-2 sm:flex sm:w-auto'>
+                <Button
+                  type='button'
+                  className='col-span-2 sm:order-last'
+                  onClick={saveAndClose}
+                >
+                  Save
+                </Button>
+                <span className='grid sm:hidden'>{getPrevious()}</span>
                 <Button
                   type='button'
                   variant='secondary'
-                  className='whitespace-nowrap max-[359px]:px-3!'
+                  className='px-3! whitespace-nowrap'
                   aria-label='Save and add another'
                   onClick={addAnother}
                 >
-                  <Plus className='size-4' aria-hidden='true' />
-                  <span>
-                    <span className='max-[419px]:hidden'>
-                      Save &amp; add another
-                    </span>
-                    <span className='max-[359px]:hidden min-[420px]:hidden'>
-                      Add another
-                    </span>
-                    <span className='min-[360px]:hidden'>Another</span>
-                  </span>
+                  <Plus
+                    className='size-4 max-[399px]:hidden'
+                    aria-hidden='true'
+                  />
+                  Save &amp; add another
                 </Button>
-                <Button type='button' onClick={saveAndClose}>
-                  Save
-                </Button>
-              </>
+              </div>
             ) : (
               <>
                 {getSkip()}
