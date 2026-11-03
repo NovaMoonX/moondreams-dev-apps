@@ -3,7 +3,7 @@ const SITE_NAME = 'Moondreams Dev Apps';
 const hasInviteCode = (value) => value?.trim().length === 6;
 const isPresent = (value) => Boolean(value?.trim());
 
-// `pages` (matched by path prefix) are checked before `params`; in each list the first match wins, so list the most specific link first.
+// `pages` (matched by path prefix, and by `pattern` when one is given) are checked before `params`; in each list the first match wins, so list the most specific link first.
 // Preview text for a page whose content is private never names it: a link preview is public even when the page is locked.
 const APP_REGISTRY = [
   {
@@ -116,6 +116,12 @@ const APP_REGISTRY = [
     pages: [
       {
         prefix: '/going-once/s/',
+        pattern: /^\/going-once\/s\/[^/]+\/[^/]+\/?$/,
+        title: 'A thing for sale',
+        description: 'Open the link to see it and say you are interested.',
+      },
+      {
+        prefix: '/going-once/s/',
         title: 'Things for sale',
         description: 'Open the link to see what is still for sale.',
       },
@@ -139,7 +145,11 @@ function getAppMeta(url) {
   }
 
   const match =
-    (app.pages ?? []).find(({ prefix }) => url.pathname.startsWith(prefix)) ??
+    (app.pages ?? []).find(
+      ({ prefix, pattern }) =>
+        url.pathname.startsWith(prefix) &&
+        (pattern === undefined || pattern.test(url.pathname)),
+    ) ??
     (app.params ?? []).find(({ name, isValid }) =>
       isValid(url.searchParams.get(name)),
     );

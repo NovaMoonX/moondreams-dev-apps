@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 
 import ClampedText from '@/components/ClampedText';
 import EmptyCard from '@/components/EmptyCard';
+import InlineNotice from '@/components/InlineNotice';
 import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
@@ -14,10 +15,15 @@ import { useNoIndex } from '@/hooks/useNoIndex';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import BuyerCard from '@apps/going-once/components/public/BuyerCard';
 import BuyerThingDrawer from '@apps/going-once/components/public/BuyerThingDrawer';
-import { GOING_ONCE_TABS, SEARCH_FROM_ITEMS } from '@apps/going-once/constants';
+import {
+  GOING_ONCE_TABS,
+  SALE_PAGE_PATH,
+  SEARCH_FROM_ITEMS,
+} from '@apps/going-once/constants';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
 import { salePageQueryOptions } from '@apps/going-once/queries/salePageQueries';
 import type { PublicThing, SalePageResult } from '@apps/going-once/types';
+import { getThingPagePath } from '@apps/going-once/utils/listing';
 
 const CARD_HEIGHT = 220;
 const EAGER_CARDS = 8;
@@ -127,10 +133,39 @@ function OwnPageBand() {
   );
 }
 
-function SaleView({ page, linkId }: { page: OkPage; linkId: string }) {
+// The address follows the open thing so it can be copied from the bar; the drawer's own back entry sits on top of it.
+const showAddress = (path: string) => {
+  const kept = `${path}${window.location.search}`;
+  if (`${window.location.pathname}${window.location.search}` === kept) return;
+  window.history.replaceState(window.history.state, '', kept);
+};
+
+interface SaleViewProps {
+  page: OkPage;
+  linkId: string;
+  /** The thing a direct link named, opened on arrival. */
+  linkedThingId: string | null;
+}
+
+function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
   const [query, setQuery] = useState('');
-  const [openId, setOpenId] = useState<string | null>(null);
   const { sale, things } = page;
+  const [openId, setOpenId] = useState<string | null>(() =>
+    things.some((thing) => thing.id === linkedThingId) ? linkedThingId : null,
+  );
+  const [isLinkedGone] = useState(
+    () =>
+      linkedThingId !== null &&
+      !things.some((thing) => thing.id === linkedThingId),
+  );
+  const openThingById = (id: string) => {
+    showAddress(getThingPagePath(linkId, id));
+    setOpenId(id);
+  };
+  const closeThing = () => {
+    showAddress(`${SALE_PAGE_PATH}${linkId}`);
+    setOpenId(null);
+  };
   const hasSearch = things.length >= SEARCH_FROM_ITEMS;
   const shown = things.filter(
     (thing) => !hasSearch || matchesSearch(thing, query),
@@ -159,6 +194,12 @@ function SaleView({ page, linkId }: { page: OkPage; linkId: string }) {
           <p className='text-muted-foreground text-sm'>{summary}</p>
         )}
       </header>
+      {isLinkedGone && (
+        <InlineNotice tone='info'>
+          The thing in your link isn&apos;t for sale anymore. Here&apos;s
+          everything that still is.
+        </InlineNotice>
+      )}
       {sale.buyerNote !== null && (
         <ClampedText text={sale.buyerNote} maxLines={2} />
       )}
@@ -179,18 +220,20 @@ function SaleView({ page, linkId }: { page: OkPage; linkId: string }) {
           Nothing matches that. Try another word.
         </p>
       )}
-      {available.length > 0 && <Cards things={available} onOpen={setOpenId} />}
+      {available.length > 0 && (
+        <Cards things={available} onOpen={openThingById} />
+      )}
       {pending.length > 0 && (
         <>
           <SectionDivider label='Pending' />
-          <Cards things={pending} onOpen={setOpenId} />
+          <Cards things={pending} onOpen={openThingById} />
         </>
       )}
       {openThing && (
         <BuyerThingDrawer
           thing={openThing}
           linkId={linkId}
-          onClose={() => setOpenId(null)}
+          onClose={closeThing}
         />
       )}
     </div>
@@ -199,7 +242,7 @@ function SaleView({ page, linkId }: { page: OkPage; linkId: string }) {
 
 /** The public page behind a sale's link: no sign-in to look, and nothing that says who is selling. */
 function SalePage() {
-  const { linkId = '' } = useParams();
+  const { linkId = '', thingId = null } = useParams();
   const { user, loading } = useAuth();
   const query = useQuery({
     ...salePageQueryOptions(linkId, user?.uid ?? null),
@@ -217,7 +260,14 @@ function SalePage() {
       return <PageFailed onRetry={() => void query.refetch()} />;
     if (query.data === undefined) return <PageSkeleton />;
     if (query.data.status === 'not_found') return <NotHere />;
-    return <SaleView key={linkId} page={query.data} linkId={linkId} />;
+    return (
+      <SaleView
+        key={linkId}
+        page={query.data}
+        linkId={linkId}
+        linkedThingId={thingId}
+      />
+    );
   };
 
   return (

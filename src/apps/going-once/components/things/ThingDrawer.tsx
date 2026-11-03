@@ -36,6 +36,7 @@ import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
 import { parseHttpUrl } from '@/utils/urlUtils';
 import ChangePaidView from '@apps/going-once/components/things/ChangePaidView';
 import CopyListingTextRow from '@apps/going-once/components/relist/CopyListingTextRow';
+import CopyThingLinkRow from '@apps/going-once/components/relist/CopyThingLinkRow';
 import SavePhotosRow from '@apps/going-once/components/relist/SavePhotosRow';
 import HistoryView from '@apps/going-once/components/things/HistoryView';
 import MarkPendingView from '@apps/going-once/components/things/MarkPendingView';
@@ -55,7 +56,10 @@ import {
   type StatusResult,
   type StatusTransition,
 } from '@apps/going-once/store/actions/statusActions';
-import { selectIsSaleFinished } from '@apps/going-once/store/selectors';
+import {
+  selectIsSaleFinished,
+  selectSaleById,
+} from '@apps/going-once/store/selectors';
 import type { Inquiry, Item } from '@apps/going-once/types';
 import {
   formatSentAt,
@@ -152,13 +156,17 @@ const getPrivateRows = (item: Item): Row[] => {
     .filter((part) => part !== null)
     .join(' · ');
   return [
-    {
-      label: 'Floor price',
-      value:
-        item.floorPriceCents === null
-          ? 'None set'
-          : formatCentsShort(item.floorPriceCents),
-    },
+    ...(item.askingPriceCents === 0
+      ? []
+      : [
+          {
+            label: 'Floor price',
+            value:
+              item.floorPriceCents === null
+                ? 'None set'
+                : formatCentsShort(item.floorPriceCents),
+          },
+        ]),
     ...(item.originalPriceCents === null || item.showOriginalPrice
       ? []
       : [
@@ -246,6 +254,9 @@ function ThingDrawer({
         }
       : null,
   ].filter((fact) => fact !== null);
+  const privateRows = getPrivateRows(item);
+  const hasPrivate =
+    privateRows.length > 0 || item.boughtUrl !== null || item.notes !== null;
   const askedCount = new Set(
     (inquiries ?? []).map(
       (inquiry) =>
@@ -255,6 +266,9 @@ function ThingDrawer({
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
   const isSaleFinished = useAppSelector((state) =>
     selectIsSaleFinished(state, item.saleId),
+  );
+  const publicLinkId = useAppSelector(
+    (state) => selectSaleById(state, item.saleId)?.publicLinkId ?? null,
   );
   const offer = getThingOffer(item.status, isListable(item), isSaleFinished);
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
@@ -579,6 +593,9 @@ function ThingDrawer({
           </ActionGroup>
           {isOnTheList && (
             <ActionGroup isRoomy>
+              {publicLinkId !== null && !isSaleFinished && (
+                <CopyThingLinkRow item={item} linkId={publicLinkId} />
+              )}
               <CopyListingTextRow item={item} uid={uid} />
               <SavePhotosRow item={item} />
             </ActionGroup>
@@ -721,26 +738,32 @@ function ThingDrawer({
             {formatCentsShort(item.floorPriceCents)}
           </p>
         )}
-        <section className='bg-accent/60 border-border space-y-3 rounded-2xl border p-3'>
-          <h3 className='text-accent-foreground text-sm font-semibold'>
-            🔒 Only you and your co-sellers
-          </h3>
-          <dl className='grid grid-cols-2 gap-3 text-sm'>
-            {getPrivateRows(item).map((row) => (
-              <div key={row.label} className='min-w-0'>
-                <dt className='text-muted-foreground text-xs'>{row.label}</dt>
-                <dd className='font-medium break-words'>{row.value}</dd>
+        {hasPrivate && (
+          <section className='bg-accent/60 border-border space-y-3 rounded-2xl border p-3'>
+            <h3 className='text-accent-foreground text-sm font-semibold'>
+              🔒 Only you and your co-sellers
+            </h3>
+            {privateRows.length > 0 && (
+              <dl className='grid grid-cols-2 gap-3 text-sm'>
+                {privateRows.map((row) => (
+                  <div key={row.label} className='min-w-0'>
+                    <dt className='text-muted-foreground text-xs'>
+                      {row.label}
+                    </dt>
+                    <dd className='font-medium break-words'>{row.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            <StoreLink item={item} />
+            {item.notes !== null && (
+              <div className='text-sm'>
+                <p className='text-muted-foreground text-xs'>Notes</p>
+                <p className='break-words whitespace-pre-line'>{item.notes}</p>
               </div>
-            ))}
-          </dl>
-          <StoreLink item={item} />
-          {item.notes !== null && (
-            <div className='text-sm'>
-              <p className='text-muted-foreground text-xs'>Notes</p>
-              <p className='break-words whitespace-pre-line'>{item.notes}</p>
-            </div>
-          )}
-        </section>
+            )}
+          </section>
+        )}
         {item.description !== null && (
           <p className='text-sm text-pretty break-words whitespace-pre-line'>
             {item.description}

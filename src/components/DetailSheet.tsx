@@ -18,7 +18,7 @@ interface DetailSheetProps {
   footer?: ReactNode;
   /** Icon buttons on the title's line (40×40, each with an `aria-label`), for what opens in place inside the sheet. */
   actions?: ReactNode;
-  /** Names the view the content shows: a new view starts at the top, coming back to one returns to where it was left, and the sheet never shrinks between views. */
+  /** Names the view the content shows: a new view starts at the top and never shrinks the sheet, and coming back to one returns to where it was left at the height it had. */
   viewKey?: string;
 }
 
@@ -51,6 +51,9 @@ function DetailSheet({
   const contentNode = useRef<HTMLDivElement | null>(null);
   const scrollTops = useRef(new Map<string, number>());
   const shownKey = useRef(viewKey);
+  const heldTotal = useRef(0);
+  const heldByView = useRef(new Map<string, number>());
+  const holdHeight = useRef<(() => void) | null>(null);
   const hasViews = viewKey !== undefined;
 
   const attachContent = useCallback(
@@ -68,21 +71,29 @@ function DetailSheet({
         scroller === node
           ? 0
           : parseFloat(paddingTop) + parseFloat(paddingBottom);
-      const held = { total: 0 };
-      const holdHeight = new ResizeObserver(() => {
+      const hold = () => {
         const footerHeight =
           scroller.nextElementSibling?.getBoundingClientRect().height ?? 0;
-        held.total = Math.max(held.total, scroller.clientHeight + footerHeight);
+        heldTotal.current = Math.max(
+          heldTotal.current,
+          scroller.clientHeight + footerHeight,
+        );
+        if (shownKey.current !== undefined) {
+          heldByView.current.set(shownKey.current, heldTotal.current);
+        }
         const { marginTop, marginBottom } = getComputedStyle(node);
         const margin = parseFloat(marginTop) + parseFloat(marginBottom);
-        node.style.minHeight = `${held.total - footerHeight - padding - margin}px`;
-      });
+        node.style.minHeight = `${heldTotal.current - footerHeight - padding - margin}px`;
+      };
+      holdHeight.current = hold;
+      const observer = new ResizeObserver(hold);
       scroller.addEventListener('scroll', record, { passive: true });
-      holdHeight.observe(scroller);
-      if (scroller.parentElement) holdHeight.observe(scroller.parentElement);
+      observer.observe(scroller);
+      if (scroller.parentElement) observer.observe(scroller.parentElement);
       return () => {
         scroller.removeEventListener('scroll', record);
-        holdHeight.disconnect();
+        observer.disconnect();
+        holdHeight.current = null;
       };
     },
     [isDrawer, hasViews],
@@ -91,6 +102,12 @@ function DetailSheet({
   useLayoutEffect(() => {
     if (viewKey === undefined || shownKey.current === viewKey) return;
     shownKey.current = viewKey;
+    const seen = heldByView.current.get(viewKey);
+    if (seen !== undefined) {
+      heldTotal.current = seen;
+      if (contentNode.current) contentNode.current.style.minHeight = '';
+      holdHeight.current?.();
+    }
     const node = contentNode.current;
     const scroller = node && (isDrawer ? node.parentElement : node);
     if (scroller) scroller.scrollTop = scrollTops.current.get(viewKey) ?? 0;

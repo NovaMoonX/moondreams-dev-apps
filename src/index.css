@@ -199,6 +199,7 @@ html.dark .subview-card {
   z-index: 40;
   display: flex;
   justify-content: center;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   --subview-top: max(var(--subview-inset), env(safe-area-inset-top));
@@ -282,6 +283,11 @@ body {
 html {
 	@apply bg-background;
   max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* A sheet scrolls up and down only. A wide child (a row of photos) scrolls inside itself, so the sheet never pans sideways. */
+[role='dialog'] .overflow-y-auto {
   overflow-x: hidden;
 }
 

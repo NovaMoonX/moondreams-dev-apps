@@ -223,7 +223,12 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
   };
 
   return (
-    <FormScreen isOpen onClose={onDialogClose} title={getItemName(item)}>
+    <FormScreen
+      isOpen
+      onClose={onDialogClose}
+      title={getItemName(item)}
+      backLabel={`Back to ${getItemName(item)}`}
+    >
       <div id={dialogId} className='space-y-5'>
         <div className='space-y-2'>
           <SectionDivider label='Buyers see' />
