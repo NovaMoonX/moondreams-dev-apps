@@ -18,10 +18,12 @@ import { sendInterest } from '@apps/going-once/queries/salePageQueries';
 import type { InterestResult, PublicThing } from '@apps/going-once/types';
 import { formatPhone, readContact } from '@apps/going-once/utils/contact';
 import { toPrefilledMessage } from '@apps/going-once/utils/inquiries';
+import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
 
 interface InterestViewProps {
   thing: PublicThing;
   linkId: string;
+  paymentMethods: string[];
   footerNode: HTMLElement | null;
   onBack: () => void;
   onDone: () => void;
@@ -54,6 +56,7 @@ const getContactNote = (
 function InterestView({
   thing,
   linkId,
+  paymentMethods,
   footerNode,
   onBack,
   onDone,
@@ -111,6 +114,11 @@ function InterestView({
       ? null
       : createPortal(
           <div className='space-y-2'>
+            {sent === null && paymentMethods.length > 0 && (
+              <p className='text-muted-foreground text-center text-xs text-pretty'>
+                They take {formatPaymentMethods(paymentMethods)}.
+              </p>
+            )}
             {footerNote && (
               <p role='alert' className='text-destructive text-sm'>
                 {footerNote}

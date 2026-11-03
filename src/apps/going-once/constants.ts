@@ -31,6 +31,19 @@ export const MAX_SALE_NAME_LENGTH = 80;
 export const MAX_PICKUP_AREA_LENGTH = 80;
 export const MAX_BUYER_NOTE_LENGTH = 300;
 
+/** The ways to pay a seller can pick in one tap; they may add their own. */
+export const PAYMENT_METHOD_SUGGESTIONS = [
+  'Cash',
+  'Venmo',
+  'Zelle',
+  'PayPal',
+  'Cash App',
+  'Card',
+] as const;
+
+export const MAX_PAYMENT_METHODS = 8;
+export const MAX_PAYMENT_METHOD_LENGTH = 30;
+
 /** A public page's address in the app, followed by the link's id. */
 export const SALE_PAGE_PATH = '/going-once/s/';
 
@@ -82,6 +95,7 @@ export const MAX_ITEM_TITLE_LENGTH = 120;
 export const MAX_ITEM_DESCRIPTION_LENGTH = 2000;
 export const MAX_ITEM_BRAND_LENGTH = 80;
 export const MAX_ITEM_SIZE_LENGTH = 80;
+export const MAX_STORE_URL_LENGTH = 2000;
 export const MAX_BOUGHT_FROM_LENGTH = 120;
 export const MAX_ITEM_NOTES_LENGTH = 1000;
 export const MAX_BUYER_NAME_LENGTH = 80;

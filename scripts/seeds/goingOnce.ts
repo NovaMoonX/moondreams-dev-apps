@@ -247,7 +247,9 @@ export const EMPTY_OPTIONALS = {
     siteName: string | null;
     fetchedAt: number;
   } | null,
+  showBoughtUrl: false,
   notes: null as string | null,
+  isDraft: false,
 };
 
 interface SeedThing {
@@ -280,6 +282,7 @@ const SEED_THINGS: SeedThing[] = [
       boughtFrom: 'West Elm',
       boughtOn: Date.UTC(2023, 2, 14),
       boughtUrl: 'https://www.westelm.com/products/haven-sofa/',
+      showBoughtUrl: true,
       boughtUrlPreview: {
         title: 'Haven Sofa',
         description: 'A deep, comfortable sofa with a clean, modern shape.',
@@ -529,6 +532,7 @@ async function seedFinishedSale(context: SeedContext) {
     name: 'Spring garage sale',
     pickupArea: 'Ballard, Seattle',
     buyerNote: null,
+    paymentMethods: [],
     currency: 'USD',
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
@@ -662,7 +666,8 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     id: SALE_ID,
     name: 'Fall clear-out',
     pickupArea: 'Capitol Hill, Seattle',
-    buyerNote: 'Evenings and weekends. Cash or Venmo.',
+    buyerNote: 'Evenings and weekends.',
+    paymentMethods: ['Cash', 'Venmo', 'Zelle'],
     currency: 'USD',
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,

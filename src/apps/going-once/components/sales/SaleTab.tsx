@@ -14,6 +14,7 @@ import PeopleSection from '@apps/going-once/components/people/PeopleSection';
 import FinishSection from '@apps/going-once/components/sales/FinishSection';
 import LinkCard from '@apps/going-once/components/sales/LinkCard';
 import PushSwitch from '@apps/going-once/components/sales/PushSwitch';
+import PaymentMethodsSheet from '@apps/going-once/components/sales/PaymentMethodsSheet';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
 import {
   FINISHED_SALE_STATUS,
@@ -26,6 +27,7 @@ import {
   selectStatusSummary,
 } from '@apps/going-once/store/selectors';
 import type { Sale, SaleDetailField } from '@apps/going-once/types';
+import { formatPaymentMethods } from '@apps/going-once/utils/paymentMethods';
 import { toFirstName } from '@apps/going-once/utils/personName';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
 import { formatOfAsked, type StatusView } from '@apps/going-once/utils/status';
@@ -83,6 +85,7 @@ function SaleTab({
   const coSellerIds = sale.members.filter((id) => id !== sale.ownerUid);
   const people = useUserInfo(coSellerIds);
   const [editing, setEditing] = useState<SaleDetailField | null>(null);
+  const [isEditingPayment, setIsEditingPayment] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const isSeller = isSaleSeller(sale, uid);
@@ -190,6 +193,21 @@ function SaleTab({
             </SummaryRow>
           );
         })}
+        <SummaryRow
+          label='Payment methods'
+          detail='Buyers see this'
+          onClick={isSeller ? () => setIsEditingPayment(true) : undefined}
+        >
+          {sale.paymentMethods.length === 0 ? (
+            <span className='text-muted-foreground'>
+              {isSeller ? 'Add the ways buyers can pay' : 'Not set'}
+            </span>
+          ) : (
+            <span className='line-clamp-3'>
+              {formatPaymentMethods(sale.paymentMethods)}
+            </span>
+          )}
+        </SummaryRow>
       </div>
 
       {!isFinished && (
@@ -213,6 +231,14 @@ function SaleTab({
             </p>
           )}
         </div>
+      )}
+
+      {isEditingPayment && (
+        <PaymentMethodsSheet
+          saleId={sale.id}
+          value={sale.paymentMethods}
+          onClose={() => setIsEditingPayment(false)}
+        />
       )}
 
       {editing !== null && (

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Camera } from 'lucide-react';
+import { Camera, ExternalLink } from 'lucide-react';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import DetailSheet from '@/components/DetailSheet';
 import PhotoStrip from '@/components/PhotoStrip';
 import InlineNotice from '@/components/InlineNotice';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import { getWebLinkHost } from '@/utils/urlUtils';
 import InterestView from '@apps/going-once/components/public/InterestView';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
@@ -19,11 +20,18 @@ import { getThingPagePath } from '@apps/going-once/utils/listing';
 interface BuyerThingDrawerProps {
   thing: PublicThing;
   linkId: string;
+  /** How the sale says buyers can pay; shown on the interest form. */
+  paymentMethods: string[];
   onClose: () => void;
 }
 
 /** A thing's public details in a drawer (a modal from `sm`): only the fields the page is allowed to carry. */
-function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
+function BuyerThingDrawer({
+  thing,
+  linkId,
+  paymentMethods,
+  onClose,
+}: BuyerThingDrawerProps) {
   const [isAsking, setIsAsking] = useState(false);
   const [footerNode, setFooterNode] = useState<HTMLElement | null>(null);
   const [refusal, setRefusal] = useState<'not_found' | 'not_available' | null>(
@@ -35,6 +43,8 @@ function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
     thing.brandModel,
     thing.size,
   ].filter((fact) => fact !== null);
+  const storeHost =
+    thing.storeUrl === null ? null : getWebLinkHost(thing.storeUrl);
 
   return (
     <DetailSheet
@@ -85,6 +95,7 @@ function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
         <InterestView
           thing={thing}
           linkId={linkId}
+          paymentMethods={paymentMethods}
           footerNode={footerNode}
           onBack={() => setIsAsking(false)}
           onDone={onClose}
@@ -112,6 +123,13 @@ function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
             </span>
           )}
           {thing.status === 'PENDING' && <StatusDot status='PENDING' />}
+          <CopyTextButton
+            text={`${window.location.origin}${getThingPagePath(linkId, thing.id)}`}
+            label='Copy link'
+            copiedLabel='Copied'
+            variant='secondary'
+            className="relative ml-auto h-[26px]! min-h-0! gap-1 rounded-full px-2.5 py-0! text-xs after:absolute after:inset-x-0 after:-inset-y-[7px] after:content-['']"
+          />
         </div>
         {facts.length > 0 && (
           <p className='text-muted-foreground text-sm'>{facts.join(' · ')}</p>
@@ -126,13 +144,23 @@ function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
             Pending: someone&apos;s picking this up.
           </InlineNotice>
         )}
-        <CopyTextButton
-          text={`${window.location.origin}${getThingPagePath(linkId, thing.id)}`}
-          label='Copy link to this thing'
-          copiedLabel='Link copied'
-          variant='secondary'
-          className='h-10 rounded-full px-4'
-        />
+        {thing.storeUrl !== null && storeHost !== null && (
+          <p className='text-muted-foreground flex min-w-0 flex-wrap items-center gap-x-1.5 text-sm'>
+            <span>Where it&apos;s from</span>
+            <a
+              href={thing.storeUrl}
+              target='_blank'
+              rel='noopener noreferrer nofollow'
+              className='text-primary inline-flex max-w-full min-w-0 items-center gap-1 hover:underline'
+            >
+              <span className='truncate'>{storeHost}</span>
+              <ExternalLink
+                className='h-3.5 w-3.5 shrink-0'
+                aria-hidden='true'
+              />
+            </a>
+          </p>
+        )}
       </div>
     </DetailSheet>
   );

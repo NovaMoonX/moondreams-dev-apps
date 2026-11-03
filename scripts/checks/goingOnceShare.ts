@@ -73,6 +73,8 @@ const thing = (extra: Record<string, unknown> = {}) => ({
   boughtOn: 1,
   boughtUrl: 'https://store.example/sofa',
   boughtUrlPreview: { title: 'Sofa' },
+  showBoughtUrl: false,
+  isDraft: false,
   notes: 'Private note',
   photos: [photo],
   status: 'AVAILABLE',
@@ -91,6 +93,7 @@ const sale = (extra: Record<string, unknown> = {}) => ({
   name: 'Fall clear-out',
   pickupArea: 'Capitol Hill, Seattle',
   buyerNote: 'Evenings.',
+  paymentMethods: ['Cash', 'Venmo'],
   currency: 'USD',
   ownerUid: OWNER,
   createdBy: OWNER,
@@ -114,6 +117,7 @@ const THING_KEYS = [
   'photos',
   'size',
   'status',
+  'storeUrl',
   'title',
 ];
 
@@ -157,7 +161,8 @@ check(
       { photos: [photo], title: '', askingPriceCents: 100 },
       { photos: [photo], title: '   ', askingPriceCents: 100 },
       { photos: [photo, photo], title: ' Sofa ', askingPriceCents: 5 },
-    ];
+      { photos: [photo], title: 'Sofa', askingPriceCents: 100, isDraft: true },
+    ].map((item) => ({ isDraft: false, ...item }));
     cases.forEach((item) =>
       assert.equal(
         isListableOnServer(item),
@@ -167,6 +172,12 @@ check(
     );
     [null, undefined, 'x', 3, [], {}].forEach((value) =>
       assert.equal(isListableOnServer(value), false),
+    );
+    const legacy = { photos: [photo], title: 'Sofa', askingPriceCents: 100 };
+    assert.equal(isListableOnServer(legacy), true);
+    assert.equal(
+      isListableOnClient({ ...legacy, isDraft: undefined as never }),
+      true,
     );
   },
 );
@@ -203,6 +214,67 @@ check('the original price leaves only when the seller chose to show it', () => {
     null,
   );
 });
+
+check('a draft is never public; a thing from before drafts is not one', () => {
+  assert.equal(toPublicThing(thing({ isDraft: true })), null);
+  assert.ok(toPublicThing(thing({ isDraft: false })));
+  const legacy = { ...thing(), isDraft: undefined };
+  assert.ok(toPublicThing(legacy));
+  const page = toSalePage(sale(), [thing({ isDraft: true })], false);
+  assert.ok(page.status === 'ok');
+  assert.equal(page.things.length, 0);
+});
+
+check(
+  "the store's link leaves only when shown, only as a plain web link",
+  () => {
+    assert.equal(toPublicThing(thing())?.storeUrl, null);
+    const shown = (extra: Record<string, unknown>) =>
+      toPublicThing(thing({ showBoughtUrl: true, ...extra }))?.storeUrl;
+    assert.equal(shown({}), 'https://store.example/sofa');
+    assert.equal(
+      shown({ boughtUrl: 'http://store.example/a' }),
+      'http://store.example/a',
+    );
+    [
+      'javascript:alert(1)',
+      'data:text/html,x',
+      'ftp://store.example/a',
+      'store.example/sofa',
+      '',
+      null,
+      7,
+      'https://store.example/' +
+        'a'.repeat(SALE_PAGE_LIMITS.MAX_STORE_URL_LENGTH),
+    ].forEach((boughtUrl) =>
+      assert.equal(shown({ boughtUrl }), null, String(boughtUrl)),
+    );
+    ['true', 1, null, undefined].forEach((showBoughtUrl) =>
+      assert.equal(
+        toPublicThing(thing({ showBoughtUrl }))?.storeUrl,
+        null,
+        String(showBoughtUrl),
+      ),
+    );
+    const body = JSON.stringify(toPublicThing(thing({ showBoughtUrl: true })));
+    ['West Elm, 2021', 'Haven'].forEach((secret) =>
+      assert.ok(!body.includes(secret), secret),
+    );
+    const sealed = sealPage(
+      {
+        status: 'ok',
+        sale: toPublicSale(sale()) as never,
+        things: [
+          { ...toPublicThing(thing())!, storeUrl: 'javascript:alert(1)' },
+        ],
+        isMember: false,
+      },
+      null,
+    );
+    assert.ok(sealed.status === 'ok');
+    assert.equal(sealed.things[0].storeUrl, null);
+  },
+);
 
 check(
   'only Available and listable things are served, Pending too, never Sold or taken off',
@@ -243,9 +315,49 @@ check('the sale keeps its name, pickup area and note and nothing else', () => {
     name: 'Fall clear-out',
     pickupArea: 'Capitol Hill, Seattle',
     buyerNote: 'Evenings.',
+    paymentMethods: ['Cash', 'Venmo'],
   });
   assert.equal(toPublicSale(sale({ name: '' })), null);
 });
+
+check(
+  'the ways to pay are trimmed, capped, emptied of blanks and at most 8',
+  () => {
+    const methods = (paymentMethods: unknown) =>
+      toPublicSale(sale({ paymentMethods }))?.paymentMethods;
+    const long = 'x'.repeat(100);
+    assert.deepEqual(methods([' Cash ', '', '   ', 7, null, long]), [
+      'Cash',
+      'x'.repeat(SALE_PAGE_LIMITS.MAX_PAYMENT_METHOD_LENGTH),
+    ]);
+    assert.equal(
+      methods(Array.from({ length: 20 }, (_, index) => 'm' + index))?.length,
+      SALE_PAGE_LIMITS.MAX_PAYMENT_METHODS,
+    );
+    ['Cash', 7, null, undefined, {}].forEach((value) =>
+      assert.deepEqual(methods(value), [], String(value)),
+    );
+    const legacy = { ...sale(), paymentMethods: undefined };
+    assert.deepEqual(toPublicSale(legacy)?.paymentMethods, []);
+    const sealed = sealPage(
+      {
+        status: 'ok',
+        sale: {
+          ...toPublicSale(sale())!,
+          paymentMethods: [long, ' ', 'Zelle'],
+        },
+        things: [],
+        isMember: false,
+      },
+      null,
+    );
+    assert.ok(sealed.status === 'ok');
+    assert.deepEqual(sealed.sale.paymentMethods, [
+      'x'.repeat(SALE_PAGE_LIMITS.MAX_PAYMENT_METHOD_LENGTH),
+      'Zelle',
+    ]);
+  },
+);
 
 check(
   'the page orders Available before Pending and holds no id, uid, name or email',
@@ -303,6 +415,7 @@ check(
     assert.deepEqual(Object.keys(sealed.sale).sort(), [
       'buyerNote',
       'name',
+      'paymentMethods',
       'pickupArea',
     ]);
     assert.equal(sealed.things.length, 1);
@@ -543,8 +656,13 @@ check(
   () => {
     assert.ok(
       saleBlock.includes(
-        "hasOnly(['name', 'pickupArea', 'buyerNote', 'lastEditedAt'])",
+        "hasOnly(['name', 'pickupArea', 'buyerNote', 'paymentMethods', 'lastEditedAt'])",
       ),
+    );
+    assert.equal(
+      saleBlock.split("get('paymentMethods', []).size() <= 8").length - 1,
+      2,
+      'create and update both cap the ways to pay at 8',
     );
     assert.ok(saleBlock.includes("get('publicLinkId', null) == null"));
     assert.ok(saleBlock.includes("get('publicLinkChangedAt', null) == null"));
@@ -572,7 +690,8 @@ check(
     [
       'floorPriceCents',
       'boughtFrom',
-      'boughtUrl',
+      'boughtOn',
+      'boughtUrlPreview',
       'notes',
       'statusHistory',
       'ownerUid',
@@ -580,6 +699,14 @@ check(
       'buyerName',
     ].forEach((field) =>
       assert.ok(!view.includes(field), `${field} is named in salePageView.ts`),
+    );
+    assert.equal(
+      view.split('boughtUrl').length - 1,
+      1,
+      'the store link is read in one place, behind showBoughtUrl',
+    );
+    assert.ok(
+      view.includes('raw.showBoughtUrl === true ? toStoreUrl(raw.boughtUrl)'),
     );
   },
 );

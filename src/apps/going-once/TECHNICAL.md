@@ -24,6 +24,7 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 | `id` | `string` | `generateUuid` |
 | `name` | `string` | "Fall clear-out"; public |
 | `pickupArea` | `string \| null` | An area, never an address; public |
+| `paymentMethods` | `string[]` | The ways buyers can pay, as worded (at most 8, each at most 30 characters); public; a sale from before reads `[]` |
 | `buyerNote` | `string \| null` | Public |
 | `currency` | `'USD'` | Closed for now; read with a fallback |
 | `timeZone` | `string \| null` | The seller's IANA zone at create (`Intl` on their phone); the push quiet hours use it. A sale from before it was kept reads `null` (UTC in the function) until the seller opens it, which writes it once (a rule allows the seller to set it only while it is missing) |
@@ -234,7 +235,7 @@ A member may write any `photos[].path` on a thing, so the public function (and t
 |---|---|---|---|---|
 | `sales/{saleId}` read | yes | yes | no | no |
 | create | yes when `ownerUid == createdBy == me`, `members == [me]`, `publicLink*` (absent or `null`), `finished*`, `contactsClear*` all `null`, `status == 'OPEN'`, and gate `create-sales` open | (same, as the seller of a new sale) | (same) | no |
-| update: `name`, `pickupArea`, `buyerNote`, `lastEditedAt` | yes | no | no | no |
+| update: `name`, `pickupArea`, `buyerNote`, `paymentMethods` (a list of at most 8), `lastEditedAt` | yes | no | no | no |
 | update: remove a member | yes, anyone but themselves; only `members`, `memberJoinedAt`, `lastEditedAt` change, members only shrink and the removed uid's `memberJoinedAt` key is deleted (setting it is refused) | only themselves (leave), same keys | no | no |
 | update: join | — | — | yes when their verified token email has an invite `{saleId}_{email}` made by the seller, they add exactly themselves (and their own `memberJoinedAt` key), and the invite is gone after the commit | no |
 | update: `ownerUid`, `createdBy`, `status`, `finishedAt`, `finishedBy`, `contactsClearAt`, `contactsClearedAt`, `publicLinkId`, `publicLinkChangedAt` | no (functions) | no | no | no |
@@ -286,13 +287,16 @@ Verified per `firestore-rules.md`: the matrix above as seller, co-seller, other 
 | Field | Leaves? | Why |
 |---|---|---|
 | Sale `name`, `pickupArea`, `buyerNote` | include | The page needs them; shown as typed, the form warns against a name or address |
+| Sale `paymentMethods` | include | Up to 8 words, each trimmed and cut to 30 characters, blanks dropped; a non-list reads as none. Buyers see how they can pay |
 | Sale `ownerUid`, `members`, any name, email or photo, `timeZone`, `status` | exclude | Never says who shared it; a finished sale has no page |
 | Thing `id` | include | Opaque key for the interest form |
 | `title`, `description`, `brandModel`, `size`, `condition`, `askingPriceCents` | include | What a buyer decides on |
 | `originalPriceCents` | only when `showOriginalPrice === true` | The seller's per-thing choice |
+| `storeUrl` (from `boughtUrl`) | only when `showBoughtUrl === true` and it parses as an `http:`/`https:` link of at most 2,000 characters | The seller's per-thing choice; only the link, never the store's name, preview or date |
+| `isDraft` | exclude, and a draft is never served | A thing started in the walk-through and not saved; a legacy thing with no field is not a draft |
 | `status` | `AVAILABLE \| PENDING` only | Sold and withdrawn things are never served |
 | Photo copies (`s`, `m` paths, first 12) | include | Smaller copies only, listed from the link's public folder, so a photo appears once both its sizes exist; never the listing-size path. Until then the thing's `photos` is shorter or empty and the page draws a placeholder |
-| `floorPriceCents`, `boughtFrom`, `boughtOn`, `boughtUrl`, `boughtUrlPreview`, `notes`, `pending`, `sale`, `statusHistory`, `createdBy`, `lastEditedBy`, timestamps | exclude | Private money, notes, people, history |
+| `floorPriceCents`, `boughtFrom`, `boughtOn`, `boughtUrlPreview`, `boughtUrl` and `showBoughtUrl` (except as `storeUrl` above), `notes`, `pending`, `sale`, `statusHistory`, `createdBy`, `lastEditedBy`, timestamps | exclude | Private money, notes, people, history |
 | Inquiries and their counts | exclude | Buyer contacts are members-only; a count says how wanted a thing is |
 | `isMember` | computed per caller | Maya or Theo signed in sees "This is your sale's public page", with no id that says whose |
 
@@ -359,7 +363,7 @@ All `region: 'us-central1'`, callables with the site's `cors` list. Errors are `
 
 | Function | Kind | Who | Input | Output | Errors / statuses |
 |---|---|---|---|---|---|
-| `getSalePage` | callable, auth optional | anyone with the link | `{ linkId }` | `{ status: 'ok', sale: { name, pickupArea, buyerNote }, things: PublicThing[], isMember }` or `{ status: 'not_found' }` | Only `not_found` (malformed, unknown, stopped, renewed-away, finished, deleted alike) |
+| `getSalePage` | callable, auth optional | anyone with the link | `{ linkId }` | `{ status: 'ok', sale: { name, pickupArea, buyerNote, paymentMethods }, things: PublicThing[], isMember }` or `{ status: 'not_found' }` | Only `not_found` (malformed, unknown, stopped, renewed-away, finished, deleted alike) |
 | `submitSaleInterest` | callable, auth optional | anyone with the link | `{ linkId, itemId, name, contact, message, website }` (`website` is the honeypot) | `{ status: 'sent', contact: 'email' \| 'phone' }`, or `not_found`, `not_available`, `busy` (the sale's day is full), `full` (the thing already has 40), `slow_down`, `invalid` (with `field: 'name' \| 'contact' \| 'message'`) | `invalid` names the field; nothing else says more |
 | `changeSalePublicLink` | callable | seller | `{ saleId, action: 'create' \| 'renew' \| 'stop' }` | `{ linkId: string \| null }` | `unauthenticated`; `invalid-argument` (a sale id that isn't 1-128 letters, digits, `_` or `-`); `not-found` (missing, someone else's or a co-seller's call alike); `failed-precondition` "This sale is finished. Reopen it to turn the page on."; `aborted` "The link just changed. Check it and try again." (two changes at once); `internal` when a stopped link's public folder could not be cleared (nothing else was changed, so trying again is safe); create and renew also make the new address's copies before answering (512 MiB-1 GiB, 300 s) |
 | `syncSalePublicPhotos` | Firestore trigger, `apps/going-once/sales/{saleId}/items/{itemId}` written | — | the event's ids (re-reads both docs) | public copies made or deleted | Logs and returns; a photo that fails is logged (item and photo id) and the rest still copy; a failed copy is retried on the thing's next write or by a `create` on the on link |

@@ -35,7 +35,7 @@ Shapes: cards and drawers are `rounded-2xl`. Inputs, pills and buttons are fully
 
 ## Example data (every board reconciles to this)
 
-Sale **Fall clear-out**. Pickup area "Capitol Hill, Seattle". Note for buyers: "Evenings and weekends. Cash or Venmo." Seller **Maya**, co-seller **Theo**. Today is **Mon Nov 2**.
+Sale **Fall clear-out**. Pickup area "Capitol Hill, Seattle". Note for buyers: "Evenings and weekends." Seller **Maya**, co-seller **Theo**. Today is **Mon Nov 2**.
 
 | Thing | Photos | Condition | Asking | Floor 🔒 | Original | Status | Paid |
 |---|---|---|---|---|---|---|---|
@@ -557,7 +557,7 @@ Title note: **"Signed out, on a phone: what's still for sale, and one way to ask
 - Signed-out site header: logo, Sign in.
 - "Fall clear-out" (26px).
 - Line: "9 for sale · Capitol Hill, Seattle".
-- Note: "Evenings and weekends. Cash or Venmo."
+- Note: "Evenings and weekends."
 - Cards, two across, 4:3 photo, 2-line name, price tag:
   - Gray sofa $350
   - Dining chairs (set of 4) $120
