@@ -1,4 +1,9 @@
 {
+  "autoCompactWindow": 300000,
+  "idleCompaction": true,
+  "env": {
+    "CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS": "150000"
+  },
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -55,6 +60,18 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pipeline-pulse.sh\" tool",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/after-compact.sh\"",
             "timeout": 5
           }
         ]
