@@ -13,6 +13,13 @@ import { useAppSelector } from '@/store';
 import { setInquiryPush } from '@apps/going-once/store/actions/peopleActions';
 import { selectIsInquiryPushOff } from '@apps/going-once/store/selectors';
 
+const getHelperText = (isOff: boolean | null) => {
+  if (isOff === null) return 'Checking your push setting…';
+  return isOff
+    ? "Off for you on this sale. You'll still see everything in the Inbox."
+    : 'Just the thing, never who asked. Several close together come as one.';
+};
+
 interface PushSwitchProps {
   saleId: string;
   uid: string;
@@ -29,17 +36,20 @@ function PushSwitch({ saleId, uid }: PushSwitchProps) {
 
   const handleChange = async (isChecked: boolean) => {
     setError(null);
-    try {
-      await setInquiryPush(uid, saleId, isChecked);
-    } catch {
+    // The browser only shows its prompt for a call made in the tap itself, so it starts before the first await.
+    const asking = isChecked && device === 'off' ? turnOnDevicePush(uid) : null;
+    const [saved] = await Promise.allSettled([
+      setInquiryPush(uid, saleId, isChecked),
+      asking,
+    ]);
+    if (saved.status === 'rejected') {
       setError("We couldn't save that. Check your connection and try again.");
-      return;
     }
-    if (!isChecked || device !== 'off') return;
-    await turnOnDevicePush(uid);
-    await queryClient.invalidateQueries({
-      queryKey: notificationsQueryKeys.device(uid),
-    });
+    if (asking) {
+      await queryClient.invalidateQueries({
+        queryKey: notificationsQueryKeys.device(uid),
+      });
+    }
   };
 
   const note =
@@ -64,9 +74,7 @@ function PushSwitch({ saleId, uid }: PushSwitchProps) {
         />
       </div>
       <p className='text-muted-foreground text-sm text-pretty'>
-        {isOff === false
-          ? 'Just the thing, never who asked. Several close together come as one.'
-          : "Off for you on this sale. You'll still see everything in the Inbox."}
+        {getHelperText(isOff)}
       </p>
       {isOff === false && note && (
         <p className='text-muted-foreground text-xs text-pretty'>{note}</p>

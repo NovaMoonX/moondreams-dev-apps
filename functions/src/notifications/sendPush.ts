@@ -78,13 +78,20 @@ async function removeDeadTokens(
   );
 }
 
-/** Sends one push to every device registered under the given people (`users/{uid}.fcmTokens`) and returns how many devices it addressed. The one sender both scheduled functions use. */
-export async function sendPushToUsers(
+export interface PushReport {
+  /** Devices addressed. */
+  devices: number;
+  /** Every device that was still good failed; nothing reached the person, and trying again can help. */
+  isFailure: boolean;
+}
+
+/** Sends one push to every device registered under the given people (`users/{uid}.fcmTokens`) and reports how it went. Dead tokens are removed and don't count as a failure; zero devices is a success with nothing to retry. */
+export async function sendPushReport(
   firestore: Firestore,
   messaging: Messaging,
   uids: string[],
   content: PushContent,
-): Promise<number> {
+): Promise<PushReport> {
   const userSnapshots = await Promise.all(
     uids.map((uid) => firestore.doc(`users/${uid}`).get()),
   );
@@ -95,21 +102,38 @@ export async function sendPushToUsers(
     })),
   );
 
-  if (devices.length > 0) {
-    const { responses } = await messaging.sendEachForMulticast({
-      tokens: devices.map((device) => device.token),
-      notification: { title: content.title, body: content.body },
-      webpush: { fcmOptions: { link: content.url } },
-    });
-    const dead = getDeadTokens(devices, responses);
-
-    if (dead.length > 0) {
-      logger.info('Removing device tokens FCM no longer accepts', {
-        count: dead.length,
-      });
-      await removeDeadTokens(firestore, dead);
-    }
+  if (devices.length === 0) {
+    return { devices: 0, isFailure: false };
   }
 
-  return devices.length;
+  const { responses } = await messaging.sendEachForMulticast({
+    tokens: devices.map((device) => device.token),
+    notification: { title: content.title, body: content.body },
+    webpush: { fcmOptions: { link: content.url } },
+  });
+  const dead = getDeadTokens(devices, responses);
+
+  if (dead.length > 0) {
+    logger.info('Removing device tokens FCM no longer accepts', {
+      count: dead.length,
+    });
+    await removeDeadTokens(firestore, dead);
+  }
+
+  const isFailure =
+    dead.length < devices.length &&
+    devices.every(
+      (device, index) => dead.includes(device) || !responses[index]?.success,
+    );
+  return { devices: devices.length, isFailure };
+}
+
+/** Sends one push to every device registered under the given people (`users/{uid}.fcmTokens`) and returns how many devices it addressed. The one sender both scheduled functions use. */
+export async function sendPushToUsers(
+  firestore: Firestore,
+  messaging: Messaging,
+  uids: string[],
+  content: PushContent,
+): Promise<number> {
+  return (await sendPushReport(firestore, messaging, uids, content)).devices;
 }
