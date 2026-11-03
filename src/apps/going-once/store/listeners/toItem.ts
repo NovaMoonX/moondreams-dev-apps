@@ -54,7 +54,9 @@ export function toItem(id: string, saleId: string, data: DocumentData): Item {
     notes: item.notes ?? null,
     photos: Array.isArray(item.photos) ? item.photos : [],
     status: item.status ?? 'AVAILABLE',
-    pending: item.pending ?? null,
+    pending: item.pending
+      ? { ...item.pending, inquiryId: item.pending.inquiryId ?? null }
+      : null,
     sale: item.sale ?? null,
     statusHistory: Array.isArray(item.statusHistory)
       ? item.statusHistory.map(toStatusChange)

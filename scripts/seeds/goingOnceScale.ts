@@ -43,7 +43,7 @@ const NOUNS = [
 const MATERIALS = ['oak', 'steel', 'walnut', 'wicker', 'glass', 'linen'];
 
 const NEW_INQUIRY_COUNT = 12;
-const HANDLED_INQUIRY_COUNT = 36;
+const HANDLED_INQUIRY_COUNT = 200;
 
 const BUYERS = ['Nate', 'Dev', 'Priya', 'Marcus', 'Lena'];
 const METHODS = ['CASH', 'VENMO', 'ZELLE', 'OTHER'] as const;
@@ -210,7 +210,7 @@ export async function seedGoingOnceScale(
     }),
   );
 
-  // Handled outnumbers the Inbox's 30 so the Handled view shows its "most recent" cap; every fifth sender and message is long.
+  // Handled far outnumbers the Inbox's 30 so older pages load, and every third one shares a handled time with its neighbours to exercise the page cursor's tie-break; every fifth sender and message is long.
   await Promise.all(
     Array.from(
       { length: NEW_INQUIRY_COUNT + HANDLED_INQUIRY_COUNT },
@@ -232,7 +232,7 @@ export async function seedGoingOnceScale(
           handled: isHandled
             ? {
                 by: index % 2 === 0 ? maya.uid : theo.uid,
-                at: context.now - (index + 1) * 41 * MINUTE_MS,
+                at: context.now - (Math.floor(index / 3) + 1) * 41 * MINUTE_MS,
               }
             : undefined,
         });

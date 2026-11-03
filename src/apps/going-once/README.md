@@ -23,7 +23,8 @@ Built:
 - The Sale tab: where the sale stands (collected, pending, left), the public page's switch and link, editing its name, pickup area and note, and deleting the sale
 - Co-sellers: the seller adds an email, the person opens Going Once signed in with it and the sale is waiting; the seller can remove them and they can leave
 - The public page: Available and Pending things with photos, and an "I'm interested" form that is refused in words for a thing that just sold
-- The Inbox: New and Handled, an inquiry with Text, Call and Email, and the thing it is about one tap away
+- The Inbox: New and Handled (older Handled messages in pages), an inquiry with Text, Call and Email, and the thing it is about one tap away
+- Each thing's own list of who asked, and Hold for someone from their inquiry
 
 Next:
 - [x] Sales, things with photos and private fields, and co-sellers
@@ -31,8 +32,8 @@ Next:
 - [x] Photos on the public page, smaller copies that go when a thing sells
 - [x] An interest form on the public page, refused in words for a thing that just sold
 - [x] A shared inbox: New and Handled, with Text, Call and Email
+- [x] Each thing's own list of who asked with Hold for someone, and older Handled messages in pages
 - [x] A bundled push when someone is interested
-- [ ] Each thing's own list of who asked, with Hold for
 - [x] Copy listing text, Save photos for one thing, and Save all photos as one zip for relisting
 - [ ] Finish the sale, with buyers' details cleared after 30 days
 - [ ] Later: who holds the money, and a later sale from what didn't sell
