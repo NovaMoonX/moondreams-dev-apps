@@ -513,6 +513,12 @@ function ThingDrawer({
               />
             ))}
           </ActionGroup>
+          {isOnTheList && (
+            <ActionGroup isRoomy>
+              <CopyListingTextRow item={item} uid={uid} />
+              <SavePhotosRow item={item} />
+            </ActionGroup>
+          )}
           {canDelete && (
             <ActionGroup isRoomy>
               <ActionRow
@@ -649,17 +655,6 @@ function ThingDrawer({
             Buyers can&apos;t see this yet. It needs a photo, a name and a
             price.
           </p>
-        )}
-        {isOnTheList && (
-          <div className='space-y-2'>
-            <h3 className='text-muted-foreground text-sm font-semibold'>
-              Post it somewhere else
-            </h3>
-            <ActionGroup isRoomy>
-              <CopyListingTextRow item={item} uid={uid} />
-              <SavePhotosRow item={item} />
-            </ActionGroup>
-          </div>
         )}
       </div>
       {deleteDialog}
