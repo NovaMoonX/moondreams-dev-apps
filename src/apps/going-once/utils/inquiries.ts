@@ -111,7 +111,7 @@ export function getAskerPills(inquiries: Inquiry[], now: number): AskerPill[] {
       inquiryIds: members.map((member) => member.id),
       name,
       label: isShared
-        ? `${name} · ${formatSentAt(latest.createdAt, now)}`
+        ? `${formatSentAt(latest.createdAt, now)} · ${name}`
         : name,
     };
   });

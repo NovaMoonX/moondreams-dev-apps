@@ -55,6 +55,13 @@ function ThingInquiryView({
             : formatSentAt(inquiry.lastSentAt, now)}
         </p>
       </div>
+      {message === null && (
+        <p className='text-muted-foreground text-sm'>
+          {inquiry.message === null
+            ? 'No message.'
+            : 'Just asked if it’s still available.'}
+        </p>
+      )}
       {message !== null && (
         <p className='text-sm break-words whitespace-pre-wrap'>{message}</p>
       )}

@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Trash2,
   Undo2,
+  ChevronDown,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -237,7 +238,12 @@ function ThingDrawer({
         }
       : null,
   ].filter((fact) => fact !== null);
-  const askedCount = inquiries?.length ?? 0;
+  const askedCount = new Set(
+    (inquiries ?? []).map(
+      (inquiry) =>
+        `${(inquiry.name ?? '').trim().toLowerCase()}|${inquiry.phone ?? inquiry.email ?? inquiry.id}`,
+    ),
+  ).size;
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
   const offer = getThingOffer(item.status, isListable(item));
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
@@ -667,6 +673,7 @@ function ThingDrawer({
               }
             >
               {askedCount} asked
+              <ChevronDown className='size-3.5' aria-hidden='true' />
             </Button>
           )}
         </div>
