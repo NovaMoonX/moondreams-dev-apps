@@ -231,7 +231,7 @@ Title note: **"Where the sale stands, who is helping, the public link, and finis
 
 **S13 · Public page off** · `Seller`
 - The Public page card with the switch off.
-- InlineNotice (info): under the line "Anyone with the link can see what's for sale and tell you they're interested, with no account." (on and off): "It shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling."
+- InlineNotice (info): under the line "Anyone with the link can see what's for sale and tell you they're interested, with no account." (off: "When it's on, anyone with the link…"): "The page shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling."
 
 **S14 · Get a new address** · `Seller` · confirm dialog
 - Title: "Get a new address?"

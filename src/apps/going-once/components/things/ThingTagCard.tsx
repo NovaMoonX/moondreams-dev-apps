@@ -106,7 +106,9 @@ function ThingTagCard({
         {isSaved && (
           <>
             <Check className='size-3' aria-hidden='true' />
-            {isDraft ? 'Draft saved' : 'Saved'}
+            <span className='max-[359px]:sr-only'>
+              {isDraft ? 'Draft saved' : 'Saved'}
+            </span>
           </>
         )}
       </p>
@@ -121,8 +123,8 @@ function ThingTagCard({
           {part(
             'name',
             `Name, ${title === '' ? 'not named yet' : title}, change`,
-            // Keeps a long name clear of the save status in the corner.
-            'w-full pr-20',
+            // Keeps a long name clear of the save status in the corner, which is only a tick on the narrowest phones.
+            'w-full pr-20 max-[359px]:pr-5',
             <span
               className={join(
                 'line-clamp-2 min-w-0 font-semibold break-words',
