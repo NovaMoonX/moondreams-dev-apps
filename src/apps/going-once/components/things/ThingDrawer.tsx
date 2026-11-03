@@ -525,6 +525,12 @@ function ThingDrawer({
               />
             ))}
           </ActionGroup>
+          {isOnTheList && !isSaleFinished && (
+            <ActionGroup isRoomy>
+              <CopyListingTextRow item={item} uid={uid} />
+              <SavePhotosRow item={item} />
+            </ActionGroup>
+          )}
           {canDelete && (
             <ActionGroup isRoomy>
               <ActionRow
@@ -667,17 +673,6 @@ function ThingDrawer({
             This sale is finished, so nothing new can be held. The seller can
             reopen it.
           </p>
-        )}
-        {isOnTheList && !isSaleFinished && (
-          <div className='space-y-2'>
-            <h3 className='text-muted-foreground text-sm font-semibold'>
-              Post it somewhere else
-            </h3>
-            <ActionGroup isRoomy>
-              <CopyListingTextRow item={item} uid={uid} />
-              <SavePhotosRow item={item} />
-            </ActionGroup>
-          </div>
         )}
       </div>
       {deleteDialog}

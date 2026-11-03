@@ -8,6 +8,7 @@ import { APP_ORIGIN, toAppUrl } from '../../notifications/sendPush.js';
 import { FINISHED_SALE_STATUS } from './salePageView.js';
 
 const MAX_NAME_LENGTH = 40;
+const MAX_ITEM_AGE_MS = 86_400_000;
 
 /** Thing and sale names on a lock screen are clipped; both are already on the public page. */
 export const clipName = (text: unknown, fallback: string) => {
@@ -82,6 +83,10 @@ export function isNewInterest(
   return !before || before.status !== 'NEW';
 }
 
+/** An item older than a day is no longer news. */
+export const isItemFresh = (item: BundleItem, now: number) =>
+  now - item.queuedAt <= MAX_ITEM_AGE_MS;
+
 const groupBySale = (items: BundleItem[]) =>
   items.reduce<Map<string, BundleItem[]>>(
     (groups, item) =>
@@ -115,7 +120,9 @@ export const goingOnceBundleHooks: BundleHooks = {
       await firestore.doc(`apps/going-once/people/${uid}`).get()
     ).data();
     const kept = await Promise.all(
-      [...groupBySale(items)].map(([saleId, saleItems]) =>
+      [
+        ...groupBySale(items.filter((item) => isItemFresh(item, Date.now()))),
+      ].map(([saleId, saleItems]) =>
         confirmSaleItems(firestore, uid, saleId, saleItems, person),
       ),
     );

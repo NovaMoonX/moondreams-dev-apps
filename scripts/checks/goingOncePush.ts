@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   goingOnceBundleHooks,
   isInquiryWaiting,
+  isItemFresh,
   isNewInterest,
   isPushOff,
   isSaleListening,
@@ -12,8 +13,15 @@ import {
   MAX_BUNDLE_ITEMS,
   decideQueue,
   getNextMorning,
+  EMPTY_BUNDLE,
+  LEASE_MS,
+  MAX_ATTEMPTS,
+  claimDue,
   isBundleDue,
   planDueSend,
+  planRetry,
+  putBackQueued,
+  settleSent,
   type BundleItem,
   type BundleState,
 } from '../../functions/src/notifications/bundledPush.ts';
@@ -40,12 +48,8 @@ const makeItem = (
 
 const { summarize } = goingOnceBundleHooks;
 const send = (state: BundleState, confirmed: BundleItem[], now: number) =>
-  planDueSend(state, confirmed, summarize) && {
-    ...state,
-    lastSentAt: now,
-    nextSendAt: null,
-    items: [],
-  };
+  planDueSend(state, confirmed, summarize) &&
+  settleSent(state, state.items, now, true);
 
 // The first inquiry after a quiet spell goes at once and alone.
 const first = makeItem('a', 'Gray sofa', at(12));
@@ -147,7 +151,7 @@ assert.equal(
 );
 // A window that ends in quiet hours goes at 08:00, not at the window's end.
 const lateWindow = decideQueue(
-  { lastSentAt: at(21, 50), nextSendAt: null, items: [], zone: ZONE },
+  { ...EMPTY_BUNDLE, lastSentAt: at(21, 50), zone: ZONE },
   first,
   ZONE,
   at(21, 55),
@@ -245,6 +249,117 @@ assert.equal(
   `k${MAX_BUNDLE_ITEMS + 4}`,
   'the newest are kept',
 );
+
+// A failed send never drops: the claim keeps the items, a lease holds other runs off, and a retry stays out of quiet hours.
+const due = { ...queued, nextSendAt: at(12, 15) };
+const claim = claimDue(due, at(12, 15));
+assert.equal(claim.kind, 'send');
+if (claim.kind !== 'send') throw new Error('expected a claim');
+assert.equal(claim.next.items.length, 3, 'claiming keeps the items');
+assert.equal(claim.next.sending.length, 3);
+assert.equal(claim.next.attempts, 1);
+assert.equal(
+  claim.next.lastSentAt,
+  at(12),
+  'claiming does not move lastSentAt',
+);
+assert.equal(isBundleDue(claim.next, at(12, 16)), false, 'leased');
+assert.equal(claimDue(claim.next, at(12, 16)).kind, 'skip');
+const reclaimed = claimDue(claim.next, at(12, 15) + LEASE_MS);
+assert.equal(reclaimed.kind, 'send', 'an expired lease is claimed again');
+assert.equal(reclaimed.kind === 'send' && reclaimed.next.attempts, 2);
+
+const lateFail = planRetry({ ...claim.next, zone: ZONE }, at(21, 59));
+assert.equal(lateFail.items.length, 3, 'a failed send keeps every item');
+assert.equal(
+  lateFail.nextSendAt,
+  at(8, 0, 21),
+  'a retry never lands in quiet hours',
+);
+assert.equal(lateFail.sendingUntil, null);
+assert.equal(
+  planRetry(claim.next, at(12, 16)).nextSendAt,
+  at(12, 17),
+  'by day a retry is a minute on',
+);
+
+let tries = claim.next;
+for (let attempt = 1; attempt < MAX_ATTEMPTS; attempt += 1) {
+  const again = claimDue({ ...tries, nextSendAt: at(13) }, at(13));
+  assert.equal(again.kind, 'send');
+  tries = again.kind === 'send' ? again.next : tries;
+}
+assert.equal(tries.attempts, MAX_ATTEMPTS);
+const gaveUp = claimDue({ ...tries, nextSendAt: at(14) }, at(14));
+assert.equal(gaveUp.kind, 'give-up', 'five tries and it gives up');
+assert.deepEqual(gaveUp.kind === 'give-up' && gaveUp.next.items, []);
+assert.equal(gaveUp.kind === 'give-up' && gaveUp.next.attempts, 0);
+
+// Items that came in during a send wait for their own window; an acknowledged send moves lastSentAt.
+const during = makeItem('z', 'Lamp', at(12, 16));
+const acknowledged = settleSent(
+  { ...claim.next, items: [...claim.next.items, during] },
+  claim.sending,
+  at(12, 16),
+  true,
+);
+assert.deepEqual(
+  acknowledged.items.map((item) => item.key),
+  ['z'],
+);
+assert.equal(acknowledged.lastSentAt, at(12, 16));
+assert.equal(acknowledged.nextSendAt, at(12, 16) + BUNDLE_WINDOW_MS);
+assert.equal(acknowledged.sendingUntil, null);
+assert.equal(acknowledged.attempts, 0);
+
+// A bundle whose items were all handled meanwhile sends nothing and leaves lastSentAt alone.
+const handled = settleSent(claim.next, claim.sending, at(12, 11), false);
+assert.equal(handled.lastSentAt, at(12));
+assert.equal(handled.nextSendAt, null);
+assert.equal(
+  decideQueue(handled, makeItem('h', 'Chair', at(12, 11)), ZONE, at(12, 11))
+    .sendNow,
+  false,
+  'still inside the window of the last real push',
+);
+assert.equal(
+  decideQueue(handled, makeItem('h', 'Chair', at(12, 11)), ZONE, at(12, 11))
+    .next.nextSendAt,
+  at(12) + BUNDLE_WINDOW_MS,
+);
+
+// A failed immediate send puts the item back, deduped by key, outside quiet hours, with the window given back.
+const immediate = decideQueue(undefined, first, ZONE, at(21, 59));
+const putBack = putBackQueued(
+  immediate.next,
+  first,
+  at(21, 59),
+  null,
+  at(21, 59),
+  ZONE,
+);
+assert.deepEqual(
+  putBack.items.map((item) => item.key),
+  ['a'],
+);
+assert.equal(putBack.lastSentAt, null);
+assert.equal(putBack.nextSendAt, at(8, 0, 21));
+assert.equal(
+  putBackQueued(
+    putBack,
+    { ...first, queuedAt: at(22) },
+    at(21, 59),
+    null,
+    at(22),
+    ZONE,
+  ).items.length,
+  1,
+  'queued twice is one item',
+);
+
+// Items older than a day are no longer news.
+assert.equal(isItemFresh(first, first.queuedAt + 86_400_000), true);
+assert.equal(isItemFresh(first, first.queuedAt + 86_400_001), false);
 
 // Nothing a buyer wrote reaches a payload: build the items from an inquiry full of marker values.
 const buyer = {
