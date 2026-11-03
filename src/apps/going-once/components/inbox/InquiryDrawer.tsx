@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
+  CalendarClock,
   ChevronRight,
   Ellipsis,
   Mail,
@@ -29,7 +30,11 @@ import StatusDot from '@apps/going-once/components/things/StatusDot';
 import ThingThumb from '@apps/going-once/components/things/ThingThumb';
 import { selectIsSaleFinished } from '@apps/going-once/store/selectors';
 import type { Inquiry, Item } from '@apps/going-once/types';
-import { getAvailableLabel, getItemName } from '@apps/going-once/utils/listing';
+import {
+  getAvailableLabel,
+  getItemName,
+  isListable,
+} from '@apps/going-once/utils/listing';
 import { getStatusFacts } from '@apps/going-once/utils/status';
 import { formatPhone } from '@apps/going-once/utils/contact';
 import {
@@ -43,6 +48,8 @@ interface InquiryDrawerProps {
   /** The thing it is about, which the thing's row opens; `null` once it is gone. */
   item: Item | null;
   onOpenThing: () => void;
+  /** Opens the thing's Mark pending, held for this person. */
+  onHold: () => void;
   thing: string;
   handledBy: string | null;
   now: number;
@@ -80,6 +87,7 @@ function InquiryDrawer({
   uid,
   item,
   onOpenThing,
+  onHold,
   thing,
   handledBy,
   now,
@@ -244,7 +252,7 @@ function InquiryDrawer({
             {getStatusLine(inquiry, handledBy, now)}
           </p>
           {item === null ? (
-            <p className='text-sm font-medium break-words'>{thing}</p>
+            <p className='text-muted-foreground text-sm break-words'>{thing}</p>
           ) : (
             <Button
               type='button'
@@ -286,6 +294,22 @@ function InquiryDrawer({
               Details cleared {formatDateShort(clearedAt)}.
             </p>
           )}
+          {!isSaleFinished &&
+            item !== null &&
+            item.status === 'AVAILABLE' &&
+            isListable(item) && (
+              <ActionGroup isRoomy>
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  icon={<CalendarClock />}
+                  label={`Hold for ${name}`}
+                  subtitle='Marks it pending, with their name on the hold'
+                  hasChevron
+                  onClick={onHold}
+                />
+              </ActionGroup>
+            )}
           {reach.length > 0 && (
             <div className='space-y-2'>
               {contactText !== null && (

@@ -762,6 +762,13 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       sentAt: context.now - 2 * HOUR_MS,
     },
     {
+      ...sofa,
+      name: 'Dan',
+      contact: 'dan.w@example.com',
+      message: 'Hi! Is the Gray sofa still available?',
+      sentAt: context.now - 3 * HOUR_MS,
+    },
+    {
       itemId: 'seed-go-road-bike',
       itemTitle: 'Road bike',
       name: 'Marcus',
@@ -813,6 +820,15 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
       sentAt: context.now - 5 * DAY_MS,
       handled: { by: theo.uid, at: context.now - 4 * DAY_MS - 18 * HOUR_MS },
     },
+    {
+      itemId: 'seed-go-deleted-side-table',
+      itemTitle: 'Side table',
+      name: 'Rosa',
+      contact: 'rosa.t@example.com',
+      message: 'Is the side table still around?',
+      sentAt: context.now - 6 * DAY_MS,
+      handled: { by: maya.uid, at: context.now - 5 * DAY_MS },
+    },
   ];
   await Promise.all(
     inquiries.map((inquiry) => {
@@ -844,6 +860,6 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
 
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 3 + SEED_THINGS.length + 7 + finishedDocuments,
+    firestoreDocuments: 3 + SEED_THINGS.length + 9 + finishedDocuments,
   };
 }

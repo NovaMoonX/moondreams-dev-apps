@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { Plus, X } from 'lucide-react';
 
@@ -13,7 +15,8 @@ import StatusViewFooter from '@apps/going-once/components/things/StatusViewFoote
 import { MAX_BUYER_NAME_LENGTH } from '@apps/going-once/constants';
 import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
-import type { Item } from '@apps/going-once/types';
+import type { Inquiry, Item } from '@apps/going-once/types';
+import { getAskerPills } from '@apps/going-once/utils/inquiries';
 import { getItemName } from '@apps/going-once/utils/listing';
 import { describeMovedOn } from '@apps/going-once/utils/status';
 import {
@@ -24,8 +27,13 @@ import {
   type HoldDraft,
 } from '@apps/going-once/utils/statusDrafts';
 
+const MORE_ASKERS = 'more';
+const ASKERS_SHOWN = 3;
+
 interface MarkPendingViewProps {
   item: Item;
+  /** This thing's inquiries, offered as who it is for. */
+  inquiries: Inquiry[];
   uid: string;
   now: number;
   /** Marking a thing pending, or changing who or when on a hold it already has. */
@@ -43,6 +51,7 @@ interface MarkPendingViewProps {
 /** Who is picking it up, and when; both are optional, so Mark pending is on from the start. */
 function MarkPendingView({
   item,
+  inquiries,
   uid,
   now,
   mode,
@@ -54,6 +63,7 @@ function MarkPendingView({
   onDone,
 }: MarkPendingViewProps) {
   const { isBusy, refusal, write } = useStatusWrite();
+  const [areAskersExpanded, setAreAskersExpanded] = useState(false);
   const isChange = mode === 'CHANGE';
   const dayOptions = [
     ...getDayOptions(now),
@@ -66,6 +76,31 @@ function MarkPendingView({
     (isBusy
       ? null
       : describeMovedOn(item, [isChange ? 'PENDING' : 'AVAILABLE']));
+  const pills = getAskerPills(inquiries, now);
+  const typedName = draft.name.trim().toLowerCase();
+  const picked =
+    pills.find((pill) =>
+      draft.inquiryId === null
+        ? typedName !== '' && pill.name.toLowerCase() === typedName
+        : pill.inquiryIds.includes(draft.inquiryId),
+    ) ?? null;
+  const firstPills = pills.slice(0, ASKERS_SHOWN);
+  const shownPills = areAskersExpanded
+    ? pills
+    : picked === null || firstPills.includes(picked)
+      ? firstPills
+      : [...firstPills.slice(0, ASKERS_SHOWN - 1), picked];
+  const askers = [
+    ...shownPills.map((pill) => ({ value: pill.id, label: pill.label })),
+    ...(shownPills.length < pills.length
+      ? [
+          {
+            value: MORE_ASKERS,
+            label: `${pills.length - shownPills.length} more`,
+          },
+        ]
+      : []),
+  ];
   const isUnchanged =
     isChange && !isDraftChanged(draft, getHoldDraft(item.pending, now));
 
@@ -89,10 +124,28 @@ function MarkPendingView({
                 pickupOn: item.pending?.pickupOn ?? null,
               },
             }
-          : { kind: 'MARK_PENDING', buyerName, pickupOn },
+          : {
+              kind: 'MARK_PENDING',
+              inquiryId: draft.inquiryId,
+              buyerName,
+              pickupOn,
+            },
       ),
     );
     if (isSaved) onDone();
+  };
+
+  const pickAsker = (id: string) => {
+    if (id === MORE_ASKERS) {
+      setAreAskersExpanded(true);
+      return;
+    }
+    if (pills.find((pill) => pill.id === id) === picked) return;
+    onDraft({
+      ...draft,
+      inquiryId: id,
+      name: inquiries.find((inquiry) => inquiry.id === id)?.name ?? draft.name,
+    });
   };
 
   const pickDay = (value: string) => {
@@ -119,6 +172,17 @@ function MarkPendingView({
         />
         <p className='text-lg font-semibold'>Who&apos;s picking it up?</p>
       </div>
+      {askers.length > 0 && (
+        <div className='space-y-3'>
+          <p className='text-muted-foreground text-sm'>Someone who asked</p>
+          <PillGroup
+            label='Someone who asked'
+            options={askers}
+            value={picked?.id ?? null}
+            onChange={pickAsker}
+          />
+        </div>
+      )}
       <div className='space-y-2'>
         <p className='text-muted-foreground text-sm'>Their name (optional)</p>
         <Input
@@ -128,7 +192,9 @@ function MarkPendingView({
           maxLength={MAX_BUYER_NAME_LENGTH}
           autoComplete='off'
           disabled={lockedNote !== null}
-          onChange={(event) => onDraft({ ...draft, name: event.target.value })}
+          onChange={(event) =>
+            onDraft({ ...draft, inquiryId: null, name: event.target.value })
+          }
         />
       </div>
       {draft.isDayShown ? (

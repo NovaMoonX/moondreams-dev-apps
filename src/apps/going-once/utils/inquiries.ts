@@ -1,6 +1,6 @@
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { MAX_ITEM_TITLE_LENGTH } from '@apps/going-once/constants';
-import type { Inquiry, Item } from '@apps/going-once/types';
+import type { Inquiry, Item, ItemPendingRecord } from '@apps/going-once/types';
 
 const DAY_MS = 86_400_000;
 
@@ -39,11 +39,14 @@ export function describeInquiryThing(
   return title;
 }
 
-/** Who asked: the name, or "A buyer asked about Gray sofa" once the sale's contacts have been cleared. */
-export const getInquirerName = (inquiry: Inquiry, thing: string) =>
-  inquiry.contactClearedAt === null
-    ? (inquiry.name ?? 'A buyer')
-    : `A buyer asked about ${thing}`;
+/** Who asked: the name, or once the sale's contacts are cleared "A buyer asked about Gray sofa" (just "A buyer" without a thing). */
+export const getInquirerName = (
+  inquiry: Inquiry,
+  thing: string | null = null,
+) =>
+  inquiry.contactClearedAt !== null && thing !== null
+    ? `A buyer asked about ${thing}`
+    : (inquiry.name ?? 'A buyer');
 
 /** The message the interest form starts with, from the title as the server keeps it; a thing someone is already picking up asks in case it falls through. */
 export const toPrefilledMessage = (title: string, isPending = false) => {
@@ -60,3 +63,62 @@ export const isPrefilledMessage = (inquiry: Inquiry) =>
       inquiry.message ===
       toPrefilledMessage(inquiry.itemTitleAtSend, isPending),
   );
+
+const toNameKey = (name: string | null) => name?.trim().toLowerCase() ?? '';
+
+/** Whether this inquiry is who the thing is held for. An older hold has no inquiry id, so it is matched by the name it kept. */
+export function isHolder(
+  pending: Pick<ItemPendingRecord, 'inquiryId' | 'buyerName'> | null,
+  inquiry: Pick<Inquiry, 'id' | 'name'>,
+): boolean {
+  if (pending === null) return false;
+  if (pending.inquiryId !== null) return pending.inquiryId === inquiry.id;
+  const held = toNameKey(pending.buyerName);
+  return held !== '' && held === toNameKey(inquiry.name);
+}
+
+/** What the buyer wrote of their own, or `null` when it is only the form's starting message. */
+export function getOwnMessage(inquiry: Inquiry): string | null {
+  const message = inquiry.message?.trim() ?? '';
+  return message === '' || isPrefilledMessage(inquiry) ? null : message;
+}
+
+export interface AskerPill {
+  /** The newest inquiry of this person. */
+  id: string;
+  /** Every inquiry the pill stands for. */
+  inquiryIds: string[];
+  name: string;
+  label: string;
+}
+
+/** One pill per person who asked, newest first. Two inquiries under one name stay apart when their contacts differ, each with the time it was sent. */
+export function getAskerPills(inquiries: Inquiry[], now: number): AskerPill[] {
+  const named = inquiries
+    .filter((inquiry) => toNameKey(inquiry.name) !== '')
+    .sort((first, second) => second.createdAt - first.createdAt);
+  const groups = named.reduce<Inquiry[][]>((found, inquiry) => {
+    const key = (other: Inquiry) =>
+      `${toNameKey(other.name)}|${other.phone ?? other.email ?? ''}`;
+    const group = found.find((members) => key(members[0]) === key(inquiry));
+    if (group === undefined) return [...found, [inquiry]];
+    group.push(inquiry);
+    return found;
+  }, []);
+  return groups.map((members) => {
+    const [latest] = members;
+    const name = (latest.name ?? '').trim();
+    const isShared =
+      groups.filter(
+        (other) => toNameKey(other[0].name) === toNameKey(latest.name),
+      ).length > 1;
+    return {
+      id: latest.id,
+      inquiryIds: members.map((member) => member.id),
+      name,
+      label: isShared
+        ? `${formatSentAt(latest.createdAt, now)} · ${name}`
+        : name,
+    };
+  });
+}
