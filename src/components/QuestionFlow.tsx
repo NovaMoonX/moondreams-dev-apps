@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -18,6 +18,11 @@ interface QuestionFlowProps {
   flow: QuestionFlowState;
   /** Puts the cursor in a question's typed field (or on its heading) as it opens. */
   shouldFocus?: boolean;
+  /** Draws the steps before the open one (all of them once reviewed) in place of the folded rows. */
+  renderAnswered?: (
+    answered: QuestionStep[],
+    reopen: (id: string) => void,
+  ) => ReactNode;
 }
 
 const getScroller = (element: HTMLElement) => {
@@ -98,7 +103,11 @@ function QuestionSheet({ step, onDone, shouldFocus }: QuestionSheetProps) {
 }
 
 /** A form asked one question at a time: the open one is large with only its control, the answered ones fold into rows above it and nothing follows it. Once every answer has been seen the form is only rows, and a tapped row opens its question in a sheet over the form, so no row moves. The way forward is the form's pinned footer (`flow.advance` while asking). */
-function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
+function QuestionFlow({
+  flow,
+  shouldFocus = true,
+  renderAnswered,
+}: QuestionFlowProps) {
   const {
     steps,
     open: asked,
@@ -197,7 +206,7 @@ function QuestionFlow({ flow, shouldFocus = true }: QuestionFlowProps) {
 
   return (
     <div ref={rootRef} className='space-y-5'>
-      {rows(before)}
+      {renderAnswered ? renderAnswered(before, reopen) : rows(before)}
       {open && (
         <div
           ref={openRef}

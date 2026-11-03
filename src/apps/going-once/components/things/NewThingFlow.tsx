@@ -2,20 +2,20 @@ import { useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Check, Plus } from 'lucide-react';
 
 import AddFieldChips from '@/components/forms/AddFieldChips';
 import OptionalDetailRows from '@/components/forms/OptionalDetailRows';
 import PhotoSetPicker from '@/components/forms/PhotoSetPicker';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import QuestionFlow from '@/components/QuestionFlow';
-import RevealChip from '@/components/RevealChip';
 import Subview from '@/components/Subview';
 import { usePhotoSetUploads } from '@/hooks/usePhotoSetUploads';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
-import { formatCentsShort } from '@/utils/moneyUtils';
 import {
   ConditionQuestion,
   NameQuestion,
@@ -28,6 +28,7 @@ import {
   THING_ROWS,
   type ExtraKey,
 } from '@apps/going-once/components/things/thingRows';
+import ThingTagCard from '@apps/going-once/components/things/ThingTagCard';
 import { CONDITION_LABELS, MAX_ITEM_PHOTOS } from '@apps/going-once/constants';
 import { useItemPhotoUrls } from '@apps/going-once/queries/photoUrlQueries';
 import {
@@ -80,29 +81,9 @@ const toResumeAnswers = (item: Item): Answers => {
 const SAVE_FAILED =
   "That didn't save. Check your connection; what you typed is still here.";
 
-const withDecideLater = (value: string, isDeferred: boolean) => {
-  if (value !== '') return value;
-  return isDeferred ? 'Decide later' : '';
-};
-
-const getPhotosSummary = (count: number, isSkipped: boolean) => {
-  if (count > 0) return `${count} ${count === 1 ? 'photo' : 'photos'}`;
-  return isSkipped ? 'Skipped for now' : '';
-};
-
-const getPriceSummary = (fields: ThingFields) =>
-  [
-    formatAskingPrice(fields.askingPriceCents) ?? '',
-    fields.floorPriceCents === null
-      ? ''
-      : `🔒 floor ${formatCentsShort(fields.floorPriceCents)}`,
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
-
 const getPriceBlocker = (answers: Answers) => {
   if (answers.isFree) return null;
-  if (answers.price.trim() === '') return "Enter a price, or tap It's free.";
+  if (answers.price.trim() === '') return "Enter a price, or choose It's free.";
   return 'Enter the price as a dollar amount.';
 };
 
@@ -214,18 +195,6 @@ function ThingSteps({
   const isDeferred = (id: string) => answers.deferred.includes(id);
   const defer = (id: string) =>
     set({ deferred: [...latestAnswers.current.deferred, id] });
-  const decideLater = (id: string, moveOn: () => void) => (
-    <div className='flex justify-center'>
-      <RevealChip
-        onClick={() => {
-          defer(id);
-          moveOn();
-        }}
-      >
-        Decide later
-      </RevealChip>
-    </div>
-  );
   const isFloorAbove =
     fields.floorPriceCents !== null &&
     fields.askingPriceCents !== null &&
@@ -236,9 +205,9 @@ function ThingSteps({
       id: 'photos',
       title: 'Take a few photos',
       summaryLabel: 'Photos',
-      summaryValue: getPhotosSummary(photoCount, isDeferred('photos')),
+      summaryValue: '',
       isAnswered: photoCount > 0 || isDeferred('photos'),
-      render: ({ moveOn }) => (
+      render: () => (
         <div className='space-y-4'>
           <p className='text-muted-foreground text-sm'>
             Different angles help. The first one is the cover.
@@ -253,18 +222,6 @@ function ThingSteps({
               removeItemPhoto(saleId, itemId, uid, photoId)
             }
           />
-          {photoCount === 0 && (
-            <div className='flex justify-center'>
-              <RevealChip
-                onClick={() => {
-                  defer('photos');
-                  moveOn();
-                }}
-              >
-                Skip photos for now
-              </RevealChip>
-            </div>
-          )}
         </div>
       ),
     },
@@ -272,57 +229,40 @@ function ThingSteps({
       id: 'name',
       title: 'What is it?',
       summaryLabel: 'Name',
-      summaryValue: withDecideLater(fields.title, isDeferred('name')),
+      summaryValue: '',
       isAnswered: fields.title !== '' || isDeferred('name'),
-      render: ({ moveOn }) => (
-        <div className='space-y-4'>
-          <NameQuestion
-            answers={answers}
-            onChange={set}
-            onCommit={() => saveAnswers()}
-          />
-          {photoCount > 0 && decideLater('name', moveOn)}
-        </div>
+      render: () => (
+        <NameQuestion
+          answers={answers}
+          onChange={set}
+          onCommit={() => saveAnswers()}
+        />
       ),
     },
     {
       id: 'price',
       title: 'What are you asking?',
       summaryLabel: 'Price',
-      summaryValue: withDecideLater(
-        getPriceSummary(fields),
-        isDeferred('price'),
-      ),
+      summaryValue: '',
       isAnswered: fields.askingPriceCents !== null || isDeferred('price'),
       blocker: getPriceBlocker(answers),
-      render: ({ moveOn }) => (
-        <div className='space-y-4'>
-          <PriceQuestion answers={answers} onChange={set} />
-          {!answers.isFree && decideLater('price', moveOn)}
-        </div>
-      ),
+      render: () => <PriceQuestion answers={answers} onChange={set} />,
     },
     {
       id: 'condition',
       title: 'What shape is it in?',
       summaryLabel: 'Condition',
-      summaryValue: withDecideLater(
-        answers.condition === null ? '' : CONDITION_LABELS[answers.condition],
-        isDeferred('condition'),
-      ),
+      summaryValue: '',
       isAnswered: answers.condition !== null || isDeferred('condition'),
       render: ({ moveOn }) => (
-        <div className='space-y-4'>
-          <ConditionQuestion
-            answers={answers}
-            onChange={({ condition }) => {
-              set({ condition });
-              saveAnswers({ condition });
-              moveOn();
-            }}
-          />
-          {answers.condition === null && decideLater('condition', moveOn)}
-        </div>
+        <ConditionQuestion
+          answers={answers}
+          onChange={({ condition }) => {
+            set({ condition });
+            saveAnswers({ condition });
+            moveOn();
+          }}
+        />
       ),
     },
   ];
@@ -371,6 +311,59 @@ function ThingSteps({
     });
   };
 
+  const openId = flow.open?.id ?? null;
+  const canSkip =
+    !isReview &&
+    openId !== null &&
+    flow.open?.isAnswered === false &&
+    (openId !== 'photos' || photoCount === 0) &&
+    (openId !== 'name' || photoCount > 0);
+  const getPriceText = () =>
+    formatAskingPrice(fields.askingPriceCents) ??
+    (isDeferred('price') ? 'Price later' : '');
+
+  const addAnother = () => {
+    saveAnswers();
+    onNext(
+      creation.current === null
+        ? null
+        : {
+            id: itemId,
+            name: fields.title === '' ? 'a thing' : fields.title,
+          },
+    );
+  };
+
+  const getCancelAction = () => {
+    if (isReview)
+      return (
+        <Button
+          type='button'
+          variant='secondary'
+          aria-label='Save and add another'
+          onClick={addAnother}
+        >
+          <Plus className='size-4' aria-hidden='true' />
+          <span>
+            Save &amp; add<span className='max-[359px]:hidden'> another</span>
+          </span>
+        </Button>
+      );
+    if (!canSkip || openId === null) return undefined;
+    return (
+      <Button
+        type='button'
+        variant='tertiary'
+        onClick={() => {
+          defer(openId);
+          flow.moveOnFrom(openId);
+        }}
+      >
+        Skip for now
+      </Button>
+    );
+  };
+
   const leave = () => {
     saveAnswers();
     onLeave();
@@ -379,7 +372,25 @@ function ThingSteps({
   return (
     <>
       <div className='space-y-5'>
-        <QuestionFlow flow={flow} />
+        <QuestionFlow
+          flow={flow}
+          renderAnswered={(answered, reopen) => (
+            <ThingTagCard
+              coverUrl={photoUrls[0]?.url ?? null}
+              photoCount={photoCount}
+              title={fields.title}
+              priceText={getPriceText()}
+              conditionLabel={
+                answers.condition === null
+                  ? ''
+                  : CONDITION_LABELS[answers.condition]
+              }
+              deferred={answers.deferred}
+              answered={answered.map((step) => step.id)}
+              onReopen={reopen}
+            />
+          )}
+        />
         {isReview && (
           <>
             <OptionalDetailRows
@@ -410,30 +421,11 @@ function ThingSteps({
         )}
         <ModalFooterActions
           note={getNote()}
-          cancelAction={
-            isReview ? (
-              <Button type='button' variant='secondary' onClick={leave}>
-                Done
-              </Button>
-            ) : undefined
-          }
+          cancelAction={getCancelAction()}
           rightActions={
             isReview ? (
-              <Button
-                type='button'
-                onClick={() => {
-                  saveAnswers();
-                  onNext(
-                    creation.current === null
-                      ? null
-                      : {
-                          id: itemId,
-                          name: fields.title === '' ? 'a thing' : fields.title,
-                        },
-                  );
-                }}
-              >
-                Next thing
+              <Button type='button' onClick={leave}>
+                Save
               </Button>
             ) : (
               <Button
@@ -496,25 +488,39 @@ function NewThingFlow({
     );
   };
 
+  const addedText =
+    added.length === 0
+      ? ''
+      : `Added ${added[added.length - 1].name}${added.length > 1 ? ` · ${added.length} things added this sitting` : ''}`;
   const statusLine =
     added.length === 0 ? null : (
-      <div className='text-muted-foreground mt-1.5 mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm'>
-        <p role='status'>
-          {`Added ${added[added.length - 1].name}${added.length > 1 ? ` · ${added.length} things added this sitting` : ''}`}
+      <div
+        className={join(
+          'mt-1.5 mb-3 flex items-center gap-3 rounded-2xl text-sm',
+          pending
+            ? 'bg-foreground text-background py-2 pr-2 pl-3'
+            : 'text-muted-foreground',
+        )}
+      >
+        <span
+          aria-hidden='true'
+          className='bg-primary text-primary-foreground flex size-5 shrink-0 items-center justify-center rounded-full'
+        >
+          <Check className='size-3' />
+        </span>
+        <p role='status' className='line-clamp-2 min-w-0 flex-1 break-words'>
+          {addedText}
         </p>
         {pending && (
           <Button
             type='button'
-            variant='secondary'
+            variant='tertiary'
             size='sm'
-            rounded='full'
-            className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+            aria-label={`Undo, ${pending.secondsLeft} seconds left`}
+            className='text-background! bg-background/15 hover:bg-background/25 h-10 shrink-0 rounded-xl! px-3! font-semibold whitespace-nowrap tabular-nums'
             onClick={undo}
           >
-            Undo
-            <span aria-hidden='true' className='tabular-nums'>
-              · {pending.secondsLeft}
-            </span>
+            Undo · {pending.secondsLeft}
           </Button>
         )}
       </div>
