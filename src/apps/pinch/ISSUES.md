@@ -63,10 +63,10 @@ Make Pinch a real app that opens to a placeholder screen, so every later issue c
 - `public/vendor/ingredient-icons/*` and its licence notice
 - `src/store/index.ts` (mount `pinch` with an empty reducer shell for now) and `src/apps/pinch/store/index.ts`
 - `firestore.rules` (the `apps/pinch` catalog-document block only)
-- `.github/instructions/pinch.instructions.md` and `.claude/rules/pinch.md` (identical bodies)
-- `CLAUDE.md` / `.github/copilot-instructions.md` (a third-party assets and licences rule, if not already present)
+- `.claude/rules/pinch.md`
+- `CLAUDE.md` / `docs/conventions/` (a third-party assets and licences rule, if not already present)
 
-**Context:** Read `TECHNICAL.md`'s "Catalog (constants, not documents)", Theming and Component & File Architecture; `UX.md`'s shell diagram and the Kitchen tab; A-List's `BottomNav.tsx`, `a-list.css`, `useAListTheme` and `a-list.instructions.md` for shape; CLAUDE.md's "Designing an app's look".
+**Context:** Read `TECHNICAL.md`'s "Catalog (constants, not documents)", Theming and Component & File Architecture; `UX.md`'s shell diagram and the Kitchen tab; A-List's `BottomNav.tsx`, `a-list.css`, `useAListTheme` and `.claude/rules/a-list.md` for shape; CLAUDE.md's "Designing an app's look".
 
 ### Description
 Open Pinch to a three-tab shell: Calendar (left), Recipes (centre, raised) and Kitchen (right), in a warm orange-on-slate theme with light and dark modes. The Kitchen tab already works as a catalog browser: grouped by family, searchable, each ingredient with an icon and a drawer showing its nutrition per 100 g. Calendar and Recipes show friendly empty states.
@@ -106,7 +106,7 @@ Open Pinch to a three-tab shell: Calendar (left), Recipes (centre, raised) and K
 - `src/apps/pinch/hooks/usePinchSync.ts`
 - `firestore.rules` (the `kitchens/{uid}` block with `ingredients` and `families`, including the shape validation)
 - `scripts/seeds/pinch.ts`, `scripts/seeds/types.ts`, `scripts/seed.ts`, `package.json` (`seed:pinch`), `SEEDING.md`
-- `.claude/rules/pinch.md` and `.github/instructions/pinch.instructions.md`
+- `.claude/rules/pinch.md`
 
 **Context:** Read `TECHNICAL.md`'s `IngredientRecord`, `Family`, resolved-ingredient notes, Redux (two listener tiers, actions) and Security Rules Design Criteria; `UX.md`'s Ingredient details drawer, Kitchen tab and Form Field Organization; A-List's `useAListSync.ts` and its seed for shape references.
 
@@ -499,7 +499,7 @@ Nutrition is always stored and shown only when switched on. The Settings tab has
 - `src/apps/pinch/components/recipes/RecipeAutofill.tsx`, `RecipeForm.tsx`
 - `src/apps/pinch/utils/ingredientMatch.ts`
 - `src/apps/pinch/store/actions/recipeActions.ts` (new custom ingredients saved with the recipe in one `writeBatch`)
-- `CLAUDE.md` / `copilot-instructions.md` (only if a rule changes)
+- `CLAUDE.md` / `docs/conventions/` (only if a rule changes)
 
 **Context:** Read `TECHNICAL.md`'s Logic §5 (ingestion), `src/lib/firebase/ai.ts`, `src/apps/waypoint/components/UploadAutofill.tsx`, `src/utils/uploadMimeType.ts`, `src/utils/imageCompression.ts`, Nine Lives' `extractProposalFromText.ts` / `extractProposalFromFile.ts`; CLAUDE.md's "A document fills the form".
 

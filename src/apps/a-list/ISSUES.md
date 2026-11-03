@@ -18,12 +18,12 @@ Tiers mirror the README's Core MVP / Next Steps / Stretch Goals. Within a tier, 
 - `src/lib/types/appCatalog.ts` (one catalog entry)
 - `cloudflare-worker.js` (exactly one new entry in its app registry)
 - `README.md` (root: the "Current apps" list)
-- `CLAUDE.md` and `.github/copilot-instructions.md` (one rule each)
+- `CLAUDE.md` and `docs/conventions/` (one rule each)
 
 **Context:** Read the registry comment at the top of `src/lib/app/app.registry.ts` (it lists what must stay in sync), `src/apps/a-list/README.md` (name, tagline, the 🎟️ identity) and the root `README.md`'s "Current apps" and PWA sections. A-List Tracker is a draft app, like Nine Lives and Waypoint.
 
 ### Description
-Make A-List Tracker a real, installable app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, fix the root README's app list, which names only Worth the Wait, so it lists every app (Worth the Wait, Nine Lives, Waypoint, A-List Tracker), each with an emoji, and add the rule that keeps it current to `CLAUDE.md` and `copilot-instructions.md`.
+Make A-List Tracker a real, installable app that opens to a placeholder screen, so every later issue can be opened and checked in the running app. In the same PR, fix the root README's app list, which names only Worth the Wait, so it lists every app (Worth the Wait, Nine Lives, Waypoint, A-List Tracker), each with an emoji, and add the rule that keeps it current to `CLAUDE.md` and `docs/conventions/`.
 
 ### Possible Approach
 1. Add the app's registry entry (`id: 'a-list'`, `name: 'A-List Tracker'`, `path: '/a-list'`, `status: 'draft'`, a `createdAt` of today, and a one-sentence description in the same voice as the others) and widen `AppId` in `appCatalog.ts`.
@@ -31,7 +31,7 @@ Make A-List Tracker a real, installable app that opens to a placeholder screen, 
 3. Add `manifest-a-list.json` by copying `manifest-waypoint.json` and changing the name, short name, icons and `start_url`. Add the logo SVG (a ticket mark) and the banner PNG (the same dimensions as the other banners).
 4. Add exactly one entry to `cloudflare-worker.js`'s app registry, copying Waypoint's shape without its `params`. Change nothing else in the file.
 5. Root `README.md`: replace the single-line "Current apps" list with one line per app, in registry order: 💌 Worth the Wait, 🐱 Nine Lives, 🧭 Waypoint, 🎟️ A-List Tracker, each followed by its registry description (A-List's from step 1). Keep the section's existing tone.
-6. `CLAUDE.md` ("Release hygiene") and `copilot-instructions.md` ("Documentation quality" and the "Critical reminders" list): add the rule — **the root `README.md` "Current apps" list mirrors `APP_REGISTRY`: every app has one line (an emoji, its name, its registry description), added in the same PR that registers the app and updated whenever an app is renamed or its description changes.** Also add "root `README.md` apps list" to the list of things the registry comment says must stay in sync, if it isn't named there.
+6. `CLAUDE.md` ("Release hygiene") and `docs/conventions/` ("Documentation quality" and the "Critical reminders" list): add the rule — **the root `README.md` "Current apps" list mirrors `APP_REGISTRY`: every app has one line (an emoji, its name, its registry description), added in the same PR that registers the app and updated whenever an app is renamed or its description changes.** Also add "root `README.md` apps list" to the list of things the registry comment says must stay in sync, if it isn't named there.
 7. Do not touch `src/lib/app/app.constants.ts` for registration. `SITE_VERSION` is bumped separately, per the release-hygiene rule.
 
 ### CRUD & Entry-Point Requirements
@@ -43,7 +43,7 @@ Make A-List Tracker a real, installable app that opens to a placeholder screen, 
 - [ ] Registry and catalog entries are added; the home screen and the app's own manifest (check the "Add to Home Screen" identity in the browser) show A-List Tracker.
 - [ ] `cloudflare-worker.js` gained exactly one entry and nothing else changed.
 - [ ] The root README lists all four apps in registry order, each with an emoji and the registry's description.
-- [ ] `CLAUDE.md` and `copilot-instructions.md` each state the rule that keeps the README's app list in sync with the registry (Keep `.github/copilot-instructions.md` current).
+- [ ] `CLAUDE.md` and `docs/conventions/` each state the rule that keeps the README's app list in sync with the registry (Keep the conventions current).
 - [ ] No Firestore field, rule or seed is introduced (so none is required); no unused type or helper was added.
 - [ ] `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass; the route was opened in a real browser.
 
@@ -63,7 +63,7 @@ Make A-List Tracker a real, installable app that opens to a placeholder screen, 
 - `src/components/SectionHeader.tsx`, `src/components/ModalFooterActions.tsx` (moved from Waypoint; Waypoint's imports updated)
 - `firestore.rules` (the `apps/a-list` block and `memberships/{uid}`)
 - `scripts/seeds/aList.ts`, `scripts/seeds/types.ts`, `scripts/seed.ts`, `package.json` (`seed:a-list`), `SEEDING.md`
-- `CLAUDE.md`, `.github/copilot-instructions.md`, `src/apps/a-list/README.md` (check off the Build Plan line)
+- `CLAUDE.md`, `docs/conventions/`, `src/apps/a-list/README.md` (check off the Build Plan line)
 
 **Context:** Read `src/apps/a-list/TECHNICAL.md`'s "1. Membership Profile", Logic §4 (billing) and §6 (Setup branching), "Security Rules Design Criteria" and "Client State Management"; `UX.md`'s "Setup — Cost & start date", the shell diagram and its Setup table. Waypoint's `store/index.ts`, `hooks/useWaypointSync.ts` and `components/StepThroughModal.tsx` are the shape references.
 
@@ -80,7 +80,7 @@ On first launch, a member lands on a three-step Setup modal: confirm the perks, 
 7. `MembershipSettingsModal` (opened from the Dashboard gear) shows the saved values read-only, including the rate as "about 7.5%".
 8. Rules: add the `apps/a-list` catalog block (four read predicates, admin writes, placed above `nine-lives`) and `memberships/{uid}` with the shape checks and immutables from TECHNICAL.md's criteria. Verify on the emulator (owner allowed; a second user and a signed-out request denied; a bad shape denied).
 9. Seed: `seedAList` creates a membership for the dev fixture users, registers `'a-list'` in `SeedScope`, adds `npm run seed:a-list`, and updates SEEDING.md and the document counts.
-10. `copilot-instructions.md`: add (a) **per-member private data nests under `apps/{appId}/<root>/{uid}/…` with one-line `request.auth.uid == uid` rules, no `ownerUid` body checks and no composite indexes**; (b) **sums of money are stored as integer minor units (`priceCents`) and formatted at the edge**; (c) **when a second app needs a component or hook, move it to central `src/components`, `src/ui` or `src/hooks` in that same PR; never import across `src/apps/*`**.
+10. `docs/conventions/`: add (a) **per-member private data nests under `apps/{appId}/<root>/{uid}/…` with one-line `request.auth.uid == uid` rules, no `ownerUid` body checks and no composite indexes**; (b) **sums of money are stored as integer minor units (`priceCents`) and formatted at the edge**; (c) **when a second app needs a component or hook, move it to central `src/components`, `src/ui` or `src/hooks` in that same PR; never import across `src/apps/*`**.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** the Setup modal writes the member's one `MembershipProfile` on first launch.
@@ -94,7 +94,7 @@ On first launch, a member lands on a three-step Setup modal: confirm the perks, 
 - [ ] `firestore.rules` covers the catalog document and `memberships/{uid}`; allowed and denied writes were verified on the emulator, and `firestore.indexes.json` was confirmed unchanged.
 - [ ] Seed data updated (`seed:a-list` works, document counts correct).
 - [ ] Every field added is used here (`taxRate` is shown in settings; goals and start date too) and nothing from a later issue (tickets, viewings) was pre-added.
-- [ ] The three `copilot-instructions.md` rules above are added (Keep `.github/copilot-instructions.md` current), and the README's Build Plan line is checked off.
+- [ ] The three `docs/conventions/` rules above are added (Keep the conventions current), and the README's Build Plan line is checked off.
 - [ ] The Setup modal and the Dashboard tab are both reachable in the running app; Waypoint still builds and its moved components render.
 - [ ] Verified in a timezone behind UTC (the start date displays the day that was picked); `SITE_VERSION` bumped (minor); `npx tsc -b --force` and `npx eslint .` pass.
 
@@ -146,7 +146,7 @@ The Dashboard gear opens the same fields as Setup, grouped into `Disclosure` sec
 - `src/apps/a-list/components/shared/PosterCover.tsx`
 - `src/apps/a-list/components/watchlist/WatchlistScreen.tsx` (a header with a "+ Add" stand-in)
 - `src/apps/a-list/components/dashboard/MembershipSettingsModal.tsx` (credits row)
-- `CLAUDE.md`, `.github/copilot-instructions.md`
+- `CLAUDE.md`, `docs/conventions/`
 
 **Context:** Read `TECHNICAL.md`'s "Movie Data Service" end to end (the budget layers, the unverified facts, why a proxy) and "Overlay coordination"; `UX.md`'s "Add to calendar — pick" and its caption. Read `functions/src/linkMetadata/fetchLinkMetadata.ts` for the callable conventions and `src/lib/places/placesQueries.ts` for the query-factory shape.
 
@@ -161,7 +161,7 @@ The member can open an Add drawer from the Watchlist, search OMDb by title, and 
 5. Client: `movieQueries.ts` factories with the keys and persistence from the TDD; `MoviePicker` uses `useDebouncedValue(…, DEBOUNCE_MS.autocomplete)`, a minimum length, and shows the "search is resting for today" line on `resource-exhausted`. Search results never trigger per-result details calls.
 6. `useAListOverlay` (the one-value overlay state) and `AddDrawer` (a Drawer; pick, then details); `PosterCover` with the title-tile fallback. The Watchlist tab shows a header with a "+ Add" that opens the drawer.
 7. Credits: a line in the Membership settings modal crediting OMDb as its license requires.
-8. `copilot-instructions.md` / `CLAUDE.md`: add (a) **a third-party credential that can't be domain-restricted lives in a Functions secret behind an `onCall`; the browser never holds it, and a free-tier API shared across users gets a server-side cache and a daily budget guard**; (b) the Design & UX line: **never stack an overlay on an overlay: whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a destructive confirm is the only thing allowed on top**.
+8. `docs/conventions/` / `CLAUDE.md`: add (a) **a third-party credential that can't be domain-restricted lives in a Functions secret behind an `onCall`; the browser never holds it, and a free-tier API shared across users gets a server-side cache and a daily budget guard**; (b) the Design & UX line: **never stack an overlay on an overlay: whatever continues inside an open drawer swaps its content in place with a "‹ Back" link; a destructive confirm is the only thing allowed on top**.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** not in this issue; saving a watchlist item is Issue 5 (this issue's details view ends in a disabled "Add" as the stand-in).
@@ -174,7 +174,7 @@ The member can open an Add drawer from the Watchlist, search OMDb by title, and 
 - [ ] No key appears in the browser bundle, a response or a log.
 - [ ] `firestore.rules` updated with the three deny blocks and verified on the emulator; `firestore.indexes.json` confirmed unchanged; no seed change needed (stated).
 - [ ] `functions/README.md` documents the two functions and the secret; the invoker-access step in the root README was followed after deploy if CORS failed.
-- [ ] The two `copilot-instructions.md`/`CLAUDE.md` rules above are added; the "unverified" notes in `TECHNICAL.md` were corrected from real calls.
+- [ ] The two `docs/conventions/`/`CLAUDE.md` rules above are added; the "unverified" notes in `TECHNICAL.md` were corrected from real calls.
 - [ ] Every type and constant added is used here; the Add drawer is reachable from the Watchlist tab; `SITE_VERSION` bumped; `npx tsc -b --force` and `npx eslint .` pass.
 
 ### Issue 5: Add a movie to the watchlist
@@ -257,7 +257,7 @@ When search is unavailable (the daily lookup budget is spent) or a movie isn't i
 - `src/apps/a-list/components/calendar/CalendarScreen.tsx`, `PosterCell.tsx`, `DayPanel.tsx`, `ViewingRow.tsx`
 - `src/apps/a-list/components/add/AddDrawer.tsx`, `MoviePicker.tsx`
 - `firestore.rules` (the `viewings/{viewingId}` block), `scripts/seeds/aList.ts`
-- `src/apps/a-list/UX.md` (the cell-sizing finding), `.github/copilot-instructions.md`
+- `src/apps/a-list/UX.md` (the cell-sizing finding), `docs/conventions/`
 
 **Context:** Read `TECHNICAL.md`'s "3. Viewing", Logic §1 (lifecycle) and §2 (local-day keys), "Client State Management"; `UX.md`'s Calendar, "Add to calendar — pick/details" and the viewing-state table, plus its "Honest caveats" about cell sizing.
 
@@ -272,7 +272,7 @@ The Calendar tab shows a month grid where each day holding a movie is filled by 
 5. The details step: date (defaults to the selected day) and showtime (`fromLocalDateAndTimeInputValues`), in a `Form`; the picker is watchlist-first and shows "↺ Seen once before — this will be a rewatch" using a selector over `SEEN` viewings of the same `movieKey`.
 6. The day panel lists the selected day's movies (poster thumb, title, time, a Seen or Planned state) and a "+ Add" that pre-fills the date. A tapped row opens its drawer in Issue 10; until then it's not interactive.
 7. Rules: the viewings block with the integrity checks from the criteria (`endsAt > showtimeAt`; `SEEN` implies `showtimeAt <= request.time`; arriving at `SEEN` needs `endsAt <= request.time`; a stored `SEEN` stays `SEEN`; `movieKey`, `movie`, `createdAt` immutable). Seed viewings on past and future days. Verify allowed and denied writes on the emulator.
-8. `copilot-instructions.md`: add **a Calendar `renderCell` reads a prebuilt day-keyed map (built once in a `createSelector`); the key is the viewer's local day via `toLocalDateInputValue`, and a date-only (UTC-midnight) value is keyed with `toDateInputValue`, never read in local time**.
+8. `docs/conventions/`: add **a Calendar `renderCell` reads a prebuilt day-keyed map (built once in a `createSelector`); the key is the viewer's local day via `toLocalDateInputValue`, and a date-only (UTC-midnight) value is keyed with `toDateInputValue`, never read in local time**.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create:** a viewing is added from the Calendar's "+ Add" (and from the day panel's "+ Add", pre-filled), from the watchlist or a search; a new movie joins the watchlist.
@@ -286,7 +286,7 @@ The Calendar tab shows a month grid where each day holding a movie is filled by 
 - [ ] A past showing saves as Seen, one still running as Planned, a future one as Planned; a second viewing of the same movie works and the rewatch note appears.
 - [ ] `firestore.rules` updated for viewings and verified; indexes unchanged; seed updated.
 - [ ] Only `Viewing` fields used here exist (no `ticket`, no `rating`); the Calendar and its Add drawer are reachable from the bottom bar.
-- [ ] The `renderCell` rule is added to `copilot-instructions.md`; README Build Plan progress noted; `SITE_VERSION` bumped; `npx tsc -b --force` and `npx eslint .` pass.
+- [ ] The `renderCell` rule is added to `docs/conventions/`; README Build Plan progress noted; `SITE_VERSION` bumped; `npx tsc -b --force` and `npx eslint .` pass.
 
 ### Issue 8: Poster splits for days with several movies
 

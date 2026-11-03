@@ -1242,12 +1242,12 @@ Everything outside `src/apps/runway/` that must change, so nothing is found miss
 - **Security lib:** `encryptBytes`/`decryptBytes` in `src/lib/security`, exported from `@lib/security`.
 - **Seeds:** `scripts/seeds/runway.ts` and its document count; `SeedScope`; the branch and scope checks in `scripts/seed.ts`; a `seed:runway` script; `runwayScale.ts`; `SEEDING.md`; `'runway'` in a fixture's `apps` list in `src/lib/dev/fixtureAccounts.ts`.
 - **Checks:** `check:runway-engine` in `package.json`; `npm run check:apps` passes with the theme tokens.
-- **Rules files and docs:** `.github/instructions/runway.instructions.md` and the identical `.claude/rules/runway.md`; `UX.md`, `TECHNICAL.md`, `ISSUES.md`, `README.md` under `src/apps/runway/`.
+- **Rules files and docs:** `.claude/rules/runway.md`; `UX.md`, `TECHNICAL.md`, `ISSUES.md`, `README.md` under `src/apps/runway/`.
 - **Release:** the PR carries one `patch` or `minor` label.
 
 ### Proposed changes to the repo's instructions
 
-Per the project instruction to keep `copilot-instructions.md` current, these follow from this design. Made in the polish PR (the owner's list, applied as written unless noted):
+Per the project instruction to keep `docs/conventions/` current, these follow from this design. Made in the polish PR (the owner's list, applied as written unless noted):
 
 1. **New-app checklist, Release line:** replaced "bump `SITE_VERSION`" with the label rule (never edit `SITE_VERSION`; one `patch` or `minor` label). Made.
 2. **One PWA:** the checklist says the site installs as one PWA and an app has no manifest of its own. Made.
@@ -1256,8 +1256,8 @@ Per the project instruction to keep `copilot-instructions.md` current, these fol
 5. **Shared security lib:** `encryptBytes`/`decryptBytes` are named in `docs/conventions/data-contracts.md`, beside the sealed-payload rule. Made by Issue 47.
 6. **Functions and secrets:** a secret an issue binds must exist in production before merge, and `functions/README.md` mirrors `index.ts`. Already stated in "Documentation quality" and "Cloud Functions"; nothing added.
 7. **Shared primitives:** a component with no app entities goes in `src/components` from its first use. Already stated; `AmountField` and `BeforeAfterRow` are now named as examples.
-8. **Terminology:** "mini-app" is "app" in prose in `CLAUDE.md` and `copilot-instructions.md`, "New mini-app checklist" is "New app checklist", paths under `src/apps/<name>/` are unchanged, and "beta" is defined once, as an access-gated app. Made. The `build-app-mvp` skill keeps its name.
-9. **`.github/instructions/runway.instructions.md` and `.claude/rules/runway.md`:** the restrained tone exception, the level-gating rule (hidden, not disabled) and the sealed-document rule were written in Issue 2 and extended since. The owner confirmed the tone exception.
+8. **Terminology:** "mini-app" is "app" in prose in `CLAUDE.md` and `docs/conventions/`, "New mini-app checklist" is "New app checklist", paths under `src/apps/<name>/` are unchanged, and "beta" is defined once, as an access-gated app. Made. The `build-app-mvp` skill keeps its name.
+9. **`.claude/rules/runway.md`:** the restrained tone exception, the level-gating rule (hidden, not disabled) and the sealed-document rule were written in Issue 2 and extended since. The owner confirmed the tone exception.
 10. **The `plan-mdd-app` skill (was `plan-mini-app`)** (UX phase as a canvas plus a short `UX.md` with no Mermaid; the hidden-not-disabled checklist item; the roadmap preamble's two closing checks using the label rule; a sealed payload gaining a field only in the issue that uses it; its description "Plan an app for the Moondreams Dev Apps repo"): the four rules were already in the skill; its description and its prose now say "app". The skill lives outside this repository (in the owner's skills) and is renamed `plan-mdd-app`, by the owner's choice.
 
 ---

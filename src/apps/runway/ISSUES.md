@@ -32,9 +32,9 @@ Conventions that apply to every issue:
 - `cloudflare-worker.js` (exactly one new entry in its app registry)
 - `README.md` (root: the "Current apps" list)
 - `functions/src/apps/runway/findFirstActivityAt.ts` (new), `functions/src/appUsage/registerAppUsage.ts` (one `FIRST_ACTIVITY_FINDERS` entry), `functions/README.md` (the `registerAppUsage` note)
-- `.github/copilot-instructions.md` (the New-app checklist's Release line, if the owner approves the proposed change)
+- `docs/conventions/` (the New-app checklist's Release line, if the owner approves the proposed change)
 
-**Context:** Read the registry comment at the top of `src/lib/app/app.registry.ts`, the New-app checklist in `.github/copilot-instructions.md`, `scripts/checkAppWiring.ts`, and the TDD's Decisions 16 and 18 and its "Wiring checklist".
+**Context:** Read the registry comment at the top of `src/lib/app/app.registry.ts`, the New-app checklist in `docs/conventions/`, `scripts/checkAppWiring.ts`, and the TDD's Decisions 16 and 18 and its "Wiring checklist".
 
 ### Description
 Make Runway a real, access-gated app that opens to a placeholder, counts a member's first visit, and appears in the root README's app list, so every later issue can be opened and checked in the running app. Runway has no manifest of its own: the site is one PWA.
@@ -73,7 +73,7 @@ Make Runway a real, access-gated app that opens to a placeholder, counts a membe
 - `src/apps/runway/components/RunwayBottomNav.tsx`
 - `src/store/index.ts` (mount `runway` with an empty reducer shell) and `src/apps/runway/store/runwaySlice.ts`
 - `src/lib/app/app.registry.ts` (`resumeParams: ['tab']`)
-- `.github/instructions/runway.instructions.md` and `.claude/rules/runway.md` (identical bodies)
+- `.claude/rules/runway.md`
 
 **Context:** Read the TDD's "Theming", "UI Conventions Applied" and Decision 17, `UX.md` section 1 (what is specific to Runway) and the sitemap; Pinch's and A-List's `BottomNav`, theme stylesheet and `use<App>Theme`; CLAUDE.md's "Designing an app's look" and "An app resumes where you left it".
 

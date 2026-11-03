@@ -103,7 +103,7 @@ Each phase ends in something that can ship and be rolled back.
 
 - New repo with history: `git filter-repo --subdirectory-filter src/apps/<id>` (or a subtree split), then add the shell, config and the shared files chosen in phase 1.
 - Shared UI: copy what the app uses, or publish a small package from this repo. Copy first; a package is a second product to maintain, so only when two graduated apps need the same fix.
-- Move the app's Functions, rules, indexes, seed, docs (`README`, `UX`, `TECHNICAL`, `ISSUES`) and rules files (`.github/instructions/<id>.instructions.md`, `.claude/rules/<id>.md`).
+- Move the app's Functions, rules, indexes, seed, docs (`README`, `UX`, `TECHNICAL`, `ISSUES`) and rules file (`.claude/rules/<id>.md`).
 - Carry over the process that protects it: CI checks, the merge workflow, versioning, review agents. Its own version and tags replace `SITE_VERSION`.
 
 ### Phase 4: stand up the new home

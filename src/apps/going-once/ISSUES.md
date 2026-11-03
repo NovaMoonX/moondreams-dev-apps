@@ -29,7 +29,7 @@ Every issue's Success Criteria end with the same two checks, repeated in each is
 - `src/lib/gates/gates.registry.ts` (`create-sales` in `FEATURE_GATES`, server-enforced, default everyone)
 - `firestore.rules` (`apps/going-once/sales/{saleId}`)
 - `scripts/seeds/going-once.ts` (new), `scripts/seeds/types.ts`, `scripts/seed.ts`, `package.json` (`seed:going-once`), `SEEDING.md`, `src/lib/dev/fixtureAccounts.ts`
-- `.claude/rules/going-once.md`, `.github/instructions/going-once.instructions.md` (new)
+- `.claude/rules/going-once.md` (new)
 **Context:** `TECHNICAL.md` "Decisions this design makes", "Data Schema" (the sale), "Security & Privacy Requirements" (the `sales/{saleId}` rows) and "Client State Management"; `UX.md` "Sitemap", S1, S2, S3, S15; `docs/conventions/new-app.md`.
 
 ### Description

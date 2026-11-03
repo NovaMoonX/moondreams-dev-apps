@@ -6,7 +6,7 @@ Coding practices, styles, and norms for this repo. Every rule here and in the fi
 
 **A plan keeps the owner's mental load low.** It is a short page the owner can read in under a minute: what the person will see or be able to do, which items count (the criteria) when that matters, and only the decisions that are uncertain or risky, each a 🚩 question with your recommendation. Files, selectors, checks, verification steps and docs are yours to get right and stay out of it (owner, A-List release days: "the plan is so dense"). A plan for a follow-up covers only the follow-up: each answer and what it changes and the questions they asked, never the earlier plan or what is already built (owner, Runway cards round 3). A session that comes back in plan mode with nothing new writes a one-line plan. These rules replace plan mode's default template (no Context, Files or Verification sections), and `plan-check.sh` sends back a plan that names files or code, nests bullets or runs past 350 words. All of them are in `orchestrate` "Writing a plan".
 
-Per-app rules live in `.claude/rules/<app>.md` (loaded by `paths` when you touch that app; `.github/instructions/<app>.instructions.md` only points there). Read the one for the app you are touching. `.github/copilot-instructions.md` is a pointer to this file and `docs/conventions/`, and keeps no rules of its own.
+Per-app rules live in `.claude/rules/<app>.md` (loaded by `paths` when you touch that app). Read the one for the app you are touching.
 
 ## Read before you touch
 

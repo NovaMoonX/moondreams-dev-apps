@@ -1,6 +1,6 @@
 # A-List Tracker — Technical Design Document
 
-Built against this app's `README.md` and `UX.md`, and against the conventions in `.github/copilot-instructions.md` and `CLAUDE.md`. Waypoint's `TECHNICAL.md` is the format reference. A-List is much smaller than Waypoint in one respect: **every byte of data is private to one signed-in member**, apart from the calendar snapshots a member chooses to share by link (Data Schema #5). There is no invite flow, no roles, no pending requests, and so no cross-user concurrency. That removes most of the atomic-write and rule complexity and puts the design weight on three things instead: the money/date math, the calendar read model, and a server-side movie lookup.
+Built against this app's `README.md` and `UX.md`, and against the conventions in `docs/conventions/` and `CLAUDE.md`. Waypoint's `TECHNICAL.md` is the format reference. A-List is much smaller than Waypoint in one respect: **every byte of data is private to one signed-in member**, apart from the calendar snapshots a member chooses to share by link (Data Schema #5). There is no invite flow, no roles, no pending requests, and so no cross-user concurrency. That removes most of the atomic-write and rule complexity and puts the design weight on three things instead: the money/date math, the calendar read model, and a server-side movie lookup.
 
 ## Decisions made in this document
 
@@ -797,7 +797,7 @@ Charts use `recharts` (already a dependency), following Nine Lives' `TrendLineCh
 
 - `src/lib/types/appCatalog.ts`: `'a-list'` in `AppId`. `src/lib/app/app.registry.ts`: a registry entry (`status: 'draft'`, `path: '/a-list'`).
 - `src/routes/AppRoutes.tsx`: lazy route to `@apps/a-list/AList`.
-- `public/manifest-a-list.json`, a logo and a banner under `public/logos` and `public/banners/by-app`, the entry in `cloudflare-worker.js`, and the root `README.md` (the registry's own comment lists exactly these). The root README's "Current apps" list is stale (it names only Worth the Wait), so this first PR rewrites it to list every app, each with an emoji; `CLAUDE.md` (Release hygiene) and `.github/copilot-instructions.md` (Documentation quality) each gain a rule that adding or renaming an app updates that list in the same PR.
+- `public/manifest-a-list.json`, a logo and a banner under `public/logos` and `public/banners/by-app`, the entry in `cloudflare-worker.js`, and the root `README.md` (the registry's own comment lists exactly these). The root README's "Current apps" list is stale (it names only Worth the Wait), so this first PR rewrites it to list every app, each with an emoji; `CLAUDE.md` (Release hygiene) and `docs/conventions/` (Documentation quality) each gain a rule that adding or renaming an app updates that list in the same PR.
 - `src/store/index.ts`: `aList` reducer and `RootState`.
 - `firestore.rules`: the block above (including the three server-only deny blocks), in alphabetical order, with emulator verification noted in the PR; `firestore.indexes.json` unchanged (state this in the PR).
 - `functions/src/index.ts`: export `searchMovies`, `getPopularMovies` and `getMovie`; set the `TMDB_API_KEY` and `OMDB_API_KEY` secrets (create `TMDB_API_KEY` in production before the PR merges); after the first deploy, confirm the invoker access (README's Deployment section) if the browser reports a CORS error.
