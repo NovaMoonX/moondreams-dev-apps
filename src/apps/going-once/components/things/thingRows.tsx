@@ -147,7 +147,7 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
     Question: BoughtQuestion,
   },
   link: {
-    label: '🔒 Store link',
+    label: 'Store link',
     icon: '🔗',
     fields: ['boughtUrl', 'boughtUrlPreview', 'showBoughtUrl'],
     summary: (a) => {

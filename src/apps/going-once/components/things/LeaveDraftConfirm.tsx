@@ -23,11 +23,11 @@ function LeaveDraftConfirm({ isOpen, settle }: LeaveDraftConfirmProps) {
       isOpen
       onClose={onDialogClose}
       hideCloseButton
-      title='Save this as a draft?'
+      title='Keep it as a draft?'
     >
       <p className='text-muted-foreground'>
-        It keeps what you added so far. Buyers don&apos;t see it until you save
-        it.
+        What you added so far stays in your drafts, ready to finish. Buyers
+        don&apos;t see it until you do.
       </p>
       <div className='mt-5 flex flex-col gap-2'>
         <Button
@@ -36,7 +36,7 @@ function LeaveDraftConfirm({ isOpen, settle }: LeaveDraftConfirmProps) {
           className='w-full'
           onClick={() => settle('SAVE_DRAFT')}
         >
-          Save as draft
+          Keep as draft
         </Button>
         <Button
           type='button'
@@ -54,7 +54,7 @@ function LeaveDraftConfirm({ isOpen, settle }: LeaveDraftConfirmProps) {
           className='text-destructive! w-full'
           onClick={() => settle('DISCARD')}
         >
-          Discard
+          Discard it
         </Button>
       </div>
     </Modal>

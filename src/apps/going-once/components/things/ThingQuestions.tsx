@@ -129,7 +129,7 @@ export function PriceQuestion({
       )}
       {hasFloor && !answers.isFree && (
         <div className='bg-muted border-border space-y-2 rounded-2xl border p-3'>
-          <p className='text-sm font-semibold'>🔒 Lowest you'd take</p>
+          <p className='text-sm font-semibold'>Lowest you'd take</p>
           <MoneyInput
             ariaLabel='Lowest you would take'
             value={answers.floor}
@@ -284,6 +284,12 @@ export function StoreLinkQuestion({ answers, onChange }: QuestionProps) {
           onChange({ boughtUrl, boughtUrlPreview })
         }
       />
+      {answers.boughtUrl.trim() === '' && (
+        <p className='text-muted-foreground text-sm'>
+          Only you and your co-sellers see it unless you choose to show it to
+          buyers.
+        </p>
+      )}
       {answers.boughtUrl.trim() !== '' && (
         <label className='flex items-start gap-3'>
           <AppToggle

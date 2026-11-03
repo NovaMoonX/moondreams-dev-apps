@@ -237,14 +237,19 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
               ? 'Add photos'
               : `${item.photos.length} ${item.photos.length === 1 ? 'photo' : 'photos'}`}
           </SummaryRow>
-          {BUYERS_SEE.filter(
-            (key) => key !== 'showOriginal' || item.originalPriceCents !== null,
-          ).map(renderRow)}
+          {[...BUYERS_SEE, ...(item.showBoughtUrl ? ['link' as const] : [])]
+            .filter(
+              (key) =>
+                key !== 'showOriginal' || item.originalPriceCents !== null,
+            )
+            .map(renderRow)}
         </div>
         <div className='space-y-2'>
           <SectionDivider label='🔒 Only you and your co-sellers' />
           {PRIVATE.filter(
-            (key) => key !== 'floor' || item.askingPriceCents !== 0,
+            (key) =>
+              (key !== 'floor' || item.askingPriceCents !== 0) &&
+              (key !== 'link' || !item.showBoughtUrl),
           ).map(renderRow)}
         </div>
         <ModalFooterActions

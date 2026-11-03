@@ -345,6 +345,7 @@ function ThingSteps({
     onAdvance: () => saveAnswers(),
   });
   const isReview = flow.hasReviewed;
+  const isLinkShown = answers.showBoughtUrl && answers.boughtUrl.trim() !== '';
   const getNote = () => {
     if (saveError !== null) return saveError;
     if (isReview) return getDraftNote(photoCount, fields);
@@ -531,10 +532,17 @@ function ThingSteps({
         {isReview && (
           <>
             {[
-              { heading: 'For buyers', keys: BUYER_EXTRA_KEYS },
               {
-                heading: '🔒 Just for you and your co-sellers',
-                keys: PRIVATE_EXTRA_KEYS,
+                heading: 'Buyers see these',
+                keys: isLinkShown
+                  ? [...BUYER_EXTRA_KEYS, 'link' as const]
+                  : BUYER_EXTRA_KEYS,
+              },
+              {
+                heading: 'Only you and your co-sellers see these',
+                keys: isLinkShown
+                  ? PRIVATE_EXTRA_KEYS.filter((key) => key !== 'link')
+                  : PRIVATE_EXTRA_KEYS,
               },
             ].map(({ heading, keys }) => (
               <ExtraSection

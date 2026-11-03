@@ -72,7 +72,6 @@ import {
   formatAddedAgo,
   getItemName,
   getAvailableLabel,
-  getDraftHint,
   isListable,
 } from '@apps/going-once/utils/listing';
 import {
@@ -155,6 +154,17 @@ function StoreLink({ item }: { item: Item }) {
 }
 
 const INTEREST_SHOWN = 3;
+
+/** What a draft still lacks, all of it: "add a photo and a price", or "save it" once nothing is missing. */
+const getDraftNeeds = (item: Item) => {
+  const missing = [
+    item.photos.length === 0 && 'a photo',
+    item.title.trim() === '' && 'a name',
+    item.askingPriceCents === null && 'a price',
+  ].filter((part) => part !== false);
+  if (missing.length === 0) return 'save it';
+  return `add ${missing.length === 1 ? missing[0] : `${missing.slice(0, -1).join(', ')} and ${missing.at(-1)}`}`;
+};
 
 const getPrivateRows = (item: Item): Row[] => {
   const bought = [
@@ -783,10 +793,8 @@ function ThingDrawer({
         />
         {isNotListed && (
           <p className='text-muted-foreground text-sm text-pretty'>
-            This is a draft. Buyers can&apos;t see it until{' '}
-            {getDraftHint(item) === 'save it to list it'
-              ? 'you save it.'
-              : 'it has a photo, a name and a price.'}
+            This is a draft. Buyers can&apos;t see it until you{' '}
+            {getDraftNeeds(item)}.
           </p>
         )}
         {isHoldLockedByFinish && (

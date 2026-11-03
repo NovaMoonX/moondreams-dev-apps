@@ -81,7 +81,7 @@ function ThingTagCard({
     <span className='bg-muted text-muted-foreground flex size-16 flex-col items-center justify-center gap-0.5 rounded-xl'>
       <Camera className='size-5' aria-hidden='true' />
       {photoCount === 0 && deferred.includes('photos') && (
-        <span className='text-[11px] leading-none'>Skipped</span>
+        <span className='text-[11px] leading-none'>No photo</span>
       )}
     </span>
   );
