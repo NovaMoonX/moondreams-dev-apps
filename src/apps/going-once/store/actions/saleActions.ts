@@ -47,6 +47,7 @@ export function startSale(
       toTrimmedOrNull(pickupArea)?.slice(0, MAX_PICKUP_AREA_LENGTH) ?? null,
     buyerNote:
       toTrimmedOrNull(buyerNote)?.slice(0, MAX_BUYER_NOTE_LENGTH) ?? null,
+    paymentMethods: [],
     currency: 'USD',
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     ownerUid: uid,

@@ -15,11 +15,12 @@ import {
 
 export type ItemSort = (typeof ITEM_SORT_OPTIONS)[number]['value'];
 
-type Listable = Pick<Item, 'photos' | 'title' | 'askingPriceCents'>;
+type Listable = Pick<Item, 'photos' | 'title' | 'askingPriceCents' | 'isDraft'>;
 
-/** A thing buyers can be shown needs a photo, a name and a price; Free counts as a price. */
+/** A thing buyers can be shown is saved (not a draft) and has a photo, a name and a price; Free counts as a price. */
 export function isListable(item: Listable): boolean {
   return (
+    !item.isDraft &&
     item.photos.length > 0 &&
     item.title.trim() !== '' &&
     item.askingPriceCents !== null

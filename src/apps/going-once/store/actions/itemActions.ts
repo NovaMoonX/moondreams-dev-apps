@@ -55,7 +55,7 @@ const readImageSize = async (file: File) => {
   }
 };
 
-/** Writes a new thing from its first answer, so it starts Not listed yet; the write is queued offline. */
+/** Writes a new thing from its first answer as a draft, which buyers never see until it is saved; the write is queued offline. */
 export function createItem(
   saleId: string,
   itemId: string,
@@ -78,7 +78,9 @@ export function createItem(
     boughtOn: null,
     boughtUrl: null,
     boughtUrlPreview: null,
+    showBoughtUrl: false,
     notes: null,
+    isDraft: true,
     photos: [],
     status: 'AVAILABLE',
     pending: null,
