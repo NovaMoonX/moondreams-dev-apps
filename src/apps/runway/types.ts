@@ -99,6 +99,8 @@ export interface Schedule {
   anchor: DateOnly | null;
   /** Monthly: [d]; twice a month: [d1, d2]. Day 31 lands on a short month's last day. */
   monthDays: number[];
+  /** Every few months: the months between dates, 12 for yearly, on the anchor's day; a schedule written before it existed has none. */
+  intervalMonths?: number | null;
 }
 
 export interface SourceSealed {

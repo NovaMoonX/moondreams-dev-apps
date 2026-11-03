@@ -10,7 +10,7 @@ import {
   daysInUtcMonth,
   payLineIdOfDayKey,
 } from '@apps/runway/engine/dates';
-import { occurrences } from '@apps/runway/engine/schedule';
+import { getIntervalMonths, occurrences } from '@apps/runway/engine/schedule';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 
 type PayFundedBy = Extract<BillFundedBy, { kind: 'pay' }>;
@@ -144,7 +144,13 @@ export function hasPaysToChoose(
     schedule,
     { onDate: null, afterCount: null },
     schedule.anchor ?? 0,
-    addUtcMonths(today, LOOKAHEAD_MONTHS),
+    Math.max(
+      addUtcMonths(
+        today,
+        LOOKAHEAD_MONTHS + (getIntervalMonths(schedule) ?? 0),
+      ),
+      schedule.anchor ?? 0,
+    ),
   )
     .filter((dueOn) => dueOn >= today)
     .slice(0, 6);

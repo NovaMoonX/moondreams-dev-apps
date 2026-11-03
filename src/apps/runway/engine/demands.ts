@@ -19,7 +19,12 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
-import { daysInUtcMonth, payLineIdOfDayKey } from './dates';
+import {
+  DAY_MS,
+  addUtcMonths,
+  daysInUtcMonth,
+  payLineIdOfDayKey,
+} from './dates';
 import { allocate, percentOf, percentShares } from './money';
 import {
   countFundedDays,
@@ -33,7 +38,7 @@ import {
 import { planGoalContributions } from './pace';
 import { effectiveStance, pick } from './stance';
 import { getCalendarCents } from './calendar';
-import { occurrences, selectRuleDays } from './schedule';
+import { getIntervalMonths, occurrences, selectRuleDays } from './schedule';
 import { matchMovedDates } from './moved';
 import {
   getLineId,
@@ -126,6 +131,8 @@ export interface BillShare {
   totalCents: Cents;
   /** What confirmed days already set aside for the payment. */
   setAsideCents?: Cents;
+  /** The bill comes round less often than monthly, so each pay saves a little toward it. */
+  isSavingUp?: boolean;
   /** The bill's range and the stance that picked the total (the bill's own, else the plan's); null when it is exact. */
   ranged: {
     range: MoneyRange;
@@ -523,11 +530,40 @@ export interface BillPayment {
   paid: PaidPayment | null;
 }
 
+/** A spread bill's first payment after the horizon, when it repeats every few months: its saving starts before the plan reaches its due date. */
+const getDueBeyond = (bill: DraftBillInput, horizon: number) => {
+  const interval = getIntervalMonths(bill.schedule);
+  const isSpread =
+    bill.fundedBy.kind === 'suggested' || bill.fundedBy.kind === 'pay';
+  if (interval === null || !isSpread) return [];
+  return occurrences(
+    bill.schedule,
+    bill.ending,
+    horizon + DAY_MS,
+    Math.max(addUtcMonths(horizon, interval), bill.schedule.anchor ?? 0),
+  ).slice(0, 1);
+};
+
+/** Of what a payment due after the horizon still needs, the part the income days up to the horizon carry: its share of the time from the window's first day to the due date. */
+const toShareByHorizon = (
+  left: Cents,
+  window: readonly IncomeDayRef[],
+  dueOn: DateOnly,
+  horizon: number,
+): Cents => {
+  const start = window[0]?.on;
+  if (start === undefined || start >= dueOn) return left;
+  const fraction = Math.min(1, (horizon - start) / (dueOn - start));
+  return Math.min(left, Math.ceil(left * Math.max(0, fraction)));
+};
+
 /**
  * Every payment of a bill up to `horizon` and what each income day sets aside for it. A payment is
  * funded by the income days after the previous payment through its due date: suggested spreads it
  * over them, the last-before kind takes it all from the last, a pay takes it from that pay line's
  * days (or one day of the month), and chosen splits it equally over the picked days still coming.
+ * A spread bill every few months also lists its first payment after `horizon`, asking the days up to
+ * the horizon for their share of it by time, so a bill due in 20 months is saved for from today.
  */
 export function planBillPayments(
   bill: DraftBillInput,
@@ -576,12 +612,15 @@ export function planBillPayments(
         : getHeldNow(dueOn, fundedCents, paid, Number.MAX_SAFE_INTEGER);
     return { heldNowCents, heldMostCents };
   };
-  const dues = occurrences(
-    bill.schedule,
-    bill.ending,
-    bill.schedule.anchor ?? 0,
-    horizon,
-  );
+  const dues = [
+    ...occurrences(
+      bill.schedule,
+      bill.ending,
+      bill.schedule.anchor ?? 0,
+      horizon,
+    ),
+    ...getDueBeyond(bill, horizon),
+  ];
   const moved = matchMovedDates(
     progress.paid.map((entry) => entry.dueOn),
     dues,
@@ -663,9 +702,10 @@ export function planBillPayments(
       bill.fundedBy,
       bill.oneTimePayLineIds,
     );
+    const left = paid ? 0 : Math.max(0, amountCents - fundedCents);
     const pairedShares = getPairedShares(
       window,
-      paid ? 0 : Math.max(0, amountCents - fundedCents),
+      dueOn > horizon ? toShareByHorizon(left, window, dueOn, horizon) : left,
       bill.paired,
       bill.fixed,
       eligible,
@@ -747,6 +787,9 @@ function buildBillDemands(
             dueOn: payment.dueOn,
             totalCents: payment.totalCents,
             setAsideCents: payment.fundedCents,
+            isSavingUp:
+              getIntervalMonths(bill.schedule) !== null &&
+              bill.fundedBy.kind !== 'lastBefore',
             ranged: payment.ranged,
           },
           ask: { kind: 'exact' },

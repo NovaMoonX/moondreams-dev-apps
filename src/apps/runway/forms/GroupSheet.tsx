@@ -355,10 +355,10 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const isPast = dueDate !== undefined && dueDate < today;
   const skippedCount = billCount - eligibleBills.length;
 
-  const describeBillDue = (kind: string, due: number | null) =>
+  const describeBillDue = (schedule: Schedule, due: number | null) =>
     due === null
       ? BILL_WORDS.needsDueDate
-      : `Due ${formatDateShortUTC(due)} · ${describeBillRepeat(kind as Schedule['kind'])}`;
+      : `Due ${formatDateShortUTC(due)} · ${describeBillRepeat(schedule)}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;
@@ -797,7 +797,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         purposeEmojis,
                       )}
                       detail={describeBillDue(
-                        version.payload.timing.schedule.kind,
+                        version.payload.timing.schedule,
                         getCurrentDue({ item, version }),
                       )}
                       figure={describeGroupTotal(version.payload.amount)}
