@@ -1,6 +1,6 @@
 ---
 name: finish-feature-pr
-description: Take over an in-progress feature PR someone else started (usually a Copilot-authored coding-agent PR) and bring it the rest of the way to mergeable — resolve conflicts with main, correct entry points and CRUD/UX gaps, sync Firestore/Storage rules with the data model, add seed data, and validate. Use when the user says "finish PR #NNN", "get this PR ready to merge", or points at a stale/incomplete PR link. Not for PRs you built yourself in this session: those are already held to these checks by orchestrate, the validator agent and pr-wrap-up, and the Stop hook (`pr-gate.sh`) no longer runs this skill.
+description: Take over an in-progress feature PR someone else started (often one a coding agent opened) and bring it the rest of the way to mergeable — resolve conflicts with main, correct entry points and CRUD/UX gaps, sync Firestore/Storage rules with the data model, add seed data, and validate. Use when the user says "finish PR #NNN", "get this PR ready to merge", or points at a stale/incomplete PR link. Not for PRs you built yourself in this session: those are already held to these checks by orchestrate, the validator agent and pr-wrap-up, and the Stop hook (`pr-gate.sh`) no longer runs this skill.
 ---
 
 # Finish a feature PR
