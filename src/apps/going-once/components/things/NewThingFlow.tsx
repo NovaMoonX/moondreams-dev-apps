@@ -16,6 +16,7 @@ import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { generateUuid } from '@/utils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import {
   ConditionQuestion,
   NameQuestion,
@@ -381,6 +382,16 @@ function ThingSteps({
                 answers.condition === null
                   ? ''
                   : CONDITION_LABELS[answers.condition]
+              }
+              floorText={
+                fields.floorPriceCents === null
+                  ? ''
+                  : formatCentsShort(fields.floorPriceCents)
+              }
+              isFloorAbove={
+                fields.floorPriceCents !== null &&
+                fields.askingPriceCents !== null &&
+                fields.floorPriceCents > fields.askingPriceCents
               }
               deferred={answers.deferred}
               answered={answered.map((step) => step.id)}

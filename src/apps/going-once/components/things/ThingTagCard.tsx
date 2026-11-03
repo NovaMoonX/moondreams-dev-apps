@@ -15,6 +15,9 @@ interface ThingTagCardProps {
   /** "$45", "Free" or "Price later"; empty while there is no price. */
   priceText: string;
   conditionLabel: string;
+  /** The private floor ("$30"), or '' when none. */
+  floorText: string;
+  isFloorAbove: boolean;
   deferred: string[];
   /** The ids of the steps already passed, whose parts can be tapped to change. */
   answered: string[];
@@ -31,6 +34,8 @@ function ThingTagCard({
   title,
   priceText,
   conditionLabel,
+  floorText,
+  isFloorAbove,
   deferred,
   answered,
   onReopen,
@@ -132,7 +137,28 @@ function ThingTagCard({
                 'text-sm',
                 conditionLabel,
               )}
+            {conditionLabel === '' &&
+              deferred.includes('condition') &&
+              part(
+                'condition',
+                'Condition, later, change',
+                'text-sm',
+                <span className='text-accent-foreground/60'>
+                  Condition later
+                </span>,
+              )}
           </div>
+          {floorText !== '' && (
+            <p className='px-2 text-xs'>
+              🔒 Lowest {floorText}
+              {isFloorAbove && (
+                <span className='font-medium text-(--going-once-hint)'>
+                  {' '}
+                  · more than the price
+                </span>
+              )}
+            </p>
+          )}
         </div>
       </div>
     </div>
