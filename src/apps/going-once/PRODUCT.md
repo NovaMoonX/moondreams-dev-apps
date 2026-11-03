@@ -189,7 +189,7 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 - [x] **Co-seller:** Available, Pending (optionally who and a pickup day) and Sold with what was paid, how and when; Not sold after all; take off the list and put back; a short history per thing; refused in words from a stale screen (the seller has the same controls)
 - [x] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating
 - [x] **Seller:** delete a thing, with a confirm that names its pickup, its inquiries and any change to Collected, and offers Take it off the list instead
-- [ ] **Co-seller:** a push when someone is interested, on by default, bundled to one per 15 minutes, quiet 10 PM to 8 AM with one morning push, never dropped; permission asked on first opening the inbox or on joining, up to three times; a per-sale switch to turn it off (the seller gets the same)
+- [x] **Co-seller:** a push when someone is interested, on by default, bundled to one per 15 minutes, quiet 10 PM to 8 AM with one morning push, never dropped; permission asked on first opening the inbox or on joining, up to three times; a per-sale switch to turn it off (the seller gets the same)
 - [x] **Co-seller:** the shared inbox with Call, Text and Email, New / Handled by hand and resends folded into one inquiry (the seller sees it too)
 - [ ] **Co-seller:** each thing's own list of who asked, and Hold for someone from their inquiry
 - [ ] **Co-seller:** Copy listing text (remembered on the thing, with a take-it-down reminder at Sold), Save photos for one thing, and Save all photos as one zip for the whole sale, at listing quality

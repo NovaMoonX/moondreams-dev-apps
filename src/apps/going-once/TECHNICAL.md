@@ -26,7 +26,7 @@ All app data under `apps/going-once/…`. Exceptions, deliberately not app-scope
 | `pickupArea` | `string \| null` | An area, never an address; public |
 | `buyerNote` | `string \| null` | Public |
 | `currency` | `'USD'` | Closed for now; read with a fallback |
-| `timeZone` | `string` | The seller's IANA zone at create; the push quiet hours use it |
+| `timeZone` | `string \| null` | The seller's IANA zone at create (`Intl` on their phone); the push quiet hours use it. A sale from before it was kept reads `null` (UTC in the function) until the seller opens it, which writes it once (a rule allows the seller to set it only while it is missing) |
 | `status` | `SaleStatus = 'OPEN' \| 'FINISHED'` | |
 | `finishedAt`, `finishedBy` | `number \| null`, `string \| null` | |
 | `contactsClearAt` | `number \| null` | `finishedAt + 30 days`; `null` while open and once cleared |
@@ -194,19 +194,19 @@ Central `pushBundles/{appId}_{uid}` (admin SDK only; no client rule matches it, 
 Flow, all in `functions/src/notifications/bundledPush.ts` (no app words; the app passes its items and a summary builder):
 
 1. **`queueBundledPush(appId, uid, item, zone, now)`** runs in a transaction on the person's bundle doc. If nothing is waiting, `lastSentAt` is more than 15 minutes ago and it isn't a quiet hour in `zone`, it marks the push as sent (`lastSentAt = now`) and returns "send now", and the caller sends that one item at once, after the commit. Otherwise it adds the item and sets `nextSendAt` to the later of `lastSentAt + 15 min` and, when that lands in quiet hours, the next 08:00 in `zone`.
-2. **`sendDueBundledPushes`**, scheduled every minute, queries `pushBundles where nextSendAt <= now` (one range field, no composite index; at most 100 per run). For each it claims the doc in a transaction (re-read; skip if `nextSendAt` moved), asks the app's `confirmItems` hook which items still matter (Going Once drops an inquiry already Handled, cleared or deleted, a sale now finished, and a sale the person turned off or left; an inquiry whose thing was deleted still counts, named by `itemTitleAtSend`), sends one summary built by the app's `summarize`, and sets `lastSentAt = now`, `items = []`, `nextSendAt = null`. If nothing is left it sends nothing and just clears. A doc whose `nextSendAt` is far behind (an outage) sends one summary of what still matters; it doesn't drop it, because a buyer is still waiting (the rule for a push that is a person waiting on you; `product.md` gains it in the docs PR).
+2. **`sendDueBundledPushes`**, scheduled every minute, queries `pushBundles where nextSendAt <= now` (one range field, no composite index; at most 100 per run). For each it claims the doc in a transaction (re-read; skip if `nextSendAt` moved), asks the app's `confirmItems` hook which items still matter (Going Once drops an inquiry already Handled, cleared or deleted, a sale now finished, and a sale the person turned off or left; an inquiry whose thing was deleted still counts, named by `itemTitleAtSend`), sends one summary built by the app's `summarize`, and sets `lastSentAt = now`, `items = []`, `nextSendAt = null`. If nothing is left it sends nothing and just clears. A doc whose `nextSendAt` is far behind (an outage) sends one summary of what still matters; it doesn't drop it, because a buyer is still waiting (the rule for a push that is a person waiting on you; `product.md` "A push nobody asked for").
 3. The app registers its hooks in a map keyed by `appId` (like `FIRST_ACTIVITY_FINDERS`); an unknown `appId` is cleared and logged.
 
 - **Quiet hours** use `isQuietHour` from `pushBudget.ts` (22:00–08:00). The zone is the sale's `timeZone`: nobody's own zone is stored, so a co-seller in another zone gets the seller's quiet hours (accepted).
-- **"Next 08:00 in a zone"** needs a zoned wall time to an instant: Waypoint's `zonedDateTimeToEpoch` (`functions/src/apps/waypoint/zonedTime.ts`) moves to `functions/src/notifications/` (or a shared `functions/src/time/`) in the push issue, with Waypoint's imports updated.
+- **"Next 08:00 in a zone"** needs a zoned wall time to an instant: Waypoint's `zonedDateTimeToEpoch` (`functions/src/apps/waypoint/zonedTime.ts`) now lives in `functions/src/notifications/zonedTime.ts`, with Waypoint's import updated.
 - **Window latency:** a bundled push lands within a minute of its window ending. The first inquiry after a quiet spell pushes at once.
 - **Races:** two inquiries at the same moment both run the transaction; one gets "send now", the other is queued. A trigger retried after a crash may push one inquiry twice; accepted.
 - **Cost:** one scheduled run a minute with a single indexed range query; free-tier sized.
 
 ### Asking for permission (on a tap, never on load)
 
-- A quiet bar, "Get a push when someone's interested · Turn on · Not now", the first time the seller opens the Inbox and on a co-seller's first open of a sale they joined. Turn on calls `enablePushNotifications(uid)` on that tap.
-- Not drawn once this device has a token or while the person has this sale's switch off. After "Not now" it comes back on a later Inbox open, up to 3 times in all (count per uid in `localStorage`: `going-once:<uid>:push-asks`), then never again; the switch stays the way to turn it on.
+- A quiet bar, "Get a push when someone's interested · Turn on · Not now", the first time the seller opens the Inbox and on a co-seller's first open of a sale they joined. Turn on calls the site's `turnOnDevicePush(uid)` (the same registration as `enablePushNotifications`, but it answers whether the browser allowed it, so the bar can say why not) on that tap.
+- Not drawn once this device has a token or while the person has this sale's switch off. After "Not now" it is gone for the rest of the visit and comes back on a later one, up to 3 times in all (count per uid in `localStorage`: `going-once:<uid>:push-asks`), then never again; the switch stays the way to turn it on.
 - A refused or unsupported browser says why in the bar, once.
 - **The switch:** "Push me when someone's interested" (`AppToggle`) in the Sale tab, per person, writing `arrayUnion`/`arrayRemove` on their own `people/{uid}`. Turning it on asks for permission on that tap if this device has none.
 
@@ -391,7 +391,7 @@ src/apps/going-once/
   SalePage.tsx                  public route /going-once/s/:linkId (no sign-in, useNoIndex, getSalePage)
   types.ts  constants.ts  going-once.css
   components/
-    sales/        SalesList, SaleFormSheet, SaleTab (StatTiles, LinkCard, People, Details, Finish, Delete)
+    sales/        SalesList, SaleFormSheet, SaleTab (StatTiles, LinkCard, PushSwitch, People, Details, Finish, Delete)
     things/       ThingRow, ThingThumb (a cover), StatusDot, PriceTag, OpenThing (a thing's drawer and its Modify, from the Things tab or over an inquiry), ThingDrawer (getThingOffer), ThingForm (Modify), MarkPendingView,
                   MarkSoldView, SoldConfirmation, ChangePaidView, HistoryView, StatusViewFooter, DeleteThingConfirm, NewThingFlow (QuestionFlow), ThingQuestions + thingRows (the questions
                   both share, and each row's label, fields and summary), ItemsSection (search, sort, the door)

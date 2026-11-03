@@ -47,6 +47,7 @@ export function startSale(
     buyerNote:
       toTrimmedOrNull(buyerNote)?.slice(0, MAX_BUYER_NOTE_LENGTH) ?? null,
     currency: 'USD',
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     ownerUid: uid,
     createdBy: uid,
     members: [uid],
@@ -83,6 +84,14 @@ export function updateSaleDetail(
     [field]: value,
     lastEditedAt: Date.now(),
   });
+}
+
+/** Keeps the seller's time zone on a sale made before it was kept, for the push's quiet hours; the rules allow it only while the sale has none. */
+export function backfillSaleTimeZone(saleId: string): Promise<void> {
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return timeZone
+    ? updateDoc(doc(db, 'apps', 'going-once', 'sales', saleId), { timeZone })
+    : Promise.resolve();
 }
 
 const DELETE_TIMEOUT_MS = 540_000;

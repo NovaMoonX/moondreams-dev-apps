@@ -34,6 +34,8 @@ export interface GoingOnceState {
   saleInvites: { saleId: string | null; invites: SaleEmailInvite[] };
   /** The sale the person was just taken off (or followed an old link to), kept once its data is cleared; the name and seller are null when the sale was never read. */
   removedFrom: RemovedFrom | null;
+  /** The sales whose interest push this person turned off; `null` until it is read. */
+  pushOffSaleIds: string[] | null;
   /** A sale the person is leaving right now, so the departure is not shown as a removal. */
   leavingSaleId: string | null;
   /** Photos being saved right now, by thing, so its row can say so. */
@@ -52,6 +54,7 @@ const initialState: GoingOnceState = {
   myInvites: [],
   saleInvites: { saleId: null, invites: [] },
   removedFrom: null,
+  pushOffSaleIds: null,
   leavingSaleId: null,
   photoUploads: {},
 };
@@ -135,6 +138,9 @@ export const goingOnceSlice = createSlice({
     setRemovedFrom(state, action: PayloadAction<RemovedFrom | null>) {
       state.removedFrom = action.payload;
     },
+    setPushOffSaleIds(state, action: PayloadAction<string[] | null>) {
+      state.pushOffSaleIds = action.payload;
+    },
     setLeavingSaleId(state, action: PayloadAction<string | null>) {
       state.leavingSaleId = action.payload;
     },
@@ -171,6 +177,7 @@ export const {
   setSaleInvites,
   clearSaleInvites,
   setRemovedFrom,
+  setPushOffSaleIds,
   setLeavingSaleId,
   photoUploadStarted,
   photoUploadEnded,
