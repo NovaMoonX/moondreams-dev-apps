@@ -28,7 +28,7 @@ const toFileBase = (title: string) =>
 const plural = (count: number) =>
   `${count} ${count === 1 ? 'photo' : 'photos'}`;
 
-/** Fetches the thing's photos as soon as the row mounts, so the tap can hand them to the share sheet at once. */
+/** Fetches the thing's photos as soon as the row mounts (the drawer's More view), so the tap can hand them to the share sheet at once. */
 function useFetchedPhotos(paths: string[], attempt: number) {
   const key = `${attempt}:${paths.join('|')}`;
   const [fetched, setFetched] = useState<Fetched | null>(null);
@@ -117,6 +117,7 @@ function SavePhotosRow({ item }: SavePhotosRowProps) {
       icon={canShare ? <ImageDown /> : <Download />}
       label={canShare || result === null ? 'Save photos' : 'Download photos'}
       subtitle={getSubtitle()}
+      isDisabled={result === null}
       onClick={() => void save()}
     />
   );

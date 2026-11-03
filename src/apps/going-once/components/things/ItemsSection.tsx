@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight, Plus, X } from 'lucide-react';
+import { ChevronRight, ImageDown, Plus, X } from 'lucide-react';
 
-import EllipsisDropdown from '@/components/EllipsisDropdown';
 import EmptyCard from '@/components/EmptyCard';
 import LazyMount from '@/components/LazyMount';
 import { PillGroup } from '@/components/PillGroup';
@@ -159,16 +158,27 @@ function ItemsSection({
     </Button>
   );
 
+  const hasSavablePhotos = items.some(
+    (item) =>
+      (item.status === 'AVAILABLE' || item.status === 'PENDING') &&
+      item.photos.length > 0,
+  );
+
   const headerActions = (
     <div className='flex items-center gap-2'>
-      <EllipsisDropdown
-        ariaLabel='More for your things'
-        variant='tertiary'
-        items={[
-          { __type: 'option', value: 'save-photos', label: 'Save all photos' },
-        ]}
-        onItemSelect={() => setIsSavingPhotos(true)}
-      />
+      {hasSavablePhotos && (
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          rounded='full'
+          aria-label='Save all photos'
+          className='size-7 min-w-7 p-0'
+          onClick={() => setIsSavingPhotos(true)}
+        >
+          <ImageDown className='size-4' aria-hidden='true' />
+        </Button>
+      )}
       {addButton}
     </div>
   );
