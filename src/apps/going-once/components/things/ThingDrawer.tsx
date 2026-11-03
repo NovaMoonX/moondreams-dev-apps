@@ -5,7 +5,6 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   BadgeDollarSign,
   CalendarClock,
-  Clock,
   Ellipsis,
   Eye,
   EyeOff,
@@ -36,7 +35,7 @@ import MarkSoldView from '@apps/going-once/components/things/MarkSoldView';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import SoldConfirmation from '@apps/going-once/components/things/SoldConfirmation';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
-import { CONDITION_LABELS } from '@apps/going-once/constants';
+import { CONDITION_LABELS, NOT_LISTED_LABEL } from '@apps/going-once/constants';
 import { useDeleteThing } from '@apps/going-once/hooks/useDeleteThing';
 import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
@@ -50,7 +49,6 @@ import type { Item } from '@apps/going-once/types';
 import {
   canDeleteItem,
   formatAddedAgo,
-  formatAskingPrice,
   getItemName,
   isListable,
 } from '@apps/going-once/utils/listing';
@@ -123,7 +121,6 @@ function StoreLink({ item }: { item: Item }) {
 }
 
 const getPrivateRows = (item: Item): Row[] => {
-  const asking = formatAskingPrice(item.askingPriceCents);
   const bought = [
     item.boughtFrom,
     item.boughtOn === null ? null : formatDateUTC(item.boughtOn),
@@ -131,7 +128,6 @@ const getPrivateRows = (item: Item): Row[] => {
     .filter((part) => part !== null)
     .join(' · ');
   return [
-    { label: 'Asking price', value: asking ?? 'No price yet' },
     {
       label: 'Floor price',
       value:
@@ -195,7 +191,6 @@ function ThingDrawer({
     item.condition === null
       ? null
       : { key: 'condition', content: CONDITION_LABELS[item.condition] },
-    isListable(item) ? null : { key: 'unlisted', content: 'Not listed yet' },
   ].filter((fact) => fact !== null);
   const buyerFacts = [
     item.brandModel === null
@@ -211,7 +206,9 @@ function ThingDrawer({
   ].filter((fact) => fact !== null);
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
   const offer = getThingOffer(item.status, isListable(item));
-  const isOnTheList = item.status === 'AVAILABLE' || item.status === 'PENDING';
+  const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
+  const isOnTheList =
+    item.status === 'PENDING' || (item.status === 'AVAILABLE' && !isNotListed);
 
   const getIsDirty = () => {
     if (view === 'markPending')
@@ -307,16 +304,6 @@ function ThingDrawer({
     () => void takeOffTheList(),
   );
   const moreActions: MoreAction[] = [
-    offer === 'FINISH'
-      ? {
-          key: 'markPending',
-          icon: <Clock />,
-          label: 'Mark pending',
-          subtitle: 'Buyers still see it, marked Pending',
-          hasChevron: true,
-          onClick: () => open('markPending'),
-        }
-      : null,
     isOnTheList
       ? {
           key: 'markSold',
@@ -417,7 +404,7 @@ function ThingDrawer({
         type='button'
         size='lg'
         rounded='full'
-        className='min-w-0 flex-1 whitespace-nowrap'
+        className='min-w-0 flex-1 whitespace-nowrap max-[359px]:px-4'
         disabled={isWorking}
         onClick={onClick}
       >
@@ -465,6 +452,7 @@ function ThingDrawer({
           variant='secondary'
           size='lg'
           rounded='full'
+          className='max-[359px]:px-4'
           onClick={onModify}
         >
           Modify
@@ -599,14 +587,13 @@ function ThingDrawer({
       )}
       <div className={join('space-y-4', view !== null && 'hidden')}>
         <PhotoStrip photos={photos} label={name} />
-        <StatusDot status={item.status}>{getStatusFacts(item)}</StatusDot>
-        {isUnderFloor(item) && item.floorPriceCents !== null && (
-          <p className='text-muted-foreground text-sm'>
-            🔒 Sold under your floor price of{' '}
-            {formatCentsShort(item.floorPriceCents)}
-          </p>
-        )}
-        <div className='flex items-center gap-3'>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+          <StatusDot
+            status={item.status}
+            label={isNotListed ? NOT_LISTED_LABEL : undefined}
+          >
+            {getStatusFacts(item)}
+          </StatusDot>
           {item.askingPriceCents !== null && (
             <PriceTag askingPriceCents={item.askingPriceCents} />
           )}
@@ -615,19 +602,10 @@ function ThingDrawer({
             facts={facts}
           />
         </div>
-        {item.description !== null && (
-          <p className='text-sm break-words whitespace-pre-line'>
-            {item.description}
-          </p>
-        )}
-        <FactsLine
-          className='text-muted-foreground min-w-0 text-sm'
-          facts={buyerFacts}
-        />
-        {!isListable(item) && (
+        {isUnderFloor(item) && item.floorPriceCents !== null && (
           <p className='text-muted-foreground text-sm'>
-            Buyers can&apos;t see this yet. It needs a photo, a name and a
-            price.
+            🔒 Sold under your floor price of{' '}
+            {formatCentsShort(item.floorPriceCents)}
           </p>
         )}
         <section className='bg-accent/60 border-border space-y-3 rounded-2xl border p-3'>
@@ -650,6 +628,21 @@ function ThingDrawer({
             </div>
           )}
         </section>
+        {item.description !== null && (
+          <p className='text-sm text-pretty break-words whitespace-pre-line'>
+            {item.description}
+          </p>
+        )}
+        <FactsLine
+          className='text-muted-foreground min-w-0 text-sm'
+          facts={buyerFacts}
+        />
+        {isNotListed && (
+          <p className='text-muted-foreground text-sm text-pretty'>
+            Buyers can&apos;t see this yet. It needs a photo, a name and a
+            price.
+          </p>
+        )}
       </div>
       {deleteDialog}
     </DetailSheet>

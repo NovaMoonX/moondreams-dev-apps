@@ -113,6 +113,13 @@ const APP_REGISTRY = [
     description:
       'Sell a lot of your things without answering every buyer yourself: add each thing once with photos and a price, bring in a co-seller you trust, and share one link that shows only what is still for sale.',
     image: 'https://moondreams-dev-apps.web.app/banners/by-app/banner-going-once.png',
+    pages: [
+      {
+        prefix: '/going-once/s/',
+        title: 'Things for sale',
+        description: 'Open the link to see what is still for sale.',
+      },
+    ],
   },
 ];
 

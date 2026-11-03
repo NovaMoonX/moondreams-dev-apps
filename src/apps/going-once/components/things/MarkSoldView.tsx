@@ -15,7 +15,7 @@ import { PAYMENT_METHOD_OPTIONS } from '@apps/going-once/constants';
 import { useStatusWrite } from '@apps/going-once/hooks/useStatusWrite';
 import { changeStatus } from '@apps/going-once/store/actions/statusActions';
 import type { Item } from '@apps/going-once/types';
-import { formatAskingPrice } from '@apps/going-once/utils/listing';
+import { formatAskingPrice, getItemName } from '@apps/going-once/utils/listing';
 import { describeMovedOn } from '@apps/going-once/utils/status';
 import type { SoldDraft } from '@apps/going-once/utils/statusDrafts';
 
@@ -84,9 +84,9 @@ function MarkSoldView({
   };
 
   return (
-    <div className='space-y-5'>
+    <div className='space-y-5 [@media(max-height:499px)]:space-y-3'>
       <div className='space-y-2'>
-        <BackLink onBack={onBack} label='Mark sold' />
+        <BackLink onBack={onBack} label={getItemName(item)} />
         <p className='text-lg font-semibold'>What did they pay?</p>
       </div>
       <div className='space-y-2'>

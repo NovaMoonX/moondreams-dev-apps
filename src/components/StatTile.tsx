@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronRight } from 'lucide-react';
 
 interface StatTileProps {
   label: string;
@@ -16,6 +17,8 @@ interface StatTileProps {
   isLabelWrapped?: boolean;
   /** Makes the tile itself a button (and only the tile: its neighbours and the gaps between are not part of it); the help icon keeps its own tap. */
   onOpen?: { label: string; onClick: () => void };
+  /** A chevron in the tile's corner that says it opens something; only with `onOpen`. */
+  hasChevron?: boolean;
   /** A target to show progress toward; a met one tints the whole tile. */
   goal?: { current: number; target: number };
   /** Dims the tile and invites setting something up (a goal) with a button, instead of showing progress. */
@@ -38,6 +41,7 @@ function StatTile({
   isStacked = false,
   isLabelWrapped = false,
   onOpen,
+  hasChevron = false,
   goal,
   prompt,
   className,
@@ -67,6 +71,12 @@ function StatTile({
           className='absolute inset-0 h-full w-full rounded-2xl!'
         />
       )}
+      {onOpen && hasChevron && (
+        <ChevronRight
+          className='text-muted-foreground pointer-events-none absolute top-3 right-2.5 size-4'
+          aria-hidden='true'
+        />
+      )}
       {icon && (
         <span
           className='bg-secondary text-secondary-foreground pointer-events-none relative grid size-10 shrink-0 place-items-center rounded-full text-xl'
@@ -81,6 +91,7 @@ function StatTile({
           onOpen &&
             'pointer-events-none relative [&_button]:pointer-events-auto',
           Boolean(help) && !isStacked && !isLabelWrapped && 'pr-6 sm:pr-0',
+          onOpen && hasChevron && 'pr-5',
         )}
       >
         <p

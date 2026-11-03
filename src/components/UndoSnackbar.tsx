@@ -10,7 +10,9 @@ const FOOTER_GAP_PX = 16;
 const DEFAULT_BOTTOM = 'calc(1rem + env(safe-area-inset-bottom))';
 
 const getFooter = () =>
-  Array.from(document.querySelectorAll<HTMLElement>('.form-footer'))
+  Array.from(
+    document.querySelectorAll<HTMLElement>('.form-footer, [data-bottom-bar]'),
+  )
     .filter((footer) => {
       const { height, top } = footer.getBoundingClientRect();
       return height > 0 && top < window.innerHeight;
@@ -85,7 +87,7 @@ interface UndoSnackbarProps {
   isOverSheet?: boolean;
 }
 
-/** A bar with the seconds left to undo a removal, floating above a pinned form footer; keep it mounted so screen readers hear the message. */
+/** A bar with the seconds left to undo a removal, floating above a pinned form footer or a fixed bar marked `data-bottom-bar`; keep it mounted so screen readers hear the message. */
 function UndoSnackbar({
   pending,
   onUndo,

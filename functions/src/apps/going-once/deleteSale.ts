@@ -4,6 +4,8 @@ import { getStorage } from 'firebase-admin/storage';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { publicFolder } from './saleLinkStore.js';
+
 if (getApps().length === 0) {
   initializeApp();
 }
@@ -22,10 +24,10 @@ interface FilesQuery {
   pageToken?: string;
 }
 
-/** Deletes every file under the sale's folder, a page at a time, and returns how many it removed. */
-export async function deleteSaleFiles(
+/** Deletes every file under a folder, a page at a time, and returns how many it removed. */
+async function deleteFilesUnder(
   bucket: SaleBucket,
-  saleId: string,
+  prefix: string,
 ): Promise<number> {
   const removePage = async (
     query: FilesQuery,
@@ -39,24 +41,62 @@ export async function deleteSaleFiles(
     return next ? removePage(next, total) : total;
   };
   return removePage(
-    {
-      prefix: storagePrefix(saleId),
-      maxResults: FILE_PAGE_SIZE,
-      autoPaginate: false,
-    },
+    { prefix, maxResults: FILE_PAGE_SIZE, autoPaginate: false },
     0,
   );
 }
 
-/** Photos first, then the sale with everything under it, so an interrupted run leaves the sale and a rerun finishes it. */
+/** Deletes every file under the sale's folder and returns how many it removed. */
+export const deleteSaleFiles = (bucket: SaleBucket, saleId: string) =>
+  deleteFilesUnder(bucket, storagePrefix(saleId));
+
+/** Ends the sale's public links, each one's photo copies first and then its record, so no address outlives its photos; returns how many links it ended. */
+export async function deleteSaleLinks(
+  firestore: Firestore,
+  bucket: SaleBucket,
+  saleId: string,
+): Promise<number> {
+  const links = await firestore
+    .collection('apps/going-once/publicLinks')
+    .where('saleId', '==', saleId)
+    .get();
+  await Promise.all(
+    links.docs.map(async (link) => {
+      await deleteFilesUnder(bucket, publicFolder(link.id));
+      await link.ref.delete();
+    }),
+  );
+  return links.size;
+}
+
+/** Deletes the sale's waiting invitations, which live beside the sale rather than under it, and returns how many it removed. */
+export async function deleteSaleInvites(
+  firestore: Firestore,
+  saleId: string,
+): Promise<number> {
+  const invites = await firestore
+    .collection('apps/going-once/emailInvites')
+    .where('saleId', '==', saleId)
+    .get();
+  const writer = firestore.bulkWriter();
+  invites.docs.forEach((invite) => void writer.delete(invite.ref));
+  await writer.close();
+  return invites.size;
+}
+
+/** Photos, public links and invitations first, then the sale with everything under it, so an interrupted run leaves the sale and a rerun finishes it. */
 export async function deleteSaleContents(
   firestore: Firestore,
   bucket: SaleBucket,
   saleId: string,
 ) {
   const files = await deleteSaleFiles(bucket, saleId);
+  const links = await deleteSaleLinks(firestore, bucket, saleId);
+  const invites = await deleteSaleInvites(firestore, saleId);
   await firestore.recursiveDelete(firestore.doc(salePath(saleId)));
-  return { files };
+  // A link minted while the sale was being deleted would outlive it; the sale is gone now, so no later one can be.
+  const lateLinks = await deleteSaleLinks(firestore, bucket, saleId);
+  return { files, links: links + lateLinks, invites };
 }
 
 /**
@@ -95,12 +135,12 @@ export const deleteSale = onCall(
     }
 
     try {
-      const { files } = await deleteSaleContents(
+      const { files, links, invites } = await deleteSaleContents(
         firestore,
         getStorage().bucket(),
         saleId,
       );
-      logger.info('goingOnce.sale.deleted', { saleId, files });
+      logger.info('goingOnce.sale.deleted', { saleId, files, links, invites });
       return { deleted: true };
     } catch (error) {
       const code = (error as { code?: unknown } | null)?.code;

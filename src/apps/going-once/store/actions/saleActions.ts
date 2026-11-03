@@ -12,7 +12,11 @@ import {
 } from '@apps/going-once/constants';
 import type { AppDispatch } from '@/store';
 import { removeSale, upsertSale } from '@apps/going-once/store';
-import type { Sale, SaleDetailField } from '@apps/going-once/types';
+import type {
+  Sale,
+  SaleDetailField,
+  SaleLinkAction,
+} from '@apps/going-once/types';
 
 interface CreateSaleInput {
   uid: string;
@@ -46,6 +50,9 @@ export function startSale(
     ownerUid: uid,
     createdBy: uid,
     members: [uid],
+    memberJoinedAt: {},
+    publicLinkId: null,
+    publicLinkChangedAt: null,
     createdAt: Date.now(),
     lastEditedAt: null,
   };
@@ -120,5 +127,47 @@ export async function deleteSale(saleId: string): Promise<DeleteSaleResult> {
     if (code === 'functions/not-found' && (await isSaleGone(saleId)))
       return { outcome: 'deleted' };
     return { outcome: 'failed', reason: toDeleteReason(code, error) };
+  }
+}
+
+const LINK_FAILED =
+  "We couldn't change the public page. Check your connection and try again.";
+const LINK_SERVER_SENTENCES = [
+  'This sale is finished. Reopen it to turn the page on.',
+  'The link just changed. Check it and try again.',
+  "We couldn't finish that. Try again in a moment.",
+];
+
+const toLinkReason = (code: string, error: unknown) => {
+  if (code === 'functions/unauthenticated')
+    return 'Sign in again to change the public page.';
+  if (code === 'functions/not-found')
+    return "We couldn't find this sale. It may have been deleted.";
+  if (error instanceof Error && LINK_SERVER_SENTENCES.includes(error.message))
+    return error.message;
+  return LINK_FAILED;
+};
+
+export type SaleLinkResult =
+  | { outcome: 'done'; linkId: string | null }
+  | { outcome: 'failed'; reason: string };
+
+/** Turns the sale's public page on, gives it a new address or turns it off; only the seller's call is taken. */
+export async function changeSaleLink(
+  saleId: string,
+  action: SaleLinkAction,
+): Promise<SaleLinkResult> {
+  try {
+    const { data } = await httpsCallable<
+      { saleId: string; action: SaleLinkAction },
+      { linkId: string | null }
+    >(
+      functions,
+      'changeSalePublicLink',
+    )({ saleId, action });
+    return { outcome: 'done', linkId: data.linkId };
+  } catch (error) {
+    const code = error instanceof FirebaseError ? error.code : '';
+    return { outcome: 'failed', reason: toLinkReason(code, error) };
   }
 }

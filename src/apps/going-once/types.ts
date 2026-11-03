@@ -21,8 +21,26 @@ export interface Sale {
   createdBy: string;
   /** The seller and any co-sellers; every rule keys off it. */
   members: string[];
+  /** When each member joined, by uid; a sale from before co-sellers may lack some. */
+  memberJoinedAt: Record<string, number>;
+  /** The address of the sale's public page; written only by `changeSalePublicLink`. */
+  publicLinkId: string | null;
+  /** When the address was made or last renewed. */
+  publicLinkChangedAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+/** The seller's standing welcome for an email address (`apps/going-once/emailInvites/{saleId}_{email}`). */
+export interface SaleEmailInvite {
+  saleId: string;
+  /** Lowercased. */
+  email: string;
+  invitedBy: string;
+  /** Copied in so the invitee never reads the sale before joining. */
+  saleName: string;
+  inviterName: string;
+  createdAt: number;
 }
 
 export type ItemCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'WELL_USED';
@@ -129,3 +147,79 @@ export interface Item {
   lastEditedAt: number | null;
   lastEditedBy: string | null;
 }
+
+/** One photo's two public copies (480px and 1,280px WebP), as Storage paths. */
+export interface PublicPhoto {
+  s: string;
+  m: string;
+}
+
+/** A thing as the public page shows it: only the fields `getSalePage` allows. */
+export interface PublicThing {
+  id: string;
+  title: string;
+  description: string | null;
+  brandModel: string | null;
+  size: string | null;
+  condition: ItemCondition | null;
+  askingPriceCents: number;
+  /** Set only when the seller chose to show it. */
+  originalPriceCents: number | null;
+  status: Extract<ItemStatus, 'AVAILABLE' | 'PENDING'>;
+  /** Cover first, in the thing's order; only photos whose copies exist. */
+  photos: PublicPhoto[];
+}
+
+/** What `getSalePage` answers: the page, or one `not_found` for every link that shows nothing. */
+export type SalePageResult =
+  | { status: 'not_found' }
+  | {
+      status: 'ok';
+      sale: Pick<Sale, 'name' | 'pickupArea' | 'buyerNote'>;
+      things: PublicThing[];
+      /** True when the signed-in visitor is the seller or a co-seller. */
+      isMember: boolean;
+    };
+
+export type SaleLinkAction = 'create' | 'renew' | 'stop';
+
+export type InquiryStatus = 'NEW' | 'HANDLED';
+
+/** A buyer's message about a thing; made and resent only by the server. */
+export interface Inquiry {
+  id: string;
+  saleId: string;
+  itemId: string;
+  itemTitleAtSend: string;
+  /** `null` once the sale's contacts are cleared. */
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  message: string | null;
+  status: InquiryStatus;
+  handledBy: string | null;
+  handledAt: number | null;
+  sendCount: number;
+  createdAt: number;
+  lastSentAt: number;
+  contactClearedAt: number | null;
+}
+
+export type InterestResult =
+  | { status: 'sent'; contact: 'email' | 'phone' }
+  | {
+      status: 'not_found' | 'not_available' | 'busy' | 'full' | 'slow_down';
+    }
+  | { status: 'invalid'; field: 'name' | 'contact' | 'message' };
+
+export interface InterestRequest {
+  linkId: string;
+  itemId: string;
+  name: string;
+  contact: string;
+  message: string;
+  /** Left empty by a person; anything in it is a bot. */
+  website: string;
+}
+
+export type InboxView = 'new' | 'handled';
