@@ -40,7 +40,7 @@ export function toInquiry(
   };
 }
 
-const inquiriesOf = (saleId: string) =>
+export const inquiriesOf = (saleId: string) =>
   collection(db, 'apps', 'going-once', 'sales', saleId, 'inquiries');
 
 const listen = (
@@ -89,6 +89,20 @@ export const startHandledInquiriesListener = (
       orderBy('handledAt', 'desc'),
       limit(HANDLED_INBOX_LIMIT),
     ),
+    onChange,
+    onError,
+  );
+
+/** Every inquiry about one thing, in no set order; a thing takes at most 40. */
+export const startThingInquiriesListener = (
+  saleId: string,
+  itemId: string,
+  onChange: (inquiries: Inquiry[]) => void,
+  onError: (error: unknown) => void,
+) =>
+  listen(
+    saleId,
+    query(inquiriesOf(saleId), where('itemId', '==', itemId)),
     onChange,
     onError,
   );
