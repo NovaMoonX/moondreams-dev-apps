@@ -31,11 +31,13 @@ const FINAL_CODES = [
 type Phase =
   | { name: 'idle' }
   | { name: 'building' }
-  | { name: 'ready'; url: string }
+  | { name: 'ready'; built: Built }
   | { name: 'failed'; reason: string; canRetry: boolean };
 
 interface Built {
   url: string;
+  photoCount: number;
+  sizeBytes: number;
 }
 
 const buildCallable = httpsCallable<
@@ -43,18 +45,28 @@ const buildCallable = httpsCallable<
   { path: string; photoCount: number; sizeBytes: number }
 >(functions, 'buildSalePhotoArchive', { timeout: BUILD_TIMEOUT_MS });
 
-/** A build keeps running when the sheet closes, so reopening finds it by sale. */
-const running = new Map<string, Promise<Built>>();
+/** How long a finished zip is offered again on reopening before the sheet asks for a fresh build. */
+const KEEP_BUILT_MS = 10 * 60_000;
+
+/** A build keeps running when the sheet closes, and a finished one is kept a while, so reopening finds it by sale. */
+const builds = new Map<string, { build: Promise<Built>; startedAt: number }>();
+
+const findBuild = (saleId: string) => {
+  const found = builds.get(saleId);
+  return found !== undefined && Date.now() - found.startedAt < KEEP_BUILT_MS
+    ? found.build
+    : null;
+};
 
 const startBuild = (saleId: string) => {
-  const existing = running.get(saleId);
-  if (existing) return existing;
-  const started = buildCallable({ saleId })
-    .then(({ data }) => getDownloadURL(ref(storage, data.path)))
-    .then((url) => ({ url }))
-    .finally(() => running.delete(saleId));
-  running.set(saleId, started);
-  return started;
+  const build = buildCallable({ saleId }).then(async ({ data }) => ({
+    url: await getDownloadURL(ref(storage, data.path)),
+    photoCount: data.photoCount,
+    sizeBytes: data.sizeBytes,
+  }));
+  build.catch(() => builds.delete(saleId));
+  builds.set(saleId, { build, startedAt: Date.now() });
+  return build;
 };
 
 const toFailure = (error: unknown): Phase => {
@@ -78,6 +90,9 @@ function getArchiveTotals(items: Item[]) {
   };
 }
 
+const describePhotos = (count: number) =>
+  `${count.toLocaleString()} ${count === 1 ? 'photo' : 'photos'}`;
+
 const formatAbout = (bytes: number) =>
   bytes < MEGABYTE
     ? 'under 1 MB'
@@ -93,13 +108,13 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
   const items = useAppSelector((state) => selectItems(state, saleId));
   const { count, bytes } = getArchiveTotals(items);
   const [phase, setPhase] = useState<Phase>(() =>
-    running.has(saleId) ? { name: 'building' } : { name: 'idle' },
+    findBuild(saleId) === null ? { name: 'idle' } : { name: 'building' },
   );
   const isTooMany = count > MAX_PHOTOS;
 
   const watch = (build: Promise<Built>) =>
     build.then(
-      ({ url }) => setPhase({ name: 'ready', url }),
+      (built) => setPhase({ name: 'ready', built }),
       (error: unknown) => setPhase(toFailure(error)),
     );
 
@@ -109,21 +124,23 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
   };
 
   useEffect(() => {
-    const pending = running.get(saleId);
-    if (pending) void watch(pending);
-    // Only on open: it picks up a build that began before the sheet was closed.
+    const pending = findBuild(saleId);
+    if (pending !== null) void watch(pending);
+    // Only on open: it picks up a build that began, or finished, while the sheet was closed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const summary = (() => {
+  const getSummary = () => {
+    if (phase.name === 'ready')
+      return `${describePhotos(phase.built.photoCount)} · ${formatAbout(phase.built.sizeBytes)}`;
     if (count === 0)
       return 'Nothing to save yet. Photos of Available and Pending things land here.';
     if (isTooMany)
       return "That's more than 1,500 photos. Save fewer at a time.";
-    return `${count} ${count === 1 ? 'photo' : 'photos'} · ${formatAbout(bytes)} · best on Wi-Fi`;
-  })();
+    return `${describePhotos(count)} · ${formatAbout(bytes)} · best on Wi-Fi`;
+  };
 
-  const body = (() => {
+  const getBody = () => {
     if (phase.name === 'building')
       return (
         <p className='text-muted-foreground flex items-center gap-2 text-sm'>
@@ -150,12 +167,15 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
         photos at listing quality. Sold and taken-off things are left out.
       </p>
     );
-  })();
+  };
 
-  const primary = (() => {
+  const getPrimary = () => {
     if (phase.name === 'ready')
       return (
-        <Button type='button' onClick={() => window.location.assign(phase.url)}>
+        <Button
+          type='button'
+          onClick={() => window.location.assign(phase.built.url)}
+        >
           Download
         </Button>
       );
@@ -169,13 +189,13 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
         {phase.name === 'failed' ? 'Build again' : 'Build the zip'}
       </Button>
     );
-  })();
+  };
 
   return (
     <FormSheet isOpen onClose={onClose} title='Save all photos'>
       <div className='space-y-3 pb-4'>
-        <p className='text-foreground font-medium'>{summary}</p>
-        {body}
+        <p className='text-foreground font-medium'>{getSummary()}</p>
+        {getBody()}
       </div>
       <ModalFooterActions
         cancelAction={
@@ -183,7 +203,7 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
             Close
           </Button>
         }
-        rightActions={primary}
+        rightActions={getPrimary()}
       />
     </FormSheet>
   );
