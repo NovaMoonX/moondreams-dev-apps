@@ -19,6 +19,7 @@ import {
   MAX_BUYER_NOTE_LENGTH,
   MAX_PICKUP_AREA_LENGTH,
   MAX_SALE_NAME_LENGTH,
+  SALE_DETAIL_NOTES,
   SALE_NAME_SUGGESTIONS,
 } from '@apps/going-once/constants';
 import { startSale } from '@apps/going-once/store/actions/saleActions';
@@ -151,6 +152,9 @@ function SaleFormSheet({
               />
             )}
           </Field>
+          <p className='text-muted-foreground text-xs text-pretty'>
+            {SALE_DETAIL_NOTES.name}
+          </p>
           <SuggestionChips
             label='Ideas'
             suggestions={SALE_NAME_SUGGESTIONS}

@@ -24,12 +24,19 @@ interface ImageViewerProps {
   slides: ViewerSlide[];
   startIndex: number;
   onClose: () => void;
+  /** What the pictures are, for screen readers; defaults to screenshots. */
+  label?: string;
 }
 
 const SWIPE_PX = 50;
 
 /** Pictures full screen in the same tab, over whatever is open; closes only its own layer. */
-function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
+function ImageViewer({
+  slides,
+  startIndex,
+  onClose,
+  label = 'Screenshots',
+}: ImageViewerProps) {
   const [index, setIndex] = useState(startIndex);
   const [pick, setPick] = useState({ slide: startIndex, picture: 0 });
   const [hiddenNotes, setHiddenNotes] = useState<number[]>([]);
@@ -58,7 +65,9 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Tab') {
         const focusable = Array.from(
-          root.current?.querySelectorAll<HTMLElement>('button:not([disabled])') ?? [],
+          root.current?.querySelectorAll<HTMLElement>(
+            'button:not([disabled])',
+          ) ?? [],
         );
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
@@ -96,7 +105,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
       id={dialogId}
       role='dialog'
       aria-modal='true'
-      aria-label='Screenshots'
+      aria-label={label}
       tabIndex={-1}
       className='fixed inset-0 z-100 flex flex-col bg-black text-white outline-none'
     >
@@ -120,7 +129,7 @@ function ImageViewer({ slides, startIndex, onClose }: ImageViewerProps) {
           </Button>
         ) : null}
         {count > 1 ? (
-          <span className='text-xs tabular-nums text-white/70'>
+          <span className='text-xs text-white/70 tabular-nums'>
             {index + 1} / {count}
           </span>
         ) : null}

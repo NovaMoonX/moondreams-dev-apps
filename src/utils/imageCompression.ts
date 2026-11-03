@@ -1,9 +1,12 @@
 /** What a picked photo is for, which decides how far it is shrunk before upload. */
-export type ImageUse = 'thumbnail' | 'avatar' | 'photo' | 'cover' | 'document';
+export type ImageUse =
+  'thumbnail' | 'avatar' | 'photo' | 'cover' | 'document' | 'listing';
 
 interface ImageUseSize {
   maxDimension: number;
   quality: number;
+  /** The one format a use is encoded in, for a photo that leaves for places that don't all open WebP; WebP (JPEG on Safari) when omitted. */
+  type?: 'image/jpeg';
 }
 
 export const IMAGE_USE_SIZES: Record<ImageUse, ImageUseSize> = {
@@ -12,6 +15,7 @@ export const IMAGE_USE_SIZES: Record<ImageUse, ImageUseSize> = {
   photo: { maxDimension: 1280, quality: 0.82 },
   cover: { maxDimension: 1600, quality: 0.82 },
   document: { maxDimension: 2400, quality: 0.88 },
+  listing: { maxDimension: 2048, quality: 0.88, type: 'image/jpeg' },
 };
 
 /** Kept under Storage's 5 MB photo rule with room to spare. */
@@ -39,7 +43,7 @@ const toNamedFile = (blob: Blob, source: File) => {
   return file;
 };
 
-const withDecodedImage = async <T,>(
+const withDecodedImage = async <T>(
   file: File,
   onDecoded: (image: HTMLImageElement) => Promise<T>,
   onFailed: T,
@@ -61,6 +65,7 @@ const encodeImage = async (
   image: HTMLImageElement,
   maxDimension: number,
   quality: number,
+  type?: ImageUseSize['type'],
 ): Promise<Blob | null> => {
   const scale = Math.min(
     1,
@@ -71,10 +76,16 @@ const encodeImage = async (
   canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
   const context = canvas.getContext('2d');
   if (!context) return null;
+  if (type === 'image/jpeg') {
+    context.fillStyle = '#fff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+  }
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  const toBlob = (type: string) =>
-    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, quality));
-  const webp = await toBlob('image/webp');
+  const toBlob = (mimeType: string) =>
+    new Promise<Blob | null>((resolve) =>
+      canvas.toBlob(resolve, mimeType, quality),
+    );
+  const webp = type === undefined ? await toBlob('image/webp') : null;
   if (webp?.type === 'image/webp') return webp;
   // Safari can't encode WebP and hands back a PNG, which is larger than the original.
   const jpeg = await toBlob('image/jpeg');
@@ -86,8 +97,10 @@ const fitsAlready = (
   image: HTMLImageElement,
   maxDimension: number,
   maxBytes: number,
+  type?: ImageUseSize['type'],
 ) =>
   shrunkFiles.has(file) &&
+  (type === undefined || file.type === type) &&
   file.size <= maxBytes &&
   Math.max(image.naturalWidth, image.naturalHeight) <= maxDimension;
 
@@ -109,7 +122,7 @@ const getAttempts = ({ maxDimension, quality }: ImageUseSize) => [
   })),
 ];
 
-/** Shrinks a photo for its use to WebP (JPEG on Safari) under `maxBytes`; `null` when this browser can't open it (HEIC on a computer). */
+/** Shrinks a photo for its use to WebP (JPEG on Safari, or always JPEG for a use that names it) under `maxBytes`; `null` when this browser can't open it (HEIC on a computer). */
 export async function compressImageForUse(
   file: File,
   use: ImageUse,
@@ -121,12 +134,18 @@ export async function compressImageForUse(
   return withDecodedImage<File | null>(
     file,
     async (image) => {
-      if (fitsAlready(file, image, size.maxDimension, maxBytes)) return file;
+      if (fitsAlready(file, image, size.maxDimension, maxBytes, size.type))
+        return file;
       const blob = await getAttempts(size).reduce<Promise<Blob | null>>(
         async (previous, attempt) => {
           const found = await previous;
           if (found && found.size <= maxBytes) return found;
-          return encodeImage(image, attempt.maxDimension, attempt.quality);
+          return encodeImage(
+            image,
+            attempt.maxDimension,
+            attempt.quality,
+            size.type,
+          );
         },
         Promise.resolve(null),
       );

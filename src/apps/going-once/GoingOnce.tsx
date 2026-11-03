@@ -6,13 +6,19 @@ import { ChevronLeft, Inbox, Store, Tag } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import EmptyCard from '@/components/EmptyCard';
+import IconBadge from '@/components/IconBadge';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen, useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import AuthRequiredState from '@/ui/AuthRequiredState';
 import Loading from '@/ui/Loading';
+import InboxTab from '@apps/going-once/components/inbox/InboxTab';
+import CoSellerIntro from '@apps/going-once/components/people/CoSellerIntro';
+import RemovedFromSale from '@apps/going-once/components/people/RemovedFromSale';
+import ItemsSection from '@apps/going-once/components/things/ItemsSection';
 import SaleFormSheet from '@apps/going-once/components/sales/SaleFormSheet';
+import SaleTab from '@apps/going-once/components/sales/SaleTab';
 import SalesList from '@apps/going-once/components/sales/SalesList';
 import {
   CREATE_SALES_GATE_ID,
@@ -21,46 +27,43 @@ import {
 } from '@apps/going-once/constants';
 import { useGoingOnceSync } from '@apps/going-once/hooks/useGoingOnceSync';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
+import { useJoinFromInvites } from '@apps/going-once/hooks/useJoinFromInvites';
 import { useGoingOnceUrlState } from '@apps/going-once/hooks/useGoingOnceUrlState';
+import { setRemovedFrom, type RemovedFrom } from '@apps/going-once/store';
 import {
+  selectMyInvites,
+  selectNewInquiries,
+  selectRemovedFrom,
   selectSaleById,
   selectSales,
   selectSalesStatus,
 } from '@apps/going-once/store/selectors';
-import type { GoingOnceTab, Sale } from '@apps/going-once/types';
+import type {
+  GoingOnceTab,
+  Sale,
+  SaleEmailInvite,
+} from '@apps/going-once/types';
 
-const TAB_ICONS: Record<GoingOnceTab, ReactNode> = {
-  things: <Tag className='h-5 w-5' />,
-  inbox: <Inbox className='h-5 w-5' />,
-  sale: <Store className='h-5 w-5' />,
-};
-
-const TAB_PLACEHOLDERS: Record<GoingOnceTab, { icon: string; text: string }> = {
-  things: {
-    icon: '🏷️',
-    text: 'The things you add to this sale will show here.',
-  },
-  inbox: {
-    icon: '📬',
-    text: 'When someone is interested in a thing, their message will land here.',
-  },
-  sale: {
-    icon: '🧾',
-    text: 'Where the sale stands, who is helping and its details will live here.',
-  },
+const getTabIcon = (tab: GoingOnceTab, newCount: number): ReactNode => {
+  if (tab === 'things') return <Tag className='h-5 w-5' />;
+  if (tab === 'sale') return <Store className='h-5 w-5' />;
+  return <IconBadge icon={<Inbox className='h-5 w-5' />} count={newCount} />;
 };
 
 /** A floating pill at the bottom of the screen with the sale's three tabs. */
 function SaleTabs({
   value,
+  newCount,
   onChange,
 }: {
   value: GoingOnceTab;
+  newCount: number;
   onChange: (tab: GoingOnceTab) => void;
 }) {
   return (
     <nav
       aria-label='Sale sections'
+      data-bottom-bar
       className='fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] left-1/2 z-20 max-w-[calc(100vw-2rem)] -translate-x-1/2'
     >
       <ul className='border-border bg-background flex items-center gap-1 rounded-full border p-1.5 shadow-lg'>
@@ -71,7 +74,7 @@ function SaleTabs({
               <Button
                 type='button'
                 variant='tertiary'
-                aria-label={`${GOING_ONCE_TAB_LABELS[tab]} tab`}
+                aria-label={`${GOING_ONCE_TAB_LABELS[tab]} tab${tab === 'inbox' && newCount > 0 ? `, ${newCount} new` : ''}`}
                 aria-current={isSelected ? 'page' : undefined}
                 onClick={() => onChange(tab)}
                 className={join(
@@ -81,7 +84,7 @@ function SaleTabs({
                     : 'text-muted-foreground!',
                 )}
               >
-                {TAB_ICONS[tab]}
+                {getTabIcon(tab, newCount)}
                 {GOING_ONCE_TAB_LABELS[tab]}
               </Button>
             </li>
@@ -105,6 +108,19 @@ function pickOpenSaleId(
   return null;
 }
 
+/** A `?sale=` link to a sale that isn't in the person's sales (and that they aren't about to join): the same card as a removal, with nothing known about the sale. */
+function toUnreadableLink(
+  saleId: string | null,
+  sales: Sale[],
+  invites: SaleEmailInvite[],
+  isListChosen: boolean,
+): RemovedFrom | null {
+  if (saleId === null || isListChosen) return null;
+  if (sales.some((sale) => sale.id === saleId)) return null;
+  if (invites.some((invite) => invite.saleId === saleId)) return null;
+  return { saleId, name: null, ownerUid: null };
+}
+
 function GoingOnce() {
   useGoingOnceTheme();
   const { user, loading } = useAuth();
@@ -115,12 +131,34 @@ function GoingOnce() {
   const areGatesRead = useAppSelector(
     (state) => state.featureGates.byApp['going-once'] !== undefined,
   );
-  const { saleId, activeTab, openSale, closeSale, showTab } =
-    useGoingOnceUrlState();
+  const {
+    saleId,
+    thingId,
+    inquiryId,
+    inboxView,
+    showInboxView,
+    switchInboxView,
+    openInquiry,
+    closeInquiry,
+    activeTab,
+    statusView,
+    showStatusView,
+    showThingsOn,
+    openSale,
+    closeSale,
+    showTab,
+    openThing,
+    closeThing,
+  } = useGoingOnceUrlState();
   const sales = useAppSelector(selectSales);
   const salesStatus = useAppSelector(selectSalesStatus);
   const [isStartOpen, setIsStartOpen] = useState(false);
   const [isListChosen, setIsListChosen] = useState(false);
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  const changeTab = (tab: GoingOnceTab) => {
+    setResumeId(null);
+    return showTab(tab);
+  };
 
   const openSaleId = pickOpenSaleId(
     sales,
@@ -128,8 +166,16 @@ function GoingOnce() {
     salesStatus === 'ready',
     isListChosen,
   );
-  useGoingOnceSync(uid, openSaleId);
+  const verifiedEmail = user?.emailVerified ? (user.email ?? null) : null;
+  useGoingOnceSync(uid, verifiedEmail, openSaleId);
+  useJoinFromInvites(uid);
+  const dispatch = useAppDispatch();
+  const storedRemoval = useAppSelector(selectRemovedFrom);
+  const myInvites = useAppSelector(selectMyInvites);
   const sale = useAppSelector((state) => selectSaleById(state, openSaleId));
+  const newInquiryCount = useAppSelector(
+    (state) => selectNewInquiries(state, openSaleId).length,
+  );
 
   if (loading) {
     return <Loading />;
@@ -156,7 +202,22 @@ function GoingOnce() {
     );
   }
 
-  const placeholder = TAB_PLACEHOLDERS[activeTab];
+  const removedFrom =
+    storedRemoval ?? toUnreadableLink(saleId, sales, myInvites, isListChosen);
+
+  if (removedFrom) {
+    return (
+      <RemovedFromSale
+        saleName={removedFrom.name}
+        sellerUid={removedFrom.ownerUid}
+        onBack={() => {
+          dispatch(setRemovedFrom(null));
+          setIsListChosen(true);
+          closeSale();
+        }}
+      />
+    );
+  }
 
   return (
     <>
@@ -188,9 +249,62 @@ function GoingOnce() {
                 )}
               </div>
             </header>
-            <EmptyCard icon={placeholder.icon}>{placeholder.text}</EmptyCard>
+            <CoSellerIntro sale={sale} uid={user.uid} />
+            {activeTab === 'things' && (
+              <ItemsSection
+                saleId={sale.id}
+                uid={user.uid}
+                openId={thingId}
+                onOpenThing={openThing}
+                onCloseThing={closeThing}
+                statusView={statusView}
+                onStatusViewChange={showStatusView}
+                resumeId={resumeId}
+                onResumeTaken={() => setResumeId(null)}
+              />
+            )}
+            {activeTab === 'sale' && (
+              <SaleTab
+                sale={sale}
+                uid={user.uid}
+                myEmail={user.email}
+                onLeft={() => {
+                  setIsListChosen(true);
+                  closeSale();
+                }}
+                onOpenStatus={showThingsOn}
+                onDeleted={() => {
+                  setIsListChosen(true);
+                  closeSale();
+                }}
+              />
+            )}
+            {activeTab === 'inbox' && (
+              <InboxTab
+                saleId={sale.id}
+                uid={user.uid}
+                view={inboxView}
+                onViewChange={showInboxView}
+                onSwitchView={switchInboxView}
+                openId={inquiryId}
+                onOpen={openInquiry}
+                onClose={closeInquiry}
+                openThingId={thingId}
+                onOpenThing={openThing}
+                onCloseThing={closeThing}
+                onFinishThing={(id) => {
+                  setResumeId(id);
+                  void showTab('things');
+                }}
+                onOpenSale={() => changeTab('sale')}
+              />
+            )}
           </div>
-          <SaleTabs value={activeTab} onChange={showTab} />
+          <SaleTabs
+            value={activeTab}
+            newCount={newInquiryCount}
+            onChange={changeTab}
+          />
         </div>
       ) : (
         <SalesList

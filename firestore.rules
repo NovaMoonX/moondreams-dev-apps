@@ -88,6 +88,16 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/apps/nine-lives/households/$(householdId)).data.members;
     }
 
+    function isSaleMember(saleId) {
+      return request.auth != null
+        && request.auth.uid in get(/databases/$(database)/documents/apps/going-once/sales/$(saleId)).data.members;
+    }
+
+    function isSaleSeller(saleId) {
+      return request.auth != null
+        && request.auth.uid == get(/databases/$(database)/documents/apps/going-once/sales/$(saleId)).data.ownerUid;
+    }
+
     // Trips are judged by calendar day, and `endDate` is the UTC midnight that starts the last day.
     function isTripActive(trip) {
       return request.time.toMillis() >= trip.startDate && request.time.toMillis() < trip.endDate + 86400000;
@@ -335,15 +345,138 @@ service cloud.firestore {
     // --- App: going-once ---
 
     // A sale is read by the seller and co-sellers. Anyone signed in may start one while the `create-sales`
-    // switch is open for them, as its seller and only member. Editing and deleting arrive with their issues.
+    // switch is open for them, as its seller and only member. The seller may change its name, pickup area and note for
+    // buyers; deleting is the `deleteSale` function's. People come and go by two narrow updates that touch only
+    // `members`, `memberJoinedAt` and `lastEditedAt`: the seller removes a co-seller or a co-seller leaves, and someone
+    // with a verified email the seller added joins as themselves, using up their invitation in the same commit.
+    // The public link's two fields on the sale are written only by `changeSalePublicLink`: a new sale starts without
+    // them and no update names them. `publicLinks` has no rule, so no client reads or writes it.
     match /apps/going-once/sales/{saleId} {
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function joinedAtOf(data) {
+        return data.get('memberJoinedAt', {});
+      }
+
+      function isMemberRemoval() {
+        let removed = resource.data.members.removeAll(request.resource.data.members);
+        return request.auth != null
+          && request.auth.uid in resource.data.members
+          && changedKeys().hasOnly(['members', 'memberJoinedAt', 'lastEditedAt'])
+          && removed.size() == 1
+          && removed[0] != resource.data.ownerUid
+          && (removed[0] == request.auth.uid || request.auth.uid == resource.data.ownerUid)
+          && request.resource.data.members.size() == resource.data.members.size() - 1
+          && request.resource.data.members.hasAll(resource.data.members.removeAll(removed))
+          && joinedAtOf(request.resource.data).diff(joinedAtOf(resource.data)).affectedKeys().hasOnly([removed[0]])
+          && !(removed[0] in joinedAtOf(request.resource.data))
+          && request.resource.data.lastEditedAt is int;
+      }
+
+      function isSaleEmailInviteJoinValid() {
+        let uid = request.auth.uid;
+        let email = request.auth.token.get('email', '').lower();
+        let invitePath = /databases/$(database)/documents/apps/going-once/emailInvites/$(saleId + '_' + email);
+        let added = request.resource.data.members.removeAll(resource.data.members);
+        return request.auth.token.get('email_verified', false) == true
+          && email != ''
+          && !(uid in resource.data.members)
+          && changedKeys().hasOnly(['members', 'memberJoinedAt', 'lastEditedAt'])
+          && request.resource.data.members.hasAll(resource.data.members)
+          && request.resource.data.members.size() == resource.data.members.size() + 1
+          && added.size() == 1
+          && added[0] == uid
+          && joinedAtOf(request.resource.data).diff(joinedAtOf(resource.data)).affectedKeys().hasOnly([uid])
+          && request.resource.data.memberJoinedAt[uid] is int
+          && request.resource.data.lastEditedAt is int
+          && exists(invitePath)
+          && get(invitePath).data.saleId == saleId
+          && get(invitePath).data.invitedBy == resource.data.ownerUid
+          && !existsAfter(invitePath);
+      }
+
       allow read: if request.auth != null && request.auth.uid in resource.data.members;
       allow create: if request.auth != null
         && isGateOpen('going-once', 'create-sales', 'everyone')
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.members == [request.auth.uid];
-      allow update, delete: if false;
+        && request.resource.data.members == [request.auth.uid]
+        && request.resource.data.get('publicLinkId', null) == null
+        && request.resource.data.get('publicLinkChangedAt', null) == null;
+      allow update: if (request.auth != null
+          && request.auth.uid == resource.data.ownerUid
+          && changedKeys().hasOnly(['name', 'pickupArea', 'buyerNote', 'lastEditedAt'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 80
+          && (request.resource.data.pickupArea == null
+            || (request.resource.data.pickupArea is string && request.resource.data.pickupArea.size() <= 80))
+          && (request.resource.data.buyerNote == null
+            || (request.resource.data.buyerNote is string && request.resource.data.buyerNote.size() <= 300))
+          && request.resource.data.lastEditedAt is int)
+        || isMemberRemoval()
+        || (request.auth != null && isSaleEmailInviteJoinValid());
+      allow delete: if false;
+    }
+
+    // The seller's standing welcome for an email address. The person it is for reads and uses it up when they join
+    // (with a verified email, so a made-up account can't claim it) and never reads the sale before that; the sale's
+    // members read it; only the sale's seller creates or withdraws it. It is never changed in place.
+    match /apps/going-once/emailInvites/{inviteId} {
+      function isInvitee(email) {
+        return request.auth != null
+          && request.auth.token.get('email_verified', false) == true
+          && request.auth.token.get('email', '').lower() == email;
+      }
+
+      allow read: if resource != null && isInvitee(resource.data.email);
+      allow read: if resource != null && isSaleMember(resource.data.saleId);
+      allow create: if isSaleSeller(request.resource.data.saleId)
+        && inviteId == request.resource.data.saleId + '_' + request.resource.data.email
+        && request.resource.data.email == request.resource.data.email.lower()
+        && request.resource.data.invitedBy == request.auth.uid;
+      allow delete: if isInvitee(resource.data.email) || isSaleSeller(resource.data.saleId);
+    }
+
+    // A thing is read and written by the sale's members, judged by the sale in its path and never a field of the thing.
+    // Who made it and when never change after it is made; the seller may delete any thing, a co-seller only one they
+    // made in the last ten minutes that was never held or sold (`createdAt` is epoch milliseconds, and a new thing's
+    // may be at most a minute ahead of the server so a wrong phone clock cannot make a thing undeletable).
+    match /apps/going-once/sales/{saleId}/items/{itemId} {
+      allow read: if isSaleMember(saleId);
+      allow create: if isSaleMember(saleId) && isCreatedByMe()
+        && request.resource.data.createdAt is int
+        && request.resource.data.createdAt <= request.time.toMillis() + 60000;
+      allow update: if isSaleMember(saleId) && isCreatedByKept()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['createdAt', 'saleId', 'id']);
+      allow delete: if isSaleSeller(saleId)
+        || (isSaleMember(saleId)
+          && resource.data.createdBy == request.auth.uid
+          && request.time.toMillis() < resource.data.createdAt + 600000
+          && resource.data.get('sale', null) == null
+          && resource.data.get('pending', null) == null);
+    }
+
+    // An inquiry is written only by the server, so no client creates one. The sale's members read it, delete it,
+    // and change only whether it has been handled and by whom: Handled carries the caller and a time, New carries neither.
+    // `limits` (the day's interest count) has no rule, so no client reads or writes it.
+    match /apps/going-once/sales/{saleId}/inquiries/{inquiryId} {
+      function isHandledChange() {
+        let next = request.resource.data;
+        return next.status in ['NEW', 'HANDLED']
+          && (next.status == 'HANDLED'
+            ? next.handledBy == request.auth.uid && next.handledAt is int
+            : next.handledBy == null && next.handledAt == null);
+      }
+
+      allow read: if isSaleMember(saleId);
+      allow create: if false;
+      allow update: if isSaleMember(saleId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'handledBy', 'handledAt'])
+        && isHandledChange();
+      allow delete: if isSaleMember(saleId);
     }
 
     // --- App: waypoint ---
