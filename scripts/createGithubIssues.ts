@@ -609,7 +609,13 @@ const run = async () => {
   );
   const ISSUE_LIST_LIMIT = 2000;
   const existingIssues = ghJson<
-    { title: string; number: number; url: string; body: string }[]
+    {
+      title: string;
+      number: number;
+      url: string;
+      body: string;
+      stateReason: string;
+    }[]
   >([
     'issue',
     'list',
@@ -620,19 +626,22 @@ const run = async () => {
     '--limit',
     String(ISSUE_LIST_LIMIT),
     '--json',
-    'title,number,url,body',
+    'title,number,url,body,stateReason',
   ]);
   if (existingIssues.length >= ISSUE_LIST_LIMIT)
     fail(
       `The repo has ${ISSUE_LIST_LIMIT}+ issues, so existing ones may be missed and duplicated. Raise ISSUE_LIST_LIMIT first.`,
     );
-  const issuesByTitle = existingIssues.reduce(
-    (map, issue) => {
-      const key = issue.title.toLowerCase();
-      return map.set(key, [...(map.get(key) ?? []), issue]);
-    },
-    new Map<string, typeof existingIssues>(),
-  );
+  // An issue closed as a duplicate is never adopted, so its original is.
+  const issuesByTitle = existingIssues
+    .filter((issue) => issue.stateReason !== 'DUPLICATE')
+    .reduce(
+      (map, issue) => {
+        const key = issue.title.toLowerCase();
+        return map.set(key, [...(map.get(key) ?? []), issue]);
+      },
+      new Map<string, typeof existingIssues>(),
+    );
   // Older roadmaps were titled "<App>: Title" with no number, so that form is
   // adopted too. An issue made before titles carried the app prefix is adopted
   // by its bare title only when that title is unique, so a common title is
