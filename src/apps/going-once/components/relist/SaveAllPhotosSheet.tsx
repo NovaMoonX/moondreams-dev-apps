@@ -119,8 +119,9 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
     );
 
   const build = () => {
+    if (phase.name === 'building') return;
     setPhase({ name: 'building' });
-    void watch(startBuild(saleId));
+    void watch(findBuild(saleId) ?? startBuild(saleId));
   };
 
   useEffect(() => {
@@ -152,7 +153,7 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
       return (
         <p className='text-muted-foreground text-sm'>
           Your zip is ready. On an iPhone it lands in Files; on Android and
-          computers, in Downloads.
+          computers, in Downloads. This download stays here for 10 minutes.
         </p>
       );
     if (phase.name === 'failed')
@@ -163,10 +164,16 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
       );
     return (
       <p className='text-muted-foreground text-sm'>
-        One folder for each Available or Pending thing, named after it, with its
-        photos at listing quality. Sold and taken-off things are left out.
+        One folder for each Available or Pending thing, including any not listed
+        yet, named after it, with its photos at listing quality. Sold and
+        taken-off things are left out.
       </p>
     );
+  };
+
+  const getPrimaryLabel = () => {
+    if (phase.name === 'building') return 'Building…';
+    return phase.name === 'failed' ? 'Build again' : 'Build the zip';
   };
 
   const getPrimary = () => {
@@ -186,7 +193,7 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
         disabled={phase.name === 'building' || count === 0 || isTooMany}
         onClick={build}
       >
-        {phase.name === 'failed' ? 'Build again' : 'Build the zip'}
+        {getPrimaryLabel()}
       </Button>
     );
   };
@@ -194,7 +201,9 @@ function SaveAllPhotosSheet({ saleId, onClose }: SaveAllPhotosSheetProps) {
   return (
     <FormSheet isOpen onClose={onClose} title='Save all photos'>
       <div className='space-y-3 pb-4'>
-        <p className='text-foreground font-medium'>{getSummary()}</p>
+        <p className='text-foreground font-medium text-pretty'>
+          {getSummary()}
+        </p>
         {getBody()}
       </div>
       <ModalFooterActions
