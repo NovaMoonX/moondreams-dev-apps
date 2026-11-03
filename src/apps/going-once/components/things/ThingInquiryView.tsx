@@ -7,6 +7,8 @@ import { getItemName } from '@apps/going-once/utils/listing';
 import {
   formatSentAt,
   getInquirerName,
+  getOwnMessage,
+  isHolder,
 } from '@apps/going-once/utils/inquiries';
 
 interface ThingInquiryViewProps {
@@ -21,7 +23,7 @@ interface ThingInquiryViewProps {
 }
 
 const getNote = (item: Item, inquiry: Inquiry, canHold: boolean) => {
-  if (item.pending?.inquiryId === inquiry.id)
+  if (isHolder(item.pending, inquiry))
     return `Held for ${getInquirerName(inquiry)}`;
   if (canHold) return null;
   return item.status === 'PENDING'
@@ -40,6 +42,7 @@ function ThingInquiryView({
   onHold,
 }: ThingInquiryViewProps) {
   const name = getInquirerName(inquiry);
+  const message = getOwnMessage(inquiry);
 
   return (
     <div className='space-y-4'>
@@ -47,13 +50,14 @@ function ThingInquiryView({
         <BackLink onBack={onBack} label={getItemName(item)} />
         <p className='text-lg font-semibold break-words'>{name} asked</p>
         <p className='text-muted-foreground text-sm'>
-          {formatSentAt(inquiry.createdAt, now)}
-          {inquiry.sendCount > 1 && ` · Sent ${inquiry.sendCount} times`}
+          {inquiry.sendCount > 1
+            ? `Sent ${inquiry.sendCount} times · latest ${formatSentAt(inquiry.lastSentAt, now)}`
+            : formatSentAt(inquiry.lastSentAt, now)}
         </p>
       </div>
-      <p className='text-sm break-words whitespace-pre-wrap'>
-        {inquiry.message ?? 'No message.'}
-      </p>
+      {message !== null && (
+        <p className='text-sm break-words whitespace-pre-wrap'>{message}</p>
+      )}
       <StatusViewFooter
         footerNode={footerNode}
         note={getNote(item, inquiry, canHold)}
@@ -65,10 +69,12 @@ function ThingInquiryView({
             size='lg'
             rounded='full'
             className='w-full'
+            aria-label={`Hold ${getItemName(item)} for ${name}`}
             onClick={onHold}
           >
-            <span className='truncate'>
-              Hold {getItemName(item)} for {name}
+            <span className='flex min-w-0'>
+              <span className='whitespace-pre'>Hold for </span>
+              <span className='truncate'>{name}</span>
             </span>
           </Button>
         )}

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -22,6 +22,7 @@ import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import FactsLine from '@/components/FactsLine';
 import SectionDivider from '@/components/SectionDivider';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import LinkPreviewCard from '@/components/LinkPreviewCard';
 import PhotoStrip from '@/components/PhotoStrip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
@@ -53,6 +54,8 @@ import type { Inquiry, Item } from '@apps/going-once/types';
 import {
   formatSentAt,
   getInquirerName,
+  getOwnMessage,
+  isHolder,
 } from '@apps/going-once/utils/inquiries';
 import {
   canDeleteItem,
@@ -132,6 +135,8 @@ function StoreLink({ item }: { item: Item }) {
   );
 }
 
+const INTEREST_SHOWN = 3;
+
 const getPrivateRows = (item: Item): Row[] => {
   const bought = [
     item.boughtFrom,
@@ -194,6 +199,8 @@ function ThingDrawer({
   );
   const [hold, setHold] = useState<HoldDraft>(holdStart);
   const [inquiryId, setInquiryId] = useState<string | null>(null);
+  const [isInterestExpanded, setIsInterestExpanded] = useState(false);
+  const interestRef = useRef<HTMLElement>(null);
   const { inquiries, hasFailed: haveInquiriesFailed } = useThingInquiries(
     item.saleId,
     item.id,
@@ -230,6 +237,7 @@ function ThingDrawer({
         }
       : null,
   ].filter((fact) => fact !== null);
+  const askedCount = inquiries?.length ?? 0;
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
   const offer = getThingOffer(item.status, isListable(item));
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
@@ -646,6 +654,21 @@ function ThingDrawer({
             className='text-muted-foreground min-w-0 text-sm'
             facts={facts}
           />
+          {askedCount > 0 && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className="text-muted-foreground! relative h-auto p-0 text-sm font-normal after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+              onClick={() =>
+                interestRef.current?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                })
+              }
+            >
+              {askedCount} asked
+            </Button>
+          )}
         </div>
         {isUnderFloor(item) && item.floorPriceCents !== null && (
           <p className='text-muted-foreground text-sm'>
@@ -688,43 +711,71 @@ function ThingDrawer({
             price.
           </p>
         )}
-        {((inquiries !== null && inquiries.length > 0) ||
-          haveInquiriesFailed) && (
-          <SectionDivider label='Interest' className='pt-2' />
-        )}
-        {haveInquiriesFailed && inquiries === null && (
-          <p className='text-muted-foreground text-sm'>
-            We couldn&apos;t load who asked. Check your connection and try
-            again.
-          </p>
-        )}
-        {inquiries !== null && inquiries.length > 0 && (
-          <ul className='space-y-2'>
-            {inquiries.map((inquiry) => (
-              <li key={inquiry.id}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='border-border bg-card h-auto min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left'
-                  onClick={() => {
-                    setInquiryId(inquiry.id);
-                    open('inquiry');
-                  }}
-                >
-                  <span className='min-w-0 flex-1 text-sm font-normal break-words'>
-                    {formatSentAt(inquiry.createdAt, now)} ·{' '}
-                    {getInquirerName(inquiry)} asked
-                    {item.pending?.inquiryId === inquiry.id && ' · Holding'}
-                  </span>
-                  <ChevronRight
-                    className='text-muted-foreground size-5 shrink-0'
-                    aria-hidden='true'
-                  />
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <section ref={interestRef} className='scroll-mt-2 space-y-4'>
+          {(askedCount > 0 || haveInquiriesFailed) && (
+            <SectionDivider label='Interest' className='pt-2' />
+          )}
+          {haveInquiriesFailed && inquiries === null && (
+            <p className='text-muted-foreground text-sm'>
+              We couldn&apos;t load who asked. Check your connection and try
+              again.
+            </p>
+          )}
+          {inquiries !== null && askedCount > 0 && (
+            <ul className='space-y-2'>
+              {(isInterestExpanded
+                ? inquiries
+                : inquiries.slice(0, INTEREST_SHOWN)
+              ).map((inquiry) => {
+                const message = getOwnMessage(inquiry);
+                return (
+                  <li key={inquiry.id}>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      className='border-border bg-card h-auto min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left'
+                      onClick={() => {
+                        setInquiryId(inquiry.id);
+                        open('inquiry');
+                      }}
+                    >
+                      <span className='min-w-0 flex-1'>
+                        <span className='text-foreground block truncate text-base font-medium'>
+                          {getInquirerName(inquiry)}
+                        </span>
+                        <span className='text-muted-foreground mt-0.5 line-clamp-2 text-sm font-normal text-pretty break-words'>
+                          {[
+                            isHolder(item.pending, inquiry) ? 'Holding' : null,
+                            formatSentAt(inquiry.lastSentAt, now),
+                            inquiry.sendCount > 1
+                              ? `Sent ${inquiry.sendCount} times`
+                              : null,
+                          ]
+                            .filter((part) => part !== null)
+                            .join(' · ')}
+                        </span>
+                        {message !== null && (
+                          <span className='text-foreground mt-1 line-clamp-1 text-sm font-normal break-words'>
+                            {message}
+                          </span>
+                        )}
+                      </span>
+                      <ChevronRight
+                        className='text-muted-foreground size-5 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {askedCount > INTEREST_SHOWN && !isInterestExpanded && (
+            <ShowMoreButton onClick={() => setIsInterestExpanded(true)}>
+              Show all {askedCount}
+            </ShowMoreButton>
+          )}
+        </section>
       </div>
       {deleteDialog}
     </DetailSheet>

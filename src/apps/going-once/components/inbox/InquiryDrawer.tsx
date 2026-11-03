@@ -236,7 +236,7 @@ function InquiryDrawer({
             {getStatusLine(inquiry, handledBy, now)}
           </p>
           {item === null ? (
-            <p className='text-sm font-medium break-words'>{thing}</p>
+            <p className='text-muted-foreground text-sm break-words'>{thing}</p>
           ) : (
             <Button
               type='button'
@@ -279,7 +279,7 @@ function InquiryDrawer({
                 isGrouped
                 isRoomy
                 icon={<CalendarClock />}
-                label={`Hold ${getItemName(item)} for ${name}`}
+                label={`Hold for ${name}`}
                 subtitle='Marks it pending, with their name on the hold'
                 hasChevron
                 onClick={onHold}
