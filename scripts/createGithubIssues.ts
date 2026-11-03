@@ -2,7 +2,7 @@
  * Creates an app's roadmap issues from its ISSUES.md and puts them on the
  * project board, so planning ends in real issues with one command.
  *
- *   npm run issues:create -- <app-id> [--app-name <name>] [--file <path>] [--yes]
+ *   npm run issues:create -- <app-id> [--app-name <name>] [--file <path>] [--base-file <path>] [--yes]
  *   npm run issues:create:dry-run -- <app-id> [--file <path>]
  *
  * ISSUES.md holds `### Issue N: Title` sections under `## <Tier>` headings
@@ -12,7 +12,10 @@
  * GitHub) becomes the real `#123`. Re-running is safe: an issue found by its
  * prefixed (`<App> N: Title` or the older `<App>: Title`) or bare title,
  * compared without case, is reused, keeps its board Status and its edited
- * body, and only gets its label, Apps and links. The app's name comes from
+ * body, and only gets its label, Apps and links. With `--base-file` (the
+ * roadmap as it stands on the base branch), only issues new since it are ever
+ * created: one the base had that matches nothing is listed, not made again.
+ * The app's name comes from
  * APP_REGISTRY, `--app-name`, or the first heading of the app's README.md
  * before the app is registered; a missing Apps option is added to the board,
  * keeping every item's existing Apps value. Needs `gh` signed in with the
@@ -66,7 +69,7 @@ const isDryRun =
   (process.env.npm_lifecycle_event ?? '').includes('dry-run') ||
   process.argv.includes('--dry-run');
 
-const VALUE_FLAGS = ['--file', '--app-name'];
+const VALUE_FLAGS = ['--file', '--app-name', '--base-file'];
 
 const readArgs = () => {
   const args = process.argv.slice(2).filter((arg) => arg !== '--dry-run');
@@ -86,6 +89,7 @@ const readArgs = () => {
     appId,
     file: readValue('--file'),
     appName: readValue('--app-name'),
+    baseFile: readValue('--base-file'),
     skipConfirm: args.includes('--yes'),
   };
   return result;
@@ -527,11 +531,17 @@ const readNameFromReadme = (appId: string) => {
 };
 
 const run = async () => {
-  const { appId: givenId, file, appName: givenName, skipConfirm } = readArgs();
+  const {
+    appId: givenId,
+    file,
+    appName: givenName,
+    baseFile,
+    skipConfirm,
+  } = readArgs();
   const appId =
     givenId ??
     fail(
-      'Usage: npm run issues:create -- <app-id> [--app-name <name>] [--file <path>] [--yes]',
+      'Usage: npm run issues:create -- <app-id> [--app-name <name>] [--file <path>] [--base-file <path>] [--yes]',
     );
 
   const app = APP_REGISTRY.find((entry) => entry.id === appId);
@@ -556,6 +566,23 @@ const run = async () => {
     ),
   );
   console.log('');
+
+  // An issue the base roadmap already had is never created again: when no
+  // issue on GitHub matches it, it is reported and left for a person.
+  const baseIssues =
+    baseFile && existsSync(baseFile)
+      ? parseRoadmap(readFileSync(baseFile, 'utf8'))
+      : [];
+  const baseNumbers = new Set(baseIssues.map((issue) => issue.number));
+  const baseTitles = new Set(
+    baseIssues.map((issue) => issue.title.toLowerCase()),
+  );
+  const isInBase = (issue: RoadmapIssue) =>
+    baseNumbers.has(issue.number) || baseTitles.has(issue.title.toLowerCase());
+  if (baseFile)
+    console.log(
+      `${issues.filter((issue) => !isInBase(issue)).length} of them are new since ${baseFile}; only those can be created.\n`,
+    );
 
   if (isDryRun) {
     console.log('Dry run: nothing was created.');
@@ -661,7 +688,8 @@ const run = async () => {
     return result;
   };
 
-  const created = issues.map((issue) => {
+  const skipped: RoadmapIssue[] = [];
+  const created = issues.flatMap((issue) => {
     const title = toGithubTitle(appName, issue);
     if (issue.tier) ensureLabel(repo, issue.tier, labels);
     const existing = findExisting(title, issue.title);
@@ -677,13 +705,20 @@ const run = async () => {
           '--add-label',
           issue.tier,
         ]);
-      return {
-        issue,
-        number: existing.number,
-        url: existing.url,
-        body: existing.body,
-        isNew: false,
-      };
+      return [
+        {
+          issue,
+          number: existing.number,
+          url: existing.url,
+          body: existing.body,
+          isNew: false,
+        },
+      ];
+    }
+    if (isInBase(issue)) {
+      console.log(`Not found, not created: ${title} (already in ${baseFile})`);
+      skipped.push(issue);
+      return [];
     }
     const createArgs = [
       'issue',
@@ -700,7 +735,7 @@ const run = async () => {
     );
     const number = Number(url.split('/').pop());
     console.log(`Created: #${number} ${title}`);
-    return { issue, number, url, body: issue.body, isNew: true };
+    return [{ issue, number, url, body: issue.body, isNew: true }];
   });
 
   created.forEach(({ number, isNew }) => {
@@ -744,6 +779,10 @@ const run = async () => {
   created.forEach(({ issue, number }) =>
     console.log(`  Issue ${issue.number} → #${number}`),
   );
+  if (skipped.length > 0)
+    console.log(
+      `\nNot created: ${skipped.length} issues the base roadmap already had match no issue on GitHub (a renamed issue's title, or one never created). Link or create them by hand:\n${skipped.map((issue) => `  Issue ${issue.number}: ${issue.title}`).join('\n')}`,
+    );
 };
 
 run();
