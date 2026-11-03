@@ -14,6 +14,9 @@ export function toSale(id: string, data: DocumentData): Sale {
     ownerUid: sale.ownerUid ?? '',
     createdBy: sale.createdBy ?? '',
     members: sale.members ?? [],
+    memberJoinedAt: sale.memberJoinedAt ?? {},
+    publicLinkId: sale.publicLinkId ?? null,
+    publicLinkChangedAt: sale.publicLinkChangedAt ?? null,
     createdAt: sale.createdAt ?? 0,
     lastEditedAt: sale.lastEditedAt ?? null,
   };

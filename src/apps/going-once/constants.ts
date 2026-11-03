@@ -1,7 +1,10 @@
 import type {
+  InboxView,
+  InterestResult,
   ItemCondition,
   ItemStatus,
   PaymentMethod,
+  SaleDetailField,
 } from '@apps/going-once/types';
 
 /** The feature switch for starting new sales (`FEATURE_GATES`). */
@@ -26,6 +29,44 @@ export const SALE_NAME_SUGGESTIONS = [
 export const MAX_SALE_NAME_LENGTH = 80;
 export const MAX_PICKUP_AREA_LENGTH = 80;
 export const MAX_BUYER_NOTE_LENGTH = 300;
+
+/** A public page's address in the app, followed by the link's id. */
+export const SALE_PAGE_PATH = '/going-once/s/';
+
+/** A public link id is 26 characters of the 32-letter share alphabet. */
+export const SALE_LINK_ID_PATTERN = /^[2-9a-hj-np-z]{26}$/;
+
+/** Co-sellers and waiting invites together, per sale. */
+export const MAX_CO_SELLERS = 10;
+
+/** The sale's editable details on the Sale tab: what each is called, what an empty one invites and what it tells the seller. */
+export const SALE_DETAILS: Record<
+  SaleDetailField,
+  { label: string; empty: string; hint: string | null }
+> = {
+  name: {
+    label: 'Name',
+    empty: 'Name your sale',
+    hint: 'Buyers see this. Leave out your name and address.',
+  },
+  pickupArea: {
+    label: 'Pickup area',
+    empty: 'Add a pickup area',
+    hint: 'An area, never your address. Buyers see this.',
+  },
+  buyerNote: {
+    label: 'Note for buyers',
+    empty: 'Add a note for buyers',
+    hint: 'Buyers see this.',
+  },
+};
+
+/** What a row says under a sale detail's value: all of them reach the public page. */
+export const SALE_DETAIL_NOTES: Record<SaleDetailField, string> = {
+  name: 'Buyers see this. Leave out your name and address.',
+  pickupArea: 'Buyers see this',
+  buyerNote: 'Buyers see this',
+};
 
 export const MAX_ITEM_PHOTOS = 12;
 export const MAX_ITEM_TITLE_LENGTH = 120;
@@ -67,6 +108,9 @@ export const CONDITION_LABELS: Record<ItemCondition, string> = {
   WELL_USED: 'Well used',
 };
 
+/** What a thing that buyers can't be shown yet is called where a status word would stand. */
+export const NOT_LISTED_LABEL = 'Not listed yet';
+
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   AVAILABLE: 'Available',
   PENDING: 'Pending',
@@ -76,6 +120,13 @@ export const STATUS_LABELS: Record<ItemStatus, string> = {
 
 /** The Things tab's switch; taken-off things sit at the end of Sold. */
 export const STATUS_VIEWS = ['AVAILABLE', 'PENDING', 'SOLD'] as const;
+
+/** The Things tab's status in the address (`?status=sold`); Available is the default and leaves the address clean. */
+export const STATUS_VIEW_PARAMS = {
+  available: 'AVAILABLE',
+  pending: 'PENDING',
+  sold: 'SOLD',
+} as const;
 
 export const PAYMENT_METHOD_OPTIONS = [
   { value: 'CASH', label: 'Cash' },
@@ -90,3 +141,39 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   ZELLE: 'Zelle',
   OTHER: 'Other',
 };
+
+export const MAX_INQUIRY_NAME_LENGTH = 80;
+export const MAX_INQUIRY_CONTACT_LENGTH = 254;
+export const MAX_INQUIRY_MESSAGE_LENGTH = 1000;
+
+export const HANDLED_INBOX_LIMIT = 30;
+
+export const INBOX_VIEWS = [
+  'new',
+  'handled',
+] as const satisfies readonly InboxView[];
+
+export const INBOX_VIEW_LABELS: Record<InboxView, string> = {
+  new: 'New',
+  handled: 'Handled',
+};
+
+export const INTEREST_REFUSALS: Record<
+  Exclude<InterestResult['status'], 'sent' | 'invalid'>,
+  string
+> = {
+  not_found: "This sale isn't taking messages anymore.",
+  not_available: 'This one just sold, sorry.',
+  busy: "This sale isn't taking messages right now. Try again tomorrow.",
+  full: 'This one already has plenty of messages. Try again later.',
+  slow_down: "That's a few messages in a row. Try again in a little while.",
+};
+
+export const INTEREST_FAILURE =
+  "Couldn't send. Check your connection and try again.";
+
+export const INTEREST_INVALID_FIELDS = {
+  name: 'Add your name.',
+  contact: "That phone or email doesn't look right.",
+  message: 'That message is too long.',
+} as const;

@@ -2,17 +2,12 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { deleteDoc, doc, FieldPath, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 
 import { db } from '@/lib/firebase/config';
+import { isValidEmail, normalizeEmail } from '@/utils/emailUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { ASSIGNABLE_MEMBER_ROLES } from '@apps/waypoint/constants';
 import { removeMyPendingRequest } from '@apps/waypoint/store/slices/pendingRequestsSlice';
 import type { TripEmailInvite, TripSpace } from '@apps/waypoint/types';
 import { isTripAdmin } from '@apps/waypoint/utils/roleGuards';
-
-export const normalizeEmail = (email: string) => email.trim().toLowerCase();
-
-const EMAIL_PATTERN = /^[^@\s/]+@[^@\s/]+\.[^@\s/]+$/;
-
-export const isValidEmail = (email: string) => EMAIL_PATTERN.test(normalizeEmail(email));
 
 function inviteRef(tripId: string, email: string) {
   return doc(db, 'apps', 'waypoint', 'emailInvites', `${tripId}_${normalizeEmail(email)}`);

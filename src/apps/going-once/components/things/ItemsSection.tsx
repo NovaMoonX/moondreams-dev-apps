@@ -12,8 +12,7 @@ import SectionHeader from '@/components/SectionHeader';
 import SortControl from '@/components/SortControl';
 import { useAppSelector } from '@/store';
 import NewThingFlow from '@apps/going-once/components/things/NewThingFlow';
-import ThingDrawer from '@apps/going-once/components/things/ThingDrawer';
-import ThingForm from '@apps/going-once/components/things/ThingForm';
+import OpenThing from '@apps/going-once/components/things/OpenThing';
 import ThingRow from '@apps/going-once/components/things/ThingRow';
 import {
   ITEM_SORT_OPTIONS,
@@ -28,7 +27,7 @@ import {
   selectSaleById,
 } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
-import { keepEntryFor } from '@/hooks/useBackHistory';
+import { isSaleSeller } from '@apps/going-once/utils/roles';
 import {
   isListable,
   matchesSearch,
@@ -58,6 +57,12 @@ interface ItemsSectionProps {
   openId: string | null;
   onOpenThing: (id: string) => void;
   onCloseThing: () => void;
+  /** The status the list is switched to, kept in the address so the Sale tab's tiles can open it. */
+  statusView: StatusView;
+  onStatusViewChange: (view: StatusView) => void;
+  /** A thing whose add-a-thing walk-through opens as the tab mounts, when another tab sent the person here to finish it. */
+  resumeId: string | null;
+  onResumeTaken: () => void;
 }
 
 /** The Things tab: the sale's things, newest first, with a search and a sort once there are enough to need them, and the way to add one. */
@@ -67,20 +72,24 @@ function ItemsSection({
   openId,
   onOpenThing,
   onCloseThing,
+  statusView,
+  onStatusViewChange,
+  resumeId,
+  onResumeTaken,
 }: ItemsSectionProps) {
   const items = useAppSelector((state) => selectItems(state, saleId));
   const status = useAppSelector(selectItemsStatus);
   const uploads = useAppSelector(selectPhotoUploads);
   const sale = useAppSelector((state) => selectSaleById(state, saleId));
-  const [adding, setAdding] = useState<{ resume: Item | null } | null>(null);
-  const [modifyId, setModifyId] = useState<string | null>(null);
+  const [adding, setAdding] = useState<{ resume: Item | null } | null>(() => {
+    const resume = items.find((item) => item.id === resumeId);
+    return resume === undefined ? null : { resume };
+  });
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<ItemSort>('newest');
   const [isUnlistedOnly, setIsUnlistedOnly] = useState(false);
-  const [statusView, setStatusView] = useState<StatusView>('AVAILABLE');
   const openItem = items.find((item) => item.id === openId) ?? null;
-  const isModifying = openItem !== null && modifyId === openItem.id;
-  const isSeller = sale?.ownerUid === uid;
+  const isSeller = isSaleSeller(sale, uid);
 
   const hasTools = items.length >= SEARCH_FROM_ITEMS;
   const searched = items.filter(
@@ -107,7 +116,7 @@ function ItemsSection({
   const takenOffRef = useRef<HTMLDivElement | null>(null);
 
   const showTakenOff = () => {
-    setStatusView('SOLD');
+    onStatusViewChange('SOLD');
     window.requestAnimationFrame(() =>
       takenOffRef.current?.scrollIntoView({ block: 'start' }),
     );
@@ -192,7 +201,7 @@ function ItemsSection({
             detail: String(summary[value].count),
           }))}
           value={statusView}
-          onChange={setStatusView}
+          onChange={onStatusViewChange}
         />
       )}
       {unlistedCount > 0 &&
@@ -265,8 +274,9 @@ function ItemsSection({
           </ul>
         </>
       )}
-      {openItem && !isModifying && (
-        <ThingDrawer
+      {openItem && (
+        <OpenThing
+          key={openItem.id}
           item={openItem}
           uid={uid}
           isSeller={isSeller}
@@ -276,18 +286,6 @@ function ItemsSection({
             setAdding({ resume: openItem });
             onCloseThing();
           }}
-          onModify={() => {
-            keepEntryFor('thing');
-            setModifyId(openItem.id);
-          }}
-        />
-      )}
-      {openItem && isModifying && (
-        <ThingForm
-          item={openItem}
-          uid={uid}
-          isSeller={isSeller}
-          onClose={() => setModifyId(null)}
         />
       )}
       {adding && (
@@ -295,7 +293,10 @@ function ItemsSection({
           saleId={saleId}
           uid={uid}
           resume={adding.resume}
-          onClose={() => setAdding(null)}
+          onClose={() => {
+            setAdding(null);
+            onResumeTaken();
+          }}
         />
       )}
     </div>
