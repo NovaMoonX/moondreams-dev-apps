@@ -81,7 +81,8 @@ function SoldConfirmation({
       {copiedBy !== null && item.listingCopiedAt !== null && (
         <InlineNotice tone='warning'>
           {copiedBy} copied this listing on{' '}
-          {formatDateShort(item.listingCopiedAt)}. Take that listing down too.
+          {formatDateShort(item.listingCopiedAt)}. If it went up somewhere else,
+          take that listing down too.
         </InlineNotice>
       )}
       {sale !== null && (
