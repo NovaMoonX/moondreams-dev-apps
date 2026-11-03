@@ -69,7 +69,6 @@ const NO_ENTRIES: CalendarEntry[] = [];
 
 interface DaysCalendarViewProps {
   today: number;
-  /** What the plan leaves short on an income day, for its row. */
   getShorts: (dayKey: string) => { name: string; shortBy: number }[];
 }
 
@@ -102,9 +101,16 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       ),
     ),
   );
-  const [monthIndex, setMonthIndex] = useState(thisIndex);
+  const [monthIndex, setMonthIndexState] = useState(thisIndex);
   const [pickedOn, setPickedOn] = useState<number | null>(null);
-  const [openBillId, setOpenBillId] = useState<string | null>(null);
+  const [openBillRef, setOpenBillRef] = useState<{
+    billId: string;
+    on: number;
+  } | null>(null);
+  const setMonthIndex = (index: number) => {
+    setPickedOn(null);
+    setMonthIndexState(index);
+  };
   const [openCard, setOpenCard] = useState<OpenedCard | null>(null);
 
   const days = useMemo(() => [...open, ...confirmed], [open, confirmed]);
@@ -118,7 +124,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
         ? cards.map((card) => ({
             cardId: card.id,
             dueDay: card.dueDay,
-            since: todayAsUtcDate(card.createdAt),
+            since: Math.max(today, todayAsUtcDate(card.createdAt)),
           }))
         : [],
       goals: paces.flatMap(({ item, payload, pace, track }) =>
@@ -127,7 +133,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           : [{ goalId: item.id, targetDate: payload.targetDate, track }],
       ),
     }),
-    [days, payments, cards, isTracking, paces],
+    [days, payments, cards, isTracking, paces, today],
   );
   const monthStart = monthStartOf(monthIndex);
   const monthEnd = monthStartOf(monthIndex + 1) - DAY_MS;
@@ -193,7 +199,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
   ).filter(([kind]) => dotKinds.has(kind));
 
   const dayDays = new Map(days.map((day) => [day.dayKey, day]));
-  const openBill = bills.find(({ item }) => item.id === openBillId);
+  const openBill = bills.find(({ item }) => item.id === openBillRef?.billId);
   const getRow = (entry: CalendarEntry) => {
     if (entry.kind === 'income') {
       const day = dayDays.get(entry.dayKey);
@@ -219,7 +225,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           }
           planStance={stance}
           today={today}
-          onOpen={() => setOpenBillId(entry.billId)}
+          onOpen={() => setOpenBillRef({ billId: entry.billId, on: entry.on })}
         />
       ) : null;
     }
@@ -343,12 +349,12 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           bill={openBill.version.payload}
           payment={
             (payments[openBill.item.id] ?? []).find(
-              (payment) => payment.dueOn >= today,
+              (payment) => payment.dueOn === openBillRef?.on,
             ) ?? null
           }
           planStance={stance}
           today={today}
-          onClose={() => setOpenBillId(null)}
+          onClose={() => setOpenBillRef(null)}
         />
       )}
     </div>

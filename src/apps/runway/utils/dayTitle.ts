@@ -1,3 +1,4 @@
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 const titleFormatters = {
   currentYear: new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
@@ -17,7 +18,8 @@ const titleFormatters = {
 /** "Thu, Oct 29", or "Thu, Nov 4, 2027" outside this year: the day an income day's screen is about. */
 export const formatDayTitle = (on: number) => {
   const isCurrentYear =
-    new Date(on).getUTCFullYear() === new Date().getUTCFullYear();
+    new Date(on).getUTCFullYear() ===
+    new Date(todayAsUtcDate()).getUTCFullYear();
   const formatter = isCurrentYear
     ? titleFormatters.currentYear
     : titleFormatters.otherYear;
