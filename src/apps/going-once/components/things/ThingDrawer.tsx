@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   BadgeDollarSign,
   CalendarClock,
+  ChevronRight,
   Ellipsis,
   Eye,
   EyeOff,
@@ -13,6 +14,7 @@ import {
   RotateCcw,
   Trash2,
   Undo2,
+  ChevronDown,
 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
@@ -20,6 +22,8 @@ import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import FactsLine from '@/components/FactsLine';
+import SectionDivider from '@/components/SectionDivider';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import LinkPreviewCard from '@/components/LinkPreviewCard';
 import PhotoStrip from '@/components/PhotoStrip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
@@ -32,6 +36,7 @@ import ChangePaidView from '@apps/going-once/components/things/ChangePaidView';
 import HistoryView from '@apps/going-once/components/things/HistoryView';
 import MarkPendingView from '@apps/going-once/components/things/MarkPendingView';
 import MarkSoldView from '@apps/going-once/components/things/MarkSoldView';
+import ThingInquiryView from '@apps/going-once/components/things/ThingInquiryView';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import SoldConfirmation from '@apps/going-once/components/things/SoldConfirmation';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
@@ -39,13 +44,20 @@ import { CONDITION_LABELS, NOT_LISTED_LABEL } from '@apps/going-once/constants';
 import { useDeleteThing } from '@apps/going-once/hooks/useDeleteThing';
 import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
+import { useThingInquiries } from '@apps/going-once/hooks/useThingInquiries';
 import { useItemPhotoUrls } from '@apps/going-once/queries/photoUrlQueries';
 import {
   changeStatus,
   type StatusResult,
   type StatusTransition,
 } from '@apps/going-once/store/actions/statusActions';
-import type { Item } from '@apps/going-once/types';
+import type { Inquiry, Item } from '@apps/going-once/types';
+import {
+  formatSentAt,
+  getInquirerName,
+  getOwnMessage,
+  isHolder,
+} from '@apps/going-once/utils/inquiries';
 import {
   canDeleteItem,
   formatAddedAgo,
@@ -59,6 +71,7 @@ import {
 } from '@apps/going-once/utils/status';
 import {
   getHoldDraft,
+  getHoldStart,
   getSoldDraft,
   isDraftChanged,
   type HoldDraft,
@@ -76,6 +89,8 @@ interface ThingDrawerProps {
   onModify: () => void;
   /** Every sold thing in the sale, for Collected. */
   sold: StatusFigures;
+  /** Opens straight on Mark pending, held for this person. */
+  holdFor: Inquiry | null;
 }
 
 type View =
@@ -85,7 +100,8 @@ type View =
   | 'markSold'
   | 'sold'
   | 'changePaid'
-  | 'history';
+  | 'history'
+  | 'inquiry';
 
 interface Row {
   label: string;
@@ -119,6 +135,8 @@ function StoreLink({ item }: { item: Item }) {
     </a>
   );
 }
+
+const INTEREST_SHOWN = 3;
 
 const getPrivateRows = (item: Item): Row[] => {
   const bought = [
@@ -165,13 +183,29 @@ function ThingDrawer({
   onFinish,
   onModify,
   sold,
+  holdFor,
 }: ThingDrawerProps) {
-  const [views, setViews] = useState<View[]>([]);
+  const [views, setViews] = useState<View[]>(() =>
+    holdFor !== null &&
+    getThingOffer(item.status, isListable(item)) === 'MARK_PENDING'
+      ? ['markPending']
+      : [],
+  );
   const [footerNode, setFooterNode] = useState<HTMLElement | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
   const { isWorking, run } = useSingleFlight();
   const now = useNow();
-  const [hold, setHold] = useState<HoldDraft>(() => getHoldDraft(null, now));
+  const [holdStart, setHoldStart] = useState<HoldDraft>(() =>
+    getHoldStart(holdFor, now),
+  );
+  const [hold, setHold] = useState<HoldDraft>(holdStart);
+  const [inquiryId, setInquiryId] = useState<string | null>(null);
+  const [isInterestExpanded, setIsInterestExpanded] = useState(false);
+  const interestRef = useRef<HTMLElement>(null);
+  const { inquiries, hasFailed: haveInquiriesFailed } = useThingInquiries(
+    item.saleId,
+    item.id,
+  );
   const [soldDraft, setSoldDraft] = useState<SoldDraft>(() =>
     getSoldDraft(item, now),
   );
@@ -204,6 +238,12 @@ function ThingDrawer({
         }
       : null,
   ].filter((fact) => fact !== null);
+  const askedCount = new Set(
+    (inquiries ?? []).map(
+      (inquiry) =>
+        `${(inquiry.name ?? '').trim().toLowerCase()}|${inquiry.phone ?? inquiry.email ?? inquiry.id}`,
+    ),
+  ).size;
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
   const offer = getThingOffer(item.status, isListable(item));
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
@@ -211,8 +251,7 @@ function ThingDrawer({
     item.status === 'PENDING' || (item.status === 'AVAILABLE' && !isNotListed);
 
   const getIsDirty = () => {
-    if (view === 'markPending')
-      return isDraftChanged(hold, getHoldDraft(null, now));
+    if (view === 'markPending') return isDraftChanged(hold, holdStart);
     if (view === 'changeHold')
       return isDraftChanged(hold, getHoldDraft(item.pending, now));
     if (view === 'markSold')
@@ -223,9 +262,13 @@ function ThingDrawer({
   };
   const isDirty = getIsDirty();
 
-  const open = (next: View) => {
+  const open = (next: View, holdFor: Inquiry | null = null) => {
     setStatusError(null);
-    if (next === 'markPending') setHold(getHoldDraft(null, now));
+    if (next === 'markPending') {
+      const start = getHoldStart(holdFor, now);
+      setHold(start);
+      setHoldStart(start);
+    }
     if (next === 'changeHold') setHold(getHoldDraft(item.pending, now));
     if (next === 'markSold') setSoldDraft(getSoldDraft(item, now));
     if (next === 'changePaid')
@@ -419,6 +462,7 @@ function ThingDrawer({
     return marker === 'You' ? 'you' : marker;
   };
 
+  const asker = inquiries?.find((inquiry) => inquiry.id === inquiryId);
   const isMoreOpen = view === 'more';
   const isFront = view === null || view === 'more';
   const frontFooter = (
@@ -533,6 +577,7 @@ function ThingDrawer({
       {(view === 'markPending' || view === 'changeHold') && (
         <MarkPendingView
           item={item}
+          inquiries={inquiries ?? []}
           uid={uid}
           now={now}
           mode={view === 'changeHold' ? 'CHANGE' : 'MARK'}
@@ -585,6 +630,20 @@ function ThingDrawer({
       {view === 'history' && (
         <HistoryView item={item} uid={uid} onBack={back} />
       )}
+      {view === 'inquiry' && asker !== undefined && (
+        <ThingInquiryView
+          item={item}
+          inquiry={asker}
+          now={now}
+          canHold={offer === 'MARK_PENDING'}
+          footerNode={footerNode}
+          onBack={back}
+          onHold={() => {
+            setViews((current) => current.slice(0, -1));
+            open('markPending', asker);
+          }}
+        />
+      )}
       <div className={join('space-y-4', view !== null && 'hidden')}>
         <PhotoStrip photos={photos} label={name} />
         <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
@@ -601,6 +660,22 @@ function ThingDrawer({
             className='text-muted-foreground min-w-0 text-sm'
             facts={facts}
           />
+          {askedCount > 0 && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className="text-muted-foreground! relative h-auto p-0 text-sm font-normal after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+              onClick={() =>
+                interestRef.current?.scrollIntoView({
+                  behavior: 'smooth',
+                  block: 'start',
+                })
+              }
+            >
+              {askedCount} asked
+              <ChevronDown className='size-3.5' aria-hidden='true' />
+            </Button>
+          )}
         </div>
         {isUnderFloor(item) && item.floorPriceCents !== null && (
           <p className='text-muted-foreground text-sm'>
@@ -643,6 +718,71 @@ function ThingDrawer({
             price.
           </p>
         )}
+        <section ref={interestRef} className='scroll-mt-2 space-y-4'>
+          {(askedCount > 0 || haveInquiriesFailed) && (
+            <SectionDivider label='Interest' className='pt-2' />
+          )}
+          {haveInquiriesFailed && inquiries === null && (
+            <p className='text-muted-foreground text-sm'>
+              We couldn&apos;t load who asked. Check your connection and try
+              again.
+            </p>
+          )}
+          {inquiries !== null && askedCount > 0 && (
+            <ul className='space-y-2'>
+              {(isInterestExpanded
+                ? inquiries
+                : inquiries.slice(0, INTEREST_SHOWN)
+              ).map((inquiry) => {
+                const message = getOwnMessage(inquiry);
+                return (
+                  <li key={inquiry.id}>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      className='border-border bg-card h-auto min-h-12 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-3 text-left'
+                      onClick={() => {
+                        setInquiryId(inquiry.id);
+                        open('inquiry');
+                      }}
+                    >
+                      <span className='min-w-0 flex-1'>
+                        <span className='text-foreground block truncate text-base font-medium'>
+                          {getInquirerName(inquiry)}
+                        </span>
+                        <span className='text-muted-foreground mt-0.5 line-clamp-2 text-sm font-normal text-pretty break-words'>
+                          {[
+                            isHolder(item.pending, inquiry) ? 'Holding' : null,
+                            formatSentAt(inquiry.lastSentAt, now),
+                            inquiry.sendCount > 1
+                              ? `Sent ${inquiry.sendCount} times`
+                              : null,
+                          ]
+                            .filter((part) => part !== null)
+                            .join(' · ')}
+                        </span>
+                        {message !== null && (
+                          <span className='text-foreground mt-1 line-clamp-1 text-sm font-normal break-words'>
+                            {message}
+                          </span>
+                        )}
+                      </span>
+                      <ChevronRight
+                        className='text-muted-foreground size-5 shrink-0'
+                        aria-hidden='true'
+                      />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          {askedCount > INTEREST_SHOWN && !isInterestExpanded && (
+            <ShowMoreButton onClick={() => setIsInterestExpanded(true)}>
+              Show all {askedCount}
+            </ShowMoreButton>
+          )}
+        </section>
       </div>
       {deleteDialog}
     </DetailSheet>

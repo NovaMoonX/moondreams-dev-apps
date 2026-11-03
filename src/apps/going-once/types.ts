@@ -51,7 +51,7 @@ export type PaymentMethod = 'CASH' | 'VENMO' | 'ZELLE' | 'OTHER';
 
 /** Who is set to pick a thing up (`pending`); cleared on Back to available and on Sold. */
 export interface ItemPendingRecord {
-  /** Set by the inquiry rows that arrive with the inbox. */
+  /** The inquiry the hold was made from; `null` for a typed name. */
   inquiryId: string | null;
   /** A typed name; the buyer's personal data. */
   buyerName: string | null;
