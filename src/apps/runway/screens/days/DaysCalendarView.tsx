@@ -119,13 +119,17 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
     () => ({
       incomeDays: days,
       billPayments: Object.entries(payments).flatMap(([billId, list]) =>
-        list.map(({ dueOn, totalCents }) => ({ billId, dueOn, totalCents })),
+        list.flatMap(({ dueOn, totalCents, paid }) =>
+          paid !== null || dueOn >= (startDate ?? today)
+            ? [{ billId, dueOn, totalCents }]
+            : [],
+        ),
       ),
       cards: isTracking
         ? cards.map((card) => ({
             cardId: card.id,
             dueDay: card.dueDay,
-            since: Math.max(today, todayAsUtcDate(card.createdAt)),
+            since: Math.max(startDate ?? 0, todayAsUtcDate(card.createdAt)),
           }))
         : [],
       goals: paces.flatMap(({ item, payload, pace, track }) =>
@@ -134,7 +138,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           : [{ goalId: item.id, targetDate: payload.targetDate, track }],
       ),
     }),
-    [days, payments, cards, isTracking, paces, today],
+    [days, payments, cards, isTracking, paces, today, startDate],
   );
   const monthStart = monthStartOf(monthIndex);
   const monthEnd = monthStartOf(monthIndex + 1) - DAY_MS;
@@ -325,6 +329,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
               entries={byDay.get(on) ?? NO_ENTRIES}
               isSelected={on === selectedOn}
               isToday={isToday}
+              isPast={on < today}
               isOutsideMonth={on < monthStart || on > monthEnd}
             />
           );

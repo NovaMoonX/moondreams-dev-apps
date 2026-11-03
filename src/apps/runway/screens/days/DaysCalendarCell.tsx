@@ -12,6 +12,7 @@ interface DaysCalendarCellProps {
   entries: readonly CalendarEntry[];
   isSelected: boolean;
   isToday: boolean;
+  isPast: boolean;
   isOutsideMonth: boolean;
 }
 
@@ -21,6 +22,7 @@ function DaysCalendarCell({
   entries,
   isSelected,
   isToday,
+  isPast,
   isOutsideMonth,
 }: DaysCalendarCellProps) {
   const shownCount = entries.length > MAX_DOTS ? MAX_DOTS - 1 : MAX_DOTS;
@@ -40,25 +42,33 @@ function DaysCalendarCell({
         className={join(
           'relative flex h-full w-full flex-col items-center gap-1 rounded-lg pt-1.5',
           isOutsideMonth && 'opacity-35',
+          isPast && !isOutsideMonth && 'bg-muted/60',
         )}
       >
         <span
           className={join(
-            'flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums',
-            isToday && 'bg-primary text-primary-foreground',
+            'flex flex-col items-center gap-1',
+            isPast && !isOutsideMonth && 'opacity-50',
           )}
         >
-          {date.getDate()}
-        </span>
-        <span className='flex h-2.5 items-center justify-center gap-0.5'>
-          {entries.slice(0, shownCount).map((entry, index) => (
-            <Dot key={index} kind={getDotKind(entry)} />
-          ))}
-          {hiddenCount > 0 && (
-            <span className='text-muted-foreground text-[10px] leading-none font-semibold'>
-              {DAYS_CALENDAR_WORDS.more(hiddenCount)}
-            </span>
-          )}
+          <span
+            className={join(
+              'flex h-6 min-w-6 items-center justify-center rounded-full px-1 text-xs font-semibold tabular-nums',
+              isToday && 'bg-primary text-primary-foreground',
+            )}
+          >
+            {date.getDate()}
+          </span>
+          <span className='flex h-2.5 items-center justify-center gap-0.5'>
+            {entries.slice(0, shownCount).map((entry, index) => (
+              <Dot key={index} kind={getDotKind(entry)} />
+            ))}
+            {hiddenCount > 0 && (
+              <span className='text-muted-foreground text-[10px] leading-none font-semibold'>
+                {DAYS_CALENDAR_WORDS.more(hiddenCount)}
+              </span>
+            )}
+          </span>
         </span>
         {isSelected && !isToday && (
           <span className='ring-primary pointer-events-none absolute inset-0 rounded-lg ring-2 ring-inset' />
