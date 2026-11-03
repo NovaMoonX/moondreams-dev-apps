@@ -1,13 +1,12 @@
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 import {
-  doc,
   getCountFromServer,
-  getDoc,
   getDocs,
   limit,
   orderBy,
   query,
   startAfter,
+  startAt,
   where,
 } from 'firebase/firestore';
 
@@ -18,11 +17,6 @@ import {
 } from '@apps/going-once/store/listeners/inquiriesListener';
 import type { Inquiry } from '@apps/going-once/types';
 
-export interface HandledCursor {
-  handledAt: number;
-  id: string;
-}
-
 export const inquiryQueryKeys = {
   all: ['going-once', 'inquiries'] as const,
   olderHandled: (saleId: string) =>
@@ -31,23 +25,26 @@ export const inquiryQueryKeys = {
     [...inquiryQueryKeys.all, 'handledCount', saleId] as const,
 };
 
+/** Where a page starts: the `handledAt` of the last row of the page before (that row and any tie are read again and dropped by id), or `null` for the top. */
+type HandledPageStart = { handledAt: number; isPastTies: boolean } | null;
+
 const readPage = async (
   saleId: string,
-  cursor: HandledCursor | null,
+  start: HandledPageStart,
 ): Promise<Inquiry[]> => {
   const handled = query(
     inquiriesOf(saleId),
     where('status', '==', 'HANDLED'),
     orderBy('handledAt', 'desc'),
   );
-  const after =
-    cursor === null ? null : await getDoc(doc(inquiriesOf(saleId), cursor.id));
   const snapshot = await getDocs(
-    cursor === null
-      ? query(handled, limit(HANDLED_INBOX_LIMIT))
+    start === null
+      ? query(handled, limit(2 * HANDLED_INBOX_LIMIT))
       : query(
           handled,
-          startAfter(after?.exists() ? after : cursor.handledAt),
+          start.isPastTies
+            ? startAfter(start.handledAt)
+            : startAt(start.handledAt),
           limit(HANDLED_INBOX_LIMIT),
         ),
   );
@@ -56,26 +53,25 @@ const readPage = async (
   );
 };
 
-export const toHandledCursor = (
-  inquiry: Inquiry | undefined,
-): HandledCursor | null =>
-  inquiry?.handledAt == null
-    ? null
-    : { handledAt: inquiry.handledAt, id: inquiry.id };
+const getNextStart = (page: Inquiry[]): HandledPageStart | undefined => {
+  const last = page.at(-1)?.handledAt;
+  if (page.length < HANDLED_INBOX_LIMIT || last == null) return undefined;
+  return {
+    handledAt: last,
+    isPastTies: page.every((inquiry) => inquiry.handledAt === last),
+  };
+};
 
-/** Handled inquiries in pages of 30 after `after` (the oldest the live listener shows), most recently handled first, continuing after the last document of the page before (a snapshot cursor, so ties on `handledAt` break by id and a page never repeats or skips one). */
-export const olderHandledQueryOptions = (
-  saleId: string,
-  after: HandledCursor | null,
-) =>
+/**
+ * Every Handled inquiry, most recently handled first, read from the top in value-cursor pages (the first two pages' worth at once, since the live listener already shows the newest 30).
+ * Each page starts at the last page's oldest `handledAt` inclusive, so a row handled, reopened or deleted meanwhile never opens a gap; the Inbox drops repeats by id.
+ */
+export const olderHandledQueryOptions = (saleId: string) =>
   infiniteQueryOptions({
     queryKey: inquiryQueryKeys.olderHandled(saleId),
     queryFn: ({ pageParam }) => readPage(saleId, pageParam),
-    initialPageParam: after,
-    getNextPageParam: (lastPage) =>
-      lastPage.length < HANDLED_INBOX_LIMIT
-        ? undefined
-        : toHandledCursor(lastPage.at(-1)),
+    initialPageParam: null as HandledPageStart,
+    getNextPageParam: getNextStart,
     staleTime: 60_000,
     gcTime: 5 * 60_000,
   });

@@ -21,8 +21,6 @@ import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
 import {
   handledCountQueryOptions,
   olderHandledQueryOptions,
-  toHandledCursor,
-  type HandledCursor,
 } from '@apps/going-once/queries/inquiryQueries';
 import {
   selectHandledInquiries,
@@ -105,15 +103,12 @@ function InboxTab({
   const newestHandled = useAppSelector((state) =>
     selectHandledInquiries(state, saleId),
   );
-  const [olderStart, setOlderStart] = useState<{
-    saleId: string;
-    cursor: HandledCursor;
-  } | null>(null);
+  const [olderSaleId, setOlderSaleId] = useState<string | null>(null);
   const [holdFor, setHoldFor] = useState<Inquiry | null>(null);
-  const startCursor = olderStart?.saleId === saleId ? olderStart.cursor : null;
+  const isOlderOn = olderSaleId === saleId;
   const older = useInfiniteQuery({
-    ...olderHandledQueryOptions(saleId, startCursor),
-    enabled: startCursor !== null,
+    ...olderHandledQueryOptions(saleId),
+    enabled: isOlderOn,
   });
   const handledCount = useQuery(handledCountQueryOptions(saleId));
   const handled = Object.values(
@@ -147,14 +142,13 @@ function InboxTab({
       : null;
   const hasMoreHandled =
     newestHandled.length >= HANDLED_INBOX_LIMIT &&
-    (startCursor === null || older.hasNextPage);
+    (!isOlderOn || older.hasNextPage);
   const showOlder = () => {
-    if (startCursor !== null) {
+    if (isOlderOn) {
       void older.fetchNextPage();
       return;
     }
-    const cursor = toHandledCursor(newestHandled.at(-1));
-    if (cursor !== null) setOlderStart({ saleId, cursor });
+    setOlderSaleId(saleId);
   };
   const findItem = (inquiry: (typeof shown)[number]) =>
     items.find((candidate) => candidate.id === inquiry.itemId) ?? null;
