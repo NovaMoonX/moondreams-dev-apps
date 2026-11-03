@@ -112,11 +112,7 @@ export function describeBillRepeat(schedule: Schedule) {
   return result;
 }
 
-/**
- * A repeating bill read the way a group's monthly total reads it: its figure for a usual month and what each payment is
- * ("$150 yearly"), so a row beside the total never leads with a yearly or fortnightly amount. Null when the bill is paid
- * once, has no fixed beat or already comes monthly, and its row keeps the payment as its figure.
- */
+/** A repeating bill's figure for a usual month and its payment; null when it is paid once, has no fixed beat or is already monthly. */
 export function describeBillMonthly(amount: MoneyRange, schedule: Schedule) {
   const monthly = toMonthlyRange(amount, schedule);
   if (
@@ -136,11 +132,11 @@ export function describeBillMonthly(amount: MoneyRange, schedule: Schedule) {
   };
 }
 
-/** A converted row's line: what each payment is first, then where the next one stands ("$150 yearly · due Mar 1"). */
+/** A converted row's line: the payment first, then where the next one stands. */
 export const joinPaymentAndState = (payment: string, state: string) =>
   `${payment}\u00a0· ${state.charAt(0).toLowerCase()}${state.slice(1)}`;
 
-/** An envelope funded on a calendar period read as a month, like a bill: its figure for a usual month and what each time is ("$600 yearly"). Null for an income-day envelope, an unfixed amount or a monthly beat. */
+/** A calendar-period envelope's figure for a usual month and its amount; null for income-day or unfixed amounts and monthly beats. */
 export function describeEnvelopeMonthly(funding: FundingRule) {
   const cents = toMonthlyEnvelopeCents(funding);
   if (
