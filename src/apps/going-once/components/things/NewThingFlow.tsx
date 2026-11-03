@@ -463,11 +463,8 @@ function ThingSteps({
   const getPrevious = () => (
     <Button
       type='button'
-      variant='tertiary'
-      className={join(
-        'px-2! max-[359px]:h-10 max-[359px]:text-sm',
-        previousId === null && 'invisible',
-      )}
+      variant='secondary'
+      className={join('px-3!', previousId === null && 'invisible')}
       aria-hidden={previousId === null}
       tabIndex={previousId === null ? -1 : undefined}
       onClick={goPrevious}
@@ -567,19 +564,19 @@ function ThingSteps({
                 <Button
                   type='button'
                   variant='secondary'
-                  className='whitespace-nowrap max-[359px]:h-10 max-[359px]:px-3! max-[359px]:text-sm'
+                  className='whitespace-nowrap max-[359px]:px-3!'
                   aria-label='Save and add another'
                   onClick={addAnother}
                 >
-                  <Plus
-                    className='size-4 max-[359px]:hidden'
-                    aria-hidden='true'
-                  />
+                  <Plus className='size-4' aria-hidden='true' />
                   <span>
                     <span className='max-[419px]:hidden'>
                       Save &amp; add another
                     </span>
-                    <span className='min-[420px]:hidden'>Add another</span>
+                    <span className='max-[359px]:hidden min-[420px]:hidden'>
+                      Add another
+                    </span>
+                    <span className='min-[360px]:hidden'>Another</span>
                   </span>
                 </Button>
                 <Button type='button' onClick={saveAndClose}>

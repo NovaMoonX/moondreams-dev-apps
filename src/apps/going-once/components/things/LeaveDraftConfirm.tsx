@@ -40,21 +40,21 @@ function LeaveDraftConfirm({ isOpen, settle }: LeaveDraftConfirmProps) {
         </Button>
         <Button
           type='button'
-          variant='destructive'
-          rounded='full'
-          className='w-full'
-          onClick={() => settle('DISCARD')}
-        >
-          Discard
-        </Button>
-        <Button
-          type='button'
           variant='secondary'
           rounded='full'
           className='w-full'
           onClick={onDialogClose}
         >
           Keep editing
+        </Button>
+        <Button
+          type='button'
+          variant='tertiary'
+          rounded='full'
+          className='text-destructive! w-full'
+          onClick={() => settle('DISCARD')}
+        >
+          Discard
         </Button>
       </div>
     </Modal>
