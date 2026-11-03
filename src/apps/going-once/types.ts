@@ -142,6 +142,9 @@ export interface Item {
   sale: ItemSaleRecord | null;
   /** The last 50 status changes, oldest first. */
   statusHistory: StatusChange[];
+  /** The most recent Copy listing text, so Mark sold can say to take that listing down. */
+  listingCopiedAt: number | null;
+  listingCopiedBy: string | null;
   createdBy: string;
   createdAt: number;
   lastEditedAt: number | null;

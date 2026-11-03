@@ -28,3 +28,41 @@ export function isReadableFile({ name, type }: { name: string; type: string }) {
   const result = READABLE_EXTENSIONS.has(extension);
   return result;
 }
+
+/** Whether this browser can hand these files to its share sheet (false on most desktops). */
+export function canShareFiles(files: File[]) {
+  return (
+    typeof navigator !== 'undefined' &&
+    typeof navigator.canShare === 'function' &&
+    navigator.canShare({ files })
+  );
+}
+
+/** Hands files to the share sheet where the browser has one, otherwise downloads each. Call it inside the tap with files already in hand: a share started after a slow `await` is refused on iOS. A cancelled share is not a failure. */
+export async function shareOrDownloadFiles(
+  files: File[],
+  { title }: { title: string },
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
+  if (canShareFiles(files)) {
+    try {
+      await navigator.share({ files, title });
+      return 'shared';
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError')
+        return 'cancelled';
+      throw error;
+    }
+  }
+
+  files.forEach((file) => {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  });
+  return 'downloaded';
+}

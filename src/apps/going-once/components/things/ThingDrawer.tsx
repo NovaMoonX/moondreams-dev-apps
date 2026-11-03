@@ -29,6 +29,8 @@ import { formatDateUTC } from '@/utils/formatUtils';
 import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
 import { parseHttpUrl } from '@/utils/urlUtils';
 import ChangePaidView from '@apps/going-once/components/things/ChangePaidView';
+import CopyListingTextRow from '@apps/going-once/components/relist/CopyListingTextRow';
+import SavePhotosRow from '@apps/going-once/components/relist/SavePhotosRow';
 import HistoryView from '@apps/going-once/components/things/HistoryView';
 import MarkPendingView from '@apps/going-once/components/things/MarkPendingView';
 import MarkSoldView from '@apps/going-once/components/things/MarkSoldView';
@@ -179,7 +181,9 @@ function ThingDrawer({
   const { pending: undoable, showUndo, undo } = useUndoRemoval();
   const [undoLabel, setUndoLabel] = useState('Undo');
   const getName = usePersonNames(
-    item.sale === null ? [] : [item.sale.markedBy],
+    [item.sale?.markedBy, item.listingCopiedBy].filter(
+      (person) => person != null,
+    ),
     uid,
   );
   const name = getItemName(item);
@@ -563,6 +567,9 @@ function ThingDrawer({
           item={item}
           now={now}
           markedBy={getMarkedBy()}
+          copiedBy={
+            item.listingCopiedBy === null ? null : getName(item.listingCopiedBy)
+          }
           sold={sold}
           footerNode={footerNode}
           onDone={toFront}
@@ -642,6 +649,17 @@ function ThingDrawer({
             Buyers can&apos;t see this yet. It needs a photo, a name and a
             price.
           </p>
+        )}
+        {isOnTheList && (
+          <div className='space-y-2'>
+            <h3 className='text-muted-foreground text-sm font-semibold'>
+              Post it somewhere else
+            </h3>
+            <ActionGroup isRoomy>
+              <CopyListingTextRow item={item} uid={uid} />
+              <SavePhotosRow item={item} />
+            </ActionGroup>
+          </div>
         )}
       </div>
       {deleteDialog}
