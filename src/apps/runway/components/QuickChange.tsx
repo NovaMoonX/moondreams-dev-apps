@@ -45,9 +45,10 @@ function QuickChange({
   const isMoney = MONEY_STEPS.includes(step.id);
   const isShort = useIsShortScreen(599);
   const isLandscape = useIsShortScreen(419);
-  const shownIds = rowIds.slice(
-    0,
-    isShort && !isLandscape ? SHORT_SCREEN_ROWS : rowIds.length,
+  const rowLimit = isShort && !isLandscape ? SHORT_SCREEN_ROWS : rowIds.length;
+  // The soft keyboard shrinks the viewport into "short", and a row that owns an open sheet must outlive that or the sheet unmounts under the finger.
+  const shownIds = rowIds.filter(
+    (id, index) => index < rowLimit || id === flow.reopenedId,
   );
   const rows = shownIds
     .map((id) => flow.steps.find((other) => other.id === id))
