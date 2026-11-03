@@ -100,11 +100,9 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
               size='sm'
               label='Turn on'
               title='This sale is finished'
+              className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
             >
-              <p>
-                The public page stays off while the sale is finished. Reopen the
-                sale to turn it on again.
-              </p>
+              <p>Reopen the sale to turn the public page on again.</p>
             </LockedButton>
           )}
         </div>

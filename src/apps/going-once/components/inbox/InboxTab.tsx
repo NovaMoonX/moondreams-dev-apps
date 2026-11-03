@@ -10,6 +10,7 @@ import InquiryRow from '@apps/going-once/components/inbox/InquiryRow';
 import PushCapsule from '@apps/going-once/components/inbox/PushCapsule';
 import OpenThing from '@apps/going-once/components/things/OpenThing';
 import {
+  FINISHED_SALE_STATUS,
   HANDLED_INBOX_LIMIT,
   INBOX_VIEWS,
   INBOX_VIEW_LABELS,
@@ -62,11 +63,21 @@ interface InboxTabProps {
   onOpenSale: () => void;
 }
 
+const FINISHED_TEXT = {
+  seller:
+    "This sale is finished, so buyers can't ask. Reopen it in Sale to take new questions.",
+  coSeller:
+    "This sale is finished, so buyers can't ask. The seller can reopen it.",
+};
+
 const getEmptyText = (
   view: InboxView,
   isPageOff: boolean,
   isSeller: boolean,
+  isFinished: boolean,
 ) => {
+  if (view === 'new' && isFinished)
+    return isSeller ? FINISHED_TEXT.seller : FINISHED_TEXT.coSeller;
   if (view !== 'new' || !isPageOff) return EMPTY_TEXT[view];
   return isSeller ? PAGE_OFF_TEXT.seller : PAGE_OFF_TEXT.coSeller;
 };
@@ -120,6 +131,9 @@ function InboxTab({
   const openThing = items.find((candidate) => candidate.id === openThingId);
   const isPageOff = sale !== null && sale.publicLinkId === null;
   const isSeller = sale !== null && isSaleSeller(sale, uid);
+  const isFinished = sale?.status === FINISHED_SALE_STATUS;
+  const clearsAt =
+    isFinished && sale.contactsClearedAt === null ? sale.contactsClearAt : null;
 
   if (status === 'error') {
     return (
@@ -132,7 +146,7 @@ function InboxTab({
 
   return (
     <div className='space-y-4'>
-      <PushCapsule saleId={saleId} uid={uid} />
+      {!isFinished && <PushCapsule saleId={saleId} uid={uid} />}
       {openId !== null && open === undefined && status === 'ready' && (
         <p className='text-muted-foreground text-sm'>
           That message isn&apos;t here anymore.
@@ -156,7 +170,7 @@ function InboxTab({
         <EmptyCard
           icon={view === 'new' ? '📬' : '✅'}
           action={
-            view === 'new' && isPageOff && isSeller ? (
+            view === 'new' && (isPageOff || isFinished) && isSeller ? (
               <Button
                 type='button'
                 variant='secondary'
@@ -170,7 +184,7 @@ function InboxTab({
             ) : undefined
           }
         >
-          {getEmptyText(view, isPageOff, isSeller)}
+          {getEmptyText(view, isPageOff, isSeller, isFinished)}
         </EmptyCard>
       )}
       {shown.length > 0 && (
@@ -209,6 +223,7 @@ function InboxTab({
           thing={describe(open)}
           handledBy={getHandledBy(open)}
           now={now}
+          clearsAt={clearsAt}
           onClose={onClose}
           onBackToNew={() => onSwitchView('new')}
         />

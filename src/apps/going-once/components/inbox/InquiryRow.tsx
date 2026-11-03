@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import ThingThumb from '@apps/going-once/components/things/ThingThumb';
+import { formatDateShort } from '@/utils/formatUtils';
 import type { Inquiry, Item } from '@apps/going-once/types';
 import {
   formatSentAt,
@@ -32,12 +33,15 @@ function InquiryRow({
   const isNew = inquiry.status === 'NEW';
   const line = [
     handledBy === null ? null : `Handled by ${handledBy}`,
-    thing,
+    inquiry.contactClearedAt === null ? thing : null,
     formatSentAt(
       isNew ? inquiry.lastSentAt : (inquiry.handledAt ?? inquiry.lastSentAt),
       now,
     ),
     inquiry.sendCount > 1 ? `Sent ${inquiry.sendCount} times` : null,
+    inquiry.contactClearedAt === null
+      ? null
+      : `Details cleared ${formatDateShort(inquiry.contactClearedAt)}`,
   ]
     .filter((part) => part !== null)
     .join(' · ');
@@ -58,7 +62,7 @@ function InquiryRow({
             isNew ? 'font-semibold' : 'font-normal',
           )}
         >
-          {getInquirerName(inquiry)}
+          {getInquirerName(inquiry, thing)}
         </span>
         <span className='text-muted-foreground mt-0.5 line-clamp-2 text-sm font-normal text-pretty break-words'>
           {line}

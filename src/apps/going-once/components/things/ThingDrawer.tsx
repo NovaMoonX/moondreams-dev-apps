@@ -39,11 +39,7 @@ import MarkSoldView from '@apps/going-once/components/things/MarkSoldView';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import SoldConfirmation from '@apps/going-once/components/things/SoldConfirmation';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
-import {
-  CONDITION_LABELS,
-  FINISHED_SALE_STATUS,
-  NOT_LISTED_LABEL,
-} from '@apps/going-once/constants';
+import { CONDITION_LABELS } from '@apps/going-once/constants';
 import { useDeleteThing } from '@apps/going-once/hooks/useDeleteThing';
 import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
@@ -53,12 +49,13 @@ import {
   type StatusResult,
   type StatusTransition,
 } from '@apps/going-once/store/actions/statusActions';
-import { selectSaleById } from '@apps/going-once/store/selectors';
+import { selectIsSaleFinished } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
 import {
   canDeleteItem,
   formatAddedAgo,
   getItemName,
+  getAvailableLabel,
   isListable,
 } from '@apps/going-once/utils/listing';
 import {
@@ -216,9 +213,8 @@ function ThingDrawer({
       : null,
   ].filter((fact) => fact !== null);
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
-  const isSaleFinished = useAppSelector(
-    (state) =>
-      selectSaleById(state, item.saleId)?.status === FINISHED_SALE_STATUS,
+  const isSaleFinished = useAppSelector((state) =>
+    selectIsSaleFinished(state, item.saleId),
   );
   const offer = getThingOffer(item.status, isListable(item), isSaleFinished);
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
@@ -321,6 +317,14 @@ function ThingDrawer({
     uid,
     () => void takeOffTheList(),
   );
+  const getTakeOffSubtitle = () => {
+    const leaves = isSaleFinished
+      ? 'Leaves the totals.'
+      : 'Leaves the public page and the totals.';
+    return item.status === 'PENDING'
+      ? `Drops ${item.pending?.buyerName ? `${item.pending.buyerName}'s` : 'the'} hold. ${leaves}`
+      : `Keeping it or gave it away. ${leaves}`;
+  };
   const moreActions: MoreAction[] = [
     isOnTheList
       ? {
@@ -350,8 +354,9 @@ function ThingDrawer({
           key: 'backToAvailable',
           icon: <Undo2 />,
           label: 'Back to available',
-          subtitle:
-            'The pickup fell through. Buyers see it as Available again.',
+          subtitle: isSaleFinished
+            ? "The pickup fell through. It goes back to Didn't sell."
+            : 'The pickup fell through. Buyers see it as Available again.',
           onClick: () => void backToAvailable(),
         }
       : null,
@@ -370,7 +375,9 @@ function ThingDrawer({
           key: 'notSold',
           icon: <RotateCcw />,
           label: 'Not sold after all',
-          subtitle: 'Back to Available, and out of Collected',
+          subtitle: isSaleFinished
+            ? "Back to Didn't sell, and out of Collected"
+            : 'Back to Available, and out of Collected',
           onClick: () =>
             void notSoldAfterAll().then((message) => {
               if (message !== null) setStatusError(message);
@@ -382,10 +389,7 @@ function ThingDrawer({
           key: 'takeOff',
           icon: <EyeOff />,
           label: 'Take off the list',
-          subtitle:
-            item.status === 'PENDING'
-              ? `Drops ${item.pending?.buyerName ? `${item.pending.buyerName}'s` : 'the'} hold. Leaves the public page and the totals.`
-              : 'Keeping it or gave it away. Leaves the public page and the totals.',
+          subtitle: getTakeOffSubtitle(),
           onClick: () => void takeOffTheList(),
         }
       : null,
@@ -394,7 +398,9 @@ function ThingDrawer({
           key: 'putBack',
           icon: <Eye />,
           label: 'Put it back',
-          subtitle: 'Back on the public page as Available',
+          subtitle: isSaleFinished
+            ? "Back to Didn't sell"
+            : 'Back on the public page as Available',
           onClick: () => void putBackOnTheList(),
         }
       : null,
@@ -527,7 +533,7 @@ function ThingDrawer({
               />
             ))}
           </ActionGroup>
-          {isOnTheList && !isSaleFinished && (
+          {isOnTheList && (
             <ActionGroup isRoomy>
               <CopyListingTextRow item={item} uid={uid} />
               <SavePhotosRow item={item} />
@@ -617,7 +623,11 @@ function ThingDrawer({
         <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
           <StatusDot
             status={item.status}
-            label={isNotListed ? NOT_LISTED_LABEL : undefined}
+            label={
+              item.status === 'AVAILABLE'
+                ? getAvailableLabel(item, isSaleFinished)
+                : undefined
+            }
           >
             {getStatusFacts(item)}
           </StatusDot>

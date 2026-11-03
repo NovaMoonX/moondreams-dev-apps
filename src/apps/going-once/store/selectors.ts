@@ -1,6 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
+import { FINISHED_SALE_STATUS } from '@apps/going-once/constants';
 import type {
   Inquiry,
   Item,
@@ -13,6 +14,10 @@ export const selectSales = (state: RootState) => state.goingOnce.sales.items;
 
 export const selectSalesStatus = (state: RootState) =>
   state.goingOnce.sales.status;
+
+/** Whether the sale with this id is finished. */
+export const selectIsSaleFinished = (state: RootState, saleId: string | null) =>
+  selectSaleById(state, saleId)?.status === FINISHED_SALE_STATUS;
 
 /** The sale with this id: its own listener's copy once it has arrived, else the one in my sales. */
 export const selectSaleById = (

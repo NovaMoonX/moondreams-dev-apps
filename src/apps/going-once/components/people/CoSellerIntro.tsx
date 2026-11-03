@@ -4,6 +4,7 @@ import IntroCard from '@/components/IntroCard';
 import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import PushCapsule from '@apps/going-once/components/inbox/PushCapsule';
+import { FINISHED_SALE_STATUS } from '@apps/going-once/constants';
 import type { Sale } from '@apps/going-once/types';
 import { toFirstName } from '@apps/going-once/utils/personName';
 import { isSaleSeller } from '@apps/going-once/utils/roles';
@@ -49,7 +50,9 @@ function CoSellerIntro({ sale, uid }: CoSellerIntroProps) {
         delete other people&apos;s things, manage co-sellers or change the
         sale&apos;s details; you can leave from People.
       </IntroCard>
-      <PushCapsule saleId={sale.id} uid={uid} />
+      {sale.status !== FINISHED_SALE_STATUS && (
+        <PushCapsule saleId={sale.id} uid={uid} />
+      )}
     </div>
   );
 }

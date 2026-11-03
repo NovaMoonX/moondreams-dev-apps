@@ -164,13 +164,7 @@ function SaleTab({
 
       <LinkCard sale={sale} isSeller={isSeller} />
 
-      {isFinished ? (
-        <p className='text-muted-foreground text-sm text-pretty'>
-          Pushes are off while the sale is finished.
-        </p>
-      ) : (
-        <PushSwitch saleId={sale.id} uid={uid} />
-      )}
+      {!isFinished && <PushSwitch saleId={sale.id} uid={uid} />}
 
       <PeopleSection sale={sale} uid={uid} myEmail={myEmail} onLeft={onLeft} />
 

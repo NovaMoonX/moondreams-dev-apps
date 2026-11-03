@@ -69,17 +69,16 @@ function FinishSection({ sale, isSeller, summary }: FinishSectionProps) {
 
   if (isFinished)
     return (
-      <section
-        aria-label='Finished'
-        className='border-border bg-card space-y-3 rounded-2xl border p-4'
-      >
-        <p className='text-sm text-pretty'>{describeFinished(sale)}</p>
+      <section aria-label='Finished' className='space-y-3'>
+        <p className='text-muted-foreground text-sm text-pretty'>
+          {describeFinished(sale)}
+        </p>
         {isSeller && (
           <ActionRow
             isRoomy
             icon={<RotateCcw />}
             label={isWorking ? 'Reopening…' : 'Reopen the sale'}
-            subtitle='The public page stays off until you turn it on.'
+            subtitle='Opens the sale again.'
             isDisabled={isWorking}
             onClick={() => void handleReopen()}
           />

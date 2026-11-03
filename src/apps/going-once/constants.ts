@@ -120,6 +120,9 @@ export const CONDITION_LABELS: Record<ItemCondition, string> = {
 /** What a thing that buyers can't be shown yet is called where a status word would stand. */
 export const NOT_LISTED_LABEL = 'Not listed yet';
 
+/** What an Available thing is called once the sale is finished: it didn't find a buyer. */
+export const DID_NOT_SELL_LABEL = "Didn't sell";
+
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   AVAILABLE: 'Available',
   PENDING: 'Pending',
