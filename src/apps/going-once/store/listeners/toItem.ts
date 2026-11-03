@@ -59,6 +59,8 @@ export function toItem(id: string, saleId: string, data: DocumentData): Item {
     statusHistory: Array.isArray(item.statusHistory)
       ? item.statusHistory.map(toStatusChange)
       : [],
+    listingCopiedAt: item.listingCopiedAt ?? null,
+    listingCopiedBy: item.listingCopiedBy ?? null,
     createdBy: item.createdBy ?? '',
     createdAt: item.createdAt ?? 0,
     lastEditedAt: item.lastEditedAt ?? null,

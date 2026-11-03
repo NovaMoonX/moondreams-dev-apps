@@ -32,7 +32,7 @@ Next:
 - [x] An interest form on the public page, refused in words for a thing that just sold
 - [x] A shared inbox: New and Handled, with Text, Call and Email
 - [ ] A bundled push when someone is interested, and each thing's own list of who asked with Hold for
-- [ ] Copy listing text, Save photos and Save all photos for relisting
+- [ ] Copy listing text and Save photos for one thing are in; Save all photos for relisting is next
 - [ ] Finish the sale, with buyers' details cleared after 30 days
 - [ ] Later: who holds the money, and a later sale from what didn't sell
 
