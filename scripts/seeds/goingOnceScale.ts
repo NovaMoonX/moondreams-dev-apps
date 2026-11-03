@@ -1,4 +1,11 @@
-import { EMPTY_OPTIONALS, JPEG_SIZE, uploadSeedPhoto } from './goingOnce.ts';
+import {
+  buildSeedInquiry,
+  buildSeedStatus,
+  EMPTY_OPTIONALS,
+  JPEG_SIZE,
+  uploadSeedPhoto,
+  type SeedStatus,
+} from './goingOnce.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -35,6 +42,42 @@ const NOUNS = [
 ];
 const MATERIALS = ['oak', 'steel', 'walnut', 'wicker', 'glass', 'linen'];
 
+const NEW_INQUIRY_COUNT = 12;
+const HANDLED_INQUIRY_COUNT = 36;
+
+const BUYERS = ['Nate', 'Dev', 'Priya', 'Marcus', 'Lena'];
+const METHODS = ['CASH', 'VENMO', 'ZELLE', 'OTHER'] as const;
+
+/** Four Pending (one with a long name), eight Sold and three taken off the list; the rest stay Available. */
+const buildStatus = (
+  index: number,
+  people: { maya: string; theo: string },
+): SeedStatus => {
+  if (index % 12 === 3)
+    return {
+      kind: 'PENDING',
+      by: people.theo,
+      buyerName:
+        index === 3
+          ? 'Alexandra Wilhelmina Featherstonehaugh-Smythe'
+          : BUYERS[index % BUYERS.length],
+      pickup: index % 24 === 15 ? null : 'saturday',
+      daysAgo: 1 + (index % 3),
+    };
+  if (index % 6 === 2)
+    return {
+      kind: 'SOLD',
+      by: index % 4 === 2 ? people.maya : people.theo,
+      priceCents: (4 + ((index * 5) % 40)) * 500,
+      method: index % 8 === 2 ? null : METHODS[index % METHODS.length],
+      daysAgo: 1 + (index % 5),
+      heldFor: index % 4 === 0 ? BUYERS[index % BUYERS.length] : undefined,
+    };
+  if ([7, 19, 43].includes(index))
+    return { kind: 'WITHDRAWN', by: people.maya, daysAgo: 1 + (index % 4) };
+  return { kind: 'AVAILABLE' };
+};
+
 const buildThing = (index: number) => {
   const noun = NOUNS[index % NOUNS.length];
   const material = MATERIALS[(index * 3) % MATERIALS.length];
@@ -65,6 +108,7 @@ export async function seedGoingOnceScale(
   context: SeedContext,
 ): Promise<SeedResult> {
   const maya = FIXTURE_USERS.goingOnceSeller;
+  const theo = FIXTURE_USERS.goingOnceCoSeller;
   const sale = context.firestore
     .collection('apps')
     .doc('going-once')
@@ -79,10 +123,39 @@ export async function seedGoingOnceScale(
     currency: 'USD',
     ownerUid: maya.uid,
     createdBy: maya.uid,
-    members: [maya.uid],
+    members: [maya.uid, theo.uid],
+    memberJoinedAt: { [theo.uid]: context.now - 8 * DAY_MS },
+    publicLinkId: null,
+    publicLinkChangedAt: null,
     createdAt: context.now - 9 * DAY_MS,
     lastEditedAt: null,
   });
+
+  // Eight waiting emails, one of them very long, so People still reads at the cap of ten with Theo.
+  const waitingEmails = [
+    ...Array.from(
+      { length: 7 },
+      (_, index) => `helper${index + 1}@example.test`,
+    ),
+    'a.very.long.email.address.for.a.helper.who.is.waiting@a-surprisingly-long-example-domain.test',
+  ];
+  await Promise.all(
+    waitingEmails.map((email, index) =>
+      context.firestore
+        .collection('apps')
+        .doc('going-once')
+        .collection('emailInvites')
+        .doc(`${SALE_ID}_${email}`)
+        .set({
+          saleId: SALE_ID,
+          email,
+          invitedBy: maya.uid,
+          saleName: 'Big garage sale (scale test)',
+          inviterName: 'Maya',
+          createdAt: context.now - (index + 1) * 3 * MINUTE_MS,
+        }),
+    ),
+  );
 
   await Promise.all(
     Array.from({ length: THING_COUNT }, async (_, index) => {
@@ -116,7 +189,10 @@ export async function seedGoingOnceScale(
           ...EMPTY_OPTIONALS,
           ...thing.optionals,
           photos,
-          status: 'AVAILABLE',
+          ...buildSeedStatus(
+            buildStatus(index, { maya: maya.uid, theo: theo.uid }),
+            context.now,
+          ),
           createdBy: maya.uid,
           createdAt,
           lastEditedAt: null,
@@ -125,5 +201,44 @@ export async function seedGoingOnceScale(
     }),
   );
 
-  return { ...EMPTY_SEED_RESULT, firestoreDocuments: 1 + THING_COUNT };
+  // Handled outnumbers the Inbox's 30 so the Handled view shows its "most recent" cap; every fifth sender and message is long.
+  await Promise.all(
+    Array.from(
+      { length: NEW_INQUIRY_COUNT + HANDLED_INQUIRY_COUNT },
+      (_, index) => {
+        const thing = buildThing(index % THING_COUNT);
+        const isHandled = index >= NEW_INQUIRY_COUNT;
+        const isLong = index % 5 === 0;
+        const stored = buildSeedInquiry(SALE_ID, {
+          itemId: `seed-go-${thing.id}`,
+          itemTitle: thing.title,
+          name: isLong
+            ? 'Alexandra Wilhelmina Featherstonehaugh-Smythe'
+            : `${BUYERS[index % BUYERS.length]} ${index + 1}`,
+          contact: `206555${String(1000 + index).padStart(4, '0')}`,
+          message: isLong
+            ? 'Hello! I saw this on the link a friend sent me and wondered whether it is still available, whether you would take a little less, and whether I could pick it up on a weekday evening after work because I do not drive on weekends.'
+            : 'Is this still available?',
+          sentAt: context.now - (index + 1) * 47 * MINUTE_MS,
+          handled: isHandled
+            ? {
+                by: index % 2 === 0 ? maya.uid : theo.uid,
+                at: context.now - (index + 1) * 41 * MINUTE_MS,
+              }
+            : undefined,
+        });
+        return sale.collection('inquiries').doc(stored.id).set(stored);
+      },
+    ),
+  );
+
+  return {
+    ...EMPTY_SEED_RESULT,
+    firestoreDocuments:
+      1 +
+      waitingEmails.length +
+      THING_COUNT +
+      NEW_INQUIRY_COUNT +
+      HANDLED_INQUIRY_COUNT,
+  };
 }

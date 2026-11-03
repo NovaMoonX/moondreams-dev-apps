@@ -1,12 +1,8 @@
 import { onCall } from 'firebase-functions/v2/https';
 
+import { isShareId } from '../../share/shareIds.js';
 import { shareRef, shareSnapshotRef } from './pinchShareStore.js';
-import {
-  isRecord,
-  isShareId,
-  toShareResult,
-  type ShareResult,
-} from './pinchShareView.js';
+import { isRecord, toShareResult, type ShareResult } from './pinchShareView.js';
 
 export const getPinchShare = onCall(
   {

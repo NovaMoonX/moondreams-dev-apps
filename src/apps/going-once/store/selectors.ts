@@ -1,7 +1,13 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import type { Item, Sale } from '@apps/going-once/types';
+import type {
+  Inquiry,
+  Item,
+  Sale,
+  SaleEmailInvite,
+} from '@apps/going-once/types';
+import { getStatusSummary } from '@apps/going-once/utils/statusSummary';
 
 export const selectSales = (state: RootState) => state.goingOnce.sales.items;
 
@@ -33,8 +39,64 @@ export const selectItems = createSelector(
       : [],
 );
 
+/** The open sale's counts and sums per status, worked out once per change to its things. */
+export const selectStatusSummary = createSelector([selectItems], (items) =>
+  getStatusSummary(items),
+);
+
 export const selectItemsStatus = (state: RootState) =>
   state.goingOnce.items.status;
 
 export const selectPhotoUploads = (state: RootState) =>
   state.goingOnce.photoUploads;
+
+export const selectMyInvites = (state: RootState) => state.goingOnce.myInvites;
+
+/** The open sale's waiting invitations, oldest first; empty while another sale's are still arriving. */
+export const selectSaleInvites = createSelector(
+  [
+    (state: RootState) => state.goingOnce.saleInvites,
+    (_state: RootState, saleId: string | null) => saleId,
+  ],
+  (saleInvites, saleId): SaleEmailInvite[] =>
+    saleInvites.saleId === saleId
+      ? [...saleInvites.invites].sort(
+          (first, second) => first.createdAt - second.createdAt,
+        )
+      : [],
+);
+
+export const selectRemovedFrom = (state: RootState) =>
+  state.goingOnce.removedFrom;
+
+const NO_INQUIRIES: Inquiry[] = [];
+
+/** The open sale's New inquiries, newest sent first; empty while another sale's are still arriving. */
+export const selectNewInquiries = (
+  state: RootState,
+  saleId: string | null,
+): Inquiry[] =>
+  state.goingOnce.inquiries.saleId === saleId
+    ? state.goingOnce.inquiries.new.items
+    : NO_INQUIRIES;
+
+/** The open sale's newest Handled inquiries, most recently handled first. */
+export const selectHandledInquiries = (
+  state: RootState,
+  saleId: string | null,
+): Inquiry[] =>
+  state.goingOnce.inquiries.saleId === saleId
+    ? state.goingOnce.inquiries.handled.items
+    : NO_INQUIRIES;
+
+/** Whether both inquiry lists have answered for this sale. */
+export const selectInquiriesStatus = (
+  state: RootState,
+  saleId: string | null,
+): 'loading' | 'ready' | 'error' => {
+  const { inquiries } = state.goingOnce;
+  if (inquiries.saleId !== saleId) return 'loading';
+  const statuses = [inquiries.new.status, inquiries.handled.status];
+  if (statuses.includes('error')) return 'error';
+  return statuses.every((status) => status === 'ready') ? 'ready' : 'loading';
+};

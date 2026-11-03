@@ -175,7 +175,7 @@ function PhotosSheet({ item, uid, onClose }: PhotosSheetProps) {
       </div>
       <ModalFooterActions
         rightActions={
-          <Button type='button' onClick={onClose}>
+          <Button type='button' variant='secondary' onClick={onClose}>
             Done
           </Button>
         }
@@ -201,7 +201,10 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
   const [openKey, setOpenKey] = useState<RowKey | 'photos' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasSaved, setHasSaved] = useState(false);
-  const deleteThing = useDeleteThing(item.saleId);
+  const { deleteThing, dialog: deleteDialog } = useDeleteThing(
+    item.saleId,
+    uid,
+  );
   const answers = toAnswers(item);
 
   const renderRow = (key: RowKey) => {
@@ -254,12 +257,13 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
             )
           }
           rightActions={
-            <Button type='button' variant='secondary' onClick={onClose}>
+            <Button type='button' onClick={onClose}>
               Done
             </Button>
           }
         />
       </div>
+      {deleteDialog}
       {openKey === 'photos' && (
         <PhotosSheet item={item} uid={uid} onClose={() => setOpenKey(null)} />
       )}

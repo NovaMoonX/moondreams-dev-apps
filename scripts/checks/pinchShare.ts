@@ -6,9 +6,7 @@ import {
   SHARE_LINK_KINDS,
   SHARE_UNITS,
   isShareOwner,
-  isShareId,
   kitchenCoverPath,
-  mintShareId,
   shareCoverPath,
   toCoverRefs,
   toCoveredCopy,
@@ -18,6 +16,11 @@ import {
   toSharedMeal,
   toSharedRecipe,
 } from '../../functions/src/apps/pinch/pinchShareView.ts';
+import {
+  SHARE_ID_LENGTH,
+  isShareId,
+  mintShareId,
+} from '../../functions/src/share/shareIds.ts';
 import * as clientConstants from '../../src/apps/pinch/constants.ts';
 import { SEED_SHARE_IDS, buildSeedShares } from '../seeds/pinch.ts';
 
@@ -791,6 +794,7 @@ check(
 );
 
 check("the unit list and every cap and list here equal the app's own", () => {
+  assert.equal(SHARE_ID_LENGTH, L.SHARE_ID_LENGTH);
   assert.deepEqual([...SHARE_UNITS], clientConstants.UNITS);
   assert.deepEqual(
     [...SHARE_LINK_KINDS].sort(),

@@ -1,8 +1,19 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Ellipsis, Trash2 } from 'lucide-react';
+import {
+  BadgeDollarSign,
+  CalendarClock,
+  Ellipsis,
+  Eye,
+  EyeOff,
+  History,
+  Pencil,
+  RotateCcw,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -11,22 +22,49 @@ import DetailSheet from '@/components/DetailSheet';
 import FactsLine from '@/components/FactsLine';
 import LinkPreviewCard from '@/components/LinkPreviewCard';
 import PhotoStrip from '@/components/PhotoStrip';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
+import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { formatDateUTC } from '@/utils/formatUtils';
-import { formatCentsShort } from '@/utils/moneyUtils';
+import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
 import { parseHttpUrl } from '@/utils/urlUtils';
+import ChangePaidView from '@apps/going-once/components/things/ChangePaidView';
+import HistoryView from '@apps/going-once/components/things/HistoryView';
+import MarkPendingView from '@apps/going-once/components/things/MarkPendingView';
+import MarkSoldView from '@apps/going-once/components/things/MarkSoldView';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
-import { CONDITION_LABELS } from '@apps/going-once/constants';
+import SoldConfirmation from '@apps/going-once/components/things/SoldConfirmation';
+import StatusDot from '@apps/going-once/components/things/StatusDot';
+import { CONDITION_LABELS, NOT_LISTED_LABEL } from '@apps/going-once/constants';
 import { useDeleteThing } from '@apps/going-once/hooks/useDeleteThing';
+import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
+import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
 import { useItemPhotoUrls } from '@apps/going-once/queries/photoUrlQueries';
+import {
+  changeStatus,
+  type StatusResult,
+  type StatusTransition,
+} from '@apps/going-once/store/actions/statusActions';
 import type { Item } from '@apps/going-once/types';
 import {
   canDeleteItem,
   formatAddedAgo,
-  formatAskingPrice,
   getItemName,
   isListable,
 } from '@apps/going-once/utils/listing';
+import {
+  getStatusFacts,
+  getThingOffer,
+  isUnderFloor,
+} from '@apps/going-once/utils/status';
+import {
+  getHoldDraft,
+  getSoldDraft,
+  isDraftChanged,
+  type HoldDraft,
+  type SoldDraft,
+} from '@apps/going-once/utils/statusDrafts';
+import type { StatusFigures } from '@apps/going-once/utils/statusSummary';
 
 interface ThingDrawerProps {
   item: Item;
@@ -36,7 +74,18 @@ interface ThingDrawerProps {
   /** Reopens the add-a-thing walk-through on this thing. */
   onFinish: () => void;
   onModify: () => void;
+  /** Every sold thing in the sale, for Collected. */
+  sold: StatusFigures;
 }
+
+type View =
+  | 'more'
+  | 'markPending'
+  | 'changeHold'
+  | 'markSold'
+  | 'sold'
+  | 'changePaid'
+  | 'history';
 
 interface Row {
   label: string;
@@ -72,7 +121,6 @@ function StoreLink({ item }: { item: Item }) {
 }
 
 const getPrivateRows = (item: Item): Row[] => {
-  const asking = formatAskingPrice(item.askingPriceCents);
   const bought = [
     item.boughtFrom,
     item.boughtOn === null ? null : formatDateUTC(item.boughtOn),
@@ -80,7 +128,6 @@ const getPrivateRows = (item: Item): Row[] => {
     .filter((part) => part !== null)
     .join(' · ');
   return [
-    { label: 'Asking price', value: asking ?? 'No price yet' },
     {
       label: 'Floor price',
       value:
@@ -100,7 +147,16 @@ const getPrivateRows = (item: Item): Row[] => {
   ];
 };
 
-/** A thing in full: its photos, a facts line and the private figures sellers negotiate with. */
+interface MoreAction {
+  key: string;
+  icon: ReactNode;
+  label: string;
+  subtitle: string;
+  hasChevron?: boolean;
+  onClick: () => void;
+}
+
+/** A thing in full: its photos, a facts line and the private figures sellers negotiate with, with its status acts one tap away. */
 function ThingDrawer({
   item,
   uid,
@@ -108,11 +164,26 @@ function ThingDrawer({
   onClose,
   onFinish,
   onModify,
+  sold,
 }: ThingDrawerProps) {
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [views, setViews] = useState<View[]>([]);
+  const [footerNode, setFooterNode] = useState<HTMLElement | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const { isWorking, run } = useSingleFlight();
   const now = useNow();
-  const deleteThing = useDeleteThing(item.saleId);
+  const [hold, setHold] = useState<HoldDraft>(() => getHoldDraft(null, now));
+  const [soldDraft, setSoldDraft] = useState<SoldDraft>(() =>
+    getSoldDraft(item, now),
+  );
+  const [paidAmount, setPaidAmount] = useState('');
+  const { pending: undoable, showUndo, undo } = useUndoRemoval();
+  const [undoLabel, setUndoLabel] = useState('Undo');
+  const getName = usePersonNames(
+    item.sale === null ? [] : [item.sale.markedBy],
+    uid,
+  );
   const name = getItemName(item);
+  const view = views.at(-1) ?? null;
   const photos = useItemPhotoUrls(item.photos).flatMap((photo) =>
     photo.url === null ? [] : [{ id: photo.id, url: photo.url }],
   );
@@ -120,7 +191,6 @@ function ThingDrawer({
     item.condition === null
       ? null
       : { key: 'condition', content: CONDITION_LABELS[item.condition] },
-    isListable(item) ? null : { key: 'unlisted', content: 'Not listed yet' },
   ].filter((fact) => fact !== null);
   const buyerFacts = [
     item.brandModel === null
@@ -135,85 +205,395 @@ function ThingDrawer({
       : null,
   ].filter((fact) => fact !== null);
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
-  const isFinishShown = !isListable(item);
-  const showMore = isMoreOpen && canDelete;
+  const offer = getThingOffer(item.status, isListable(item));
+  const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
+  const isOnTheList =
+    item.status === 'PENDING' || (item.status === 'AVAILABLE' && !isNotListed);
 
-  const footer = (
-    <div className='flex items-center gap-2'>
+  const getIsDirty = () => {
+    if (view === 'markPending')
+      return isDraftChanged(hold, getHoldDraft(null, now));
+    if (view === 'changeHold')
+      return isDraftChanged(hold, getHoldDraft(item.pending, now));
+    if (view === 'markSold')
+      return isDraftChanged(soldDraft, getSoldDraft(item, now));
+    if (view === 'changePaid')
+      return paidAmount !== centsToInputValue(item.sale?.priceCents ?? 0);
+    return false;
+  };
+  const isDirty = getIsDirty();
+
+  const open = (next: View) => {
+    setStatusError(null);
+    if (next === 'markPending') setHold(getHoldDraft(null, now));
+    if (next === 'changeHold') setHold(getHoldDraft(item.pending, now));
+    if (next === 'markSold') setSoldDraft(getSoldDraft(item, now));
+    if (next === 'changePaid')
+      setPaidAmount(centsToInputValue(item.sale?.priceCents ?? 0));
+    setViews((current) => [...current, next]);
+  };
+  const back = () => setViews((current) => current.slice(0, -1));
+  const toFront = () => setViews([]);
+  const askBefore = {
+    isDirty,
+    title: 'Discard your changes?',
+    message: 'They will not be saved.',
+  };
+  const goBack = useDiscardGuard({ ...askBefore, onClose: back });
+  const closeDrawer = useDiscardGuard({ ...askBefore, onClose });
+
+  const showRefusal = (result: StatusResult | null) => {
+    if (result !== null && !result.ok) setStatusError(result.message);
+  };
+
+  /** One status act at a time: a second tap while it runs does nothing. Comes back to the thing once it has written; `null` when ignored. */
+  const apply = (transition: StatusTransition) =>
+    run(async () => {
+      setStatusError(null);
+      const result = await changeStatus(item.saleId, item.id, uid, transition);
+      if (result.ok) toFront();
+      return result;
+    });
+  const offerUndo = (
+    message: string,
+    label: string,
+    restore: () => Promise<StatusResult | null>,
+  ) => {
+    setUndoLabel(label);
+    showUndo(message, () => void restore().then(showRefusal));
+  };
+
+  const takeOffTheList = async () => {
+    const restorePending = item.pending;
+    const result = await apply({ kind: 'TAKE_OFF', undoesAt: null });
+    showRefusal(result);
+    if (result?.ok)
+      offerUndo('Taken off the list', 'Put it back', () =>
+        apply({ kind: 'PUT_BACK', restorePending, undoesAt: result.at }),
+      );
+  };
+  const putBackOnTheList = async () => {
+    const result = await apply({
+      kind: 'PUT_BACK',
+      restorePending: null,
+      undoesAt: null,
+    });
+    showRefusal(result);
+    if (result?.ok)
+      offerUndo('Put back on the list', 'Undo', () =>
+        apply({ kind: 'TAKE_OFF', undoesAt: result.at }),
+      );
+  };
+  /** Takes the sale back and offers it again for a few seconds; answers a refusal in words. */
+  const notSoldAfterAll = async (): Promise<string | null> => {
+    const { sale } = item;
+    if (sale === null) return null;
+    const result = await apply({ kind: 'NOT_SOLD' });
+    if (result === null || !result.ok) return result?.message ?? null;
+    offerUndo('Back to available', 'Undo', () =>
+      apply({ kind: 'RESTORE_SALE', sale, undoesAt: result.at }),
+    );
+    return null;
+  };
+  const backToAvailable = async () =>
+    showRefusal(await apply({ kind: 'BACK_TO_AVAILABLE' }));
+
+  const { deleteThing, dialog: deleteDialog } = useDeleteThing(
+    item.saleId,
+    uid,
+    () => void takeOffTheList(),
+  );
+  const moreActions: MoreAction[] = [
+    isOnTheList
+      ? {
+          key: 'markSold',
+          icon: <BadgeDollarSign />,
+          label: 'Mark sold',
+          subtitle:
+            item.status === 'PENDING'
+              ? 'Record what they paid'
+              : "Skip Pending, it's gone",
+          hasChevron: true,
+          onClick: () => open('markSold'),
+        }
+      : null,
+    item.status === 'PENDING'
+      ? {
+          key: 'changeHold',
+          icon: <CalendarClock />,
+          label: 'Change who or when',
+          subtitle: 'Same hold, a new name or day',
+          hasChevron: true,
+          onClick: () => open('changeHold'),
+        }
+      : null,
+    item.status === 'PENDING'
+      ? {
+          key: 'backToAvailable',
+          icon: <Undo2 />,
+          label: 'Back to available',
+          subtitle:
+            'The pickup fell through. Buyers see it as Available again.',
+          onClick: () => void backToAvailable(),
+        }
+      : null,
+    item.status === 'SOLD'
+      ? {
+          key: 'changePaid',
+          icon: <Pencil />,
+          label: 'Change what was paid',
+          subtitle: 'Fix a typo; Collected follows',
+          hasChevron: true,
+          onClick: () => open('changePaid'),
+        }
+      : null,
+    item.status === 'SOLD'
+      ? {
+          key: 'notSold',
+          icon: <RotateCcw />,
+          label: 'Not sold after all',
+          subtitle: 'Back to Available, and out of Collected',
+          onClick: () =>
+            void notSoldAfterAll().then((message) => {
+              if (message !== null) setStatusError(message);
+            }),
+        }
+      : null,
+    isOnTheList
+      ? {
+          key: 'takeOff',
+          icon: <EyeOff />,
+          label: 'Take off the list',
+          subtitle:
+            item.status === 'PENDING'
+              ? `Drops ${item.pending?.buyerName ? `${item.pending.buyerName}'s` : 'the'} hold. Leaves the public page and the totals.`
+              : 'Keeping it or gave it away. Leaves the public page and the totals.',
+          onClick: () => void takeOffTheList(),
+        }
+      : null,
+    item.status === 'WITHDRAWN'
+      ? {
+          key: 'putBack',
+          icon: <Eye />,
+          label: 'Put it back',
+          subtitle: 'Back on the public page as Available',
+          onClick: () => void putBackOnTheList(),
+        }
+      : null,
+    {
+      key: 'history',
+      icon: <History />,
+      label: 'History',
+      subtitle: 'Who changed what, and when',
+      hasChevron: true,
+      onClick: () => open('history'),
+    },
+  ].filter((action) => action !== null);
+
+  const primary = () => {
+    if (offer === null) return <span className='flex-1' aria-hidden='true' />;
+    const actions: Record<NonNullable<typeof offer>, [string, () => void]> = {
+      FINISH: ['Finish adding', onFinish],
+      MARK_PENDING: ['Mark pending', () => open('markPending')],
+      MARK_SOLD: ['Mark sold', () => open('markSold')],
+      PUT_BACK: ['Put it back', () => void putBackOnTheList()],
+    };
+    const [label, onClick] = actions[offer];
+    return (
       <Button
         type='button'
-        variant='secondary'
         size='lg'
         rounded='full'
-        className={join(!isFinishShown && 'flex-1')}
-        onClick={onModify}
+        className='min-w-0 flex-1 whitespace-nowrap max-[359px]:px-4'
+        disabled={isWorking}
+        onClick={onClick}
       >
-        Modify
+        {label}
       </Button>
-      {canDelete && (
+    );
+  };
+
+  const getMarkedBy = () => {
+    if (item.sale === null) return 'someone';
+    const marker = getName(item.sale.markedBy);
+    return marker === 'You' ? 'you' : marker;
+  };
+
+  const isMoreOpen = view === 'more';
+  const isFront = view === null || view === 'more';
+  const frontFooter = (
+    <div className='space-y-2'>
+      {statusError !== null && (
+        <p role='alert' className='text-destructive text-sm'>
+          {statusError}
+        </p>
+      )}
+      {undoable !== null && statusError === null && (
+        <div role='status' className='flex items-center justify-between gap-3'>
+          <p className='text-muted-foreground min-w-0 text-sm'>
+            {undoable.message}
+          </p>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className='h-10 shrink-0 px-4 tabular-nums'
+            disabled={isWorking}
+            onClick={undo}
+          >
+            {undoLabel} · {undoable.secondsLeft}
+          </Button>
+        </div>
+      )}
+      <div className='flex items-center gap-2'>
+        <Button
+          type='button'
+          variant='secondary'
+          size='lg'
+          rounded='full'
+          className='max-[359px]:px-4'
+          onClick={onModify}
+        >
+          Modify
+        </Button>
+        {primary()}
         <Button
           type='button'
           variant='secondary'
           size='icon'
           rounded='full'
           aria-label='More for this thing'
-          aria-expanded={showMore}
-          onClick={() => setIsMoreOpen((open) => !open)}
+          aria-expanded={isMoreOpen}
+          onClick={() => (isMoreOpen ? back() : open('more'))}
           className={join(
             'text-foreground! size-10 min-w-10 shrink-0 p-0',
-            showMore && 'bg-accent!',
+            isMoreOpen && 'bg-accent!',
           )}
         >
           <Ellipsis className='size-5' aria-hidden='true' />
         </Button>
-      )}
-      {isFinishShown && (
-        <Button
-          type='button'
-          size='lg'
-          rounded='full'
-          className='flex-1'
-          onClick={onFinish}
-        >
-          Finish adding
-        </Button>
-      )}
+      </div>
     </div>
   );
+
+  const getFooter = () => {
+    if (isFront) return frontFooter;
+    if (view === 'history') return undefined;
+    return <div ref={setFooterNode} />;
+  };
 
   return (
     <DetailSheet
       isOpen
-      onClose={onClose}
+      onClose={closeDrawer}
       title={name}
-      viewKey={showMore ? 'more' : 'thing'}
-      footer={footer}
+      viewKey={view ?? 'thing'}
+      footer={getFooter()}
     >
-      {showMore && (
+      {isMoreOpen && (
         <div className='space-y-5'>
-          <BackLink onBack={() => setIsMoreOpen(false)} label={name} />
+          <BackLink onBack={back} label={name} />
           <ActionGroup isRoomy>
-            <ActionRow
-              isGrouped
-              isRoomy
-              isDestructive
-              icon={<Trash2 />}
-              label='Delete thing'
-              subtitle={
-                isSeller ? undefined : formatAddedAgo(item.createdAt, now)
-              }
-              onClick={() => {
-                void deleteThing(item).then((isDeleted) => {
-                  if (isDeleted) onClose();
-                });
-              }}
-            />
+            {moreActions.map((action) => (
+              <ActionRow
+                key={action.key}
+                isGrouped
+                isRoomy
+                icon={action.icon}
+                label={action.label}
+                subtitle={action.subtitle}
+                hasChevron={action.hasChevron}
+                isDisabled={isWorking}
+                onClick={action.onClick}
+              />
+            ))}
           </ActionGroup>
+          {canDelete && (
+            <ActionGroup isRoomy>
+              <ActionRow
+                isGrouped
+                isRoomy
+                isDestructive
+                icon={<Trash2 />}
+                label='Delete thing'
+                subtitle={
+                  isSeller ? undefined : formatAddedAgo(item.createdAt, now)
+                }
+                onClick={() => {
+                  void deleteThing(item).then((isDeleted) => {
+                    if (isDeleted) onClose();
+                  });
+                }}
+              />
+            </ActionGroup>
+          )}
         </div>
       )}
-      <div className={join('space-y-4', showMore && 'hidden')}>
+      {(view === 'markPending' || view === 'changeHold') && (
+        <MarkPendingView
+          item={item}
+          uid={uid}
+          now={now}
+          mode={view === 'changeHold' ? 'CHANGE' : 'MARK'}
+          draft={hold}
+          onDraft={setHold}
+          footerNode={footerNode}
+          onBack={goBack}
+          onLeave={back}
+          onDone={toFront}
+        />
+      )}
+      {view === 'markSold' && (
+        <MarkSoldView
+          item={item}
+          uid={uid}
+          now={now}
+          draft={soldDraft}
+          onDraft={setSoldDraft}
+          footerNode={footerNode}
+          onBack={goBack}
+          onLeave={back}
+          onSold={() => setViews(['sold'])}
+          onTakeOff={() => void takeOffTheList()}
+        />
+      )}
+      {view === 'sold' && (
+        <SoldConfirmation
+          item={item}
+          now={now}
+          markedBy={getMarkedBy()}
+          sold={sold}
+          footerNode={footerNode}
+          onDone={toFront}
+          onNotSold={notSoldAfterAll}
+        />
+      )}
+      {view === 'changePaid' && (
+        <ChangePaidView
+          item={item}
+          uid={uid}
+          collectedCents={sold.collectedCents}
+          amount={paidAmount}
+          onAmount={setPaidAmount}
+          footerNode={footerNode}
+          onBack={goBack}
+          onLeave={back}
+          onSaved={toFront}
+        />
+      )}
+      {view === 'history' && (
+        <HistoryView item={item} uid={uid} onBack={back} />
+      )}
+      <div className={join('space-y-4', view !== null && 'hidden')}>
         <PhotoStrip photos={photos} label={name} />
-        <div className='flex items-center gap-3'>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
+          <StatusDot
+            status={item.status}
+            label={isNotListed ? NOT_LISTED_LABEL : undefined}
+          >
+            {getStatusFacts(item)}
+          </StatusDot>
           {item.askingPriceCents !== null && (
             <PriceTag askingPriceCents={item.askingPriceCents} />
           )}
@@ -222,19 +602,10 @@ function ThingDrawer({
             facts={facts}
           />
         </div>
-        {item.description !== null && (
-          <p className='text-sm break-words whitespace-pre-line'>
-            {item.description}
-          </p>
-        )}
-        <FactsLine
-          className='text-muted-foreground min-w-0 text-sm'
-          facts={buyerFacts}
-        />
-        {!isListable(item) && (
+        {isUnderFloor(item) && item.floorPriceCents !== null && (
           <p className='text-muted-foreground text-sm'>
-            Buyers can&apos;t see this yet. It needs a photo, a name and a
-            price.
+            🔒 Sold under your floor price of{' '}
+            {formatCentsShort(item.floorPriceCents)}
           </p>
         )}
         <section className='bg-accent/60 border-border space-y-3 rounded-2xl border p-3'>
@@ -257,7 +628,23 @@ function ThingDrawer({
             </div>
           )}
         </section>
+        {item.description !== null && (
+          <p className='text-sm text-pretty break-words whitespace-pre-line'>
+            {item.description}
+          </p>
+        )}
+        <FactsLine
+          className='text-muted-foreground min-w-0 text-sm'
+          facts={buyerFacts}
+        />
+        {isNotListed && (
+          <p className='text-muted-foreground text-sm text-pretty'>
+            Buyers can&apos;t see this yet. It needs a photo, a name and a
+            price.
+          </p>
+        )}
       </div>
+      {deleteDialog}
     </DetailSheet>
   );
 }
