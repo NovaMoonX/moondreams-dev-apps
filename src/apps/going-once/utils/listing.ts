@@ -2,6 +2,8 @@ import { formatCentsShort } from '@/utils/moneyUtils';
 import {
   CO_SELLER_DELETE_WINDOW_MS,
   CONDITION_LABELS,
+  DID_NOT_SELL_LABEL,
+  NOT_LISTED_LABEL,
   type ITEM_SORT_OPTIONS,
 } from '@apps/going-once/constants';
 import type { Item } from '@apps/going-once/types';
@@ -21,6 +23,15 @@ export function isListable(item: Listable): boolean {
     item.title.trim() !== '' &&
     item.askingPriceCents !== null
   );
+}
+
+/** The word an Available thing carries instead of "Available", or `undefined` while that word is right: "Not listed yet" while buyers can't be shown it, "Didn't sell" once the sale is finished. */
+export function getAvailableLabel(
+  item: Listable,
+  isSaleFinished: boolean,
+): string | undefined {
+  if (!isListable(item)) return NOT_LISTED_LABEL;
+  return isSaleFinished ? DID_NOT_SELL_LABEL : undefined;
 }
 
 /** "Free", "$150", or `null` while the thing has no price. */

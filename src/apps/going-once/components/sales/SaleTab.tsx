@@ -11,10 +11,15 @@ import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppSelector } from '@/store';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import PeopleSection from '@apps/going-once/components/people/PeopleSection';
+import FinishSection from '@apps/going-once/components/sales/FinishSection';
 import LinkCard from '@apps/going-once/components/sales/LinkCard';
 import PushSwitch from '@apps/going-once/components/sales/PushSwitch';
 import SaleDetailSheet from '@apps/going-once/components/sales/SaleDetailSheet';
-import { SALE_DETAILS, SALE_DETAIL_NOTES } from '@apps/going-once/constants';
+import {
+  FINISHED_SALE_STATUS,
+  SALE_DETAILS,
+  SALE_DETAIL_NOTES,
+} from '@apps/going-once/constants';
 import { deleteSale } from '@apps/going-once/store/actions/saleActions';
 import {
   selectItems,
@@ -81,6 +86,7 @@ function SaleTab({
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const isSeller = isSaleSeller(sale, uid);
+  const isFinished = sale.status === FINISHED_SALE_STATUS;
 
   const handleDelete = async () => {
     const photoCount = items.reduce((sum, item) => sum + item.photos.length, 0);
@@ -109,6 +115,9 @@ function SaleTab({
 
   return (
     <div className='space-y-6'>
+      {isFinished && (
+        <FinishSection sale={sale} isSeller={isSeller} summary={summary} />
+      )}
       {items.length > 0 && (
         <div className='grid grid-cols-2 gap-2 sm:grid-cols-3'>
           <StatTile
@@ -135,13 +144,13 @@ function SaleTab({
           />
           <StatTile
             className='col-span-2 sm:col-span-1'
-            label='Left'
+            label={isFinished ? "Didn't sell" : 'Left'}
             value={summary.AVAILABLE.count}
             detail={formatStatusTotal('AVAILABLE', summary)}
             isLabelWrapped
             hasChevron
             onOpen={{
-              label: 'Left: open the available things',
+              label: `${isFinished ? "Didn't sell" : 'Left'}: open the available things`,
               onClick: () => onOpenStatus('AVAILABLE'),
             }}
           />
@@ -155,7 +164,7 @@ function SaleTab({
 
       <LinkCard sale={sale} isSeller={isSeller} />
 
-      <PushSwitch saleId={sale.id} uid={uid} />
+      {!isFinished && <PushSwitch saleId={sale.id} uid={uid} />}
 
       <PeopleSection sale={sale} uid={uid} myEmail={myEmail} onLeft={onLeft} />
 
@@ -182,6 +191,10 @@ function SaleTab({
           );
         })}
       </div>
+
+      {!isFinished && (
+        <FinishSection sale={sale} isSeller={isSeller} summary={summary} />
+      )}
 
       {isSeller && (
         <div className='space-y-2'>

@@ -39,8 +39,14 @@ export function describeInquiryThing(
   return title;
 }
 
-/** Who asked: the name, or "A buyer" once the sale's contacts have been cleared. */
-export const getInquirerName = (inquiry: Inquiry) => inquiry.name ?? 'A buyer';
+/** Who asked: the name, or once the sale's contacts are cleared "A buyer asked about Gray sofa" (just "A buyer" without a thing). */
+export const getInquirerName = (
+  inquiry: Inquiry,
+  thing: string | null = null,
+) =>
+  inquiry.contactClearedAt !== null && thing !== null
+    ? `A buyer asked about ${thing}`
+    : (inquiry.name ?? 'A buyer');
 
 /** The message the interest form starts with, from the title as the server keeps it; a thing someone is already picking up asks in case it falls through. */
 export const toPrefilledMessage = (title: string, isPending = false) => {

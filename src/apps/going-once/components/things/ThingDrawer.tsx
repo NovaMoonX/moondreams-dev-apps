@@ -25,10 +25,12 @@ import FactsLine from '@/components/FactsLine';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import LinkPreviewCard from '@/components/LinkPreviewCard';
+import LockedButton from '@/components/LockedButton';
 import PhotoStrip from '@/components/PhotoStrip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
+import { useAppSelector } from '@/store';
 import { formatDateUTC } from '@/utils/formatUtils';
 import { centsToInputValue, formatCentsShort } from '@/utils/moneyUtils';
 import { parseHttpUrl } from '@/utils/urlUtils';
@@ -42,7 +44,7 @@ import ThingInquiryView from '@apps/going-once/components/things/ThingInquiryVie
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import SoldConfirmation from '@apps/going-once/components/things/SoldConfirmation';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
-import { CONDITION_LABELS, NOT_LISTED_LABEL } from '@apps/going-once/constants';
+import { CONDITION_LABELS } from '@apps/going-once/constants';
 import { useDeleteThing } from '@apps/going-once/hooks/useDeleteThing';
 import { useSingleFlight } from '@apps/going-once/hooks/useSingleFlight';
 import { usePersonNames } from '@apps/going-once/hooks/usePersonNames';
@@ -53,6 +55,7 @@ import {
   type StatusResult,
   type StatusTransition,
 } from '@apps/going-once/store/actions/statusActions';
+import { selectIsSaleFinished } from '@apps/going-once/store/selectors';
 import type { Inquiry, Item } from '@apps/going-once/types';
 import {
   formatSentAt,
@@ -64,6 +67,7 @@ import {
   canDeleteItem,
   formatAddedAgo,
   getItemName,
+  getAvailableLabel,
   isListable,
 } from '@apps/going-once/utils/listing';
 import {
@@ -249,10 +253,16 @@ function ThingDrawer({
     ),
   ).size;
   const canDelete = canDeleteItem(item, { isSeller, uid, now });
-  const offer = getThingOffer(item.status, isListable(item));
+  const isSaleFinished = useAppSelector((state) =>
+    selectIsSaleFinished(state, item.saleId),
+  );
+  const offer = getThingOffer(item.status, isListable(item), isSaleFinished);
   const isNotListed = item.status === 'AVAILABLE' && !isListable(item);
   const isOnTheList =
     item.status === 'PENDING' || (item.status === 'AVAILABLE' && !isNotListed);
+  const isHoldLockedByFinish =
+    isSaleFinished &&
+    (item.status === 'PENDING' || (item.status === 'AVAILABLE' && isOnTheList));
 
   const getIsDirty = () => {
     if (view === 'markPending') return isDraftChanged(hold, holdStart);
@@ -350,6 +360,14 @@ function ThingDrawer({
     uid,
     () => void takeOffTheList(),
   );
+  const getTakeOffSubtitle = () => {
+    const leaves = isSaleFinished
+      ? 'Leaves the totals.'
+      : 'Leaves the public page and the totals.';
+    return item.status === 'PENDING'
+      ? `Drops ${item.pending?.buyerName ? `${item.pending.buyerName}'s` : 'the'} hold. ${leaves}`
+      : `Keeping it or gave it away. ${leaves}`;
+  };
   const moreActions: MoreAction[] = [
     isOnTheList
       ? {
@@ -364,7 +382,7 @@ function ThingDrawer({
           onClick: () => open('markSold'),
         }
       : null,
-    item.status === 'PENDING'
+    item.status === 'PENDING' && !isSaleFinished
       ? {
           key: 'changeHold',
           icon: <CalendarClock />,
@@ -379,8 +397,9 @@ function ThingDrawer({
           key: 'backToAvailable',
           icon: <Undo2 />,
           label: 'Back to available',
-          subtitle:
-            'The pickup fell through. Buyers see it as Available again.',
+          subtitle: isSaleFinished
+            ? "The pickup fell through. It goes back to Didn't sell."
+            : 'The pickup fell through. Buyers see it as Available again.',
           onClick: () => void backToAvailable(),
         }
       : null,
@@ -399,7 +418,9 @@ function ThingDrawer({
           key: 'notSold',
           icon: <RotateCcw />,
           label: 'Not sold after all',
-          subtitle: 'Back to Available, and out of Collected',
+          subtitle: isSaleFinished
+            ? "Back to Didn't sell, and out of Collected"
+            : 'Back to Available, and out of Collected',
           onClick: () =>
             void notSoldAfterAll().then((message) => {
               if (message !== null) setStatusError(message);
@@ -411,10 +432,7 @@ function ThingDrawer({
           key: 'takeOff',
           icon: <EyeOff />,
           label: 'Take off the list',
-          subtitle:
-            item.status === 'PENDING'
-              ? `Drops ${item.pending?.buyerName ? `${item.pending.buyerName}'s` : 'the'} hold. Leaves the public page and the totals.`
-              : 'Keeping it or gave it away. Leaves the public page and the totals.',
+          subtitle: getTakeOffSubtitle(),
           onClick: () => void takeOffTheList(),
         }
       : null,
@@ -423,7 +441,9 @@ function ThingDrawer({
           key: 'putBack',
           icon: <Eye />,
           label: 'Put it back',
-          subtitle: 'Back on the public page as Available',
+          subtitle: isSaleFinished
+            ? "Back to Didn't sell"
+            : 'Back on the public page as Available',
           onClick: () => void putBackOnTheList(),
         }
       : null,
@@ -648,7 +668,8 @@ function ThingDrawer({
           item={item}
           inquiry={asker}
           now={now}
-          canHold={offer === 'MARK_PENDING'}
+          canHold={offer === 'MARK_PENDING' && asker.contactClearedAt === null}
+          isSaleFinished={isSaleFinished}
           footerNode={footerNode}
           onBack={back}
           onHold={() => {
@@ -662,7 +683,11 @@ function ThingDrawer({
         <div className='flex flex-wrap items-center gap-x-3 gap-y-2'>
           <StatusDot
             status={item.status}
-            label={isNotListed ? NOT_LISTED_LABEL : undefined}
+            label={
+              item.status === 'AVAILABLE'
+                ? getAvailableLabel(item, isSaleFinished)
+                : undefined
+            }
           >
             {getStatusFacts(item)}
           </StatusDot>
@@ -730,6 +755,19 @@ function ThingDrawer({
             Buyers can&apos;t see this yet. It needs a photo, a name and a
             price.
           </p>
+        )}
+        {isHoldLockedByFinish && (
+          <LockedButton
+            label={
+              item.status === 'PENDING' ? 'Change who or when' : 'Mark pending'
+            }
+            title='This sale is finished'
+          >
+            <p>
+              This sale is finished, so nothing new can be held. The seller can
+              reopen it.
+            </p>
+          </LockedButton>
         )}
         <section ref={interestRef} className='scroll-mt-2 space-y-4'>
           {(askedCount > 0 || haveInquiriesFailed) && (

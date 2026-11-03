@@ -1,10 +1,13 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+
+import { useAppSelector } from '@/store';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import ThingThumb from '@apps/going-once/components/things/ThingThumb';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
-import { CONDITION_LABELS, NOT_LISTED_LABEL } from '@apps/going-once/constants';
+import { CONDITION_LABELS } from '@apps/going-once/constants';
+import { selectIsSaleFinished } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
-import { getItemName, isListable } from '@apps/going-once/utils/listing';
+import { getAvailableLabel, getItemName } from '@apps/going-once/utils/listing';
 import { getStatusFacts } from '@apps/going-once/utils/status';
 
 interface ThingRowProps {
@@ -15,7 +18,11 @@ interface ThingRowProps {
 }
 
 /** The row's muted line after its status dot: the word (when the status doesn't say it) and what follows. */
-const getLine = (item: Item, uploadingCount: number) => {
+const getLine = (
+  item: Item,
+  uploadingCount: number,
+  isSaleFinished: boolean,
+) => {
   if (uploadingCount > 0)
     return {
       label: `Uploading ${uploadingCount} ${uploadingCount === 1 ? 'photo' : 'photos'}`,
@@ -26,14 +33,17 @@ const getLine = (item: Item, uploadingCount: number) => {
   const facts =
     item.condition === null ? '' : `· ${CONDITION_LABELS[item.condition]}`;
   return {
-    label: isListable(item) ? undefined : NOT_LISTED_LABEL,
+    label: getAvailableLabel(item, isSaleFinished),
     facts,
   };
 };
 
 /** A thing in the list: its cover, name, its status as a dot and word with what follows, and its asking price. */
 function ThingRow({ item, uploadingCount, onOpen }: ThingRowProps) {
-  const { label, facts } = getLine(item, uploadingCount);
+  const isSaleFinished = useAppSelector((state) =>
+    selectIsSaleFinished(state, item.saleId),
+  );
+  const { label, facts } = getLine(item, uploadingCount, isSaleFinished);
 
   return (
     <Button

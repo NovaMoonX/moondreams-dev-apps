@@ -59,6 +59,7 @@ jobs:
       - run: npm run check:pinch-share
       - run: npm run check:going-once-share
       - run: npm run check:going-once-push
+      - run: npm run check:going-once-finish
   check_shared:
     runs-on: ubuntu-latest
     steps:

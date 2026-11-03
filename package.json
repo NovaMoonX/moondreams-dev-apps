@@ -58,6 +58,7 @@
     "check:gates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/gates.ts",
     "check:gate-rules": "firebase emulators:exec --only auth,firestore --project demo-gate-rules \"python3 scripts/checks/gateRules.py\"",
     "check:waypoint-pushes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/waypointPushes.ts",
+    "check:going-once-finish": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/goingOnceFinish.ts",
     "check:going-once-push": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/goingOncePush.ts",
     "check:receipts": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/receiptSplit.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/receiptReading.ts",
     "check:a-list": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/aListProjection.ts",

@@ -8,7 +8,11 @@ import { ExternalLink, RefreshCw } from 'lucide-react';
 import AppToggle from '@/components/AppToggle';
 import CopyTextButton from '@/components/CopyTextButton';
 import InlineNotice from '@/components/InlineNotice';
-import { SALE_PAGE_PATH } from '@apps/going-once/constants';
+import LockedButton from '@/components/LockedButton';
+import {
+  FINISHED_SALE_STATUS,
+  SALE_PAGE_PATH,
+} from '@apps/going-once/constants';
 import { changeSaleLink } from '@apps/going-once/store/actions/saleActions';
 import type { Sale, SaleLinkAction } from '@apps/going-once/types';
 
@@ -24,6 +28,7 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
   const [pending, setPending] = useState<SaleLinkAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const linkId = sale.publicLinkId;
+  const isFinished = sale.status === FINISHED_SALE_STATUS;
   const isOn = pending === null ? linkId !== null : pending !== 'stop';
   const path = linkId === null ? null : `${SALE_PAGE_PATH}${linkId}`;
 
@@ -62,6 +67,10 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
   };
 
   const getOffNotice = () => {
+    if (isFinished)
+      return isSeller
+        ? 'This sale is finished. Reopen it to turn the page on.'
+        : 'This sale is finished, so the page is off.';
     if (isSeller)
       return "Turning it on makes a link that shows photos, names, condition and prices of Available and Pending things. Never your floor prices, notes, buyers or who's selling.";
     return 'Only the seller can turn it on.';
@@ -78,13 +87,23 @@ function LinkCard({ sale, isSeller }: LinkCardProps) {
           <span className='text-muted-foreground text-sm'>
             {isOn ? 'On' : 'Off'}
           </span>
-          {isSeller && (
+          {isSeller && !isFinished && (
             <AppToggle
               aria-label='Public page'
               checked={isOn}
               disabled={pending !== null}
               onCheckedChange={(isChecked) => void handleToggle(isChecked)}
             />
+          )}
+          {isSeller && isFinished && (
+            <LockedButton
+              size='sm'
+              label='Turn on'
+              title='This sale is finished'
+              className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+            >
+              <p>Reopen the sale to turn the public page on again.</p>
+            </LockedButton>
           )}
         </div>
       </div>

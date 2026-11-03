@@ -15,6 +15,7 @@ import {
   Undo2,
 } from 'lucide-react';
 
+import { useAppSelector } from '@/store';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
@@ -24,11 +25,16 @@ import {
   deleteInquiry,
   markHandled,
 } from '@apps/going-once/store/actions/inquiryActions';
+import { formatDateShort } from '@/utils/formatUtils';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
 import ThingThumb from '@apps/going-once/components/things/ThingThumb';
-import { NOT_LISTED_LABEL } from '@apps/going-once/constants';
+import { selectIsSaleFinished } from '@apps/going-once/store/selectors';
 import type { Inquiry, Item } from '@apps/going-once/types';
-import { getItemName, isListable } from '@apps/going-once/utils/listing';
+import {
+  getAvailableLabel,
+  getItemName,
+  isListable,
+} from '@apps/going-once/utils/listing';
 import { getStatusFacts } from '@apps/going-once/utils/status';
 import { formatPhone } from '@apps/going-once/utils/contact';
 import {
@@ -47,6 +53,8 @@ interface InquiryDrawerProps {
   thing: string;
   handledBy: string | null;
   now: number;
+  /** When the sale's finish will clear buyers' details, or `null` when it isn't waiting to. */
+  clearsAt: number | null;
   onClose: () => void;
   onBackToNew: () => void;
 }
@@ -83,13 +91,18 @@ function InquiryDrawer({
   thing,
   handledBy,
   now,
+  clearsAt,
   onClose,
   onBackToNew,
 }: InquiryDrawerProps) {
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
-  const name = getInquirerName(inquiry);
+  const name = getInquirerName(inquiry, thing);
+  const clearedAt = inquiry.contactClearedAt;
+  const isSaleFinished = useAppSelector((state) =>
+    selectIsSaleFinished(state, inquiry.saleId),
+  );
   const isNew = inquiry.status === 'NEW';
 
   const showFailure = (title: string) => () =>
@@ -114,7 +127,10 @@ function InquiryDrawer({
   };
   const remove = async () => {
     const isConfirmed = await confirm({
-      title: `Delete ${name}'s message?`,
+      title:
+        clearedAt === null
+          ? `Delete ${name}'s message?`
+          : 'Delete this message?',
       message: `${thing}${inquiry.sendCount > 1 ? `, sent ${inquiry.sendCount} times` : ''}. It can't be undone.`,
       confirmText: 'Delete',
       destructive: true,
@@ -254,8 +270,8 @@ function InquiryDrawer({
                   <StatusDot
                     status={item.status}
                     label={
-                      item.status === 'AVAILABLE' && !isListable(item)
-                        ? NOT_LISTED_LABEL
+                      item.status === 'AVAILABLE'
+                        ? getAvailableLabel(item, isSaleFinished)
                         : undefined
                     }
                     isInline
@@ -273,19 +289,28 @@ function InquiryDrawer({
           <p className='text-sm break-words whitespace-pre-wrap'>
             {inquiry.message ?? 'No message.'}
           </p>
-          {item !== null && item.status === 'AVAILABLE' && isListable(item) && (
-            <ActionGroup isRoomy>
-              <ActionRow
-                isGrouped
-                isRoomy
-                icon={<CalendarClock />}
-                label={`Hold for ${name}`}
-                subtitle='Marks it pending, with their name on the hold'
-                hasChevron
-                onClick={onHold}
-              />
-            </ActionGroup>
+          {clearedAt !== null && (
+            <p className='text-muted-foreground text-sm'>
+              Details cleared {formatDateShort(clearedAt)}.
+            </p>
           )}
+          {!isSaleFinished &&
+            clearedAt === null &&
+            item !== null &&
+            item.status === 'AVAILABLE' &&
+            isListable(item) && (
+              <ActionGroup isRoomy>
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  icon={<CalendarClock />}
+                  label={`Hold for ${name}`}
+                  subtitle='Marks it pending, with their name on the hold'
+                  hasChevron
+                  onClick={onHold}
+                />
+              </ActionGroup>
+            )}
           {reach.length > 0 && (
             <div className='space-y-2'>
               {contactText !== null && (
@@ -308,6 +333,11 @@ function InquiryDrawer({
                   </a>
                 ))}
               </div>
+              {clearsAt !== null && (
+                <p className='text-muted-foreground text-xs'>
+                  Buyers&apos; details clear {formatDateShort(clearsAt)}.
+                </p>
+              )}
             </div>
           )}
         </div>

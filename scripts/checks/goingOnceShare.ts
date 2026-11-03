@@ -7,6 +7,7 @@ import {
   mintShareId,
 } from '../../functions/src/share/shareIds.ts';
 import {
+  FINISHED_SALE_STATUS,
   NOT_FOUND_RESULT,
   PUBLIC_CONDITIONS,
   PUBLIC_STATUSES,
@@ -26,6 +27,7 @@ import {
   readContact as readContactOnServer,
   toInquiryId,
 } from '../../functions/src/apps/going-once/inquiryView.ts';
+import { OPEN_SALE_STATUS } from '../../functions/src/apps/going-once/finishPlan.ts';
 import * as clientConstants from '../../src/apps/going-once/constants.ts';
 import { readContact as readContactOnClient } from '../../src/apps/going-once/utils/contact.ts';
 import {
@@ -133,6 +135,14 @@ check("every cap and list here equals the app's own", () => {
   assert.deepEqual(
     [...PUBLIC_STATUSES],
     clientConstants.STATUS_VIEWS.filter((status) => status !== 'SOLD'),
+  );
+});
+
+check("the finished status is the functions' and the client's", () => {
+  assert.equal(clientConstants.FINISHED_SALE_STATUS, FINISHED_SALE_STATUS);
+  assert.deepEqual(
+    Object.keys(clientConstants.SALE_STATUS_LABELS).sort(),
+    [FINISHED_SALE_STATUS, OPEN_SALE_STATUS].sort(),
   );
 });
 
@@ -628,32 +638,29 @@ check(
   },
 );
 
-check(
-  'the copied listing text holds only what buyers already see',
-  () => {
-    const base = {
-      title: 'Gray sofa',
-      condition: 'LIKE_NEW' as const,
-      askingPriceCents: 35_000,
-      description: 'No stains.',
-      brandModel: 'Haven',
-      size: '84 in wide',
-      originalPriceCents: 129_900,
-      floorPriceCents: 30_000,
-      boughtFrom: 'SECRET-STORE',
-      boughtUrl: 'https://secret.example/sofa',
-      notes: 'SECRET-NOTE',
-      pending: { buyerName: 'SECRET-BUYER' },
-    };
-    const hidden = listingText({ ...base, showOriginalPrice: false });
-    ['$300', '$1,299', 'SECRET'].forEach((value) =>
-      assert.ok(!hidden.includes(value), `leaked ${value}`),
-    );
-    assert.ok(hidden.includes('$350') && hidden.includes('No stains.'));
-    assert.ok(
-      listingText({ ...base, showOriginalPrice: true }).includes('Was $1,299'),
-    );
-  },
-);
+check('the copied listing text holds only what buyers already see', () => {
+  const base = {
+    title: 'Gray sofa',
+    condition: 'LIKE_NEW' as const,
+    askingPriceCents: 35_000,
+    description: 'No stains.',
+    brandModel: 'Haven',
+    size: '84 in wide',
+    originalPriceCents: 129_900,
+    floorPriceCents: 30_000,
+    boughtFrom: 'SECRET-STORE',
+    boughtUrl: 'https://secret.example/sofa',
+    notes: 'SECRET-NOTE',
+    pending: { buyerName: 'SECRET-BUYER' },
+  };
+  const hidden = listingText({ ...base, showOriginalPrice: false });
+  ['$300', '$1,299', 'SECRET'].forEach((value) =>
+    assert.ok(!hidden.includes(value), `leaked ${value}`),
+  );
+  assert.ok(hidden.includes('$350') && hidden.includes('No stains.'));
+  assert.ok(
+    listingText({ ...base, showOriginalPrice: true }).includes('Was $1,299'),
+  );
+});
 
 console.log(`going once share checks passed (${passed})`);

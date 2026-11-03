@@ -17,12 +17,14 @@ import OpenThing from '@apps/going-once/components/things/OpenThing';
 import ThingRow from '@apps/going-once/components/things/ThingRow';
 import {
   ITEM_SORT_OPTIONS,
+  DID_NOT_SELL_LABEL,
   SEARCH_FROM_ITEMS,
   STATUS_LABELS,
   STATUS_VIEWS,
 } from '@apps/going-once/constants';
 import {
   selectItems,
+  selectIsSaleFinished,
   selectItemsStatus,
   selectPhotoUploads,
   selectSaleById,
@@ -92,6 +94,17 @@ function ItemsSection({
   const [isSavingPhotos, setIsSavingPhotos] = useState(false);
   const openItem = items.find((item) => item.id === openId) ?? null;
   const isSeller = isSaleSeller(sale, uid);
+  const isFinished = useAppSelector((state) =>
+    selectIsSaleFinished(state, saleId),
+  );
+  const getEmptyText = (value: StatusView) =>
+    value === 'AVAILABLE' && isFinished
+      ? 'Nothing is left over.'
+      : EMPTY_VIEW_TEXT[value];
+  const getStatusLabel = (value: StatusView) =>
+    value === 'AVAILABLE' && isFinished
+      ? DID_NOT_SELL_LABEL
+      : STATUS_LABELS[value];
 
   const hasTools = items.length >= SEARCH_FROM_ITEMS;
   const searched = items.filter(
@@ -179,7 +192,7 @@ function ItemsSection({
           <FolderDown className='size-4' aria-hidden='true' />
         </Button>
       )}
-      {addButton}
+      {!isFinished && addButton}
     </div>
   );
 
@@ -224,7 +237,7 @@ function ItemsSection({
           wrapsNarrow
           options={STATUS_VIEWS.map((value) => ({
             value,
-            label: STATUS_LABELS[value],
+            label: getStatusLabel(value),
             detail: String(summary[value].count),
           }))}
           value={statusView}
@@ -263,8 +276,8 @@ function ItemsSection({
       {searched.length > 0 && shown.length === 0 && (
         <p className='text-muted-foreground text-center text-sm'>
           {isSearching
-            ? `No matches in ${STATUS_LABELS[statusView]}`
-            : EMPTY_VIEW_TEXT[statusView]}
+            ? `No matches in ${getStatusLabel(statusView)}`
+            : getEmptyText(statusView)}
         </p>
       )}
       {shown.length > 0 && (
@@ -274,7 +287,7 @@ function ItemsSection({
       )}
       {shown.length > 0 && !isNarrowed && (
         <p className='text-muted-foreground text-right text-sm'>
-          {isSearching && `All ${STATUS_LABELS[statusView].toLowerCase()} · `}
+          {isSearching && `All ${getStatusLabel(statusView).toLowerCase()} · `}
           {formatStatusTotal(statusView, totals)}
         </p>
       )}

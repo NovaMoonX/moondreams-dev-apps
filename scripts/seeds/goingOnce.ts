@@ -461,6 +461,17 @@ const SEED_THINGS: SeedThing[] = [
   },
 ];
 
+/** The finish fields of a sale that is still open. */
+export const OPEN_SALE_FIELDS = {
+  status: 'OPEN',
+  finishedAt: null,
+  finishedBy: null,
+  contactsClearAt: null,
+  contactsClearedAt: null,
+} as const;
+
+const FINISHED_SALE_ID = 'seed-going-once-spring-sale';
+
 const getPhotoPath = (thingId: string, photoId: string) =>
   `apps/going-once/sales/${SALE_ID}/items/seed-go-${thingId}/${photoId}.jpg`;
 
@@ -503,6 +514,141 @@ export async function uploadSeedPhoto(path: string, colorIndex: number) {
   return { isUploaded: response?.ok === true, sizeBytes: body.length };
 }
 
+/** Maya's second, small sale: finished 25 days ago with its buyers' details due to clear in 5, one thing of each kind that was left over. */
+async function seedFinishedSale(context: SeedContext) {
+  const maya = FIXTURE_USERS.goingOnceSeller;
+  const theo = FIXTURE_USERS.goingOnceCoSeller;
+  const sale = context.firestore
+    .collection('apps')
+    .doc('going-once')
+    .collection('sales')
+    .doc(FINISHED_SALE_ID);
+  const finishedAt = context.now - 25 * DAY_MS;
+  await sale.set({
+    id: FINISHED_SALE_ID,
+    name: 'Spring garage sale',
+    pickupArea: 'Ballard, Seattle',
+    buyerNote: null,
+    currency: 'USD',
+    timeZone: 'America/Los_Angeles',
+    ownerUid: maya.uid,
+    createdBy: maya.uid,
+    members: [maya.uid, theo.uid],
+    memberJoinedAt: { [theo.uid]: context.now - 38 * DAY_MS },
+    publicLinkId: null,
+    publicLinkChangedAt: null,
+    status: 'FINISHED',
+    finishedAt,
+    finishedBy: maya.uid,
+    contactsClearAt: finishedAt + 30 * DAY_MS,
+    contactsClearedAt: null,
+    createdAt: context.now - 40 * DAY_MS,
+    lastEditedAt: null,
+  });
+
+  const things: {
+    id: string;
+    title: string;
+    askingPriceCents: number;
+    status: SeedStatus;
+  }[] = [
+    {
+      id: 'garden-bench',
+      title: 'Garden bench',
+      askingPriceCents: 8000,
+      status: { kind: 'AVAILABLE' },
+    },
+    {
+      id: 'toolbox',
+      title: 'Toolbox',
+      askingPriceCents: 3500,
+      status: {
+        kind: 'PENDING',
+        by: theo.uid,
+        buyerName: 'Ravi',
+        pickup: 1,
+        daysAgo: 26,
+      },
+    },
+    {
+      id: 'patio-chairs',
+      title: 'Patio chairs (pair)',
+      askingPriceCents: 6000,
+      status: {
+        kind: 'SOLD',
+        by: theo.uid,
+        priceCents: 5000,
+        method: 'CASH',
+        daysAgo: 27,
+        heldFor: 'Ana',
+      },
+    },
+  ];
+  await Promise.all(
+    things.map(async (thing, index) => {
+      const itemId = `seed-go-${thing.id}`;
+      const createdAt = context.now - 39 * DAY_MS + index * 10 * MINUTE_MS;
+      const photoId = `${itemId}-photo-1`;
+      const path = `apps/going-once/sales/${FINISHED_SALE_ID}/items/${itemId}/${photoId}.jpg`;
+      const upload = await uploadSeedPhoto(path, index + 2);
+      await sale
+        .collection('items')
+        .doc(itemId)
+        .set({
+          id: itemId,
+          saleId: FINISHED_SALE_ID,
+          title: thing.title,
+          condition: 'GOOD',
+          askingPriceCents: thing.askingPriceCents,
+          floorPriceCents: null,
+          ...EMPTY_OPTIONALS,
+          photos: [
+            {
+              id: photoId,
+              path,
+              ...JPEG_SIZE,
+              sizeBytes: upload.sizeBytes,
+              createdAt,
+            },
+          ],
+          ...buildSeedStatus(thing.status, context.now),
+          createdBy: maya.uid,
+          createdAt,
+          lastEditedAt: null,
+          lastEditedBy: null,
+        });
+    }),
+  );
+
+  const inquiries: SeedInquiry[] = [
+    {
+      itemId: 'seed-go-toolbox',
+      itemTitle: 'Toolbox',
+      name: 'Ravi',
+      contact: '2065550166',
+      message: 'Can I pick the toolbox up tomorrow?',
+      sentAt: context.now - 26 * DAY_MS,
+      handled: { by: theo.uid, at: context.now - 26 * DAY_MS + HOUR_MS },
+    },
+    {
+      itemId: 'seed-go-patio-chairs',
+      itemTitle: 'Patio chairs (pair)',
+      name: 'Ana',
+      contact: 'ana.k@example.com',
+      message: 'Are the chairs still around?',
+      sentAt: context.now - 28 * DAY_MS,
+      handled: { by: theo.uid, at: context.now - 28 * DAY_MS + HOUR_MS },
+    },
+  ];
+  await Promise.all(
+    inquiries.map((inquiry) => {
+      const stored = buildSeedInquiry(FINISHED_SALE_ID, inquiry);
+      return sale.collection('inquiries').doc(stored.id).set(stored);
+    }),
+  );
+  return 1 + things.length + inquiries.length;
+}
+
 export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
   const maya = FIXTURE_USERS.goingOnceSeller;
   const theo = FIXTURE_USERS.goingOnceCoSeller;
@@ -525,6 +671,7 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     memberJoinedAt: { [theo.uid]: context.now - 5 * DAY_MS },
     publicLinkId: SEED_SALE_LINK_ID,
     publicLinkChangedAt: context.now - 4 * DAY_MS,
+    ...OPEN_SALE_FIELDS,
     createdAt: context.now - 6 * DAY_MS,
     lastEditedAt: null,
   });
@@ -709,8 +856,10 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     );
   }
 
+  const finishedDocuments = await seedFinishedSale(context);
+
   return {
     ...EMPTY_SEED_RESULT,
-    firestoreDocuments: 3 + SEED_THINGS.length + 9,
+    firestoreDocuments: 3 + SEED_THINGS.length + 9 + finishedDocuments,
   };
 }

@@ -2,7 +2,11 @@ import type { ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import { NOT_LISTED_LABEL, STATUS_LABELS } from '@apps/going-once/constants';
+import {
+  DID_NOT_SELL_LABEL,
+  NOT_LISTED_LABEL,
+  STATUS_LABELS,
+} from '@apps/going-once/constants';
 import type { ItemStatus } from '@apps/going-once/types';
 
 const DOT_COLORS: Record<ItemStatus, string> = {
@@ -16,7 +20,7 @@ interface StatusDotProps {
   status: ItemStatus;
   /** What follows the word ("for Nate · pickup Sat, Nov 7"). */
   children?: ReactNode;
-  /** Replaces the status word where the thing is in a state the status doesn't name ("Not listed yet"). */
+  /** Replaces the status word where the thing is in a state the status doesn't name ("Not listed yet", "Didn't sell"). */
   label?: string;
   /** Flows with the text around it so a parent's `line-clamp` can clip it; the default is its own flex line. */
   isInline?: boolean;
@@ -31,7 +35,10 @@ function StatusDot({
   isInline = false,
   className,
 }: StatusDotProps) {
-  const dotStatus = label === NOT_LISTED_LABEL ? 'WITHDRAWN' : status;
+  const dotStatus =
+    label === NOT_LISTED_LABEL || label === DID_NOT_SELL_LABEL
+      ? 'WITHDRAWN'
+      : status;
   const dot = (
     <span
       className={join(

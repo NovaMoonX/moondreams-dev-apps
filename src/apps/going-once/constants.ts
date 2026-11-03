@@ -5,6 +5,7 @@ import type {
   ItemStatus,
   PaymentMethod,
   SaleDetailField,
+  SaleStatus,
 } from '@apps/going-once/types';
 
 /** The feature switch for starting new sales (`FEATURE_GATES`). */
@@ -68,6 +69,14 @@ export const SALE_DETAIL_NOTES: Record<SaleDetailField, string> = {
   buyerNote: 'Buyers see this',
 };
 
+/** `check:going-once-share` fails when this drifts from the functions' `FINISHED_SALE_STATUS`. */
+export const FINISHED_SALE_STATUS = 'FINISHED' satisfies SaleStatus;
+
+export const SALE_STATUS_LABELS: Record<SaleStatus, string> = {
+  OPEN: 'Open',
+  FINISHED: 'Finished',
+};
+
 export const MAX_ITEM_PHOTOS = 12;
 export const MAX_ITEM_TITLE_LENGTH = 120;
 export const MAX_ITEM_DESCRIPTION_LENGTH = 2000;
@@ -110,6 +119,9 @@ export const CONDITION_LABELS: Record<ItemCondition, string> = {
 
 /** What a thing that buyers can't be shown yet is called where a status word would stand. */
 export const NOT_LISTED_LABEL = 'Not listed yet';
+
+/** What an Available thing is called once the sale is finished: it didn't find a buyer. */
+export const DID_NOT_SELL_LABEL = "Didn't sell";
 
 export const STATUS_LABELS: Record<ItemStatus, string> = {
   AVAILABLE: 'Available',
