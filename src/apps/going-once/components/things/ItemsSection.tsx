@@ -173,7 +173,7 @@ function ItemsSection({
           size='sm'
           rounded='full'
           aria-label='Save all photos'
-          className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:content-['']"
+          className="relative size-7 min-w-7 p-0 before:absolute before:-inset-1.5 before:-inset-x-1.5! before:content-['']"
           onClick={() => setIsSavingPhotos(true)}
         >
           <FolderDown className='size-4' aria-hidden='true' />
