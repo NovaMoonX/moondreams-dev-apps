@@ -237,6 +237,7 @@ import {
   getPace,
   planGoalContributions,
 } from '../../src/apps/runway/engine/pace.ts';
+import { buildCalendarEntries } from '../../src/apps/runway/engine/dayCalendar.ts';
 import {
   describeAmount,
   normalizeFunding,
@@ -10513,6 +10514,47 @@ const version = (
     created([water], [{ ...water, on: 500 }]).length,
     1,
     "a no-income problem on an earlier day is the change's",
+  );
+}
+
+{
+  const from = utc(2026, 11, 1);
+  const to = utc(2026, 11, 30);
+  const byDay = buildCalendarEntries(
+    {
+      incomeDays: [
+        { dayKey: 'p_20261106', on: utc(2026, 11, 6) },
+        { dayKey: 'p_20261201', on: utc(2026, 12, 1) },
+      ],
+      billPayments: [
+        { billId: 'rent', dueOn: utc(2026, 11, 6), totalCents: 150000 },
+      ],
+      cards: [
+        { cardId: 'c1', dueDay: 31, since: utc(2026, 1, 1) },
+        { cardId: 'c2', dueDay: 12, since: utc(2026, 11, 20) },
+      ],
+      goals: [
+        { goalId: 'g1', targetDate: utc(2026, 11, 6), track: 'behind' },
+        { goalId: 'g2', targetDate: null, track: null },
+      ],
+    },
+    from,
+    to,
+  );
+  assert.deepEqual(
+    (byDay.get(utc(2026, 11, 6)) ?? []).map((entry) => entry.kind),
+    ['income', 'bill', 'goal'],
+    'a day lists income, then bills, then goal dates, and only what is in the month',
+  );
+  assert.deepEqual(
+    (byDay.get(utc(2026, 11, 30)) ?? []).map((entry) => entry.kind),
+    ['card'],
+    'a card due on the 31st lands on the last day of a shorter month, and a card not yet added has no due day',
+  );
+  assert.equal(
+    byDay.has(utc(2026, 12, 1)),
+    false,
+    'a day outside the range is left out',
   );
 }
 

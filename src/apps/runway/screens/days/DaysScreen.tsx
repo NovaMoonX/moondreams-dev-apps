@@ -16,6 +16,8 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   COMING_DAYS_CAP,
   COMING_DAYS_PREVIEW,
+  DAYS_CALENDAR_WORDS,
+  DAYS_VIEWS,
   DAYS_WORDS,
   PROBLEM_WORDS,
   SETTLED_DAYS_PREVIEW,
@@ -26,6 +28,7 @@ import { getMonthStart } from '@apps/runway/engine/closings';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import { listHistoryMonths } from '@apps/runway/utils/historyWindow';
+import DaysCalendarView from '@apps/runway/screens/days/DaysCalendarView';
 import EarlierDaysView from '@apps/runway/screens/days/EarlierDaysView';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -94,8 +97,22 @@ function DaysScreen() {
         cushion.billCount > 0 && plural(cushion.billCount, 'bill'),
       ].filter(Boolean)
     : [];
-  const { openDay, daysMonth, showDaysMonth, addRequest, clearAdd } =
-    useRunwayUrlState();
+  const {
+    openDay,
+    daysMonth,
+    showDaysMonth,
+    daysView,
+    showDaysView,
+    addRequest,
+    clearAdd,
+  } = useRunwayUrlState();
+  const isCalendar = daysView === 'calendar';
+  const getShorts = (dayKey: string) =>
+    (lookahead?.problems ?? []).flatMap((problem) =>
+      problem.kind === 'short' && problem.dayKey === dayKey
+        ? [{ name: problem.name, shortBy: problem.shortBy }]
+        : [],
+    );
   const recentFrom = useAppSelector(selectRecentFrom);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
@@ -110,7 +127,9 @@ function DaysScreen() {
             label: monthFormat.format(getMonthStart(month)),
           }));
   const earlierMonth =
-    daysMonth !== null && monthOptions.some((o) => o.value === daysMonth)
+    !isCalendar &&
+    daysMonth !== null &&
+    monthOptions.some((o) => o.value === daysMonth)
       ? daysMonth
       : null;
   const [isExpanded, setIsExpanded] = useState(false);
@@ -128,7 +147,7 @@ function DaysScreen() {
       : confirmed;
 
   const monthChip =
-    isLoaded && monthOptions.length > 0 ? (
+    isLoaded && !isCalendar && monthOptions.length > 0 ? (
       <ScopeChip
         label={
           earlierMonth === null
@@ -170,6 +189,9 @@ function DaysScreen() {
         </EmptyCard>
       );
     }
+    if (isCalendar) {
+      return <DaysCalendarView today={today} getShorts={getShorts} />;
+    }
     return (
       <div className='space-y-4'>
         {days.length === 0 ? (
@@ -188,12 +210,7 @@ function DaysScreen() {
                     <IncomeDayCard
                       key={day.dayKey}
                       day={day}
-                      shorts={(lookahead?.problems ?? []).flatMap((problem) =>
-                        problem.kind === 'short' &&
-                        problem.dayKey === day.dayKey
-                          ? [{ name: problem.name, shortBy: problem.shortBy }]
-                          : [],
-                      )}
+                      shorts={getShorts(day.dayKey)}
                       onOpen={() => openDay(day.dayKey)}
                     />
                   ))}
@@ -258,8 +275,22 @@ function DaysScreen() {
     );
   };
 
+  const hasDays = isLoaded && (days.length > 0 || confirmed.length > 0);
+
   return (
     <div className='space-y-4'>
+      {hasDays && earlierMonth === null && (
+        <PillGroup
+          label={DAYS_CALENDAR_WORDS.viewLabel}
+          options={DAYS_VIEWS.map((value) => ({
+            value,
+            label: DAYS_CALENDAR_WORDS[value],
+          }))}
+          value={daysView}
+          isThin
+          onChange={showDaysView}
+        />
+      )}
       <div className='flex min-h-10 items-center justify-between gap-2'>
         <div className='min-w-0 flex-1'>
           {earlierMonth !== null && (

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Target } from 'lucide-react';
+import { CircleCheck, Target, TriangleAlert } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
@@ -11,17 +11,17 @@ import { useAppSelector } from '@/store';
 import { formatDateShortUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { GROUP_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import {
+  GOAL_TRACK_WORDS,
+  GROUP_WORDS,
+  RUNWAY_SEARCH_THRESHOLD,
+} from '@apps/runway/constants';
 import GoalRow from '@apps/runway/components/GoalRow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getPace } from '@apps/runway/engine/pace';
-import { fundingAtLevel, getExtras } from '@apps/runway/engine/parts';
-import type { GoalSealed, Priority } from '@apps/runway/types';
-import { effectiveStance, pick } from '@apps/runway/engine/stance';
+import { useGoalPaces } from '@apps/runway/hooks/useGoalPaces';
 import { RangeBasisNote } from '@apps/runway/components/RangeNote';
 import GoalForm from '@apps/runway/forms/GoalForm';
 import {
-  getPriorDays,
   selectComingDays,
   selectHeldByItem,
   selectGoals,
@@ -53,6 +53,7 @@ function GoalsScreen() {
   const heldByItem = useAppSelector(selectHeldByItem);
   const assignedByItem = useAppSelector(selectBalances).assignedByItem;
   const { dial } = usePriorityDial();
+  const paces = useGoalPaces(today);
   const counted = goals.filter(({ version }) =>
     isCountedAt(version.payload.priority, dial),
   );
@@ -72,70 +73,23 @@ function GoalsScreen() {
     dial,
     goals.some(({ version }) => version.payload.targetCents > 0),
   );
-  const items = useAppSelector((state) => state.runway.items);
-  const versions = useAppSelector((state) => state.runway.versions);
-  const priorDays = getPriorDays(
-    items,
-    versions,
-    today,
-    comingDays,
-    goals.map(({ version }) => version.payload.funding),
-  );
   const { addRequest, clearAdd } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'goal';
   const [query, setQuery] = useState('');
-
-  /** The dial a goal's finish date is counted at: only a counted goal with an extra the dial leaves out moves. */
-  const getPaceDial = (goal: GoalSealed): Priority | null => {
-    if (dial === 'want' || !isCountedAt(goal.priority, dial)) return null;
-    const isTrimmed = getExtras(goal).some(
-      (extra) => !isCountedAt(extra.tier, dial),
-    );
-    return isTrimmed ? dial : null;
-  };
-  const getPaceFunding = (goal: GoalSealed) => {
-    const paceDial = getPaceDial(goal);
-    return paceDial === null
-      ? {}
-      : {
-          funding: fundingAtLevel(goal, paceDial) ?? goal.funding,
-          extras: null,
-        };
-  };
 
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
   );
   const hasSearch = goals.length >= RUNWAY_SEARCH_THRESHOLD;
   const needle = hasSearch ? query.trim().toLowerCase() : '';
-  const visible = goals
-    .filter(({ version }) =>
-      `${version.payload.name} ${version.payload.targetDate === null ? '' : formatDateShortUTC(version.payload.targetDate)}`
-        .toLowerCase()
-        .includes(needle),
-    )
-    .map(({ item, version }) => ({
-      item,
-      payload: version.payload,
-      paceDial: getPaceDial(version.payload),
-      pace: getPace(
-        {
-          ...version.payload,
-          ...getPaceFunding(version.payload),
-          heldCents: heldByItem[item.id] ?? 0,
-        },
-        comingDays.map((day) => ({
-          ...day,
-          moneyCents: pick(
-            effectiveStance(stance, day.stanceOverride),
-            day.amount,
-            'income',
-          ),
-        })),
-        priorDays,
-      ),
-    }));
+  const trackedGoals = paces.filter(({ track }) => track !== null);
+  const behindGoals = trackedGoals.filter(({ track }) => track === 'behind');
+  const visible = paces.filter(({ payload }) =>
+    `${payload.name} ${payload.targetDate === null ? '' : formatDateShortUTC(payload.targetDate)}`
+      .toLowerCase()
+      .includes(needle),
+  );
 
   const getBody = () => {
     if (!isLoaded) {
@@ -154,6 +108,25 @@ function GoalsScreen() {
     }
     return (
       <div className='space-y-3'>
+        {trackedGoals.length > 0 &&
+          (behindGoals.length === 0 ? (
+            <div className='flex min-h-10 items-center gap-1'>
+              <CircleCheck
+                className='text-primary h-4 w-4 shrink-0'
+                aria-hidden='true'
+              />
+              <p className='text-sm font-medium'>
+                {GOAL_TRACK_WORDS.allOnTrack}
+              </p>
+            </div>
+          ) : (
+            <p className='flex min-h-10 items-center gap-1.5 text-sm font-medium text-(--runway-warning-ink)'>
+              <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden='true' />
+              {GOAL_TRACK_WORDS.behind(
+                behindGoals.map(({ payload }) => payload.name),
+              )}
+            </p>
+          ))}
         {hasSearch && (
           <SearchInput
             value={query}

@@ -718,6 +718,20 @@ export const PACE_WORDS = {
   completed: 'Completed',
 } as const;
 
+/** Names in a sentence: "A", "A and B", "A, B and C", then three and "N more". */
+const joinNames = (names: readonly string[]) =>
+  names.length <= 3
+    ? names.length <= 1
+      ? (names[0] ?? '')
+      : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+    : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`;
+
+export const GOAL_TRACK_WORDS = {
+  allOnTrack: 'Every goal with a date is on track',
+  behind: (names: readonly string[]) =>
+    `${names.length} ${names.length === 1 ? 'goal is' : 'goals are'} behind: ${joinNames(names)}`,
+} as const;
+
 export const GOAL_STATES = ['active', 'paused'] as const;
 
 /** The pace line's three answers for a goal with a date. */
@@ -2054,6 +2068,34 @@ export const FIX_WORDS = {
   openDueBill: 'Set its due date',
   incomeEnds: (date: string) =>
     `Your last income day is ${date}. Nothing is planned after it.`,
+} as const;
+
+export const DAYS_VIEWS = ['list', 'calendar'] as const;
+
+export const DAYS_CALENDAR_WORDS = {
+  viewLabel: 'Days view',
+  list: 'List',
+  calendar: 'Calendar',
+  previousMonth: 'Show the previous month',
+  nextMonth: 'Show the next month',
+  today: 'Today',
+  legend: {
+    income: 'Income',
+    bill: 'Bill',
+    card: 'Card due',
+    goal: 'Goal date',
+    goalBehind: 'Goal behind',
+  },
+  monthTotals: (income: string, bills: string) =>
+    `In ${income} · Bills ${bills}`,
+  monthIncomeOnly: (income: string) => `In ${income}`,
+  monthBillsOnly: (bills: string) => `Bills ${bills}`,
+  nothingOnDay: 'Nothing due or coming in on this day.',
+  more: (count: number) => `+${count}`,
+  dayLabel: (date: string, count: number) =>
+    count === 0
+      ? date
+      : `${date}, ${count} ${count === 1 ? 'thing' : 'things'}`,
 } as const;
 
 export const DAYS_WORDS = {
