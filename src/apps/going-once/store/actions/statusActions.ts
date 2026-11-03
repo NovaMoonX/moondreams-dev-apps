@@ -15,7 +15,12 @@ import type {
 import { toFirstName } from '@apps/going-once/utils/personName';
 
 export type StatusTransition =
-  | { kind: 'MARK_PENDING'; buyerName: string | null; pickupOn: number | null }
+  | {
+      kind: 'MARK_PENDING';
+      inquiryId: string | null;
+      buyerName: string | null;
+      pickupOn: number | null;
+    }
   /** `from` is the hold the editor opened with, so an edit made meanwhile by someone else is never overwritten. */
   | {
       kind: 'CHANGE_HOLD';
@@ -104,7 +109,10 @@ const getHold = (
   uid: string,
   now: number,
 ): ItemPendingRecord => ({
-  inquiryId: current.pending?.inquiryId ?? null,
+  inquiryId:
+    current.pending?.buyerName === transition.buyerName
+      ? (current.pending?.inquiryId ?? null)
+      : null,
   buyerName: transition.buyerName,
   pickupOn: transition.pickupOn,
   markedBy: current.pending?.markedBy ?? uid,
@@ -130,7 +138,7 @@ const getNext = (
       ...keep,
       status: 'PENDING',
       pending: {
-        inquiryId: null,
+        inquiryId: transition.inquiryId,
         buyerName: transition.buyerName,
         pickupOn: transition.pickupOn,
         markedBy: uid,
