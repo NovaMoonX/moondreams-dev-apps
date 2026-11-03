@@ -1,6 +1,6 @@
 ---
 name: build-app-mvp
-description: Build a brand-new app's whole MVP from its planning docs, as an orchestrator. Use it when the user runs /build-app-mvp with the app's README/PRODUCT/UX/TECHNICAL/ISSUES files attached or already in src/apps/<id>/ (from plan-app). It stores the docs, creates the GitHub issues, builds one stacked PR per MVP issue (validated, Copilot-reviewed or subagent-reviewed, fixes synced up the stack), then opens a final polish PR driven by product and design review agents, carrying the pre-merge overview comment.
+description: Build a brand-new app's whole MVP from its planning docs, as an orchestrator. Use it when the user runs /build-app-mvp with the app's README/PRODUCT/UX/TECHNICAL/ISSUES files attached or already in src/apps/<id>/ (from plan-app). It stores the docs, creates the GitHub issues, builds one stacked PR per MVP issue (validated, reviewed by the agents sized to each PR, fixes synced up the stack), then opens a final polish PR driven by product and design review agents, carrying the pre-merge overview comment.
 ---
 
 # Build a app MVP end to end
@@ -17,7 +17,7 @@ The app's look is one `<app>.css` on a theme class, built per `docs/conventions/
 
 Every app also gets an oversized seed fixture (`scripts/seeds/<app>Scale.ts`, Waypoint's is the reference) and its rules file says to extend it whenever a list is added; performance is checked on it per `docs/conventions/state-data.md` "Performance is a design check".
 
-Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: screenshots in the PR body, a regression check (rules first), Copilot with a 20-minute window, then technical, product and design agents. Where that skill and this one differ on review, `pr-wrap-up` wins.
+Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: screenshots in the PR body, a regression check (rules first), then the review sized to the PR (validator, technical, product and design agents). Where that skill and this one differ on review, `pr-wrap-up` wins.
 
 ## Inputs
 
@@ -45,7 +45,6 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
   - Open each PR yourself, non-draft, right after pushing, so the hook finds it.
   - When the hook fires mid-loop, do the cheap parts: check main hasn't moved, run tsc and eslint.
   - Don't re-run the whole checklist on a branch a subagent is working in.
-- **Copilot review requests** can "succeed" without registering. After requesting, check `gh api repos/{o}/{r}/pulls/{n}/requested_reviewers` and the reviews list. If Copilot isn't listed, treat the request as failed immediately.
 - **Model identifiers** never go in commits, PRs, code comments or any pushed file.
 
 ## Phase 0: Intake and docs PR
@@ -61,7 +60,7 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
 4. Write a state file to the scratchpad, `mvp-state.md`, and keep it updated after every step:
    - the issue number map;
    - each PR's number, branch, base and version label;
-   - Copilot/subagent review status;
+   - each PR's review status (size, who reviewed, fix commit);
    - open threads and pending decisions.
 
    The conversation will be compacted several times, and this file is how you resume without re-deriving anything.
@@ -114,16 +113,9 @@ For each MVP issue, in order:
      - Validation: concrete results, not "tested";
      - the attribution footer.
 7. **Review:**
-   1. Request a Copilot review (MCP `request_copilot_review`).
-   2. Verify it registered (see Session facts). If it did, wait up to **20 minutes** with `.claude/skills/build-app-mvp/scripts/waitreview.sh <pr> 20` in the background. Don't sit idle meanwhile: read the next issue and plan it, but don't push the next PR until review is handled.
-   3. **If Copilot reviewed:**
-      - Fix every real finding.
-      - Reply on each thread with one line, then resolve it.
-      - If a finding is wrong or out of scope, reply explaining why and leave it open.
-   4. **If Copilot didn't register or didn't review within 20 minutes:**
-      - Run the review `pr-wrap-up` §4 sizes for this PR, or, for a quick pass on a small PR, one `stack-pr-reviewer` agent (it reviews, fixes and syncs the stack). The agents' models are set in their files.
-      - Wait for its report.
-      - Verify its fix commit yourself: read the diff, and check stack ancestry with `git merge-base --is-ancestor` for each adjacent pair.
+   1. Run the review `pr-wrap-up` §3 sizes for this PR, or, for a size S PR, one `stack-pr-reviewer` agent (it reviews, fixes and syncs the stack). The agents' models are set in their files. While it runs, read the next issue and plan it, but don't push the next PR until the review is handled.
+   2. Wait for its report.
+   3. Verify any fix commit yourself: read the diff, and check stack ancestry with `git merge-base --is-ancestor` for each adjacent pair.
 8. **Sync the stack after any fix** to a lower PR. Merge it up through every branch above it, in order: merge, never rebase or force-push. Push each branch, and confirm tsc and eslint stay green.
 9. Update `mvp-state.md`, then move to the next issue.
 
@@ -160,9 +152,9 @@ Start this once every MVP PR is merged up and reviewed.
    - Fix everything that is a real problem and in MVP scope: alignment, centring, empty space, unclear active state, a confusing path, a missing affordance, copy, an outdated README or PRODUCT.md.
    - Note anything bigger as a follow-up in the overview comment instead of widening scope.
    - Re-validate as in Phase 2, including re-driving each flow you touched.
-6. **Keep the conventions current while you fix.** Both agents' rule candidates feed `docs/conventions/` (design rules in `design-ux.md` or `app-look.md`, product rules in `product.md`, one app's rules in its rules file), folded into the nearest bullet, never appended, per `pr-wrap-up` §6. When the owner says a review agent should have caught something, that agent's file in `.claude/agents/` is amended too (`docs/conventions/agents.md`).
+6. **Keep the conventions current while you fix.** Both agents' rule candidates feed `docs/conventions/` (design rules in `design-ux.md` or `app-look.md`, product rules in `product.md`, one app's rules in its rules file), folded into the nearest bullet, never appended, per `pr-wrap-up` §5. When the owner says a review agent should have caught something, that agent's file in `.claude/agents/` is amended too (`docs/conventions/agents.md`).
 7. **Update `src/apps/<id>/PRODUCT.md` and its short `README.md`** to match what was actually built. Also update the root README and `functions/README.md` if they're affected.
-8. **Label the polish PR `patch`**, commit, push, and open the polish PR with the top MVP branch as its base. Run the same Copilot → subagent review loop.
+8. **Label the polish PR `patch`**, commit, push, and open the polish PR with the top MVP branch as its base. Run the same review as the MVP PRs.
 9. **Post the overview comment on the polish PR**, built from `references/overview-comment.md`. It replaces any per-PR "what's left" notes.
 
 ## Final report to the user

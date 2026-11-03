@@ -1,6 +1,6 @@
 ---
 name: pr-wrap-up
-description: The standard way every PR in this repo ends, run automatically without being asked. Screenshots in the PR body (phone first, before and after for changes), a regression check (rules and security first), a review sized to the PR (Copilot, then the validator and reviewer agents, sharded with a lead reviewer for large PRs), fixes, the PR status comment, and any lasting rule written into docs/conventions. Use whenever a PR is opened or its code changes; the Stop hook (pr-gate.sh) names which parts a push needs.
+description: The standard way every PR in this repo ends, run automatically without being asked. Screenshots in the PR body (phone first, before and after for changes), a regression check (rules and security first), a review sized to the PR (the validator and reviewer agents, sharded with a lead reviewer for large PRs), fixes, the PR status comment, and any lasting rule written into docs/conventions. Use whenever a PR is opened or its code changes; the Stop hook (pr-gate.sh) names which parts a push needs.
 ---
 
 # PR wrap-up
@@ -55,16 +55,11 @@ A `## Regression check` section in the PR body shows that what the PR adds does 
 
 **Keep it current.** Whenever a push touches an area a row covers, re-run that row and update the result. A stale row, or a rules change with no matching row, is an unfinished PR. The Stop hook asks for this on every new HEAD, like the screenshots.
 
-## 3. Ask Copilot first (20-minute window)
+## 3. Review: sized to the PR
 
-1. Request a review (MCP `request_copilot_review`), then verify it registered: `gh api repos/NovaMoonX/moondreams-dev-apps/pulls/<n>/requested_reviewers` and `…/reviews`. A request can "succeed" without registering. **If Copilot isn't listed, treat it as failed and go to step 4 immediately.** (It has not registered on draft PRs.)
-2. If it registered, wait up to **20 minutes**: `.claude/skills/build-app-mvp/scripts/waitreview.sh <pr> 20 <request-time-iso>` in the background. Use the wait for the screenshots, not for idling.
-3. **Copilot reviewed:** fix every real finding, reply on each thread in one line, resolve it. A finding that is wrong or out of scope gets a reply saying why, and stays open.
-4. **No review in 20 minutes:** step 4.
+There is no outside reviewer: these agents are the whole review, so they run on every PR whose diff meets a trigger, and the order below keeps them cheap. Take the screenshots (step 1) before spawning the product and design reviewers, so they start from the images and the published folder.
 
-## 4. Our own review: sized to the PR
-
-Size the PR (S, M or L) and run the review that size gets, as `orchestrate` "Sizing the review" defines it; record the size and why in the Review block. The agents are `.claude/agents/`: `validator` (haiku) first, then `technical-reviewer`, `product-reviewer` and `design-reviewer` (sonnet), and for an L PR one reviewer per shard plus `lead-reviewer` (opus), which verifies the findings and does the cross-shard pass. Spawn them by name with `run_in_background: true`; they are **read-only**, report, and you make every fix. The size in the hook's message is a floor: raise it when the diff is riskier than its line count (a money or date calculation, a transaction).
+Size the PR (S, M or L) and run the review that size gets, as `orchestrate` "Sizing the review" defines it; record the size and why in the Review block. The agents are `.claude/agents/`: `validator` (haiku) first, then `technical-reviewer`, `product-reviewer` and `design-reviewer` (sonnet), and for an L PR one reviewer per shard plus `lead-reviewer` (opus), which verifies the findings and does the cross-shard pass. Spawn them by name with `run_in_background: true`; they are **read-only**, report, and you make every fix. The technical reviewer judges from the code and answers the product and design reviewers' `questionForTechnical` findings when you send them back to it (`orchestrate` "Sizing the review"). The size in the hook's message is a floor: raise it when the diff is riskier than its line count (a money or date calculation, a transaction).
 
 - **The checklists live only in the agent files** (`docs/conventions/agents.md` lists them): do not copy a check into this file, a prompt or a conventions file. Give each agent a brief: the PR, base and head, the shard if any, the worktree or port, and what the owner asked for, in their words, with any concern they voiced. Name the largest real size the feature must serve (the owner's range, such as 12 to 20 members or 100 rows): agents test the seeded case unless told. **A brief states the goal and the concern, never a list of what to verify** (an agent handed the design it should confirm confirms it: the receipt editor's ⋯ menu passed a review whose brief listed it as a thing to measure), and a redesign is reviewed as a whole surface, not as the delta.
 - **A stack of PRs:** one `technical-reviewer` per PR (it only needs `git diff`), and one product and one design reviewer on the **top** branch, each tagging findings with the PR the flow belongs to. Before spawning them, have the emulators, the seed and the dev server running on the top branch.
@@ -72,7 +67,7 @@ Size the PR (S, M or L) and run the review that size gets, as `orchestrate` "Siz
 
 **Journeys, doors and insight counts in the PR body.** A PR that adds or changes a tab, drawer, row type, entry point or anything a screen volunteers also carries a `## Journeys` section: for each feature it touches, its doors with the journey each serves (an extra door with no named journey goes), the first-view insight count at 390×844 for Alex and Jamie before and after, classified decision / status / reference / noise (a noise item is a finding), and the taps of the journeys it shortens or lengthens. It updates `src/apps/pinch/JOURNEYS.md` §4.1 and §4.2 and the sitemap in `UX.md` in the same PR. The product and design reviewers' checks read it.
 
-## 5. Triage, fix, re-validate
+## 4. Triage, fix, re-validate
 
 - Merge duplicates. Fix every real, in-scope finding. **A reviewer's severity is a claim: before fixing, say from the person's side what they are doing at that moment and whether the fix helps them then.** A fix that makes the app reach further (over a sheet, into a task, one more control) needs a journey that asks for it; without one, the finding is answered and dropped (owner, PR 559: an update strip was lifted over open sheets because a review called it unreachable mid-form). Put anything bigger in the PR body under "Follow-ups" rather than widening the PR. **A design or product finding you decide not to follow, in whole or in part, goes to the owner as a 🚩 question with the reviewer's option and yours, never under "Decisions I made for you"** (owner, Waypoint bucket: a review said to keep the banner on phones, the session shrank the side image instead and filed it as its own call, and the owner found it "extremely odd"). A layout the request borrows from another screen ("like stays") copies that screen at every width, its breakpoints included.
 - Fix on the PR the finding belongs to, then merge that branch up through every branch above it (merge, never rebase or force-push), re-running `npm run typecheck` and `npx eslint .` on each.
@@ -80,7 +75,7 @@ Size the PR (S, M or L) and run the review that size gets, as `orchestrate` "Siz
 - **The last fresh design pass runs on the head that ships.** A fix round that changes `src` after the last fresh design pass is re-checked by a fresh design agent on those screens, and on every screen that draws a shared part they changed, before the PR body says "reviewed": a fix measured only by its author does not close a finding, and "left" is not an outcome (the owner's goal check, round 8: three rounds ended with the fixes unreviewed).
 - **Check third-party contract claims before building on them.** A reviewer's "AMC's date format is different" is cheap to check and expensive to ship wrong; search for the real contract, and say in the PR body what is still unverified.
 
-## 6. Write down what the review taught, automatically
+## 5. Write down what the review taught, automatically
 
 Don't ask first. When a finding reflects a **lasting** design or product rule rather than a one-off bug, add it in the same PR. The same goes for a **pattern** the PR establishes or reuses (a component, a layout, a copy convention): add its line to the "Pattern index" in `CLAUDE.md`, and its rules to the app's rules file when it belongs to one app and tell the user afterwards (the PR body's "Rules added" line and the final report).
 
@@ -89,7 +84,7 @@ Don't ask first. When a finding reflects a **lasting** design or product rule ra
 - **"X agent should have caught this" is an instruction to fix that agent.** When the owner says a review agent should have caught something (or words to that effect), amend that agent's file in `.claude/agents/` in the same turn as the code fix, as an audit of the whole section, not an append, by the procedure in `docs/conventions/agents.md` (it ends with the one line to the owner).
 - **This applies outside the review too.** Any time during a session, while iterating on a PR or on the user's requests, you decide something is worth noting in the product or design guidance, add it in that PR and tell the user afterwards.
 
-## 7. Finish
+## 6. Finish
 
 Rewrite the PR's status comment (`orchestrate` "The PR status comment") last, after every push of the pass, so the owner sees where the PR stands.
 
