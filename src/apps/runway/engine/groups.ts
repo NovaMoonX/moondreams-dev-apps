@@ -44,6 +44,21 @@ const getMonthlyFactor = (schedule: Schedule): [number, number] | null => {
   return null;
 };
 
+/** What one payment's range comes to in a usual month at the schedule's beat; null for a bill paid once or with no fixed beat. */
+export function toMonthlyRange(
+  amount: MoneyRange,
+  schedule: Schedule,
+): MoneyRange | null {
+  const factor = getMonthlyFactor(schedule);
+  if (!factor) return null;
+  const scale = (cents: Cents): Cents =>
+    Math.round((cents * factor[0]) / factor[1]);
+  return {
+    lowCents: scale(amount.lowCents),
+    highCents: scale(amount.highCents),
+  };
+}
+
 const CALENDAR_FACTORS: Record<string, [number, number]> = {
   weekly: [52, 12],
   every2Weeks: [26, 12],

@@ -7,7 +7,7 @@ import {
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import { monthlyTotal } from '@apps/runway/engine/groups';
+import { monthlyTotal, toMonthlyRange } from '@apps/runway/engine/groups';
 import { getIntervalMonths } from '@apps/runway/engine/schedule';
 import type {
   GroupEnvelopeMember,
@@ -104,6 +104,26 @@ export function describeBillRepeat(schedule: Schedule) {
     ? BILL_FREQUENCY_LABELS[known]
     : SCHEDULE_LABELS[schedule.kind];
   return result;
+}
+
+/**
+ * A repeating bill read the way a group's monthly total reads it: its figure for a usual month and what each payment is
+ * ("$150 yearly"), so a row beside the total never leads with a yearly or fortnightly amount. Null when the bill is paid
+ * once, has no fixed beat or already comes monthly, and its row keeps the payment as its figure.
+ */
+export function describeBillMonthly(amount: MoneyRange, schedule: Schedule) {
+  const monthly = toMonthlyRange(amount, schedule);
+  if (
+    monthly === null ||
+    (monthly.lowCents === amount.lowCents &&
+      monthly.highCents === amount.highCents)
+  ) {
+    return null;
+  }
+  return {
+    figure: describeGroupTotal(monthly),
+    payment: `${describeGroupTotal(amount)} ${describeBillRepeat(schedule).toLowerCase()}`,
+  };
 }
 
 /** A bill that comes round less often than monthly is saved up for over the pays before it, unless it is paid all from the pay right before it is due. */

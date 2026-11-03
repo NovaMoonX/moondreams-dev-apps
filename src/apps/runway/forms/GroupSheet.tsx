@@ -83,6 +83,7 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 import {
+  describeBillMonthly,
   describeBillRepeat,
   describeGroupLead,
   describeGroupTotal,
@@ -355,10 +356,14 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const isPast = dueDate !== undefined && dueDate < today;
   const skippedCount = billCount - eligibleBills.length;
 
-  const describeBillDue = (schedule: Schedule, due: number | null) =>
+  const describeBillDue = (
+    schedule: Schedule,
+    due: number | null,
+    payment: string | null,
+  ) =>
     due === null
       ? BILL_WORDS.needsDueDate
-      : `Due ${formatDateShortUTC(due)} · ${describeBillRepeat(schedule)}`;
+      : `Due ${formatDateShortUTC(due)} · ${payment ?? describeBillRepeat(schedule)}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;
@@ -787,22 +792,29 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   </MaskedText>
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                  {bills.map(({ item, version }) => (
-                    <ItemRow
-                      key={item.id}
-                      name={version.payload.name}
-                      emoji={resolveItemEmoji(
-                        version.payload.emoji,
-                        version.payload.groupId,
-                        purposeEmojis,
-                      )}
-                      detail={describeBillDue(
-                        version.payload.timing.schedule,
-                        getCurrentDue({ item, version }),
-                      )}
-                      figure={describeGroupTotal(version.payload.amount)}
-                    />
-                  ))}
+                  {bills.map(({ item, version }) => {
+                    const { amount } = version.payload;
+                    const { schedule } = version.payload.timing;
+                    const monthly = describeBillMonthly(amount, schedule);
+                    return (
+                      <ItemRow
+                        key={item.id}
+                        name={version.payload.name}
+                        emoji={resolveItemEmoji(
+                          version.payload.emoji,
+                          version.payload.groupId,
+                          purposeEmojis,
+                        )}
+                        detail={describeBillDue(
+                          schedule,
+                          getCurrentDue({ item, version }),
+                          monthly?.payment ?? null,
+                        )}
+                        figure={monthly?.figure ?? describeGroupTotal(amount)}
+                        figureWord={monthly ? BILL_WORDS.aMonth : null}
+                      />
+                    );
+                  })}
                 </ul>
               </div>
             )}
