@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState, type MutableRefObject } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -22,10 +28,15 @@ import {
   NameQuestion,
   PriceQuestion,
 } from '@apps/going-once/components/things/ThingQuestions';
+import LeaveDraftConfirm, {
+  type LeaveChoice,
+} from '@apps/going-once/components/things/LeaveDraftConfirm';
 import {
+  BUYER_EXTRA_KEYS,
   EXTRA_ANSWER_KEYS,
   EXTRA_KEYS,
   getRowTitle,
+  PRIVATE_EXTRA_KEYS,
   THING_ROWS,
   type ExtraKey,
 } from '@apps/going-once/components/things/thingRows';
@@ -36,6 +47,7 @@ import {
   addItemPhoto,
   createItem,
   deleteItem,
+  markItemSaved,
   removeItemPhoto,
   reorderItemPhotos,
   updateItemFields,
@@ -88,13 +100,78 @@ const getPriceBlocker = (answers: Answers) => {
   return 'Enter the price as a dollar amount.';
 };
 
-const getListedNote = (photoCount: number, fields: ThingFields) => {
-  if (photoCount === 0) return 'Saved · Not listed yet: add a photo';
-  if (fields.title === '') return 'Saved · Not listed yet: add a name';
+const getDraftNote = (photoCount: number, fields: ThingFields) => {
+  if (photoCount === 0) return 'Saves as a draft until it has a photo';
+  if (fields.title === '') return 'Saves as a draft until it has a name';
   if (fields.askingPriceCents === null)
-    return 'Saved · Not listed yet: add a price';
-  return 'Saved · Listed';
+    return 'Saves as a draft until it has a price';
+  return null;
 };
+
+interface ExtraSectionProps {
+  heading: string;
+  keys: ExtraKey[];
+  answers: Answers;
+  openExtra: ExtraKey | null;
+  onOpen: (key: string) => void;
+  onClose: () => void;
+  onRemove: (key: string) => void;
+  onAdd: (key: string) => void;
+  render: (key: ExtraKey) => ReactNode;
+}
+
+/** One group of the review's optional extras: the rows already added under the group's heading, and chips for the rest. */
+function ExtraSection({
+  heading,
+  keys,
+  answers,
+  openExtra,
+  onOpen,
+  onClose,
+  onRemove,
+  onAdd,
+  render,
+}: ExtraSectionProps) {
+  const details = answers.extras
+    .filter((key) => keys.includes(key))
+    .map((key) => {
+      const text = THING_ROWS[key].summary(answers);
+      return {
+        key,
+        label: getRowTitle(key),
+        value:
+          text === '' ? 'Add it' : <span className='line-clamp-2'>{text}</span>,
+        isEmpty: text === '',
+        render: () => render(key),
+      };
+    });
+  const hasRows = details.some(
+    (detail) => !detail.isEmpty || detail.key === openExtra,
+  );
+  return (
+    <section className='space-y-3'>
+      <OptionalDetailRows
+        heading={heading}
+        details={details}
+        openKey={openExtra}
+        onOpen={onOpen}
+        onClose={onClose}
+        onRemove={onRemove}
+      />
+      <AddFieldChips
+        heading={hasRows ? 'Add more' : heading}
+        chips={keys
+          .filter((key) => !answers.extras.includes(key))
+          .map((key) => ({
+            key,
+            label: getRowTitle(key),
+            icon: THING_ROWS[key].icon,
+          }))}
+        onAdd={onAdd}
+      />
+    </section>
+  );
+}
 
 interface ThingStepsProps {
   saleId: string;
@@ -102,8 +179,8 @@ interface ThingStepsProps {
   /** A thing that was started and left, picked up where it stopped. */
   resume: Item | null;
   onTitleChange: (title: string) => void;
-  /** Filled with a function that saves the open answer, for the screen's Back, close and Escape. */
-  saveOnExitRef: MutableRefObject<(() => void) | null>;
+  /** Filled with the function the screen's Back, close and Escape call: it saves the open answer, then leaves or asks what to do with the unsaved thing. */
+  leaveRef: MutableRefObject<(() => void) | null>;
   onLeave: () => void;
   /** `null` when nothing was written for this thing, so there is nothing to add or take back. */
   onNext: (added: { id: string; name: string } | null) => void;
@@ -115,11 +192,13 @@ function ThingSteps({
   uid,
   resume,
   onTitleChange,
-  saveOnExitRef,
+  leaveRef,
   onLeave,
   onNext,
 }: ThingStepsProps) {
   const dispatch = useAppDispatch();
+  const { addToast } = useToast();
+  const [isAsking, setIsAsking] = useState(false);
   const [itemId] = useState(() => resume?.id ?? generateUuid());
   const [initialAnswers] = useState(() =>
     resume === null ? INITIAL_ANSWERS : toResumeAnswers(resume),
@@ -178,10 +257,6 @@ function ThingSteps({
   // A choice that saves and moves on in one tap runs before React re-renders, so saves read the latest answers.
   const saveAnswers = (overrides: Partial<Answers> = {}) =>
     save(toFields({ ...latestAnswers.current, ...overrides }));
-
-  useEffect(() => {
-    saveOnExitRef.current = () => saveAnswers();
-  });
 
   const uploads = usePhotoSetUploads(
     async (file) => {
@@ -272,22 +347,14 @@ function ThingSteps({
   const isReview = flow.hasReviewed;
   const getNote = () => {
     if (saveError !== null) return saveError;
-    if (isReview) return getListedNote(photoCount, fields);
-    return flow.blocker ?? (item === null ? null : 'Saved');
+    if (isReview) return getDraftNote(photoCount, fields);
+    return flow.blocker;
   };
 
-  const extraDetails = answers.extras.map((key) => {
-    const { label, summary, Question } = THING_ROWS[key];
-    const text = summary(answers);
-    return {
-      key,
-      label,
-      value:
-        text === '' ? 'Add it' : <span className='line-clamp-2'>{text}</span>,
-      isEmpty: text === '',
-      render: () => <Question answers={answers} onChange={set} />,
-    };
-  });
+  const renderExtra = (key: ExtraKey) => {
+    const { Question } = THING_ROWS[key];
+    return <Question answers={answers} onChange={set} />;
+  };
   const addExtra = (key: ExtraKey | null) => {
     if (key === null) return;
     set({ extras: [...latestAnswers.current.extras, key] });
@@ -315,8 +382,21 @@ function ThingSteps({
     formatAskingPrice(fields.askingPriceCents) ??
     (isDeferred('price') ? 'Price later' : '');
 
+  const markSaved = () => {
+    if (creation.current === null) return;
+    markItemSaved(saleId, itemId, uid).catch(() =>
+      addToast({
+        title: "That didn't save",
+        description:
+          'It stays a draft. Open it from the Things tab to save it again.',
+        type: 'error',
+      }),
+    );
+  };
+
   const addAnother = () => {
     saveAnswers();
+    markSaved();
     onNext(
       creation.current === null
         ? null
@@ -327,29 +407,74 @@ function ThingSteps({
     );
   };
 
-  const getCancelAction = () => {
-    if (isReview)
-      return (
-        <Button
-          type='button'
-          variant='secondary'
-          aria-label='Save and add another'
-          onClick={addAnother}
-        >
-          <Plus className='size-4' aria-hidden='true' />
-          <span>
-            <span className='max-[359px]:hidden'>Save &amp; add another</span>
-            <span className='min-[360px]:hidden'>Add another</span>
-          </span>
-        </Button>
+  const saveAndClose = () => {
+    saveAnswers();
+    markSaved();
+    onLeave();
+  };
+
+  const requestLeave = () => {
+    saveAnswers();
+    if (creation.current === null || resume !== null) {
+      onLeave();
+      return;
+    }
+    setIsAsking(true);
+  };
+  useEffect(() => {
+    leaveRef.current = requestLeave;
+  });
+
+  const settleLeave = (choice: LeaveChoice) => {
+    setIsAsking(false);
+    if (choice === null) return;
+    if (choice === 'DISCARD')
+      deleteItem(saleId, item ?? { id: itemId, photos: [] }, () =>
+        addToast({
+          title: "That draft couldn't be discarded",
+          description: 'Delete it from the Things tab instead.',
+          type: 'error',
+        }),
       );
-    if (openId === null) return undefined;
+    onLeave();
+  };
+
+  const openIndex = steps.findIndex((step) => step.id === openId);
+  const previousId = isReview
+    ? (steps.at(-1)?.id ?? null)
+    : (steps[openIndex - 1]?.id ?? null);
+
+  const goPrevious = () => {
+    if (previousId === null) return;
+    saveAnswers();
+    flow.reopen(previousId);
+  };
+
+  // Held in place on the first question, so the footer never shifts.
+  const getPrevious = () => (
+    <Button
+      type='button'
+      variant='tertiary'
+      className={join(
+        'px-2! max-[359px]:h-10 max-[359px]:text-sm',
+        previousId === null && 'invisible',
+      )}
+      aria-hidden={previousId === null}
+      tabIndex={previousId === null ? -1 : undefined}
+      onClick={goPrevious}
+    >
+      Previous
+    </Button>
+  );
+
+  const getSkip = () => {
+    if (openId === null) return null;
     // Held in place while it can't be used, so Next never jumps when the first answer is typed.
     return (
       <Button
         type='button'
         variant='tertiary'
-        className={canSkip ? undefined : 'invisible'}
+        className={join('px-2!', !canSkip && 'invisible')}
         aria-hidden={!canSkip}
         tabIndex={canSkip ? undefined : -1}
         onClick={() => {
@@ -357,14 +482,10 @@ function ThingSteps({
           flow.moveOnFrom(openId);
         }}
       >
-        Skip for now
+        <span className='sm:hidden'>Skip</span>
+        <span className='max-sm:hidden'>Skip for now</span>
       </Button>
     );
-  };
-
-  const leave = () => {
-    saveAnswers();
-    onLeave();
   };
 
   return (
@@ -395,59 +516,82 @@ function ThingSteps({
               }
               deferred={answers.deferred}
               answered={answered.map((step) => step.id)}
+              isSaved={item !== null && saveError === null}
               onReopen={reopen}
             />
           )}
         />
         {isReview && (
           <>
-            <OptionalDetailRows
-              heading='More about it'
-              details={extraDetails}
-              openKey={openExtra}
-              onOpen={(key) => setOpenExtra(toExtraKey(key))}
-              onClose={() => {
-                setOpenExtra(null);
-                saveAnswers();
-              }}
-              onRemove={removeExtra}
-            />
-            <AddFieldChips
-              heading='Add more details'
-              chips={EXTRA_KEYS.filter(
-                (key) => !answers.extras.includes(key),
-              ).map((key) => ({
-                key,
-                label: getRowTitle(key),
-                icon: THING_ROWS[key].label.startsWith('🔒')
-                  ? '🔒'
-                  : THING_ROWS[key].icon,
-              }))}
-              onAdd={(key) => addExtra(toExtraKey(key))}
-            />
+            {[
+              { heading: 'For buyers', keys: BUYER_EXTRA_KEYS },
+              {
+                heading: '🔒 Just for you and your co-sellers',
+                keys: PRIVATE_EXTRA_KEYS,
+              },
+            ].map(({ heading, keys }) => (
+              <ExtraSection
+                key={heading}
+                heading={heading}
+                keys={keys}
+                answers={answers}
+                openExtra={openExtra}
+                onOpen={(key) => setOpenExtra(toExtraKey(key))}
+                onClose={() => {
+                  setOpenExtra(null);
+                  saveAnswers();
+                }}
+                onRemove={removeExtra}
+                onAdd={(key) => addExtra(toExtraKey(key))}
+                render={renderExtra}
+              />
+            ))}
           </>
         )}
         <ModalFooterActions
           note={getNote()}
-          cancelAction={getCancelAction()}
+          cancelAction={getPrevious()}
           rightActions={
             isReview ? (
-              <Button type='button' onClick={leave}>
-                Save
-              </Button>
+              <>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  className='whitespace-nowrap max-[359px]:h-10 max-[359px]:px-3! max-[359px]:text-sm'
+                  aria-label='Save and add another'
+                  onClick={addAnother}
+                >
+                  <Plus
+                    className='size-4 max-[359px]:hidden'
+                    aria-hidden='true'
+                  />
+                  <span>
+                    <span className='max-[419px]:hidden'>
+                      Save &amp; add another
+                    </span>
+                    <span className='min-[420px]:hidden'>Add another</span>
+                  </span>
+                </Button>
+                <Button type='button' onClick={saveAndClose}>
+                  Save
+                </Button>
+              </>
             ) : (
-              <Button
-                type='button'
-                className='max-sm:-ml-2'
-                disabled={!flow.open?.isAnswered}
-                onClick={flow.advance}
-              >
-                Next
-              </Button>
+              <>
+                {getSkip()}
+                <Button
+                  type='button'
+                  disabled={!flow.open?.isAnswered}
+                  onClick={flow.advance}
+                >
+                  Next
+                </Button>
+              </>
             )
           }
         />
       </div>
+      <LeaveDraftConfirm isOpen={isAsking} settle={settleLeave} />
     </>
   );
 }
@@ -455,12 +599,12 @@ function ThingSteps({
 interface NewThingFlowProps {
   saleId: string;
   uid: string;
-  /** A thing that was started and left Not listed yet, to pick up where it stopped. */
+  /** A draft that was started and left, to pick up where it stopped. */
   resume?: Item | null;
   onClose: () => void;
 }
 
-/** Adds things one after another: photos, a name, a price (or Free) with a floor beside it, a condition, then the next thing. Back, close and Escape save the open answer first. */
+/** Adds things one after another: photos, a name, a price (or Free) with a floor beside it, a condition, then the next thing. Back, close and Escape save the open answer first, then ask what to do with a new thing that isn't saved yet. */
 function NewThingFlow({
   saleId,
   uid,
@@ -470,7 +614,7 @@ function NewThingFlow({
   const [added, setAdded] = useState<{ id: string; name: string }[]>([]);
   const [sittingStep, setSittingStep] = useState(0);
   const [title, setTitle] = useState(resume?.title.trim() ?? '');
-  const saveOnExit = useRef<(() => void) | null>(null);
+  const leave = useRef<(() => void) | null>(null);
   const { addToast } = useToast();
   const { pending, showUndo, undo } = useUndoRemoval();
   const items = useAppSelector((state) => selectItems(state, saleId));
@@ -478,10 +622,7 @@ function NewThingFlow({
   useEffect(() => {
     itemsRef.current = items;
   });
-  const close = () => {
-    saveOnExit.current?.();
-    onClose();
-  };
+  const close = () => leave.current?.();
 
   const takeBack = (thing: { id: string; name: string }) => {
     setAdded((current) => current.filter((found) => found.id !== thing.id));
@@ -548,7 +689,7 @@ function NewThingFlow({
         uid={uid}
         resume={sittingStep === 0 ? resume : null}
         onTitleChange={setTitle}
-        saveOnExitRef={saveOnExit}
+        leaveRef={leave}
         onLeave={onClose}
         onNext={(thing) => {
           setSittingStep((current) => current + 1);

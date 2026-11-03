@@ -270,7 +270,7 @@ function ItemsSection({
             aria-label='Show all things again'
             onClick={() => setIsUnlistedOnly(false)}
           >
-            Not listed yet · {unlistedCount}
+            Drafts · {unlistedCount}
             <X className='size-4' aria-hidden='true' />
           </Button>
         ) : (
@@ -280,7 +280,7 @@ function ItemsSection({
             className='border-border text-foreground! h-10 w-full justify-between rounded-full border px-4 text-sm'
             onClick={() => setIsUnlistedOnly(true)}
           >
-            {unlistedCount} not listed yet
+            {unlistedCount} {unlistedCount === 1 ? 'draft' : 'drafts'}
             <ChevronRight className='size-4' aria-hidden='true' />
           </Button>
         ))}

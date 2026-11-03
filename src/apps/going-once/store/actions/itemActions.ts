@@ -34,6 +34,7 @@ export type ItemFields = Partial<
     | 'boughtOn'
     | 'boughtUrl'
     | 'boughtUrlPreview'
+    | 'showBoughtUrl'
     | 'notes'
   >
 >;
@@ -106,6 +107,19 @@ export function updateItemFields(
 ): Promise<void> {
   return updateDoc(getItemRef(saleId, itemId), {
     ...fields,
+    lastEditedAt: Date.now(),
+    lastEditedBy: uid,
+  });
+}
+
+/** Takes a thing out of draft so buyers can be shown it (once it has a photo, a name and a price); the write is queued offline. */
+export function markItemSaved(
+  saleId: string,
+  itemId: string,
+  uid: string,
+): Promise<void> {
+  return updateDoc(getItemRef(saleId, itemId), {
+    isDraft: false,
     lastEditedAt: Date.now(),
     lastEditedBy: uid,
   });

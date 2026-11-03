@@ -4,10 +4,14 @@ import { useAppSelector } from '@/store';
 import PriceTag from '@apps/going-once/components/things/PriceTag';
 import ThingThumb from '@apps/going-once/components/things/ThingThumb';
 import StatusDot from '@apps/going-once/components/things/StatusDot';
-import { CONDITION_LABELS } from '@apps/going-once/constants';
+import { CONDITION_LABELS, NOT_LISTED_LABEL } from '@apps/going-once/constants';
 import { selectIsSaleFinished } from '@apps/going-once/store/selectors';
 import type { Item } from '@apps/going-once/types';
-import { getAvailableLabel, getItemName } from '@apps/going-once/utils/listing';
+import {
+  getAvailableLabel,
+  getDraftHint,
+  getItemName,
+} from '@apps/going-once/utils/listing';
 import { getStatusFacts } from '@apps/going-once/utils/status';
 
 interface ThingRowProps {
@@ -30,12 +34,12 @@ const getLine = (
     };
   if (item.status !== 'AVAILABLE')
     return { label: undefined, facts: getStatusFacts(item, true) };
+  const label = getAvailableLabel(item, isSaleFinished);
+  if (label === NOT_LISTED_LABEL)
+    return { label, facts: `· ${getDraftHint(item)}` };
   const facts =
     item.condition === null ? '' : `· ${CONDITION_LABELS[item.condition]}`;
-  return {
-    label: getAvailableLabel(item, isSaleFinished),
-    facts,
-  };
+  return { label, facts };
 };
 
 /** A thing in the list: its cover, name, its status as a dot and word with what follows, and its asking price. */

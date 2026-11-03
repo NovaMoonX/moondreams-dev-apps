@@ -104,7 +104,7 @@ const buildThing = (index: number) => {
   };
 };
 
-/** Seeds Maya's second sale with 50 things (about 100 photos in the Storage emulator, 6 of them not listed yet) for checking that the Things tab stays fast; returns the documents written. Emulators only. */
+/** Seeds Maya's second sale with 50 things (about 100 photos in the Storage emulator, 6 of them drafts) for checking that the Things tab stays fast; returns the documents written. Emulators only. */
 export async function seedGoingOnceScale(
   context: SeedContext,
 ): Promise<SeedResult> {

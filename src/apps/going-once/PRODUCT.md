@@ -50,7 +50,7 @@ It started with a home to clear out and a seller who hates selling. A friend was
 
 ### Things and What Each Field Shows, In Detail
 
-The real input is a person walking through a home with a phone: twenty to a hundred things, often over several sittings, three to six photos each, most from the camera, some already in the photo library. So adding a thing starts from its photos (several picked at once, or taken one after another, up to 12), the thing is saved from its first photo or its name, and the walk goes on to the next thing without a Save button. A thing goes on the public page only once it has a photo, a name and a price ("Free" counts as a price); until then it is "Not listed yet".
+The real input is a person walking through a home with a phone: twenty to a hundred things, often over several sittings, three to six photos each, most from the camera, some already in the photo library. So adding a thing starts from its photos (several picked at once, or taken one after another, up to 12), the thing is saved from its first photo or its name, and the walk goes on to the next thing without a Save button. A thing goes on the public page only once it has a photo, a name and a price ("Free" counts as a price) and is saved; until then it is a draft that buyers never see.
 
 **No categories.** Things are found by status (Available, Pending, Sold) and search; nobody sorts them into kinds, so adding a thing stays four answers.
 
@@ -138,7 +138,7 @@ This is Theo's loop, and every tool in it is one tap from where he is.
 
 - **Collected:** the sum of what was paid for Sold things. **Asked for those:** their asking prices beside it, so "$225 of $245 asked" reads at a glance.
 - **Pending:** a count and what they are asking.
-- **Left:** Available things and what they are asking. Things not listed yet (no photo, name or price) are counted apart, not priced ("plus 1 not listed yet"), and taken-off things are left out of every figure.
+- **Left:** Available things and what they are asking. Drafts (no photo, name or price yet, or not saved) are counted apart, not priced ("plus 1 draft"), and taken-off things are left out of every figure.
 - The floor price is never summed; it is a per-thing guide, not a target.
 
 ### Finishing a Sale, In Detail
@@ -184,7 +184,7 @@ Each item names the person it serves first. Final for planning; the MVP is what 
 ### Core MVP
 
 - [x] **Seller:** start a sale with a name, pickup area and note (behind the `create-sales` switch, open to everyone); keep several, open or finished
-- [x] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, "Not listed yet" until it has a photo, a name and a price; no categories, found by status and search
+- [x] **Seller:** add things in four answers (photos, up to 12; name; asking price or Free; condition), with the floor price beside the price and the rest optional (description, brand or model, size, original price with Show original price, where bought and the store's link, notes); saved from the first photo or name, a draft until it is saved with a photo, a name and a price; no categories, found by status and search
 - [x] **Seller:** add co-sellers by email and remove them, with a confirm that says what they marked stays; **Co-seller:** join, leave, and be told plainly when removed
 - [x] **Co-seller:** Available, Pending (optionally who and a pickup day) and Sold with what was paid, how and when; Not sold after all; take off the list and put back; a short history per thing; refused in words from a stale screen (the seller has the same controls)
 - [x] **Co-seller:** add and edit things, undo his own add within 10 minutes, and the private part of every thing (floor price, original price, where bought with the store's link, notes) in view while negotiating

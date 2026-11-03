@@ -72,6 +72,7 @@ import {
   formatAddedAgo,
   getItemName,
   getAvailableLabel,
+  getDraftHint,
   isListable,
 } from '@apps/going-once/utils/listing';
 import {
@@ -124,25 +125,32 @@ function StoreLink({ item }: { item: Item }) {
   if (item.boughtUrl === null || page === null) return null;
   const { boughtUrlPreview: preview } = item;
   return (
-    <a
-      href={item.boughtUrl}
-      target='_blank'
-      rel='noopener noreferrer'
-      className='[&>div]:border-accent-foreground/20 [&>div]:bg-accent-foreground/5 block'
-    >
-      <LinkPreviewCard
-        preview={{
-          url: item.boughtUrl,
-          host: page.hostname.replace(/^www\./i, ''),
-          title: preview?.title ?? null,
-          siteName: preview?.siteName ?? null,
-          description: preview?.description ?? null,
-          imageUrl: preview?.imageUrl?.startsWith('https://')
-            ? preview.imageUrl
-            : null,
-        }}
-      />
-    </a>
+    <div className='space-y-1'>
+      <a
+        href={item.boughtUrl}
+        target='_blank'
+        rel='noopener noreferrer'
+        className='[&>div]:border-accent-foreground/20 [&>div]:bg-accent-foreground/5 block'
+      >
+        <LinkPreviewCard
+          preview={{
+            url: item.boughtUrl,
+            host: page.hostname.replace(/^www\./i, ''),
+            title: preview?.title ?? null,
+            siteName: preview?.siteName ?? null,
+            description: preview?.description ?? null,
+            imageUrl: preview?.imageUrl?.startsWith('https://')
+              ? preview.imageUrl
+              : null,
+          }}
+        />
+      </a>
+      {item.showBoughtUrl && (
+        <p className='text-muted-foreground text-xs'>
+          Store link · shown to buyers
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -775,8 +783,10 @@ function ThingDrawer({
         />
         {isNotListed && (
           <p className='text-muted-foreground text-sm text-pretty'>
-            Buyers can&apos;t see this yet. It needs a photo, a name and a
-            price.
+            This is a draft. Buyers can&apos;t see it until{' '}
+            {getDraftHint(item) === 'save it to list it'
+              ? 'you save it.'
+              : 'it has a photo, a name and a price.'}
           </p>
         )}
         {isHoldLockedByFinish && (

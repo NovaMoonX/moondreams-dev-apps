@@ -2,9 +2,10 @@ import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Camera } from 'lucide-react';
+import { Camera, Check } from 'lucide-react';
 
 import FallbackImage from '@/components/FallbackImage';
+import PriceTag from '@apps/going-once/components/things/PriceTag';
 
 type TagPart = 'photos' | 'name' | 'price' | 'condition';
 
@@ -21,13 +22,15 @@ interface ThingTagCardProps {
   deferred: string[];
   /** The ids of the steps already passed, whose parts can be tapped to change. */
   answered: string[];
+  /** True once anything was written for the thing; nothing is said before that. */
+  isSaved: boolean;
   onReopen: (id: string) => void;
 }
 
 const PART_BUTTON =
-  'min-h-10 min-w-0 justify-start rounded-lg px-2 text-left text-accent-foreground! hover:bg-foreground/10 focus-visible:outline-2';
+  'min-h-10 min-w-0 justify-start rounded-lg px-2 text-left text-foreground! hover:bg-foreground/10 focus-visible:outline-2';
 
-/** The thing being written, drawn as a kraft price tag that fills in as each question is answered. */
+/** The thing being written, drawn as a clean card that fills in as each question is answered, with the kraft price tag for its price. */
 function ThingTagCard({
   coverUrl,
   photoCount,
@@ -38,6 +41,7 @@ function ThingTagCard({
   isFloorAbove,
   deferred,
   answered,
+  isSaved,
   onReopen,
 }: ThingTagCardProps) {
   const part = (
@@ -71,7 +75,7 @@ function ThingTagCard({
   };
 
   const placeholder = (
-    <span className='bg-background/40 flex size-16 flex-col items-center justify-center gap-0.5 rounded-xl'>
+    <span className='bg-muted text-muted-foreground flex size-16 flex-col items-center justify-center gap-0.5 rounded-xl'>
       <Camera className='size-5' aria-hidden='true' />
       {photoCount === 0 && deferred.includes('photos') && (
         <span className='text-[11px] leading-none'>Skipped</span>
@@ -91,11 +95,18 @@ function ThingTagCard({
     );
 
   return (
-    <div className='bg-accent text-accent-foreground relative rounded-2xl py-3 pr-3 pl-9 shadow-sm'>
-      <span
-        aria-hidden='true'
-        className='bg-background ring-foreground/10 absolute top-3 left-3 size-3.5 rounded-full ring-2 ring-inset'
-      />
+    <div className='bg-card text-card-foreground border-border rounded-2xl border p-3 shadow-sm'>
+      <p
+        role='status'
+        className='text-muted-foreground mb-1 flex h-4 items-center justify-end gap-1 px-2 text-xs'
+      >
+        {isSaved && (
+          <>
+            <Check className='size-3' aria-hidden='true' />
+            Draft saved
+          </>
+        )}
+      </p>
       <div className='flex items-start gap-2'>
         {part(
           'photos',
@@ -111,7 +122,7 @@ function ThingTagCard({
             <span
               className={join(
                 'line-clamp-2 min-w-0 font-semibold break-words',
-                title === '' && 'text-accent-foreground/60 font-normal',
+                title === '' && 'text-muted-foreground font-normal',
               )}
             >
               {getNameText()}
@@ -121,14 +132,8 @@ function ThingTagCard({
             {part(
               'price',
               `Price, ${priceText === '' ? 'none yet' : priceText}, change`,
-              'text-lg font-semibold',
-              priceText === '' ? (
-                <span className='text-accent-foreground/60 text-sm font-normal'>
-                  No price yet
-                </span>
-              ) : (
-                priceText
-              ),
+              '',
+              <PriceTag text={priceText === '' ? 'No price yet' : priceText} />,
             )}
             {conditionLabel !== '' &&
               part(
@@ -143,13 +148,11 @@ function ThingTagCard({
                 'condition',
                 'Condition, later, change',
                 'text-sm',
-                <span className='text-accent-foreground/60'>
-                  Condition later
-                </span>,
+                <span className='text-muted-foreground'>Condition later</span>,
               )}
           </div>
           {floorText !== '' && (
-            <p className='px-2 text-xs'>
+            <p className='text-muted-foreground px-2 text-xs'>
               🔒 Lowest {floorText}
               {isFloorAbove && (
                 <span className='font-medium text-(--going-once-hint)'>

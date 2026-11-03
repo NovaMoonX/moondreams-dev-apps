@@ -20,7 +20,7 @@ interface StatusDotProps {
   status: ItemStatus;
   /** What follows the word ("for Nate · pickup Sat, Nov 7"). */
   children?: ReactNode;
-  /** Replaces the status word where the thing is in a state the status doesn't name ("Not listed yet", "Didn't sell"). */
+  /** Replaces the status word where the thing is in a state the status doesn't name ("Draft", "Didn't sell"). */
   label?: string;
   /** Flows with the text around it so a parent's `line-clamp` can clip it; the default is its own flex line. */
   isInline?: boolean;

@@ -21,6 +21,7 @@ export interface ThingAnswers {
   boughtOn: string;
   boughtUrl: string;
   boughtUrlPreview: LinkPreview | null;
+  showBoughtUrl: boolean;
   notes: string;
 }
 
@@ -42,6 +43,7 @@ export const EMPTY_ANSWERS: ThingAnswers = {
   boughtOn: '',
   boughtUrl: '',
   boughtUrlPreview: null,
+  showBoughtUrl: false,
   notes: '',
 };
 
@@ -66,6 +68,7 @@ export const toAnswers = (item: Item): ThingAnswers => ({
   boughtOn: toDateInputValue(item.boughtOn ?? undefined),
   boughtUrl: item.boughtUrl ?? '',
   boughtUrlPreview: item.boughtUrlPreview,
+  showBoughtUrl: item.showBoughtUrl,
   notes: item.notes ?? '',
 });
 
@@ -90,6 +93,7 @@ export const toFields = (answers: ThingAnswers): ThingFields => {
     boughtOn: fromDateInputValue(answers.boughtOn) ?? null,
     boughtUrl,
     boughtUrlPreview: boughtUrl === null ? null : answers.boughtUrlPreview,
+    showBoughtUrl: boughtUrl !== null && answers.showBoughtUrl,
     notes: toText(answers.notes),
   };
 };
@@ -108,6 +112,7 @@ export const EMPTY_FIELDS: ThingFields = {
   boughtOn: null,
   boughtUrl: null,
   boughtUrlPreview: null,
+  showBoughtUrl: false,
   notes: null,
 };
 
