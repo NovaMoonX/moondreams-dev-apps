@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft, ChevronRight, Info, X } from 'lucide-react';
 
 import FallbackImage from '@/components/FallbackImage';
@@ -28,7 +29,19 @@ interface ImageViewerProps {
   label?: string;
 }
 
-const SWIPE_PX = 50;
+const DRAG_START_PX = 8;
+const COMMIT_FRACTION = 0.2;
+const FLICK_PX_PER_MS = 0.5;
+const FLICK_MIN_PX = 24;
+const EDGE_RESISTANCE = 3;
+
+interface Drag {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  startAt: number;
+  isActive: boolean;
+}
 
 /** Pictures full screen in the same tab, over whatever is open; closes only its own layer. */
 function ImageViewer({
@@ -41,8 +54,10 @@ function ImageViewer({
   const [pick, setPick] = useState({ slide: startIndex, picture: 0 });
   const [hiddenNotes, setHiddenNotes] = useState<number[]>([]);
   const isNarrow = useMediaQuery().isBelow('sm');
-  const swipeStart = useRef<number | null>(null);
+  const drag = useRef<Drag | null>(null);
   const didSwipe = useRef(false);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const root = useRef<HTMLDivElement | null>(null);
   const { dialogId, onDialogClose } = useSheetHistory(true, onClose);
   const slide = slides[index] ?? slides[0];
@@ -155,19 +170,75 @@ function ImageViewer({
           if (event.target === event.currentTarget) onDialogClose();
         }}
         onPointerDown={(event) => {
-          swipeStart.current = event.clientX;
           didSwipe.current = false;
+          if (
+            !event.isPrimary ||
+            (event.target as HTMLElement).closest('button')
+          )
+            return;
+          drag.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            startAt: event.timeStamp,
+            isActive: false,
+          };
+        }}
+        onPointerMove={(event) => {
+          const current = drag.current;
+          if (current?.pointerId !== event.pointerId) return;
+          const moved = event.clientX - current.startX;
+          if (!current.isActive) {
+            const isHorizontal =
+              Math.abs(moved) > DRAG_START_PX &&
+              Math.abs(moved) > Math.abs(event.clientY - current.startY);
+            if (!isHorizontal) return;
+            current.isActive = true;
+            didSwipe.current = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            setIsDragging(true);
+          }
+          const isAtEdge =
+            (index === 0 && moved > 0) || (index === count - 1 && moved < 0);
+          setDragX(isAtEdge ? moved / EDGE_RESISTANCE : moved);
         }}
         onPointerUp={(event) => {
-          const start = swipeStart.current;
-          swipeStart.current = null;
-          if (start === null) return;
-          const moved = event.clientX - start;
-          didSwipe.current = Math.abs(moved) >= SWIPE_PX;
-          if (didSwipe.current) step(moved < 0 ? 1 : -1);
+          const current = drag.current;
+          drag.current = null;
+          if (current?.pointerId !== event.pointerId || !current.isActive)
+            return;
+          const moved = event.clientX - current.startX;
+          const elapsed = Math.max(1, event.timeStamp - current.startAt);
+          const isFlick =
+            Math.abs(moved) >= FLICK_MIN_PX &&
+            Math.abs(moved) / elapsed >= FLICK_PX_PER_MS;
+          const isFar =
+            Math.abs(moved) >=
+            event.currentTarget.clientWidth * COMMIT_FRACTION;
+          setDragX(0);
+          if (!isFar && !isFlick) {
+            setIsDragging(false);
+            return;
+          }
+          // The new slide takes the old one's place at once; easing it back from the drag offset would slide it in against the finger.
+          step(moved < 0 ? 1 : -1);
+          window.requestAnimationFrame(() => setIsDragging(false));
+        }}
+        onPointerCancel={(event) => {
+          if (drag.current?.pointerId !== event.pointerId) return;
+          drag.current = null;
+          setIsDragging(false);
+          setDragX(0);
         }}
       >
-        <div className='flex size-full min-h-0 items-center justify-center gap-3'>
+        <div
+          className={join(
+            'flex size-full min-h-0 items-center justify-center gap-3',
+            !isDragging &&
+              'transition-transform duration-200 motion-reduce:transition-none',
+          )}
+          style={{ transform: `translateX(${dragX}px)` }}
+        >
           {shown.map((picture) => (
             <figure
               key={picture.src}

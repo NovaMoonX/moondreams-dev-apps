@@ -4,6 +4,7 @@ import {
   CONDITION_LABELS,
   DID_NOT_SELL_LABEL,
   NOT_LISTED_LABEL,
+  SALE_PAGE_PATH,
   type ITEM_SORT_OPTIONS,
 } from '@apps/going-once/constants';
 import type { Item } from '@apps/going-once/types';
@@ -159,4 +160,9 @@ export function matchesSearch(item: Item, query: string): boolean {
   return [item.title, item.description, item.brandModel].some((text) =>
     text?.toLowerCase().includes(needle),
   );
+}
+
+/** The public page's address for one thing on it, which opens the page with that thing's drawer. */
+export function getThingPagePath(linkId: string, thingId: string): string {
+  return `${SALE_PAGE_PATH}${linkId}/${thingId}`;
 }

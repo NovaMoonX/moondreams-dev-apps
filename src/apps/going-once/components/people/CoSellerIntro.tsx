@@ -15,10 +15,12 @@ const parseSeen = (stored: unknown) => (stored === true ? true : null);
 interface CoSellerIntroProps {
   sale: Sale;
   uid: string;
+  /** False where the screen already asks for pushes itself (the Inbox), so the ask never shows twice. */
+  isPushAsked: boolean;
 }
 
 /** Greets a co-seller the first time they open a sale they were added to; each person sees it once per sale. */
-function CoSellerIntro({ sale, uid }: CoSellerIntroProps) {
+function CoSellerIntro({ sale, uid, isPushAsked }: CoSellerIntroProps) {
   const seller = useUserInfo(sale.ownerUid);
   const [isSeen, setIsSeen] = useLocalStorageState(
     `going-once-intro-${uid}-${sale.id}`,
@@ -50,7 +52,7 @@ function CoSellerIntro({ sale, uid }: CoSellerIntroProps) {
         delete other people&apos;s things, manage co-sellers or change the
         sale&apos;s details; you can leave from People.
       </IntroCard>
-      {sale.status !== FINISHED_SALE_STATUS && (
+      {isPushAsked && sale.status !== FINISHED_SALE_STATUS && (
         <PushCapsule saleId={sale.id} uid={uid} />
       )}
     </div>

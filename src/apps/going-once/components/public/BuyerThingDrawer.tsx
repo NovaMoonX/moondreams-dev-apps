@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Camera } from 'lucide-react';
 
+import CopyTextButton from '@/components/CopyTextButton';
 import DetailSheet from '@/components/DetailSheet';
 import PhotoStrip from '@/components/PhotoStrip';
 import InlineNotice from '@/components/InlineNotice';
@@ -13,6 +14,7 @@ import StatusDot from '@apps/going-once/components/things/StatusDot';
 import { CONDITION_LABELS } from '@apps/going-once/constants';
 import { usePublicPhotoUrls } from '@apps/going-once/queries/publicPhotoQueries';
 import type { PublicThing } from '@apps/going-once/types';
+import { getThingPagePath } from '@apps/going-once/utils/listing';
 
 interface BuyerThingDrawerProps {
   thing: PublicThing;
@@ -124,6 +126,13 @@ function BuyerThingDrawer({ thing, linkId, onClose }: BuyerThingDrawerProps) {
             Pending: someone&apos;s picking this up.
           </InlineNotice>
         )}
+        <CopyTextButton
+          text={`${window.location.origin}${getThingPagePath(linkId, thing.id)}`}
+          label='Copy link to this thing'
+          copiedLabel='Link copied'
+          variant='secondary'
+          className='h-10 rounded-full px-4'
+        />
       </div>
     </DetailSheet>
   );

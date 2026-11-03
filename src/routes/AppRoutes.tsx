@@ -108,7 +108,7 @@ export const router = createBrowserRouter([
         },
       },
       {
-        path: 'going-once/s/:linkId',
+        path: 'going-once/s/:linkId/:thingId?',
         HydrateFallback: Loading,
         lazy: async () => {
           const { default: SalePage } =

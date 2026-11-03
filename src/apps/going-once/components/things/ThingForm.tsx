@@ -45,7 +45,7 @@ const BUYERS_SEE: RowKey[] = [
   'size',
   'showOriginal',
 ];
-const PRIVATE: RowKey[] = ['floor', 'original', 'bought', 'notes'];
+const PRIVATE: RowKey[] = ['floor', 'original', 'bought', 'link', 'notes'];
 
 const SAVE_FAILED = "That didn't save. Check your connection and try again.";
 /** An offline write never settles, so after this long it counts as kept on the phone and the sheet closes. */
@@ -223,7 +223,12 @@ function ThingForm({ item, uid, isSeller, onClose }: ThingFormProps) {
   };
 
   return (
-    <FormScreen isOpen onClose={onDialogClose} title={getItemName(item)}>
+    <FormScreen
+      isOpen
+      onClose={onDialogClose}
+      title={getItemName(item)}
+      backLabel={`Back to ${getItemName(item)}`}
+    >
       <div id={dialogId} className='space-y-5'>
         <div className='space-y-2'>
           <SectionDivider label='Buyers see' />

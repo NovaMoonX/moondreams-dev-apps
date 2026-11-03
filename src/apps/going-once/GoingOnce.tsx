@@ -251,7 +251,11 @@ function GoingOnce() {
                 )}
               </div>
             </header>
-            <CoSellerIntro sale={sale} uid={user.uid} />
+            <CoSellerIntro
+              sale={sale}
+              uid={user.uid}
+              isPushAsked={activeTab !== 'inbox'}
+            />
             {activeTab === 'things' && (
               <ItemsSection
                 saleId={sale.id}

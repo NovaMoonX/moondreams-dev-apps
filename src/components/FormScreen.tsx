@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Modal } from '@moondreamsdev/dreamer-ui/components';
 
-import Subview from '@/components/Subview';
+import Subview, { SubviewBackButton } from '@/components/Subview';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface FormScreenProps {
@@ -11,6 +11,8 @@ interface FormScreenProps {
   /** A plain noun, the same for creating and editing. */
   title: string;
   children: ReactNode;
+  /** For a form opened from another sheet that closing returns to: the modal's title gets the subview's back button too. */
+  backLabel?: string;
 }
 
 /**
@@ -18,7 +20,13 @@ interface FormScreenProps {
  * footer pinned to the bottom, so the form can be as long as it needs to be) and a modal from `sm` up,
  * where there is room. Forms that fit a phone screen without scrolling stay a plain `Modal`.
  */
-function FormScreen({ isOpen, onClose, title, children }: FormScreenProps) {
+function FormScreen({
+  isOpen,
+  onClose,
+  title,
+  children,
+  backLabel,
+}: FormScreenProps) {
   const isPhone = useMediaQuery().isBelow('sm');
 
   if (!isOpen) {
@@ -34,7 +42,20 @@ function FormScreen({ isOpen, onClose, title, children }: FormScreenProps) {
   }
 
   return (
-    <Modal isOpen onClose={onClose} title={title}>
+    <Modal
+      isOpen
+      onClose={onClose}
+      title={
+        backLabel === undefined ? (
+          title
+        ) : (
+          <span className='flex min-w-0 items-center gap-2'>
+            <SubviewBackButton label={backLabel} onClick={onClose} />
+            <span className='min-w-0 truncate'>{title}</span>
+          </span>
+        )
+      }
+    >
       {children}
     </Modal>
   );

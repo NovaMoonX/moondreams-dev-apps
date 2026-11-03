@@ -26,7 +26,7 @@ interface PhotoStripProps {
 const TILE_BOX =
   'bg-muted aspect-4/3 h-auto max-h-[40dvh] w-full overflow-hidden rounded-2xl [@media(max-height:499px)]:max-h-[26dvh]';
 
-/** A sideways row of photos that snaps one at a time and lets the next peek in, with "1 / 5" under it, arrows from `sm`, and a tap that opens the pictures full screen. A photo that is loading holds its box, and one that fails shows a camera tile; the strip hides when none can be shown. */
+/** A sideways row of photos, one per view in the same 4:3 box, that snaps one at a time with "1 / 5" over the photo's corner, arrows from `sm`, and a tap that opens the pictures full screen. A photo that is loading holds its box, and one that fails shows a camera tile; the strip hides when none can be shown. */
 function PhotoStrip({ photos, label, fallback = null }: PhotoStripProps) {
   const listRef = useRef<HTMLUListElement>(null);
   const [scrolledTo, setScrolledTo] = useState(0);
@@ -120,25 +120,30 @@ function PhotoStrip({ photos, label, fallback = null }: PhotoStripProps) {
   };
 
   return (
-    <div className='space-y-1'>
+    <div>
       <div className='relative'>
         <ul
           ref={listRef}
-          className='-mx-1 flex snap-x snap-mandatory [scrollbar-width:none] gap-2 overflow-x-auto px-1 pb-1'
+          className='flex snap-x snap-mandatory [scrollbar-width:none] overflow-x-auto overscroll-x-contain'
           onScroll={handleScroll}
         >
           {photos.map((photo, index) => (
             <li
               key={photo.id}
-              className={join(
-                'flex shrink-0 snap-center',
-                photos.length === 1 ? 'w-full' : 'w-[85%] sm:w-[70%]',
-              )}
+              className='flex w-full shrink-0 snap-center snap-always'
             >
               {renderTile(photo, index)}
             </li>
           ))}
         </ul>
+        {shown.length > 1 && (
+          <p
+            className='pointer-events-none absolute right-2 bottom-2 rounded-full bg-black/55 px-2 py-0.5 text-xs text-white tabular-nums'
+            aria-hidden='true'
+          >
+            {position} / {shown.length}
+          </p>
+        )}
         {current > 0 && (
           <Button
             type='button'
@@ -166,14 +171,6 @@ function PhotoStrip({ photos, label, fallback = null }: PhotoStripProps) {
           </Button>
         )}
       </div>
-      {shown.length > 1 && (
-        <p
-          className='bg-muted text-muted-foreground mx-auto w-fit rounded-full px-2 py-0.5 text-xs tabular-nums'
-          aria-hidden='true'
-        >
-          {position} / {shown.length}
-        </p>
-      )}
       {viewerStart !== null && viewerStart >= 0 && (
         <ImageViewer
           startIndex={viewerStart}

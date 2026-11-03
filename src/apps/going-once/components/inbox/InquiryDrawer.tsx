@@ -6,6 +6,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   CalendarClock,
+  CheckCircle2,
   ChevronRight,
   Ellipsis,
   Mail,
@@ -72,7 +73,7 @@ const getStatusLine = (
       ? `Sent ${inquiry.sendCount} times · latest ${formatSentAt(inquiry.lastSentAt, now)}`
       : null;
   if (inquiry.status === 'NEW' || inquiry.handledAt === null)
-    return [resent ?? formatSentAt(inquiry.lastSentAt, now), 'New'].join(' · ');
+    return ['New', resent ?? formatSentAt(inquiry.lastSentAt, now)].join(' · ');
   return [
     `Handled by ${handledBy ?? 'someone'} · ${formatSentAt(inquiry.handledAt, now)}`,
     resent,
@@ -247,75 +248,106 @@ function InquiryDrawer({
           </ActionGroup>
         </div>
       ) : (
-        <div className='space-y-4'>
-          <p className='text-muted-foreground text-sm'>
-            {getStatusLine(inquiry, handledBy, now)}
-          </p>
-          {item === null ? (
-            <p className='text-muted-foreground text-sm break-words'>{thing}</p>
-          ) : (
-            <Button
-              type='button'
-              variant='tertiary'
-              className='border-border bg-card h-auto min-h-16 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left'
-              aria-label={`Open ${getItemName(item)}`}
-              onClick={onOpenThing}
-            >
-              <ThingThumb item={item} />
-              <span className='min-w-0 flex-1'>
-                <span className='text-foreground line-clamp-2 text-base font-medium break-words'>
-                  {getItemName(item)}
-                </span>
-                <span className='text-muted-foreground block text-sm font-normal'>
-                  <StatusDot
-                    status={item.status}
-                    label={
-                      item.status === 'AVAILABLE'
-                        ? getAvailableLabel(item, isSaleFinished)
-                        : undefined
-                    }
-                    isInline
-                  >
-                    {getStatusFacts(item, true)}
-                  </StatusDot>
-                </span>
-              </span>
-              <ChevronRight
-                className='text-muted-foreground size-5 shrink-0'
+        <div className='space-y-5'>
+          <p className='text-muted-foreground flex items-center gap-2 text-sm'>
+            {isNew ? (
+              <span
+                className='bg-primary size-2 shrink-0 rounded-full'
                 aria-hidden='true'
               />
-            </Button>
-          )}
-          <p className='text-sm break-words whitespace-pre-wrap'>
-            {inquiry.message ?? 'No message.'}
-          </p>
-          {clearedAt !== null && (
-            <p className='text-muted-foreground text-sm'>
-              Details cleared {formatDateShort(clearedAt)}.
-            </p>
-          )}
-          {!isSaleFinished &&
-            clearedAt === null &&
-            item !== null &&
-            item.status === 'AVAILABLE' &&
-            isListable(item) && (
-              <ActionGroup isRoomy>
-                <ActionRow
-                  isGrouped
-                  isRoomy
-                  icon={<CalendarClock />}
-                  label={`Hold for ${name}`}
-                  subtitle='Marks it pending, with their name on the hold'
-                  hasChevron
-                  onClick={onHold}
-                />
-              </ActionGroup>
+            ) : (
+              <CheckCircle2 className='size-4 shrink-0' aria-hidden='true' />
             )}
+            <span className='min-w-0'>
+              {getStatusLine(inquiry, handledBy, now)}
+            </span>
+          </p>
+          <div className='bg-card border-border rounded-2xl rounded-tl-md border px-4 py-3'>
+            {inquiry.message === null ? (
+              <p className='text-muted-foreground'>No message.</p>
+            ) : (
+              <p className='break-words whitespace-pre-wrap'>
+                {inquiry.message}
+              </p>
+            )}
+          </div>
+          <div className='space-y-2'>
+            <p className='text-muted-foreground text-xs font-medium'>About</p>
+            {item === null ? (
+              <p className='text-muted-foreground text-sm break-words'>
+                {thing}
+              </p>
+            ) : (
+              <Button
+                type='button'
+                variant='tertiary'
+                className='border-border bg-card h-auto min-h-16 w-full items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 text-left'
+                aria-label={`Open ${getItemName(item)}`}
+                onClick={onOpenThing}
+              >
+                <ThingThumb item={item} />
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground line-clamp-2 text-base font-medium break-words'>
+                    {getItemName(item)}
+                  </span>
+                  <span className='text-muted-foreground block text-sm font-normal'>
+                    <StatusDot
+                      status={item.status}
+                      label={
+                        item.status === 'AVAILABLE'
+                          ? getAvailableLabel(item, isSaleFinished)
+                          : undefined
+                      }
+                      isInline
+                    >
+                      {getStatusFacts(item, true)}
+                    </StatusDot>
+                  </span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-5 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            )}
+            {!isSaleFinished &&
+              clearedAt === null &&
+              item !== null &&
+              item.status === 'AVAILABLE' &&
+              isListable(item) && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  className='text-primary! h-10 max-w-full justify-start gap-2 px-2!'
+                  onClick={onHold}
+                >
+                  <CalendarClock
+                    className='size-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                  <span className='truncate'>Hold it for {name}</span>
+                </Button>
+              )}
+          </div>
+          {clearedAt !== null && (
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-xs font-medium'>
+                Reach them
+              </p>
+              <p className='text-muted-foreground text-sm'>
+                Details cleared {formatDateShort(clearedAt)}.
+              </p>
+            </div>
+          )}
           {reach.length > 0 && (
             <div className='space-y-2'>
+              <p className='text-muted-foreground text-xs font-medium'>
+                Reach them
+              </p>
               {contactText !== null && (
                 <p className='text-muted-foreground text-sm break-all'>
-                  Reach them at {contactText}
+                  {contactText}
                 </p>
               )}
               <div className='flex flex-wrap gap-2'>

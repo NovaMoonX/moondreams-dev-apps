@@ -5,6 +5,8 @@ import {
   useState,
   useSyncExternalStore,
   type ChangeEvent,
+  type CSSProperties,
+  type PointerEvent,
   type ReactNode,
 } from 'react';
 
@@ -36,7 +38,14 @@ const DEFAULT_MAX = 12;
 // A little after the undo bar's own six seconds, so Undo is never offered for a removal that has already gone through.
 const REMOVE_DELAY_MS = 6500;
 const FOCUS_AFTER_REMOVAL_MS = 350;
+const PENDING_ORDER_HOLD_MS = 3000;
 const TOUCH_QUERY = '(pointer: coarse)';
+const MOUSE_DRAG_PX = 5;
+const TOUCH_HOLD_MS = 300;
+const TOUCH_SLOP_PX = 8;
+const EDGE_SCROLL_ZONE_PX = 40;
+const EDGE_SCROLL_MAX_PX = 12;
+const CLICK_GUARD_MS = 80;
 // Positioning stays with the call site: a `relative` here would beat the `absolute` of a corner button.
 const HIT_AREA = "before:absolute before:-inset-2 before:content-['']";
 
@@ -73,6 +82,50 @@ interface Notice {
   message: string;
   isError: boolean;
 }
+
+interface Press {
+  id: string;
+  from: number;
+  count: number;
+  pointerId: number;
+  isMouse: boolean;
+  startX: number;
+  startY: number;
+  startScroll: number;
+  pointerX: number;
+  isActive: boolean;
+  timer: number | null;
+}
+
+interface DragState {
+  id: string;
+  from: number;
+  over: number;
+  x: number;
+}
+
+// A thumb (5.5rem) plus the row's gap (0.5rem).
+const SLOT = '6rem';
+
+const thumbStyle = (
+  drag: DragState | null,
+  id: string,
+  index: number,
+): CSSProperties | undefined => {
+  if (drag === null) return undefined;
+  if (drag.id === id) {
+    return { transform: `translateX(${drag.x}px) scale(1.05)` };
+  }
+  if (index > drag.from && index <= drag.over) {
+    return { transform: `translateX(calc(${SLOT} * -1))` };
+  }
+  if (index < drag.from && index >= drag.over) {
+    return { transform: `translateX(${SLOT})` };
+  }
+  return undefined;
+};
+
+const blockTouchScroll = (event: TouchEvent) => event.preventDefault();
 
 interface ThumbFrameProps {
   isCover?: boolean;
@@ -186,6 +239,12 @@ function PhotoSetPicker({
     () => false,
   );
   const addAreaRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const endPress = useRef<(() => void) | null>(null);
+  const didDrag = useRef(false);
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [pendingIds, setPendingIds] = useState<string[] | null>(null);
+  const moveToken = useRef(0);
   const [hiddenIds, setHiddenIds] = useState<ReadonlySet<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -220,7 +279,19 @@ function PhotoSetPicker({
 
   useEffect(() => commitRemoval, [commitRemoval]);
 
-  const shown = photos.filter((photo) => !hiddenIds.has(photo.id));
+  const visible = photos.filter((photo) => !hiddenIds.has(photo.id));
+  const isCaughtUp =
+    pendingIds !== null &&
+    visible.map((photo) => photo.id).join() === pendingIds.join();
+  const shown =
+    pendingIds === null || isCaughtUp
+      ? visible
+      : [
+          ...pendingIds.flatMap((id) =>
+            visible.filter((photo) => photo.id === id),
+          ),
+          ...visible.filter((photo) => !pendingIds.includes(photo.id)),
+        ];
   const count = shown.length + uploads.uploads.length;
   const remaining = Math.max(0, max - count);
   const opened = shown.find((photo) => photo.id === openId) ?? null;
@@ -245,13 +316,151 @@ function PhotoSetPicker({
     const without = ids.filter((photoId) => photoId !== id);
     const next = [...without.slice(0, to), id, ...without.slice(to)];
     setNotice(null);
-    void onReorder(next).catch(() =>
-      setNotice({
-        message:
-          "The order didn't save. Changing it needs a connection; try again when you're back online.",
-        isError: true,
-      }),
+    setPendingIds(next);
+    const token = (moveToken.current += 1);
+    const clearIfLatest = () => {
+      if (moveToken.current === token) setPendingIds(null);
+    };
+    // A saved order shows from the record once its listener catches up; this only lets go if it never does.
+    void onReorder(next).then(
+      () => window.setTimeout(clearIfLatest, PENDING_ORDER_HOLD_MS),
+      () => {
+        clearIfLatest();
+        setNotice({
+          message:
+            "The order didn't save. Changing it needs a connection; try again when you're back online.",
+          isError: true,
+        });
+      },
     );
+  };
+
+  const latest = useRef({ move, count: shown.length });
+
+  useEffect(() => {
+    latest.current = { move, count: shown.length };
+  });
+
+  useEffect(() => () => endPress.current?.(), []);
+
+  const startPress = (
+    event: PointerEvent<HTMLLIElement>,
+    id: string,
+    from: number,
+  ) => {
+    const row = listRef.current;
+    if (!event.isPrimary || event.button !== 0 || !row || shown.length < 2)
+      return;
+    endPress.current?.();
+    didDrag.current = false;
+    const isMouse = event.pointerType === 'mouse';
+    const current: Press = {
+      id,
+      from,
+      count: shown.length,
+      pointerId: event.pointerId,
+      isMouse,
+      startX: event.clientX,
+      startY: event.clientY,
+      startScroll: row.scrollLeft,
+      pointerX: event.clientX,
+      isActive: false,
+      timer: null,
+    };
+    const loop = { frame: 0 };
+
+    const measure = () => {
+      const first = row.children[0] as HTMLElement | undefined;
+      const second = row.children[1] as HTMLElement | undefined;
+      const step = first && second ? second.offsetLeft - first.offsetLeft : 96;
+      const x =
+        current.pointerX -
+        current.startX +
+        row.scrollLeft -
+        current.startScroll;
+      const over = Math.min(
+        current.count - 1,
+        Math.max(0, Math.round(current.from + x / step)),
+      );
+      return { x, over };
+    };
+
+    const update = () => setDrag({ id, from, ...measure() });
+
+    const tick = () => {
+      const box = row.getBoundingClientRect();
+      const toLeft = current.pointerX - (box.left + EDGE_SCROLL_ZONE_PX);
+      const toRight = current.pointerX - (box.right - EDGE_SCROLL_ZONE_PX);
+      const pace = (depth: number) =>
+        Math.min(
+          EDGE_SCROLL_MAX_PX,
+          Math.ceil(
+            (Math.abs(depth) / EDGE_SCROLL_ZONE_PX) * EDGE_SCROLL_MAX_PX,
+          ),
+        );
+      const before = row.scrollLeft;
+      if (toLeft < 0) row.scrollLeft -= pace(toLeft);
+      else if (toRight > 0) row.scrollLeft += pace(toRight);
+      if (row.scrollLeft !== before) update();
+      loop.frame = window.requestAnimationFrame(tick);
+    };
+
+    const begin = () => {
+      current.isActive = true;
+      didDrag.current = true;
+      if (current.timer !== null) window.clearTimeout(current.timer);
+      current.timer = null;
+      document.addEventListener('touchmove', blockTouchScroll, {
+        passive: false,
+      });
+      update();
+      loop.frame = window.requestAnimationFrame(tick);
+    };
+
+    const handleMove = (moveEvent: globalThis.PointerEvent) => {
+      if (moveEvent.pointerId !== current.pointerId) return;
+      current.pointerX = moveEvent.clientX;
+      if (current.isActive) {
+        update();
+        return;
+      }
+      const distance = Math.hypot(
+        moveEvent.clientX - current.startX,
+        moveEvent.clientY - current.startY,
+      );
+      if (isMouse && distance > MOUSE_DRAG_PX) begin();
+      else if (!isMouse && distance > TOUCH_SLOP_PX) finish(false);
+    };
+
+    const handleUp = (upEvent: globalThis.PointerEvent) => {
+      if (upEvent.pointerId !== current.pointerId) return;
+      finish(upEvent.type === 'pointerup');
+    };
+
+    const finish = (shouldDrop: boolean) => {
+      const wasActive = current.isActive;
+      const over = wasActive && shouldDrop ? measure().over : from;
+      if (current.timer !== null) window.clearTimeout(current.timer);
+      window.cancelAnimationFrame(loop.frame);
+      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener('pointerup', handleUp);
+      window.removeEventListener('pointercancel', handleUp);
+      document.removeEventListener('touchmove', blockTouchScroll);
+      endPress.current = null;
+      setDrag(null);
+      if (wasActive) {
+        window.setTimeout(() => {
+          didDrag.current = false;
+        }, CLICK_GUARD_MS);
+        if (over !== from) latest.current.move(id, over);
+      }
+    };
+
+    window.addEventListener('pointermove', handleMove);
+    window.addEventListener('pointerup', handleUp);
+    window.addEventListener('pointercancel', handleUp);
+    endPress.current = () => finish(false);
+    if (!isMouse) current.timer = window.setTimeout(begin, TOUCH_HOLD_MS);
   };
 
   const startRemoval = (id: string) => {
@@ -306,9 +515,38 @@ function PhotoSetPicker({
           <p className='text-muted-foreground text-xs tabular-nums'>
             {count} of {max}
           </p>
-          <ul className='-mx-1 flex min-w-0 snap-x gap-2 overflow-x-auto px-1 pb-1'>
+          {shown.length > 1 && (
+            <p className='text-muted-foreground text-xs'>
+              {isTouch
+                ? 'Hold and drag to reorder. Tap a photo to make it the cover.'
+                : 'Drag to reorder. Click a photo to make it the cover.'}
+            </p>
+          )}
+          <ul
+            ref={listRef}
+            className={join(
+              '-mx-1 flex min-w-0 gap-2 overflow-x-auto px-1 py-1',
+              drag === null ? 'snap-x' : 'snap-none',
+            )}
+          >
             {shown.map((photo, index) => (
-              <li key={photo.id} className='shrink-0'>
+              <li
+                key={photo.id}
+                className={join(
+                  'relative shrink-0 select-none [-webkit-touch-callout:none]',
+                  drag?.id === photo.id
+                    ? 'z-10 shadow-xl'
+                    : 'motion-safe:transition-transform motion-safe:duration-150',
+                )}
+                style={thumbStyle(drag, photo.id, index)}
+                onPointerDown={(event) => startPress(event, photo.id, index)}
+                onContextMenu={(event) => event.preventDefault()}
+                onClickCapture={(event) => {
+                  if (!didDrag.current) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
                 <ThumbFrame isCover={index === 0}>
                   <Button
                     type='button'
@@ -321,6 +559,7 @@ function PhotoSetPicker({
                       <FallbackImage
                         src={photo.url}
                         alt=''
+                        draggable={false}
                         className='size-full object-cover'
                       />
                     )}
@@ -428,7 +667,7 @@ function PhotoSetPicker({
               <FallbackImage
                 src={opened.url}
                 alt=''
-                className='mx-auto size-24 rounded-xl object-cover'
+                className='aspect-4/3 w-full rounded-2xl object-cover'
               />
             )}
             <ActionGroup>

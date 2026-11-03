@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 
 import { formatDateUTC } from '@/utils/formatUtils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
+import { getWebLinkHost } from '@/utils/urlUtils';
 import { formatCentsShort, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   BoughtQuestion,
@@ -14,6 +15,7 @@ import {
   OriginalPriceQuestion,
   PriceQuestion,
   SizeQuestion,
+  StoreLinkQuestion,
   type QuestionProps,
 } from '@apps/going-once/components/things/ThingQuestions';
 import { CONDITION_LABELS } from '@apps/going-once/constants';
@@ -35,11 +37,12 @@ export type RowKey =
   | 'floor'
   | 'original'
   | 'bought'
+  | 'link'
   | 'notes';
 
 export type ExtraKey = Extract<
   RowKey,
-  'description' | 'brand' | 'size' | 'original' | 'bought' | 'notes'
+  'description' | 'brand' | 'size' | 'original' | 'bought' | 'link' | 'notes'
 >;
 
 export interface ThingRow {
@@ -133,21 +136,29 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
   bought: {
     label: '🔒 Where you got it',
     icon: '🛍️',
-    fields: ['boughtFrom', 'boughtOn', 'boughtUrl', 'boughtUrlPreview'],
+    fields: ['boughtFrom', 'boughtOn'],
     summary: (a) => {
       const day = fromDateInputValue(a.boughtOn);
       const store = clip(a.boughtFrom);
-      return [
-        store,
-        day === undefined ? '' : formatDateUTC(day),
-        store !== '' || a.boughtUrl === ''
-          ? ''
-          : (a.boughtUrlPreview?.siteName ?? 'Store link'),
-      ]
+      return [store, day === undefined ? '' : formatDateUTC(day)]
         .filter((part) => part !== '')
         .join(' · ');
     },
     Question: BoughtQuestion,
+  },
+  link: {
+    label: '🔒 Store link',
+    icon: '🔗',
+    fields: ['boughtUrl', 'boughtUrlPreview'],
+    summary: (a) => {
+      if (a.boughtUrl === '') return '';
+      return (
+        a.boughtUrlPreview?.siteName ||
+        getWebLinkHost(a.boughtUrl) ||
+        'Store link'
+      );
+    },
+    Question: StoreLinkQuestion,
   },
   notes: {
     label: '🔒 Notes',
@@ -164,6 +175,7 @@ export const EXTRA_KEYS: ExtraKey[] = [
   'size',
   'original',
   'bought',
+  'link',
   'notes',
 ];
 
@@ -177,6 +189,7 @@ export const EXTRA_ANSWER_KEYS: Record<ExtraKey, (keyof ThingAnswers)[]> = {
   brand: ['brandModel'],
   size: ['size'],
   original: ['original', 'showOriginalPrice'],
-  bought: ['boughtFrom', 'boughtOn', 'boughtUrl', 'boughtUrlPreview'],
+  bought: ['boughtFrom', 'boughtOn'],
+  link: ['boughtUrl', 'boughtUrlPreview'],
   notes: ['notes'],
 };

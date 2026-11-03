@@ -8,7 +8,7 @@ import LinkAttachField from '@/components/forms/LinkAttachField';
 import MoneyInput from '@/components/MoneyInput';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
-import RevealChip from '@/components/RevealChip';
+import SegmentedControl from '@/components/SegmentedControl';
 import { parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   CONDITION_OPTIONS,
@@ -49,6 +49,19 @@ const HIDE_FIELD_CAPTION = '[&_label>span:first-child]:sr-only';
 
 const hiddenLabel = (text: string) => <span className='sr-only'>{text}</span>;
 
+/** Said on the floor itself, where it is typed, when it is more than the asking price. */
+function FloorAboveNote({ answers }: Pick<QuestionProps, 'answers'>) {
+  const floor = parseMoneyToCents(answers.floor);
+  const price = parseMoneyToCents(answers.price);
+  if (answers.isFree || floor === null || price === null || floor <= price)
+    return null;
+  return (
+    <p role='status' className='text-xs font-medium text-(--going-once-hint)'>
+      That&apos;s more than your asking price.
+    </p>
+  );
+}
+
 /** The floor price; `isTitled` is for a sheet whose title already says it. */
 export function FloorField({
   answers,
@@ -65,6 +78,7 @@ export function FloorField({
         autoFocus
         wrapperClassName={isTitled ? undefined : 'max-w-48'}
       />
+      <FloorAboveNote answers={answers} />
       <p className='text-muted-foreground text-xs'>
         Only you and your co-sellers see this. Buyers never do.
       </p>
@@ -72,7 +86,12 @@ export function FloorField({
   );
 }
 
-/** The asking price (or Free), with the floor price revealed beside it unless `hasFloor` is false. */
+const PRICE_WAYS = [
+  { value: 'price', label: 'Set a price' },
+  { value: 'free', label: "It's free" },
+] as const;
+
+/** The asking price (or Free), with the floor price below it unless `hasFloor` is false. */
 export function PriceQuestion({
   answers,
   onChange,
@@ -80,12 +99,24 @@ export function PriceQuestion({
 }: QuestionProps & { hasFloor?: boolean }) {
   return (
     <div className='space-y-4'>
+      <SegmentedControl
+        label='Price'
+        options={PRICE_WAYS}
+        value={answers.isFree ? 'free' : 'price'}
+        onChange={(way) =>
+          onChange(
+            way === 'free'
+              ? { isFree: true, isFloorShown: false }
+              : { isFree: false, isFloorShown: answers.floor.trim() !== '' },
+          )
+        }
+      />
       {answers.isFree ? (
-        <div className='space-y-3 text-center'>
+        <div className='space-y-1 py-2 text-center'>
           <p className='text-5xl font-semibold'>Free</p>
-          <RevealChip onClick={() => onChange({ isFree: false })}>
-            Set a price
-          </RevealChip>
+          <p className='text-muted-foreground text-sm'>
+            Buyers see Free on its tag.
+          </p>
         </div>
       ) : (
         <AmountHero
@@ -93,28 +124,25 @@ export function PriceQuestion({
           value={answers.price}
           onChange={(price) => onChange({ price })}
           autoFocus
-          ways={[
-            {
-              label: "It's free",
-              onClick: () => onChange({ isFree: true, isFloorShown: false }),
-            },
-          ]}
         />
       )}
-      {hasFloor &&
-        !answers.isFree &&
-        (answers.isFloorShown ? (
-          <FloorField answers={answers} onChange={onChange} />
-        ) : (
-          <div className='flex justify-center'>
-            <RevealChip
-              icon='+'
-              onClick={() => onChange({ isFloorShown: true })}
-            >
-              🔒 Floor price
-            </RevealChip>
-          </div>
-        ))}
+      {hasFloor && !answers.isFree && (
+        <div className='bg-accent/60 border-border space-y-2 rounded-2xl border p-3'>
+          <p className='text-accent-foreground text-sm font-semibold'>
+            🔒 Lowest you'd take
+          </p>
+          <MoneyInput
+            ariaLabel='Lowest you would take'
+            value={answers.floor}
+            onChange={(floor) => onChange({ floor, isFloorShown: true })}
+            wrapperClassName='max-w-48'
+          />
+          <FloorAboveNote answers={answers} />
+          <p className='text-muted-foreground text-xs'>
+            Only you and your co-sellers see this. Buyers never do.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -238,17 +266,22 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
           />
         )}
       </Field>
-      <LinkAttachField
-        label="Store's page"
-        addLabel="+ Add the store's link"
-        url={answers.boughtUrl}
-        preview={answers.boughtUrlPreview}
-        startRevealed
-        onChange={(boughtUrl, boughtUrlPreview) =>
-          onChange({ boughtUrl, boughtUrlPreview })
-        }
-      />
     </div>
+  );
+}
+
+export function StoreLinkQuestion({ answers, onChange }: QuestionProps) {
+  return (
+    <LinkAttachField
+      label="Store's page"
+      addLabel="+ Add the store's link"
+      url={answers.boughtUrl}
+      preview={answers.boughtUrlPreview}
+      startRevealed
+      onChange={(boughtUrl, boughtUrlPreview) =>
+        onChange({ boughtUrl, boughtUrlPreview })
+      }
+    />
   );
 }
 
