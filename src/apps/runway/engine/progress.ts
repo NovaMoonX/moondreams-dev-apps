@@ -232,35 +232,48 @@ export const sumOutsideTransfers = (entries: readonly TransferEntry[]): Cents =>
     0,
   );
 
-/** The money moved into each item, counted as set aside from the day it moved, less what a transfer out of that item later took back (the latest money in goes first). */
+/** The money moved into each item, counted as set aside from the day it moved, less what a later transfer out of that item took back (the latest money in before it goes first). */
 export function collectMovedIn(
   entries: readonly TransferEntry[],
 ): Record<string, FundedDay[]> {
-  const takenOut = entries.reduce<Record<string, Cents>>(
-    (acc, { fromId, cents }) =>
-      fromId !== null && cents > 0
-        ? { ...acc, [fromId]: (acc[fromId] ?? 0) + cents }
-        : acc,
-    {},
-  );
-  const left = { ...takenOut };
-  return entries
-    .filter((entry) => entry.toId !== null && entry.cents > 0)
-    .sort((a, b) => a.on - b.on)
-    .reduceRight<Record<string, FundedDay[]>>((acc, entry) => {
-      const toId = entry.toId ?? '';
-      const took = Math.min(left[toId] ?? 0, entry.cents);
-      left[toId] = (left[toId] ?? 0) - took;
-      if (entry.cents > took) {
-        (acc[toId] ??= []).unshift({
+  const ordered = entries
+    .filter((entry) => entry.cents > 0)
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => a.entry.on - b.entry.on || a.index - b.index)
+    .map(({ entry }) => entry);
+  const days = ordered.reduce<Record<string, FundedDay[]>>((acc, entry) => {
+    if (entry.fromId !== null && acc[entry.fromId] !== undefined) {
+      const fromId = entry.fromId;
+      acc[fromId] = acc[fromId].reduceRight<{ kept: FundedDay[]; owed: Cents }>(
+        ({ kept, owed }, day) => {
+          const took = Math.min(owed, day.cents);
+          return {
+            kept:
+              day.cents > took
+                ? [{ ...day, cents: day.cents - took }, ...kept]
+                : kept,
+            owed: owed - took,
+          };
+        },
+        { kept: [], owed: entry.cents },
+      ).kept;
+    }
+    if (entry.toId !== null) {
+      acc[entry.toId] = [
+        ...(acc[entry.toId] ?? []),
+        {
           dayKey: `moved_${entry.moveId}`,
           on: entry.on,
-          cents: entry.cents - took,
+          cents: entry.cents,
           isMoved: true,
-        });
-      }
-      return acc;
-    }, {});
+        },
+      ];
+    }
+    return acc;
+  }, {});
+  return Object.fromEntries(
+    Object.entries(days).filter(([, list]) => list.length > 0),
+  );
 }
 
 /** What transfers added to (positive) or took from (negative) each item. */

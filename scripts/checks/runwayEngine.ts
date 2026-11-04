@@ -15146,6 +15146,17 @@ console.log('runway engine: ok');
     'a transfer out with nothing moved in leaves nothing',
   );
   assert.deepEqual(
+    flat(
+      [
+        transfer('d', nov1 + DAY_MS, 'moving', 'bill-1', 5_000),
+        transfer('b', nov1, 'bill-1', null, 6_000),
+      ],
+      'bill-1',
+    ),
+    [5_000],
+    'a transfer out never takes back money that moved in after it',
+  );
+  assert.deepEqual(
     collectMovedIn([transfer('f', nov1, 'moving', null, 20_000)]),
     {},
     'a transfer to Free to Spend is moved into no item',
