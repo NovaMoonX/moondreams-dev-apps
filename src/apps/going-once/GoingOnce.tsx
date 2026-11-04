@@ -270,12 +270,12 @@ function GoingOnce() {
                   </p>
                 )}
               </div>
-              {sale.publicLinkId !== null && (
+              {sale.publicLinkId !== null && activeTab !== 'sale' && (
                 <CopyTextButton
                   text={`${window.location.origin}${SALE_PAGE_PATH}${sale.publicLinkId}`}
                   label='Copy link'
                   variant='secondary'
-                  className="relative ml-auto h-9 shrink-0 rounded-full! px-3! whitespace-nowrap after:absolute after:inset-x-0 after:-inset-y-0.5 after:content-[''] max-[359px]:w-9 max-[359px]:px-0! max-[359px]:[&>span]:sr-only"
+                  className="relative ml-auto h-9 shrink-0 rounded-full! px-3! whitespace-nowrap after:absolute after:-inset-0.5 after:content-[''] max-[359px]:w-9 max-[359px]:px-0! max-[359px]:[&>span]:sr-only"
                 />
               )}
             </header>

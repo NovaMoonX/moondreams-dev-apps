@@ -165,6 +165,32 @@ function ImageViewer({
   }, []);
 
   useEffect(() => {
+    const element = area.current;
+    if (!element) return;
+    // Non-passive so Ctrl+wheel (a trackpad pinch) zooms the picture, not the page.
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const { width, height, centerX, centerY } = readArea(element);
+      const factor = Math.exp(-event.deltaY * (event.ctrlKey ? 0.01 : 0.002));
+      setZoom((current) => {
+        const next = clampZoom(
+          zoomAround(
+            current,
+            current.scale * factor,
+            event.clientX - centerX,
+            event.clientY - centerY,
+          ),
+          width,
+          height,
+        );
+        return next.scale < 1.01 ? NO_ZOOM : next;
+      });
+    };
+    element.addEventListener('wheel', handleWheel, { passive: false });
+    return () => element.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Tab') {
         const focusable = Array.from(

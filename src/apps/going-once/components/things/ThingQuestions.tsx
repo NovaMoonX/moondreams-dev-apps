@@ -293,14 +293,18 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
 
   const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
     const link = readPastedLink(event.clipboardData.getData('text'));
-    const name = link === null ? null : getWebLinkSiteName(link);
-    if (link === null || name === null) return;
+    if (link === null || getWebLinkSiteName(link) === null) return;
+    if (answers.boughtFrom.trim() !== '' && !isNameFromLink) return;
     event.preventDefault();
-    if (answers.boughtUrl !== '') {
-      onChange({ boughtFrom: name.slice(0, MAX_BOUGHT_FROM_LENGTH) });
-      return;
-    }
-    onChange(withStoreName({ ...answers, boughtFrom: '' }, link, null));
+    const preview =
+      link === answers.boughtUrl ? answers.boughtUrlPreview : null;
+    onChange(
+      withStoreName(
+        { ...answers, boughtFrom: '', boughtUrl: '' },
+        link,
+        preview,
+      ),
+    );
   };
 
   return (
@@ -356,7 +360,7 @@ export function StoreLinkQuestion({ answers, onChange }: QuestionProps) {
         answers.boughtFrom.trim() !== '' &&
         answers.boughtFrom.trim() ===
           toStoreName(answers.boughtUrl, answers.boughtUrlPreview) && (
-          <p className='text-muted-foreground text-sm'>
+          <p className='text-muted-foreground text-sm text-pretty'>
             🔒 Where you got it: {answers.boughtFrom.trim()}, from the link.
           </p>
         )}

@@ -57,11 +57,13 @@ export function getWebLinkHost(text: string) {
 }
 
 const SHORT_SECOND_LEVEL = /^(co|com|net|org|gov|edu|ac)$/i;
+const LINK_SHORTENER =
+  /^(bit\.ly|amzn\.to|amzn\.eu|a\.co|t\.co|tinyurl\.com|goo\.gl|ow\.ly|is\.gd|buff\.ly|rb\.gy|cutt\.ly|tiny\.cc|shorturl\.at|rebrand\.ly|lnkd\.in|linktr\.ee|s\.id)$/i;
 
-/** A name for the site a web link is on, from its address ("www.target.com/p/1" is "Target"), or null. */
+/** A name for the site a web link is on, from its address ("www.target.com/p/1" is "Target"), or null (an IP or a link shortener). */
 export function getWebLinkSiteName(text: string) {
   const host = getWebLinkHost(text);
-  if (!host || /^[\d.]+$/.test(host)) return null;
+  if (!host || /^[\d.]+$/.test(host) || LINK_SHORTENER.test(host.replace(/^www\./i, ''))) return null;
   const labels = host.split('.');
   const name =
     labels.length > 2 && SHORT_SECOND_LEVEL.test(labels[labels.length - 2])
