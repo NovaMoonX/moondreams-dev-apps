@@ -56,6 +56,23 @@ export function getWebLinkHost(text: string) {
   return link ? new URL(link).hostname.replace(/^www\./i, '') : null;
 }
 
+const SHORT_SECOND_LEVEL = /^(co|com|net|org|gov|edu|ac)$/i;
+
+/** A name for the site a web link is on, from its address ("www.target.com/p/1" is "Target"), or null. */
+export function getWebLinkSiteName(text: string) {
+  const host = getWebLinkHost(text);
+  if (!host || /^[\d.]+$/.test(host)) return null;
+  const labels = host.split('.');
+  const name =
+    labels.length > 2 && SHORT_SECOND_LEVEL.test(labels[labels.length - 2])
+      ? labels[labels.length - 3]
+      : labels[Math.max(0, labels.length - 2)];
+  const words = name.split('-').filter(Boolean);
+  return words.length === 0
+    ? null
+    : words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+}
+
 const TRACKING_PARAMETER =
   /^(utm_.*|fbclid|gclid|igshid|igsh|mc_cid|mc_eid|si|mibextid)$/i;
 

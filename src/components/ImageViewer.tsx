@@ -35,6 +35,12 @@ const FLICK_PX_PER_MS = 0.5;
 const FLICK_MIN_PX = 24;
 const EDGE_RESISTANCE = 3;
 
+const MAX_ZOOM = 4;
+const DOUBLE_TAP_ZOOM = 2.5;
+const KEY_ZOOM_STEP = 1.5;
+const DOUBLE_TAP_MS = 300;
+const DOUBLE_TAP_PX = 24;
+
 interface Drag {
   pointerId: number;
   startX: number;
@@ -42,6 +48,66 @@ interface Drag {
   startAt: number;
   isActive: boolean;
 }
+
+/** How far the pictures are zoomed, and how far the zoomed pictures are moved from the centre of their area. */
+interface Zoom {
+  scale: number;
+  x: number;
+  y: number;
+}
+
+interface Pan {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  start: Zoom;
+  isActive: boolean;
+}
+
+interface Pinch {
+  distance: number;
+  midX: number;
+  midY: number;
+  start: Zoom;
+}
+
+const NO_ZOOM: Zoom = { scale: 1, x: 0, y: 0 };
+
+const clampZoom = (zoom: Zoom, width: number, height: number): Zoom => {
+  const scale = Math.min(MAX_ZOOM, Math.max(1, zoom.scale));
+  const maxX = ((scale - 1) * width) / 2;
+  const maxY = ((scale - 1) * height) / 2;
+  return {
+    scale,
+    x: Math.min(maxX, Math.max(-maxX, zoom.x)),
+    y: Math.min(maxY, Math.max(-maxY, zoom.y)),
+  };
+};
+
+/** The zoom at `scale` that keeps the point under the focus (measured from the area's centre) where it is. */
+const zoomAround = (
+  zoom: Zoom,
+  scale: number,
+  focusX: number,
+  focusY: number,
+): Zoom => {
+  const ratio = scale / zoom.scale;
+  return {
+    scale,
+    x: focusX - ratio * (focusX - zoom.x),
+    y: focusY - ratio * (focusY - zoom.y),
+  };
+};
+
+const readArea = (element: HTMLElement) => {
+  const box = element.getBoundingClientRect();
+  return {
+    width: box.width,
+    height: box.height,
+    centerX: box.left + box.width / 2,
+    centerY: box.top + box.height / 2,
+  };
+};
 
 /** Pictures full screen in the same tab, over whatever is open; closes only its own layer. */
 function ImageViewer({
@@ -58,15 +124,37 @@ function ImageViewer({
   const didSwipe = useRef(false);
   const [dragX, setDragX] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [zoom, setZoom] = useState<Zoom>(NO_ZOOM);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pan = useRef<Pan | null>(null);
+  const pinch = useRef<Pinch | null>(null);
+  const lastTap = useRef<{ at: number; x: number; y: number } | null>(null);
+  const area = useRef<HTMLDivElement | null>(null);
   const root = useRef<HTMLDivElement | null>(null);
   const { dialogId, onDialogClose } = useSheetHistory(true, onClose);
   const slide = slides[index] ?? slides[0];
   const count = slides.length;
   const step = useCallback(
-    (by: number) =>
-      setIndex((current) => Math.min(count - 1, Math.max(0, current + by))),
+    (by: number) => {
+      setZoom(NO_ZOOM);
+      setIndex((current) => Math.min(count - 1, Math.max(0, current + by)));
+    },
     [count],
   );
+  const zoomByKey = useCallback((factor: number | null) => {
+    const element = area.current;
+    if (!element) return;
+    const { width, height } = readArea(element);
+    setZoom((current) =>
+      factor === null
+        ? NO_ZOOM
+        : clampZoom(
+            zoomAround(current, current.scale * factor, 0, 0),
+            width,
+            height,
+          ),
+    );
+  }, []);
 
   useEffect(() => {
     const opener = document.activeElement;
@@ -99,6 +187,9 @@ function ImageViewer({
       }
       if (event.key === 'ArrowLeft') step(-1);
       else if (event.key === 'ArrowRight') step(1);
+      else if (event.key === '+' || event.key === '=') zoomByKey(KEY_ZOOM_STEP);
+      else if (event.key === '-') zoomByKey(1 / KEY_ZOOM_STEP);
+      else if (event.key === '0') zoomByKey(null);
       else if (event.key === 'Escape') onDialogClose();
       else return;
       event.preventDefault();
@@ -106,7 +197,7 @@ function ImageViewer({
     };
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [step, onDialogClose]);
+  }, [step, zoomByKey, onDialogClose]);
 
   if (!slide) return null;
   const isNoteHidden = hiddenNotes.includes(index);
@@ -161,21 +252,55 @@ function ImageViewer({
         </Button>
       </div>
       <div
-        className='relative flex min-h-0 flex-1 touch-pan-y items-center justify-center px-2 pb-[max(1rem,env(safe-area-inset-bottom))]'
+        ref={area}
+        className='relative flex min-h-0 flex-1 touch-none items-center justify-center overflow-hidden px-2 pb-[max(1rem,env(safe-area-inset-bottom))]'
         onClick={(event) => {
           if (didSwipe.current) {
             didSwipe.current = false;
             return;
           }
-          if (event.target === event.currentTarget) onDialogClose();
+          if (event.target !== event.currentTarget) return;
+          if (zoom.scale > 1) setZoom(NO_ZOOM);
+          else onDialogClose();
         }}
         onPointerDown={(event) => {
-          didSwipe.current = false;
-          if (
-            !event.isPrimary ||
-            (event.target as HTMLElement).closest('button')
-          )
+          if ((event.target as HTMLElement).closest('button')) return;
+          if (pointers.current.size === 0) didSwipe.current = false;
+          pointers.current.set(event.pointerId, {
+            x: event.clientX,
+            y: event.clientY,
+          });
+          const { centerX, centerY } = readArea(event.currentTarget);
+          const fingers = Array.from(pointers.current.values());
+          if (fingers.length === 2) {
+            const [first, second] = fingers;
+            drag.current = null;
+            pan.current = null;
+            setDragX(0);
+            pinch.current = {
+              distance: Math.max(
+                1,
+                Math.hypot(first.x - second.x, first.y - second.y),
+              ),
+              midX: (first.x + second.x) / 2 - centerX,
+              midY: (first.y + second.y) / 2 - centerY,
+              start: zoom,
+            };
+            didSwipe.current = true;
+            setIsDragging(true);
             return;
+          }
+          if (fingers.length > 2 || !event.isPrimary) return;
+          if (zoom.scale > 1) {
+            pan.current = {
+              pointerId: event.pointerId,
+              startX: event.clientX,
+              startY: event.clientY,
+              start: zoom,
+              isActive: false,
+            };
+            return;
+          }
           drag.current = {
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -185,6 +310,65 @@ function ImageViewer({
           };
         }}
         onPointerMove={(event) => {
+          if (!pointers.current.has(event.pointerId)) return;
+          pointers.current.set(event.pointerId, {
+            x: event.clientX,
+            y: event.clientY,
+          });
+          const { width, height, centerX, centerY } = readArea(
+            event.currentTarget,
+          );
+          const currentPinch = pinch.current;
+          if (currentPinch) {
+            const fingers = Array.from(pointers.current.values());
+            if (fingers.length < 2) return;
+            const [first, second] = fingers;
+            const distance = Math.hypot(first.x - second.x, first.y - second.y);
+            const midX = (first.x + second.x) / 2 - centerX;
+            const midY = (first.y + second.y) / 2 - centerY;
+            const scaled = zoomAround(
+              currentPinch.start,
+              currentPinch.start.scale * (distance / currentPinch.distance),
+              currentPinch.midX,
+              currentPinch.midY,
+            );
+            setZoom(
+              clampZoom(
+                {
+                  ...scaled,
+                  x: scaled.x + midX - currentPinch.midX,
+                  y: scaled.y + midY - currentPinch.midY,
+                },
+                width,
+                height,
+              ),
+            );
+            return;
+          }
+          const currentPan = pan.current;
+          if (currentPan?.pointerId === event.pointerId) {
+            const movedX = event.clientX - currentPan.startX;
+            const movedY = event.clientY - currentPan.startY;
+            if (!currentPan.isActive) {
+              if (Math.hypot(movedX, movedY) <= DRAG_START_PX) return;
+              currentPan.isActive = true;
+              didSwipe.current = true;
+              event.currentTarget.setPointerCapture(event.pointerId);
+              setIsDragging(true);
+            }
+            setZoom(
+              clampZoom(
+                {
+                  ...currentPan.start,
+                  x: currentPan.start.x + movedX,
+                  y: currentPan.start.y + movedY,
+                },
+                width,
+                height,
+              ),
+            );
+            return;
+          }
           const current = drag.current;
           if (current?.pointerId !== event.pointerId) return;
           const moved = event.clientX - current.startX;
@@ -203,30 +387,87 @@ function ImageViewer({
           setDragX(isAtEdge ? moved / EDGE_RESISTANCE : moved);
         }}
         onPointerUp={(event) => {
-          const current = drag.current;
-          drag.current = null;
-          if (current?.pointerId !== event.pointerId || !current.isActive)
-            return;
-          const moved = event.clientX - current.startX;
-          const elapsed = Math.max(1, event.timeStamp - current.startAt);
-          const isFlick =
-            Math.abs(moved) >= FLICK_MIN_PX &&
-            Math.abs(moved) / elapsed >= FLICK_PX_PER_MS;
-          const isFar =
-            Math.abs(moved) >=
-            event.currentTarget.clientWidth * COMMIT_FRACTION;
-          setDragX(0);
-          if (!isFar && !isFlick) {
-            setIsDragging(false);
+          const wasTracked = pointers.current.delete(event.pointerId);
+          if (pinch.current) {
+            if (pointers.current.size < 2) {
+              pinch.current = null;
+              pan.current = null;
+              lastTap.current = null;
+              setIsDragging(false);
+              setZoom((current) => (current.scale < 1.05 ? NO_ZOOM : current));
+            }
             return;
           }
-          // The new slide takes the old one's place at once; easing it back from the drag offset would slide it in against the finger.
-          step(moved < 0 ? 1 : -1);
-          window.requestAnimationFrame(() => setIsDragging(false));
+          const currentPan = pan.current;
+          if (currentPan?.pointerId === event.pointerId) {
+            pan.current = null;
+            if (currentPan.isActive) {
+              setIsDragging(false);
+              return;
+            }
+          }
+          const current = drag.current;
+          drag.current = null;
+          if (current?.pointerId === event.pointerId && current.isActive) {
+            const moved = event.clientX - current.startX;
+            const elapsed = Math.max(1, event.timeStamp - current.startAt);
+            const isFlick =
+              Math.abs(moved) >= FLICK_MIN_PX &&
+              Math.abs(moved) / elapsed >= FLICK_PX_PER_MS;
+            const isFar =
+              Math.abs(moved) >=
+              event.currentTarget.clientWidth * COMMIT_FRACTION;
+            setDragX(0);
+            if (!isFar && !isFlick) {
+              setIsDragging(false);
+              return;
+            }
+            // The new slide takes the old one's place at once; easing it back from the drag offset would slide it in against the finger.
+            step(moved < 0 ? 1 : -1);
+            window.requestAnimationFrame(() => setIsDragging(false));
+            return;
+          }
+          if (!wasTracked || event.target === event.currentTarget) return;
+          const previous = lastTap.current;
+          const isDoubleTap =
+            previous !== null &&
+            event.timeStamp - previous.at <= DOUBLE_TAP_MS &&
+            Math.hypot(
+              event.clientX - previous.x,
+              event.clientY - previous.y,
+            ) <= DOUBLE_TAP_PX;
+          if (!isDoubleTap) {
+            lastTap.current = {
+              at: event.timeStamp,
+              x: event.clientX,
+              y: event.clientY,
+            };
+            return;
+          }
+          lastTap.current = null;
+          const { width, height, centerX, centerY } = readArea(
+            event.currentTarget,
+          );
+          setZoom(
+            zoom.scale > 1
+              ? NO_ZOOM
+              : clampZoom(
+                  zoomAround(
+                    NO_ZOOM,
+                    DOUBLE_TAP_ZOOM,
+                    event.clientX - centerX,
+                    event.clientY - centerY,
+                  ),
+                  width,
+                  height,
+                ),
+          );
         }}
         onPointerCancel={(event) => {
-          if (drag.current?.pointerId !== event.pointerId) return;
-          drag.current = null;
+          pointers.current.delete(event.pointerId);
+          if (pinch.current && pointers.current.size < 2) pinch.current = null;
+          if (pan.current?.pointerId === event.pointerId) pan.current = null;
+          if (drag.current?.pointerId === event.pointerId) drag.current = null;
           setIsDragging(false);
           setDragX(0);
         }}
@@ -237,7 +478,9 @@ function ImageViewer({
             !isDragging &&
               'transition-transform duration-200 motion-reduce:transition-none',
           )}
-          style={{ transform: `translateX(${dragX}px)` }}
+          style={{
+            transform: `translate(${dragX + zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`,
+          }}
         >
           {shown.map((picture) => (
             <figure
@@ -325,7 +568,10 @@ function ImageViewer({
               variant={pictureIndex === shownPicture ? 'secondary' : 'tertiary'}
               aria-pressed={pictureIndex === shownPicture}
               className={pictureIndex === shownPicture ? '' : 'text-white!'}
-              onClick={() => setPick({ slide: index, picture: pictureIndex })}
+              onClick={() => {
+                setZoom(NO_ZOOM);
+                setPick({ slide: index, picture: pictureIndex });
+              }}
             >
               {picture.label ?? `Picture ${pictureIndex + 1}`}
             </Button>

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -62,6 +63,40 @@ const themeProblems = listFiles('src/apps')
   });
 
 problems.push(...themeProblems);
+
+// A link preview shows the app's banner, so each app's banner must exist, be its own image (a copied placeholder once
+// put Waypoint's banner on every Going Once link), and be the one the worker names for that app.
+const bannerPath = (id: string) => `public/banners/by-app/banner-${id}.png`;
+const bannerHashes = APP_REGISTRY.filter((app) => existsSync(bannerPath(app.id))).map((app) => ({
+  id: app.id,
+  hash: createHash('sha256').update(readFileSync(bannerPath(app.id))).digest('hex'),
+}));
+const workerEntries = new Map(
+  readFileSync('cloudflare-worker.js', 'utf8')
+    .split(/\n\s*\{\s*\n\s*id: '/)
+    .slice(1)
+    .map((entry): [string, string | null] => [
+      entry.slice(0, entry.indexOf("'")),
+      entry.match(/image:\s*'([^']+)'/)?.[1] ?? null,
+    ]),
+);
+
+const bannerProblems = APP_REGISTRY.flatMap((app) => {
+  const own = bannerHashes.find((banner) => banner.id === app.id);
+  const twin = own && bannerHashes.find((banner) => banner.id !== app.id && banner.hash === own.hash);
+  const workerImage = workerEntries.get(app.id);
+  return [
+    existsSync(`public/logos/by-app/logo-${app.id}.svg`) ? null : `${app.id}: missing public/logos/by-app/logo-${app.id}.svg`,
+    own ? null : `${app.id}: missing ${bannerPath(app.id)}`,
+    twin ? `${app.id}: ${bannerPath(app.id)} is the same image as ${bannerPath(twin.id)}` : null,
+    workerImage === undefined ? `${app.id}: no entry in cloudflare-worker.js APP_REGISTRY` : null,
+    workerImage && !workerImage.endsWith(`/banners/by-app/banner-${app.id}.png`)
+      ? `${app.id}: cloudflare-worker.js previews it with ${workerImage}`
+      : null,
+  ].filter((problem): problem is string => problem !== null);
+});
+
+problems.push(...bannerProblems);
 
 // Text on a themed fill must stay readable in light and dark. The top strip (OfflineBanner: offline, slow, "New version ready · Restart")
 // is `primary` with `primary-foreground`, and its button is that pair swapped, so one ratio covers both. A pair the theme sets
