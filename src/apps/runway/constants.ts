@@ -344,7 +344,7 @@ export const HORIZON_WORDS = {
   costFrom: (from: string) => `From ${from}`,
   costEndsOn: (date: string) => ` to ${date}`,
   costEndsAfter: (count: number) =>
-    count === 1 ? ', once' : `, ${count} times`,
+    count === 1 ? ', once' : `, ${count}\u00A0times`,
   costLastPayment: 'Last payment on',
   costPaymentCount: 'How many payments?',
   costPaymentCountHint: 'How many payments, like 6',
@@ -383,9 +383,9 @@ export const HORIZON_WORDS = {
   restTitle: "What it doesn't cover comes from",
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
-  plannedTotal: (amount: string, isUpTo: boolean) =>
-    `${isUpTo ? 'Up to ' : ''}${amount} planned`,
-  overNextYear: ' over the next year',
+  plannedTotal: (amount: string, isUpTo: boolean, isAfterLead: boolean) =>
+    `${isUpTo ? (isAfterLead ? 'up to ' : 'Up to ') : ''}${amount} planned`,
+  overNextYear: 'Over the next year:',
   setAside: 'Set aside',
   spent: 'Spent',
   left: 'Left',

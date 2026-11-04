@@ -20,7 +20,9 @@ function CostRow({ cost, onOpen }: CostRowProps) {
   const label = (
     <span className='block min-w-0 flex-1'>
       <span className='line-clamp-2 font-medium break-words'>{cost.name}</span>
-      <span className='text-muted-foreground block text-sm'>{line}</span>
+      <span className='text-muted-foreground block text-sm text-balance break-words'>
+        {line}
+      </span>
     </span>
   );
   const amount = (
@@ -41,7 +43,7 @@ function CostRow({ cost, onOpen }: CostRowProps) {
       <Button
         type='button'
         variant='tertiary'
-        className='hover:bg-muted/60 text-foreground h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3! py-2 text-left font-normal'
+        className='hover:bg-muted/60 text-foreground! h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3! py-2 text-left font-normal'
         aria-label={HORIZON_WORDS.changeCost(cost.name)}
         onClick={onOpen}
       >
