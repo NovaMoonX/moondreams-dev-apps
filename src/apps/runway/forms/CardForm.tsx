@@ -58,6 +58,7 @@ import {
 import { createCard, updateCard } from '@apps/runway/store/actions/cardActions';
 import {
   selectAccounts,
+  selectIsAccountsLoaded,
   selectAllAccounts,
   selectAllCards,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -135,6 +136,7 @@ const parseCardDraft = (stored: unknown, isEditing: boolean) => {
 const getInitialData = (
   editing: OpenCard | undefined,
   pullAccounts: readonly OpenAccount[],
+  isAccountsLoaded: boolean,
 ): CardFormData => {
   if (!editing) {
     return {
@@ -161,7 +163,11 @@ const getInitialData = (
     hasNoDueDay: editing.dueDay === null,
     lastFour: editing.lastFour ?? '',
     hasNoLastFour: !editing.lastFour,
-    payFromAccountId: keepPullAccountId(editing.payFromAccountId, pullAccounts),
+    payFromAccountId: keepPullAccountId(
+      editing.payFromAccountId,
+      pullAccounts,
+      isAccountsLoaded,
+    ),
   };
 };
 
@@ -181,12 +187,15 @@ function CardFormBody({
   const isMounted = useRef(true);
   const cards = useAppSelector(selectAllCards);
   const openAccounts = useAppSelector(selectAccounts);
+  const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const allAccounts = useAppSelector(selectAllAccounts);
   const pullAccounts = getPullAccounts(openAccounts);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
-  const [startData] = useState(() => getInitialData(editing, pullAccounts));
+  const [startData] = useState(() =>
+    getInitialData(editing, pullAccounts, isAccountsLoaded),
+  );
   const draftKey = `${FORM_DRAFT_PREFIX}card:${editing?.id ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
   const draftBase = editing ? startData : null;
@@ -245,6 +254,7 @@ function CardFormBody({
   const payFromAccountId = keepPullAccountId(
     formData.payFromAccountId,
     pullAccounts,
+    isAccountsLoaded,
   );
   const payFromName =
     pullAccounts.find((account) => account.id === payFromAccountId)?.name ??

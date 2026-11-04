@@ -116,6 +116,7 @@ import {
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
+  selectIsAccountsLoaded,
   selectAllCards,
   selectBills,
   selectComingDays,
@@ -564,6 +565,7 @@ function BillFormBody({
   }));
   const allCards = useAppSelector(selectAllCards);
   const openAccounts = useAppSelector(selectAccounts);
+  const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const isTracking = useAppSelector(selectLevel) === 'track';
   const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial
@@ -575,6 +577,7 @@ function BillFormBody({
           accountId: keepPullAccountId(
             (editing?.payload ?? draft?.initial)?.accountId,
             openAccounts,
+            isAccountsLoaded,
           ),
           ...(draft?.forName
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
@@ -738,7 +741,11 @@ function BillFormBody({
   };
 
   const accountOptions = getPullAccounts(openAccounts);
-  const accountId = keepPullAccountId(formData.accountId, openAccounts);
+  const accountId = keepPullAccountId(
+    formData.accountId,
+    openAccounts,
+    isAccountsLoaded,
+  );
   const nameOfAccount = (id: string | null) =>
     accountOptions.find((account) => account.id === id)?.name ??
     ACCOUNT_WORDS.payFromNone;
@@ -1328,7 +1335,11 @@ function BillFormBody({
       stanceOverride: getStanceOverride(data.amount),
       groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       paidByCardId: data.paidByCardId,
-      accountId: keepPullAccountId(data.accountId, openAccounts),
+      accountId: keepPullAccountId(
+        data.accountId,
+        openAccounts,
+        isAccountsLoaded,
+      ),
     };
     return result;
   };
@@ -1369,7 +1380,11 @@ function BillFormBody({
       ? {
           ...editing.payload,
           paidByCardId: editing.payload.paidByCardId ?? null,
-          accountId: keepPullAccountId(editing.payload.accountId, openAccounts),
+          accountId: keepPullAccountId(
+            editing.payload.accountId,
+            openAccounts,
+            isAccountsLoaded,
+          ),
         }
       : EMPTY_BILL,
     candidate,
