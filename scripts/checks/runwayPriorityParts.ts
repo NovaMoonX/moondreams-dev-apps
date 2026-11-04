@@ -462,4 +462,29 @@ assert.deepEqual(
   'a bill at the level today but not in a later stretch rewrites only that stretch, and moves from its priority, never a made-up one',
 );
 
+const mixedEnvelope = member('i', 'envelope', 'must', [
+  { tier: 'should', cents: 1_000, orderIndex: 1 },
+]);
+const mixedStretches = planGroupPriority(
+  [
+    {
+      ...mixedEnvelope,
+      stretches: [
+        mixedEnvelope.stretches[0],
+        {
+          ...mixedEnvelope.stretches[0],
+          payload: { ...mixedEnvelope.stretches[0].payload, priority: 'want' },
+        },
+      ],
+    },
+  ] as never,
+  'must',
+  40,
+);
+assert.deepEqual(
+  mixedStretches[0].written.map(({ payload }) => payload.orderIndex),
+  [3, 40],
+  'a stretch already at the level keeps its rank while a later stretch that moves is ranked after the level',
+);
+
 console.log('runway priority parts: ok');

@@ -532,9 +532,9 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         text:
           choice === 'none'
             ? GROUP_WORDS.priorityNoneSet(row, payload.name)
-            : changes.length === 0
+            : written.length === 0
               ? GROUP_WORDS.priorityAlready(scope, label)
-              : GROUP_WORDS.priorityDone(changes.length, label),
+              : GROUP_WORDS.priorityDone(written.length, label),
         isError: false,
       });
     } catch (pickError) {

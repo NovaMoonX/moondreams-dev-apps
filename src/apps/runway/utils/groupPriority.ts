@@ -73,7 +73,7 @@ const toSingleTier = (
 /**
  * What putting members at `priority` writes: each member not already there with one amount, in each
  * stretch that is not. One that moves tier is ranked after what the level holds (`firstRank`, then one step each, in
- * the order given); one already at the level keeps its rank and only folds its extras in.
+ * the order given); a stretch already at the level keeps its rank and only folds its extras in.
  */
 export function planGroupPriority(
   members: readonly GroupPriorityMember[],
@@ -108,7 +108,7 @@ export function planGroupPriority(
         payload: toSingleTier(
           stretch.payload,
           priority,
-          moverIndex === -1
+          moverIndex === -1 || stretch.payload.priority === priority
             ? stretch.payload.orderIndex
             : firstRank + moverIndex * ENVELOPE_ORDER_STEP,
         ),
