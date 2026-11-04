@@ -117,10 +117,8 @@ problems.push(...bannerProblems);
 
 // Every page an app has besides its root (a share link, a public page) gets its own link-preview text in the
 // worker, so a preview never falls back to the app's own description for a page that shows something else.
-const routePaths = Array.from(
-  readFileSync('src/routes/AppRoutes.tsx', 'utf8').matchAll(/path:\s*'([^']+)'/g),
-  (match) => match[1],
-);
+const routesSource = readFileSync('src/routes/AppRoutes.tsx', 'utf8').replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, '');
+const routePaths = Array.from(routesSource.matchAll(/\bpath:\s*(['"`])([^'"`]+)\1/g), (match) => match[2]);
 const pagePrefixes = APP_REGISTRY.flatMap((app) =>
   routePaths
     .filter((path) => path.startsWith(`${app.id}/`))
@@ -131,9 +129,11 @@ const sharePrefixes = Array.from(
   (match) => match[1],
 );
 const workerPrefixes = workerApps.flatMap((entry) => (entry.pages ?? []).map(({ prefix }) => ({ id: entry.id, prefix })));
-const routesSource = readFileSync('src/routes/AppRoutes.tsx', 'utf8');
 const readNothing = [
   routePaths.length === 0 ? 'no `path:` in src/routes/AppRoutes.tsx' : null,
+  (routesSource.match(/\bpath:/g) ?? []).length !== routePaths.length
+    ? 'src/routes/AppRoutes.tsx has a `path:` that is not a plain string; write each route\'s path as a literal so the worker check sees it'
+    : null,
   sharePrefixes.length === 0 ? 'no PUBLIC_SHARE_PREFIXES array in src/ui/Layout.tsx' : null,
   (routesSource.match(/children:/g) ?? []).length > 1
     ? 'src/routes/AppRoutes.tsx nests `children:` below the root; write an app route\'s full path (`app-id/s/:id`) so the worker check sees it'

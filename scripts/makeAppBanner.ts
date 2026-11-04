@@ -31,6 +31,10 @@ const themePrimary = (existsSync(themePath) ? readFileSync(themePath, 'utf8') : 
   /--color-primary:\s*(#[0-9a-f]{6})\b/i,
 )?.[1];
 const primary = args.includes('--color') ? colorArg : themePrimary;
+if (args.includes('--color') && !/^#[0-9a-f]{6}$/i.test(colorArg ?? '')) {
+  console.error(`--color needs a six-digit hex value, like: npm run make:banner -- ${app.id} --color #1a2b3c`);
+  process.exit(1);
+}
 if (!primary || !/^#[0-9a-f]{6}$/i.test(primary)) {
   console.error(
     `No #rrggbb --color-primary in ${themePath} (light theme); pass the app's main colour: npm run make:banner -- ${app.id} --color #rrggbb`,
