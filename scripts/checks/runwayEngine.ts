@@ -239,11 +239,14 @@ import {
   type LookaheadDraft,
 } from '../../src/apps/runway/engine/lookahead.ts';
 import {
+  changeCost,
+  getLiveCosts,
   listCostPayments,
   listHorizonPayments,
   planHorizon,
   readHorizon,
   removeCost,
+  restoreCost,
   setCostPrice,
   sumCostPayments,
 } from '../../src/apps/runway/engine/horizon.ts';
@@ -11549,6 +11552,132 @@ const version = (
     ended?.costs.find(({ id }) => id === 'storage')?.endsAfter,
     feb1,
     'a cost with a paid payment stays and ends after today',
+  );
+
+  const onlyEnded = removeCost(
+    { ...moving, costs: [movers, { ...storage, endsAfter: jan15 }] },
+    'movers',
+    jan15,
+    false,
+  );
+  assert.equal(
+    onlyEnded,
+    null,
+    'a cost that already ended is not a live one, so the last live cost stays',
+  );
+  assert.deepEqual(
+    getLiveCosts({ costs: [movers, { ...storage, endsAfter: jan15 }] }).map(
+      ({ id }) => id,
+    ),
+    ['movers'],
+    'only costs with no endsAfter are live',
+  );
+  const restoredAt = restoreCost({ ...moving, costs: [storage] }, movers, 0);
+  assert.deepEqual(
+    restoredAt?.costs.map(({ id }) => id),
+    ['movers', 'storage'],
+    'Undo puts a removed cost back at its place',
+  );
+  assert.equal(
+    restoreCost(moving, movers, 0),
+    null,
+    'and does nothing when the cost is already there',
+  );
+  const renamed = changeCost(
+    { ...moving, costs: [{ ...movers, pricedOn: jan15 }, storage] },
+    'movers',
+    {
+      name: 'Truck',
+      schedule: movers.schedule,
+      ending: movers.ending,
+      isOutside: true,
+    },
+  );
+  assert.equal(
+    renamed?.costs[0].name === 'Truck' &&
+      renamed.costs[0].isOutside &&
+      renamed.costs[0].pricedOn === jan15 &&
+      renamed.costs[0].amount.highCents === 80_000,
+    true,
+    "a cost's Change keeps its live price and day priced",
+  );
+  assert.equal(
+    changeCost(moving, 'nope', {
+      name: 'x',
+      schedule: movers.schedule,
+      ending: movers.ending,
+      isOutside: false,
+    }),
+    null,
+    'a cost taken out meanwhile gives no candidate',
+  );
+
+  const line = (after: HorizonSealed, before: HorizonSealed = moving) =>
+    describeChange(before, after, () => '');
+  const catering = cost('catering', range(12_000, 12_000), utc(2027, 11, 2));
+  assert.equal(
+    line({ ...moving, costs: [movers, storage, catering] }),
+    `added catering $120.00, ${formatDateOrdinalUTC(catering.schedule.anchor ?? 0)}`,
+    'an added cost reads by name, amount and day',
+  );
+  assert.equal(
+    line(
+      { ...moving, costs: [catering, movers, storage] },
+      {
+        ...moving,
+        costs: [movers, storage],
+      },
+    ),
+    `added catering $120.00, ${formatDateOrdinalUTC(catering.schedule.anchor ?? 0)}`,
+    'and keeps the costs in their own order, not by id',
+  );
+  assert.equal(
+    line({
+      ...moving,
+      costs: [
+        movers,
+        {
+          ...storage,
+          schedule: { ...storage.schedule, anchor: utc(2027, 1, 15) },
+        },
+      ],
+    }),
+    `storage monthly from ${formatDateOrdinalUTC(feb1)} to monthly from ${formatDateOrdinalUTC(utc(2027, 1, 15))}`,
+    'a repeat that moves reads by its date words',
+  );
+  const oneTime = {
+    ...moving,
+    costs: [movers, cost('truck', range(5_000, 5_000), feb1)],
+  };
+  assert.equal(
+    line(
+      {
+        ...oneTime,
+        costs: [
+          movers,
+          {
+            ...oneTime.costs[1],
+            schedule: {
+              ...oneTime.costs[1].schedule,
+              anchor: utc(2027, 1, 15),
+            },
+          },
+        ],
+      },
+      oneTime,
+    ),
+    `truck from ${formatDateOrdinalUTC(feb1)} to ${formatDateOrdinalUTC(utc(2027, 1, 15))}`,
+    'a one-time cost that moves reads "from" and "to" its days',
+  );
+  assert.equal(
+    line(setCostPrice(moving, 'movers', range(60_000, 60_000), jan15)),
+    'movers $600.00–$800.00 to $600.00',
+    'a range going exact keeps its dash, so "to" is only the change',
+  );
+  assert.equal(
+    line(setCostPrice(moving, 'storage', range(10_000, 19_000), jan15)),
+    'storage $100.00 to $100.00–$190.00',
+    'and so does an exact price becoming a range',
   );
 
   const stopped = { ...storage, endsAfter: utc(2027, 3, 1) };

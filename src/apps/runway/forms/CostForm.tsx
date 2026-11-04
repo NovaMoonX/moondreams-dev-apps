@@ -68,13 +68,14 @@ const MODE_OPTIONS = [
 ];
 
 /** The cost names Runway knows for an event, found by the simple words in the event's name. */
-const getSuggestions = (itemName: string) => {
+const getSuggestions = (itemName: string, takenNames: readonly string[]) => {
   const words = itemName.toLowerCase().split(/[^\p{L}]+/u);
+  const taken = takenNames.map((name) => name.trim().toLowerCase());
   return (
     HORIZON_COST_SUGGESTIONS.find((group) =>
       group.words.some((word) => words.includes(word)),
     )?.suggestions ?? []
-  );
+  ).filter((suggestion) => !taken.includes(suggestion.toLowerCase()));
 };
 
 interface CostFormProps {
@@ -82,6 +83,8 @@ interface CostFormProps {
   itemName: string;
   /** The event's day: a new cost starts due then, while that day is still valid for a cost. */
   happensOn: number;
+  /** Names the event's other costs already have, which are not offered again. */
+  takenNames?: readonly string[];
   /** The cost being changed; saving keeps its id. Absent when adding. */
   cost?: HorizonCost;
   onSave: (cost: HorizonCost) => void;
@@ -127,6 +130,7 @@ function CostForm({
   itemName,
   happensOn,
   cost,
+  takenNames = [],
   onSave,
   onRemove,
   isAmountFixed = false,
@@ -168,7 +172,7 @@ function CostForm({
       : name === ''
         ? HORIZON_WORDS.needsCostName
         : whenBlocker;
-  const suggestions = getSuggestions(itemName);
+  const suggestions = getSuggestions(itemName, takenNames);
 
   const amountSteps: QuestionStep[] = [
     {
@@ -337,7 +341,9 @@ function CostForm({
     <FormSheet
       isOpen
       onClose={requestClose}
-      title={cost ? HORIZON_WORDS.costChangeTitle : HORIZON_WORDS.costFormTitle}
+      title={
+        cost ? HORIZON_WORDS.changeCost(cost.name) : HORIZON_WORDS.costFormTitle
+      }
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-5'>

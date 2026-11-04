@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { HandCoins, History, Pencil, Plus } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { HandCoins, History, Pencil } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -8,6 +8,7 @@ import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
+import LockedButton from '@/components/LockedButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
@@ -23,6 +24,7 @@ import PutTowardView from '@apps/runway/components/PutTowardView';
 import TakeFromPaysView from '@apps/runway/components/TakeFromPaysView';
 import SheetHead from '@apps/runway/components/SheetHead';
 import {
+  CHANGE_REASON_CHIPS,
   FIX_WORDS,
   HORIZON_WORDS,
   ITEM_SHEET_WORDS,
@@ -30,6 +32,7 @@ import {
   MAX_HORIZON_COSTS,
   RANGE_END_WORDS,
 } from '@apps/runway/constants';
+import { changeCost, type CostChange } from '@apps/runway/engine/horizon';
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
@@ -65,6 +68,7 @@ function HorizonSheet({
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
   const [view, setView] = useState<'main' | 'change' | 'history'>('main');
   const [costId, setCostId] = useState<string | null>(null);
+  const [costEdit, setCostEdit] = useState<CostChange | 'form' | null>(null);
   const [addState, setAddState] = useState<'form' | HorizonCost | null>(null);
   const [putting, setPutting] = useState<{
     initialCents: number | null;
@@ -142,9 +146,61 @@ function HorizonSheet({
     .filter(Boolean)
     .join(' ·\u00A0');
   const openCost = horizon.costs.find(({ id }) => id === costId);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const viewKey = [
+    view,
+    costId,
+    costEdit === null,
+    addState === null,
+    isTakingFromPays,
+    putting === null,
+  ].join();
+  // A view swapped in starts at the top, so its back chip is never left under the sticky title.
+  useEffect(() => {
+    const isScroller = (node: HTMLElement) =>
+      /auto|scroll/.test(getComputedStyle(node).overflowY) &&
+      node.scrollHeight > node.clientHeight;
+    for (
+      let node = bodyRef.current?.parentElement;
+      node;
+      node = node.parentElement
+    ) {
+      if (isScroller(node)) {
+        node.scrollTop = 0;
+        return;
+      }
+    }
+  }, [viewKey]);
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );
+
+  if (addState === 'form') {
+    return (
+      <CostForm
+        itemName={horizon.name}
+        happensOn={horizon.happensOn}
+        takenNames={horizon.costs.map(({ name }) => name)}
+        onSave={setAddState}
+        onClose={() => setAddState(null)}
+      />
+    );
+  }
+  if (openCost && costEdit === 'form') {
+    return (
+      <CostForm
+        isAmountFixed
+        itemName={horizon.name}
+        happensOn={horizon.happensOn}
+        cost={openCost}
+        takenNames={horizon.costs
+          .filter(({ id }) => id !== openCost.id)
+          .map(({ name }) => name)}
+        onSave={setCostEdit}
+        onClose={() => setCostEdit(null)}
+      />
+    );
+  }
 
   return (
     <FormSheet
@@ -154,6 +210,7 @@ function HorizonSheet({
       title={horizon.name}
       actions={<ValuesEyeButton />}
     >
+      <div ref={bodyRef} className='contents' />
       {view === 'change' ? (
         <HorizonChangeForm
           itemId={itemId}
@@ -172,6 +229,18 @@ function HorizonSheet({
           </div>
           <ItemHistoryView itemId={itemId} />
         </div>
+      ) : openCost && costEdit !== null && costEdit !== 'form' ? (
+        <HorizonChangeView
+          itemId={itemId}
+          backLabel={openCost.name}
+          title={HORIZON_WORDS.changeCost(openCost.name)}
+          current={horizon}
+          candidate={changeCost(horizon, openCost.id, costEdit)}
+          blocker={null}
+          reasonChips={CHANGE_REASON_CHIPS.horizon}
+          onBack={() => setCostEdit(null)}
+          onDone={() => setCostEdit(null)}
+        />
       ) : openCost ? (
         <CostSheet
           itemId={itemId}
@@ -180,15 +249,21 @@ function HorizonSheet({
           today={today}
           stance={stance}
           onBack={() => setCostId(null)}
+          onChange={() => setCostEdit('form')}
         />
-      ) : addState !== null && addState !== 'form' ? (
+      ) : addState !== null ? (
         <HorizonChangeView
           itemId={itemId}
           backLabel={horizon.name}
-          title={HORIZON_WORDS.formTitle}
+          title={HORIZON_WORDS.add(addState.name)}
           current={horizon}
           candidate={{ ...horizon, costs: [...horizon.costs, addState] }}
-          blocker={null}
+          blocker={
+            horizon.costs.length >= MAX_HORIZON_COSTS
+              ? HORIZON_WORDS.maxCosts(MAX_HORIZON_COSTS)
+              : null
+          }
+          reasonChips={CHANGE_REASON_CHIPS.horizon}
           onBack={() => setAddState(null)}
           onDone={() => setAddState(null)}
         />
@@ -294,6 +369,39 @@ function HorizonSheet({
               {HORIZON_WORDS.restOutsideNote}
             </p>
           )}
+          <p className='text-muted-foreground text-sm'>
+            <MaskedText>{fact}</MaskedText>
+          </p>
+          <div className='space-y-2'>
+            <p className='text-muted-foreground text-sm font-medium'>
+              {HORIZON_WORDS.costsCaption}
+            </p>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {costs.map((cost) => (
+                <CostRow
+                  key={cost.id}
+                  cost={cost}
+                  onOpen={() => setCostId(cost.id)}
+                />
+              ))}
+            </ul>
+            {horizon.costs.length >= MAX_HORIZON_COSTS ? (
+              <LockedButton
+                label={HORIZON_WORDS.addCost}
+                title={HORIZON_WORDS.maxCostsTitle}
+              >
+                <p>{HORIZON_WORDS.maxCosts(MAX_HORIZON_COSTS)}</p>
+              </LockedButton>
+            ) : (
+              <Button
+                type='button'
+                variant='secondary'
+                onClick={() => setAddState('form')}
+              >
+                {HORIZON_WORDS.addCost}
+              </Button>
+            )}
+          </div>
           <ActionGroup isRoomy>
             {!shortfall && (
               <ActionRow
@@ -325,45 +433,6 @@ function HorizonSheet({
               onClick={() => setView('history')}
             />
           </ActionGroup>
-          <p className='text-muted-foreground text-sm'>
-            <MaskedText>{fact}</MaskedText>
-          </p>
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-sm font-medium'>
-              {HORIZON_WORDS.costsCaption}
-            </p>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {costs.map((cost) => (
-                <CostRow
-                  key={cost.id}
-                  cost={cost}
-                  onOpen={() => setCostId(cost.id)}
-                />
-              ))}
-            </ul>
-            <Button
-              type='button'
-              variant='secondary'
-              disabled={horizon.costs.length >= MAX_HORIZON_COSTS}
-              onClick={() => setAddState('form')}
-            >
-              <Plus className='h-4 w-4' aria-hidden='true' />
-              {HORIZON_WORDS.addCost}
-            </Button>
-            {horizon.costs.length >= MAX_HORIZON_COSTS && (
-              <p className='text-muted-foreground text-sm'>
-                {HORIZON_WORDS.maxCosts(MAX_HORIZON_COSTS)}
-              </p>
-            )}
-          </div>
-          {addState === 'form' && (
-            <CostForm
-              itemName={horizon.name}
-              happensOn={horizon.happensOn}
-              onSave={setAddState}
-              onClose={() => setAddState(null)}
-            />
-          )}
         </div>
       )}
     </FormSheet>

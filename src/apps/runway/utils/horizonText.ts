@@ -90,6 +90,25 @@ export function describeCostTiming(
   return `${start}${stop}`;
 }
 
+const lowerFirst = (text: string) =>
+  text.charAt(0).toLowerCase() + text.slice(1);
+
+/** A cost's day inside a sentence: "Feb 1st" for one paid once, "monthly from Feb 1st, 6 times" for a repeat. */
+export const describeCostWhen = (schedule: Schedule, ending: Ending) =>
+  schedule.kind === 'once'
+    ? describeCostTiming(schedule, ending)
+    : lowerFirst(describeCostTiming(schedule, ending, true));
+
+/** A cost's timing as a sentence names it: "due Jan 15th" for one paid once, "from Feb 1st · $100 a month" for a repeat. */
+export function describeCostInSentence(cost: HorizonCost) {
+  const { schedule, ending } = cost;
+  if (schedule.kind === 'once') {
+    return HORIZON_WORDS.costDueLower(describeCostTiming(schedule, ending));
+  }
+  const { figure, per } = describeCost(cost);
+  return `${lowerFirst(describeCostTiming(schedule, ending))} · ${[figure, per].filter(Boolean).join(' ')}`;
+}
+
 /** What one payment of a repeating cost is per beat: "a month", "every 2 weeks", "a year", "every 3 months". */
 const describeCostPer = (schedule: Schedule) => {
   const interval = getIntervalMonths(schedule);

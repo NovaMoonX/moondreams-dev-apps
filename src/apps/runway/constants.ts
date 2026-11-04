@@ -344,13 +344,13 @@ export const HORIZON_WORDS = {
   removeThisCost: 'Remove this cost',
   saveCost: 'Save cost',
   maxCosts: (count: number) => `An item holds up to ${count} costs.`,
+  maxCostsTitle: 'That is the most costs',
   needsCost: 'List at least one cost.',
   needsName: 'Name it.',
   priority: 'Priority',
   add: (name: string) => `Add ${name}`,
   addFailed: 'This did not save. Nothing was changed.',
   costFormTitle: 'Add a cost',
-  costChangeTitle: 'Change cost',
   costAmountTitle: 'How much will it cost?',
   costAmount: 'Amount',
   costNameTitle: 'What is it?',
@@ -502,25 +502,48 @@ export const HORIZON_WORDS = {
   needsPutMoreFrom: 'Pick where it comes from.',
   changeItem: 'Change it',
   changeItemSub: 'Name, date, how the rest is paid and priority',
-  costFact: (due: string, pricedOn: string | null) =>
-    pricedOn === null ? `Due ${due}` : `Due ${due} · priced ${pricedOn}`,
+  costDue: (date: string) => `Due ${date}`,
+  costDueLower: (date: string) => `due ${date}`,
+  costFact: (when: string, pricedOn: string | null) =>
+    pricedOn === null ? when : `${when} · priced ${pricedOn}`,
   setPrice: 'Set the price',
   setPriceSub: 'An exact amount, or still a range',
   setPriceSubExact: (amount: string) =>
     `It's ${amount} now. Change it or make it a range`,
   setPriceTitle: (name: string) => `What will ${name} cost?`,
+  setPriceSave: 'Set the price',
+  priceExactTitle: 'An exact amount',
+  priceExactBody: 'One price, quoted or known.',
+  priceRangeTitle: 'Still a range',
+  priceRangeBody: 'A low and a high end.',
+  pickPriceWay: 'Pick an exact amount or still a range.',
+  priceHint: (range: string) => `Planned at ${range} now`,
   samePrice: "That's the price already.",
+  effectBefore: 'Now',
+  effectAfter: 'After this change',
+  changeLastCost: "It's the only cost left.",
   changeCostRow: 'Change',
   changeCostSub: "Name, date and how it's paid",
   removeCostRow: 'Remove this cost',
   removeCostSub: 'It leaves the list and the plan',
   removeConfirmTitle: (name: string) => `Remove ${name}?`,
-  removeConfirmText: (name: string, date: string, item: string) =>
-    `${name}, due ${date}, comes off ${item}. Its change stays in History.`,
+  removeConfirmText: (name: string, timing: string, item: string) =>
+    `${name}, ${timing}, comes off ${item}. Its removal stays in History.`,
   removeConfirm: 'Remove cost',
-  removeSummary: (item: string, cost: string, date: string) =>
-    `${item}: removed ${cost}, due ${date}.`,
+  removeSummary: (item: string, cost: string, timing: string, from: string) =>
+    `${item}: removed ${cost}, ${timing}, from ${from}.`,
+  restoreSummary: (item: string, cost: string, timing: string, from: string) =>
+    `${item}: restored ${cost}, ${timing}, from ${from}.`,
+  restoreGone: "It's already back, so nothing was changed.",
+  restoreFailed: 'This did not save. Nothing was changed.',
   removedToast: (name: string) => `Removed ${name}`,
+  changeAdded: (name: string, amount: string, when: string) =>
+    `added ${name} ${amount}, ${when}`,
+  changeRemoved: (name: string) => `removed ${name}`,
+  changeMoved: (name: string, from: string, to: string) =>
+    `${name} from ${from} to ${to}`,
+  changeFromTo: (name: string, from: string, to: string) =>
+    `${name} ${from} to ${to}`,
   removeFailed: 'This did not save. Nothing was changed.',
   removeGone: 'This cost was already changed. Open it again.',
   changeItemTitle: 'Change it',
@@ -934,8 +957,15 @@ export const CHANGE_REASON_CHIPS: Record<
   payLine: ['New job or raise', 'Hours changed', ...MIND_CHIPS],
   source: MIND_CHIPS,
   group: MIND_CHIPS,
-  horizon: ['Got a quote', 'Price went up', 'Price went down', ...MIND_CHIPS],
+  horizon: ['Plans changed', ...MIND_CHIPS],
 };
+
+/** Starting points for "Why the change?" when a Horizon cost is priced. */
+export const HORIZON_PRICE_REASON_CHIPS = [
+  'Got a quote',
+  'Price went up',
+  'Price went down',
+] as const;
 
 /** What happened to a pairing that its own pay could not cover. */
 export const PAIRING_STATES = [

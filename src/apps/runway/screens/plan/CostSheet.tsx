@@ -12,18 +12,35 @@ import { store } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import RangeNote from '@apps/runway/components/RangeNote';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { FORM_FLOW_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
-import { removeCost, setCostPrice } from '@apps/runway/engine/horizon';
-import CostForm from '@apps/runway/forms/CostForm';
+import {
+  FORM_FLOW_WORDS,
+  HORIZON_PRICE_REASON_CHIPS,
+  HORIZON_WORDS,
+  PAY_SHARE_WORDS,
+} from '@apps/runway/constants';
+import {
+  getLiveCosts,
+  removeCost,
+  restoreCost,
+  setCostPrice,
+} from '@apps/runway/engine/horizon';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
 import { selectHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
 import {
+  describeCost,
+  describeCostInSentence,
+  describeCostTiming,
+} from '@apps/runway/utils/horizonText';
+import {
+  EMPTY_AMOUNT_DRAFT,
   getAmountDraftProblem,
   parseAmountDraft,
   toAmountDraft,
@@ -31,16 +48,18 @@ import {
 } from '@apps/runway/utils/rangeInput';
 import { formatRange } from '@apps/runway/utils/rangeText';
 
-const MODE_OPTIONS = [
+type PriceWay = 'exact' | 'range';
+
+const PRICE_WAYS = [
   {
     value: 'exact' as const,
-    label: 'Exact',
-    linkLabel: FORM_FLOW_WORDS.oneAmount,
+    title: HORIZON_WORDS.priceExactTitle,
+    body: HORIZON_WORDS.priceExactBody,
   },
   {
     value: 'range' as const,
-    label: 'A range',
-    linkLabel: FORM_FLOW_WORDS.itVaries,
+    title: HORIZON_WORDS.priceRangeTitle,
+    body: HORIZON_WORDS.priceRangeBody,
   },
 ];
 
@@ -52,22 +71,30 @@ interface PriceViewProps {
   onBack: () => void;
 }
 
-/** Say what the cost really is: an exact amount or a range, from today. */
+/** Say what the cost really is: an exact amount or a range, from today. The way is asked first, with nothing chosen for the person. */
 function PriceView({ itemId, horizon, cost, today, onBack }: PriceViewProps) {
-  const [draft, setDraft] = useState<AmountDraft>(() =>
-    toAmountDraft(cost.amount, null),
-  );
-  const range = parseAmountDraft(draft);
+  const [way, setWay] = useState<PriceWay | null>(null);
+  const [draft, setDraft] = useState<AmountDraft>(EMPTY_AMOUNT_DRAFT);
+  const range = way === null ? null : parseAmountDraft(draft);
   const isSame =
     range !== null &&
     range.lowCents === cost.amount.lowCents &&
     range.highCents === cost.amount.highCents;
-  const blocker =
-    range === null
-      ? (getAmountDraftProblem(draft) ?? FORM_FLOW_WORDS.badAmount)
-      : isSame
-        ? HORIZON_WORDS.samePrice
-        : null;
+  const getBlocker = () => {
+    if (way === null) return HORIZON_WORDS.pickPriceWay;
+    if (range === null) {
+      return getAmountDraftProblem(draft) ?? FORM_FLOW_WORDS.badAmount;
+    }
+    return isSame ? HORIZON_WORDS.samePrice : null;
+  };
+  const pickWay = (next: PriceWay) => {
+    setWay(next);
+    setDraft(
+      next === 'exact'
+        ? EMPTY_AMOUNT_DRAFT
+        : { ...toAmountDraft(cost.amount, null), mode: 'range' },
+    );
+  };
 
   return (
     <HorizonChangeView
@@ -80,24 +107,33 @@ function PriceView({ itemId, horizon, cost, today, onBack }: PriceViewProps) {
           ? null
           : setCostPrice(horizon, cost.id, range, today)
       }
-      blocker={blocker}
+      blocker={getBlocker()}
+      reasonChips={HORIZON_PRICE_REASON_CHIPS}
+      saveLabel={HORIZON_WORDS.setPriceSave}
       onBack={onBack}
       onDone={onBack}
     >
-      <AmountField
-        isHero
-        autoFocus
-        label={HORIZON_WORDS.costAmount}
-        modes={MODE_OPTIONS}
-        mode={draft.mode}
-        onModeChange={(mode) =>
-          setDraft({ ...draft, mode: mode === 'range' ? 'range' : 'exact' })
-        }
-        value={draft.low}
-        onChange={(low) => setDraft({ ...draft, low })}
-        highValue={draft.high}
-        onHighChange={(high) => setDraft({ ...draft, high })}
-      />
+      <ChoiceCards options={PRICE_WAYS} value={way} onChange={pickWay} />
+      {way !== null && (
+        <AmountField
+          key={way}
+          isHero
+          autoFocus
+          label={HORIZON_WORDS.costAmount}
+          mode={draft.mode}
+          value={draft.low}
+          onChange={(low) => setDraft({ ...draft, low })}
+          highValue={draft.high}
+          onHighChange={(high) => setDraft({ ...draft, high })}
+          hint={
+            way === 'exact' && (
+              <MaskedText>
+                {HORIZON_WORDS.priceHint(formatRange(cost.amount))}
+              </MaskedText>
+            )
+          }
+        />
+      )}
     </HorizonChangeView>
   );
 }
@@ -110,6 +146,8 @@ interface CostSheetProps {
   stance: Stance;
   /** Back to the event's sheet. */
   onBack: () => void;
+  /** Opens the cost's Change form, which replaces the event's sheet. */
+  onChange: () => void;
 }
 
 /** One cost of an event, swapped into the event's sheet: set its price, change it, or remove it. */
@@ -120,21 +158,24 @@ function CostSheet({
   today,
   stance,
   onBack,
+  onChange,
 }: CostSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const mask = useMaskedText();
-  const [view, setView] = useState<'menu' | 'price' | 'change'>('menu');
-  const [edited, setEdited] = useState<HorizonCost | null>(null);
+  const [view, setView] = useState<'menu' | 'price'>('menu');
   const [isRemoving, setIsRemoving] = useState(false);
 
   const isExact = cost.amount.lowCents === cost.amount.highCents;
-  const dueOn = formatDateOrdinalUTC(cost.schedule.anchor ?? today);
-  const toMenu = () => {
-    setEdited(null);
-    setView('menu');
-  };
+  const isLive = cost.endsAfter === null;
+  const isRemovable = isLive && getLiveCosts(horizon).length > 1;
+  const isRepeat = cost.schedule.kind !== 'once';
+  const when = isRepeat
+    ? describeCostTiming(cost.schedule, cost.ending)
+    : HORIZON_WORDS.costDue(
+        formatDateOrdinalUTC(cost.schedule.anchor ?? today),
+      );
 
   if (view === 'price') {
     return (
@@ -143,63 +184,92 @@ function CostSheet({
         horizon={horizon}
         cost={cost}
         today={today}
-        onBack={toMenu}
+        onBack={() => setView('menu')}
       />
     );
   }
-  if (view === 'change' && edited !== null) {
-    return (
-      <HorizonChangeView
-        itemId={itemId}
-        backLabel={cost.name}
-        title={HORIZON_WORDS.changeCostRow}
-        current={horizon}
-        candidate={{
-          ...horizon,
-          costs: horizon.costs.map((entry) =>
-            entry.id === edited.id ? edited : entry,
-          ),
-        }}
-        blocker={null}
-        onBack={toMenu}
-        onDone={toMenu}
-      />
-    );
-  }
+
+  const getLive = () =>
+    selectHorizonItems(store.getState(), today).find(
+      ({ item }) => item.id === itemId,
+    )?.version.payload ?? null;
+
+  const write = async (payload: HorizonSealed, summary: string) => {
+    if (!user) return;
+    const encryption = await getRunwayEncryption(user.uid);
+    await changeItem(user.uid, encryption, {
+      itemId,
+      kind: 'horizon',
+      payload,
+      summary,
+      note: null,
+      effectiveFrom: today,
+    });
+  };
 
   const remove = async () => {
     if (!user || isRemoving) return;
     const isConfirmed = await confirm({
       title: HORIZON_WORDS.removeConfirmTitle(cost.name),
       message: mask(
-        HORIZON_WORDS.removeConfirmText(cost.name, dueOn, horizon.name),
+        HORIZON_WORDS.removeConfirmText(
+          cost.name,
+          describeCostInSentence(cost),
+          horizon.name,
+        ),
       ),
       confirmText: HORIZON_WORDS.removeConfirm,
+      destructive: true,
     });
     if (!isConfirmed) return;
-    const live = selectHorizonItems(store.getState(), today).find(
-      ({ item }) => item.id === itemId,
-    )?.version.payload;
+    const live = getLive();
+    const index = live?.costs.findIndex(({ id }) => id === cost.id) ?? -1;
+    const gone = live?.costs[index];
     // No payment can be marked paid yet, so a removal is always a version without the cost.
-    const next = live ? removeCost(live, cost.id, today, false) : null;
-    if (!next) {
+    const next = live && gone ? removeCost(live, cost.id, today, false) : null;
+    if (!next || !gone) {
       addToast({ title: HORIZON_WORDS.removeGone, type: 'error' });
       return;
     }
+    const from = formatDateOrdinalUTC(today);
+    const timing = describeCostInSentence(gone);
     setIsRemoving(true);
     try {
-      const encryption = await getRunwayEncryption(user.uid);
-      await changeItem(user.uid, encryption, {
-        itemId,
-        kind: 'horizon',
-        payload: next,
-        summary: HORIZON_WORDS.removeSummary(next.name, cost.name, dueOn),
-        note: null,
-        effectiveFrom: today,
-      });
+      await write(
+        next,
+        HORIZON_WORDS.removeSummary(next.name, gone.name, timing, from),
+      );
       addToast({
-        title: HORIZON_WORDS.removedToast(cost.name),
+        title: HORIZON_WORDS.removedToast(gone.name),
         type: 'success',
+        action: {
+          label: PAY_SHARE_WORDS.undo,
+          onClick: () => {
+            const now = getLive();
+            const back = now ? restoreCost(now, gone, index) : null;
+            if (!now || !back) {
+              addToast({
+                title: PAY_SHARE_WORDS.undoFailed,
+                description: HORIZON_WORDS.restoreGone,
+                type: 'error',
+              });
+              return;
+            }
+            void write(
+              back,
+              HORIZON_WORDS.restoreSummary(now.name, gone.name, timing, from),
+            ).catch((undoError: unknown) =>
+              addToast({
+                title: PAY_SHARE_WORDS.undoFailed,
+                description: getErrorMessage(
+                  undoError,
+                  HORIZON_WORDS.restoreFailed,
+                ),
+                type: 'error',
+              }),
+            );
+          },
+        },
       });
       onBack();
     } catch (removeError) {
@@ -219,12 +289,13 @@ function CostSheet({
       <SheetHead
         label={cost.name}
         figure={formatRange(cost.amount)}
+        suffix={describeCost(cost).per || undefined}
         fact={HORIZON_WORDS.costFact(
-          dueOn,
+          when,
           cost.pricedOn === null ? null : formatDateOrdinalUTC(cost.pricedOn),
         )}
       />
-      <RangeNote range={cost.amount} stance={stance} side='expense' />
+      <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
       <ActionGroup isRoomy>
         <ActionRow
           isGrouped
@@ -234,8 +305,10 @@ function CostSheet({
           label={HORIZON_WORDS.setPrice}
           subtitle={
             isExact
-              ? HORIZON_WORDS.setPriceSubExact(
-                  formatCents(cost.amount.lowCents),
+              ? mask(
+                  HORIZON_WORDS.setPriceSubExact(
+                    formatCents(cost.amount.lowCents),
+                  ),
                 )
               : HORIZON_WORDS.setPriceSub
           }
@@ -248,9 +321,9 @@ function CostSheet({
           icon={<Pencil />}
           label={HORIZON_WORDS.changeCostRow}
           subtitle={HORIZON_WORDS.changeCostSub}
-          onClick={() => setView('change')}
+          onClick={onChange}
         />
-        {horizon.costs.length > 1 && (
+        {isRemovable && (
           <ActionRow
             isGrouped
             isRoomy
@@ -263,15 +336,10 @@ function CostSheet({
           />
         )}
       </ActionGroup>
-      {view === 'change' && edited === null && (
-        <CostForm
-          isAmountFixed
-          itemName={horizon.name}
-          happensOn={horizon.happensOn}
-          cost={cost}
-          onSave={setEdited}
-          onClose={toMenu}
-        />
+      {isLive && !isRemovable && (
+        <p className='text-muted-foreground text-sm'>
+          {HORIZON_WORDS.changeLastCost}
+        </p>
       )}
     </div>
   );

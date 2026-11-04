@@ -650,8 +650,10 @@ const isHorizon = (version: OpenVersion): version is HorizonVersion =>
 const getNextCostOn = (version: HorizonVersion, on: number) =>
   Math.min(
     Number.MAX_SAFE_INTEGER,
-    ...version.payload.costs.flatMap(({ schedule }) =>
-      schedule.anchor !== null && schedule.anchor >= on
+    ...version.payload.costs.flatMap(({ schedule, endsAfter }) =>
+      schedule.anchor !== null &&
+      schedule.anchor >= on &&
+      (endsAfter === null || schedule.anchor <= endsAfter)
         ? [schedule.anchor]
         : [],
     ),

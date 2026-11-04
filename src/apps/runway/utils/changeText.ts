@@ -4,6 +4,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   GROUP_WORDS,
+  HORIZON_WORDS,
   PAID_FROM_WORDS,
   PRIORITY_LABELS,
   SCHEDULE_LABELS,
@@ -12,7 +13,7 @@ import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import {
-  describeCostTiming,
+  describeCostWhen,
   formatDateRangeOrdinalUTC,
 } from '@apps/runway/utils/horizonText';
 import { formatRange } from '@apps/runway/utils/rangeText';
@@ -22,6 +23,8 @@ import type {
   HorizonSealed,
   GoalSealed,
   GroupSealed,
+  HorizonCost,
+  MoneyRange,
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
@@ -60,7 +63,8 @@ export type GroupNamer = (groupId: string) => string;
 
 const same = isSameValue;
 
-type Part = [label: string, before: string, after: string] | null;
+/** A label with its before and after, or a whole phrase when the change does not read "label from to". */
+type Part = [label: string, before: string, after: string] | string | null;
 
 const diff = <T>(
   label: string,
@@ -80,6 +84,37 @@ const describeHorizonRest = (value: HorizonSealed['rest']) =>
       : value.kind === 'outside'
         ? 'outside the plan'
         : "I'll decide later";
+
+/** "$600.00–$800.00" for a range, so "to" in a change line is only the change. */
+const formatRangeDash = (range: MoneyRange) =>
+  range.lowCents === range.highCents
+    ? formatCents(range.lowCents)
+    : `${formatCents(range.lowCents)}–${formatCents(range.highCents)}`;
+
+const describeAmountMove = (cost: HorizonCost, old: MoneyRange): Part =>
+  same(old, cost.amount)
+    ? null
+    : HORIZON_WORDS.changeFromTo(
+        cost.name,
+        formatRangeDash(old),
+        formatRangeDash(cost.amount),
+      );
+
+const describeTimingMove = (cost: HorizonCost, old: HorizonCost): Part => {
+  if (
+    same(
+      { schedule: old.schedule, ending: old.ending },
+      { schedule: cost.schedule, ending: cost.ending },
+    )
+  ) {
+    return null;
+  }
+  const from = describeCostWhen(old.schedule, old.ending);
+  const to = describeCostWhen(cost.schedule, cost.ending);
+  return old.schedule.kind === 'once' && cost.schedule.kind === 'once'
+    ? HORIZON_WORDS.changeMoved(cost.name, from, to)
+    : HORIZON_WORDS.changeFromTo(cost.name, from, to);
+};
 
 /** What changed in an event: its own fields, then each cost it still has (a priced cost is named, its figures from and to). */
 const getHorizonParts = (
@@ -103,31 +138,25 @@ const getHorizonParts = (
         : formatDateRangeOrdinalUTC(from, until),
   ),
   diff('The rest', before.rest, after.rest, describeHorizonRest),
-  diff(
-    'Costs',
-    before.costs.map(({ id }) => id).sort(),
-    after.costs.map(({ id }) => id).sort(),
-    (ids) =>
-      ids
-        .map(
-          (id) =>
-            [...before.costs, ...after.costs].find((cost) => cost.id === id)
-              ?.name,
-        )
-        .join(', '),
-  ),
+  ...after.costs
+    .filter((cost) => !before.costs.some(({ id }) => id === cost.id))
+    .map((cost): Part =>
+      HORIZON_WORDS.changeAdded(
+        cost.name,
+        formatRangeDash(cost.amount),
+        describeCostWhen(cost.schedule, cost.ending),
+      ),
+    ),
+  ...before.costs
+    .filter((cost) => !after.costs.some(({ id }) => id === cost.id))
+    .map((cost): Part => HORIZON_WORDS.changeRemoved(cost.name)),
   ...after.costs.flatMap((cost): Part[] => {
     const old = before.costs.find(({ id }) => id === cost.id);
     if (!old) return [];
     return [
       diff('Cost name', old.name, cost.name, (value) => value),
-      diff(cost.name, old.amount, cost.amount, formatRange),
-      diff(
-        `${cost.name} due`,
-        { schedule: old.schedule, ending: old.ending },
-        { schedule: cost.schedule, ending: cost.ending },
-        ({ schedule, ending }) => describeCostTiming(schedule, ending, true),
-      ),
+      describeAmountMove(cost, old.amount),
+      describeTimingMove(cost, old),
       diff(`${cost.name} paid`, old.isOutside, cost.isOutside, (value) =>
         value ? 'outside the plan' : 'like the rest',
       ),
@@ -352,7 +381,9 @@ export function describeChange(
 ) {
   const result = getParts(before, after, cardNameOf, groupName, payNameOf)
     .flatMap((part) => (part === null ? [] : [part]))
-    .map(([label, from, to]) => `${label} ${from} to ${to}`)
+    .map((part) =>
+      typeof part === 'string' ? part : `${part[0]} ${part[1]} to ${part[2]}`,
+    )
     .join('; ');
   return result;
 }

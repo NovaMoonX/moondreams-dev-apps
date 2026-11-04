@@ -84,14 +84,48 @@ export const setCostPrice = (
   ),
 });
 
-/** The item without a cost, or null when that is its last (the item is then called off, not emptied). A cost with a paid payment stays, ending after `today`, so what it already took stays in Spent. */
+/** The cost fields a cost's Change form owns; its price, the day it was priced and where it ended stay as they are. */
+export type CostChange = Pick<
+  HorizonCost,
+  'name' | 'schedule' | 'ending' | 'isOutside'
+>;
+
+/** The item with one cost's name, schedule, ending and paid-outside answer replaced; null when the cost is no longer in it. */
+export const changeCost = (
+  horizon: HorizonSealed,
+  costId: string,
+  fields: CostChange,
+): HorizonSealed | null =>
+  horizon.costs.some(({ id }) => id === costId)
+    ? {
+        ...horizon,
+        costs: horizon.costs.map((cost) =>
+          cost.id === costId
+            ? {
+                ...cost,
+                name: fields.name,
+                schedule: fields.schedule,
+                ending: fields.ending,
+                isOutside: fields.isOutside,
+              }
+            : cost,
+        ),
+      }
+    : null;
+
+/** The costs still asking for money; one that ended after a paid payment stays listed but is not counted. */
+export const getLiveCosts = (horizon: Pick<HorizonSealed, 'costs'>) =>
+  horizon.costs.filter(({ endsAfter }) => endsAfter === null);
+
+/** The item without a cost, or null when that is its last live cost (the item is then called off, not emptied). A cost with a paid payment stays, ending after `today`, so what it already took stays in Spent. */
 export const removeCost = (
   horizon: HorizonSealed,
   costId: string,
   today: DateOnly,
   hasPaidPayment: boolean,
 ): HorizonSealed | null =>
-  horizon.costs.length <= 1 || !horizon.costs.some(({ id }) => id === costId)
+  getLiveCosts(horizon).length <= 1 ||
+  !getLiveCosts(horizon).some(({ id }) => id === costId)
     ? null
     : {
         ...horizon,
@@ -100,6 +134,23 @@ export const removeCost = (
               cost.id === costId ? { ...cost, endsAfter: today } : cost,
             )
           : horizon.costs.filter(({ id }) => id !== costId),
+      };
+
+/** The item with a removed cost put back at its old place; null when a cost with that id is already in it. */
+export const restoreCost = (
+  horizon: HorizonSealed,
+  cost: HorizonCost,
+  index: number,
+): HorizonSealed | null =>
+  horizon.costs.some(({ id }) => id === cost.id)
+    ? null
+    : {
+        ...horizon,
+        costs: [
+          ...horizon.costs.slice(0, index),
+          cost,
+          ...horizon.costs.slice(index),
+        ],
       };
 
 /** How much of one payment the money held covers. */
