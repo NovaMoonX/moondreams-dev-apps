@@ -607,11 +607,7 @@ function ItemSheet({
         openAccounts,
         (id) => (id === itemId ? payload.name : ''),
       );
-      toastHoldsSaved(
-        ACCOUNT_WORDS.holdsSaved(target.name),
-        written,
-        target.name,
-      );
+      toastHoldsSaved(ACCOUNT_WORDS.holdsSaved(target.name), written);
       goTo('menu');
     } catch (saveError) {
       setError(

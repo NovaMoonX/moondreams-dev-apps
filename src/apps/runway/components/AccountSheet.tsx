@@ -242,11 +242,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
           openAccounts,
           nameOf,
         );
-        toastHoldsSaved(
-          ACCOUNT_WORDS.holdsSaved(account.name),
-          written,
-          account.name,
-        );
+        toastHoldsSaved(ACCOUNT_WORDS.holdsSaved(account.name), written);
       },
       ACCOUNT_WORDS.holdsFailed,
       null,

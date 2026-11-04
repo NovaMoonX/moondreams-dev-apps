@@ -2768,6 +2768,9 @@ export const ACCOUNT_WORDS = {
   holdsEmpty: 'Nothing is held here yet.',
   notYetGivenAJob: 'Not yet given a job',
   shortOfWhatItHolds: (amount: string) => `${amount} short of what it holds`,
+  rowShort: (bankLine: string, amount: string) =>
+    `${bankLine} ·\u00a0${amount}\u00a0short`,
+  rowPulledFrom: (bankLine: string) => `${bankLine} ·\u00a0Pulled\u00a0from`,
   showMore: (count: number) => `Show ${count} more`,
   showFewer: 'Show fewer',
   chooseHolds: 'Choose what it holds',
@@ -2871,12 +2874,11 @@ export const ACCOUNT_WORDS = {
   holdsSaved: (name: string) => `Changed what ${name} holds`,
   holdsFailed: 'What it holds was not saved',
   undo: 'Undo',
-  changeHoldsUndone: (name: string) =>
-    `Took back the change to what ${name} holds`,
+  changeHoldsUndone: (names: string[]) =>
+    `Took back the change to what ${names.join(' and ')} ${names.length === 1 ? 'holds' : 'hold'}`,
   holdsNotUndone: 'The change was not taken back',
   holdsChangedSince: (names: string[]) =>
     `What ${names.join(' and ')} ${names.length === 1 ? 'holds' : 'hold'} changed since, so nothing was undone.`,
-  pulledFrom: 'Pulled from',
   heldIn: (name: string) => `Held in ${name}`,
   notHeld: 'Not held in an account yet',
   heldSub: 'Change which account holds it',

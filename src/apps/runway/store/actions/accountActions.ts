@@ -168,7 +168,7 @@ export interface WrittenHolds {
 const isSameSet = (a: string[], b: string[]) =>
   a.length === b.length && a.every((id) => b.includes(id));
 
-/** Sets what an account holds and takes those ids from any other account that held them, re-reading every account in the transaction. `nameOf` names an item for the change entry; an item it has no name for is left out of the sentence. Returns what it wrote to each account, the target first. */
+/** Sets what an account holds and takes those ids from any other account that held them, re-reading every account in the transaction. `nameOf` names an item for the change entry; an item it has no name for is left out of the sentence. Returns what it wrote to each account, the target first, or nothing when the save changes nothing. */
 export async function setAccountHolds(
   uid: string,
   encryption: RunwayEncryption,
@@ -216,6 +216,11 @@ export async function setAccountHolds(
         };
       }),
     );
+    if (
+      isSameSet(holds, targetSealed.holds) &&
+      writes.every((write) => write === null)
+    )
+      return [];
     const [sealed, change] = await Promise.all([
       sealJson({ ...targetSealed, holds }, encryption),
       getChangeDoc(
@@ -261,26 +266,51 @@ export async function setAccountHolds(
   });
 }
 
-/** Writes back what a holds save replaced, only when every account it wrote still holds what it left there (a partial undo could leave one item in two accounts). Returns the names changed since, writing nothing when there are any. */
+/** Writes back what a holds save replaced, only when every account it wrote is still open and holds what it left there, and no other account has since taken an item it would give back (each item has one holder). Returns the names changed since, writing nothing when there are any. */
 export async function undoAccountHolds(
   uid: string,
   encryption: RunwayEncryption,
   written: WrittenHolds[],
+  openAccounts: OpenAccount[],
   summary: string,
 ): Promise<string[]> {
+  const writtenIds = new Set(written.map((entry) => entry.accountId));
+  const others = openAccounts.filter((account) => !writtenIds.has(account.id));
+  const givenBack = new Set(
+    written.flatMap((entry) =>
+      entry.before.filter((id) => !entry.after.includes(id)),
+    ),
+  );
   return runTransaction(db, async (transaction) => {
-    const snapshots = await Promise.all(
-      written.map((entry) => transaction.get(accountRef(uid, entry.accountId))),
-    );
+    const [snapshots, otherSnapshots] = await Promise.all([
+      Promise.all(
+        written.map((entry) =>
+          transaction.get(accountRef(uid, entry.accountId)),
+        ),
+      ),
+      Promise.all(
+        others.map((account) => transaction.get(accountRef(uid, account.id))),
+      ),
+    ]);
     const now = Date.now();
+    const takenElsewhere = await Promise.all(
+      otherSnapshots.map(async (snapshot) => {
+        if (!snapshot.exists()) return null;
+        const data = snapshot.data() as AccountDoc;
+        if (data.archivedAt !== null) return null;
+        const current = await openSealed(data, encryption);
+        return current.holds.some((id) => givenBack.has(id))
+          ? current.name
+          : null;
+      }),
+    );
     const results = await Promise.all(
       written.map(async (entry, index) => {
         const snapshot = snapshots[index];
         if (!snapshot.exists()) return { entry, sealed: null };
-        const current = await openSealed(
-          snapshot.data() as AccountDoc,
-          encryption,
-        );
+        const data = snapshot.data() as AccountDoc;
+        if (data.archivedAt !== null) return { entry, sealed: null };
+        const current = await openSealed(data, encryption);
         if (!isSameSet(current.holds, entry.after))
           return { entry, sealed: null };
         return {
@@ -295,9 +325,10 @@ export async function undoAccountHolds(
     const restored = results.flatMap(({ entry, sealed }) =>
       sealed ? [{ entry, sealed }] : [],
     );
-    const skipped = results.flatMap(({ entry, sealed }) =>
-      sealed ? [] : [entry.name],
-    );
+    const skipped = [
+      ...results.flatMap(({ entry, sealed }) => (sealed ? [] : [entry.name])),
+      ...takenElsewhere.flatMap((name) => (name ? [name] : [])),
+    ];
     if (skipped.length > 0) return skipped;
     const change = await getChangeDoc(
       encryption,

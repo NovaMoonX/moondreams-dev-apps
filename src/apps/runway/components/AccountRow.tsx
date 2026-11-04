@@ -8,21 +8,19 @@ import { describeAccountLine } from '@apps/runway/utils/accountText';
 
 interface AccountRowProps {
   account: OpenAccount;
-  /** The balance less what the account holds; below zero the row says it is short. Null while unknown. */
   unassignedCents: number | null;
   onOpen: () => void;
 }
 
-/** An account as a row: the bank's initial, its name, the bank and last 4 digits (and that cards and bills pull from it), and its balance; short of what it holds, the line says so while amounts are shown. */
 function AccountRow({ account, unassignedCents, onOpen }: AccountRowProps) {
   const { isHidden } = useValuesHidden();
   const hasBalance = account.balanceCents !== null;
   const isShort = !isHidden && unassignedCents !== null && unassignedCents < 0;
   const bankLine = describeAccountLine(account);
   const detail = isShort
-    ? ACCOUNT_WORDS.shortOfWhatItHolds(formatCents(-unassignedCents))
+    ? ACCOUNT_WORDS.rowShort(bankLine, formatCents(-unassignedCents))
     : account.isPullAccount
-      ? `${bankLine} · ${ACCOUNT_WORDS.pulledFrom}`
+      ? ACCOUNT_WORDS.rowPulledFrom(bankLine)
       : bankLine;
   return (
     <ItemRow
