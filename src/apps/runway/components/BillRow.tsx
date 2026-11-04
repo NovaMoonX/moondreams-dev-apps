@@ -37,7 +37,7 @@ interface BillRowProps {
   isOutsideTotal?: boolean;
   /** Said in the row's one line in place of the due date. */
   detailOverride?: string | null;
-  /** A list beside a monthly total leads with what the bill comes to a month ("monthly"); a bill shown on the day it is due leads with the payment ("payment"). */
+  /** Which figure leads: what it comes to a month, or the payment. */
   figureKind?: 'monthly' | 'payment';
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;

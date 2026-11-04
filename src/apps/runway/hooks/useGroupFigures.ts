@@ -25,7 +25,6 @@ const toBillMember = ({ version: bill }: ResolvedBill) => ({
   ending: bill.payload.ending,
 });
 
-/** The one count of income days a month an envelope's pay holds, shared by its group total and its row. */
 const getEnvelopeIncomeDays = (
   payLines: Parameters<typeof getIncomeDaysPerMonth>[0],
   today: number,

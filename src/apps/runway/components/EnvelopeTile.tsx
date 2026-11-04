@@ -50,7 +50,7 @@ interface EnvelopeTileProps {
   isPart?: boolean;
   /** How far down the priorities Plan's dial counts: the figure is what the counted parts ask, and the line names the extras it leaves out. */
   dial?: Priority;
-  /** A list beside a monthly total reads a calendar-period envelope per month ("monthly"); one mixed with bills and goals shows what each time sets aside ("payment"). */
+  /** Which figure leads: what it comes to a month, or what each time puts in. */
   figureKind?: 'monthly' | 'payment';
 }
 
