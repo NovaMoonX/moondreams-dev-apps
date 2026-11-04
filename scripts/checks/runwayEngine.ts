@@ -251,6 +251,11 @@ import {
 } from '../../src/apps/runway/utils/fundingText.ts';
 import { parsePercentToBps } from '../../src/utils/moneyUtils.ts';
 import {
+  formatDateOrdinal,
+  formatDateOrdinalUTC,
+  toDayOrdinal,
+} from '../../src/utils/formatUtils.ts';
+import {
   allocate,
   percentOf,
   percentShares,
@@ -10567,6 +10572,72 @@ const version = (
   );
 }
 
+{
+  const expected = [
+    '1st',
+    '2nd',
+    '3rd',
+    '4th',
+    '5th',
+    '6th',
+    '7th',
+    '8th',
+    '9th',
+    '10th',
+    '11th',
+    '12th',
+    '13th',
+    '14th',
+    '15th',
+    '16th',
+    '17th',
+    '18th',
+    '19th',
+    '20th',
+    '21st',
+    '22nd',
+    '23rd',
+    '24th',
+    '25th',
+    '26th',
+    '27th',
+    '28th',
+    '29th',
+    '30th',
+    '31st',
+  ];
+  expected.forEach((word, index) =>
+    assert.equal(
+      toDayOrdinal(index + 1),
+      word,
+      `day ${index + 1} reads ${word}`,
+    ),
+  );
+  const thisYear = new Date().getUTCFullYear();
+  const feb1 = Date.UTC(thisYear, 1, 1);
+  assert.equal(
+    formatDateOrdinalUTC(feb1),
+    'Feb 1st',
+    'a date this year has no year',
+  );
+  assert.equal(
+    formatDateOrdinalUTC(Date.UTC(thisYear + 1, 11, 22)),
+    `Dec 22nd, ${thisYear + 1}`,
+    'a date in another year names it',
+  );
+  assert.equal(
+    formatDateOrdinalUTC(Date.UTC(thisYear, 2, 31)),
+    'Mar 31st',
+    'a date-only value keeps its day for a viewer behind UTC',
+  );
+  const localNoon = new Date(thisYear, 6, 3, 12).getTime();
+  assert.equal(
+    formatDateOrdinal(localNoon),
+    'Jul 3rd',
+    'an instant reads its local day',
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
@@ -12685,6 +12756,72 @@ console.log('runway engine: ok');
     ).length,
     0,
     'a bill paid from the last pay before it waits until that pay is in the plan',
+  );
+}
+
+{
+  const expected = [
+    '1st',
+    '2nd',
+    '3rd',
+    '4th',
+    '5th',
+    '6th',
+    '7th',
+    '8th',
+    '9th',
+    '10th',
+    '11th',
+    '12th',
+    '13th',
+    '14th',
+    '15th',
+    '16th',
+    '17th',
+    '18th',
+    '19th',
+    '20th',
+    '21st',
+    '22nd',
+    '23rd',
+    '24th',
+    '25th',
+    '26th',
+    '27th',
+    '28th',
+    '29th',
+    '30th',
+    '31st',
+  ];
+  expected.forEach((word, index) =>
+    assert.equal(
+      toDayOrdinal(index + 1),
+      word,
+      `day ${index + 1} reads ${word}`,
+    ),
+  );
+  const thisYear = new Date().getUTCFullYear();
+  const feb1 = Date.UTC(thisYear, 1, 1);
+  assert.equal(
+    formatDateOrdinalUTC(feb1),
+    'Feb 1st',
+    'a date this year has no year',
+  );
+  assert.equal(
+    formatDateOrdinalUTC(Date.UTC(thisYear + 1, 11, 22)),
+    `Dec 22nd, ${thisYear + 1}`,
+    'a date in another year names it',
+  );
+  assert.equal(
+    formatDateOrdinalUTC(Date.UTC(thisYear, 2, 31)),
+    'Mar 31st',
+    'a date-only value keeps its day for a viewer behind UTC',
+  );
+  const localNoon = new Date(thisYear, 6, 3, 12).getTime();
+  assert.equal(
+    formatDateOrdinal(localNoon),
+    'Jul 3rd',
+    'an instant reads its local day',
   );
 }
 
