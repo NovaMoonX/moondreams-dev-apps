@@ -60,7 +60,7 @@ function PlanScreen() {
               emoji={option.emoji}
               isThin
               isSelected={!isMore && planSection === option.value}
-              className='max-[413px]:px-2 max-[413px]:[&_[data-pill-emoji]]:hidden'
+              className='max-sm:px-2 max-sm:[&_[data-pill-emoji]]:hidden'
               onClick={() => showPlanSection(option.value)}
             >
               {option.label}

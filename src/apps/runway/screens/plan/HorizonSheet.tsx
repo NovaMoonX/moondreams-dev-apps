@@ -45,8 +45,6 @@ function HorizonSheet({ horizon, today, stance, onClose }: HorizonSheetProps) {
         );
   const fact = [
     HORIZON_WORDS.costCount(horizon.costs.length).replace(' ', '\u00A0'),
-    hasRange &&
-      HORIZON_WORDS.rangesAt(RANGE_END_WORDS[getRangeEnd(stance, 'expense')]),
     when,
   ]
     .filter(Boolean)
@@ -71,6 +69,13 @@ function HorizonSheet({ horizon, today, stance, onClose }: HorizonSheetProps) {
           label={HORIZON_WORDS.totalCost}
           figure={formatCents(plannedCents)}
           fact={fact}
+          help={
+            hasRange
+              ? HORIZON_WORDS.rangesAt(
+                  RANGE_END_WORDS[getRangeEnd(stance, 'expense')],
+                )
+              : undefined
+          }
         />
         <div className='space-y-2'>
           <p className='text-muted-foreground text-sm font-medium'>
