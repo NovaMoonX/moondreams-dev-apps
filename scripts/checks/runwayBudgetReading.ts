@@ -572,7 +572,7 @@ assert.deepEqual(
   many.notRead.map((entry) => entry.text),
   [
     'Only the first 10 incomes are kept; 2 more were left out.',
-    'House aims for January 1, 2031, which is more than 12 months away. The date was left out.',
+    'House aims for Jan 1st, 2031, which is more than 12 months away. The date was left out.',
   ],
   'what was cut is said',
 );

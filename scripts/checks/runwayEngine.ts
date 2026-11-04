@@ -930,7 +930,7 @@ const version = (
     archivedAt: null,
     heldReleasedOn: null,
   });
-  // Two pay lines, each every other week, a week apart: A on Oct 2, 16, 30 ...; B on Oct 9, 23, Nov 6 ...
+  // Two pay lines, each every other week, a week apart: A on Oct 2nd, 16, 30 ...; B on Oct 9th, 23, Nov 6th ...
   const days = buildComingDays(
     [header('A'), header('B')],
     [
@@ -7904,7 +7904,7 @@ const version = (
   );
   assert.ok(
     noted[0]?.text.includes(
-      'Phone $296.00 short on Nov 7: Freelance payment is one-time and brings $120.',
+      'Phone $296.00 short on Nov 7th: Freelance payment is one-time and brings $120.',
     ),
     'a short pay that is one-time says why',
   );
@@ -8776,7 +8776,7 @@ const version = (
   assert.deepEqual(
     paidDues(utc(2026, 10, 28)),
     [['20261028', 'paid_rent_20261101']],
-    'B1: moving it to the 28th takes the Nov 1 mark to Oct 28, the payment it became, and never marks a payment nobody paid',
+    'B1: moving it to the 28th takes the Nov 1st mark to Oct 28th, the payment it became, and never marks a payment nobody paid',
   );
   assert.deepEqual(
     [
@@ -11046,7 +11046,7 @@ console.log('runway engine: ok');
   assert.deepEqual(
     [rentOf(twoMonths, 'job_a'), rentOf(twoMonths, 'job_b')],
     [120_000, 120_000],
-    'F1: the Nov 6 pairing fills the Nov 15 rent and the Nov 20 pairing the Dec 15 rent, each in full',
+    'F1: the Nov 6th pairing fills the Nov 15th rent and the Nov 20th pairing the Dec 15th rent, each in full',
   );
   const oneMonth = draftOver([
     ['job_a', utc(2026, 11, 6)],
@@ -12139,8 +12139,8 @@ console.log('runway engine: ok');
     'G11: a bill paid once keeps its payment as the figure',
   );
   assert.equal(
-    joinPaymentAndState('$150 yearly', 'Due Mar 1, 2027'),
-    '$150 yearly\u00a0· due Mar 1, 2027',
+    joinPaymentAndState('$150 yearly', 'Due Mar 1st, 2027'),
+    '$150 yearly\u00a0· due Mar 1st, 2027',
     'G11: a converted row names the payment first and keeps the dot with it',
   );
   const calendarFunding = (
