@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { HandCoins } from 'lucide-react';
+import { HandCoins, History, Pencil, Plus } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -15,6 +16,8 @@ import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
+import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
+import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import PutTowardView from '@apps/runway/components/PutTowardView';
 import TakeFromPaysView from '@apps/runway/components/TakeFromPaysView';
@@ -22,13 +25,19 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import {
   FIX_WORDS,
   HORIZON_WORDS,
+  ITEM_SHEET_WORDS,
+  ITEM_VIEW_WORDS,
+  MAX_HORIZON_COSTS,
   RANGE_END_WORDS,
 } from '@apps/runway/constants';
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
-import type { HorizonSealed, Stance } from '@apps/runway/types';
+import CostForm from '@apps/runway/forms/CostForm';
+import HorizonChangeForm from '@apps/runway/forms/HorizonChangeForm';
+import CostSheet from '@apps/runway/screens/plan/CostSheet';
+import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 interface HorizonSheetProps {
@@ -54,6 +63,9 @@ function HorizonSheet({
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const { isHidden } = useValuesHidden();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
+  const [view, setView] = useState<'main' | 'change' | 'history'>('main');
+  const [costId, setCostId] = useState<string | null>(null);
+  const [addState, setAddState] = useState<'form' | HorizonCost | null>(null);
   const [putting, setPutting] = useState<{
     initialCents: number | null;
   } | null>(null);
@@ -129,6 +141,7 @@ function HorizonSheet({
   ]
     .filter(Boolean)
     .join(' ·\u00A0');
+  const openCost = horizon.costs.find(({ id }) => id === costId);
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );
@@ -141,7 +154,45 @@ function HorizonSheet({
       title={horizon.name}
       actions={<ValuesEyeButton />}
     >
-      {isTakingFromPays ? (
+      {view === 'change' ? (
+        <HorizonChangeForm
+          itemId={itemId}
+          horizon={horizon}
+          today={today}
+          onBack={() => setView('main')}
+          onDone={() => setView('main')}
+        />
+      ) : view === 'history' ? (
+        <div className='flex flex-1 flex-col gap-4'>
+          <div className='flex items-center gap-1'>
+            <BackLink isChevronOnly onBack={() => setView('main')} />
+            <p className='min-w-0 text-2xl font-semibold'>
+              {ITEM_VIEW_WORDS.historyTitle}
+            </p>
+          </div>
+          <ItemHistoryView itemId={itemId} />
+        </div>
+      ) : openCost ? (
+        <CostSheet
+          itemId={itemId}
+          horizon={horizon}
+          cost={openCost}
+          today={today}
+          stance={stance}
+          onBack={() => setCostId(null)}
+        />
+      ) : addState !== null && addState !== 'form' ? (
+        <HorizonChangeView
+          itemId={itemId}
+          backLabel={horizon.name}
+          title={HORIZON_WORDS.formTitle}
+          current={horizon}
+          candidate={{ ...horizon, costs: [...horizon.costs, addState] }}
+          blocker={null}
+          onBack={() => setAddState(null)}
+          onDone={() => setAddState(null)}
+        />
+      ) : isTakingFromPays ? (
         <TakeFromPaysView
           itemId={itemId}
           horizon={horizon}
@@ -243,8 +294,8 @@ function HorizonSheet({
               {HORIZON_WORDS.restOutsideNote}
             </p>
           )}
-          {!shortfall && (
-            <ActionGroup isRoomy>
+          <ActionGroup isRoomy>
+            {!shortfall && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -254,8 +305,26 @@ function HorizonSheet({
                 subtitle={HORIZON_WORDS.putMoreSub}
                 onClick={() => setPutting({ initialCents: null })}
               />
-            </ActionGroup>
-          )}
+            )}
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<Pencil />}
+              label={HORIZON_WORDS.changeItem}
+              subtitle={HORIZON_WORDS.changeItemSub}
+              onClick={() => setView('change')}
+            />
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<History />}
+              label={ITEM_SHEET_WORDS.history}
+              subtitle={ITEM_SHEET_WORDS.historySub}
+              onClick={() => setView('history')}
+            />
+          </ActionGroup>
           <p className='text-muted-foreground text-sm'>
             <MaskedText>{fact}</MaskedText>
           </p>
@@ -265,10 +334,36 @@ function HorizonSheet({
             </p>
             <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
               {costs.map((cost) => (
-                <CostRow key={cost.id} cost={cost} />
+                <CostRow
+                  key={cost.id}
+                  cost={cost}
+                  onOpen={() => setCostId(cost.id)}
+                />
               ))}
             </ul>
+            <Button
+              type='button'
+              variant='secondary'
+              disabled={horizon.costs.length >= MAX_HORIZON_COSTS}
+              onClick={() => setAddState('form')}
+            >
+              <Plus className='h-4 w-4' aria-hidden='true' />
+              {HORIZON_WORDS.addCost}
+            </Button>
+            {horizon.costs.length >= MAX_HORIZON_COSTS && (
+              <p className='text-muted-foreground text-sm'>
+                {HORIZON_WORDS.maxCosts(MAX_HORIZON_COSTS)}
+              </p>
+            )}
           </div>
+          {addState === 'form' && (
+            <CostForm
+              itemName={horizon.name}
+              happensOn={horizon.happensOn}
+              onSave={setAddState}
+              onClose={() => setAddState(null)}
+            />
+          )}
         </div>
       )}
     </FormSheet>

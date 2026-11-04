@@ -272,6 +272,7 @@ async function writeSeedHorizon(
     anchor: number,
     isOutside = false,
     isMonthly = false,
+    pricedOn: number | null = null,
   ) => ({
     id,
     name,
@@ -285,6 +286,8 @@ async function writeSeedHorizon(
       : { kind: 'once' as const, anchor, monthDays: [] },
     ending: { onDate: null, afterCount: null },
     isOutside,
+    pricedOn,
+    endsAfter: null,
     note: null,
   });
   const feb1 = nextCalendarDay(today, 1, 1);
@@ -328,6 +331,7 @@ async function writeSeedHorizon(
             feb1,
             false,
             true,
+            today - 2 * DAY_MS,
           ),
         ],
       },

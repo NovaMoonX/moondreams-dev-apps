@@ -4,6 +4,7 @@ import type {
   HorizonCost,
   HorizonSealed,
   HorizonStored,
+  MoneyRange,
   Schedule,
   Stance,
 } from '@apps/runway/types';
@@ -27,9 +28,9 @@ export function listCostPayments(
   stance: Stance,
 ): CostPayment[] {
   const totalCents = pick(stance, cost.amount, 'expense');
-  const result = occurrences(cost.schedule, cost.ending, 0, horizon).map(
-    (dueOn) => ({ costId: cost.id, dueOn, totalCents }),
-  );
+  const result = occurrences(cost.schedule, cost.ending, 0, horizon)
+    .filter((dueOn) => cost.endsAfter === null || dueOn <= cost.endsAfter)
+    .map((dueOn) => ({ costId: cost.id, dueOn, totalCents }));
   return result;
 }
 
@@ -65,8 +66,41 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
     ...cost,
     isOutside: cost.isOutside ?? false,
     ending: cost.ending ?? { onDate: null, afterCount: null },
+    pricedOn: cost.pricedOn ?? null,
+    endsAfter: cost.endsAfter ?? null,
   })),
 });
+
+/** The item with one cost's amount set and the day it was priced; unchanged when the cost is not in it. */
+export const setCostPrice = (
+  horizon: HorizonSealed,
+  costId: string,
+  amount: MoneyRange,
+  pricedOn: DateOnly,
+): HorizonSealed => ({
+  ...horizon,
+  costs: horizon.costs.map((cost) =>
+    cost.id === costId ? { ...cost, amount, pricedOn } : cost,
+  ),
+});
+
+/** The item without a cost, or null when that is its last (the item is then called off, not emptied). A cost with a paid payment stays, ending after `today`, so what it already took stays in Spent. */
+export const removeCost = (
+  horizon: HorizonSealed,
+  costId: string,
+  today: DateOnly,
+  hasPaidPayment: boolean,
+): HorizonSealed | null =>
+  horizon.costs.length <= 1 || !horizon.costs.some(({ id }) => id === costId)
+    ? null
+    : {
+        ...horizon,
+        costs: hasPaidPayment
+          ? horizon.costs.map((cost) =>
+              cost.id === costId ? { ...cost, endsAfter: today } : cost,
+            )
+          : horizon.costs.filter(({ id }) => id !== costId),
+      };
 
 /** How much of one payment the money held covers. */
 export interface HorizonCover {

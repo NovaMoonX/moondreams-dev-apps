@@ -11,6 +11,10 @@ import {
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
 import { describeFunding } from '@apps/runway/utils/fundingText';
+import {
+  describeCostTiming,
+  formatDateRangeOrdinalUTC,
+} from '@apps/runway/utils/horizonText';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
   BillSealed,
@@ -68,6 +72,69 @@ const diff = <T>(
 const pairingCount = (list: readonly unknown[]) =>
   list.length === 1 ? '1 funded' : `${list.length} funded`;
 
+const describeHorizonRest = (value: HorizonSealed['rest']) =>
+  value.kind === 'pays'
+    ? 'my pays before each cost'
+    : value.kind === 'onePay'
+      ? 'one pay you picked'
+      : value.kind === 'outside'
+        ? 'outside the plan'
+        : "I'll decide later";
+
+/** What changed in an event: its own fields, then each cost it still has (a priced cost is named, its figures from and to). */
+const getHorizonParts = (
+  before: HorizonSealed,
+  after: HorizonSealed,
+): Part[] => [
+  diff('Name', before.name, after.name, (value) => value),
+  diff(
+    'Matters',
+    before.priority,
+    after.priority,
+    (value) => PRIORITY_LABELS[value],
+  ),
+  diff(
+    'Date',
+    { from: before.happensOn, until: before.happensUntil },
+    { from: after.happensOn, until: after.happensUntil },
+    ({ from, until }) =>
+      until === null
+        ? formatDateOrdinalUTC(from)
+        : formatDateRangeOrdinalUTC(from, until),
+  ),
+  diff('The rest', before.rest, after.rest, describeHorizonRest),
+  diff(
+    'Costs',
+    before.costs.map(({ id }) => id).sort(),
+    after.costs.map(({ id }) => id).sort(),
+    (ids) =>
+      ids
+        .map(
+          (id) =>
+            [...before.costs, ...after.costs].find((cost) => cost.id === id)
+              ?.name,
+        )
+        .join(', '),
+  ),
+  ...after.costs.flatMap((cost): Part[] => {
+    const old = before.costs.find(({ id }) => id === cost.id);
+    if (!old) return [];
+    return [
+      diff('Cost name', old.name, cost.name, (value) => value),
+      diff(cost.name, old.amount, cost.amount, formatRange),
+      diff(
+        `${cost.name} due`,
+        { schedule: old.schedule, ending: old.ending },
+        { schedule: cost.schedule, ending: cost.ending },
+        ({ schedule, ending }) => describeCostTiming(schedule, ending, true),
+      ),
+      diff(`${cost.name} paid`, old.isOutside, cost.isOutside, (value) =>
+        value ? 'outside the plan' : 'like the rest',
+      ),
+    ];
+  }),
+];
+
 const getParts = (
   before: ItemPayload,
   after: ItemPayload,
@@ -75,6 +142,9 @@ const getParts = (
   groupName: GroupNamer,
   payNameOf?: PayNamer,
 ): Part[] => {
+  if ('costs' in before && 'costs' in after) {
+    return getHorizonParts(before, after);
+  }
   const base: Part[] = [
     diff('Name', before.name, after.name, (value) => value),
   ];

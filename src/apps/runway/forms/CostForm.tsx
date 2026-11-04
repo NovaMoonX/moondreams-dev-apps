@@ -87,6 +87,8 @@ interface CostFormProps {
   onSave: (cost: HorizonCost) => void;
   /** Offered only when changing a cost. */
   onRemove?: () => void;
+  /** The amount is not asked: a priced cost's amount changes only through Set the price. */
+  isAmountFixed?: boolean;
   onClose: () => void;
 }
 
@@ -127,6 +129,7 @@ function CostForm({
   cost,
   onSave,
   onRemove,
+  isAmountFixed = false,
   onClose,
 }: CostFormProps) {
   const today = todayAsUtcDate();
@@ -138,7 +141,8 @@ function CostForm({
   const set = (patch: Partial<CostFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
-  const range = parseAmountDraft(formData.amount);
+  const range =
+    isAmountFixed && cost ? cost.amount : parseAmountDraft(formData.amount);
   const name = formData.name.trim();
   const date = fromDateInputValue(formData.date);
   const isStarted =
@@ -166,7 +170,7 @@ function CostForm({
         : whenBlocker;
   const suggestions = getSuggestions(itemName);
 
-  const steps: QuestionStep[] = [
+  const amountSteps: QuestionStep[] = [
     {
       id: 'amount',
       title: HORIZON_WORDS.costAmountTitle,
@@ -196,6 +200,9 @@ function CostForm({
         />
       ),
     },
+  ];
+  const steps: QuestionStep[] = [
+    ...(isAmountFixed ? [] : amountSteps),
     {
       id: 'name',
       title: HORIZON_WORDS.costNameTitle,
@@ -320,6 +327,8 @@ function CostForm({
       schedule,
       ending,
       isOutside: formData.isOutside,
+      pricedOn: cost?.pricedOn ?? null,
+      endsAfter: cost?.endsAfter ?? null,
       note: cost?.note ?? null,
     });
   };

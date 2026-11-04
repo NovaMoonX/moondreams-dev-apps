@@ -242,6 +242,8 @@ import {
   listHorizonPayments,
   planHorizon,
   readHorizon,
+  removeCost,
+  setCostPrice,
   sumCostPayments,
 } from '../../src/apps/runway/engine/horizon.ts';
 import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
@@ -5457,6 +5459,8 @@ const version = (
             schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
             ending: never,
             isOutside: false,
+            pricedOn: null,
+            endsAfter: null,
             note: null,
           },
           ...extraCosts.map((extra) => ({
@@ -5470,6 +5474,8 @@ const version = (
             },
             ending: never,
             isOutside: false,
+            pricedOn: null,
+            endsAfter: null,
             note: null,
           })),
         ],
@@ -5607,6 +5613,8 @@ const version = (
       schedule: { kind: 'once' as const, anchor, monthDays: [] },
       ending: never,
       isOutside: false,
+      pricedOn: null,
+      endsAfter: null,
       note: null,
     });
     const dec19 = today + 57 * DAY_MS;
@@ -11054,6 +11062,8 @@ const version = (
     schedule: { kind: 'once' as const, anchor: jan15, monthDays: [] },
     ending: { onDate: null, afterCount: null },
     isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
     note: null,
   };
   const truck = {
@@ -11192,6 +11202,8 @@ const version = (
     schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
     ending: { onDate: null, afterCount: null },
     isOutside,
+    pricedOn: null,
+    endsAfter: null,
     note: null,
   });
   const costs = [
@@ -11438,6 +11450,134 @@ const version = (
   );
   assert.equal(rebased.assignedToHorizonCents, 80_000);
   assert.equal(rebased.freeToSpendCents, 20_000);
+}
+
+// Horizon: set the price, remove a cost, and a cost that ends.
+{
+  const jan15 = utc(2027, 0, 15);
+  const feb1 = utc(2027, 1, 1);
+  const end = utc(2027, 11, 31);
+  const range = (lowCents: number, highCents: number) => ({
+    lowCents,
+    highCents,
+  });
+  const cost = (
+    id: string,
+    amount: ReturnType<typeof range>,
+    anchor: number,
+    kind: 'once' | 'monthly' = 'once',
+  ): HorizonCost => ({
+    id,
+    name: id,
+    amount,
+    schedule:
+      kind === 'once'
+        ? { kind, anchor, monthDays: [] }
+        : { kind, anchor, monthDays: [1] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  });
+  const movers = cost('movers', range(60_000, 80_000), jan15);
+  const storage = cost('storage', range(10_000, 10_000), feb1, 'monthly');
+  const moving = {
+    name: 'Moving',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should' as const,
+    orderIndex: 1,
+    rest: { kind: 'later' as const },
+    note: null,
+    costs: [movers, storage],
+  };
+  const coveredUntil = (item: typeof moving, heldCents: number) =>
+    planHorizon(
+      item,
+      heldCents,
+      listHorizonPayments(item.costs, end, 'conservative'),
+    ).coveredUntil;
+  const heldCents = 90_000;
+  const before = coveredUntil(moving, heldCents);
+  const lowered = setCostPrice(moving, 'movers', range(60_000, 70_000), jan15);
+  const after = coveredUntil(lowered, heldCents);
+  assert.ok(
+    before !== null && (after === null || after >= before),
+    'pricing a range lower never moves coveredUntil earlier',
+  );
+  const exactPrice = setCostPrice(
+    moving,
+    'movers',
+    range(60_000, 60_000),
+    jan15,
+  );
+  assert.ok(
+    (coveredUntil(exactPrice, heldCents) ?? Infinity) >= (before ?? 0),
+    'and so does an exact price at the low end',
+  );
+  assert.deepEqual(
+    exactPrice.costs.map(({ pricedOn }) => pricedOn),
+    [jan15, null],
+    'Set the price stamps the day on that cost only',
+  );
+  assert.equal(
+    exactPrice.costs[0].amount.highCents,
+    60_000,
+    'and sets its whole amount',
+  );
+
+  assert.deepEqual(
+    removeCost(moving, 'storage', jan15, false)?.costs.map(({ id }) => id),
+    ['movers'],
+    'a cost with no paid payment is removed from the next version',
+  );
+  assert.equal(
+    removeCost({ ...moving, costs: [movers] }, 'movers', jan15, false),
+    null,
+    "removing an item's last cost is refused",
+  );
+  assert.equal(
+    removeCost(moving, 'nope', jan15, false),
+    null,
+    'and so is removing one the item does not have',
+  );
+  const ended = removeCost(moving, 'storage', feb1, true);
+  assert.equal(
+    ended?.costs.find(({ id }) => id === 'storage')?.endsAfter,
+    feb1,
+    'a cost with a paid payment stays and ends after today',
+  );
+
+  const stopped = { ...storage, endsAfter: utc(2027, 3, 1) };
+  assert.deepEqual(
+    listCostPayments(stopped, end, 'conservative').map(({ dueOn }) => dueOn),
+    [feb1, utc(2027, 2, 1), utc(2027, 3, 1)],
+    'endsAfter stops the payments after that day, and keeps the day itself',
+  );
+  assert.equal(
+    listCostPayments(storage, end, 'conservative').length,
+    12,
+    'a cost with no endsAfter keeps asking',
+  );
+  const readOld = readHorizon({
+    ...moving,
+    costs: [
+      {
+        id: 'c',
+        name: 'Movers',
+        amount: range(1, 1),
+        schedule: movers.schedule,
+        note: null,
+      },
+    ],
+  });
+  assert.equal(
+    readOld.costs[0].pricedOn === null && readOld.costs[0].endsAfter === null,
+    true,
+    'a cost sealed before pricedOn and endsAfter reads both as null',
+  );
 }
 
 console.log('runway engine: ok');
@@ -13593,6 +13733,8 @@ console.log('runway engine: ok');
           },
     ending: { onDate: null, afterCount: null },
     isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
     note: null,
   });
   const jan15 = utc(2027, 0, 15);

@@ -394,12 +394,17 @@ export interface HorizonSealed {
   costs: HorizonCost[];
 }
 
-/** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside` or `ending` existed lacks them. */
+/** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
 export type HorizonStored = Omit<HorizonSealed, 'rest' | 'costs'> & {
   rest?: HorizonRest | null;
-  costs: (Omit<HorizonCost, 'isOutside' | 'ending'> & {
+  costs: (Omit<
+    HorizonCost,
+    'isOutside' | 'ending' | 'pricedOn' | 'endsAfter'
+  > & {
     isOutside?: boolean;
     ending?: Ending;
+    pricedOn?: DateOnly | null;
+    endsAfter?: DateOnly | null;
   })[];
 };
 
@@ -414,6 +419,10 @@ export interface HorizonCost {
   ending: Ending;
   /** Paid outside the plan: listed, never covered, never short. */
   isOutside: boolean;
+  /** The day Set the price last ran; null while the first estimate stands. */
+  pricedOn: DateOnly | null;
+  /** Set when a cost with paid payments is removed: it asks for nothing after this day. */
+  endsAfter: DateOnly | null;
   note: string | null;
 }
 

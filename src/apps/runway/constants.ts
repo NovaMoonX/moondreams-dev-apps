@@ -500,6 +500,30 @@ export const HORIZON_WORDS = {
   putMoreAction: (amount: string) => `Put ${amount} toward it`,
   putMoreDone: (amount: string, name: string) => `Put ${amount} toward ${name}`,
   needsPutMoreFrom: 'Pick where it comes from.',
+  changeItem: 'Change it',
+  changeItemSub: 'Name, date, how the rest is paid and priority',
+  costFact: (due: string, pricedOn: string | null) =>
+    pricedOn === null ? `Due ${due}` : `Due ${due} · priced ${pricedOn}`,
+  setPrice: 'Set the price',
+  setPriceSub: 'An exact amount, or still a range',
+  setPriceSubExact: (amount: string) =>
+    `It's ${amount} now. Change it or make it a range`,
+  setPriceTitle: (name: string) => `What will ${name} cost?`,
+  samePrice: "That's the price already.",
+  changeCostRow: 'Change',
+  changeCostSub: "Name, date and how it's paid",
+  removeCostRow: 'Remove this cost',
+  removeCostSub: 'It leaves the list and the plan',
+  removeConfirmTitle: (name: string) => `Remove ${name}?`,
+  removeConfirmText: (name: string, date: string, item: string) =>
+    `${name}, due ${date}, comes off ${item}. Its change stays in History.`,
+  removeConfirm: 'Remove cost',
+  removeSummary: (item: string, cost: string, date: string) =>
+    `${item}: removed ${cost}, due ${date}.`,
+  removedToast: (name: string) => `Removed ${name}`,
+  removeFailed: 'This did not save. Nothing was changed.',
+  removeGone: 'This cost was already changed. Open it again.',
+  changeItemTitle: 'Change it',
   covers: {
     nothingSet: 'Nothing is set aside yet, so nothing is covered.',
     none: "What's set aside doesn't cover a whole cost yet.",
@@ -910,7 +934,7 @@ export const CHANGE_REASON_CHIPS: Record<
   payLine: ['New job or raise', 'Hours changed', ...MIND_CHIPS],
   source: MIND_CHIPS,
   group: MIND_CHIPS,
-  horizon: ['Plans changed', 'Cost more', ...MIND_CHIPS],
+  horizon: ['Got a quote', 'Price went up', 'Price went down', ...MIND_CHIPS],
 };
 
 /** What happened to a pairing that its own pay could not cover. */
