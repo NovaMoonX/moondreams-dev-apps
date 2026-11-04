@@ -66,3 +66,11 @@ export async function shareOrDownloadFiles(
   });
   return 'downloaded';
 }
+
+/** Opens a file input's chooser, or the phone's rear camera when `isCamera` (the input's `capture`), so one input serves both buttons. */
+export function openFileChooser(input: HTMLInputElement | null, { isCamera = false } = {}) {
+  if (!input) return;
+  if (isCamera) input.setAttribute('capture', 'environment');
+  else input.removeAttribute('capture');
+  input.click();
+}
