@@ -581,7 +581,12 @@ export const MAKE_BILL_WORDS = {
   title: (cost: string) => `Make ${cost} a bill`,
   primary: 'Make it a bill',
   nowABill: 'Now a bill',
-  nowABillSub: 'Open it in Bills',
+  nowABillSub: 'It is a bill now, funded from your pays',
+  nowABillFact: (date: string) => `Now a bill, from ${date}`,
+  firstDueDetail: "The cost's next unpaid payment",
+  lockedTitle: 'Make it a bill has to wait',
+  lockedWhy:
+    "A bill starts from this cost's next unpaid payment, so each payment before it is settled first and none is counted twice.",
   openBill: (cost: string) => `Open ${cost} in Bills`,
   bringTitle: (item: string, money: string) =>
     `Bring ${item}'s ${money} with it?`,

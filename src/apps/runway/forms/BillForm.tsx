@@ -558,6 +558,25 @@ const getEditingData = (
 const scrollIntoSight = (element: HTMLDivElement | null) =>
   element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 
+const withoutYear = (date: DateOnly) =>
+  formatDateOrdinalUTC(date).replace(/,\s\d{4}$/, '');
+
+const formatBringDates = (dates: readonly DateOnly[]) => {
+  const shown = dates.slice(0, 3);
+  const year = (date: DateOnly) => new Date(date).getUTCFullYear();
+  const isOneYear = shown.every((date) => year(date) === year(shown[0]));
+  const names = shown.map((date, index) =>
+    isOneYear && index < shown.length - 1
+      ? withoutYear(date)
+      : formatDateOrdinalUTC(date),
+  );
+  return new Intl.ListFormat('en', { type: 'conjunction' }).format(
+    dates.length > 3
+      ? [...names, MAKE_BILL_WORDS.moreDates(dates.length - 3)]
+      : names,
+  );
+};
+
 function BillFormBody({
   onStartOver,
   isOpen,
@@ -839,16 +858,7 @@ function BillFormBody({
       ? MAKE_BILL_WORDS.yesPart(
           dueDate === undefined ? '' : formatDateOrdinalUTC(dueDate),
         )
-      : MAKE_BILL_WORDS.yesCovers(
-          new Intl.ListFormat('en', { type: 'conjunction' }).format(
-            bringDates.length > 3
-              ? [
-                  ...bringDates.slice(0, 3).map(formatDateOrdinalUTC),
-                  MAKE_BILL_WORDS.moreDates(bringDates.length - 3),
-                ]
-              : bringDates.map(formatDateOrdinalUTC),
-          ),
-        );
+      : MAKE_BILL_WORDS.yesCovers(formatBringDates(bringDates));
   const bringNoTitle = isFreeInstead
     ? MAKE_BILL_WORDS.noFree
     : MAKE_BILL_WORDS.noLeave(itemName);
@@ -1746,7 +1756,10 @@ function BillFormBody({
                   <BackLink onBack={() => setIsAll(false)} />
                 )}
                 {fromCost && (
-                  <SummaryRow label={MAKE_BILL_WORDS.firstDue}>
+                  <SummaryRow
+                    label={MAKE_BILL_WORDS.firstDue}
+                    detail={MAKE_BILL_WORDS.firstDueDetail}
+                  >
                     {formatDateOrdinalUTC(fromCost.firstDueOn)}
                   </SummaryRow>
                 )}

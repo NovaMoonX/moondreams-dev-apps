@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import {
   CircleCheck,
   HandCoins,
@@ -23,6 +23,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -214,6 +215,9 @@ function CostSheet({
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [isMakingBill, setIsMakingBill] = useState(false);
+  const [isLockOpen, setIsLockOpen] = useState(false);
+  const { dialogId: lockDialogId, onDialogClose: onLockClose } =
+    useSheetHistory(isLockOpen, () => setIsLockOpen(false));
   const { showOnPlan } = useRunwayUrlState();
   const isTrack = useAppSelector(selectLevel) === 'track';
   const isRestoring = useRef(false);
@@ -572,7 +576,11 @@ function CostSheet({
         suffix={describeCost(cost).per || undefined}
         fact={
           isBill && !settled
-            ? MAKE_BILL_WORDS.nowABill
+            ? cost.becameBillOn === null
+              ? MAKE_BILL_WORDS.nowABill
+              : MAKE_BILL_WORDS.nowABillFact(
+                  formatDateOrdinalUTC(cost.becameBillOn),
+                )
             : settled
               ? COST_PAID_WORDS.paidHead(
                   formatDateOrdinalUTC(settled.paidOn),
@@ -658,7 +666,7 @@ function CostSheet({
                     formatDateOrdinalUTC(makeBillBlock.dueOn),
                   )
             }
-            onClick={() => undefined}
+            onClick={() => setIsLockOpen(true)}
           />
         )}
         {cost.becameBillId !== null && (
@@ -667,7 +675,7 @@ function CostSheet({
             isRoomy
             hasChevron
             icon={<Receipt />}
-            label={MAKE_BILL_WORDS.nowABill}
+            label={MAKE_BILL_WORDS.openBill(cost.name)}
             subtitle={MAKE_BILL_WORDS.nowABillSub}
             onClick={() =>
               showOnPlan('bills', { itemId: cost.becameBillId ?? '' })
@@ -719,6 +727,21 @@ function CostSheet({
           }
         />
       )}
+      <Modal
+        id={lockDialogId}
+        isOpen={isLockOpen}
+        onClose={onLockClose}
+        title={MAKE_BILL_WORDS.lockedTitle}
+      >
+        <div className='space-y-4'>
+          <p className='text-muted-foreground text-sm'>
+            {MAKE_BILL_WORDS.lockedWhy}
+          </p>
+          <div className='flex justify-end'>
+            <Button onClick={onLockClose}>Got it</Button>
+          </div>
+        </div>
+      </Modal>
       {isMakingBill && next && (
         <BillForm
           isOpen
