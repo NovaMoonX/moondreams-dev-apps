@@ -4,12 +4,17 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { HORIZON_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import {
+  HORIZON_WORDS,
+  LOOKAHEAD_MONTHS,
+  RANGE_END_WORDS,
+} from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   listHorizonPayments,
   sumCostPayments,
 } from '@apps/runway/engine/horizon';
+import { getRangeEnd } from '@apps/runway/engine/stance';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 
 interface HorizonSheetProps {
@@ -28,6 +33,24 @@ function HorizonSheet({ horizon, today, stance, onClose }: HorizonSheetProps) {
       stance,
     ),
   );
+  const hasRange = horizon.costs.some(
+    ({ amount }) => amount.lowCents !== amount.highCents,
+  );
+  const when =
+    horizon.happensUntil === null
+      ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
+      : HORIZON_WORDS.aroundRange(
+          formatDateOrdinalUTC(horizon.happensOn),
+          formatDateOrdinalUTC(horizon.happensUntil),
+        );
+  const fact = [
+    HORIZON_WORDS.costCount(horizon.costs.length),
+    hasRange &&
+      HORIZON_WORDS.rangesAt(RANGE_END_WORDS[getRangeEnd(stance, 'expense')]),
+    when,
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );
@@ -42,16 +65,9 @@ function HorizonSheet({ horizon, today, stance, onClose }: HorizonSheetProps) {
     >
       <div className='space-y-4'>
         <SheetHead
-          label={HORIZON_WORDS.planned}
+          label={HORIZON_WORDS.totalCost}
           figure={formatCents(plannedCents)}
-          fact={
-            horizon.happensUntil === null
-              ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
-              : HORIZON_WORDS.aroundRange(
-                  formatDateOrdinalUTC(horizon.happensOn),
-                  formatDateOrdinalUTC(horizon.happensUntil),
-                )
-          }
+          fact={fact}
         />
         <div className='space-y-2'>
           <p className='text-muted-foreground text-sm font-medium'>

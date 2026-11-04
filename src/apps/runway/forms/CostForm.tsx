@@ -30,6 +30,7 @@ import {
   EMPTY_AMOUNT_DRAFT,
   getAmountDraftProblem,
   parseAmountDraft,
+  toAmountDraft,
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 
@@ -38,12 +39,6 @@ interface CostFormData {
   name: string;
   date: string;
 }
-
-const INITIAL_DATA: CostFormData = {
-  amount: EMPTY_AMOUNT_DRAFT,
-  name: '',
-  date: '',
-};
 
 const MODE_OPTIONS = [
   {
@@ -71,15 +66,57 @@ const getSuggestions = (itemName: string) => {
 interface CostFormProps {
   /** The event the cost belongs to, which decides the names offered. */
   itemName: string;
-  onAdd: (cost: HorizonCost) => void;
+  /** The event's day: a new cost starts due then, while that day is still valid for a cost. */
+  happensOn: number;
+  /** The cost being changed; saving keeps its id. Absent when adding. */
+  cost?: HorizonCost;
+  onSave: (cost: HorizonCost) => void;
+  /** Offered only when changing a cost. */
+  onRemove?: () => void;
   onClose: () => void;
 }
 
-/** Add a cost: the amount first, what it is, then when it is due. */
-function CostForm({ itemName, onAdd, onClose }: CostFormProps) {
+const toDraftData = (
+  cost: HorizonCost | undefined,
+  happensOn: number,
+  today: number,
+  lastDate: number,
+): CostFormData => {
+  if (cost) {
+    return {
+      amount: toAmountDraft(cost.amount, null),
+      name: cost.name,
+      date:
+        cost.schedule.anchor === null
+          ? ''
+          : toDateInputValue(cost.schedule.anchor),
+    };
+  }
+  return {
+    amount: EMPTY_AMOUNT_DRAFT,
+    name: '',
+    date:
+      happensOn >= today && happensOn <= lastDate
+        ? toDateInputValue(happensOn)
+        : '',
+  };
+};
+
+/** Add a cost, or change one: the amount first, what it is, then when it is due. */
+function CostForm({
+  itemName,
+  happensOn,
+  cost,
+  onSave,
+  onRemove,
+  onClose,
+}: CostFormProps) {
   const today = todayAsUtcDate();
   const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
-  const [formData, setFormData] = useState<CostFormData>(INITIAL_DATA);
+  const [initialData] = useState(() =>
+    toDraftData(cost, happensOn, today, lastDate),
+  );
+  const [formData, setFormData] = useState<CostFormData>(initialData);
   const set = (patch: Partial<CostFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
@@ -184,18 +221,23 @@ function CostForm({ itemName, onAdd, onClose }: CostFormProps) {
     },
   ];
   const { isHidden } = useValuesHidden();
-  const questions = useQuestionFlow({ steps: maskSummaries(steps, isHidden) });
-
-  const requestClose = useDiscardGuard({
-    isDirty: JSON.stringify(formData) !== JSON.stringify(INITIAL_DATA),
-    onClose,
-    title: FORM_FLOW_WORDS.discardNew(HORIZON_WORDS.discardCostNoun),
+  const questions = useQuestionFlow({
+    steps: maskSummaries(steps, isHidden),
+    startFolded: cost !== undefined,
   });
 
-  const add = () => {
+  const requestClose = useDiscardGuard({
+    isDirty: JSON.stringify(formData) !== JSON.stringify(initialData),
+    onClose,
+    title: cost
+      ? FORM_FLOW_WORDS.discardChange
+      : FORM_FLOW_WORDS.discardNew(HORIZON_WORDS.discardCostNoun),
+  });
+
+  const save = () => {
     if (range === null || !isDateValid) return;
-    onAdd({
-      id: generateUuid(),
+    onSave({
+      id: cost?.id ?? generateUuid(),
       name,
       amount: range,
       schedule: {
@@ -203,7 +245,7 @@ function CostForm({ itemName, onAdd, onClose }: CostFormProps) {
         anchor: date,
         monthDays: [],
       },
-      note: null,
+      note: cost?.note ?? null,
     });
   };
 
@@ -211,11 +253,21 @@ function CostForm({ itemName, onAdd, onClose }: CostFormProps) {
     <FormSheet
       isOpen
       onClose={requestClose}
-      title={HORIZON_WORDS.costFormTitle}
+      title={cost ? HORIZON_WORDS.costChangeTitle : HORIZON_WORDS.costFormTitle}
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-5'>
         <QuestionFlow flow={questions} />
+        {onRemove && (
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-destructive!'
+            onClick={onRemove}
+          >
+            {HORIZON_WORDS.removeThisCost}
+          </Button>
+        )}
         <ModalFooterActions
           note={questions.hasReviewed ? blocker : questions.blocker}
           cancelAction={
@@ -225,8 +277,10 @@ function CostForm({ itemName, onAdd, onClose }: CostFormProps) {
           }
           rightActions={
             questions.hasReviewed ? (
-              <Button type='button' disabled={blocker !== null} onClick={add}>
-                {HORIZON_WORDS.addCostNamed(name)}
+              <Button type='button' disabled={blocker !== null} onClick={save}>
+                {cost
+                  ? HORIZON_WORDS.saveCost
+                  : HORIZON_WORDS.addCostNamed(name)}
               </Button>
             ) : (
               <Button

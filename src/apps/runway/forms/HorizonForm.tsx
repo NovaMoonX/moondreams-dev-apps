@@ -4,7 +4,6 @@ import { Plus } from 'lucide-react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import DateInput from '@/components/DateInput';
-import DeleteIconButton from '@/components/DeleteIconButton';
 import EmojiField from '@/components/EmojiField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -88,7 +87,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const horizons = useAppSelector((state) => selectHorizonItems(state, today));
   const { isHidden } = useValuesHidden();
   const [formData, setFormData] = useState<HorizonFormData>(INITIAL_DATA);
-  const [isAddingCost, setIsAddingCost] = useState(false);
+  const [costDraft, setCostDraft] = useState<HorizonCost | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const set = (patch: Partial<HorizonFormData>) =>
@@ -172,24 +171,43 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       blocker: dateBlocker,
       render: () => (
         <div className='space-y-3'>
-          <DateInput
-            variant='outline'
-            aria-label={HORIZON_WORDS.when}
-            min={toDateInputValue(today)}
-            max={toDateInputValue(lastDate)}
-            value={formData.date}
-            onChange={(event) => set({ date: event.target.value })}
-          />
+          <div className='space-y-1'>
+            {formData.isFewDays && (
+              <label
+                htmlFor='horizon-from'
+                className='text-muted-foreground block text-sm font-medium'
+              >
+                {HORIZON_WORDS.startLabel}
+              </label>
+            )}
+            <DateInput
+              id='horizon-from'
+              variant='outline'
+              aria-label={formData.isFewDays ? undefined : HORIZON_WORDS.when}
+              min={toDateInputValue(today)}
+              max={toDateInputValue(lastDate)}
+              value={formData.date}
+              onChange={(event) => set({ date: event.target.value })}
+            />
+          </div>
           {formData.isFewDays ? (
             <>
-              <DateInput
-                variant='outline'
-                aria-label={HORIZON_WORDS.endLabel}
-                min={formData.date}
-                max={toDateInputValue(lastDate)}
-                value={formData.endDate}
-                onChange={(event) => set({ endDate: event.target.value })}
-              />
+              <div className='space-y-1'>
+                <label
+                  htmlFor='horizon-to'
+                  className='text-muted-foreground block text-sm font-medium'
+                >
+                  {HORIZON_WORDS.endLabel}
+                </label>
+                <DateInput
+                  id='horizon-to'
+                  variant='outline'
+                  min={formData.date}
+                  max={toDateInputValue(lastDate)}
+                  value={formData.endDate}
+                  onChange={(event) => set({ endDate: event.target.value })}
+                />
+              </div>
               <div>
                 <RevealChip
                   onClick={() => set({ isFewDays: false, endDate: '' })}
@@ -215,7 +233,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       summaryValue:
         formData.costs.length === 0
           ? ''
-          : HORIZON_WORDS.plannedFact(formData.costs.length),
+          : HORIZON_WORDS.costCount(formData.costs.length),
       isAnswered: formData.costs.length > 0,
       render: () => (
         <div className='space-y-3'>
@@ -229,18 +247,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
                 <CostRow
                   key={cost.id}
                   cost={cost}
-                  action={
-                    <DeleteIconButton
-                      label={HORIZON_WORDS.removeCost(cost.name)}
-                      onClick={() =>
-                        set({
-                          costs: formData.costs.filter(
-                            ({ id }) => id !== cost.id,
-                          ),
-                        })
-                      }
-                    />
-                  }
+                  onOpen={() => setCostDraft(cost)}
                 />
               ))}
             </ul>
@@ -249,7 +256,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             type='button'
             variant='secondary'
             disabled={formData.costs.length >= MAX_HORIZON_COSTS}
-            onClick={() => setIsAddingCost(true)}
+            onClick={() => setCostDraft('new')}
           >
             <Plus className='h-4 w-4' aria-hidden='true' />
             {HORIZON_WORDS.addCost}
@@ -363,14 +370,34 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
           }
         />
       </div>
-      {isAddingCost && (
+      {costDraft !== null && (
         <CostForm
           itemName={name}
-          onAdd={(cost) => {
-            set({ costs: [...formData.costs, cost] });
-            setIsAddingCost(false);
+          happensOn={date ?? today}
+          cost={costDraft === 'new' ? undefined : costDraft}
+          onSave={(saved) => {
+            set({
+              costs: formData.costs.some(({ id }) => id === saved.id)
+                ? formData.costs.map((cost) =>
+                    cost.id === saved.id ? saved : cost,
+                  )
+                : [...formData.costs, saved],
+            });
+            setCostDraft(null);
           }}
-          onClose={() => setIsAddingCost(false)}
+          onRemove={
+            costDraft === 'new'
+              ? undefined
+              : () => {
+                  set({
+                    costs: formData.costs.filter(
+                      ({ id }) => id !== costDraft.id,
+                    ),
+                  });
+                  setCostDraft(null);
+                }
+          }
+          onClose={() => setCostDraft(null)}
         />
       )}
     </FormSheet>

@@ -41,7 +41,7 @@ function HorizonRow({ horizon, today, stance }: HorizonRowProps) {
         emoji={horizon.emoji}
         detail={detail}
         figure={formatCentsShort(plannedCents)}
-        ariaLabel={`${horizon.name}, ${formatCentsShort(plannedCents)} planned. ${detail}. Open`}
+        ariaLabel={`${horizon.name}, ${formatCentsShort(plannedCents)} total cost. ${detail}. Open`}
         onOpen={() => setIsOpen(true)}
       />
       {isOpen && (

@@ -2,7 +2,8 @@ import { Settings2 } from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
 import { useAppSelector } from '@/store';
-import { PillGroup } from '@/components/PillGroup';
+import Pill from '@/components/Pill';
+import { PillRow } from '@/components/PillGroup';
 import {
   PLAN_MORE_LABEL,
   PLAN_SECTION_LABELS,
@@ -19,9 +20,7 @@ import IncomeScreen from '@apps/runway/screens/plan/IncomeScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectHasEverHadIncome } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import type { PlanSection } from '@apps/runway/types';
 
-const NO_VIEW = '' as PlanSection;
 const viewSections = PLAN_SECTIONS.filter((value) => value !== 'more');
 
 const toOption = (value: (typeof viewSections)[number]) => ({
@@ -49,13 +48,26 @@ function PlanScreen() {
   return (
     <div className='space-y-4'>
       {hasIncome && (
-        <PillGroup
+        <PillRow
           label='Plan sections'
-          options={isTracking ? sectionOptions : untrackedOptions}
-          value={isMore ? NO_VIEW : planSection}
           isThin
-          onChange={showPlanSection}
-        />
+          isScrolling
+          wrapsNarrow
+          scrollKey={planSection}
+        >
+          {(isTracking ? sectionOptions : untrackedOptions).map((option) => (
+            <Pill
+              key={option.value}
+              emoji={option.emoji}
+              isThin
+              isSelected={!isMore && planSection === option.value}
+              className='max-[359px]:px-2 max-[359px]:[&_[data-pill-emoji]]:hidden'
+              onClick={() => showPlanSection(option.value)}
+            >
+              {option.label}
+            </Pill>
+          ))}
+        </PillRow>
       )}
       {planSection === 'envelopes' && <EnvelopesScreen />}
       {isMore && <MoreScreen />}
