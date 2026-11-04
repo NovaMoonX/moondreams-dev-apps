@@ -2355,6 +2355,8 @@ export const GROUP_WORDS = {
     parts: string[],
   ) =>
     `${name} becomes ${priority} for ${total === null ? 'its full amount' : `the full ${total}`} (was ${parts.join(' + ')})`,
+  priorityAlsoMoves: (fold: string, from: string, to: string) =>
+    `${fold}; where it was ${from}, it becomes ${to} too`,
   priorityConfirmMore: (count: number) => `and ${count} more`,
   priorityConfirm: (priority: string) => `Set to ${priority}`,
   prioritySummary: (

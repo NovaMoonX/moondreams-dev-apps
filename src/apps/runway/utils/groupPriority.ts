@@ -71,8 +71,8 @@ const toSingleTier = (
     : { ...payload, priority, orderIndex };
 
 /**
- * What putting members at `priority` writes: each member not already there with one amount, in every
- * stretch. One that moves tier is ranked after what the level holds (`firstRank`, then one step each, in
+ * What putting members at `priority` writes: each member not already there with one amount, in each
+ * stretch that is not. One that moves tier is ranked after what the level holds (`firstRank`, then one step each, in
  * the order given); one already at the level keeps its rank and only folds its extras in.
  */
 export function planGroupPriority(
@@ -80,12 +80,9 @@ export function planGroupPriority(
   priority: Priority,
   firstRank: number,
 ): GroupPriorityChange[] {
-  const open = members.filter(({ stretches }) =>
-    stretches.some(
-      ({ payload }) =>
-        payload.priority !== priority || getFoldedExtras(payload).length > 0,
-    ),
-  );
+  const isOpen = ({ payload }: VersionStretch<MemberPayload>) =>
+    payload.priority !== priority || getFoldedExtras(payload).length > 0;
+  const open = members.filter(({ stretches }) => stretches.some(isOpen));
   const movers = open.filter(({ stretches }) =>
     stretches.some(({ payload }) => payload.priority !== priority),
   );
@@ -106,7 +103,7 @@ export function planGroupPriority(
         : 0;
     return {
       ...member,
-      written: member.stretches.map((stretch) => ({
+      written: member.stretches.filter(isOpen).map((stretch) => ({
         ...stretch,
         payload: toSingleTier(
           stretch.payload,

@@ -458,8 +458,8 @@ assert.deepEqual(
     written.map(({ payload }) => payload.priority),
     wasPriority,
   ]),
-  [[['want', 'want'], 'must']],
-  'a bill at the level today but not in a later stretch moves from the later priority, never a made-up one',
+  [[['want'], 'must']],
+  'a bill at the level today but not in a later stretch rewrites only that stretch, and moves from its priority, never a made-up one',
 );
 
 console.log('runway priority parts: ok');

@@ -180,7 +180,7 @@ const canonical = (value: unknown): unknown => {
   );
 };
 
-/** Whether two values hold the same thing: key order does not matter, and a missing field, null and an empty list are equal. */
+/** Whether two values hold the same thing: key order does not matter, and a missing field, null and an empty list are equal. Item payloads only: a day override's empty `pairings` means something null does not. */
 export const isSameValue = (a: unknown, b: unknown) =>
   JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 

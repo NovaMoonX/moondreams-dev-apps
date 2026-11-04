@@ -398,12 +398,19 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         ? PRIORITY_LABELS[tier]
         : `${formatCents(cents)} ${PRIORITY_LABELS[tier]}`,
     );
-    return GROUP_WORDS.priorityFolds(
+    const fold = GROUP_WORDS.priorityFolds(
       change.name,
       label,
       isMasked ? null : formatCents(folded.totalCents),
       parts,
     );
+    return change.wasPriority === null || change.wasPriority === folded.priority
+      ? fold
+      : GROUP_WORDS.priorityAlsoMoves(
+          fold,
+          PRIORITY_LABELS[change.wasPriority],
+          label,
+        );
   };
 
   const pickPriority = async (row: PriorityRow, choice: StartingChoice) => {
@@ -428,15 +435,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
           (isPickSame ? 0 : 1) +
           changes.reduce((sum, { written }) => sum + written.length, 0);
         const key = JSON.stringify([
-          isPickSame,
-          changes.map(({ itemId, written }) => [
-            itemId,
-            written.map(({ payload, effectiveFrom }) => [
-              effectiveFrom,
-              payload.priority,
-              payload.orderIndex,
-            ]),
-          ]),
+          next,
+          changes.map(({ itemId, written }) => [itemId, written]),
         ]);
         return { live, next, isPickSame, changes, writeCount, key };
       };
@@ -492,8 +492,11 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         });
         if (!isConfirmed) return;
       }
-      const { live, next, isPickSame } = plan;
-      if (readPlan().key !== plan.key) {
+      setPriorityNote(null);
+      setPendingPriority({ row, choice });
+      const encryption = await getRunwayEncryption(user.uid);
+      const fresh = readPlan();
+      if (fresh.key !== plan.key) {
         setPriorityNote({
           row,
           text: GROUP_WORDS.priorityMoved,
@@ -501,25 +504,23 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         });
         return;
       }
-      setPriorityNote(null);
-      setPendingPriority({ row, choice });
-      const encryption = await getRunwayEncryption(user.uid);
+      const { live, next, isPickSame, changes: written } = fresh;
       const date = formatDateOrdinalUTC(today);
       await setGroupPriority(user.uid, encryption, {
         groupId,
         group: isPickSame ? null : next,
-        members: changes.map(({ itemId, kind, written }) => ({
-          itemId,
-          kind,
-          stretches: written,
+        members: written.map((change) => ({
+          itemId: change.itemId,
+          kind: change.kind,
+          stretches: change.written,
         })),
         summary:
-          changes.length === 0
+          written.length === 0
             ? `${next.name}: ${describeChange(live, next, getCardNamer([])) || 'Updated'}, from ${date}.`
             : GROUP_WORDS.prioritySummary(
                 label,
                 next.name,
-                changes.map((change) =>
+                written.map((change) =>
                   describePriorityChange(change, label, false),
                 ),
                 date,
