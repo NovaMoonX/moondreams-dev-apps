@@ -551,6 +551,17 @@ function StartFlow({
           </div>
           {index === 0 && notice}
           <div className='space-y-3'>{body.content}</div>
+          {index === 0 && total > 0 && startMethod === 'continue' && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='self-start'
+              onClick={() => void handleStartOver()}
+            >
+              {START_WORDS.resumeStartOver}
+            </Button>
+          )}
           {error && (
             <p className='text-destructive text-sm' role='alert'>
               {error}
