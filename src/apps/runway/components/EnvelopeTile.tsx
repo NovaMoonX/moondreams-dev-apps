@@ -173,7 +173,7 @@ function EnvelopeTile({
           detail={rowDetail}
           figure={rowFigure}
           figureWord={monthly ? BILL_WORDS.aMonth : null}
-          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${rowDetail}${isLeftOut ? `, ${notCountedWord}` : ''}` : `${value} ${word}. ${funding}`}. Open`}
+          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${rowDetail}` : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}
@@ -189,7 +189,7 @@ function EnvelopeTile({
             isPlan
               ? eachTime
                 ? `${describeCadenceLine(envelope.funding.cadence)}${isLeftOut ? `, ${notCountedWord}` : isTrimmedHere && dial !== 'want' ? `, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial]}` : ''}`
-                : ITEM_SHEET_R2_WORDS.eachTime
+                : `${ITEM_SHEET_R2_WORDS.eachTime}${isLeftOut ? `, ${notCountedWord}` : ''}`
               : isHidden
                 ? ITEM_SHEET_R2_WORDS.balance
                 : capitalize(word)
@@ -201,7 +201,9 @@ function EnvelopeTile({
             envelope.maxCents === null
               ? null
               : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
-            isPlan && cents !== 0 && !isTrimmedHere ? `${value} ${word}` : null,
+            isPlan && cents !== 0 && extras.length === 0
+              ? `${value} ${word}`
+              : null,
           ]
             .filter(Boolean)
             .join(' · ')}

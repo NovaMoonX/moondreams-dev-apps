@@ -2336,17 +2336,16 @@ export const GROUP_WORDS = {
   priorityStale: (names: string[], priority: string) =>
     `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not ${priority}.`,
   priorityMakeAll: (priority: string) => `Make all ${priority}`,
-  priorityPartial: (done: number, total: number, failed: string[]) =>
-    `Set ${done} of ${total}. ${joinNames(failed)} did not save; the others did.`,
   priorityFailed:
     'The priority is saved for new ones, but the items already here did not change.',
   prioritySkipped: (names: string[], priority: string) =>
-    `${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'} as ${names.length === 1 ? 'it is' : 'they are'}: ${names.length === 1 ? 'it has' : 'they have'} money at ${priority} too. Change ${names.length === 1 ? 'it' : 'them'} on the envelope.`,
+    `${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'} as ${names.length === 1 ? 'it is' : 'they are'}: ${names.length === 1 ? 'it has' : 'they have'} a part at ${priority} or higher. Change ${names.length === 1 ? 'it' : 'them'} on the envelope.`,
   priorityUndone: 'Priorities put back.',
   priorityUndoPartial: (done: number, total: number, failed: string[]) =>
     `Put back ${done} of ${total}. ${joinNames(failed)} did not change back.`,
   priorityUndoStale: (names: string[]) =>
     `${joinNames(names)} changed since, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
+  priorityUndoPickFailed: 'The group still holds the new pick.',
   priorityUndoFailed: 'The priorities did not change back. Nothing was undone.',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,

@@ -202,6 +202,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const [priorityRecord, setPriorityRecord] = useState<{
     note: string;
     undo: PriorityWritten[] | null;
+    restorePick: StartingChoice | null;
   } | null>(null);
   const [isUndoingPriority, setIsUndoingPriority] = useState(false);
   const isApplyingPriority = useRef(false);
@@ -298,10 +299,14 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
           from,
         );
 
-  const undoPriorities = async (written: PriorityWritten[]) => {
+  const undoPriorities = async (
+    written: PriorityWritten[],
+    restorePick: StartingChoice | null,
+  ) => {
     if (!user || handledUndos.current.has(written)) return;
     handledUndos.current.add(written);
     setIsUndoingPriority(true);
+    setPriorityError(null);
     try {
       const encryption = await getRunwayEncryption(user.uid);
       const live = store.getState().runway.versions;
@@ -353,9 +358,26 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
           );
       const description =
         stale.length === 0 ? undefined : GROUP_WORDS.priorityUndoStale(stale);
+      const pickFailure =
+        isClean && restorePick !== null
+          ? await save(
+              {
+                ...payload,
+                startingPriority: restorePick === 'none' ? null : restorePick,
+              },
+              true,
+            )
+          : null;
       setPriorityRecord({
-        note: description ? `${title} ${description}` : title,
+        note: [
+          title,
+          description,
+          pickFailure === null ? null : GROUP_WORDS.priorityUndoPickFailed,
+        ]
+          .filter(Boolean)
+          .join(' '),
         undo: null,
+        restorePick: null,
       });
     } catch (undoError) {
       const message = getErrorMessage(
@@ -363,7 +385,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         GROUP_WORDS.priorityUndoFailed,
       );
       handledUndos.current.delete(written);
-      setPriorityRecord({ note: message, undo: written });
+      setPriorityRecord({ note: message, undo: written, restorePick });
     } finally {
       setIsUndoingPriority(false);
     }
@@ -394,7 +416,10 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       firstRank,
     );
 
-  const applyPriorityToMembers = async (choice: Priority) => {
+  const applyPriorityToMembers = async (
+    choice: Priority,
+    restorePick: StartingChoice | null,
+  ) => {
     if (!user) return;
     const state = store.getState();
     const everyItem = [
@@ -412,7 +437,11 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       setPriorityRecord(
         skipped.length > 0
           ? null
-          : { note: GROUP_WORDS.priorityAlready(label), undo: null },
+          : {
+              note: GROUP_WORDS.priorityAlready(label),
+              undo: null,
+              restorePick: null,
+            },
       );
       return;
     }
@@ -441,22 +470,13 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     const saved = changes.filter(
       (_, index) => results[index].status === 'fulfilled',
     );
-    const failed = changes
-      .filter((_, index) => results[index].status === 'rejected')
-      .map(({ name }) => name);
     if (saved.length > 0) {
       setPriorityRecord({
         note: GROUP_WORDS.priorityDone(saved.length, label),
         undo: saved,
+        restorePick,
       });
-    }
-    if (failed.length > 0) {
-      setPriorityError(
-        saved.length === 0
-          ? GROUP_WORDS.priorityFailed
-          : GROUP_WORDS.priorityPartial(saved.length, changes.length, failed),
-      );
-    }
+    } else setPriorityError(GROUP_WORDS.priorityFailed);
   };
 
   const setStartingPriority = async (choice: StartingChoice) => {
@@ -465,7 +485,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     setPriorityError(null);
     setPriorityRecord(null);
     setPickedPriority(choice);
-    const isSavedChoice = choice === (payload.startingPriority ?? 'none');
+    const before = payload.startingPriority ?? 'none';
+    const isSavedChoice = choice === before;
     const failure = isSavedChoice
       ? null
       : await save(
@@ -475,7 +496,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     if (failure !== null) setPriorityError(GROUP_WORDS.startingPriorityFailed);
     else if (choice !== 'none') {
       try {
-        await applyPriorityToMembers(choice);
+        await applyPriorityToMembers(choice, isSavedChoice ? null : before);
       } catch {
         setPriorityError(GROUP_WORDS.priorityFailed);
       }
@@ -521,13 +542,17 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
 
   const savedPick = payload.startingPriority;
   const isApplyingNow = pickedPriority !== null;
-  const hidesNotice =
-    isApplyingNow || (priorityRecord?.undo != null && priorityError === null);
   const pickPlan =
-    savedPick === null || hidesNotice
+    savedPick === null || isApplyingNow
       ? null
       : planPriority(allVersions, savedPick, 0);
-  const notAtPick = pickPlan?.changes.map(({ name }) => name) ?? [];
+  const justWritten = new Set(
+    priorityRecord?.undo?.map(({ itemId }) => itemId),
+  );
+  const notAtPick =
+    pickPlan?.changes
+      .filter(({ itemId }) => !justWritten.has(itemId))
+      .map(({ name }) => name) ?? [];
   const keptAsIs = pickPlan?.skipped ?? [];
 
   const dueDate = fromDateInputValue(dueText);
@@ -1148,7 +1173,10 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                       disabled={isUndoingPriority}
                       className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
                       onClick={() =>
-                        void undoPriorities(priorityRecord.undo ?? [])
+                        void undoPriorities(
+                          priorityRecord.undo ?? [],
+                          priorityRecord.restorePick,
+                        )
                       }
                     >
                       {ITEM_SHEET_R2_WORDS.undo}
