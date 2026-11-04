@@ -20,7 +20,6 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import {
   HORIZON_WORDS,
   LOOKAHEAD_MONTHS,
-  RANGE_END_WORDS,
 } from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
@@ -29,7 +28,6 @@ import {
   planHorizon,
   sumCostPayments,
 } from '@apps/runway/engine/horizon';
-import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 
@@ -62,9 +60,6 @@ function HorizonSheet({
   );
   const plan = planHorizon(horizon, figures.leftCents, payments);
   const { shortfall } = plan;
-  const hasRange = horizon.costs.some(
-    ({ amount }) => amount.lowCents !== amount.highCents,
-  );
   const when =
     horizon.happensUntil === null
       ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
@@ -77,8 +72,6 @@ function HorizonSheet({
       '\u00A0',
     ),
     HORIZON_WORDS.costCount(horizon.costs.length).replace(' ', '\u00A0'),
-    hasRange &&
-      HORIZON_WORDS.rangesAt(RANGE_END_WORDS[getRangeEnd(stance, 'expense')]),
     when,
   ]
     .filter(Boolean)

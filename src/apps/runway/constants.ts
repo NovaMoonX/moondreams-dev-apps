@@ -300,8 +300,6 @@ export const HORIZON_WORDS = {
   due: (name: string, date: string) => `${name} · due\u00A0${date}`,
   totalCost: 'Total cost',
   costCount: (count: number) => (count === 1 ? 'One cost' : `${count} costs`),
-  rangesAt: (endWords: string) =>
-    `Ranges planned at ${endWords.replaceAll(' ', '\u00A0')}`,
   costsCaption: 'Costs',
   nameTitle: "What's on your horizon?",
   name: 'Name',
