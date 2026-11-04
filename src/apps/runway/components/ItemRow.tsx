@@ -66,7 +66,6 @@ interface ItemRowProps {
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
   isHighlighted?: boolean;
   isFaded?: boolean;
-  /** Lets a warning elsewhere scroll this row into view. */
   itemId?: string;
 }
 

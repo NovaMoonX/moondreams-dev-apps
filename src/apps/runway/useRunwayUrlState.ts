@@ -295,7 +295,7 @@ export function useRunwayUrlState() {
     );
   };
 
-  /** Opens a Plan item's sheet from anywhere: the section, then the tab (its history entry first), then the item at `step`, scrolled into view under the sheet. Given 'undatedBills', Bills lists only the bills with no due date instead. */
+  /** The tab's history entry is written before the item's, so Back closes the sheet before it leaves the tab. */
   const showOnPlan = async (
     section: PlanSection,
     target: { itemId: string; step?: string } | 'undatedBills',

@@ -45,7 +45,6 @@ interface BillRowProps {
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
   isFaded?: boolean;
-  /** Lets a warning elsewhere scroll this row into view. */
   itemId?: string;
   onOpen?: () => void;
 }
