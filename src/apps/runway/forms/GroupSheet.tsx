@@ -206,6 +206,9 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   } | null>(null);
   const [isUndoingPriority, setIsUndoingPriority] = useState(false);
   const isApplyingPriority = useRef(false);
+  const undoArmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const priorityLinesRef = useRef<HTMLDivElement>(null);
   const [isUndoArmed, setIsUndoArmed] = useState(true);
   const [reservedLinesHeight, setReservedLinesHeight] = useState(0);
@@ -486,7 +489,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     );
     if (saved.length > 0) {
       setIsUndoArmed(false);
-      setTimeout(() => setIsUndoArmed(true), 700);
+      clearTimeout(undoArmTimer.current);
+      undoArmTimer.current = setTimeout(() => setIsUndoArmed(true), 700);
       setPriorityRecord({
         note: GROUP_WORDS.priorityDone(saved.length, label),
         undo: saved,
@@ -497,11 +501,6 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
 
   const setStartingPriority = async (choice: StartingChoice) => {
     if (isApplyingPriority.current) return;
-    if (
-      priorityRecord?.undo &&
-      choice === (getLivePayload().startingPriority ?? 'none')
-    )
-      return;
     isApplyingPriority.current = true;
     setReservedLinesHeight(priorityLinesRef.current?.offsetHeight ?? 0);
     setPriorityError(null);
@@ -1176,9 +1175,12 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 label={GROUP_WORDS.startingPriority}
                 options={startingOptions}
                 value={pickedPriority ?? payload.startingPriority ?? 'none'}
-                onChange={(choice: StartingChoice) =>
-                  void setStartingPriority(choice)
-                }
+                onChange={(choice: StartingChoice) => {
+                  const isRepeat =
+                    choice === (getLivePayload().startingPriority ?? 'none');
+                  if (priorityRecord?.undo && isRepeat) return;
+                  void setStartingPriority(choice);
+                }}
               />
               <div ref={priorityLinesRef} className='space-y-1.5 empty:hidden'>
                 {priorityError && (
