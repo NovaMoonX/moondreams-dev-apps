@@ -296,6 +296,14 @@ export const HORIZON_COST_SUGGESTIONS: readonly {
   },
 ];
 
+/** How many of the coming pays have room: "Only 2 of your 8 pays have room", "None of your 8 pays have room". */
+const getPaysRoom = (roomCount: number, payCount: number) =>
+  payCount === 1
+    ? 'Your pay has no room'
+    : roomCount === 0
+      ? `None of your ${payCount} pays have room`
+      : `Only ${roomCount} of your ${payCount} pays ${roomCount === 1 ? 'has' : 'have'} room`;
+
 export const HORIZON_WORDS = {
   title: 'Horizon',
   addLabel: 'Add to your horizon',
@@ -403,15 +411,31 @@ export const HORIZON_WORDS = {
   onePayCapped: "Later pays aren't listed.",
   effectShortOnePay: (date: string, name: string, short: string) =>
     `${date} has no room for ${name} yet: ${short} stays short. Higher priorities take that pay first.`,
-  effectShortPays: (name: string, short: string) =>
-    `${name} stays ${short} short on your pays. Higher priorities take them first.`,
-  takeFromPaysShort: (carried: string, short: string, left: string) =>
-    `These pays carry ${carried} of the ${short}. ${left} stays short.`,
+  effectShortPays: (
+    name: string,
+    short: string,
+    roomCount: number,
+    payCount: number,
+  ) =>
+    roomCount === payCount
+      ? `${name} stays ${short} short on your pays. Higher priorities take them first.`
+      : `${getPaysRoom(roomCount, payCount)} for ${name}: it stays ${short} short. Higher priorities take them first.`,
+  takeFromPaysShort: (
+    carried: string,
+    asked: string,
+    left: string,
+    roomCount: number,
+    payCount: number,
+  ) =>
+    roomCount === payCount
+      ? `${payCount === 1 ? 'Your pay carries' : 'These pays carry'} ${carried} of the ${asked}. ${left} stays short.`
+      : roomCount === 0
+        ? `${getPaysRoom(roomCount, payCount)}. ${left} stays short.`
+        : `${getPaysRoom(roomCount, payCount)}: ${roomCount === 1 ? 'it carries' : 'they carry'} ${carried} of the ${asked}. ${left} stays short.`,
   onePayLabel: (date: string, name: string) => `${date} ·\u00A0${name}`,
   noPays: 'No pay is coming up to pick.',
   needsPay: 'Pick the pay that carries it.',
   restOnePaySummary: (date: string) => `The ${date} pay`,
-  effectCaption: 'What changes on your pays',
   effectNone: 'No pay moves.',
   lineDue: (date: string) => `due\u00A0${date}`,
   lineBack: 'Back to Free to Spend',
@@ -474,6 +498,8 @@ export const HORIZON_WORDS = {
   putHolds: (name: string, amount: string) => `${name} has ${amount}`,
   needsPutOrNotNow: 'Pick where it comes from, or Not now.',
   restOutsideNote: 'The rest is on you, outside the plan.',
+  restPaysNote: 'The rest comes from your pays before each cost is due.',
+  restOnePayNote: (date: string) => `The rest comes from the ${date} pay.`,
   putMore: 'Put more toward it',
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
   putMoreTitle: 'Put more toward it',
@@ -814,6 +840,8 @@ export const CHANGE_WORDS = {
   dateBlocker: 'Pick a day after today, within ten years.',
   previewHeading: 'What this changes',
   shortMoves: (before: string, after: string) => `short ${before} → ${after}`,
+  putsInOf: (put: string, asked: string, hasRoom: boolean) =>
+    `${hasRoom ? '' : 'No room: '}puts\u00A0in\u00A0${put}\u00A0of\u00A0${asked}`,
   previewNone:
     'No income day in the next year moves. Earlier days stay as they are.',
   previewWaiting: 'Finish the form to see what it changes.',

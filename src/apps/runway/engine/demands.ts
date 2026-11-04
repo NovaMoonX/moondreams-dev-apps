@@ -901,7 +901,7 @@ export interface CostSharePlan {
  * Every unpaid payment of an item's costs that the money it holds does not cover, and what each income day sets aside for it:
  * `pays` spreads a payment over the pays since the one before it (a repeating cost's first payment looks back one beat),
  * `onePay` puts a one-time payment and a repeating cost's first payment on the picked pay and spreads later ones as `pays`.
- * A payment marked paid with money from Free to Spend before the picked pay is given back by that pay, whenever it fell due. A picked pay no longer coming is ignored, as if `pays` were chosen. `outside` and `later` ask nothing.
+ * A payment marked paid with money from Free to Spend before the picked pay is given back by that pay, whenever it fell due. A picked pay no longer coming is ignored, as if `pays` were chosen, and the first coming pay gives the fronted payment back. `outside` and `later` ask nothing.
  */
 export function planCostShares(
   item: DraftHorizonInput,
@@ -967,11 +967,13 @@ export function planCostShares(
         repays: null,
       };
     });
-  const repaid = picked
+  const repayDay =
+    picked ?? (rest.kind === 'onePay' ? chronological[0] : undefined);
+  const repaid = repayDay
     ? paid
         .filter(
           ({ paidOn, fromFreeCents }) =>
-            fromFreeCents > 0 && paidOn < picked.on,
+            fromFreeCents > 0 && paidOn < repayDay.on,
         )
         .map((entry): CostSharePlan => ({
           costId: entry.costId,
@@ -981,7 +983,7 @@ export function planCostShares(
           needCents: 0,
           ranged: null,
           parts: [],
-          repays: { day: picked, cents: entry.fromFreeCents },
+          repays: { day: repayDay, cents: entry.fromFreeCents },
         }))
     : [];
   return [...shares, ...repaid];
@@ -1003,8 +1005,10 @@ function buildHorizonDemands(
   const nextAfter = (on: number) =>
     chronological.find((day) => day.on > on)?.on ?? Infinity;
   const result = items.flatMap((item) => {
+    const { rest } = item;
     const cadence =
-      item.rest.kind === 'onePay'
+      rest.kind === 'onePay' &&
+      chronological.some((day) => day.dayKey === rest.dayKey)
         ? HORIZON_CADENCES.onePay
         : HORIZON_CADENCES.pays;
     const demandOf = (

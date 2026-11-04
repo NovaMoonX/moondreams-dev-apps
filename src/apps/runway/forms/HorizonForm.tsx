@@ -49,7 +49,10 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { addHorizon } from '@apps/runway/store/actions/horizonActions';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
-import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
+import type {
+  ItemShortsReading,
+  PreviewChange,
+} from '@apps/runway/store/selectors/previewSelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBills,
@@ -283,7 +286,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const pickedOn = pickedDay?.on ?? null;
   const shortNote = {
     itemId: horizonId,
-    describe: (shorts: readonly { on: number; cents: number }[]) => {
+    describe: ({ shorts, payCount, roomCount }: ItemShortsReading) => {
       const total = shorts.reduce((sum, entry) => sum + entry.cents, 0);
       if (total === 0) return null;
       return pickedOn !== null && formData.rest === 'onePay'
@@ -292,7 +295,12 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             name,
             formatCents(total),
           )
-        : HORIZON_WORDS.effectShortPays(name, formatCents(total));
+        : HORIZON_WORDS.effectShortPays(
+            name,
+            formatCents(total),
+            roomCount,
+            payCount,
+          );
     },
   };
 
@@ -688,7 +696,6 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
         {questions.hasReviewed && previewJson !== null && (
           <EffectPreview
             changeJson={previewJson}
-            caption={HORIZON_WORDS.effectCaption}
             emptyText={HORIZON_WORDS.effectNone}
             shortNote={shortNote}
           />

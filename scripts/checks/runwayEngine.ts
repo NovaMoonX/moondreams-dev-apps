@@ -128,6 +128,7 @@ import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
 import {
   previewBillShareView,
   previewChange,
+  previewItemShorts,
 } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
 import {
   computeDraftView,
@@ -3791,6 +3792,7 @@ const version = (
           shortBy: 0,
           paidBy: [],
           costId: null,
+          costName: null,
           repaysFree: false,
         },
       ],
@@ -3817,6 +3819,7 @@ const version = (
     shortBy: 0,
     paidBy: [{ dayId: 'd', cents }],
     costId: null,
+    costName: null,
     repaysFree: false,
   });
   const confirmed: OpenRecord = {
@@ -4057,6 +4060,7 @@ const version = (
           shortBy: 0,
           paidBy: [],
           costId: null,
+          costName: null,
           repaysFree: false,
         },
         {
@@ -4070,6 +4074,7 @@ const version = (
           shortBy: 0,
           paidBy: [],
           costId: null,
+          costName: null,
           repaysFree: false,
         },
       ],
@@ -5114,6 +5119,7 @@ const version = (
           shortBy: 0,
           paidBy: [],
           costId: null,
+          costName: null,
           repaysFree: false,
         },
       ],
@@ -5364,6 +5370,129 @@ const version = (
     ).span,
     null,
     'a last day past the ten years the rules allow is refused',
+  );
+}
+
+// Horizon cost lines on the effects card and the short note (Issue 82).
+{
+  const today = utc(2026, 10, 23);
+  const exactRange = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const never = { onDate: null, afterCount: null };
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
+  const dueOn = today + 24 * DAY_MS;
+  const planItems: PlanItemDoc[] = [
+    item('pay', 1, { kind: 'payLine', parentId: 'src' }),
+    item('src', 1),
+  ];
+  const base: OpenVersion[] = [
+    {
+      id: 'vsrc',
+      itemId: 'src',
+      kind: 'source',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: { name: 'Acme', pairings: [] },
+    },
+    {
+      id: 'vpay',
+      itemId: 'pay',
+      kind: 'payLine',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Paycheck',
+        schedule: weekly,
+        amount: exactRange(10_000),
+        ending: never,
+        stanceOverride: null,
+        pairings: [],
+      },
+    },
+  ];
+  const inputs = {
+    items: planItems,
+    versions: base,
+    openDays: [],
+    stance: 'conservative' as const,
+    today,
+    heldByItem: {},
+    settledKey: '',
+    billProgress: {},
+  };
+  const surgery = (priority: 'must' | 'should') => ({
+    kind: 'addItem' as const,
+    item: item('surgery', 2, { kind: 'horizon' }),
+    version: {
+      itemId: 'surgery',
+      kind: 'horizon' as const,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'what-if',
+      payload: {
+        name: "Miso's surgery",
+        emoji: null,
+        happensOn: dueOn,
+        happensUntil: null,
+        priority,
+        orderIndex: 1,
+        rest: { kind: 'pays' as const },
+        note: null,
+        costs: [
+          {
+            id: 'surg',
+            name: 'Surgery',
+            amount: exactRange(60_000),
+            schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
+            ending: never,
+            isOutside: false,
+            note: null,
+          },
+        ],
+      },
+    },
+    heldCents: 0,
+  });
+  const should = previewItemShorts(inputs, surgery('should'), 'surgery');
+  assert.ok(should.payCount >= 3, 'every pay before the cost has a share');
+  assert.ok(should.shorts.length > 0, 'a pay too small for its share is short');
+  assert.ok(
+    should.roomCount <= should.payCount,
+    'the pays with room are some of the pays asked',
+  );
+  assert.equal(
+    should.askedCents - should.carriedCents,
+    should.shorts.reduce((sum, entry) => sum + entry.cents, 0),
+    'what stays short is what the rows say they are short',
+  );
+  const lastPay = previewChange(inputs, surgery('should'))
+    .map((day) => day.on)
+    .filter((on) => on < dueOn)
+    .pop();
+  assert.ok(
+    lastPay !== undefined &&
+      should.shorts.every((entry) => entry.on !== lastPay),
+    "the short on the last pay before the due date is the lookahead's, so the note leaves it out",
+  );
+  const must = previewItemShorts(inputs, surgery('must'), 'surgery');
+  assert.deepEqual(
+    must.shorts,
+    [],
+    "a Must's shortfall is warned about by the lookahead, so the note counts none",
+  );
+
+  const effect = previewChange(inputs, surgery('should'))[0]?.effect;
+  assert.ok(effect, 'the new cost moves the first pay');
+  assert.ok(
+    effect.lines.every((line) => line.key === 'surgery:cost:surg'),
+    'a cost line keys the card by its cost, not by its item',
+  );
+  assert.ok(
+    effect.lines.every((line) => line.itemId === 'surgery'),
+    'and still names its item',
   );
 }
 
@@ -6924,6 +7053,7 @@ const version = (
     shortBy: 0,
     paidBy: [],
     costId: null,
+    costName: null,
     repaysFree: false,
   });
   const pickCents = (max: number) => 100 + Math.floor(random() * max);
@@ -7697,6 +7827,7 @@ const version = (
     shortBy: 0,
     paidBy: [],
     costId: null,
+    costName: null,
     repaysFree: false,
   });
   const dayRows = [
@@ -7880,6 +8011,7 @@ const version = (
       on,
       dayKey: `k${on}`,
       itemId: name,
+      costId: null,
       name,
       shortBy,
       isBill: true,
@@ -8602,6 +8734,7 @@ const version = (
     shortBy: 0,
     paidBy: [],
     costId: null,
+    costName: null,
     repaysFree: false,
   });
   const confirmedDay = (dayId: string, arrived: number, rent: number) =>
@@ -10512,6 +10645,7 @@ const version = (
     on,
     dayKey: `d${on}`,
     itemId: 'rent',
+    costId: null as string | null,
     name: 'Rent',
     shortBy,
     isBill: true,
@@ -10541,6 +10675,14 @@ const version = (
     created([short(2_000, 5_000)], [short(2_500, 5_000)]).length,
     0,
     'the same shortfall moved later is old',
+  );
+  assert.equal(
+    created(
+      [{ ...short(2_000, 1_000), costId: 'a' }],
+      [{ ...short(2_000, 1_000), costId: 'b' }],
+    ).length,
+    1,
+    "two costs of one item are never each other's old shortfall",
   );
   assert.equal(
     created(
@@ -11080,6 +11222,7 @@ console.log('runway engine: ok');
     shortBy: 0,
     paidBy: [],
     costId: null,
+    costName: null,
     repaysFree: false,
   };
   const line = (
@@ -11315,6 +11458,7 @@ console.log('runway engine: ok');
     shortBy: 0,
     paidBy: [],
     costId: null,
+    costName: null,
     repaysFree: false,
   });
   const day20 = {
@@ -11627,6 +11771,7 @@ console.log('runway engine: ok');
     shortBy: 0,
     paidBy: [{ dayId: 'g9', cents }],
     costId: null,
+    costName: null,
     repaysFree: false,
   });
   const confirmedOf = (arrivedCents: number): OpenRecord => {
@@ -13374,6 +13519,48 @@ console.log('runway engine: ok');
     60_000,
     "the picked day repaysFree equals the payment's fromFreeCents",
   );
+  const goneFronted = item(
+    { kind: 'onePay', dayKey: 'pay:gone' },
+    [movers],
+    0,
+    {
+      paid: [
+        {
+          costId: 'movers',
+          dueOn: utc(2027, 0, 10),
+          paidOn: utc(2027, 0, 5),
+          fromFreeCents: 60_000,
+        },
+      ],
+    },
+  );
+  const goneRepays = costLines(draftOn(jan15, goneFronted));
+  assert.equal(goneRepays.length, 1);
+  assert.equal(
+    goneRepays[0].repaysFree,
+    true,
+    'a fronted payment is given back on the first coming pay when the picked pay is gone',
+  );
+  assert.equal(goneRepays[0].cents, 60_000);
+  assert.deepEqual(
+    costLines(draftOn(jan31, goneFronted)),
+    [],
+    'and on that pay alone',
+  );
+  const earlyGone = costLines(draftOn(utc(2027, 0, 5), goneFronted, early));
+  assert.deepEqual(
+    earlyGone,
+    [],
+    'a payment paid on the first coming pay is not repaid by it',
+  );
+  const goneSpread = costLines(
+    draftOn(jan15, item({ kind: 'onePay', dayKey: 'pay:gone' }, [storage], 0)),
+  );
+  assert.equal(
+    goneSpread[0]?.reason.cadence,
+    'horizonPays',
+    'a pick that is gone reads as the pays, not as the pay you picked',
+  );
   const withoutRepay = draftOn(
     jan15,
     item({ kind: 'onePay', dayKey: days[0].dayKey }, [movers], 0),
@@ -13395,7 +13582,14 @@ console.log('runway engine: ok');
     true,
     'a record line seals its cost and what it gives back',
   );
-  assert.equal(sealedLine?.name, 'Movers\u00A0·\u00A0Moving');
+  assert.equal(sealedLine?.name, 'Moving');
+  assert.equal(sealedLine?.costName, 'Movers');
+  assert.ok(
+    sealed
+      .filter((line) => !line.costId)
+      .every((line) => line.costName === null),
+    'a line that is not a cost has no cost name',
+  );
   assert.deepEqual(
     sumConfirmedByItem([
       {
@@ -13553,6 +13747,7 @@ console.log('runway engine: ok');
   const opened = withLineDefaults({ lines: [oldLine] }).lines[0];
   assert.equal(opened.costId, null);
   assert.equal(opened.repaysFree, false);
+  assert.equal(opened.costName, null, 'a legacy line opens with no cost name');
   assert.equal(
     sumLines([opened, { ...opened, cents: 900, repaysFree: true }]),
     500,
@@ -13618,9 +13813,10 @@ console.log('runway engine: ok');
   });
   assert.deepEqual(
     carries[1].added,
-    { moving: 2_000 },
-    'a repays line adds nothing to the carry',
+    {},
+    'a cost line adds nothing to the carry: its share already spreads what is left over every pay, and a repays line gives back to Free to Spend',
   );
+
   assert.deepEqual(
     looked.problems
       .filter((problem) => problem.on === jan15)

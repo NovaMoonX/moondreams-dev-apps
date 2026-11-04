@@ -1323,6 +1323,7 @@ export const seedLine = (
   shortBy: 0,
   paidBy: [{ dayId, cents }],
   costId: null,
+  costName: null,
   repaysFree: false,
 });
 
@@ -1421,7 +1422,7 @@ async function writeSeedConfirmedDays(
                 ...seedLine(
                   dayId,
                   'seed-horizon-surgery',
-                  "Surgery\u00A0·\u00A0Miso's surgery",
+                  "Miso's surgery",
                   '🐱',
                   'must',
                   5_000,
@@ -1432,6 +1433,7 @@ async function writeSeedConfirmedDays(
                   'seed-cost-surgery',
                 ),
                 costId: 'seed-cost-surgery',
+                costName: 'Surgery',
                 repaysFree: false,
               },
             ]

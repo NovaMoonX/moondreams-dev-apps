@@ -1,6 +1,8 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from 'react-redux';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import InlineNotice from '@/components/InlineNotice';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -29,6 +31,7 @@ import {
   previewItemShorts,
   previewLookahead,
   previewOverrideCarry,
+  type ItemShortsReading,
   type PreviewChange,
   type PreviewDay,
 } from '@apps/runway/store/selectors/previewSelectors';
@@ -71,10 +74,7 @@ interface EffectPreviewProps {
   /** Says when the item's cost lines come up short on the pays once the change is made; null says nothing. */
   shortNote?: {
     itemId: string;
-    describe: (
-      shorts: readonly { on: number; cents: number }[],
-      carriedCents: number,
-    ) => string | null;
+    describe: (reading: ItemShortsReading) => string | null;
   };
   /** What the change does to how far the plan holds, when the form has already worked it out. */
   holds?: { blocks: HoldsBlock[]; isSame: boolean } | null;
@@ -84,7 +84,7 @@ interface EffectEntry {
   key: string;
   title: string;
   note: string | null;
-  lines: { name: string; text: string }[];
+  lines: { name: string; text: string; isWords?: boolean }[];
   free: string | null;
   detail: string | null;
 }
@@ -101,15 +101,23 @@ const toDayEntry = (
       : [];
   const shown = [
     ...lines.map((line) => ({
-      name: day.names[line.itemId]?.name ?? 'Something removed',
+      name: day.names[line.key]?.name ?? 'Something removed',
       text: `${formatCents(line.beforeCents)} → ${formatCents(line.afterCents)}`,
     })),
     ...(day.kind === 'changed' ? day.effect.shortened : []).map((entry) => ({
-      name: day.names[entry.itemId]?.name ?? 'Something removed',
-      text: CHANGE_WORDS.shortMoves(
-        formatCents(entry.beforeShortCents),
-        formatCents(entry.afterShortCents),
-      ),
+      name: day.names[entry.key]?.name ?? 'Something removed',
+      text:
+        entry.beforeShortCents > 0
+          ? CHANGE_WORDS.shortMoves(
+              formatCents(entry.beforeShortCents),
+              formatCents(entry.afterShortCents),
+            )
+          : CHANGE_WORDS.putsInOf(
+              formatCents(entry.putInCents),
+              formatCents(entry.putInCents + entry.afterShortCents),
+              entry.putInCents > 0,
+            ),
+      isWords: true,
     })),
   ];
   const isFreeMoved =
@@ -271,7 +279,7 @@ function EffectPreview({
 
   const shortText = useMemo(() => {
     if (shortNote === undefined || settledVirtual === null) return null;
-    const { shorts, carriedCents } = previewItemShorts(
+    const reading = previewItemShorts(
       {
         items,
         versions,
@@ -285,7 +293,7 @@ function EffectPreview({
       settledVirtual,
       shortNote.itemId,
     );
-    return shortNote.describe(shorts, carriedCents);
+    return shortNote.describe(reading);
   }, [
     shortNote,
     settledVirtual,
@@ -451,11 +459,19 @@ function EffectPreview({
                 : entry.lines.slice(0, MAX_LINES_SHOWN)
               ).map((line) => (
                 <p
-                  key={line.name}
-                  className='flex items-baseline justify-between gap-3'
+                  key={`${line.name}:${line.text}`}
+                  className={join(
+                    'flex items-baseline justify-between gap-x-3',
+                    line.isWords && 'flex-wrap',
+                  )}
                 >
                   <span className='min-w-0 break-words'>{line.name}</span>
-                  <span className='font-medium whitespace-nowrap tabular-nums'>
+                  <span
+                    className={join(
+                      'font-medium tabular-nums',
+                      line.isWords ? 'ml-auto text-right' : 'whitespace-nowrap',
+                    )}
+                  >
                     <MaskedText>{line.text}</MaskedText>
                   </span>
                 </p>
@@ -520,7 +536,9 @@ function EffectPreview({
   const shownBlocks =
     holdsText && !(isCompact && holdsText.isSame)
       ? holdsText.blocks.filter(
-          (block) => describeLead === undefined || block.tone === 'warning',
+          (block) =>
+            (describeLead === undefined || block.tone === 'warning') &&
+            !(block.isStanding === true && shortText !== null),
         )
       : [];
   const renderFigure = (block: (typeof shownBlocks)[number]) =>

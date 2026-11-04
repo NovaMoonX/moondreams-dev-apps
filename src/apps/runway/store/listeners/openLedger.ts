@@ -73,6 +73,7 @@ export const withLineDefaults = <T extends { lines: RecordLine[] }>(
   lines: payload.lines.map((line) => ({
     ...line,
     costId: line.costId ?? null,
+    costName: line.costName ?? null,
     repaysFree: line.repaysFree ?? false,
   })),
 });

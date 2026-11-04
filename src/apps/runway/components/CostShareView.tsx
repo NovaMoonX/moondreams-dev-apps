@@ -181,19 +181,26 @@ function CostShareView({
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
       <ActionTitle>{HORIZON_WORDS.costShareTitle(costName)}</ActionTitle>
-      <AmountHero
-        label={PAY_SHARE_WORDS.amount}
-        value={amount}
-        onChange={setAmount}
-        disabled={isSaving}
-        hint={
-          isCapped ? (
-            <MaskedText>
-              {HORIZON_WORDS.costShareCapped(costName, formatCents(maxCents))}
-            </MaskedText>
-          ) : undefined
+      <div
+        className='scroll-mb-24'
+        onFocusCapture={(event) =>
+          event.currentTarget.scrollIntoView({ block: 'nearest' })
         }
-      />
+      >
+        <AmountHero
+          label={PAY_SHARE_WORDS.amount}
+          value={amount}
+          onChange={setAmount}
+          disabled={isSaving}
+          hint={
+            isCapped ? (
+              <MaskedText>
+                {HORIZON_WORDS.costShareCapped(costName, formatCents(maxCents))}
+              </MaskedText>
+            ) : undefined
+          }
+        />
+      </div>
       <EffectPreview changeJson={changeJson} />
       <ModalFooterActions
         note={error ?? blocker}

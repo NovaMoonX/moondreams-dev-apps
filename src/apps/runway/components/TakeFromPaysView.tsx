@@ -14,7 +14,10 @@ import EffectPreview from '@apps/runway/components/EffectPreview';
 import { HORIZON_WORDS, PAY_SHARE_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
-import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
+import type {
+  ItemShortsReading,
+  PreviewChange,
+} from '@apps/runway/store/selectors/previewSelectors';
 import { selectHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed } from '@apps/runway/types';
 
@@ -22,8 +25,6 @@ interface TakeFromPaysViewProps {
   itemId: string;
   horizon: HorizonSealed;
   today: number;
-  /** What the item is short of today, all payments counted. */
-  shortCents: number;
   onBack: () => void;
 }
 
@@ -32,7 +33,6 @@ function TakeFromPaysView({
   itemId,
   horizon,
   today,
-  shortCents,
   onBack,
 }: TakeFromPaysViewProps) {
   const { user } = useAuth();
@@ -124,21 +124,25 @@ function TakeFromPaysView({
   const shortNote = useMemo(
     () => ({
       itemId,
-      describe: (
-        shorts: readonly { on: number; cents: number }[],
-        carriedCents: number,
-      ) => {
-        const left = Math.max(0, shortCents - carriedCents);
-        return shorts.length === 0 && left === 0
+      describe: ({
+        carriedCents,
+        askedCents,
+        payCount,
+        roomCount,
+      }: ItemShortsReading) => {
+        const left = Math.max(0, askedCents - carriedCents);
+        return left === 0
           ? null
           : HORIZON_WORDS.takeFromPaysShort(
               formatCents(carriedCents),
-              formatCents(shortCents),
+              formatCents(askedCents),
               formatCents(left),
+              roomCount,
+              payCount,
             );
       },
     }),
-    [itemId, shortCents],
+    [itemId],
   );
 
   return (
@@ -147,7 +151,6 @@ function TakeFromPaysView({
       <ActionTitle>{HORIZON_WORDS.takeFromPaysTitle(horizon.name)}</ActionTitle>
       <EffectPreview
         changeJson={changeJson}
-        caption={HORIZON_WORDS.effectCaption}
         emptyText={HORIZON_WORDS.effectNone}
         shortNote={shortNote}
       />

@@ -13,7 +13,6 @@ import {
   RECORD_WORDS,
 } from '@apps/runway/constants';
 import type { RecordLine } from '@apps/runway/types';
-import { splitCostLineName } from '@apps/runway/utils/horizonText';
 
 interface RecordLineRowProps {
   line: RecordLine;
@@ -35,11 +34,9 @@ function RecordLineRow({
   const mask = useMaskedText();
   const emoji = useRecordedEmoji(line.emoji, line.itemId);
   const { isHidden } = useValuesHidden();
-  const costParts = line.costId ? splitCostLineName(line.name) : null;
   const name =
-    line.name === ''
-      ? DRAFT_WORDS.billFallback
-      : (costParts?.cost ?? line.name);
+    line.costName ?? (line.name === '' ? DRAFT_WORDS.billFallback : line.name);
+  const costItem = line.costName === null ? '' : line.name;
   const isChanged = plannedCents !== undefined && plannedCents !== line.cents;
   const shortText =
     line.shortBy <= 0 || (isHidden && isShortSaidAbove)
@@ -74,9 +71,9 @@ function RecordLineRow({
       emoji={emoji}
       detail={
         shortText ??
-        (costParts?.item
+        (costItem
           ? HORIZON_WORDS.costLineDetail(
-              costParts.item,
+              costItem,
               line.repaysFree
                 ? HORIZON_WORDS.lineBack
                 : PRIORITY_LABELS[line.tier],

@@ -188,6 +188,8 @@ export interface RecordLine {
   paidBy: { dayId: string; cents: Cents }[];
   /** The Horizon cost this line saves toward; null elsewhere, and on a record sealed before Horizon costs. */
   costId: string | null;
+  /** The cost's own name when this line saves toward a Horizon cost ("Surgery"; `name` stays the item's); null on every other line. */
+  costName: string | null;
   /** True when the line gives back to Free to Spend what a fronted payment took; an older record reads false. */
   repaysFree: boolean;
 }

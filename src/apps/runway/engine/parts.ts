@@ -150,7 +150,7 @@ export const getCostLineId = (
 export const getCostShareKey = (itemId: string, costId: string) =>
   `${itemId}:${costId}`;
 
-/** Where a cost's own name ("Storage unit · Moving") sits among the names of a draft's items. */
+/** Where a cost's own name ("Moving") sits among the names of a draft's items. */
 export const getCostNameKey = (itemId: string, costId: string) =>
   `${itemId}:cost:${costId}`;
 

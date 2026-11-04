@@ -233,7 +233,7 @@ function describeChangeProblem(
 }
 
 const getProblemKey = (problem: LookaheadProblem) =>
-  `${problem.kind}:${problem.kind === 'short' ? problem.itemId : problem.billId}`;
+  `${problem.kind}:${problem.kind === 'short' ? `${problem.itemId}:${problem.costId ?? ''}` : problem.billId}`;
 
 export interface CreatedProblem {
   problem: LookaheadProblem;

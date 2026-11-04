@@ -1,4 +1,3 @@
-import { HORIZON_WORDS } from '@apps/runway/constants';
 import type {
   Cents,
   ConfirmedSealed,
@@ -29,14 +28,15 @@ const nameOf = (
   draft: Draft,
   names: ItemNames,
 ) => {
-  const itemName = Object.hasOwn(names, line.itemId)
-    ? names[line.itemId].name
-    : '';
-  if (!Object.hasOwn(names, nameKeyOf(line)))
-    return getPartName(itemName, line, draft.lines);
-  const { name } = names[nameKeyOf(line)];
-  return line.costId ? HORIZON_WORDS.costLineName(name, itemName) : name;
+  if (!Object.hasOwn(names, line.itemId))
+    return getPartName('', line, draft.lines);
+  return names[line.itemId].name;
 };
+
+const costNameOf = (line: Draft['lines'][number], names: ItemNames) =>
+  line.costId && Object.hasOwn(names, nameKeyOf(line))
+    ? names[nameKeyOf(line)].name
+    : null;
 
 /** Lines of a draft as a record keeps them, with the names they had that day. */
 export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
@@ -45,6 +45,7 @@ export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
     itemId: line.itemId,
     part: line.part,
     name: nameOf(line, draft, names),
+    costName: costNameOf(line, names),
     emoji: Object.hasOwn(names, line.itemId) ? names[line.itemId].emoji : null,
     tier: line.tier,
     demandCents: line.demandCents,

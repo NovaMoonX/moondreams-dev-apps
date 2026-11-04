@@ -22,6 +22,7 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import { HORIZON_WORDS, RANGE_END_WORDS } from '@apps/runway/constants';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
@@ -42,6 +43,7 @@ function HorizonSheet({
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const { isHidden } = useValuesHidden();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
   const [putting, setPutting] = useState<{
@@ -90,6 +92,16 @@ function HorizonSheet({
       isRange ? RANGE_END_WORDS[getRangeEnd(stance, 'expense')] : null,
     );
   };
+  const getRestFromPaysNote = () => {
+    const { rest } = horizon;
+    const picked =
+      rest.kind === 'onePay'
+        ? comingDays.find(({ dayKey }) => dayKey === rest.dayKey)
+        : undefined;
+    return picked
+      ? HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on))
+      : HORIZON_WORDS.restPaysNote;
+  };
   const when =
     horizon.happensUntil === null
       ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
@@ -126,7 +138,6 @@ function HorizonSheet({
           itemId={itemId}
           horizon={horizon}
           today={today}
-          shortCents={shortfall?.totalShortCents ?? 0}
           onBack={() => setIsTakingFromPays(false)}
         />
       ) : putting ? (
@@ -206,6 +217,12 @@ function HorizonSheet({
               {HORIZON_WORDS.restOutsideNote}
             </p>
           )}
+          {(horizon.rest.kind === 'pays' || horizon.rest.kind === 'onePay') &&
+            plan.coveredUntil !== null && (
+              <p className='text-muted-foreground text-sm'>
+                {getRestFromPaysNote()}
+              </p>
+            )}
           {!shortfall && (
             <ActionGroup isRoomy>
               <ActionRow

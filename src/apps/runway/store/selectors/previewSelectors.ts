@@ -365,12 +365,22 @@ export function previewChange(
   return result;
 }
 
-/** What one item's cost lines get from each coming pay once the change is layered over the plan: the days where a line is short, and what its lines set aside in all. */
+export interface ItemShortsReading {
+  shorts: { on: number; cents: number }[];
+  carriedCents: number;
+  askedCents: number;
+  /** Pays in the window that were asked for something. */
+  payCount: number;
+  /** Pays in the window that put in something. */
+  roomCount: number;
+}
+
+/** What one item's cost lines ask of each coming pay and get from it, leaving out a short the lookahead already warns about so the two never say the same thing twice. */
 export function previewItemShorts(
   inputs: PreviewInputs,
   change: PreviewChange,
   itemId: string,
-): { shorts: { on: number; cents: number }[]; carriedCents: number } {
+): ItemShortsReading {
   const { stance, today } = inputs;
   const layered = layerPlan(inputs, change);
   const settled = new Set(
@@ -380,10 +390,10 @@ export function previewItemShorts(
     change.kind === 'addItem'
       ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
       : inputs.heldByItem;
-  const days = buildComingDays(layered.items, layered.versions, today)
-    .filter((day) => !settled.has(day.dayKey))
-    .slice(0, MAX_PREVIEW_DAYS);
-  const rows = days.map((day) => {
+  const coming = buildComingDays(layered.items, layered.versions, today).filter(
+    (day) => !settled.has(day.dayKey),
+  );
+  const rows = coming.slice(0, MAX_PREVIEW_DAYS).map((day, index) => {
     const view = computeDraftView(
       layered.items,
       layered.versions,
@@ -395,20 +405,31 @@ export function previewItemShorts(
       inputs.settledKey,
       inputs.billProgress,
     );
+    const nextOn = coming[index + 1]?.on ?? Number.POSITIVE_INFINITY;
     const lines = (view?.draft.lines ?? []).filter(
-      (line) => line.itemId === itemId && line.cost && !line.repaysFree,
+      (line) =>
+        line.itemId === itemId &&
+        line.cost &&
+        !line.repaysFree &&
+        !(
+          line.shortBy > 0 &&
+          (line.tier === 'must' || line.cost.dueOn < nextOn)
+        ),
     );
     return {
       on: day.on,
-      cents: lines.reduce((sum, line) => sum + line.shortBy, 0),
+      short: lines.reduce((sum, line) => sum + line.shortBy, 0),
       carried: lines.reduce((sum, line) => sum + line.cents, 0),
     };
   });
   return {
     shorts: rows
-      .filter((row) => row.cents > 0)
-      .map(({ on, cents }) => ({ on, cents })),
+      .filter((row) => row.short > 0)
+      .map(({ on, short }) => ({ on, cents: short })),
     carriedCents: rows.reduce((sum, row) => sum + row.carried, 0),
+    askedCents: rows.reduce((sum, row) => sum + row.carried + row.short, 0),
+    payCount: rows.filter((row) => row.carried + row.short > 0).length,
+    roomCount: rows.filter((row) => row.carried > 0).length,
   };
 }
 

@@ -48,6 +48,8 @@ export type LookaheadProblem =
       on: DateOnly;
       dayKey: string;
       itemId: string;
+      /** The Horizon cost a line saves toward; null elsewhere, so an item's costs are never mistaken for one another. */
+      costId: string | null;
       name: string;
       shortBy: Cents;
       isBill: boolean;
@@ -142,7 +144,9 @@ const nextCarry = (
   draft: Draft,
 ): LookaheadCarry =>
   draft.lines.reduce<LookaheadCarry>((acc, line) => {
-    if (line.cents <= 0 || line.repaysFree) return acc;
+    // A cost's share already spreads what is left over every pay: counting an earlier
+    // pay's money again would shrink the later shares.
+    if (line.cents <= 0 || line.repaysFree || line.costId) return acc;
     if (line.bill !== null) {
       const entry: FundedDay = {
         dayKey: day.dayKey,
@@ -198,6 +202,7 @@ const findShorts = (
       on: day.on,
       dayKey: day.dayKey,
       itemId: line.itemId,
+      costId: line.costId ?? null,
       name: getShortName(line, result.names),
       shortBy: line.shortBy,
       isBill: line.bill !== null,
