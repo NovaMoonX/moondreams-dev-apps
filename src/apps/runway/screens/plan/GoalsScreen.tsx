@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { CircleCheck, Target, TriangleAlert } from 'lucide-react';
+import { ChevronRight, CircleCheck, Target, TriangleAlert } from 'lucide-react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
@@ -38,6 +40,7 @@ import {
 } from '@apps/runway/hooks/usePriorityDial';
 import { describePlanTotal } from '@apps/runway/utils/billText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { revealItem } from '@apps/runway/utils/revealItem';
 
 function GoalsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -73,7 +76,8 @@ function GoalsScreen() {
     dial,
     goals.some(({ version }) => version.payload.targetCents > 0),
   );
-  const { addRequest, clearAdd } = useRunwayUrlState();
+  const { addRequest, clearAdd, openItem, openItemAt, closeOpenItem } =
+    useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'goal';
   const [query, setQuery] = useState('');
@@ -120,12 +124,27 @@ function GoalsScreen() {
               </p>
             </div>
           ) : (
-            <p className='flex min-h-10 items-center gap-1.5 text-sm font-medium text-(--runway-warning-ink)'>
-              <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden='true' />
-              {GOAL_TRACK_WORDS.behind(
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-auto min-h-10 w-full items-center justify-start gap-1.5 px-0! py-1 text-left text-sm font-medium whitespace-normal text-(--runway-warning-ink)!'
+              aria-label={`${GOAL_TRACK_WORDS.behind(
                 behindGoals.map(({ payload }) => payload.name),
-              )}
-            </p>
+              )}. ${GOAL_TRACK_WORDS.openBehind}`}
+              onClick={() => {
+                const first = behindGoals[0].item.id;
+                revealItem(first);
+                void openItemAt(first, 'amount');
+              }}
+            >
+              <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden='true' />
+              <span className='min-w-0 flex-1'>
+                {GOAL_TRACK_WORDS.behind(
+                  behindGoals.map(({ payload }) => payload.name),
+                )}
+              </span>
+              <ChevronRight className='h-4 w-4 shrink-0' aria-hidden='true' />
+            </Button>
           ))}
         {hasSearch && (
           <SearchInput
@@ -146,6 +165,8 @@ function GoalsScreen() {
                 pace={pace}
                 paceDial={paceDial}
                 heldCents={heldByItem[item.id] ?? 0}
+                request={openItem?.itemId === item.id ? openItem : null}
+                onRequestDone={closeOpenItem}
                 today={today}
                 isFaded={!isCountedAt(payload.priority, dial)}
               />
