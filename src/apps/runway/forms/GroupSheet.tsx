@@ -937,7 +937,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       title={payload.emoji ? `${payload.emoji} ${payload.name}` : payload.name}
       actions={<ValuesEyeButton />}
     >
-      <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
+      <div className='sheet-scrolls space-y-4 [@media(max-height:599px)]:space-y-2.5'>
         {isPickingEmoji ? (
           <>
             <BackLink onBack={() => setIsPickingEmoji(false)} />
