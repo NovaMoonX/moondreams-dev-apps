@@ -238,7 +238,7 @@ Several costs that belong to one event, some once and some repeating, paid from 
 2. **Put money toward it now?** $800 from Free to Spend. **Where does the rest come from?** "My pays before each cost is due". Before adding, the review shows the effect: the pays from Jan 15th on each put $50 toward Storage.
 3. **See how far it goes.** Moving reads **$800 left · $800 set aside, $0 spent** and "Covers Movers on Jan 15th. From Feb 1st, Storage comes from your pays." The truck asks nothing of anyone.
 4. **Dec 2nd, the quote is $600.** Movers > "Set the price" > "An exact amount" > $600, why "Got a quote". What changes, shown first: four pays (Jan 15th to Feb 28th) put $50 less. Now "Covers Movers, then Storage on Feb 1st and Mar 1st. From Apr 1st, Storage comes from your pays."
-5. **Jan 14th, the truck.** Work pays for it, so Truck rental > "Mark paid" ("Paid outside the plan. Nothing comes from Moving.") marks it at once. Moving's money doesn't move.
+5. **Jan 14th, the truck.** Work pays for it, so Truck rental > "Mark paid" ("You pay it yourself, so nothing comes from Moving.") marks it at once. Moving's money doesn't move.
 6. **Jan 15th, pay the movers.** Home's "To pay today" > Movers · Moving > "Add what you paid": the purchase form, pointed at Movers · Moving, with $600 filled in (the price is exact). Paid by Venture X > Add. **$200 left · $800 set aside, $600 spent.**
 7. **Jan 16th, Storage becomes a real bill.** Moving's footer offers "Make Storage unit a bill". The bill form opens filled in ($100 monthly from Feb 1st, Moving's priority) and asks "Bring Moving's $200 with it?" Yes: Bills lists Storage unit holding $200, which covers Feb 1st and Mar 1st before any pay is asked.
 8. **Moving is done.** The truck is marked paid, the movers are paid and Storage is a bill. Nothing is left, so Finish asks nothing, and Moving folds into Done: "Spent $600 · Storage unit is now a bill".
@@ -580,7 +580,8 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Horizon: an event with one-time and repeating costs, exact or a range, money put toward it now, and the rest from your pays, one pay, outside the plan or decided later, with set aside, spent and left
 - [x] How far an item's money goes, in a sentence, and a warning where it stops when the rest is undecided
 - [x] Set a cost's price, exact or a range, with what it changes on your pays and why
-- [ ] Pay a cost in one tap when exact, with its real amount when a range, as a purchase or a paid mark on Track and a paid mark on Plan; mark an outside cost paid
+- [x] Pay a cost in one tap when exact, with its real amount when a range, as a paid mark; mark an outside cost paid
+- [ ] Pay a cost as a purchase on Track (Add what you paid)
 - [ ] Turn a repeating cost into a bill, bringing what is left with it
 - [x] Change an event and its costs, and remove a cost (never an item's last)
 - [ ] Finish or call off an item, choosing where its money goes, and bring a called-off item back

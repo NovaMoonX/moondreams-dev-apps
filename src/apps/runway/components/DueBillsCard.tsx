@@ -17,14 +17,24 @@ import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
+  toBillAmountPayment,
+  useBillCardName,
+} from '@apps/runway/hooks/paidAmountPayment';
+import {
   CARD_WORDS,
   DUE_WORDS,
+  HORIZON_WORDS,
   ITEM_SHEET_R2_WORDS,
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Cents } from '@apps/runway/types';
+import type { CostPayment } from '@apps/runway/engine/horizon';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
+import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
+import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
+import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
+import type { HorizonCost } from '@apps/runway/types';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { undoPaymentPaid, useBillPaid } from '@apps/runway/hooks/useBillPaid';
@@ -33,11 +43,24 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectBillPayments,
   selectBills,
+  selectHorizonItems,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getBillCardName } from '@apps/runway/utils/cardText';
 
 type DueBill = Lookahead['due'][number];
+type DueCost = Lookahead['dueCosts'][number];
+
+type DueRow =
+  | { kind: 'bill'; entry: DueBill }
+  | {
+      kind: 'cost';
+      entry: DueCost;
+      cost: HorizonCost;
+      payment: CostPayment;
+      emoji: string | null;
+    };
 
 interface DueBillRowProps {
   due: DueBill;
@@ -47,7 +70,10 @@ interface DueBillRowProps {
   onOpen: () => void;
 }
 
-const getDueLine = (due: DueBill, today: number) => {
+const getDueLine = (
+  due: Pick<DueBill, 'isOverdue' | 'dueOn' | 'laterDueOn'>,
+  today: number,
+) => {
   if (!due.isOverdue) return DUE_WORDS.today;
   const when = formatRelativeDayUTC(due.dueOn, today, formatDateOrdinalUTC);
   if (due.laterDueOn.length === 0) return DUE_WORDS.wasDue(when);
@@ -72,6 +98,7 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
   const isUndoing = useRef(false);
   const maskText = useMaskedText();
   const [isAsking, setIsAsking] = useState(false);
+  const sheetCardName = useBillCardName(due.billId, payment?.dueOn ?? null);
 
   const undo = async (written: WrittenPaidMark) => {
     if (!user || isUndoing.current) return;
@@ -203,11 +230,103 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
       </span>
       {isAsking && payment && (
         <PaidAmountSheet
-          billId={due.billId}
-          billName={due.name}
-          payment={payment}
+          payment={toBillAmountPayment(due.name, payment, sheetCardName)}
           onMark={markPaid}
           onClose={() => setIsAsking(false)}
+        />
+      )}
+    </li>
+  );
+}
+
+interface DueCostRowProps {
+  due: DueCost;
+  cost: HorizonCost;
+  payment: CostPayment;
+  emoji: string | null;
+  today: number;
+}
+
+/** One cost to pay, named with its event ("Movers · Moving"): the amount, and a quick Mark paid with an Undo toast. Opening it opens the event. */
+function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
+  const horizons = useAppSelector((state) => selectHorizonItems(state, today));
+  const stance = useAppSelector(selectStance);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isAsking, setIsAsking] = useState(false);
+  const name = HORIZON_WORDS.costLineName(due.costName, due.itemName);
+  const paid = useCostPaid({
+    itemId: due.itemId,
+    itemName: due.itemName,
+    cost,
+    payment,
+  });
+  const horizon =
+    horizons.find(({ item }) => item.id === due.itemId)?.version.payload ??
+    null;
+  const amountPayment = isAsking ? paid.toAmountPayment() : null;
+
+  return (
+    <li className='flex items-center first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl'>
+      <Button
+        type='button'
+        variant='tertiary'
+        className='text-foreground! h-auto min-h-16 min-w-0 flex-1 items-center justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
+        aria-label={DUE_WORDS.openBills(name)}
+        onClick={() => setIsOpen(true)}
+      >
+        <ItemBadge name={name} emoji={emoji} />
+        <span className='block min-w-0 flex-1'>
+          <span className='line-clamp-2 font-medium break-words'>{name}</span>
+          <span
+            className={join(
+              'block text-sm break-words',
+              due.isOverdue
+                ? 'text-(--runway-warning-ink)'
+                : 'text-muted-foreground',
+            )}
+          >
+            {getDueLine(due, today)}
+          </span>
+        </span>
+      </Button>
+      <span className='flex shrink-0 flex-col items-end gap-1 py-2 pr-3'>
+        <span className='font-semibold whitespace-nowrap tabular-nums'>
+          <SensitiveValue>
+            {paid.needsAmount
+              ? DUE_WORDS.upTo(formatCents(payment.totalCents))
+              : formatCents(payment.totalCents)}
+          </SensitiveValue>
+        </span>
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+          aria-label={`${DUE_WORDS.markPaid}: ${name}`}
+          loading={paid.isBusy}
+          disabled={!paid.isReady || paid.isBusy}
+          onClick={() => {
+            if (paid.needsAmount) setIsAsking(true);
+            else void paid.mark();
+          }}
+        >
+          {DUE_WORDS.markPaid}
+        </Button>
+      </span>
+      {amountPayment && (
+        <PaidAmountSheet
+          payment={amountPayment}
+          onMark={paid.mark}
+          onClose={() => setIsAsking(false)}
+        />
+      )}
+      {isOpen && horizon && (
+        <HorizonSheet
+          itemId={due.itemId}
+          horizon={horizon}
+          today={today}
+          stance={stance}
+          onClose={() => setIsOpen(false)}
         />
       )}
     </li>
@@ -245,7 +364,14 @@ function DueBillsCard({
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const emojiOf = useLiveEmojiResolver();
-  const due = lookahead?.due ?? [];
+  const costRows = useDueCostRows(lookahead, today);
+  const due: DueRow[] = [
+    ...(lookahead?.due ?? []).map((entry) => ({
+      kind: 'bill' as const,
+      entry,
+    })),
+    ...costRows.map((row) => ({ kind: 'cost' as const, ...row })),
+  ].sort((a, b) => (costRows.length === 0 ? 0 : a.entry.dueOn - b.entry.dueOn));
   if (due.length === 0) return null;
 
   const openBills = () => {
@@ -268,9 +394,12 @@ function DueBillsCard({
       : hidden.length > SHOWN_DUE && !isUnfolded;
   const hasFold = overflow === 'unfold' && hidden.length > SHOWN_DUE;
   const shown = isFolded ? due.slice(0, SHOWN_DUE) : due;
-  const isAnyLate = due.some((entry) => entry.isOverdue);
+  const isAnyLate = due.some(({ entry }) => entry.isOverdue);
   const title = isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title;
-  const count = due.length > 1 ? DUE_WORDS.count(due.length, isAnyLate) : null;
+  const count =
+    due.length > 1
+      ? DUE_WORDS.count(due.length, isAnyLate, costRows.length > 0)
+      : null;
   const toggleUnfolded = () => (isUnfolded ? closeAllDue() : openAllDue());
 
   return (
@@ -301,7 +430,20 @@ function DueBillsCard({
         </div>
       )}
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-        {shown.map((entry) => {
+        {shown.map((row) => {
+          if (row.kind === 'cost') {
+            return (
+              <DueCostRow
+                key={`${row.entry.itemId}-${row.entry.costId}`}
+                due={row.entry}
+                cost={row.cost}
+                payment={row.payment}
+                emoji={emojiOf(row.emoji, null)}
+                today={today}
+              />
+            );
+          }
+          const { entry } = row;
           const payload =
             bills.find(({ item }) => item.id === entry.billId)?.version
               .payload ?? null;

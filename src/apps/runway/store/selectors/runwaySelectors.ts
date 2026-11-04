@@ -38,6 +38,11 @@ import { getCostNameKey, getCostShareKey } from '@apps/runway/engine/parts';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { getFixedByBill } from '@apps/runway/engine/billShare';
+import {
+  listHorizonPayments,
+  type CostPaidEntry,
+  type CostPayment,
+} from '@apps/runway/engine/horizon';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
@@ -702,6 +707,57 @@ export interface DraftView {
 /** The plan's stance; an unknown or missing one reads as conservative. */
 export const selectStance = (state: RootState) =>
   readStance(state.runway.plan?.stance);
+/** Every Horizon item's cost payments through the lookahead's end, each with the mark that settled it, keyed by item id. */
+export const selectCostPayments = createSelector(
+  [selectHorizonItems, selectBillProgress, selectStance, selectOn],
+  (items, progress, stance, today): Record<string, CostPayment[]> => {
+    const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
+    return Object.fromEntries(
+      items.map(({ item, version }) => [
+        item.id,
+        listHorizonPayments(
+          version.payload.costs,
+          horizon,
+          stance,
+          progress[item.id]?.costPaid ?? [],
+        ),
+      ]),
+    );
+  },
+);
+
+/** Each Horizon item's payments marked paid and not undone, by item id. */
+export const selectCostPaid = createSelector(
+  [selectBillProgress],
+  (progress): Record<string, CostPaidEntry[]> =>
+    Object.fromEntries(
+      Object.entries(progress).flatMap(([id, entry]) =>
+        entry.costPaid ? [[id, entry.costPaid]] : [],
+      ),
+    ),
+);
+
+/** Each item's payments of costs paid outside the plan that nobody has marked: until they are, the item cannot finish, whatever the date. */
+export const selectUnmarkedOutside = createSelector(
+  [selectHorizonItems, selectCostPayments],
+  (items, payments): Record<string, CostPayment[]> =>
+    Object.fromEntries(
+      items.map(({ item, version }) => {
+        const outside = new Set(
+          version.payload.costs
+            .filter(({ isOutside }) => isOutside)
+            .map(({ id }) => id),
+        );
+        return [
+          item.id,
+          (payments[item.id] ?? []).filter(
+            ({ costId, paid }) => outside.has(costId) && paid === null,
+          ),
+        ];
+      }),
+    ),
+);
+
 const selectDays = (state: RootState) => state.runway.days;
 const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
 const selectToday = (_state: RootState, _dayKey: string, today: number) =>
@@ -859,6 +915,7 @@ export function computeDraftView(
           resolvedHorizon.map(({ item, version }) => [
             version.id,
             heldByItem[item.id] ?? 0,
+            hashProgress(billProgress[item.id]),
           ]),
           resolved.map(({ item, version }) =>
             version.payload.maxCents === null ? 0 : (heldByItem[item.id] ?? 0),
@@ -929,6 +986,8 @@ export function computeDraftView(
     rest: version.payload.rest,
     costs: version.payload.costs,
     heldCents: heldByItem[item.id] ?? 0,
+    paid: billProgress[item.id]?.costPaid ?? [],
+    repaid: billProgress[item.id]?.repaid,
     fixed: Object.fromEntries(
       version.payload.costs.flatMap((cost) => {
         const pinned = fixedByBill.get(getCostShareKey(item.id, cost.id));

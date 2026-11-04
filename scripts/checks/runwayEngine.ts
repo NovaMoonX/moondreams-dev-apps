@@ -243,12 +243,18 @@ import {
   getLiveCosts,
   listCostPayments,
   listHorizonPayments,
+  listUnmarkedOutside,
+  needsCostAmount,
   planHorizon,
   readHorizon,
   removeCost,
   restoreCost,
   setCostPrice,
+  settleCostPaid,
+  getHorizonFigures,
   sumCostPayments,
+  sumCostSpent,
+  type CostPaidEntry,
 } from '../../src/apps/runway/engine/horizon.ts';
 import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
 import { computeLookahead } from '../../src/apps/runway/store/selectors/lookaheadSelectors.ts';
@@ -8239,6 +8245,7 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     due: [],
+    dueCosts: [],
     undated: [],
     horizonShort: [],
     steps: [],
@@ -10855,6 +10862,7 @@ const version = (
     horizonShort: [],
     steps: [],
     due: [],
+    dueCosts: [],
   });
   assert.equal(
     describeHoldsBlocks(look([water]), look([water, rent]))
@@ -11080,7 +11088,7 @@ const version = (
   const end = Date.UTC(2027, 11, 31);
   assert.deepEqual(
     listCostPayments(movers, end, 'conservative'),
-    [{ costId: 'movers', dueOn: jan15, totalCents: 80_000 }],
+    [{ costId: 'movers', dueOn: jan15, totalCents: 80_000, paid: null }],
     'a range plans at the high end under the default expense stance',
   );
   assert.equal(
@@ -11554,6 +11562,30 @@ const version = (
     'a cost with a paid payment stays and ends after today',
   );
 
+  const earlyEnd = { ...movers, endsAfter: jan15 - 5 * 86_400_000 };
+  const earlyMark: CostPaidEntry = {
+    moveId: 'paid_early',
+    costId: 'movers',
+    dueOn: jan15,
+    amountCents: 70_000,
+    paidOn: jan15 - 6 * 86_400_000,
+    fromFreeCents: 0,
+    mark: 'item',
+    purchaseId: null,
+  };
+  assert.deepEqual(
+    listCostPayments(earlyEnd, jan15 + 90 * 86_400_000, 'conservative', [
+      earlyMark,
+    ]).map(({ dueOn, paid }) => [dueOn, paid?.moveId ?? null]),
+    [[jan15, 'paid_early']],
+    'a payment marked paid before the cost ended stays listed, with its mark',
+  );
+  assert.deepEqual(
+    listCostPayments(earlyEnd, jan15 + 90 * 86_400_000, 'conservative'),
+    [],
+    'and an unpaid one past the end is dropped',
+  );
+
   const onlyEnded = removeCost(
     { ...moving, costs: [movers, { ...storage, endsAfter: jan15 }] },
     'movers',
@@ -11707,6 +11739,269 @@ const version = (
     readOld.costs[0].pricedOn === null && readOld.costs[0].endsAfter === null,
     true,
     'a cost sealed before pricedOn and endsAfter reads both as null',
+  );
+}
+
+// Mark a cost paid: what a mark settles, what balances and closings read, and the outside mark.
+{
+  const jan1 = utc(2027, 0, 1);
+  const jan15 = utc(2027, 0, 15);
+  const end = utc(2027, 11, 31);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const movers: HorizonCost = {
+    id: 'movers',
+    name: 'Movers',
+    amount: exact(60_000),
+    schedule: { kind: 'once', anchor: jan15, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  };
+  const truck: HorizonCost = {
+    ...movers,
+    id: 'truck',
+    name: 'Truck rental',
+    amount: exact(30_000),
+    isOutside: true,
+  };
+  const varies: HorizonCost = {
+    ...movers,
+    amount: { lowCents: 60_000, highCents: 80_000 },
+  };
+  const moving: HorizonSealed = {
+    name: 'Moving',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should',
+    orderIndex: 1,
+    rest: { kind: 'later' },
+    note: null,
+    costs: [movers, truck],
+  };
+  const entry = (
+    id: string,
+    costId: string,
+    amountCents: number,
+    fromFreeCents: number,
+    mark: 'item' | 'outside' = 'item',
+  ): CostPaidEntry => ({
+    moveId: id,
+    costId,
+    dueOn: jan15,
+    amountCents,
+    paidOn: jan15,
+    fromFreeCents,
+    mark,
+    purchaseId: null,
+  });
+  const markMove = (paid: CostPaidEntry): OpenMove => ({
+    id: paid.moveId,
+    kind: 'costPaid',
+    date: paid.dueOn,
+    refId: 'moving',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: {
+      costId: paid.costId,
+      dueOn: paid.dueOn,
+      amountCents: paid.amountCents,
+      paidOn: paid.paidOn,
+      fromFreeCents: paid.fromFreeCents,
+      mark: paid.mark,
+      purchaseId: paid.purchaseId,
+    },
+  });
+  const starts: OpenMove[] = [
+    {
+      id: 's1',
+      kind: 'start',
+      date: jan1,
+      refId: null,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 200_000, holding: 'money' },
+    },
+    {
+      id: 's2',
+      kind: 'start',
+      date: jan1,
+      refId: 'moving',
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 50_000, holding: 'bill' },
+    },
+  ];
+  const balancesWith = (moves: OpenMove[]) =>
+    deriveBalances({
+      startDate: jan1,
+      moves: [...starts, ...moves],
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { moving: 'horizon' },
+    });
+  const none = balancesWith([]);
+
+  assert.deepEqual(
+    settleCostPaid(60_000, 50_000),
+    { fromItemCents: 50_000, fromFreeCents: 10_000 },
+    'fromFreeCents is the excess over what the item held',
+  );
+  assert.deepEqual(
+    settleCostPaid(40_000, 50_000),
+    { fromItemCents: 40_000, fromFreeCents: 0 },
+    'less than planned comes wholly from the item',
+  );
+  assert.deepEqual(
+    settleCostPaid(60_000, 50_000, 'outside'),
+    { fromItemCents: 0, fromFreeCents: 0 },
+    'an outside mark takes nothing from anywhere',
+  );
+  assert.equal(needsCostAmount(movers), false, 'an exact cost asks nothing');
+  assert.equal(needsCostAmount(varies), true, 'a range asks what it came to');
+
+  const itemMark = entry('paid_moving_movers_1', 'movers', 60_000, 10_000);
+  const marked = balancesWith([markMove(itemMark)]);
+  assert.equal(
+    marked.assignedByItem.moving,
+    0,
+    'a mark uses up what the item held',
+  );
+  assert.equal(
+    marked.freeToSpendCents,
+    none.freeToSpendCents - 10_000,
+    'and the part beyond it draws Free to Spend',
+  );
+  assert.equal(
+    marked.costPaidByItem.moving,
+    60_000,
+    'a mark from the item is in Spent',
+  );
+
+  assert.equal(
+    marked.costFromFreeByItem.moving,
+    10_000,
+    'the part Free to Spend fronted is kept apart',
+  );
+  assert.deepEqual(
+    getHorizonFigures(0, 60_000, 10_000),
+    {
+      setAsideCents: 50_000,
+      spentCents: 60_000,
+      fromFreeCents: 10_000,
+      leftCents: 0,
+    },
+    'set aside counts only what was put in, not the part Free to Spend fronted',
+  );
+  const overFront = balancesWith([
+    markMove(entry('paid_moving_movers_3', 'movers', 30_000, 90_000)),
+  ]);
+  assert.equal(
+    overFront.costFromFreeByItem.moving,
+    30_000,
+    "a mark's Free to Spend part is clamped to what it came to",
+  );
+
+  const lessMark = entry('paid_moving_movers_2', 'movers', 40_000, 0);
+  assert.equal(
+    balancesWith([markMove(lessMark)]).assignedByItem.moving,
+    10_000,
+    'less than planned stays in the item',
+  );
+
+  const outsideMark = entry(
+    'paid_moving_truck_1',
+    'truck',
+    30_000,
+    0,
+    'outside',
+  );
+  const outside = balancesWith([markMove(outsideMark)]);
+  assert.equal(
+    outside.assignedByItem.moving,
+    none.assignedByItem.moving,
+    'an outside mark moves nothing from the item',
+  );
+  assert.equal(
+    outside.freeToSpendCents,
+    none.freeToSpendCents,
+    'and nothing from Free to Spend',
+  );
+  assert.equal(outside.costPaidByItem.moving ?? 0, 0, 'and is not in Spent');
+  assert.equal(
+    balancesWith([
+      markMove(itemMark),
+      {
+        ...markMove(itemMark),
+        id: 'unpaid_paid_moving_movers_1',
+        reversesMoveId: itemMark.moveId,
+        createdAt: 6,
+      },
+    ]).assignedByItem.moving,
+    50_000,
+    'taking a mark back gives the item its money again',
+  );
+
+  const payments = listHorizonPayments(moving.costs, end, 'conservative', [
+    itemMark,
+  ]);
+  const movePayment = payments.find(({ costId }) => costId === 'movers');
+  assert.equal(
+    movePayment?.paid?.moveId,
+    itemMark.moveId,
+    'a payment carries the mark that settled it',
+  );
+  assert.equal(
+    planHorizon(moving, 50_000, payments).covers.some(
+      ({ costId }) => costId === 'movers',
+    ),
+    false,
+    'a paid payment asks nothing of the plan',
+  );
+  assert.deepEqual(
+    listUnmarkedOutside(moving.costs, end, 'conservative').map(
+      ({ costId }) => costId,
+    ),
+    ['truck'],
+    'an unmarked outside cost is what keeps its item from finishing',
+  );
+  assert.deepEqual(
+    listUnmarkedOutside(moving.costs, end, 'conservative', [outsideMark]),
+    [],
+    'and a marked one no longer does',
+  );
+  assert.equal(
+    sumCostSpent([itemMark, outsideMark]),
+    60_000,
+    'Spent counts only marks made from the item',
+  );
+
+  const closed = buildClosing(toMonthKey(jan1), null, {
+    startDate: jan1,
+    days: [],
+    records: [],
+    moves: [...starts, markMove(itemMark)],
+    purchases: [],
+    billIds: new Set(),
+  });
+  assert.equal(
+    closed.costPaid.moving?.length,
+    1,
+    'a closing carries the marks of its month',
+  );
+  const sealed = encodeClosing(closed);
+  assert.equal(
+    decodeClosing(toMonthKey(jan1), sealed).costPaid.moving?.[0].amountCents,
+    60_000,
+    'and reads them back',
+  );
+  const legacy = { ...sealed, costPaid: undefined };
+  assert.deepEqual(
+    decodeClosing(toMonthKey(jan1), legacy).costPaid,
+    {},
+    'a closing written before costs could be paid reads costPaid as {}',
   );
 }
 
@@ -14058,6 +14353,47 @@ console.log('runway engine: ok');
     [],
     'a payment paid on the first coming pay is not repaid by it',
   );
+  const givenBack = item(
+    { kind: 'onePay', dayKey: 'pay:confirmed' },
+    [movers],
+    0,
+    {
+      paid: [
+        {
+          costId: 'movers',
+          dueOn: utc(2027, 0, 10),
+          paidOn: utc(2027, 0, 5),
+          fromFreeCents: 60_000,
+        },
+      ],
+      repaid: [{ costId: 'movers', on: utc(2027, 0, 8) }],
+    },
+  );
+  assert.deepEqual(
+    costLines(draftOn(jan15, givenBack)),
+    [],
+    'a give-back a confirmed day already carries is not asked again by the next pay',
+  );
+  assert.deepEqual(
+    planCostShares(givenBack, days, utc(2027, 11, 31), 'conservative').filter(
+      (plan) => plan.repays !== null,
+    ),
+    [],
+    'and the plan has no repays line for it',
+  );
+  assert.equal(
+    costLines(
+      draftOn(
+        jan15,
+        item({ kind: 'onePay', dayKey: 'pay:confirmed' }, [movers], 0, {
+          paid: givenBack.paid,
+          repaid: [{ costId: 'movers', on: utc(2027, 0, 4) }],
+        }),
+      ),
+    ).length,
+    1,
+    'a give-back dated before the mark does not count as repaying it',
+  );
   const goneSpread = costLines(
     draftOn(jan15, item({ kind: 'onePay', dayKey: 'pay:gone' }, [storage], 0)),
   );
@@ -14094,6 +14430,72 @@ console.log('runway engine: ok');
       .filter((line) => !line.costId)
       .every((line) => line.costName === null),
     'a line that is not a cost has no cost name',
+  );
+  const sealedDay = [
+    {
+      id: 'r',
+      dayId: 'd',
+      createdAt: 1,
+      kind: 'confirmed' as const,
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative' as const,
+        arrivedCents: 200_000,
+        expectedCents: 200_000,
+        freeToSpendCents: 0,
+        lines: sealed,
+        differences: [],
+      },
+    },
+  ];
+  const sealedDays = [
+    { id: 'd', expectedOn: utc(2027, 0, 8), arrivedOn: utc(2027, 0, 8) },
+  ];
+  const sealedClosing = buildClosing('2027-01', null, {
+    startDate: utc(2027, 0, 1),
+    days: sealedDays,
+    records: sealedDay,
+    moves: [],
+    purchases: [],
+    billIds: new Set(),
+  });
+  const reread = decodeClosing('2027-01', encodeClosing(sealedClosing));
+  assert.deepEqual(
+    reread.repaid.moving,
+    [{ costId: 'movers', on: utc(2027, 0, 8) }],
+    'a closing seals the day that gave a fronted payment back and reads it again',
+  );
+  const closedProgress = deriveBillProgress(
+    [],
+    new Map(),
+    [],
+    utc(2027, 0, 1),
+    reread,
+  );
+  assert.deepEqual(
+    closedProgress.moving?.repaid,
+    [{ costId: 'movers', on: utc(2027, 0, 8) }],
+    'and the progress read from a closing carries it',
+  );
+  assert.deepEqual(
+    costLines(
+      draftOn(
+        jan15,
+        item({ kind: 'onePay', dayKey: 'pay:confirmed' }, [movers], 0, {
+          paid: givenBack.paid,
+          repaid: closedProgress.moving?.repaid,
+        }),
+      ),
+    ),
+    [],
+    'a mark and its give-back sealed into a closing leave the next draft asking nothing',
+  );
+  const { repaid: dropped, ...beforeRepaid } = encodeClosing(sealedClosing);
+  assert.ok(dropped !== undefined);
+  assert.deepEqual(
+    decodeClosing('2027-01', beforeRepaid).repaid,
+    {},
+    'a closing written before give-backs were sealed reads repaid as {}',
   );
   assert.deepEqual(
     sumConfirmedByItem([
@@ -14329,7 +14731,7 @@ console.log('runway engine: ok');
     looked.problems
       .filter((problem) => problem.on === jan15)
       .map((problem) => problem.kind === 'short' && problem.name),
-    ['Alpha\u00A0·\u00A0Moving', 'Alpha\u00A0·\u00A0Trip', 'Beta'],
+    ['Alpha\u00A0· Moving', 'Alpha\u00A0· Trip', 'Beta'],
     "a short cost line due before the next pay is flagged by its cost, whatever its tier, and joined with its item only when another item's cost shares the name",
   );
 }

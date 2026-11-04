@@ -2,8 +2,9 @@ import type { Cents, DateOnly, OpenMove, OpenRecord } from '@apps/runway/types';
 
 import { START_DAY_KEY } from '@apps/runway/constants';
 
-import { getEffectiveSplits } from './correct';
+import { getEffectiveSplit, getEffectiveSplits } from './correct';
 import { toDayStamp } from './dates';
+import type { CostPaidEntry } from './horizon';
 
 /** What a confirmed day set aside for a bill. */
 export interface FundedDay {
@@ -30,10 +31,14 @@ export interface CardPaid {
   cents: Cents;
 }
 
-/** Everything confirmed records and moves say about one bill. */
+/** Everything confirmed records and moves say about one bill, or about the payments a Horizon item's costs have had marked paid. */
 export interface BillProgressInput {
   funded: FundedDay[];
   paid: PaidPayment[];
+  /** A Horizon item's paid payments; missing for a bill. */
+  costPaid?: CostPaidEntry[];
+  /** The confirmed days that gave back a Horizon item's fronted payment; missing when none did. */
+  repaid?: { costId: string; on: DateOnly }[];
 }
 
 export const NO_PROGRESS: BillProgressInput = { funded: [], paid: [] };
@@ -44,6 +49,14 @@ export function getPaidMoveId(billId: string, dueOn: DateOnly, marks: number) {
   const result = marks === 0 ? base : `${base}_${marks + 1}`;
   return result;
 }
+
+/** The id of the nth mark of a Horizon cost's payment: `paid_<itemId>_<costId>_<due yyyymmdd>`, then `_<n>` after an undo. */
+export const getCostPaidMoveId = (
+  itemId: string,
+  costId: string,
+  dueOn: DateOnly,
+  marks: number,
+) => getPaidMoveId(`${itemId}_${costId}`, dueOn, marks);
 
 /** Undoing a mark names the move it reverses, so a second undo of it is the same id. */
 export const getUndoMoveId = (paidMoveId: string) => `unpaid_${paidMoveId}`;
@@ -91,6 +104,56 @@ export function collectPaid(
     });
     return acc;
   }, {});
+  return result;
+}
+
+/** Each Horizon item's paid payments: the `costPaid` moves that no later move reverses. */
+export function collectCostPaid(
+  moves: readonly OpenMove[],
+): Record<string, CostPaidEntry[]> {
+  const reversed = new Set(
+    moves.flatMap((move) => (move.reversesMoveId ? [move.reversesMoveId] : [])),
+  );
+  const result = moves.reduce<Record<string, CostPaidEntry[]>>((acc, move) => {
+    if (move.kind !== 'costPaid' || move.reversesMoveId || !move.refId)
+      return acc;
+    if (reversed.has(move.id)) return acc;
+    (acc[move.refId] ??= []).push({
+      moveId: move.id,
+      ...move.payload,
+    });
+    return acc;
+  }, {});
+  return result;
+}
+
+/** The confirmed days' latest lines that give back to Free to Spend for a Horizon item's fronted payment, by item id, each with the day's date. */
+export function collectRepaid(
+  records: readonly OpenRecord[],
+  onByDay: ReadonlyMap<string, DateOnly>,
+): Record<string, { costId: string; on: DateOnly }[]> {
+  const byDay = records.reduce<Map<string, OpenRecord[]>>((acc, record) => {
+    acc.set(record.dayId, [...(acc.get(record.dayId) ?? []), record]);
+    return acc;
+  }, new Map());
+  const result = [...byDay.entries()]
+    .flatMap(([dayId, group]) => {
+      const on = onByDay.get(dayId);
+      return on === undefined
+        ? []
+        : (getEffectiveSplit(group)?.lines ?? []).flatMap((line) =>
+            line.repaysFree && line.costId !== null
+              ? [{ itemId: line.itemId, costId: line.costId, on }]
+              : [],
+          );
+    })
+    .reduce<Record<string, { costId: string; on: DateOnly }[]>>(
+      (acc, { itemId, costId, on }) => {
+        (acc[itemId] ??= []).push({ costId, on });
+        return acc;
+      },
+      {},
+    );
   return result;
 }
 
@@ -194,6 +257,22 @@ export const countMarks = (
       !move.reversesMoveId &&
       move.refId === billId &&
       move.date === dueOn,
+  ).length;
+
+/** How many times a cost's payment has been marked paid, undone ones included. */
+export const countCostMarks = (
+  moves: readonly OpenMove[],
+  itemId: string,
+  costId: string,
+  dueOn: DateOnly,
+) =>
+  moves.filter(
+    (move) =>
+      move.kind === 'costPaid' &&
+      !move.reversesMoveId &&
+      move.refId === itemId &&
+      move.date === dueOn &&
+      move.payload.costId === costId,
   ).length;
 
 /** What the confirmed days' lines gave each plan item (a corrected day's latest split), with the day each line was for; `onByDay` is a day's scheduled date. */

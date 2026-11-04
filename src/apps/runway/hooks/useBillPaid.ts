@@ -16,6 +16,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Cents } from '@apps/runway/types';
 import { countMarks } from '@apps/runway/engine/progress';
+import { inTurn } from '@apps/runway/hooks/paidQueue';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -27,14 +28,6 @@ import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
-
-/** Paid marks share the plan document, so two at once would contend and one would stall in retries; they run one after another. */
-let paidWrites: Promise<unknown> = Promise.resolve();
-const inTurn = <T>(task: () => Promise<T>): Promise<T> => {
-  const next = paidWrites.then(task, task);
-  paidWrites = next.catch(() => undefined);
-  return next;
-};
 
 /** A payment whose bill varies is marked with what it came to, so it never records the planned figure. */
 export const needsPaidAmount = (payment: BillPayment | null) =>

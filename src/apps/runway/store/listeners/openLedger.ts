@@ -9,6 +9,7 @@ import type {
   CardPaymentSealed,
   ConfirmedSealed,
   CorrectionSealed,
+  CostPaidSealed,
   DateOnly,
   DayRecordDoc,
   IncomeDayDoc,
@@ -55,6 +56,14 @@ export async function openMove(
       ...base,
       kind: 'transfer',
       payload: { ...payload, isOutside: payload.isOutside ?? false },
+    };
+  }
+  if (entry.kind === 'costPaid') {
+    const payload = await read<CostPaidSealed>(entry.sealed);
+    return {
+      ...base,
+      kind: 'costPaid',
+      payload: { ...payload, purchaseId: payload.purchaseId ?? null },
     };
   }
   const payload = await read<BillPaidSealed>(entry.sealed);
@@ -183,7 +192,8 @@ export async function openMonthEntries(
           (entry) =>
             entry.kind === 'billPaid' ||
             entry.kind === 'cardPayment' ||
-            entry.kind === 'transfer',
+            entry.kind === 'transfer' ||
+            entry.kind === 'costPaid',
         )
         .map((entry) => openMove(entry, read)),
     ),

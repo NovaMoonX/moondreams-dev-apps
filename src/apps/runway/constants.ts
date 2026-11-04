@@ -315,8 +315,8 @@ export const HORIZON_WORDS = {
   searchPlaceholder: 'Search your horizon',
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
-  costLineName: (cost: string, item: string) => `${cost}\u00A0·\u00A0${item}`,
-  costLineDetail: (item: string, tail: string) => `${item} ·\u00A0${tail}`,
+  costLineName: (cost: string, item: string) => `${cost}\u00A0· ${item}`,
+  costLineDetail: (item: string, tail: string) => `${item}\u00A0· ${tail}`,
   costFallback: 'Cost',
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
@@ -461,12 +461,12 @@ export const HORIZON_WORDS = {
   takeFromPaysConfirm: 'Take from my pays',
   plannedTotal: (amount: string, isUpTo: boolean, isAfterLead: boolean) =>
     `${isUpTo ? (isAfterLead ? 'up\u00A0to\u00A0' : 'Up\u00A0to\u00A0') : ''}${amount}\u00A0planned`,
-  overNextYear: 'Over the next year:',
+  overNextYear: 'Over\u00A0the\u00A0next\u00A0year:',
   setAside: 'Set aside',
   spent: 'Spent',
   left: 'Left',
-  leftFact: (setAside: string, spent: string) =>
-    `${setAside} set aside, ${spent} spent`,
+  leftFact: (setAside: string, spent: string, fromFree: string | null) =>
+    `${setAside} set aside, ${spent} spent${fromFree ? `, ${fromFree} of it from Free to Spend` : ''}`,
   shortTitle: (amount: string, date: string, more: string | null) =>
     `${amount} short on ${date}${more ? `, ${more} more after` : ''}`,
   shortBody: (
@@ -480,7 +480,9 @@ export const HORIZON_WORDS = {
   shortNothing: (name: string) => `Nothing is set aside for ${name} yet.`,
   shortAfter: (cost: string, earlier: string) =>
     `Nothing is left for ${cost} after ${earlier}.`,
-  outsideTotal: (amount: string) => `${amount} paid outside the plan`,
+  outsideLead: 'Outside the plan:',
+  outsideTotal: (amount: string) => `${amount}\u00A0paid`,
+  outsideDue: (amount: string) => `${amount} still\u00A0to\u00A0pay`,
   needsAShortLook: 'Needs a look',
   putHolds: (name: string, amount: string) => `${name} has ${amount}`,
   needsPutOrNotNow: 'Pick where it comes from, or Not now.',
@@ -504,8 +506,15 @@ export const HORIZON_WORDS = {
   changeItemSub: 'Name, date, how the rest is paid and priority',
   costDue: (date: string) => `Due ${date}`,
   costDueLower: (date: string) => `due ${date}`,
-  costFact: (when: string, pricedOn: string | null) =>
-    pricedOn === null ? when : `${when} · priced ${pricedOn}`,
+  costFact: (when: string, pricedOn: string | null, isOutside = false) =>
+    [
+      when,
+      isOutside &&
+        HORIZON_WORDS.outsideTag.toLowerCase().replaceAll(' ', '\u00A0'),
+      pricedOn !== null && `priced ${pricedOn}`,
+    ]
+      .filter(Boolean)
+      .join('\u00A0· '),
   setPrice: 'Set the price',
   setPriceSub: 'An exact amount, or still a range',
   setPriceSubExact: (amount: string) =>
@@ -522,6 +531,7 @@ export const HORIZON_WORDS = {
   effectBefore: 'Now',
   effectAfter: 'After this change',
   changeLastCost: "It's the only cost left.",
+  paidStaysInRecord: "It's paid, so it stays in the record.",
   changeCostRow: 'Change',
   changeCostSub: "Name, date and how it's paid",
   removeCostRow: 'Remove this cost',
@@ -549,6 +559,7 @@ export const HORIZON_WORDS = {
   changeItemTitle: 'Change it',
   covers: {
     nothingSet: 'Nothing is set aside yet, so nothing is covered.',
+    setAsideUsed: 'What was set aside is spent.',
     none: "What's set aside doesn't cover a whole cost yet.",
     all: 'Covers every cost.',
     listed: (list: string, atEnd: string) => `Covers ${list}${atEnd}.`,
@@ -708,13 +719,14 @@ export const DAY_RECORD_KINDS = [
   'confirmed',
   'correction',
 ] as const;
-/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment` and a `transfer` (money left in an envelope moved to another envelope, a goal or Free to Spend, and its undo, a `transfer` that names it). */
+/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment`, a `transfer` (money left in an envelope moved to another envelope, a goal or Free to Spend, and its undo, a `transfer` that names it) and a `costPaid` (a Horizon cost's payment marked paid, and its undo). */
 export const MOVE_KINDS = [
   'billPaid',
   'start',
   'trackingChange',
   'cardPayment',
   'transfer',
+  'costPaid',
 ] as const;
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
@@ -1095,6 +1107,9 @@ export const CHECKLIST_WORDS = {
   everything: 'Mark everything done',
   everythingShort: 'Mark all done',
   billsGroup: 'Bills to pay',
+  costsGroup: 'Costs to pay',
+  allBillsPaid: 'All bills paid',
+  allBillsPaidAction: 'Mark all bills paid',
   waitingGroup: 'Waiting for more money',
   markPaid: 'Mark paid',
   undoPaid: 'Undo',
@@ -1158,6 +1173,7 @@ export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
+  upTo: (amount: string) => `up\u00A0to\u00A0${amount}`,
   wasDue: (when: string) => `Was due\u00a0${when}`,
   missed: (
     when: string,
@@ -1175,8 +1191,12 @@ export const DUE_WORDS = {
             : when;
     return `Missed ${list}${isDueAgainToday ? ' · due again today' : ''}`;
   },
-  count: (count: number, isAnyLate: boolean) =>
-    isAnyLate ? `${count} bills, oldest first` : `${count} bills`,
+  count: (count: number, isAnyLate: boolean, hasCosts = false) => {
+    const things = hasCosts ? 'payments' : 'bills';
+    return isAnyLate
+      ? `${count} ${things}, oldest first`
+      : `${count} ${things}`;
+  },
   more: (count: number) => `Show ${count} more`,
   fewer: 'Show fewer',
   seeAll: 'See all',
@@ -2080,6 +2100,69 @@ export const PAID_HISTORY_WORDS = {
   openMove: 'Open this payment',
   undoThis: 'Take back this payment',
   undoTitle: 'Take back this payment?',
+} as const;
+
+/** A Horizon cost's payment marked paid, or taken back. */
+export const COST_PAID_WORDS = {
+  summary: (cost: string, item: string, due: string, amount: string) =>
+    `Marked ${cost} paid on ${item}: ${amount} due\u00a0${due}.`,
+  outsideSummary: (cost: string, item: string, due: string, amount: string) =>
+    `Marked ${cost} paid outside the plan on ${item}: ${amount} due\u00a0${due}.`,
+  undoText: (cost: string, item: string, due: string, gives: string | null) =>
+    `Took back the ${due} payment of ${cost} on ${item}${gives === null ? '' : `: ${gives}`}`,
+  confirm: (cost: string, item: string, due: string, gives: string | null) =>
+    `${cost}'s ${due} payment on ${item} goes back to unpaid${gives === null ? '' : `. ${gives}`}.`,
+  givesBackItem: (item: string, amount: string) =>
+    `${item} gets ${amount} back`,
+  givesBackFree: (amount: string) => `${amount} goes back to Free to Spend`,
+  confirmMark: (
+    cost: string,
+    totalCents: string,
+    item: string,
+    heldCents: string | null,
+    freeCents: string,
+  ) =>
+    heldCents === null
+      ? `${cost} is ${totalCents}. ${item} has nothing left, so all ${freeCents} comes out of Free to Spend.`
+      : `${cost} is ${totalCents}. ${item} has ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
+  confirmTitle: (cost: string) => `Mark ${cost} paid`,
+  markRow: 'Mark paid',
+  markOutsideRow: (cost: string) => `Mark ${cost} paid`,
+  markSub: (amount: string, item: string) =>
+    `${amount} comes from what ${item} has left`,
+  markSubFree: (amount: string, item: string, free: string) =>
+    `${amount} comes from ${item}; ${free} of it from Free to Spend`,
+  markSubNothingLeft: (amount: string, item: string) =>
+    `All ${amount} comes out of Free to Spend. ${item} has nothing left.`,
+  markSubRange: 'Say what it came to',
+  markSubOutside: (item: string) =>
+    `You pay it yourself, so nothing comes from ${item}.`,
+  paidRow: (paidOn: string, amount: string) =>
+    `Paid ${paidOn}\u00A0· ${amount}`,
+  paidOutsideRow: (paidOn: string) =>
+    `Paid ${paidOn}\u00A0· outside\u00A0the\u00A0plan`,
+  nothingFromItem: (item: string) => `Nothing came from ${item}`,
+  paidHead: (paidOn: string, isOutside = false) =>
+    isOutside
+      ? `Paid ${paidOn}\u00A0· outside\u00A0the\u00A0plan`
+      : `Paid ${paidOn}`,
+  paidSheetTitle: (cost: string) => `${cost} payment`,
+  cameTo: 'What it came to',
+  fromItem: (item: string, amount: string) => `${amount} from ${item}`,
+  fromFree: (amount: string) => `${amount} from Free to Spend`,
+  outsideNote: 'Paid outside the plan. Nothing came from the item.',
+  takeBack: 'Take it back',
+  takeBackSubOutside: 'It goes back to unpaid. No money moves.',
+  marked: (cost: string) => `Marked ${cost} paid`,
+  markedFrom: (cost: string, amount: string, item: string) =>
+    `Marked ${cost} paid · ${amount} from ${item}`,
+  markedOutside: (cost: string) => `Marked ${cost} paid outside the plan`,
+  unmarked: (cost: string) => `${cost} is not marked paid`,
+  failed: (cost: string) => `${cost} was not marked paid`,
+  notChanged: (cost: string) => `${cost} was not changed`,
+  alreadyPaid: (cost: string) => `${cost} was already marked paid`,
+  alreadyTakenBack: (cost: string) => `${cost} was already taken back`,
+  rowHint: 'Varies · tick to say what it came to',
 } as const;
 
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */

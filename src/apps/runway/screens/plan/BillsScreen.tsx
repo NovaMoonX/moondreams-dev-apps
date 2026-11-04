@@ -36,6 +36,7 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import BillForm from '@apps/runway/forms/BillForm';
 import { describePlanTotal, isUndatedBill } from '@apps/runway/utils/billText';
+import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
 import {
@@ -62,7 +63,8 @@ function BillsScreen() {
   );
   const bills = useAppSelector((state) => selectBills(state, today));
   const lookahead = useDeferredLookahead(today, isLoaded);
-  const hasDue = (lookahead?.due.length ?? 0) > 0;
+  const dueCosts = useDueCostRows(lookahead, today);
+  const hasDue = (lookahead?.due.length ?? 0) + dueCosts.length > 0;
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);

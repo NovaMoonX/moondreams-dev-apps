@@ -16,6 +16,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
+import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
@@ -25,6 +26,7 @@ import TakeFromPaysView from '@apps/runway/components/TakeFromPaysView';
 import SheetHead from '@apps/runway/components/SheetHead';
 import {
   CHANGE_REASON_CHIPS,
+  COST_PAID_WORDS,
   FIX_WORDS,
   HORIZON_WORDS,
   ITEM_SHEET_WORDS,
@@ -32,11 +34,19 @@ import {
   MAX_HORIZON_COSTS,
   RANGE_END_WORDS,
 } from '@apps/runway/constants';
-import { changeCost, type CostChange } from '@apps/runway/engine/horizon';
+import {
+  changeCost,
+  type CostChange,
+  type CostPaidEntry,
+} from '@apps/runway/engine/horizon';
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectComingDays,
+  selectCostPaid,
+  selectCostPayments,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import CostForm from '@apps/runway/forms/CostForm';
 import HorizonChangeForm from '@apps/runway/forms/HorizonChangeForm';
 import CostSheet from '@apps/runway/screens/plan/CostSheet';
@@ -63,6 +73,10 @@ function HorizonSheet({
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
+  const paid = useAppSelector(selectCostPaid)[itemId];
+  const costPayments = useAppSelector((state) =>
+    selectCostPayments(state, today),
+  );
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const { isHidden } = useValuesHidden();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
@@ -79,13 +93,17 @@ function HorizonSheet({
     plannedCents,
     plannedHighCents,
     isPlannedRange,
-    outsideCents,
+    outsidePaidCents,
+    outsideDueCents,
     hasRepeats,
   } = getHorizonStatus(
     horizon,
     balances.assignedByItem[itemId] ?? 0,
     today,
     stance,
+    paid,
+    balances.costPaidByItem[itemId] ?? 0,
+    balances.costFromFreeByItem[itemId] ?? 0,
   );
   const { shortfall } = plan;
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
@@ -140,11 +158,20 @@ function HorizonSheet({
         isPlannedRange,
         hasRepeats,
       ),
-    outsideCents > 0 && HORIZON_WORDS.outsideTotal(formatCents(outsideCents)),
     when,
   ]
     .filter(Boolean)
-    .join(' ·\u00A0');
+    .join('\u00A0· ');
+  const outsideFact = [
+    outsidePaidCents > 0 &&
+      HORIZON_WORDS.outsideTotal(formatCents(outsidePaidCents)),
+    outsideDueCents > 0 &&
+      HORIZON_WORDS.outsideDue(formatCents(outsideDueCents)),
+  ]
+    .filter(Boolean)
+    .join('\u00A0· ');
+  const outsideLine =
+    outsideFact && `${HORIZON_WORDS.outsideLead}\u00A0${outsideFact}`;
   const openCost = horizon.costs.find(({ id }) => id === costId);
   const bodyRef = useRef<HTMLDivElement>(null);
   const viewKey = [
@@ -171,6 +198,37 @@ function HorizonSheet({
       }
     }
   }, [viewKey]);
+  const payments = costPayments[itemId] ?? [];
+  const getPaid = (costId: string) => {
+    const latest = payments
+      .flatMap((payment) =>
+        payment.costId === costId && payment.paid ? [payment.paid] : [],
+      )
+      .reduce<CostPaidEntry | null>(
+        (best, entry) => (best && best.paidOn >= entry.paidOn ? best : entry),
+        null,
+      );
+    if (!latest) return null;
+    const isSettled = !payments.some(
+      (payment) => payment.costId === costId && payment.paid === null,
+    );
+    const paidOn = formatDateOrdinalUTC(latest.paidOn);
+    const getLine = () => {
+      if (latest.mark === 'outside')
+        return COST_PAID_WORDS.paidOutsideRow(paidOn);
+      // A settled row's figure is already what it came to.
+      return isSettled
+        ? COST_PAID_WORDS.paidHead(paidOn)
+        : COST_PAID_WORDS.paidRow(paidOn, formatCents(latest.amountCents));
+    };
+    return { line: getLine(), amountCents: latest.amountCents, isSettled };
+  };
+  const outsideToMark = horizon.costs.flatMap((cost) => {
+    const payment = payments.find(
+      ({ costId, paid }) => costId === cost.id && paid === null,
+    );
+    return cost.isOutside && payment ? [{ cost, payment }] : [];
+  });
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );
@@ -296,6 +354,9 @@ function HorizonSheet({
                 : HORIZON_WORDS.leftFact(
                     formatCents(figures.setAsideCents),
                     formatCents(figures.spentCents),
+                    figures.fromFreeCents > 0 || isHidden
+                      ? formatCents(figures.fromFreeCents)
+                      : null,
                   )
             }
           />
@@ -304,6 +365,7 @@ function HorizonSheet({
             costs={horizon.costs}
             heldCents={figures.leftCents}
             stance={stance}
+            isSetAsideUsed={figures.setAsideCents > 0}
             after={
               (horizon.rest.kind === 'pays' ||
                 horizon.rest.kind === 'onePay') &&
@@ -372,9 +434,16 @@ function HorizonSheet({
               {HORIZON_WORDS.restOutsideNote}
             </p>
           )}
-          <p className='text-muted-foreground text-sm'>
-            <MaskedText>{fact}</MaskedText>
-          </p>
+          <div className='text-muted-foreground space-y-0.5 text-sm'>
+            <p>
+              <MaskedText>{fact}</MaskedText>
+            </p>
+            {outsideLine && (
+              <p>
+                <MaskedText>{outsideLine}</MaskedText>
+              </p>
+            )}
+          </div>
           <div className='space-y-2'>
             <p className='text-muted-foreground text-sm font-medium'>
               {HORIZON_WORDS.costsCaption}
@@ -384,6 +453,7 @@ function HorizonSheet({
                 <CostRow
                   key={cost.id}
                   cost={cost}
+                  paid={getPaid(cost.id)}
                   onOpen={() => {
                     setCostId(cost.id);
                     setCostEdit(null);
@@ -406,6 +476,19 @@ function HorizonSheet({
               >
                 {HORIZON_WORDS.addCost}
               </Button>
+            )}
+            {outsideToMark.length > 0 && (
+              <ActionGroup isRoomy>
+                {outsideToMark.map(({ cost, payment }) => (
+                  <MarkOutsideCostRow
+                    key={cost.id}
+                    itemId={itemId}
+                    itemName={horizon.name}
+                    cost={cost}
+                    payment={payment}
+                  />
+                ))}
+              </ActionGroup>
             )}
           </div>
           <ActionGroup isRoomy>

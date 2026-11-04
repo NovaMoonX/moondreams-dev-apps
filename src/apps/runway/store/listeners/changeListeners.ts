@@ -44,6 +44,7 @@ async function openChange(
             ...payload.move,
             isOutside: payload.move.isOutside ?? false,
             bill: payload.move.bill ?? null,
+            cost: payload.move.cost ?? null,
           }
         : null,
       isUnreadable: false,

@@ -114,6 +114,7 @@ export async function sealMoveLeftover(
       {
         moveId: input.moveId,
         bill: null,
+        cost: null,
         date,
         fromId: input.fromId,
         toId: input.toId,

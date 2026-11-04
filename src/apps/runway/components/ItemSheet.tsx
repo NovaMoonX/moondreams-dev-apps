@@ -44,6 +44,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
+import { toBillAmountPayment } from '@apps/runway/hooks/paidAmountPayment';
 import {
   ActionSection,
   ActionTitle,
@@ -882,9 +883,7 @@ function ItemSheet({
         )}
         {isAskingPaid && payment && (
           <PaidAmountSheet
-            billId={itemId}
-            billName={payload.name}
-            payment={payment}
+            payment={toBillAmountPayment(payload.name, payment, paidWithCard)}
             onMark={paid.mark}
             onClose={() => setIsAskingPaid(false)}
           />

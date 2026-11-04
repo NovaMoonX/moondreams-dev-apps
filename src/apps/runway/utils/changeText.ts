@@ -3,6 +3,7 @@ import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  COST_PAID_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
   PAID_FROM_WORDS,
@@ -19,6 +20,7 @@ import {
 import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
   BillSealed,
+  CostPaidMark,
   EnvelopeSealed,
   HorizonSealed,
   GoalSealed,
@@ -412,3 +414,52 @@ export function describeReplaced(
   const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }
+
+/** The change-log line for a cost's payment marked paid: "Marked Movers paid on Moving: $600.00 due Jan 15th." */
+export const describeCostPaid = (
+  cost: string,
+  item: string,
+  dueOn: number,
+  amountCents: number,
+  mark: CostPaidMark,
+) =>
+  (mark === 'outside'
+    ? COST_PAID_WORDS.outsideSummary
+    : COST_PAID_WORDS.summary)(
+    cost,
+    item,
+    formatDateOrdinalUTC(dueOn),
+    formatCents(amountCents),
+  );
+
+/** Where a taken-back payment's money returns, one part for each place that gets any ("Moving gets $50.00 back and $470.00 goes back to Free to Spend"); null when none moves. */
+export const describeCostGivesBack = (
+  item: string,
+  amountCents: number,
+  fromFreeCents: number,
+  mark: CostPaidMark,
+) => {
+  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents;
+  const free = mark === 'outside' ? 0 : fromFreeCents;
+  const parts = [
+    fromItem > 0 && COST_PAID_WORDS.givesBackItem(item, formatCents(fromItem)),
+    free > 0 && COST_PAID_WORDS.givesBackFree(formatCents(free)),
+  ].filter(Boolean);
+  return parts.length === 0 ? null : parts.join(' and ');
+};
+
+/** The sentence that says what taking a cost's payment back restores, for the toast and the log. */
+export const describeCostTakenBack = (
+  cost: string,
+  item: string,
+  dueOn: number,
+  amountCents: number,
+  fromFreeCents: number,
+  mark: CostPaidMark,
+) =>
+  COST_PAID_WORDS.undoText(
+    cost,
+    item,
+    formatDateOrdinalUTC(dueOn),
+    describeCostGivesBack(item, amountCents, fromFreeCents, mark),
+  );

@@ -8,6 +8,7 @@ import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { HORIZON_WORDS } from '@apps/runway/constants';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectCostPaid } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
@@ -33,11 +34,15 @@ function HorizonRow({
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
   const balances = useAppSelector(selectBalances);
+  const paid = useAppSelector(selectCostPaid)[itemId];
   const { figures, plan, next } = getHorizonStatus(
     horizon,
     balances.assignedByItem[itemId] ?? 0,
     today,
     stance,
+    paid,
+    balances.costPaidByItem[itemId] ?? 0,
+    balances.costFromFreeByItem[itemId] ?? 0,
   );
   const { shortfall } = plan;
   const getDetail = () => {

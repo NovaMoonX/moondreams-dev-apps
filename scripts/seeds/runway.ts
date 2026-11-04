@@ -34,7 +34,15 @@ import {
   listMonths,
   toMonthKey,
 } from '../../src/apps/runway/engine/closings.ts';
-import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
+import {
+  getCostPaidMoveId,
+  getPaidMoveId,
+} from '../../src/apps/runway/engine/progress.ts';
+import {
+  describeCostPaid,
+  describeCostTakenBack,
+} from '../../src/apps/runway/utils/changeText.ts';
+import { settleCostPaid } from '../../src/apps/runway/engine/horizon.ts';
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
@@ -49,6 +57,7 @@ import type {
   ChangeSealed,
   ClosingDoc,
   BillPaidSealed,
+  CostPaidSealed,
   BillSealed,
   ConfirmedSealed,
   DayOverrideSealed,
@@ -57,6 +66,7 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   GroupSealed,
+  HorizonCost,
   HorizonSealed,
   IncomeDayDoc,
   MoveDoc,
@@ -252,7 +262,7 @@ const nextCalendarDay = (today: number, month: number, day: number) => {
     : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
 };
 
-/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. */
+/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. The surgery's Surgery payment is marked paid at $520.00 (the $50.00 its confirmed day's Surgery line set aside, the other $470.00 from Free to Spend) and Moving's truck is marked paid outside the plan, each with its mark move and payment change. */
 async function writeSeedHorizon(
   context: SeedContext,
   uid: string,
@@ -273,7 +283,7 @@ async function writeSeedHorizon(
     isOutside = false,
     isMonthly = false,
     pricedOn: number | null = null,
-  ) => ({
+  ): HorizonCost => ({
     id,
     name,
     amount: { lowCents, highCents },
@@ -439,7 +449,127 @@ async function writeSeedHorizon(
     }),
   );
 
+  const marked: {
+    itemId: string;
+    cost: HorizonCost;
+    amountCents: number;
+    fromFreeCents: number;
+    paidOn: number;
+    mark: CostPaidSealed['mark'];
+  }[] = [
+    {
+      itemId: 'seed-horizon-surgery',
+      cost: items[1].payload.costs[0],
+      amountCents: 52_000,
+      fromFreeCents: settleCostPaid(52_000, 5_000).fromFreeCents,
+      paidOn: today - 2 * DAY_MS,
+      mark: 'item',
+    },
+    {
+      itemId: 'seed-horizon-moving',
+      cost: items[0].payload.costs[0],
+      amountCents: 12_000,
+      fromFreeCents: 0,
+      paidOn: today - DAY_MS,
+      mark: 'outside',
+    },
+  ];
+  const marks = await Promise.all(
+    marked.map(async ({ itemId, cost: paidCost, ...paid }) => {
+      const itemName =
+        items.find(({ id }) => id === itemId)?.payload.name ?? itemId;
+      const dueOn = paidCost.schedule.anchor ?? today;
+      const moveId = getCostPaidMoveId(itemId, paidCost.id, dueOn, 0);
+      const payload: CostPaidSealed = {
+        costId: paidCost.id,
+        dueOn,
+        amountCents: paid.amountCents,
+        paidOn: paid.paidOn,
+        fromFreeCents: paid.fromFreeCents,
+        mark: paid.mark,
+        purchaseId: null,
+      };
+      const undoText = describeCostTakenBack(
+        paidCost.name,
+        itemName,
+        dueOn,
+        paid.amountCents,
+        paid.fromFreeCents,
+        paid.mark,
+      );
+      return {
+        itemId,
+        moveId,
+        dueOn,
+        paidOn: paid.paidOn,
+        sealed: await sealJson(payload, encryption),
+        change: await sealJson(
+          {
+            summary: describeCostPaid(
+              paidCost.name,
+              itemName,
+              dueOn,
+              paid.amountCents,
+              paid.mark,
+            ),
+            note: null,
+            move: {
+              moveId,
+              date: dueOn,
+              fromId: null,
+              toId: null,
+              cents: paid.amountCents,
+              note: null,
+              isOutside: false,
+              undoText,
+              isUndo: false,
+              bill: null,
+              cost: {
+                itemId,
+                itemName,
+                costId: paidCost.id,
+                name: paidCost.name,
+                dueOn,
+                paidOn: paid.paidOn,
+                amountCents: paid.amountCents,
+                fromFreeCents: paid.fromFreeCents,
+                mark: paid.mark,
+                purchaseId: null,
+              },
+            },
+          } satisfies ChangeSealed,
+          encryption,
+        ),
+      };
+    }),
+  );
+
   const batch = context.firestore.batch();
+  marks.forEach(
+    ({ itemId, moveId, dueOn, paidOn, sealed: markSealed, change }) => {
+      const createdAt = paidOn + 10 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+        id: moveId,
+        kind: 'costPaid',
+        date: dueOn,
+        refId: itemId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: markSealed,
+      } satisfies MoveDoc);
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-${moveId}`),
+        {
+          id: `seed-change-${moveId}`,
+          kind: 'paymentChange',
+          createdAt,
+          effectiveFrom: null,
+          itemIds: [itemId],
+          sealed: change,
+        } satisfies ChangeDoc,
+      );
+    },
+  );
   transfers.forEach(
     ({ itemId, transfer, sealed: moveSealed, change: moveChange }) => {
       const moveId = `transfer_seed-toward-${itemId}`;
@@ -491,7 +621,7 @@ async function writeSeedHorizon(
     );
   });
   await batch.commit();
-  return items.length * 3 + transfers.length * 2;
+  return items.length * 3 + transfers.length * 2 + marks.length * 2;
 }
 
 const KEPT_ENVELOPE_ID = 'seed-envelope-concert';

@@ -208,6 +208,7 @@ function SetHeldView({
             void undoMove({
               moveId,
               bill: null,
+              cost: null,
               date,
               fromId,
               toId,
