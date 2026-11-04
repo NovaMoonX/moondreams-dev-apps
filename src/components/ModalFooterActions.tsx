@@ -25,11 +25,11 @@ function ModalFooterActions({ leftActions, cancelAction, rightActions, note }: M
         </p>
       )}
       <div className='flex flex-row items-center justify-between gap-2'>
-        <div className='flex items-center gap-2'>
+        <div className='flex shrink-0 items-center gap-2'>
           {leftActions}
           {cancelAction}
         </div>
-        <div className='flex items-center justify-end gap-2 max-sm:flex-1 max-sm:[&>:last-child]:flex-1'>{rightActions}</div>
+        <div className='flex min-w-0 items-center justify-end gap-2 max-sm:flex-1 max-sm:[&>:last-child]:flex-1'>{rightActions}</div>
       </div>
     </div>
   );

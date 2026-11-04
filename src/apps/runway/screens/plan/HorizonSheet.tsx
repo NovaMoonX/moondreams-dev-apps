@@ -52,6 +52,7 @@ function HorizonSheet({
     plannedHighCents,
     isPlannedRange,
     outsideCents,
+    hasRepeats,
   } = getHorizonStatus(
     horizon,
     balances.assignedByItem[itemId] ?? 0,
@@ -93,23 +94,19 @@ function HorizonSheet({
       : HORIZON_WORDS.aroundRange(
           formatDateRangeOrdinalUTC(horizon.happensOn, horizon.happensUntil),
         );
+  const yearLead = hasRepeats ? `${HORIZON_WORDS.overNextYear} ` : '';
   const fact = [
-    HORIZON_WORDS.plannedTotal(
-      formatCents(isPlannedRange ? plannedHighCents : plannedCents),
-      isPlannedRange,
-    ).replaceAll(' ', '\u00A0'),
-    outsideCents > 0 &&
-      HORIZON_WORDS.outsideTotal(formatCents(outsideCents)).replaceAll(
-        ' ',
-        '\u00A0',
+    yearLead +
+      HORIZON_WORDS.plannedTotal(
+        formatCents(isPlannedRange ? plannedHighCents : plannedCents),
+        isPlannedRange,
+        hasRepeats,
       ),
+    outsideCents > 0 && HORIZON_WORDS.outsideTotal(formatCents(outsideCents)),
     when,
   ]
     .filter(Boolean)
-    .map((piece, index, pieces) =>
-      index < pieces.length - 1 ? `${piece}\u00A0·` : piece,
-    )
-    .join(' ');
+    .join(' ·\u00A0');
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );
@@ -158,6 +155,11 @@ function HorizonSheet({
                   {HORIZON_WORDS.shortTitle(
                     formatCents(shortfall.shortCents),
                     formatDateOrdinalUTC(shortfall.dueOn),
+                    shortfall.totalShortCents > shortfall.shortCents
+                      ? formatCents(
+                          shortfall.totalShortCents - shortfall.shortCents,
+                        )
+                      : null,
                   )}
                 </MaskedText>
               }

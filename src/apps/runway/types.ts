@@ -390,10 +390,13 @@ export interface HorizonSealed {
   costs: HorizonCost[];
 }
 
-/** A horizon payload as it may be stored: a version sealed before `rest` or `isOutside` existed lacks them. */
+/** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside` or `ending` existed lacks them. */
 export type HorizonStored = Omit<HorizonSealed, 'rest' | 'costs'> & {
   rest?: HorizonRest | null;
-  costs: (Omit<HorizonCost, 'isOutside'> & { isOutside?: boolean })[];
+  costs: (Omit<HorizonCost, 'isOutside' | 'ending'> & {
+    isOutside?: boolean;
+    ending?: Ending;
+  })[];
 };
 
 export interface HorizonCost {
@@ -403,6 +406,8 @@ export interface HorizonCost {
   /** Equal ends for an exact amount. */
   amount: MoneyRange;
   schedule: Schedule;
+  /** When a repeating cost stops; never for a cost paid once. */
+  ending: Ending;
   /** Paid outside the plan: listed, never covered, never short. */
   isOutside: boolean;
   note: string | null;

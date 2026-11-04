@@ -62,6 +62,7 @@ import {
 import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import type {
   BillFundedBy,
+  HorizonCost,
   OpenDay,
   Pairing,
 } from '../../src/apps/runway/types.ts';
@@ -10654,6 +10655,7 @@ const version = (
     name: 'Movers',
     amount: { lowCents: 60_000, highCents: 80_000 },
     schedule: { kind: 'once' as const, anchor: jan15, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
     isOutside: false,
     note: null,
   };
@@ -10689,6 +10691,57 @@ const version = (
     listCostPayments(movers, jan15 - DAY_MS, 'conservative').length,
     0,
     'a cost after the horizon is not listed',
+  );
+  const storage = {
+    ...movers,
+    id: 'storage',
+    name: 'Storage unit',
+    amount: { lowCents: 10_000, highCents: 10_000 },
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: Date.UTC(2027, 1, 1),
+      monthDays: [1],
+    },
+  };
+  const datesOf = (cost: HorizonCost) =>
+    listCostPayments(cost, end, 'conservative').map(({ dueOn }) => dueOn);
+  assert.deepEqual(
+    datesOf(storage),
+    occurrences(storage.schedule, storage.ending, 0, end),
+    'a repeating cost pays on the dates a bill with the same schedule does',
+  );
+  assert.equal(datesOf(storage).length, 11, 'and goes on to the horizon');
+  assert.deepEqual(
+    datesOf({ ...storage, ending: { onDate: null, afterCount: 3 } }),
+    [Date.UTC(2027, 1, 1), Date.UTC(2027, 2, 1), Date.UTC(2027, 3, 1)],
+    'an ending after a count stops the payments',
+  );
+  assert.deepEqual(
+    datesOf({
+      ...storage,
+      ending: { onDate: Date.UTC(2027, 3, 1), afterCount: null },
+    }),
+    [Date.UTC(2027, 1, 1), Date.UTC(2027, 2, 1), Date.UTC(2027, 3, 1)],
+    'an ending on a date keeps that day and stops after it',
+  );
+  const walked = planHorizon(
+    { rest: { kind: 'later' }, costs: [movers, storage] },
+    80_000 + 20_000,
+    listHorizonPayments([storage, movers], end, 'conservative'),
+  );
+  assert.deepEqual(
+    walked.covers.slice(0, 3).map(({ costId, dueOn }) => [costId, dueOn]),
+    [
+      ['movers', jan15],
+      ['storage', Date.UTC(2027, 1, 1)],
+      ['storage', Date.UTC(2027, 2, 1)],
+    ],
+    'the walk pays Movers, then the storage payments, in date order',
+  );
+  assert.equal(
+    walked.coveredUntil,
+    Date.UTC(2027, 3, 1),
+    'and the first storage payment the money cannot cover is where it runs out',
   );
   const payments = listHorizonPayments([movers, truck], end, 'conservative');
   assert.deepEqual(
@@ -10740,6 +10793,7 @@ const version = (
     name: id,
     amount: { lowCents, highCents },
     schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
     isOutside,
     note: null,
   });
@@ -10882,6 +10936,11 @@ const version = (
     read.costs[0].isOutside,
     false,
     'and a cost before isOutside reads as inside the plan',
+  );
+  assert.deepEqual(
+    read.costs[0].ending,
+    { onDate: null, afterCount: null },
+    'and a cost before ending reads as never ends',
   );
 
   const start = Date.UTC(2026, 9, 1);
