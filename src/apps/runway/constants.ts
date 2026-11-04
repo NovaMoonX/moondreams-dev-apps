@@ -1097,15 +1097,27 @@ export const HOME_WORDS = {
 } as const;
 
 export const SETUP_WORDS = {
-  newTitle: 'Plan your first paycheck',
-  newBody:
-    'Add your income, then what you pay and what you spend on. Runway works out what each income day sets aside, and what is Free to Spend.',
-  newAction: 'Start your plan',
-  startedTitle: 'Pick up where you left off',
-  startedBody: (parts: string) =>
-    `You have added ${parts}. Add what you pay and what you spend on, and Runway can say what is Free to Spend.`,
-  startedAction: 'Continue setting up',
-  settings: 'Plan settings',
+  steps: [
+    { key: 'income', title: 'Income', hint: 'Who pays you, and when' },
+    { key: 'bill', title: 'Bills', hint: 'What you pay each month' },
+    {
+      key: 'spending',
+      title: 'Spending and goals',
+      hint: 'Where the rest goes',
+    },
+  ],
+  newTitle: "Let's plan your first paycheck",
+  newBody: 'Three quick steps.',
+  newAction: 'Add your income',
+  startedTitle: 'Income is in',
+  startedBody: 'Next, add what you pay.',
+  startedAction: 'Add your bills',
+  outTitle: 'Plan your first paycheck',
+  outBody: 'Start now. Sign in when you want to save it.',
+  outAction: 'Start planning',
+  outKeptTitle: 'Welcome back',
+  outKeptBody: 'Kept on this device until you sign in.',
+  outKeptAction: 'Keep planning',
 } as const;
 
 export const HISTORY_WORDS = {
@@ -1421,10 +1433,6 @@ export const START_WORDS = {
     'Your plan is still opening. Try again in a moment. Nothing was added.',
   handoffUnrecorded: (names: string) =>
     `What is in it now did not record for ${names}. Add it under Where things stand.`,
-  landingTitle: 'Plan before you sign in',
-  landingBody:
-    'Runway plans each paycheck: what goes to bills, envelopes and goals, and what is left to spend. You can go through Starting out now. Your answers stay on this device until you sign in.',
-  landingButton: 'Start planning',
 } as const;
 
 /** What "Start from your budget" takes and keeps from the documents, told to the reader and enforced on its answer. */
