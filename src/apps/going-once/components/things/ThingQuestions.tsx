@@ -11,7 +11,11 @@ import { PillGroup } from '@/components/PillGroup';
 import SegmentedControl from '@/components/SegmentedControl';
 import type { LinkPreview } from '@/lib/linkMetadata/types';
 import { parseMoneyToCents } from '@/utils/moneyUtils';
-import { getWebLinkSiteName, toWebLink } from '@/utils/urlUtils';
+import {
+  getWebLinkHost,
+  getWebLinkSiteName,
+  toWebLink,
+} from '@/utils/urlUtils';
 import {
   CONDITION_OPTIONS,
   MAX_BOUGHT_FROM_LENGTH,
@@ -287,8 +291,12 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
 
   const handleName = (text: string) => {
     const link = readPastedLink(text);
-    if (link === null || answers.boughtUrl !== '') {
-      onChange({ boughtFrom: text });
+    if (
+      link === null ||
+      answers.boughtUrl !== '' ||
+      getWebLinkSiteName(link) === null
+    ) {
+      onChange({ boughtFrom: text.slice(0, MAX_BOUGHT_FROM_LENGTH) });
       return;
     }
     onChange(withStoreName({ ...answers, boughtFrom: '' }, link, null));
@@ -301,7 +309,6 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
           <Input
             variant='outline'
             placeholder='Target'
-            maxLength={MAX_BOUGHT_FROM_LENGTH}
             value={answers.boughtFrom}
             onChange={(event) => handleName(event.target.value)}
           />
@@ -309,7 +316,8 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
       </Field>
       {isNameFromLink && (
         <p className='text-muted-foreground -mt-2 text-sm'>
-          From the store link. Change it if that&apos;s not quite right.
+          From the store link ({getWebLinkHost(answers.boughtUrl)}). Change it
+          if that&apos;s not quite right.
         </p>
       )}
       <Field label='When'>

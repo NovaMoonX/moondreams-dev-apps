@@ -185,6 +185,7 @@ function ImageViewer({
         event.stopPropagation();
         return;
       }
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (event.key === 'ArrowLeft') step(-1);
       else if (event.key === 'ArrowRight') step(1);
       else if (event.key === '+' || event.key === '=') zoomByKey(KEY_ZOOM_STEP);
@@ -264,7 +265,12 @@ function ImageViewer({
           else onDialogClose();
         }}
         onPointerDown={(event) => {
-          if ((event.target as HTMLElement).closest('button')) return;
+          if (
+            (event.target as HTMLElement).closest('button') ||
+            (event.pointerType === 'mouse' && event.button !== 0) ||
+            pointers.current.size >= 2
+          )
+            return;
           if (pointers.current.size === 0) didSwipe.current = false;
           pointers.current.set(event.pointerId, {
             x: event.clientX,
@@ -390,6 +396,8 @@ function ImageViewer({
           const wasTracked = pointers.current.delete(event.pointerId);
           if (pinch.current) {
             if (pointers.current.size < 2) {
+              // A finger still down after a pinch neither pans nor counts as a tap when it lifts.
+              pointers.current.clear();
               pinch.current = null;
               pan.current = null;
               lastTap.current = null;
@@ -468,6 +476,7 @@ function ImageViewer({
           if (pinch.current && pointers.current.size < 2) pinch.current = null;
           if (pan.current?.pointerId === event.pointerId) pan.current = null;
           if (drag.current?.pointerId === event.pointerId) drag.current = null;
+          if (pinch.current) return;
           setIsDragging(false);
           setDragX(0);
         }}
