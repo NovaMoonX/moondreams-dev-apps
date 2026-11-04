@@ -339,7 +339,7 @@ async function writeSeedHorizon(
         emoji: '🐱',
         happensOn: dec18,
         happensUntil: null,
-        priority: 'should',
+        priority: 'must',
         orderIndex: 21,
         rest: { kind: 'pays' },
         note: null,
