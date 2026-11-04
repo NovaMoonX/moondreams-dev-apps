@@ -79,6 +79,8 @@ export async function createCard(
         issuer: input.issuer,
         name: input.name,
         dueDay: input.dueDay,
+        lastFour: input.lastFour ?? null,
+        payFromAccountId: input.payFromAccountId ?? null,
       } satisfies CardSealed,
       encryption,
     ),
@@ -116,7 +118,7 @@ export async function createCard(
   return id;
 }
 
-/** Changes a card's issuer, name or due day; only those fields and when it changed are written. */
+/** Changes a card's issuer, name, due day, last 4 digits or paying account; only those fields and when it changed are written. */
 export async function updateCard(
   uid: string,
   encryption: RunwayEncryption,
@@ -130,6 +132,8 @@ export async function updateCard(
         issuer: input.issuer,
         name: input.name,
         dueDay: input.dueDay,
+        lastFour: input.lastFour ?? null,
+        payFromAccountId: input.payFromAccountId ?? null,
       } satisfies CardSealed,
       encryption,
     ),

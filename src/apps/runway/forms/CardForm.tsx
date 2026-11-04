@@ -15,7 +15,11 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
-import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import {
+  useQuestionFlow,
+  type QuestionControls,
+  type QuestionStep,
+} from '@/hooks/useQuestionFlow';
 import { useAppSelector } from '@/store';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -31,6 +35,7 @@ import {
 import {
   isFlag,
   isNullableOneOf,
+  isNullableText,
   isText,
   isWholeNumber,
   readDraftFields,
@@ -40,8 +45,14 @@ import {
   type StartOverProps,
 } from '@apps/runway/forms/withStartOver';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { getPullAccounts } from '@apps/runway/engine/accounts';
+import LastFourField from '@apps/runway/forms/LastFourField';
+import { isLastFour } from '@apps/runway/utils/accountText';
 import { createCard, updateCard } from '@apps/runway/store/actions/cardActions';
-import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectAccounts,
+  selectAllCards,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenCard } from '@apps/runway/types';
 import {
   describeCardAdded,
@@ -68,6 +79,10 @@ interface CardFormData {
   /** The day of the month it is due, when one was picked. */
   dueDay: number | null;
   hasNoDueDay: boolean;
+  lastFour: string;
+  hasNoLastFour: boolean;
+  /** The account that pays it; null until one is picked. */
+  payFromAccountId: string | null;
 }
 
 interface CardFormProps {
@@ -94,6 +109,9 @@ const parseCardDraft = (stored: unknown) => {
       value === null ||
       (isWholeNumber(value) && DUE_DAYS.includes(value as number)),
     hasNoDueDay: isFlag,
+    lastFour: isText,
+    hasNoLastFour: isFlag,
+    payFromAccountId: isNullableText,
   });
   return data;
 };
@@ -108,6 +126,9 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
       owed: '',
       dueDay: null,
       hasNoDueDay: false,
+      lastFour: '',
+      hasNoLastFour: false,
+      payFromAccountId: null,
     };
   }
   const known = CARD_ISSUERS.find((issuer) => issuer === editing.issuer);
@@ -119,6 +140,9 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
     owed: '',
     dueDay: editing.dueDay,
     hasNoDueDay: editing.dueDay === null,
+    lastFour: editing.lastFour ?? '',
+    hasNoLastFour: !editing.lastFour,
+    payFromAccountId: editing.payFromAccountId ?? null,
   };
 };
 
@@ -137,6 +161,7 @@ function CardFormBody({
   const maskNote = (note: string | null) => (note ? mask(note) : null);
   const isMounted = useRef(true);
   const cards = useAppSelector(selectAllCards);
+  const pullAccounts = getPullAccounts(useAppSelector(selectAccounts));
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -194,6 +219,11 @@ function CardFormBody({
     owedCents !== null && owedCents >= 0 && owedCents <= MAX_PURCHASE_CENTS;
   const asksOwed = editing === undefined && startDate !== null;
   const isDueAnswered = formData.dueDay !== null || formData.hasNoDueDay;
+  const isLastFourAnswered =
+    formData.hasNoLastFour || isLastFour(formData.lastFour);
+  const payFromName =
+    pullAccounts.find((account) => account.id === formData.payFromAccountId)
+      ?.name ?? CARD_WORDS.payFromNone;
   const hasOther = hasUnnamedCardFrom(issuer, cards, editing?.id ?? null);
 
   const steps: QuestionStep[] = [
@@ -266,6 +296,31 @@ function CardFormBody({
             </RevealChip>
           </div>
         </div>
+      ),
+    },
+    {
+      id: 'lastFour',
+      title: CARD_WORDS.lastFourTitle,
+      summaryLabel: CARD_WORDS.lastFourLabel,
+      summaryValue: formData.hasNoLastFour
+        ? CARD_WORDS.lastFourNone
+        : isLastFour(formData.lastFour)
+          ? `••${formData.lastFour}`
+          : '',
+      isAnswered: isLastFourAnswered,
+      blocker: CARD_WORDS.needsFourDigits,
+      render: ({ moveOn }) => (
+        <LastFourField
+          label={CARD_WORDS.lastFourLabel}
+          hint={CARD_WORDS.lastFourHint}
+          skipLabel={CARD_WORDS.lastFourSkip}
+          value={formData.lastFour}
+          onChange={(value) => set({ lastFour: value, hasNoLastFour: false })}
+          onSkip={() => {
+            set({ lastFour: '', hasNoLastFour: true });
+            moveOn();
+          }}
+        />
       ),
     },
     ...(asksOwed
@@ -341,6 +396,32 @@ function CardFormBody({
         </div>
       ),
     },
+    ...(pullAccounts.length >= 2
+      ? [
+          {
+            id: 'payFrom',
+            title: CARD_WORDS.payFromTitle,
+            summaryLabel: CARD_WORDS.payFromLabel,
+            summaryValue: payFromName,
+            isAnswered: true,
+            isPreAnswered: true,
+            render: ({ moveOn }: QuestionControls) => (
+              <PillGroup
+                label={CARD_WORDS.payFromLabel}
+                options={pullAccounts.map((account) => ({
+                  value: account.id,
+                  label: account.name,
+                }))}
+                value={formData.payFromAccountId}
+                onChange={(payFromAccountId) => {
+                  set({ payFromAccountId });
+                  moveOn();
+                }}
+              />
+            ),
+          } satisfies QuestionStep,
+        ]
+      : []),
   ];
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
@@ -373,11 +454,13 @@ function CardFormBody({
       ? CARD_WORDS.needsIssuer
       : !hasName && !formData.hasNoName
         ? CARD_WORDS.needsName
-        : !isOwedValid
-          ? FORM_FLOW_WORDS.badAmount
-          : !isDueAnswered
-            ? CARD_WORDS.needsDue
-            : null;
+        : !isLastFourAnswered
+          ? CARD_WORDS.needsFourDigits
+          : !isOwedValid
+            ? FORM_FLOW_WORDS.badAmount
+            : !isDueAnswered
+              ? CARD_WORDS.needsDue
+              : null;
 
   const handleSave = async () => {
     if (!user || blocker !== null) return;
@@ -389,6 +472,11 @@ function CardFormBody({
         issuer,
         name: hasName ? name : null,
         dueDay: formData.dueDay,
+        lastFour: formData.hasNoLastFour ? null : formData.lastFour || null,
+        payFromAccountId:
+          pullAccounts.length >= 2
+            ? formData.payFromAccountId
+            : (editing?.payFromAccountId ?? null),
       };
       if (editing) {
         const summary = describeCardChanged(

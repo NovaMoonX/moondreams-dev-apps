@@ -2682,19 +2682,20 @@ export const ACCOUNT_KINDS = [
   'other',
 ] as const;
 
-export const ACCOUNT_KIND_LABELS: Record<(typeof ACCOUNT_KINDS)[number], string> =
-  {
-    checking: 'Checking',
-    savings: 'Savings',
-    cashManagement: 'Cash account',
-    investment: 'Investing',
-    other: 'Other',
-  };
+export const ACCOUNT_KIND_LABELS: Record<
+  (typeof ACCOUNT_KINDS)[number],
+  string
+> = {
+  checking: 'Checking',
+  savings: 'Savings',
+  cashManagement: 'Cash account',
+  investment: 'Investing',
+  other: 'Other',
+};
 
 /** Kinds whose money is not for spending, so a new one starts left out of the total. */
-export const ACCOUNT_KINDS_LEFT_OUT: readonly (typeof ACCOUNT_KINDS)[number][] = [
-  'investment',
-];
+export const ACCOUNT_KINDS_LEFT_OUT: readonly (typeof ACCOUNT_KINDS)[number][] =
+  ['investment'];
 
 export const ACCOUNT_WORDS = {
   sectionTitle: 'Accounts',
@@ -2710,7 +2711,7 @@ export const ACCOUNT_WORDS = {
   notYetGivenAJob: 'Not yet given a job',
   overAssigned: (amount: string) => `Over-assigned ${amount}`,
   chooseHolds: 'Choose what it holds',
-  chooseHoldsSub: 'Goals and envelopes whose money sits here',
+  chooseHoldsSub: 'Goals and envelopes kept here',
   chooseHoldsHeldElsewhere: (account: string) => `Now in ${account}`,
   updateBalance: 'Update the balance',
   updateBalanceSub: 'What the account holds today',
@@ -2755,6 +2756,8 @@ export const ACCOUNT_WORDS = {
   saveFailed: 'The account was not saved',
   payFromTitle: 'Which account pays it?',
   payFromLabel: 'Paid from',
+  payFromNone: 'Not chosen yet',
+  billLabel: 'Paid from account',
   payFromDefault: (name: string) => `${name} (where cards and bills pull from)`,
   changeAdded: (name: string) => `Added the account ${name}`,
   changeChanged: (name: string) => `Changed the account ${name}`,
@@ -2762,6 +2765,30 @@ export const ACCOUNT_WORDS = {
   changeHolds: (name: string) => `Changed what ${name} holds`,
   changeBalance: (name: string) => `Updated the balance of ${name}`,
   withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
+  sheetTitle: 'Account',
+  searchPlaceholder: 'Search accounts',
+  searchEmpty: 'No account matches that.',
+  loading: 'Getting your accounts.',
+  sheetTitleNew: 'New account',
+  discardNew: 'account',
+  offline: 'This needs a connection. Nothing was changed.',
+  failed: 'This did not save. Nothing was changed.',
+  goalsHeading: 'Goals',
+  envelopesHeading: 'Envelopes',
+  holdsNothingToPick:
+    'Add a goal or an envelope first, then say where it sits.',
+  holdsSave: 'Save',
+  holdsSaved: (name: string) => `${name} updated`,
+  holdsFailed: 'What it holds was not saved',
+  balanceSave: 'Save',
+  balanceSaved: (name: string) => `Balance of ${name} updated`,
+  balanceFailed: 'The balance was not saved',
+  balanceNotNow: 'Not now',
+  balanceHint: 'Leave it empty to add it later.',
+  balanceNeeded: 'Type an amount.',
+  needsPull: 'Say whether cards and bills pull from it.',
+  institutionsUsed: 'Banks you already use',
+  fourDigitsPlaceholder: '1234',
 } as const;
 
 export const CARD_WORDS = {
@@ -2855,6 +2882,15 @@ export const CARD_WORDS = {
     `Takes ${amount} off what you owe on ${name}.`,
   usualCard: (envelope: string) => `What you usually use for ${envelope}`,
   loading: 'Getting what each card waits for.',
+  lastFourTitle: 'What are its last 4 digits?',
+  lastFourLabel: 'Last 4 digits',
+  lastFourHint: 'Tells two cards from one bank apart.',
+  lastFourSkip: 'Skip',
+  lastFourNone: 'Not given',
+  needsFourDigits: 'Type 4 digits, or skip.',
+  payFromTitle: 'Which account pays it?',
+  payFromLabel: 'Paid from',
+  payFromNone: 'Not chosen yet',
   chargedTo: (card: string) => `Charged to ${card}`,
   comingDueTitle: 'Coming due',
   comingDueOne: '1 card due',
@@ -2899,6 +2935,11 @@ export const CARD_WORDS = {
   changeNoName: 'no name',
   changeDueDay: (from: string, to: string) => `due day ${from} to ${to}`,
   changeNoDueDay: 'no due day',
+  changeLastFour: (from: string, to: string) =>
+    `last 4 digits ${from} to ${to}`,
+  changeNoLastFour: 'none',
+  withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
+  changePayFrom: 'the account that pays it',
   changeArchived: (name: string) => `Archived ${name}`,
   changePaid: (
     covers: 'full' | 'minimum' | 'part',

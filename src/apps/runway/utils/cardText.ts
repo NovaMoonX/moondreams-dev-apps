@@ -38,6 +38,12 @@ export const resolveIssuer = (typed: string) => {
   return resolution.kind === 'match' ? resolution.option : resolution.label;
 };
 
+/** A typed bank as one the person already uses or a known issuer, or written like them. */
+export const resolveBank = (typed: string, used: readonly string[]) => {
+  const resolution = issuerMatcher.resolve(typed, [...CARD_ISSUERS, ...used]);
+  return resolution.kind === 'match' ? resolution.option : resolution.label;
+};
+
 const sameIssuer = (a: string, b: string) =>
   issuerMatcher.comparable(a) === issuerMatcher.comparable(b);
 
@@ -52,6 +58,23 @@ export function getCardName(card: OpenCard, cards: readonly OpenCard[]) {
     .sort((a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id));
   const position = unnamed.findIndex((other) => other.id === card.id);
   return position > 0 ? `${card.issuer} ${position + 1}` : card.issuer;
+}
+
+/** The card's name, with its last 4 digits after it when another open card comes from the same issuer. */
+export function getCardNameWithLastFour(
+  card: OpenCard,
+  cards: readonly OpenCard[],
+) {
+  const name = getCardName(card, cards);
+  const isShared = cards.some(
+    (other) =>
+      other.id !== card.id &&
+      other.archivedAt === null &&
+      sameIssuer(other.issuer, card.issuer),
+  );
+  return card.lastFour && isShared
+    ? CARD_WORDS.withLastFour(name, card.lastFour)
+    : name;
 }
 
 /** Whether the issuer already has an unnamed card, which the next one from it must be named apart from. */
@@ -212,6 +235,17 @@ export function describeCardChanged(
             ? CARD_WORDS.changeNoDueDay
             : CARD_WORDS.dueSummaryDay(after.dueDay, toOrdinal(after.dueDay)),
         ),
+    (before.lastFour ?? null) === (after.lastFour ?? null)
+      ? null
+      : CARD_WORDS.changeLastFour(
+          before.lastFour
+            ? `••${before.lastFour}`
+            : CARD_WORDS.changeNoLastFour,
+          after.lastFour ? `••${after.lastFour}` : CARD_WORDS.changeNoLastFour,
+        ),
+    (before.payFromAccountId ?? null) === (after.payFromAccountId ?? null)
+      ? null
+      : CARD_WORDS.changePayFrom,
   ].filter((part) => part !== null);
   return parts.length === 0
     ? null

@@ -7,7 +7,7 @@ import type { DateOnly, OpenCard } from '@apps/runway/types';
 import {
   describeCardDue,
   getCardDueNow,
-  getCardName,
+  getCardNameWithLastFour,
 } from '@apps/runway/utils/cardText';
 
 interface CardRowProps {
@@ -26,7 +26,7 @@ function CardRow({
   today,
   onOpen,
 }: CardRowProps) {
-  const name = getCardName(card, allCards);
+  const name = getCardNameWithLastFour(card, allCards);
   const moves = useAppSelector((state) => state.runway.moves);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? 0,

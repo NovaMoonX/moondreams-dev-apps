@@ -66,6 +66,8 @@ interface ItemRowProps {
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
   isHighlighted?: boolean;
   isFaded?: boolean;
+  /** The figure is a quiet word, not an amount (a balance not given yet). */
+  isFigureMuted?: boolean;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -87,6 +89,7 @@ function ItemRow({
   reorder,
   isHighlighted = false,
   isFaded = false,
+  isFigureMuted = false,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const baseAriaLabel =
@@ -175,7 +178,9 @@ function ItemRow({
             <span
               className={join(
                 'block tabular-nums',
-                isFaded ? 'text-muted-foreground font-medium' : 'font-semibold',
+                isFaded || isFigureMuted
+                  ? 'text-muted-foreground font-medium'
+                  : 'font-semibold',
               )}
             >
               {hide(figureNode, isPrivate)}
