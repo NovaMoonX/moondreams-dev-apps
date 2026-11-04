@@ -1227,7 +1227,9 @@ function BillFormBody({
                     ...(isTracking
                       ? { paidByCardId: isCard ? value : null }
                       : {}),
-                    accountId: isAccount ? value : null,
+                    ...(shownAccounts.length > 0
+                      ? { accountId: isAccount ? value : null }
+                      : {}),
                   });
                   moveOn();
                 }}
