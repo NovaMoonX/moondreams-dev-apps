@@ -18,11 +18,12 @@ const CLOSE_SHARE = 0.3;
 const FLICK_PX_PER_MS = 0.5;
 const FLICK_MIN_PX = 48;
 const SETTLE_MS = 220;
-const STILL_OPEN_CHECKS_MS = [60, 320];
+const STILL_OPEN_CHECKS_MS = [100, 320];
 
 const HANDLE =
   "[&>div]:pt-5 before:pointer-events-none before:absolute before:top-2 before:left-1/2 before:z-10 before:h-1.5 before:w-12 before:-translate-x-1/2 before:rounded-full before:bg-popover-foreground/35 before:content-['']";
-const QUIET_CLOSE = '[&_[data-drawer-close-button]]:sr-only';
+const QUIET_CLOSE =
+  '[&_[data-drawer-close-button]]:sr-only [@media(pointer:fine)]:[&_[data-drawer-close-button]]:hidden';
 const QUIET_CLOSE_ON_TOUCH =
   '[@media(pointer:coarse)]:[&_[data-drawer-close-button]]:sr-only';
 
