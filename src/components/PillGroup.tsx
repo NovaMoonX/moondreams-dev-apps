@@ -55,7 +55,15 @@ const moveTo = <T,>(list: readonly T[], from: number, to: number) => {
   return result;
 };
 
-const SCROLL_PEEK_PX = 8;
+// Wider than the edge fade, so the chosen pill is never drawn under it.
+const SCROLL_PEEK_PX = 32;
+// A side hiding no more than a pill's edge shows whole: a fade there washes out a pill that is all but in view.
+const SCROLL_FADE_MIN_PX = 8;
+const SCROLL_FADE_CLASS = join(
+  'data-[fade=end]:[mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]',
+  'data-[fade=start]:[mask-image:linear-gradient(to_left,black_calc(100%-1.5rem),transparent)]',
+  'data-[fade=both]:[mask-image:linear-gradient(to_right,transparent,black_1.5rem,black_calc(100%-1.5rem),transparent)]',
+);
 
 /** A row of wrapping pills — the container every pick-one or pick-several option row shares. A scrolling row stays one line at any width and keeps the chosen pill in view. */
 export function PillRow({
@@ -85,12 +93,45 @@ export function PillRow({
     }
     const rowBox = row.getBoundingClientRect();
     const chosenBox = chosen.getBoundingClientRect();
-    if (chosenBox.left < rowBox.left) {
+    const isMoreLeft = row.scrollLeft > 1;
+    const isMoreRight = row.scrollWidth - row.clientWidth - row.scrollLeft > 1;
+    if (isMoreLeft && chosenBox.left < rowBox.left + SCROLL_PEEK_PX) {
       row.scrollLeft -= rowBox.left - chosenBox.left + SCROLL_PEEK_PX;
-    } else if (chosenBox.right > rowBox.right) {
+    } else if (isMoreRight && chosenBox.right > rowBox.right - SCROLL_PEEK_PX) {
       row.scrollLeft += chosenBox.right - rowBox.right + SCROLL_PEEK_PX;
     }
   }, [isScrolling, scrollKey]);
+
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!isScrolling || !row) {
+      return;
+    }
+    const markEdges = () => {
+      const hidden = row.scrollWidth - row.clientWidth;
+      const isScroller = getComputedStyle(row).overflowX !== 'visible';
+      const isStartHidden = isScroller && row.scrollLeft > SCROLL_FADE_MIN_PX;
+      const isEndHidden =
+        isScroller && hidden - row.scrollLeft > SCROLL_FADE_MIN_PX;
+      const fades = {
+        both: isStartHidden && isEndHidden,
+        start: isStartHidden,
+        end: isEndHidden,
+      };
+      row.dataset.fade =
+        (Object.keys(fades) as (keyof typeof fades)[]).find(
+          (key) => fades[key],
+        ) ?? 'none';
+    };
+    markEdges();
+    const observer = new ResizeObserver(markEdges);
+    observer.observe(row);
+    row.addEventListener('scroll', markEdges, { passive: true });
+    return () => {
+      observer.disconnect();
+      row.removeEventListener('scroll', markEdges);
+    };
+  }, [isScrolling]);
 
   return (
     <div
@@ -101,7 +142,8 @@ export function PillRow({
         'flex',
         isScrolling
           ? join(
-              '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 max-[359px]:gap-x-1.5 [&::-webkit-scrollbar]:hidden',
+              '-my-2 [scrollbar-width:none] gap-x-2 overflow-x-auto py-2 max-[359px]:gap-x-1 [&::-webkit-scrollbar]:hidden',
+              SCROLL_FADE_CLASS,
               wrapsNarrow &&
                 'max-[389px]:my-0 max-[389px]:flex-wrap max-[389px]:gap-y-4 max-[389px]:overflow-visible max-[389px]:py-0',
             )
@@ -268,6 +310,10 @@ export function PillOptions<T extends string>({
           isClamped && 'overflow-hidden',
         )}
         style={isClamped && isThin ? { maxHeight: fit.limit } : undefined}
+        // A focus or a script's scroll-into-view can scroll a clamped box, leaving pills cut in half.
+        onScroll={(event) => {
+          if (isClamped) event.currentTarget.scrollTop = 0;
+        }}
         onFocusCapture={(event) =>
           isClamped &&
           event.target.matches(':focus-visible') &&

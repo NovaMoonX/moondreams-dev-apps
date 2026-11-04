@@ -56,6 +56,7 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   GroupSealed,
+  HorizonSealed,
   IncomeDayDoc,
   MoveDoc,
   PayLineSealed,
@@ -181,6 +182,11 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   );
   const billDocuments = await writeSeedBills(context, owner.uid, encryption);
   const goalDocuments = await writeSeedGoals(context, owner.uid, encryption);
+  const horizonDocuments = await writeSeedHorizon(
+    context,
+    owner.uid,
+    encryption,
+  );
   const lifecycleDocuments = await writeSeedLifecycle(
     context,
     owner.uid,
@@ -228,12 +234,141 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       envelopeDocuments +
       billDocuments +
       goalDocuments +
+      horizonDocuments +
       lifecycleDocuments +
       keptDocuments +
       startDocuments +
       historyDocuments +
       masterKeyIds.length,
   };
+}
+
+/** The next time a month and day comes round, as a date-only value. */
+const nextCalendarDay = (today: number, month: number, day: number) => {
+  const thisYear = Date.UTC(new Date(today).getUTCFullYear(), month, day);
+  return thisYear >= today
+    ? thisYear
+    : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
+};
+
+/** Two Horizon items: Moving around the next Jan 15th with a truck, movers (a range) and a deposit, and Miso's surgery in December with the surgery (a range) and a follow-up. Each is a header, a first version and an "Added" change. */
+async function writeSeedHorizon(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - 3 * DAY_MS;
+  const jan15 = nextCalendarDay(today, 0, 15);
+  const dec18 = nextCalendarDay(today, 11, 18);
+  const cost = (
+    id: string,
+    name: string,
+    lowCents: number,
+    highCents: number,
+    anchor: number,
+  ) => ({
+    id,
+    name,
+    amount: { lowCents, highCents },
+    schedule: { kind: 'once' as const, anchor, monthDays: [] },
+    note: null,
+  });
+
+  const items: { id: string; payload: HorizonSealed }[] = [
+    {
+      id: 'seed-horizon-moving',
+      payload: {
+        name: 'Moving',
+        emoji: '📦',
+        happensOn: jan15,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 20,
+        note: null,
+        costs: [
+          cost(
+            'seed-cost-truck',
+            'Truck rental',
+            12_000,
+            12_000,
+            jan15 - DAY_MS,
+          ),
+          cost('seed-cost-movers', 'Movers', 60_000, 80_000, jan15),
+          cost(
+            'seed-cost-deposit',
+            'Deposit',
+            25_000,
+            25_000,
+            jan15 - 5 * DAY_MS,
+          ),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-surgery',
+      payload: {
+        name: "Miso's surgery",
+        emoji: '🐱',
+        happensOn: dec18,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 21,
+        note: null,
+        costs: [
+          cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
+          cost(
+            'seed-cost-follow-up',
+            'Follow-up visit',
+            12_000,
+            12_000,
+            dec18 + 14 * DAY_MS,
+          ),
+        ],
+      },
+    },
+  ];
+
+  const [sealed, addedChanges] = await Promise.all([
+    Promise.all(items.map(({ payload }) => sealJson(payload, encryption))),
+    Promise.all(
+      items.map(({ payload }) =>
+        sealJson(
+          { summary: `Added ${payload.name}.` } satisfies ChangeSealed,
+          encryption,
+        ),
+      ),
+    ),
+  ]);
+
+  const batch = context.firestore.batch();
+  items.forEach(({ id }, index) => {
+    const createdAt = addedAt + index * 1000;
+    const changeId = `seed-change-${id}`;
+    batch.set(
+      context.firestore.doc(`${plan}/items/${id}`),
+      header(id, 'horizon', null, createdAt),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${id}`),
+      version(
+        `seed-version-${id}`,
+        id,
+        'horizon',
+        createdAt,
+        today,
+        changeId,
+        sealed[index],
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, createdAt, today, [id], addedChanges[index]),
+    );
+  });
+  await batch.commit();
+  return items.length * 3;
 }
 
 const KEPT_ENVELOPE_ID = 'seed-envelope-concert';

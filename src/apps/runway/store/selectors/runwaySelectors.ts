@@ -66,6 +66,7 @@ import type {
   GoalSealed,
   GoalVersion,
   GroupVersion,
+  HorizonVersion,
   OpenVersion,
   PayLineVersion,
   PlanItemDoc,
@@ -630,6 +631,46 @@ export const selectGoals = createSelector(
           PRIORITIES.indexOf(a.version.payload.priority) -
             PRIORITIES.indexOf(b.version.payload.priority) ||
           a.version.payload.orderIndex - b.version.payload.orderIndex ||
+          a.item.createdAt - b.item.createdAt ||
+          a.item.id.localeCompare(b.item.id),
+      );
+    return result;
+  },
+);
+
+export interface ResolvedHorizon {
+  item: PlanItemDoc;
+  version: HorizonVersion;
+}
+
+const isHorizon = (version: OpenVersion): version is HorizonVersion =>
+  version.kind === 'horizon';
+
+const getNextCostOn = (version: HorizonVersion, on: number) =>
+  Math.min(
+    Number.MAX_SAFE_INTEGER,
+    ...version.payload.costs.flatMap(({ schedule }) =>
+      schedule.anchor !== null && schedule.anchor >= on
+        ? [schedule.anchor]
+        : [],
+    ),
+  );
+
+/** The Horizon items in the plan on a date, soonest next cost first, then the event's own date. */
+export const selectHorizonItems = createSelector(
+  [selectItems, selectVersions, selectOn],
+  (items, versions, on): ResolvedHorizon[] => {
+    const horizonVersions = versions.filter(isHorizon);
+    const result = items
+      .filter((item) => item.kind === 'horizon' && isListed(item, on))
+      .flatMap((item) => {
+        const version = resolveCurrentOrNext(horizonVersions, item.id, on);
+        return version ? [{ item, version }] : [];
+      })
+      .sort(
+        (a, b) =>
+          getNextCostOn(a.version, on) - getNextCostOn(b.version, on) ||
+          a.version.payload.happensOn - b.version.payload.happensOn ||
           a.item.createdAt - b.item.createdAt ||
           a.item.id.localeCompare(b.item.id),
       );

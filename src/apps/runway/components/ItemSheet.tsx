@@ -336,7 +336,8 @@ function ItemSheet({
   });
   const [isAskingPaid, setIsAskingPaid] = useState(false);
 
-  if (!version || version.kind === 'group') return null;
+  if (!version || version.kind === 'group' || version.kind === 'horizon')
+    return null;
   const payload = version.payload;
   const paidWithCard =
     level === 'track' && payment

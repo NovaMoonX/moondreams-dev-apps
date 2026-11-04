@@ -7,6 +7,7 @@ import type {
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
+  HorizonSealed,
   Cents,
   GroupSealed,
   OpenVersion,
@@ -121,6 +122,10 @@ async function openVersion(
         groupId: payload.groupId ?? null,
       },
     };
+  }
+  if (version.kind === 'horizon') {
+    const payload = await read<HorizonSealed>(version.sealed);
+    return { ...base, kind: 'horizon', payload };
   }
   return null;
 }

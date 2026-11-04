@@ -15,6 +15,7 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
   BillSealed,
   EnvelopeSealed,
+  HorizonSealed,
   GoalSealed,
   GroupSealed,
   PayLineSealed,
@@ -47,7 +48,8 @@ export type ItemPayload =
   | EnvelopeSealed
   | BillSealed
   | GoalSealed
-  | GroupSealed;
+  | GroupSealed
+  | HorizonSealed;
 
 /** The name of a group by its id, from the plan's groups. */
 export type GroupNamer = (groupId: string) => string;

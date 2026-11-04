@@ -6,6 +6,7 @@ export const PLAN_SECTIONS = [
   'bills',
   'envelopes',
   'goals',
+  'horizon',
   'cards',
   'more',
 ] as const;
@@ -20,6 +21,7 @@ export const PLAN_SECTION_LABELS: Record<
   bills: 'Bills',
   envelopes: 'Envelopes',
   goals: 'Goals',
+  horizon: 'Horizon',
   cards: 'Cards',
   more: 'More',
 };
@@ -177,6 +179,7 @@ export const ITEM_KINDS = [
   'envelope',
   'goal',
   'group',
+  'horizon',
 ] as const;
 
 export const SCHEDULE_KINDS = [
@@ -234,6 +237,94 @@ export const INCOME_ENDING_LABELS: Record<
 };
 
 export const DEFAULT_PAY_LINE_NAME = 'Paycheck';
+export const MAX_HORIZON_COSTS = 20;
+
+/** Cost names offered under "What is it?", keyed on simple words in the item's name. */
+export const HORIZON_COST_SUGGESTIONS: readonly {
+  words: readonly string[];
+  suggestions: readonly string[];
+}[] = [
+  {
+    words: ['moving', 'move'],
+    suggestions: [
+      'Movers',
+      'Truck rental',
+      'Storage unit',
+      'Deposit',
+      'Cleaning',
+    ],
+  },
+  {
+    words: ['surgery', 'vet'],
+    suggestions: ['Surgery', 'Follow-up visit', 'Medication', 'Boarding'],
+  },
+  {
+    words: ['wedding'],
+    suggestions: ['Venue', 'Catering', 'Flowers', 'Attire', 'Photographer'],
+  },
+];
+
+export const HORIZON_WORDS = {
+  title: 'Horizon',
+  addLabel: 'Add to your horizon',
+  formTitle: 'Add to your horizon',
+  discardNoun: 'item',
+  discardCostNoun: 'cost',
+  emptyTitle: "Plan what's coming",
+  emptyBody:
+    "A move, a wedding, a surgery: list what it will cost and how you'll pay for it.",
+  loading: 'Getting your horizon.',
+  searchPlaceholder: 'Search your horizon',
+  noMatch: 'Nothing on your horizon matches that.',
+  nothingDue: 'Nothing due yet',
+  due: (name: string, date: string) => `${name} · due\u00A0${date}`,
+  totalCost: 'Total cost',
+  costCount: (count: number) => (count === 1 ? 'One cost' : `${count} costs`),
+  rangesAt: (endWords: string) =>
+    `A cost given as a range is planned at ${endWords}, so the total holds if it comes in high.`,
+  costsCaption: 'Costs',
+  nameTitle: "What's on your horizon?",
+  name: 'Name',
+  namePlaceholder: 'Moving',
+  addEmoji: 'Add an emoji',
+  whenTitle: 'When is it?',
+  when: 'When',
+  around: (date: string) => `Around ${date}`,
+  aroundRange: (range: string) => `Around ${range}`,
+  fewDays: "It's a few days",
+  oneDay: 'Just one day',
+  startLabel: 'From',
+  endLabel: 'To',
+  endBeforeStart: 'The end comes before the start.',
+  costsTitle: 'What will it cost?',
+  costs: 'Costs',
+  noCosts: 'Nothing listed yet.',
+  addCost: 'Add a cost',
+  changeCost: (name: string) => `Change ${name}`,
+  removeThisCost: 'Remove this cost',
+  saveCost: 'Save cost',
+  maxCosts: (count: number) => `An item holds up to ${count} costs.`,
+  needsCost: 'List at least one cost.',
+  needsName: 'Name it.',
+  priority: 'Priority',
+  add: (name: string) => `Add ${name}`,
+  addFailed: 'This did not save. Nothing was changed.',
+  costFormTitle: 'Add a cost',
+  costChangeTitle: 'Change cost',
+  costAmountTitle: 'How much will it cost?',
+  costAmount: 'Amount',
+  costNameTitle: 'What is it?',
+  costName: 'Name',
+  costNamePlaceholder: 'Name it',
+  costSuggestions: 'Common costs',
+  costWhenTitle: 'When?',
+  costWhen: 'When',
+  costDateHint: 'The day it is due.',
+  needsCostName: 'Name the cost.',
+  needsCostDate: 'Pick a day within the next year that has not passed.',
+  addCostNamed: (name: string) => `Add ${name}`,
+} as const;
+
 export const MAX_NAME_LENGTH = 60;
 export const MAX_ENDING_COUNT = 520;
 export const LOOKAHEAD_MONTHS = 12;
@@ -311,7 +402,7 @@ export const FUNDING_CADENCE_LABELS: Record<
 export const ENVELOPE_ORDER_STEP = 1;
 
 /** What "Add expected money" can add. */
-export const EXPECTED_KINDS = ['income', 'expense'] as const;
+export const EXPECTED_KINDS = ['income', 'expense', 'horizon'] as const;
 
 /** The ways a bill can repeat that the bill form offers. */
 /** The repeats a budget document's bill can be read as. */
@@ -627,6 +718,7 @@ export const CHANGE_REASON_CHIPS: Record<
   payLine: ['New job or raise', 'Hours changed', ...MIND_CHIPS],
   source: MIND_CHIPS,
   group: MIND_CHIPS,
+  horizon: ['Plans changed', 'Cost more', ...MIND_CHIPS],
 };
 
 /** What happened to a pairing that its own pay could not cover. */
@@ -1916,8 +2008,10 @@ export const FORM_FLOW_WORDS = {
   expectedTitle: 'What is coming?',
   expectedIncome: 'Money coming in',
   expectedIncomeSub: 'A payment you expect, once or on a schedule.',
-  expectedExpense: 'An expense coming up',
+  expectedExpense: 'A bill or one-time cost',
   expectedExpenseSub: 'Something you will pay, set aside from income days.',
+  expectedHorizon: 'Something with several costs',
+  expectedHorizonSub: 'A move, a wedding, a surgery: list what it will cost.',
   purchaseAmountTitle: 'How much was it?',
   refundAmountTitle: 'How much came back?',
   purchaseForTitle: 'What was it for?',
@@ -2189,6 +2283,7 @@ export const PLAN_VIEW_EMOJI = {
   bills: '🧾',
   envelopes: '✉️',
   goals: '🎯',
+  horizon: '🗓️',
   cards: '💳',
 } as const;
 
@@ -2274,6 +2369,7 @@ export const ITEM_KIND_NOUNS = {
   payLine: 'pay',
   source: 'income source',
   group: 'item',
+  horizon: 'event',
 } as const;
 
 export const EFFECT_FOLD_WORDS = {
