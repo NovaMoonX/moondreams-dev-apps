@@ -58,7 +58,7 @@ function PaidAmountSheet({ payment, onMark, onClose }: PaidAmountSheetProps) {
       );
     if (paidCents > heldCents)
       return (
-        <InlineNotice tone='info'>
+        <InlineNotice tone='warning'>
           {heldCents === 0
             ? PAID_AMOUNT_WORDS.allFromFree
             : PAID_AMOUNT_WORDS.fromFree(formatCents(paidCents - heldCents))}
@@ -120,13 +120,16 @@ function PaidAmountSheet({ payment, onMark, onClose }: PaidAmountSheetProps) {
               )
             }
           />
-          {isPaidElsewhere ? (
-            <InlineNotice tone='info'>
-              {PAID_AMOUNT_WORDS.alreadyPaid(name)}
-            </InlineNotice>
-          ) : (
-            getNotice()
-          )}
+          {/* A bottom-edge sheet's top moves when the notice or footer note appears; this holds their height. */}
+          <div className={getFooterNote() ? 'min-h-[5.5rem]' : 'min-h-[7rem]'}>
+            {isPaidElsewhere ? (
+              <InlineNotice tone='info'>
+                {PAID_AMOUNT_WORDS.alreadyPaid(name)}
+              </InlineNotice>
+            ) : (
+              getNotice()
+            )}
+          </div>
         </div>
         <ModalFooterActions
           note={getFooterNote()}

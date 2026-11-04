@@ -17,6 +17,7 @@ import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -183,6 +184,7 @@ function CostSheet({
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const [view, setView] = useState<'menu' | 'price'>('menu');
   const [isRemoving, setIsRemoving] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
@@ -336,13 +338,20 @@ function CostSheet({
     }
   };
 
-  const getPaidLine = (entry: CostPaidEntry) =>
-    entry.mark === 'outside'
+  const getPaidLine = (entry: CostPaidEntry) => {
+    // The head already says when it was paid.
+    if (entry === settled) {
+      return entry.mark === 'outside'
+        ? COST_PAID_WORDS.paidOutsideOnlyRow
+        : COST_PAID_WORDS.cameToRow(formatCents(entry.amountCents));
+    }
+    return entry.mark === 'outside'
       ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(entry.paidOn))
       : COST_PAID_WORDS.paidRow(
           formatDateOrdinalUTC(entry.paidOn),
           formatCents(entry.amountCents),
         );
+  };
 
   const getPaidSplit = (entry: CostPaidEntry) => {
     if (entry.mark === 'outside') return COST_PAID_WORDS.outsideNote;
@@ -372,13 +381,27 @@ function CostSheet({
     if (costPaid.needsAmount) return COST_PAID_WORDS.markSubRange;
     const total = next?.totalCents ?? 0;
     const { fromItemCents, fromFreeCents } = settleCostPaid(total, heldCents);
-    return fromFreeCents > 0
-      ? COST_PAID_WORDS.markSubFree(
+    // While hidden the sentence is one shape, so it never tells whether Free to Spend is drawn on.
+    if (isHidden) {
+      return COST_PAID_WORDS.markSubFree(
+        formatCents(fromItemCents),
+        horizon.name,
+        formatCents(fromFreeCents),
+      );
+    }
+    if (fromFreeCents === 0) {
+      return COST_PAID_WORDS.markSub(formatCents(total), horizon.name);
+    }
+    return fromItemCents === 0
+      ? COST_PAID_WORDS.markSubNothingLeft(
+          formatCents(fromFreeCents),
+          horizon.name,
+        )
+      : COST_PAID_WORDS.markSubFree(
           formatCents(fromItemCents),
           horizon.name,
           formatCents(fromFreeCents),
-        )
-      : COST_PAID_WORDS.markSub(formatCents(total), horizon.name);
+        );
   };
 
   const takingBack = paidEntries.find(({ moveId }) => moveId === takingBackId);
@@ -390,7 +413,9 @@ function CostSheet({
       <SheetHead
         label={cost.name}
         figure={
-          settled ? formatCents(settled.amountCents) : formatRange(cost.amount)
+          settled
+            ? formatCents(settled.amountCents)
+            : formatRange(cost.amount).replace(' to ', ' to\u00A0')
         }
         suffix={describeCost(cost).per || undefined}
         fact={
@@ -401,6 +426,7 @@ function CostSheet({
                 cost.pricedOn === null
                   ? null
                   : formatDateOrdinalUTC(cost.pricedOn),
+                cost.isOutside,
               )
         }
       />

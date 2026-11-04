@@ -17,6 +17,7 @@ export function readCovers(
   costs: readonly HorizonCost[],
   heldCents: Cents,
   stance: Stance,
+  isSetAsideUsed = false,
 ) {
   const words = HORIZON_WORDS.covers;
   const covered = plan.covers.flatMap((cover) => {
@@ -58,7 +59,10 @@ export function readCovers(
   );
   const getText = () => {
     if (plan.covers.length === 0) return null;
-    if (heldCents <= 0) return plan.shortfall ? null : words.nothingSet;
+    if (heldCents <= 0) {
+      if (plan.shortfall) return null;
+      return isSetAsideUsed ? words.setAsideUsed : words.nothingSet;
+    }
     if (covered.length === 0) return plan.shortfall ? null : words.none;
     if (
       covered.length === plan.covers.length &&
@@ -83,4 +87,5 @@ export const getCoversText = (
   costs: readonly HorizonCost[],
   heldCents: Cents,
   stance: Stance,
-) => readCovers(plan, costs, heldCents, stance).text;
+  isSetAsideUsed = false,
+) => readCovers(plan, costs, heldCents, stance, isSetAsideUsed).text;

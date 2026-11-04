@@ -165,7 +165,7 @@ function HorizonSheet({
     when,
   ]
     .filter(Boolean)
-    .join(' ·\u00A0');
+    .join('\u00A0· ');
   const openCost = horizon.costs.find(({ id }) => id === costId);
   const bodyRef = useRef<HTMLDivElement>(null);
   const viewKey = [
@@ -359,6 +359,7 @@ function HorizonSheet({
             costs={horizon.costs}
             heldCents={figures.leftCents}
             stance={stance}
+            isSetAsideUsed={figures.setAsideCents > 0}
             after={
               (horizon.rest.kind === 'pays' ||
                 horizon.rest.kind === 'onePay') &&

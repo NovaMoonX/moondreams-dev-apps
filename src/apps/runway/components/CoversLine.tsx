@@ -12,6 +12,8 @@ interface CoversLineProps {
   /** What the item holds now. */
   heldCents: Cents;
   stance: Stance;
+  /** Money was set aside and none of it is left. */
+  isSetAsideUsed?: boolean;
   /** A sentence that follows in the same paragraph, such as where the rest comes from. */
   after?: string | null;
 }
@@ -22,10 +24,17 @@ function CoversLine({
   costs,
   heldCents,
   stance,
+  isSetAsideUsed = false,
   after = null,
 }: CoversLineProps) {
   const words = HORIZON_WORDS.covers;
-  const { text, ranged, endWords } = readCovers(plan, costs, heldCents, stance);
+  const { text, ranged, endWords } = readCovers(
+    plan,
+    costs,
+    heldCents,
+    stance,
+    isSetAsideUsed,
+  );
   if (text === null)
     return after === null ? null : (
       <p className='text-sm text-pretty'>{after}</p>

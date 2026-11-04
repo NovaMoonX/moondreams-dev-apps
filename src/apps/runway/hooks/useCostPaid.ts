@@ -22,6 +22,7 @@ import {
 import { countCostMarks } from '@apps/runway/engine/progress';
 import type { PaidAmountPayment } from '@apps/runway/hooks/paidAmountPayment';
 import { inTurn } from '@apps/runway/hooks/paidQueue';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -69,6 +70,7 @@ export function useCostPaid({
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const { addToast } = useToast();
   const moves = useAppSelector((state) => state.runway.moves);
   const isLedgerReady = useAppSelector(
@@ -181,7 +183,7 @@ export function useCostPaid({
           cost.name,
           formatCents(total),
           itemName,
-          formatCents(fromItemCents),
+          fromItemCents > 0 || isHidden ? formatCents(fromItemCents) : null,
           formatCents(fromFreeCents),
         ),
       ),

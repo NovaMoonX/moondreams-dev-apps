@@ -92,12 +92,19 @@ function HorizonChangeView({
             ? formatCents(shortfall.totalShortCents - shortfall.shortCents)
             : null,
         )
-      : getCoversText(plan, payload.costs, figures.leftCents, stance);
+      : getCoversText(
+          plan,
+          payload.costs,
+          figures.leftCents,
+          stance,
+          figures.setAsideCents > 0,
+        );
     return {
       plan,
       payload,
       isShort: shortfall !== null,
       heldCents: figures.leftCents,
+      isSetAsideUsed: figures.setAsideCents > 0,
       text,
     };
   };
@@ -124,6 +131,7 @@ function HorizonChangeView({
                 plan={side.plan}
                 costs={side.payload.costs}
                 heldCents={side.heldCents}
+                isSetAsideUsed={side.isSetAsideUsed}
                 stance={stance}
               />
             )}

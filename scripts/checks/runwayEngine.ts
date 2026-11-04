@@ -14731,7 +14731,7 @@ console.log('runway engine: ok');
     looked.problems
       .filter((problem) => problem.on === jan15)
       .map((problem) => problem.kind === 'short' && problem.name),
-    ['Alpha\u00A0·\u00A0Moving', 'Alpha\u00A0·\u00A0Trip', 'Beta'],
+    ['Alpha\u00A0· Moving', 'Alpha\u00A0· Trip', 'Beta'],
     "a short cost line due before the next pay is flagged by its cost, whatever its tier, and joined with its item only when another item's cost shares the name",
   );
 }

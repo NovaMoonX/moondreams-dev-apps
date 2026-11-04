@@ -163,7 +163,7 @@ export function describeCost(cost: HorizonCost, isTagged = true) {
         HORIZON_WORDS.outsideTag.replaceAll(' ', '\u00A0'),
     ]
       .filter(Boolean)
-      .join(' ·\u00A0'),
+      .join('\u00A0· '),
     figure: amount,
     per,
   };

@@ -315,7 +315,7 @@ export const HORIZON_WORDS = {
   searchPlaceholder: 'Search your horizon',
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
-  costLineName: (cost: string, item: string) => `${cost}\u00A0·\u00A0${item}`,
+  costLineName: (cost: string, item: string) => `${cost}\u00A0· ${item}`,
   costLineDetail: (item: string, tail: string) => `${item} ·\u00A0${tail}`,
   costFallback: 'Cost',
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
@@ -505,8 +505,14 @@ export const HORIZON_WORDS = {
   changeItemSub: 'Name, date, how the rest is paid and priority',
   costDue: (date: string) => `Due ${date}`,
   costDueLower: (date: string) => `due ${date}`,
-  costFact: (when: string, pricedOn: string | null) =>
-    pricedOn === null ? when : `${when} · priced ${pricedOn}`,
+  costFact: (when: string, pricedOn: string | null, isOutside = false) =>
+    [
+      when,
+      isOutside && HORIZON_WORDS.outsideTag.replaceAll(' ', '\u00A0'),
+      pricedOn !== null && `priced ${pricedOn}`,
+    ]
+      .filter(Boolean)
+      .join('\u00A0· '),
   setPrice: 'Set the price',
   setPriceSub: 'An exact amount, or still a range',
   setPriceSubExact: (amount: string) =>
@@ -551,6 +557,7 @@ export const HORIZON_WORDS = {
   changeItemTitle: 'Change it',
   covers: {
     nothingSet: 'Nothing is set aside yet, so nothing is covered.',
+    setAsideUsed: 'What was set aside is spent.',
     none: "What's set aside doesn't cover a whole cost yet.",
     all: 'Covers every cost.',
     listed: (list: string, atEnd: string) => `Covers ${list}${atEnd}.`,
@@ -2102,10 +2109,12 @@ export const COST_PAID_WORDS = {
     cost: string,
     totalCents: string,
     item: string,
-    heldCents: string,
+    heldCents: string | null,
     freeCents: string,
   ) =>
-    `${cost} is ${totalCents}. ${item} has ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
+    heldCents === null
+      ? `${cost} is ${totalCents}. ${item} has nothing left, so all ${freeCents} comes out of Free to Spend.`
+      : `${cost} is ${totalCents}. ${item} has ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
   confirmTitle: (cost: string) => `Mark ${cost} paid`,
   markRow: 'Mark paid',
   markOutsideRow: (cost: string) => `Mark ${cost} paid`,
@@ -2113,13 +2122,17 @@ export const COST_PAID_WORDS = {
     `${amount} comes from what ${item} has left`,
   markSubFree: (amount: string, item: string, free: string) =>
     `${amount} comes from ${item}; ${free} of it from Free to Spend`,
+  markSubNothingLeft: (amount: string, item: string) =>
+    `All ${amount} comes out of Free to Spend. ${item} has nothing left.`,
   markSubRange: 'Say what it came to',
   markSubOutside: (item: string) =>
     `Paid outside the plan. Nothing comes from ${item}.`,
   paidRow: (paidOn: string, amount: string) =>
-    `Paid ${paidOn} ·\u00A0${amount}`,
+    `Paid ${paidOn}\u00A0· ${amount}`,
   paidOutsideRow: (paidOn: string) =>
-    `Paid ${paidOn} ·\u00A0outside\u00A0the\u00A0plan`,
+    `Paid ${paidOn}\u00A0· outside\u00A0the\u00A0plan`,
+  cameToRow: (amount: string) => `Came to ${amount}`,
+  paidOutsideOnlyRow: 'Paid outside the plan',
   paidHead: (paidOn: string) => `Paid ${paidOn}`,
   paidSheetTitle: (cost: string) => `${cost} payment`,
   cameTo: 'What it came to',
