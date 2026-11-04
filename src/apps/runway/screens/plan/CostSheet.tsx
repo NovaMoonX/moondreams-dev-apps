@@ -239,6 +239,7 @@ function CostSheet({
 
   const canAddPurchase = isTrack && next !== null && !cost.isOutside;
   const isNear = next !== null && next.dueOn - 7 * DAY_MS <= today;
+  const isFar = canAddPurchase && !isNear;
   const isMarkShown = !canAddPurchase || isNear || isMoreOpen;
   const isExact = cost.amount.lowCents === cost.amount.highCents;
   const isLive = cost.endsAfter === null;
@@ -390,12 +391,25 @@ function CostSheet({
         ? COST_PAID_WORDS.nothingFromItem(horizon.name)
         : getPaidSplit(entry);
     }
-    return entry.mark === 'outside'
-      ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(entry.paidOn))
-      : COST_PAID_WORDS.paidRow(
-          formatDateOrdinalUTC(entry.paidOn),
-          formatCents(entry.amountCents),
-        );
+    const row =
+      entry.mark === 'outside'
+        ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(entry.paidOn))
+        : COST_PAID_WORDS.paidRow(
+            formatDateOrdinalUTC(entry.paidOn),
+            formatCents(entry.amountCents),
+          );
+    return isRepeat
+      ? `${row}\u00A0· ${PURCHASE_COST_WORDS.paidFor(formatDateOrdinalUTC(entry.dueOn))}`
+      : row;
+  };
+
+  const getBoughtLine = (entry: CostPaidEntry) => {
+    if (entry.mark !== 'purchase' || !isTrack) return null;
+    const bought = purchases.find(({ id }) => id === entry.purchaseId);
+    const name = bought?.merchant ?? bought?.label ?? null;
+    return name === null
+      ? PURCHASE_COST_WORDS.aPurchase
+      : PURCHASE_COST_WORDS.boughtIn(name);
   };
 
   const getTakeBackSubtitle = (entry: CostPaidEntry) =>
@@ -408,7 +422,7 @@ function CostSheet({
           isTrack ? entry.mark : 'item',
         );
 
-  const getMarkSubtitle = () => {
+  const getMarkBody = () => {
     if (cost.isOutside) return COST_PAID_WORDS.markSubOutside(horizon.name);
     if (costPaid.needsAmount) return COST_PAID_WORDS.markSubRange;
     const total = next?.totalCents ?? 0;
@@ -434,6 +448,17 @@ function CostSheet({
           horizon.name,
           formatCents(fromFreeCents),
         );
+  };
+
+  const dueFor =
+    isRepeat && next !== null ? formatDateOrdinalUTC(next.dueOn) : null;
+  const getMarkSubtitle = () => {
+    const body = getMarkBody();
+    const lead = [
+      dueFor === null ? null : PURCHASE_COST_WORDS.forPayment(dueFor),
+      isTrack && !cost.isOutside ? PURCHASE_COST_WORDS.noPurchase : null,
+    ].filter(Boolean);
+    return [...lead, body].join('. ');
   };
 
   const takeBackEntry = async (entry: CostPaidEntry) => {
@@ -463,6 +488,42 @@ function CostSheet({
   const takingBack = paidEntries.find(({ moveId }) => moveId === takingBackId);
   const amountPayment = isAsking ? costPaid.toAmountPayment() : null;
 
+  const addRow = (
+    <ActionRow
+      isGrouped
+      isRoomy
+      hasChevron
+      icon={<ReceiptText />}
+      label={PURCHASE_COST_WORDS.addRow}
+      subtitle={
+        dueFor === null
+          ? PURCHASE_COST_WORDS.addSub
+          : `${PURCHASE_COST_WORDS.forPayment(dueFor)}. ${PURCHASE_COST_WORDS.addSub}`
+      }
+      isDisabled={!costPaid.isReady || costPaid.isBusy}
+      onClick={() => setIsAddingPurchase(true)}
+    />
+  );
+  const markRow = (
+    <ActionRow
+      isGrouped
+      isRoomy
+      hasChevron={costPaid.needsAmount}
+      icon={<HandCoins />}
+      label={
+        cost.isOutside
+          ? COST_PAID_WORDS.markOutsideRow(cost.name)
+          : COST_PAID_WORDS.markRow
+      }
+      subtitle={mask(getMarkSubtitle())}
+      isDisabled={!costPaid.isReady || costPaid.isBusy}
+      onClick={() => {
+        if (costPaid.needsAmount) setIsAsking(true);
+        else void costPaid.mark();
+      }}
+    />
+  );
+
   return (
     <div className='space-y-4'>
       <BackLink label={horizon.name} onBack={onBack} />
@@ -491,37 +552,7 @@ function CostSheet({
         <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
       )}
       <ActionGroup isRoomy>
-        {canAddPurchase && !isNear && isMoreOpen && (
-          <ActionRow
-            isGrouped
-            isRoomy
-            hasChevron
-            icon={<ReceiptText />}
-            label={PURCHASE_COST_WORDS.addRow}
-            subtitle={PURCHASE_COST_WORDS.addSub}
-            isDisabled={!costPaid.isReady || costPaid.isBusy}
-            onClick={() => setIsAddingPurchase(true)}
-          />
-        )}
-        {next && isMarkShown && (
-          <ActionRow
-            isGrouped
-            isRoomy
-            hasChevron={costPaid.needsAmount}
-            icon={<HandCoins />}
-            label={
-              cost.isOutside
-                ? COST_PAID_WORDS.markOutsideRow(cost.name)
-                : COST_PAID_WORDS.markRow
-            }
-            subtitle={mask(getMarkSubtitle())}
-            isDisabled={!costPaid.isReady || costPaid.isBusy}
-            onClick={() => {
-              if (costPaid.needsAmount) setIsAsking(true);
-              else void costPaid.mark();
-            }}
-          />
-        )}
+        {next && isMarkShown && !isFar && markRow}
         {paidEntries.map((entry) => (
           <ActionRow
             key={entry.moveId}
@@ -561,6 +592,8 @@ function CostSheet({
           subtitle={HORIZON_WORDS.changeCostSub}
           onClick={onChange}
         />
+        {isFar && isMoreOpen && addRow}
+        {next && isFar && isMoreOpen && markRow}
         {isRemovable && (
           <ActionRow
             isGrouped
@@ -644,6 +677,11 @@ function CostSheet({
               <p className='text-muted-foreground'>
                 <MaskedText>{getPaidSplit(takingBack)}</MaskedText>
               </p>
+              {getBoughtLine(takingBack) !== null && (
+                <p className='text-muted-foreground'>
+                  <MaskedText>{getBoughtLine(takingBack) ?? ''}</MaskedText>
+                </p>
+              )}
             </div>
             <ActionGroup>
               <ActionRow

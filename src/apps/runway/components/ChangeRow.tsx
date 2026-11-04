@@ -25,7 +25,10 @@ import {
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { useUndoTransfer } from '@apps/runway/hooks/useUndoTransfer';
+import {
+  useLiveCostMove,
+  useUndoTransfer,
+} from '@apps/runway/hooks/useUndoTransfer';
 import type { OpenChange } from '@apps/runway/types';
 
 interface ChangeRowProps {
@@ -47,7 +50,9 @@ function ChangeRow({
   const { confirm } = useActionModal();
   const mask = useMaskedText();
   const undoMove = useUndoTransfer();
-  const move = change.move !== null && !change.move.isUndo ? change.move : null;
+  const toLive = useLiveCostMove();
+  const move =
+    change.move !== null && !change.move.isUndo ? toLive(change.move) : null;
   const isUndone = move !== null && (undoneMoveIds?.has(move.moveId) ?? false);
   const canUndo = move !== null && !isUndone;
   const words = move?.bill || move?.cost ? PAID_HISTORY_WORDS : MOVE_WORDS;

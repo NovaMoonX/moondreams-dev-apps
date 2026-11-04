@@ -2190,7 +2190,23 @@ export const PURCHASE_COST_WORDS = {
   takeBackText: (amount: string, date: string, gives: string | null) =>
     `The ${amount} purchase on ${date} is removed from Spend.${gives === null ? '' : ` ${gives}.`} It stays in History.`,
   removeAlsoUnpays: (cost: string, item: string) =>
-    `It paid ${cost} on ${item}, which goes back to unpaid.`,
+    cost === ''
+      ? `It paid a cost on ${item}, which goes back to unpaid.`
+      : `It paid ${cost} on ${item}, which goes back to unpaid.`,
+  needsPaidBy: 'Pick how you paid to add this.',
+  noPurchase: 'No purchase.',
+  paysSub: 'Open the cost to see its payments',
+  stays: (item: string) => `It stays on ${item}`,
+  noneHint: (item: string) => `Lowers what ${item} has left; pays no cost`,
+  pickHint: (cost: string) => `Marks ${cost} paid`,
+  paysFact: (cost: string, item: string) => `Pays ${cost} on ${item}`,
+  paysRow: (cost: string, item: string) => `${cost}\u00A0on ${item}`,
+  lockedEnvelope: (cost: string, item: string) =>
+    `It pays ${cost} on ${item}, so it stays on ${item}. Take the payment back to move it.`,
+  forPayment: (due: string) => `For the ${due} payment`,
+  paidFor: (due: string) => `for ${due}`,
+  boughtIn: (name: string) => `${name}\u00A0· in Spend`,
+  aPurchase: 'A purchase in Spend',
 } as const;
 
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */

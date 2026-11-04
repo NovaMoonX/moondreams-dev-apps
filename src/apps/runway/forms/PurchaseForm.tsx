@@ -12,6 +12,7 @@ import FallbackImage from '@/components/FallbackImage';
 import BackLink from '@/components/BackLink';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import FormSheet from '@/components/FormSheet';
+import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
@@ -685,6 +686,14 @@ function PurchaseFormBody({
     options.map((option) => [option.id, option.leftCents]),
   );
   const nameOf = (id: string) => looks.get(id)?.name ?? 'An envelope';
+  const heldRef = editing?.costRef ?? null;
+  const heldCostName =
+    heldRef === null
+      ? ''
+      : (horizons
+          .find(({ item }) => item.id === heldRef.itemId)
+          ?.version.payload.costs.find(({ id }) => id === heldRef.costId)
+          ?.name ?? '');
 
   const parsed = parseMoneyToCents(formData.amount);
   const amount =
@@ -703,7 +712,13 @@ function PurchaseFormBody({
     asRefund: boolean,
     asSplit: boolean,
   ) =>
-    editing || asRefund || forEnvelopeId === null || asSplit
+    editing ||
+    asRefund ||
+    forEnvelopeId === null ||
+    asSplit ||
+    (payPick !== null &&
+      payPick.itemId === forEnvelopeId &&
+      payPick.key !== NO_COST_VALUE)
       ? undefined
       : getUsualCardId(
           forEnvelopeId,
@@ -856,12 +871,11 @@ function PurchaseFormBody({
       if (isSplit && !isRefund) return SPEND_WORDS.needsShares;
       return SPEND_WORDS.needsEnvelope;
     }
-    const heldCost = editing?.costRef ?? null;
     if (
-      heldCost !== null &&
-      lines.some((line) => line.envelopeId !== heldCost.itemId)
+      heldRef !== null &&
+      lines.some((line) => line.envelopeId !== heldRef.itemId)
     ) {
-      return PURCHASE_COST_WORDS.staysOnItem(nameOf(heldCost.itemId));
+      return PURCHASE_COST_WORDS.staysOnItem(nameOf(heldRef.itemId));
     }
     const shortKey = isRefund
       ? undefined
@@ -1387,7 +1401,20 @@ function PurchaseFormBody({
               />
             </div>
           )}
-          {!isRefund && !isSplit && (
+          {heldRef !== null && (
+            <LockedButton
+              label={nameOf(heldRef.itemId)}
+              title={PURCHASE_COST_WORDS.stays(nameOf(heldRef.itemId))}
+            >
+              <p>
+                {PURCHASE_COST_WORDS.lockedEnvelope(
+                  heldCostName,
+                  nameOf(heldRef.itemId),
+                )}
+              </p>
+            </LockedButton>
+          )}
+          {!isRefund && !isSplit && heldRef === null && (
             <div className='space-y-2'>
               <PillGroup
                 label={SPEND_WORDS.envelope}
@@ -1450,7 +1477,29 @@ function PurchaseFormBody({
         </div>
       ),
     },
-    ...(payChoices.length > 0 && !isPresetPay
+    ...(heldRef !== null
+      ? [
+          {
+            id: 'cost',
+            title: PURCHASE_COST_WORDS.whichTitle,
+            summaryLabel: PURCHASE_COST_WORDS.whichLabel,
+            summaryValue: PURCHASE_COST_WORDS.paysRow(
+              heldCostName,
+              nameOf(heldRef.itemId),
+            ),
+            isAnswered: true,
+            render: () => (
+              <p className='text-muted-foreground text-sm'>
+                {PURCHASE_COST_WORDS.lockedEnvelope(
+                  heldCostName,
+                  nameOf(heldRef.itemId),
+                )}
+              </p>
+            ),
+          },
+        ]
+      : []),
+    ...(!editing && payChoices.length > 0 && !isPresetPay
       ? [
           {
             id: 'cost',
@@ -1460,6 +1509,12 @@ function PurchaseFormBody({
               payKey === undefined
                 ? ''
                 : (chosenPay?.name ?? PURCHASE_COST_WORDS.none),
+            summaryDetail:
+              payKey === undefined || envelopeId === null
+                ? undefined
+                : chosenPay === null
+                  ? PURCHASE_COST_WORDS.noneHint(nameOf(envelopeId))
+                  : PURCHASE_COST_WORDS.pickHint(chosenPay.name),
             isAnswered: payKey !== undefined,
             render: ({ moveOn }: QuestionControls) => (
               <PillGroup
@@ -1503,6 +1558,7 @@ function PurchaseFormBody({
                 ? CARD_WORDS.usualCard(nameOf(envelopeId))
                 : undefined,
             isAnswered: paidByChoice !== undefined || isUsualCard,
+            blocker: PURCHASE_COST_WORDS.needsPaidBy,
             isPreAnswered: isUsualCard,
             render: ({ moveOn }: QuestionControls) => (
               <PillGroup
@@ -1958,6 +2014,7 @@ function PurchaseFormBody({
                   ]),
             ]}
           />
+          {effectNote}
           {(EXTRAS.some(({ key }) => extras[key] === null) ||
             pickedReceipts === null) && (
             <div className='flex flex-wrap gap-2'>
@@ -1986,7 +2043,6 @@ function PurchaseFormBody({
               )}
             </div>
           )}
-          {effectNote}
         </div>
       )}
       <ModalFooterActions

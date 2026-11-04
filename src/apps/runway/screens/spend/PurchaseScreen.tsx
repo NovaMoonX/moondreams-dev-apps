@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
+  HandCoins,
   ImagePlus,
   Layers,
   Pencil,
@@ -58,6 +59,7 @@ import {
   addReceiptImages,
   removeReceiptImagesOf,
 } from '@apps/runway/store/actions/receiptActions';
+import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -67,6 +69,7 @@ import {
   selectCostPaid,
   selectExpenses,
   selectHorizonItems,
+  selectStance,
   selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
@@ -131,6 +134,8 @@ function PurchaseScreen({
   const horizons = useAppSelector((state) =>
     selectHorizonItems(state, todayAsUtcDate()),
   );
+  const stance = useAppSelector(selectStance);
+  const [isCostOpen, setIsCostOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
     key: number;
     purchase: OpenPurchase;
@@ -249,6 +254,15 @@ function PurchaseScreen({
       },
     };
   };
+
+  const paysRef = purchase.costRef ?? null;
+  const paysHorizon =
+    paysRef === null
+      ? null
+      : (horizons.find(({ item }) => item.id === paysRef.itemId)?.version
+          .payload ?? null);
+  const paysCostName =
+    paysHorizon?.costs.find(({ id }) => id === paysRef?.costId)?.name ?? null;
 
   const remove = async () => {
     if (!user || isBusy) return;
@@ -440,6 +454,16 @@ function PurchaseScreen({
 
   return (
     <>
+      {isCostOpen && paysRef !== null && paysHorizon !== null && (
+        <HorizonSheet
+          itemId={paysRef.itemId}
+          horizon={paysHorizon}
+          today={todayAsUtcDate()}
+          stance={stance}
+          openCostId={paysRef.costId}
+          onClose={() => setIsCostOpen(false)}
+        />
+      )}
       <FormSheet
         isOpen
         isDrawerWhenShort
@@ -581,6 +605,22 @@ function PurchaseScreen({
                 }));
               }}
             />
+            {paysRef !== null &&
+              paysHorizon !== null &&
+              paysCostName !== null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<HandCoins />}
+                  label={PURCHASE_COST_WORDS.paysFact(
+                    paysCostName,
+                    paysHorizon.name,
+                  )}
+                  subtitle={PURCHASE_COST_WORDS.paysSub}
+                  onClick={() => setIsCostOpen(true)}
+                />
+              )}
             {!isCameraFirst && (
               <ActionRow
                 isGrouped
