@@ -109,8 +109,10 @@ function FloatingAction({
               {icon}
               <span
                 className={join(
-                  'grid transition-[grid-template-columns,opacity] duration-200 ease-out motion-reduce:transition-none',
-                  isCompact ? 'grid-cols-[0fr] opacity-0' : 'grid-cols-[1fr] opacity-100',
+                  'grid transition-[grid-template-columns,opacity] [transition-duration:300ms,120ms] ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none',
+                  isCompact
+                    ? 'grid-cols-[0fr] opacity-0'
+                    : 'grid-cols-[1fr] opacity-100',
                 )}
               >
                 <span className='min-w-0 overflow-hidden whitespace-nowrap'>
