@@ -168,7 +168,7 @@ export interface WrittenHolds {
 const isSameSet = (a: string[], b: string[]) =>
   a.length === b.length && a.every((id) => b.includes(id));
 
-/** Sets what an account holds and takes those ids from any other account that held them, re-reading every account in the transaction. `nameOf` names an item for the change entry; an item it has no name for is left out of the sentence. Returns what it wrote to each account, the target first, or nothing when the save changes nothing. */
+/** Sets what an account holds, taking those items from any other account; returns what it wrote, or nothing for no change. */
 export async function setAccountHolds(
   uid: string,
   encryption: RunwayEncryption,
@@ -266,7 +266,7 @@ export async function setAccountHolds(
   });
 }
 
-/** Writes back what a holds save replaced, only when every account it wrote is still open and holds what it left there, and no other account has since taken an item it would give back (each item has one holder). Returns the names changed since, writing nothing when there are any. */
+/** Takes back one holds save, all or nothing; returns the accounts changed since when it cannot. */
 export async function undoAccountHolds(
   uid: string,
   encryption: RunwayEncryption,
