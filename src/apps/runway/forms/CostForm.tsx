@@ -18,6 +18,7 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { generateUuid } from '@/utils/idUtils';
 import {
+  CHANGE_WORDS,
   FORM_FLOW_WORDS,
   HORIZON_COST_SUGGESTIONS,
   HORIZON_WORDS,
@@ -68,13 +69,14 @@ const MODE_OPTIONS = [
 ];
 
 /** The cost names Runway knows for an event, found by the simple words in the event's name. */
-const getSuggestions = (itemName: string) => {
+const getSuggestions = (itemName: string, takenNames: readonly string[]) => {
   const words = itemName.toLowerCase().split(/[^\p{L}]+/u);
+  const taken = takenNames.map((name) => name.trim().toLowerCase());
   return (
     HORIZON_COST_SUGGESTIONS.find((group) =>
       group.words.some((word) => words.includes(word)),
     )?.suggestions ?? []
-  );
+  ).filter((suggestion) => !taken.includes(suggestion.toLowerCase()));
 };
 
 interface CostFormProps {
@@ -82,11 +84,15 @@ interface CostFormProps {
   itemName: string;
   /** The event's day: a new cost starts due then, while that day is still valid for a cost. */
   happensOn: number;
+  /** Names the event's other costs already have, which are not offered again. */
+  takenNames?: readonly string[];
   /** The cost being changed; saving keeps its id. Absent when adding. */
   cost?: HorizonCost;
   onSave: (cost: HorizonCost) => void;
   /** Offered only when changing a cost. */
   onRemove?: () => void;
+  /** The amount is not asked: a priced cost's amount changes only through Set the price. */
+  isAmountFixed?: boolean;
   onClose: () => void;
 }
 
@@ -125,8 +131,10 @@ function CostForm({
   itemName,
   happensOn,
   cost,
+  takenNames = [],
   onSave,
   onRemove,
+  isAmountFixed = false,
   onClose,
 }: CostFormProps) {
   const today = todayAsUtcDate();
@@ -138,7 +146,8 @@ function CostForm({
   const set = (patch: Partial<CostFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
-  const range = parseAmountDraft(formData.amount);
+  const range =
+    isAmountFixed && cost ? cost.amount : parseAmountDraft(formData.amount);
   const name = formData.name.trim();
   const date = fromDateInputValue(formData.date);
   const isStarted =
@@ -164,9 +173,9 @@ function CostForm({
       : name === ''
         ? HORIZON_WORDS.needsCostName
         : whenBlocker;
-  const suggestions = getSuggestions(itemName);
+  const suggestions = getSuggestions(itemName, takenNames);
 
-  const steps: QuestionStep[] = [
+  const amountSteps: QuestionStep[] = [
     {
       id: 'amount',
       title: HORIZON_WORDS.costAmountTitle,
@@ -196,6 +205,9 @@ function CostForm({
         />
       ),
     },
+  ];
+  const steps: QuestionStep[] = [
+    ...(isAmountFixed ? [] : amountSteps),
     {
       id: 'name',
       title: HORIZON_WORDS.costNameTitle,
@@ -303,8 +315,12 @@ function CostForm({
     startFolded: cost !== undefined,
   });
 
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(initialData);
+  // A change that goes on to a review has nothing to review until something differs.
+  const isNothingToReview = isAmountFixed && cost !== undefined && !isDirty;
+
   const requestClose = useDiscardGuard({
-    isDirty: JSON.stringify(formData) !== JSON.stringify(initialData),
+    isDirty,
     onClose,
     title: cost
       ? FORM_FLOW_WORDS.discardChange
@@ -320,6 +336,8 @@ function CostForm({
       schedule,
       ending,
       isOutside: formData.isOutside,
+      pricedOn: cost?.pricedOn ?? null,
+      endsAfter: cost?.endsAfter ?? null,
       note: cost?.note ?? null,
     });
   };
@@ -328,7 +346,9 @@ function CostForm({
     <FormSheet
       isOpen
       onClose={requestClose}
-      title={cost ? HORIZON_WORDS.costChangeTitle : HORIZON_WORDS.costFormTitle}
+      title={
+        cost ? HORIZON_WORDS.changeCost(cost.name) : HORIZON_WORDS.costFormTitle
+      }
       actions={<ValuesEyeButton />}
     >
       <div className='space-y-5'>
@@ -342,7 +362,11 @@ function CostForm({
               />
             )
           }
-          note={questions.hasReviewed ? blocker : questions.blocker}
+          note={
+            questions.hasReviewed
+              ? (blocker ?? (isNothingToReview ? CHANGE_WORDS.unchanged : null))
+              : questions.blocker
+          }
           cancelAction={
             <Button type='button' variant='secondary' onClick={requestClose}>
               Cancel
@@ -353,13 +377,15 @@ function CostForm({
               <Button
                 type='button'
                 className='min-w-0'
-                disabled={blocker !== null}
+                disabled={blocker !== null || isNothingToReview}
                 onClick={save}
               >
                 <span className='min-w-0 truncate'>
-                  {cost
-                    ? HORIZON_WORDS.saveCost
-                    : HORIZON_WORDS.addCostNamed(name)}
+                  {isAmountFixed
+                    ? CHANGE_WORDS.review
+                    : cost
+                      ? HORIZON_WORDS.saveCost
+                      : HORIZON_WORDS.addCostNamed(name)}
                 </span>
               </Button>
             ) : (

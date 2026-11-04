@@ -18,7 +18,7 @@ function CostRow({ cost, onOpen }: CostRowProps) {
   const { line, figure, per } = describeCost(cost);
 
   const label = (
-    <span className='block min-w-0 flex-1'>
+    <span className='block min-w-[6.5rem] flex-1'>
       <span className='line-clamp-2 font-medium break-words'>{cost.name}</span>
       <span className='text-muted-foreground block text-sm break-words'>
         {line}
@@ -26,7 +26,7 @@ function CostRow({ cost, onOpen }: CostRowProps) {
     </span>
   );
   const amount = (
-    <span className='block shrink-0 text-right'>
+    <span className='block min-w-0 text-right'>
       <span className='block font-semibold tabular-nums'>
         <SensitiveValue>{figure}</SensitiveValue>
       </span>

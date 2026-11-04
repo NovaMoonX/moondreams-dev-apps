@@ -71,6 +71,8 @@ interface EffectPreviewProps {
   warningActions?: ReactNode;
   /** Replaces the section's caption. */
   caption?: string;
+  /** The caller's own reading, drawn first under the caption; the section stays when it is the only thing to say. */
+  lead?: ReactNode;
   /** Says when the item's cost lines come up short on the pays once the change is made; null says nothing. */
   shortNote?: {
     itemId: string;
@@ -232,6 +234,7 @@ function EffectPreview({
   pinnedItemIds,
   warningActions,
   caption,
+  lead = null,
   holds,
   shortNote,
 }: EffectPreviewProps) {
@@ -592,7 +595,8 @@ function EffectPreview({
     visibleNotes.length === 0 &&
     shownBlocks.length === 0 &&
     shortText === null &&
-    !isLeadShown
+    !isLeadShown &&
+    lead === null
   ) {
     return null;
   }
@@ -600,6 +604,7 @@ function EffectPreview({
 
   return (
     <ActionSection caption={caption ?? CHANGE_WORDS.previewHeading}>
+      {lead}
       {isLeadShown &&
         isHidden &&
         shownBlocks.map((block) => <NeedsALookRow key={block.text} />)}
