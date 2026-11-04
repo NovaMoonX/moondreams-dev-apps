@@ -22,7 +22,7 @@ interface PhotoPickerProps {
   variant?: PhotoPickerVariant;
   /** Minimal variant only: set false when the caller already renders its own preview bound to the same `photoUrl`. */
   showPreview?: boolean;
-  /** Adds "Take a photo" on a touch screen, for a photo of something usually in front of the person (a plate, a pet); never for one they already have (a cover, a profile picture). */
+  /** Adds "Take a photo" on a touch screen, for a photo of something usually in front of the person (a plate, a pet); never for one they already have (a trip cover, a profile picture). */
   canTakePhoto?: boolean;
   uploadLabel?: string;
   changeLabel?: string;
@@ -162,7 +162,7 @@ function PhotoPicker({
   }
 
   const buttons = (
-    <div className='flex flex-wrap items-center justify-center gap-2'>
+    <div className='flex flex-wrap items-center gap-2'>
       {isCameraShown && (
         <Button
           type='button'
