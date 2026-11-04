@@ -556,7 +556,7 @@ function StartFlow({
               type='button'
               variant='tertiary'
               size='sm'
-              className='self-start'
+              className='text-muted-foreground! relative -ml-2 self-start after:absolute after:inset-x-0 after:-inset-y-2 after:content-[""]'
               onClick={() => void handleStartOver()}
             >
               {START_WORDS.resumeStartOver}
