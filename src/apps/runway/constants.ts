@@ -1105,6 +1105,8 @@ export const MONEY_CHART_WORDS = {
   all: 'All money',
   range: 'How far back',
   hidden: 'Show amounts to see your history',
+  hideChart: 'Hide chart',
+  showChart: 'Show chart',
   young: 'Your money history shows here after your first two weeks.',
   today: 'Today',
   on: 'On',
@@ -1116,9 +1118,9 @@ export const MONEY_CHART_WORDS = {
   same: 'No change',
   lowest: 'Lowest',
   aheadHelp:
-    'The solid line is what happened. The dotted line is where your plan takes it over the next two paydays: the pay you expect and the bills due. It does not guess your everyday spending.',
+    'The solid line is what happened. The dotted line is where your plan takes it over the next year: the pay you expect, the bills due, and what your envelopes get, counted as spent the day they get it.',
   aheadFreeHelp:
-    'A pay you expect is mostly given to your envelopes, bills and goals, so Free to Spend only rises by what a pay leaves over. All money shows the whole pay.',
+    'A pay you expect is mostly given to your envelopes, bills and goals, so Free to Spend only rises by what a pay leaves over.',
   allHelp:
     'All money is Free to Spend plus what your envelopes, goals, bills and cards hold.',
 } as const;

@@ -101,7 +101,7 @@ const balances = {
   assert.equal(points.at(-1)?.allCents, 160_000, 'today adds the window');
 }
 
-// Projection: pay adds, bills leave on their day, two paydays and up to the third.
+// Projection: pay adds less what envelopes get, bills leave on their day, through `until`.
 {
   const payment = (dueOn: number, totalCents: number, isPaid = false) =>
     ({ dueOn, totalCents, paid: isPaid ? {} : null }) as unknown as BillPayment;
@@ -109,9 +109,17 @@ const balances = {
     today: d(10),
     now: { on: d(10), freeCents: 5_000, allCents: 50_000 },
     steps: [
-      { on: d(14), moneyCents: 100_000, freeCents: 10_000 },
-      { on: d(28), moneyCents: 100_000, freeCents: 0 },
-      { on: d(42), moneyCents: 100_000, freeCents: 10_000 },
+      {
+        on: d(14),
+        moneyCents: 100_000,
+        freeCents: 10_000,
+        lines: [
+          { itemId: 'groceries', cents: 20_000 },
+          { itemId: 'rent', cents: 70_000 },
+        ],
+      },
+      { on: d(28), moneyCents: 100_000, freeCents: 0, lines: [] },
+      { on: d(42), moneyCents: 100_000, freeCents: 10_000, lines: [] },
     ],
     payments: {
       rent: [payment(d(15), 80_000), payment(d(45), 80_000)],
@@ -119,6 +127,8 @@ const balances = {
       old: [payment(d(-40), 1_000)],
     },
     billsSince: d(0),
+    until: d(41),
+    spentItemIds: new Set(['groceries']),
   });
   assert.deepEqual(points[0], {
     on: d(10),
@@ -128,27 +138,27 @@ const balances = {
   const at = (n: number) => points.find((point) => point.on === d(n));
   assert.equal(at(11)?.allCents, 47_000, 'a bill already due leaves tomorrow');
   assert.equal(at(13)?.allCents, 47_000, 'flat until the next change');
-  assert.equal(at(14)?.allCents, 147_000);
+  assert.equal(
+    at(14)?.allCents,
+    127_000,
+    'pay adds, less what envelopes get (counted as spent)',
+  );
   assert.equal(
     at(14)?.freeCents,
     15_000,
     'Free to Spend gets what the day leaves',
   );
-  assert.equal(at(15)?.allCents, 67_000, 'rent leaves on its due day');
+  assert.equal(at(15)?.allCents, 47_000, 'rent leaves on its due day');
   assert.equal(
     at(15)?.freeCents,
     15_000,
     'a bill does not touch Free to Spend',
   );
-  assert.equal(
-    points.at(-1)?.on,
-    d(41),
-    'runs to the day before the third payday',
-  );
-  assert.equal(points.at(-1)?.allCents, 167_000);
+  assert.equal(points.at(-1)?.on, d(41), 'runs through until');
+  assert.equal(points.at(-1)?.allCents, 147_000);
   assert.ok(
     !points.some((point) => point.on === d(42)),
-    'the third payday is out',
+    'a payday after until is out',
   );
 }
 {
@@ -159,6 +169,8 @@ const balances = {
       steps: [],
       payments: {},
       billsSince: d(0),
+      until: d(40),
+      spentItemIds: new Set(),
     }),
     [],
     'no income ahead, no projection',
@@ -166,11 +178,17 @@ const balances = {
   const one = getMoneyProjection({
     today: d(10),
     now: { on: d(10), freeCents: 0, allCents: 0 },
-    steps: [{ on: d(12), moneyCents: 1_000, freeCents: 1_000 }],
+    steps: [{ on: d(12), moneyCents: 1_000, freeCents: 1_000, lines: [] }],
     payments: {},
     billsSince: d(0),
+    until: d(40),
+    spentItemIds: new Set(),
   });
-  assert.equal(one.at(-1)?.on, d(26), 'one payday runs two weeks past it');
+  assert.equal(
+    one.at(-1)?.on,
+    d(40),
+    'the line reaches until past the last payday',
+  );
 }
 
 console.log('runway money history: ok');

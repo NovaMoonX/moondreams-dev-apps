@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { ChartLine, ChevronRight } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -49,6 +49,7 @@ const RANGE_NAMES: Record<MoneyRange, string> = {
 };
 
 const FIGURE_KEY = 'runway-home-figure-all';
+const CHART_HIDDEN_KEY = 'runway-home-chart-hidden';
 
 /** A figure as the hero reads it: Free to Spend below zero is over-assigned, never a minus. */
 const formatFigure = (cents: number, figure: Figure) =>
@@ -75,6 +76,10 @@ interface MoneyCardProps {
 function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
   const balances = useAppSelector(selectBalances);
   const [isAll, setIsAll] = useLocalStoragePreference(FIGURE_KEY, false);
+  const [isChartHidden, setIsChartHidden] = useLocalStoragePreference(
+    CHART_HIDDEN_KEY,
+    false,
+  );
   const [range, setRange] = useState<MoneyRange>('all');
   const [reading, setReading] = useState<TrendPoint | null>(null);
   const { isHidden, toggle } = useValuesHidden();
@@ -156,10 +161,23 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
         <Button
           variant='tertiary'
           size='sm'
-          className='relative z-10 -ml-2 h-auto py-1 text-sm font-normal'
+          className='-ml-2 h-auto py-1 text-sm font-normal'
           onClick={toggle}
         >
           {MONEY_CHART_WORDS.hidden}
+        </Button>
+      );
+    }
+    if (isChartHidden) {
+      return (
+        <Button
+          variant='tertiary'
+          size='sm'
+          className='-ml-2 h-auto gap-1.5 py-1 text-sm font-normal'
+          onClick={() => setIsChartHidden(false)}
+        >
+          <ChartLine className='h-4 w-4' aria-hidden='true' />
+          {MONEY_CHART_WORDS.showChart}
         </Button>
       );
     }
@@ -178,7 +196,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
         />
       );
     return (
-      <div className='relative z-10 space-y-3'>
+      <div className='space-y-3'>
         <div
           role='img'
           aria-label={`${label}, ${RANGE_NAMES[series.range].toLowerCase()}: ${getNote()}.`}
@@ -225,45 +243,58 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
             onRead={setReading}
           />
         </div>
-        {series.ranges.length > 1 && (
-          <PillGroup
-            isThin
-            label={MONEY_CHART_WORDS.range}
-            options={series.ranges.map((entry) => ({
-              value: entry,
-              label: RANGE_LABELS[entry],
-              ariaLabel: RANGE_NAMES[entry],
-            }))}
-            value={series.range}
-            onChange={(next) => {
+        <div className='flex items-center justify-between gap-3'>
+          {series.ranges.length > 1 ? (
+            <PillGroup
+              isThin
+              label={MONEY_CHART_WORDS.range}
+              options={series.ranges.map((entry) => ({
+                value: entry,
+                label: RANGE_LABELS[entry],
+                ariaLabel: RANGE_NAMES[entry],
+              }))}
+              value={series.range}
+              onChange={(next) => {
+                setReading(null);
+                setRange(next);
+              }}
+            />
+          ) : (
+            <span />
+          )}
+          <Button
+            variant='tertiary'
+            size='sm'
+            className='text-muted-foreground! -mr-2 h-auto shrink-0 py-1 text-sm font-normal'
+            onClick={() => {
               setReading(null);
-              setRange(next);
+              setIsChartHidden(true);
             }}
-          />
-        )}
+          >
+            {MONEY_CHART_WORDS.hideChart}
+          </Button>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className='border-border bg-accent relative space-y-3 rounded-2xl border px-4 pt-3 pb-4'>
-      <div className='relative z-10'>
-        <SegmentedControl
-          label={MONEY_CHART_WORDS.figure}
-          options={FIGURE_OPTIONS}
-          value={figure}
-          onChange={(next) => {
-            setReading(null);
-            setIsAll(next === 'all');
-          }}
-          className='w-full sm:max-w-72'
-        />
-      </div>
+    <div className='space-y-3 pt-2'>
+      <SegmentedControl
+        isCompact
+        label={MONEY_CHART_WORDS.figure}
+        options={FIGURE_OPTIONS}
+        value={figure}
+        onChange={(next) => {
+          setReading(null);
+          setIsAll(next === 'all');
+        }}
+      />
       <div>
         <Button
           variant='tertiary'
           size='stripped'
-          className="text-foreground! static h-auto w-full items-center justify-between gap-3 text-left font-normal after:absolute after:inset-0 after:rounded-2xl after:content-['']"
+          className='text-foreground! h-auto w-full items-center justify-between gap-3 text-left font-normal'
           aria-label={
             isHidden
               ? `${label}, amount hidden. See it in detail`
@@ -283,13 +314,11 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
           <div className='mt-1.5 flex items-center gap-1'>
             <p className='text-muted-foreground text-sm'>{getNote()}</p>
             {help.length > 0 && (
-              <span className='relative z-10'>
-                <HelpTip title={label}>
-                  {help.map((entry) => (
-                    <p key={entry}>{entry}</p>
-                  ))}
-                </HelpTip>
-              </span>
+              <HelpTip title={label}>
+                {help.map((entry) => (
+                  <p key={entry}>{entry}</p>
+                ))}
+              </HelpTip>
             )}
           </div>
         )}

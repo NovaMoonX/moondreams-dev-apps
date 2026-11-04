@@ -132,36 +132,37 @@ export interface MoneyProjectionInput {
   payments: Readonly<Record<string, readonly BillPayment[]>>;
   /** An unpaid payment due before this day is not counted, as the lookahead does not report it. */
   billsSince: DateOnly;
+  /** The last day projected. */
+  until: DateOnly;
+  /** Envelopes: what an income day gives one is counted as spent that day. */
+  spentItemIds: ReadonlySet<string>;
 }
 
-/** How many coming income days the projection runs through; past them the plan's bills and pay are less certain. */
-export const PROJECTED_INCOME_DAYS = 2;
-const TRAILING_DAYS = 14;
-
 /**
- * Where the plan takes the money from today, oldest first: each income day adds what it brings in (to
- * all of it) and what its draft leaves free (to Free to Spend), and each unpaid bill payment leaves on
- * its due day (one already due leaves tomorrow). It runs through the next two income days, up to the
- * day before the third; nothing is guessed for everyday spending. Empty when no income day is ahead.
+ * Where the plan takes the money from today to `until`, oldest first: each income day adds what it
+ * brings in less what it gives envelopes (to all of it) and what its draft leaves free (to Free to
+ * Spend), and each unpaid bill payment leaves on its due day (one already due leaves tomorrow).
+ * Envelope money is counted as spent the day it is given, so no other everyday spending is guessed.
+ * Empty when no income day is ahead.
  */
 export function getMoneyProjection(input: MoneyProjectionInput): MoneyPoint[] {
-  const { today, now } = input;
+  const { today, now, until } = input;
   const tomorrow = today + DAY_MS;
   const ahead = input.steps.map((step) => ({
     ...step,
     on: Math.max(step.on, tomorrow),
   }));
-  if (ahead.length === 0) return [];
-  const until =
-    ahead.length > PROJECTED_INCOME_DAYS
-      ? ahead[PROJECTED_INCOME_DAYS].on - DAY_MS
-      : (ahead.at(-1)?.on ?? today) + TRAILING_DAYS * DAY_MS;
+  if (ahead.length === 0 || until <= today) return [];
   const income = ahead
     .filter((step) => step.on <= until)
     .map((step) => ({
       on: step.on,
       free: step.freeCents,
-      all: step.moneyCents,
+      all:
+        step.moneyCents -
+        step.lines
+          .filter((line) => input.spentItemIds.has(line.itemId))
+          .reduce((sum, line) => sum + line.cents, 0),
     }));
   const bills = Object.values(input.payments)
     .flat()

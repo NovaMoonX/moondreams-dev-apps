@@ -95,8 +95,13 @@ export interface Lookahead {
   }[];
   /** Bills with no due date yet, in the order given. They never stop the plan, so they are not in `problems`. */
   undated: { billId: string; name: string }[];
-  /** Each walked income day: what it brings in and what its draft leaves free to spend. */
-  steps: { on: DateOnly; moneyCents: Cents; freeCents: Cents }[];
+  /** Each walked income day: what it brings in, what its draft leaves free to spend and what it gives each item. */
+  steps: {
+    on: DateOnly;
+    moneyCents: Cents;
+    freeCents: Cents;
+    lines: { itemId: string; cents: Cents }[];
+  }[];
 }
 
 const EMPTY_CARRY: LookaheadCarry = { funded: {}, added: {} };
@@ -288,6 +293,10 @@ export function lookahead(input: LookaheadInput): Lookahead {
             on: day.on,
             moneyCents: result.draft.moneyCents,
             freeCents: result.draft.freeToSpend.cents,
+            lines: result.draft.lines.map(({ itemId, cents }) => ({
+              itemId,
+              cents,
+            })),
           },
         ],
       };

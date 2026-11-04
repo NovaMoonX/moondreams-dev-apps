@@ -4,7 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { withoutSpending } from '@apps/runway/engine/closings';
-import { DAY_MS } from '@apps/runway/engine/dates';
+import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import { addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import {
   getMoneyHistory,
@@ -19,12 +20,15 @@ import {
   selectRecentFrom,
 } from '@apps/runway/store/selectors/historySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { selectBillPayments } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectBillPayments,
+  selectEnvelopes,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly } from '@apps/runway/types';
 
 const RANGES = ['1m', '6m', '1y'] as const;
 
-/** Where the money stood over `range` and where the plan takes it next, with the ranges the history is long enough to tell apart. */
+/** Where the money stood over `range` and where the plan takes it over the next year, with the ranges the history is long enough to tell apart. */
 export function useMoneySeries(
   range: MoneyRange,
   today: DateOnly,
@@ -40,6 +44,11 @@ export function useMoneySeries(
   );
   const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
   const payments = useAppSelector((state) => selectBillPayments(state, today));
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const envelopeIds = useMemo(
+    () => new Set(envelopes.map(({ item }) => item.id)),
+    [envelopes],
+  );
   const startDate = balances.startDate;
   const spanDays =
     startDate === null ? 0 : Math.round((today - startDate) / DAY_MS);
@@ -101,8 +110,10 @@ export function useMoneySeries(
             steps: lookahead.steps,
             payments,
             billsSince: Math.max(startDate ?? 0, recentFrom ?? 0),
+            until: addUtcMonths(today, LOOKAHEAD_MONTHS),
+            spentItemIds: envelopeIds,
           }),
-    [now, lookahead, payments, today, startDate, recentFrom],
+    [now, lookahead, payments, today, startDate, recentFrom, envelopeIds],
   );
 
   const isPartial = needsClosings && closings.isError;
