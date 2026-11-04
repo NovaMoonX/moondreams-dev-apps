@@ -337,14 +337,15 @@ export const HORIZON_WORDS = {
   costSuggestions: 'Common costs',
   costWhenTitle: 'When?',
   costWhen: 'When',
-  costDateHint: 'The day it is due, or the first one if it repeats.',
+  costDateHint: 'The day it is due.',
+  costFirstDateHint: 'The day of the first payment.',
   costOnceSummary: (date: string) => `Once, ${date}`,
   costRepeatSummary: (repeat: string, from: string) => `${repeat} from ${from}`,
   costEndsOn: (date: string) => ` to ${date}`,
   costEndsAfter: (count: number) =>
     count === 1 ? ', once' : `, ${count} times`,
-  costLastPayment: 'Last payment',
-  costPaymentCount: 'How many payments',
+  costLastPayment: 'Last payment on',
+  costPaymentCount: 'How many payments?',
   costPaymentCountHint: 'How many payments, like 6',
   costPerWeek: 'a week',
   costPerOtherWeek: 'every 2 weeks',
@@ -381,14 +382,16 @@ export const HORIZON_WORDS = {
   restTitle: "What it doesn't cover comes from",
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
-  plannedTotal: (amount: string, isUpTo: boolean, through: string | null) =>
-    `${isUpTo ? 'Up to ' : ''}${amount} planned${through ? ` through ${through}` : ''}`,
+  plannedTotal: (amount: string, isUpTo: boolean) =>
+    `${isUpTo ? 'Up to ' : ''}${amount} planned`,
+  overNextYear: ' over the next year',
   setAside: 'Set aside',
   spent: 'Spent',
   left: 'Left',
   leftFact: (setAside: string, spent: string) =>
     `${setAside} set aside, ${spent} spent`,
-  shortTitle: (amount: string, date: string) => `${amount} short on ${date}`,
+  shortTitle: (amount: string, date: string, more: string | null) =>
+    `${amount} short on ${date}${more ? `, ${more} more after` : ''}`,
   shortBody: (
     cost: string,
     planned: string,
@@ -422,11 +425,8 @@ export const HORIZON_WORDS = {
     nothingSet: 'Nothing is set aside yet, so nothing is covered.',
     none: "What's set aside doesn't cover a whole cost yet.",
     all: 'Covers every cost.',
-    listed: (list: string, atEnd: string, rest: string) =>
-      `Covers ${list}${atEnd}.${rest}`,
+    listed: (list: string, atEnd: string) => `Covers ${list}${atEnd}.`,
     through: (name: string, date: string) => `${name} through ${date}`,
-    needsMoney: (date: string, name: string) =>
-      ` From ${date}, ${name} needs money from somewhere else.`,
     atEnd: (endWords: string) => ` at ${endWords}`,
     on: (name: string, date: string) => `${name} on ${date}`,
     more: (count: number) => `${count} more`,

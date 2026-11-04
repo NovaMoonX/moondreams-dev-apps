@@ -141,7 +141,12 @@ function CostForm({
   const range = parseAmountDraft(formData.amount);
   const name = formData.name.trim();
   const date = fromDateInputValue(formData.date);
-  const isDateValid = date !== undefined && date >= today && date <= lastDate;
+  const isStarted =
+    cost !== undefined &&
+    cost.schedule.kind !== 'once' &&
+    date === cost.schedule.anchor;
+  const isDateValid =
+    date !== undefined && (date >= today || isStarted) && date <= lastDate;
   const schedule = isDateValid ? buildSchedule(formData.repeat, date) : null;
   const ending = buildEnding(formData.repeat, date);
   const isWhenAnswered =
@@ -243,7 +248,9 @@ function CostForm({
             onChange={(event) => set({ date: event.target.value })}
           />
           <p className='text-muted-foreground text-sm'>
-            {HORIZON_WORDS.costDateHint}
+            {formData.repeat.frequency === 'once'
+              ? HORIZON_WORDS.costDateHint
+              : HORIZON_WORDS.costFirstDateHint}
           </p>
           <RepeatFields
             draft={formData.repeat}

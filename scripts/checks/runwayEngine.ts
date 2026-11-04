@@ -62,6 +62,7 @@ import {
 import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import type {
   BillFundedBy,
+  HorizonCost,
   OpenDay,
   Pairing,
 } from '../../src/apps/runway/types.ts';
@@ -10702,7 +10703,7 @@ const version = (
       monthDays: [1],
     },
   };
-  const datesOf = (cost: typeof storage) =>
+  const datesOf = (cost: HorizonCost) =>
     listCostPayments(cost, end, 'conservative').map(({ dueOn }) => dueOn);
   assert.deepEqual(
     datesOf(storage),

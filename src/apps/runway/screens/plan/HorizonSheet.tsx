@@ -52,7 +52,6 @@ function HorizonSheet({
     plannedHighCents,
     isPlannedRange,
     outsideCents,
-    through,
     hasRepeats,
   } = getHorizonStatus(
     horizon,
@@ -95,17 +94,17 @@ function HorizonSheet({
       : HORIZON_WORDS.aroundRange(
           formatDateRangeOrdinalUTC(horizon.happensOn, horizon.happensUntil),
         );
+  const yearWords = hasRepeats ? HORIZON_WORDS.overNextYear : '';
   const fact = [
     HORIZON_WORDS.plannedTotal(
       formatCents(isPlannedRange ? plannedHighCents : plannedCents),
       isPlannedRange,
-      hasRepeats ? formatDateOrdinalUTC(through) : null,
-    ).replaceAll(' ', '\u00A0'),
+    ).replaceAll(' ', '\u00A0') + yearWords,
     outsideCents > 0 &&
       HORIZON_WORDS.outsideTotal(formatCents(outsideCents)).replaceAll(
         ' ',
         '\u00A0',
-      ),
+      ) + yearWords,
     when,
   ]
     .filter(Boolean)
@@ -161,6 +160,11 @@ function HorizonSheet({
                   {HORIZON_WORDS.shortTitle(
                     formatCents(shortfall.shortCents),
                     formatDateOrdinalUTC(shortfall.dueOn),
+                    shortfall.totalShortCents > shortfall.shortCents
+                      ? formatCents(
+                          shortfall.totalShortCents - shortfall.shortCents,
+                        )
+                      : null,
                   )}
                 </MaskedText>
               }

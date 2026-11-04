@@ -87,6 +87,13 @@ function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
             value={draft.endKind}
             onChange={(endKind) => onChange({ endKind })}
           />
+          {draft.endKind !== 'never' && (
+            <p className='text-sm font-medium'>
+              {draft.endKind === 'date'
+                ? HORIZON_WORDS.costLastPayment
+                : HORIZON_WORDS.costPaymentCount}
+            </p>
+          )}
           {draft.endKind === 'date' && (
             <DateInput
               variant='outline'

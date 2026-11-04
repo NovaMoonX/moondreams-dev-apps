@@ -36,8 +36,11 @@ export function getHorizonStatus(
   return {
     figures,
     plan,
-    through,
-    hasRepeats: horizon.costs.some(({ schedule }) => schedule.kind !== 'once'),
+    /** A cost pays more than once in the year ahead, so the totals count that year. */
+    hasRepeats: payments.some(
+      ({ costId }, index) =>
+        payments.findIndex((payment) => payment.costId === costId) !== index,
+    ),
     plannedCents: planned.reduce((sum, { totalCents }) => sum + totalCents, 0),
     plannedHighCents: planned.reduce(
       (sum, { costId }) =>

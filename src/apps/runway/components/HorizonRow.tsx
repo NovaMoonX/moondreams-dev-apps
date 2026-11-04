@@ -37,6 +37,11 @@ function HorizonRow({ itemId, horizon, today, stance }: HorizonRowProps) {
         : HORIZON_WORDS.shortTitle(
             formatCentsShort(shortfall.shortCents),
             formatDateOrdinalUTC(shortfall.dueOn),
+            shortfall.totalShortCents > shortfall.shortCents
+              ? formatCentsShort(
+                  shortfall.totalShortCents - shortfall.shortCents,
+                )
+              : null,
           );
     }
     return next

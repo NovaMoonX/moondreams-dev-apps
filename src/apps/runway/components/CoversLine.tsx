@@ -54,19 +54,22 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
         ? words.through(cost.name, formatDateOrdinalUTC(lastDueOn))
         : words.on(cost.name, formatDateOrdinalUTC(lastDueOn)),
     );
-  const firstShort = plan.covers.find(
-    ({ coveredCents, totalCents }) => coveredCents < totalCents,
+  const hasNoEnd = costs.some(
+    ({ schedule, ending, isOutside }) =>
+      !isOutside &&
+      schedule.kind !== 'once' &&
+      ending.onDate === null &&
+      ending.afterCount === null,
   );
-  const shortCost = costs.find(({ id }) => id === firstShort?.costId);
-  const needsMoney =
-    firstShort && shortCost && shortCost.schedule.kind !== 'once'
-      ? words.needsMoney(formatDateOrdinalUTC(firstShort.dueOn), shortCost.name)
-      : '';
   const getText = () => {
     if (plan.covers.length === 0) return null;
     if (heldCents <= 0) return plan.shortfall ? null : words.nothingSet;
     if (covered.length === 0) return plan.shortfall ? null : words.none;
-    if (covered.length === plan.covers.length && covered.length > MAX_NAMED) {
+    if (
+      covered.length === plan.covers.length &&
+      groups.length > MAX_NAMED &&
+      !hasNoEnd
+    ) {
       return words.all;
     }
     const list = listFormat.format(
@@ -74,11 +77,7 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
         ? [...named, words.more(groups.length - MAX_NAMED)]
         : named,
     );
-    return words.listed(
-      list,
-      ranged.length > 0 ? words.atEnd(endWords) : '',
-      needsMoney,
-    );
+    return words.listed(list, ranged.length > 0 ? words.atEnd(endWords) : '');
   };
   const text = getText();
   if (text === null) return null;
