@@ -530,7 +530,11 @@ function PurchaseScreen({
               isGrouped
               isRoomy
               icon={<ImagePlus />}
-              label={SPEND_WORDS.addReceipt}
+              label={
+                canTakePhoto
+                  ? SPEND_WORDS.chooseReceiptPhoto
+                  : SPEND_WORDS.addReceipt
+              }
               subtitle={
                 isAddingReceipt
                   ? SPEND_WORDS.receiptAdding

@@ -448,7 +448,7 @@ function HealthRecordUploadModal({
       )}
       {!isEditing && (
         <p className='text-muted-foreground mt-3 text-xs'>
-          PDF and image files only, up to 10MB.
+          A PDF or a photo. A PDF can be up to 10 MB.
         </p>
       )}
     </Modal>

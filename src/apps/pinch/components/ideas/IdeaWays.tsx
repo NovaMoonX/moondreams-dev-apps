@@ -457,7 +457,7 @@ export function IdeaPhotoWay({ uid, onClose, onSaved }: WayProps) {
               photoUrl={upload.previewUrl}
               showPreview={false}
               canTakePhoto
-              uploadLabel='Choose a picture'
+              uploadLabel='Choose a photo'
               changeLabel='Choose another'
               error={upload.error}
               loading={upload.isPreparing}

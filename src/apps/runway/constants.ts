@@ -1243,6 +1243,7 @@ export const SPEND_WORDS = {
   addReceipt: 'Add a receipt',
   takeReceiptPhoto: 'Take a photo of the receipt',
   takePhoto: 'Take a photo',
+  chooseReceiptPhoto: 'Choose a receipt photo',
   readReceipt: 'Read a receipt',
   readReceiptSends:
     "Runway sends this photo to an AI service to read the total, the store, the day and the items. Nothing is saved until you add the purchase. The photo is kept as the purchase's receipt.",

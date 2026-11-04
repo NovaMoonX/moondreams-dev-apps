@@ -102,8 +102,10 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
         </span>
         <div
           className={join(
-            'flex min-w-0 flex-col',
-            isLarge ? 'flex-1 items-start gap-2' : 'items-center gap-1',
+            'flex min-w-0',
+            isLarge
+              ? 'flex-1 flex-col-reverse items-start gap-3'
+              : 'flex-col items-center gap-1',
           )}
         >
           <StarRating

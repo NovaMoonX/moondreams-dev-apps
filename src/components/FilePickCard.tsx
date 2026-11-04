@@ -122,10 +122,10 @@ function FilePickCard({
         <div className='px-3 pb-3'>
           <Button
             type='button'
-            variant='secondary'
+            variant='tertiary'
             disabled={isDisabled}
             onClick={onTakePhoto}
-            className='h-11 w-full gap-2'
+            className='border-border h-11 w-full gap-2 border'
           >
             <Camera className='h-4 w-4 shrink-0' aria-hidden='true' />
             Take a photo
