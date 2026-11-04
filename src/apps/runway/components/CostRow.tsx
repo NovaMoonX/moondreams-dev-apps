@@ -17,23 +17,23 @@ interface CostRowProps {
 function CostRow({ cost, onOpen }: CostRowProps) {
   const { line, figure, per } = describeCost(cost);
 
-  const content = (
-    <>
-      <span className='block min-w-0 flex-1'>
-        <span className='block font-medium break-words'>{cost.name}</span>
-        <span className='text-muted-foreground block text-sm'>{line}</span>
+  const label = (
+    <span className='block min-w-0 flex-1'>
+      <span className='line-clamp-2 font-medium break-words'>{cost.name}</span>
+      <span className='text-muted-foreground block text-sm'>{line}</span>
+    </span>
+  );
+  const amount = (
+    <span className='block shrink-0 text-right'>
+      <span className='block font-semibold tabular-nums'>
+        <SensitiveValue>{figure}</SensitiveValue>
       </span>
-      <span className='block shrink-0 text-right'>
-        <span className='block font-semibold tabular-nums'>
-          <SensitiveValue>{figure}</SensitiveValue>
+      {per && (
+        <span className='text-muted-foreground block text-sm whitespace-nowrap'>
+          {per}
         </span>
-        {per && (
-          <span className='text-muted-foreground block text-sm whitespace-nowrap'>
-            {per}
-          </span>
-        )}
-      </span>
-    </>
+      )}
+    </span>
   );
 
   return onOpen ? (
@@ -45,7 +45,8 @@ function CostRow({ cost, onOpen }: CostRowProps) {
         aria-label={HORIZON_WORDS.changeCost(cost.name)}
         onClick={onOpen}
       >
-        {content}
+        {label}
+        {amount}
         <ChevronRight
           className='text-muted-foreground h-5 w-5 shrink-0'
           aria-hidden='true'
@@ -53,7 +54,10 @@ function CostRow({ cost, onOpen }: CostRowProps) {
       </Button>
     </li>
   ) : (
-    <li className='flex min-h-14 items-center gap-3 px-3 py-2'>{content}</li>
+    <li className='flex min-h-14 items-center gap-3 px-3 py-2'>
+      {label}
+      {amount}
+    </li>
   );
 }
 

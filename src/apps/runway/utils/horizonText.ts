@@ -84,7 +84,10 @@ export function describeCostTiming(
       : ending.afterCount !== null
         ? HORIZON_WORDS.costEndsAfter(ending.afterCount)
         : '';
-  return `${HORIZON_WORDS.costRepeatSummary(describeBillRepeat(schedule), date)}${stop}`;
+  const start = isSummary
+    ? HORIZON_WORDS.costRepeatSummary(describeBillRepeat(schedule), date)
+    : HORIZON_WORDS.costFrom(date);
+  return `${start}${stop}`;
 }
 
 /** What one payment of a repeating cost is per beat: "a month", "every 2 weeks", "a year", "every 3 months". */
@@ -97,7 +100,7 @@ const describeCostPer = (schedule: Schedule) => {
   return schedule.kind === 'monthly' ? HORIZON_WORDS.costPerMonth : '';
 };
 
-/** A cost in plain pieces: the date line ("Jan 15th", "Monthly from Feb 1st"), the figure ("$600 to $800" for a range) and, for a repeat, its beat ("a month"). */
+/** A cost in plain pieces: the date line ("Jan 15th", "From Feb 1st, 6 times"), the figure ("$600 to $800" for a range) and, for a repeat, its beat ("a month"). */
 export function describeCost(cost: HorizonCost) {
   const { lowCents, highCents } = cost.amount;
   const amount =

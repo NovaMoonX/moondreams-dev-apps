@@ -99,7 +99,7 @@ function HorizonSheet({
     HORIZON_WORDS.plannedTotal(
       formatCents(isPlannedRange ? plannedHighCents : plannedCents),
       isPlannedRange,
-    ).replaceAll(' ', '\u00A0') + yearWords,
+    ).replaceAll(' ', '\u00A0') + (outsideCents > 0 ? '' : yearWords),
     outsideCents > 0 &&
       HORIZON_WORDS.outsideTotal(formatCents(outsideCents)).replaceAll(
         ' ',

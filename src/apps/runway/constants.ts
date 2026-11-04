@@ -341,6 +341,7 @@ export const HORIZON_WORDS = {
   costFirstDateHint: 'The day of the first payment.',
   costOnceSummary: (date: string) => `Once, ${date}`,
   costRepeatSummary: (repeat: string, from: string) => `${repeat} from ${from}`,
+  costFrom: (from: string) => `From ${from}`,
   costEndsOn: (date: string) => ` to ${date}`,
   costEndsAfter: (count: number) =>
     count === 1 ? ', once' : `, ${count} times`,
