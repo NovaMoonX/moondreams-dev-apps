@@ -321,7 +321,9 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       summaryValue:
         formData.costs.length === 0
           ? ''
-          : HORIZON_WORDS.costCount(formData.costs.length),
+          : formData.costs.length === 1
+            ? formData.costs[0].name
+            : HORIZON_WORDS.costCount(formData.costs.length),
       isAnswered: formData.costs.length > 0,
       render: () => (
         <div className='space-y-3'>

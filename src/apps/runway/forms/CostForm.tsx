@@ -350,10 +350,17 @@ function CostForm({
           }
           rightActions={
             questions.hasReviewed ? (
-              <Button type='button' disabled={blocker !== null} onClick={save}>
-                {cost
-                  ? HORIZON_WORDS.saveCost
-                  : HORIZON_WORDS.addCostNamed(name)}
+              <Button
+                type='button'
+                className='min-w-0'
+                disabled={blocker !== null}
+                onClick={save}
+              >
+                <span className='min-w-0 truncate'>
+                  {cost
+                    ? HORIZON_WORDS.saveCost
+                    : HORIZON_WORDS.addCostNamed(name)}
+                </span>
               </Button>
             ) : (
               <Button

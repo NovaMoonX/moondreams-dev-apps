@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import DateInput from '@/components/DateInput';
@@ -38,6 +40,13 @@ interface RepeatFieldsProps {
 
 /** How often a cost repeats and when it stops. */
 function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
+  const endRef = useRef<HTMLDivElement>(null);
+  // A choice that opens a field below can leave it under a short sheet's footer.
+  const reveal = () =>
+    requestAnimationFrame(() =>
+      endRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+    );
+
   return (
     <div className='space-y-3'>
       <p className='text-sm font-medium'>{FORM_FLOW_WORDS.repeatsTitle}</p>
@@ -45,7 +54,10 @@ function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
         label={FORM_FLOW_WORDS.repeats}
         options={frequencyOptions}
         value={draft.frequency}
-        onChange={(frequency) => onChange({ frequency })}
+        onChange={(frequency) => {
+          onChange({ frequency });
+          reveal();
+        }}
       />
       {draft.frequency === 'custom' && (
         <div className='flex items-center gap-2'>
@@ -85,7 +97,10 @@ function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
             label={FORM_FLOW_WORDS.ends}
             options={endingOptions}
             value={draft.endKind}
-            onChange={(endKind) => onChange({ endKind })}
+            onChange={(endKind) => {
+              onChange({ endKind });
+              reveal();
+            }}
           />
           {draft.endKind !== 'never' && (
             <p className='text-sm font-medium'>
@@ -118,6 +133,7 @@ function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
           )}
         </>
       )}
+      <div ref={endRef} />
     </div>
   );
 }

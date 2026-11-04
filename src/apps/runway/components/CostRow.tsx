@@ -15,7 +15,7 @@ interface CostRowProps {
 
 /** One cost of an event: its name and date on the left, its figure on the right. */
 function CostRow({ cost, onOpen }: CostRowProps) {
-  const { line, figure } = describeCost(cost);
+  const { line, figure, per } = describeCost(cost);
 
   const content = (
     <>
@@ -23,8 +23,13 @@ function CostRow({ cost, onOpen }: CostRowProps) {
         <span className='block font-medium break-words'>{cost.name}</span>
         <span className='text-muted-foreground block text-sm'>{line}</span>
       </span>
-      <span className='block shrink-0 text-right font-semibold tabular-nums'>
-        <SensitiveValue>{figure}</SensitiveValue>
+      <span className='block max-w-[45%] shrink-0 text-right'>
+        <span className='block font-semibold tabular-nums'>
+          <SensitiveValue>{figure}</SensitiveValue>
+        </span>
+        {per && (
+          <span className='text-muted-foreground block text-sm'>{per}</span>
+        )}
       </span>
     </>
   );

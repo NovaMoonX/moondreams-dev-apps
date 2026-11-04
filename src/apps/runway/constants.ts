@@ -299,7 +299,7 @@ export const HORIZON_WORDS = {
   nothingDue: 'Nothing due yet',
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
-  costCount: (count: number) => (count === 1 ? 'One cost' : `${count} costs`),
+  costCount: (count: number) => `${count} costs`,
   costsCaption: 'Costs',
   nameTitle: "What's on your horizon?",
   name: 'Name',

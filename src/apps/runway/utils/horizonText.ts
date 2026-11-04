@@ -97,7 +97,7 @@ const describeCostPer = (schedule: Schedule) => {
   return schedule.kind === 'monthly' ? HORIZON_WORDS.costPerMonth : '';
 };
 
-/** A cost in two plain pieces: the date line ("Jan 15th", "Monthly from Feb 1st") and the figure ("$600 to $800" for a range, "$100 a month" for a repeat). */
+/** A cost in plain pieces: the date line ("Jan 15th", "Monthly from Feb 1st"), the figure ("$600 to $800" for a range) and, for a repeat, its beat ("a month"). */
 export function describeCost(cost: HorizonCost) {
   const { lowCents, highCents } = cost.amount;
   const amount =
@@ -112,7 +112,8 @@ export function describeCost(cost: HorizonCost) {
     ]
       .filter(Boolean)
       .join(' · '),
-    figure: per ? `${amount} ${per}` : amount,
+    figure: amount,
+    per,
   };
 }
 
